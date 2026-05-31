@@ -32,7 +32,7 @@ PYTHONPATH = "src"
 [tools]
 hk = "latest"                       # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/)
 pkl = "latest"                      # embeddable configuration language (https://pkl-lang.org)
-python = "3.12"                     # Python runtime (https://python.org)
+python = "3.14"                     # Python runtime (https://python.org)
 usage = "latest"                    # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
 uv = "latest"                       # Fast Python package and environment manager (https://uv.astral.sh)
 rtk = "latest"                      # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
@@ -45,8 +45,8 @@ just = "latest"                     # Task runner for project automation (https:
 # ============================================================================ #
 
 [tasks."test:cli"]
-description = "Test the git-cg CLI scaffolding"
-run = "uv run python -m git_cg.main --help"
+description = "Test the git-cg CLI scaffolding (Zero-Plaintext)"
+run = "./scripts/with_1p_env.sh uv run python -m git_cg.main --help"
 
 [tasks.pre-commit]
 run = "hk run pre-commit"

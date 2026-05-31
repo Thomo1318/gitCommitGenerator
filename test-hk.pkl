@@ -1,11 +1,10 @@
 amends "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Builtins.pkl"
 
 hooks {
     ["prepare-commit-msg"] {
         steps = new Mapping<String, Step> {
             ["test"] {
-                check = "echo ARGS_ARE:"
+                check = "env | grep HK_"
             }
         }
     }
