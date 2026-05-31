@@ -1,10 +1,33 @@
 amends "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Builtins.pkl"
+
+local linters = new Mapping<String, Step> {
+    ["ruff"] = Builtins.ruff
+    ["ruff-format"] {
+        glob = "**/*.py"
+        check = "ruff format --check {{ files }}"
+        fix = "ruff format {{ files }}"
+    }
+}
 
 hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps = linters
+    }
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+    ["check"] {
+        steps = linters
+    }
     ["prepare-commit-msg"] {
         steps = new Mapping<String, Step> {
-            ["test"] {
-                check = "env > /tmp/hk_env_full.log; exit 1"
+            ["git-cg"] {
+                check = "./scripts/with_1p_env.sh uv run python -m git_cg.main commit \"{{commit_msg_file}}\" \"{{source}}\""
+                fix = "./scripts/with_1p_env.sh uv run python -m git_cg.main commit \"{{commit_msg_file}}\" \"{{source}}\""
             }
         }
     }
