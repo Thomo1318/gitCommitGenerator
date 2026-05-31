@@ -5,9 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "agentops>=0.4.21",
     "instructor>=1.15.1",
     "openai>=2.38.0",
+    "opik>=2.0.52",
     "pydantic>=2.13.4",
     "rich>=14.3.4",
     "typer>=0.26.3",
@@ -15,3 +15,38 @@ dependencies = [
 
 [project.scripts]
 git-cg = "git_cg.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/git_cg"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, UP: pyupgrade, B: bugbear, SIM: simplify, RUF: ruff, N: pep8-naming
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "N"]
+
+# B008: Do not perform function calls in argument defaults (Must ignore for Typer.Option / Pydantic.Field)
+# E501: Line too long (Handled by the formatter)
+ignore = ["B008", "E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.15",
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
