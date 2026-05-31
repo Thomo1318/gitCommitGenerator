@@ -1,0 +1,24 @@
+{
+  "name": "git-commit-generator",
+  "version": "1.0.0",
+  "description": "AI-powered GitOps commit message generator with SOP enforcement.",
+  "main": "scripts/generate_ai_commit.zsh",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "validate": "node scripts/validate_commit.mjs",
+    "release": "node scripts/cut_release.mjs"
+  },
+  "keywords": [
+    "git",
+    "ai",
+    "commit",
+    "gitops",
+    "automation"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "zx": "^8.1.0"
+  }
+}

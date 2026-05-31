@@ -1,0 +1,7 @@
+✨ feat(release): add SemVer bumping, changelog gen, and SOP viewer
+
+- Introduces `release` command for automated SemVer calculation, version injection, and CHANGELOG generation based on gitmoji matrix
+- Adds `sop` command to visualize GitOps matrices, workflows, and rules in the CLI
+- Refactors default command to `commit` with improved prompt context assembly from SOP config
+- Creates comprehensive `TODO.md` and expands README with full gitmoji reference matrix and roadmap
+- Supports `--dry-run` and `--verbose` flags for safe release testing

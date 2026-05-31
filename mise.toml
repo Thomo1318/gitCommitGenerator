@@ -1,0 +1,52 @@
+# Mise git commit generator Configuration
+# Save to: $PROJECT_DIR/mise.toml
+# Documentation: https://mise.jdx.dev/configuration.html
+# Version: 1.0.0
+
+# ============================================================================ #
+# SETTINGS                                                                     #
+# ============================================================================ #
+
+[settings]
+experimental = true                 # Required for advanced uv features
+jobs = 8                            # Parallel job count for faster installs
+env_cache = true                    # Cache environment evaluations for speed
+not_found_auto_install = true       # Auto-install tools when entering directory
+plugin_autoupdate_last_check_duration = "1d" # Check for plugin updates daily
+yes = false                         # Auto-answer yes? (False for safety, use -y in scripts)
+idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go", "java", "yarn", "terraform", "packer"]  # Read .nvmrc, .python-version, etc.
+
+[settings.python]
+uv_venv_auto = true                 # Auto-activate .venv directories created by uv
+
+[settings.pipx]
+uvx = true                          # Use uvx instead of pipx
+
+[env]
+PYTHONPATH = "src"
+
+# ============================================================================ #
+# TOOLS                                                                        #
+# ============================================================================ #
+
+[tools]
+hk = "latest"                       # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/)
+pkl = "latest"                      # embeddable configuration language (https://pkl-lang.org)
+python = "3.12"                     # Python runtime (https://python.org)
+usage = "latest"                    # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
+uv = "latest"                       # Fast Python package and environment manager (https://uv.astral.sh)
+rtk = "latest"                      # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
+node = "latest"                     # JS runtime for validation and release scripts (https://nodejs.org)
+just = "latest"                     # Task runner for project automation (https://just.systems)
+
+
+# ============================================================================ #
+# TASKS                                                                        #
+# ============================================================================ #
+
+[tasks."test:cli"]
+description = "Test the git-cg CLI scaffolding"
+run = "uv run python -m git_cg.main --help"
+
+[tasks.pre-commit]
+run = "hk run pre-commit"

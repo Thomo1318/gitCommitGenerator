@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://macsetup.local/gitops_sop.schema.json",
+  "title": "GitOps AI Agent SOP Schema",
+  "description": "Schema validation for the AI Agent Gitmoji, SemVer, and Release SOP.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "_meta",
+    "specifications_and_standards",
+    "agentic_commit_workflow",
+    "agentic_release_workflow",
+    "changelog_generation_rules",
+    "semver_resolution_matrix",
+    "gitmoji_reference_matrix"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path to this schema file for IDE validation."
+    },
+    "_meta": {
+      "type": "object",
+      "description": "Metadata enforcing AI compliance and versioning of this SOP.",
+      "required": ["purpose", "version", "enforcement"],
+      "additionalProperties": false,
+      "properties": {
+        "purpose": { "type": "string" },
+        "version": { "type": "string" },
+        "enforcement": { "type": "string" }
+      }
+    },
+    "specifications_and_standards": {
+      "type": "object",
+      "required": ["commit_format", "semver_specification", "version_injection_matrix"],
+      "additionalProperties": false,
+      "properties": {
+        "commit_format": {
+          "type": "object",
+          "required": ["standard", "syntax", "example", "rules"],
+          "properties": {
+            "standard": { "type": "string" },
+            "syntax": { "type": "string" },
+            "example": { "type": "string" },
+            "rules": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "semver_specification": {
+          "type": "object",
+          "required": ["regex", "faq_rules"],
+          "properties": {
+            "regex": { "type": "string" },
+            "faq_rules": { "type": "string" }
+          }
+        },
+        "version_injection_matrix": {
+          "type": "object",
+          "required": ["enforcement", "strategies"],
+          "properties": {
+            "enforcement": { "type": "string" },
+            "strategies": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_]+$": {
+                  "type": "object",
+                  "required": ["extensions", "method", "syntax", "rule"],
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": ["root_key", "header_comment"]
+                    },
+                    "syntax": { "type": "string" },
+                    "rule": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "agentic_commit_workflow": {
+      "type": "object",
+      "required": ["philosophy", "phases"],
+      "properties": {
+        "philosophy": { "type": "string" },
+        "phases": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "agentic_release_workflow": {
+      "type": "object",
+      "required": ["philosophy", "phases"],
+      "properties": {
+        "philosophy": { "type": "string" },
+        "phases": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "changelog_generation_rules": {
+      "type": "object",
+      "required": ["enforcement", "taxonomy"],
+      "properties": {
+        "enforcement": { "type": "string" },
+        "taxonomy": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "semver_resolution_matrix": {
+      "type": "object",
+      "required": ["MAJOR", "MINOR", "PATCH", "NONE"],
+      "properties": {
+        "MAJOR": { "type": "string" },
+        "MINOR": { "type": "string" },
+        "PATCH": { "type": "string" },
+        "NONE": { "type": "string" }
+      }
+    },
+    "gitmoji_reference_matrix": {
+      "type": "array",
+      "description": "The mapping of Gitmojis to Conventional Commits, SemVer, and Changelog groups.",
+      "items": {
+        "type": "object",
+        "required": ["emoji", "code", "description", "cc_type", "semver_impact", "changelog_group"],
+        "additionalProperties": false,
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "The visual emoji character."
+          },
+          "code": {
+            "type": "string",
+            "description": "The markdown code for the emoji (e.g., :sparkles:)."
+          },
+          "description": {
+            "type": "string",
+            "description": "The imperative description of what this commit does."
+          },
+          "cc_type": {
+            "type": "string",
+            "description": "The Conventional Commit type (e.g., feat, fix, chore).",
+            "enum": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert", "init", "release"]
+          },
+          "semver_impact": {
+            "type": "string",
+            "description": "The impact this commit has on Semantic Versioning.",
+            "enum": ["MAJOR", "MINOR", "PATCH", "NONE"]
+          },
+          "changelog_group": {
+            "type": "string",
+            "description": "The markdown header this commit belongs under in the CHANGELOG.md.",
+            "enum": ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security", "Miscellaneous"]
+          }
+        }
+      }
+    }
+  }
+}

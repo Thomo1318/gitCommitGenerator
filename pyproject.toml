@@ -1,0 +1,17 @@
+[project]
+name = "gitcommitgenerator"
+version = "0.1.7"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "agentops>=0.4.21",
+    "instructor>=1.15.1",
+    "openai>=2.38.0",
+    "pydantic>=2.13.4",
+    "rich>=14.3.4",
+    "typer>=0.26.3",
+]
+
+[project.scripts]
+git-cg = "git_cg.main:app"
