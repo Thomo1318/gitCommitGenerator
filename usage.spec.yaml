@@ -1,0 +1,32 @@
+name: git-cg
+description: AI-powered Git commit generator with SOP enforcement.
+author: Antigravity
+usage: git-cg [options] <commit_msg_file> [commit_source]
+
+flags:
+  - name: engine
+    short: e
+    long: engine
+    arg: <engine>
+    description: AI engine to use (gemini, ollama, mlx, off)
+    default: gemini
+  - name: dry-run
+    short: d
+    long: dry-run
+    description: Analyze and generate message without writing to file
+  - name: verbose
+    short: v
+    long: verbose
+    description: Show detailed analysis and API responses
+
+args:
+  - name: commit_msg_file
+    description: The file where the commit message is stored (usually .git/COMMIT_EDITMSG)
+    required: true
+  - name: commit_source
+    description: The source of the commit (message, template, merge, squash, or commit)
+    required: false
+
+examples:
+  - git-cg .git/COMMIT_EDITMSG template
+  - git-cg -e ollama .git/COMMIT_EDITMSG template

@@ -1,0 +1,171 @@
+{
+  "$schema": "./gitops_sop.schema.json",
+  "_meta": {
+    "purpose": "Comprehensive GitOps SOP and reference matrix for AI Agents generating Hybrid Gitmoji/Conventional Commits, calculating SemVer bumps, generating Changelogs, and handling Releases.",
+    "version": "1.0.0",
+    "enforcement": "MANDATORY: Agents MUST ingest these rules and use the embedded matrices for all version control operations to prevent malformed history and corrupted file syntaxes."
+  },
+  "specifications_and_standards": {
+    "commit_format": {
+      "standard": "Hybrid (Gitmoji + Conventional Commits)",
+      "syntax": "<emoji> <cc_type>(<scope>): <subject>",
+      "example": "✨ feat(auth): implement OAuth2 login",
+      "rules": [
+        "The <subject> MUST be imperative, present tense (e.g., 'change' not 'changed' or 'changes').",
+        "The <subject> MUST NOT end with a period.",
+        "The total length of the subject line MUST NOT exceed 72 characters.",
+        "If the diff includes breaking changes, append '!' after the scope: `<emoji> <cc_type>(<scope>)!: <subject>`."
+      ]
+    },
+    "semver_specification": {
+      "regex": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-zA-Z0-9-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-zA-Z0-9-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "faq_rules": "v0.x.x is for initial development; the public API should not be considered stable. v1.0.0 defines the public API."
+    },
+    "version_injection_matrix": {
+      "enforcement": "When tasked with versioning a standalone file, the agent MUST use the syntax mapped to the file extension. NEVER inject comments into unsupported formats like JSON. Default to project-level files (e.g., package.json, VERSION) unless executing on a standalone script.",
+      "strategies": {
+        "json": {
+          "extensions": [".json"],
+          "method": "root_key",
+          "syntax": "\"version\": \"{SEMVER}\"",
+          "rule": "DO NOT use comments. Find or create a `version` key at the root object level."
+        },
+        "hash_comment": {
+          "extensions": [".py", ".sh", ".yaml", ".yml", ".rb", ".conf"],
+          "method": "header_comment",
+          "syntax": "# version: v{SEMVER}",
+          "rule": "Inject or replace on line 1 or 2 of the file."
+        },
+        "slash_comment": {
+          "extensions": [".js", ".ts", ".c", ".cpp", ".java", ".go"],
+          "method": "header_comment",
+          "syntax": "// version: v{SEMVER}",
+          "rule": "Inject or replace on line 1 or 2 of the file."
+        },
+        "block_comment": {
+          "extensions": [".html", ".xml", ".md"],
+          "method": "header_comment",
+          "syntax": "<!-- version: v{SEMVER} -->",
+          "rule": "Inject or replace at the top of the document."
+        }
+      }
+    }
+  },
+  "agentic_commit_workflow": {
+    "philosophy": "Traceable, machine-readable, and visually clear history. Never hallucinate intent.",
+    "phases": [
+      "Phase 1: Diff Analysis. Execute `git diff` to identify the exact files changed and the nature of the logic altered.",
+      "Phase 2: Intent Classification. Determine the PRIMARY intent of the commit. Does it add a feature, fix a bug, or merely refactor?",
+      "Phase 3: Matrix Query. Query the `gitmoji_reference_matrix` and select the single most appropriate object based on the `description`.",
+      "Phase 4: Subject Line Generation. Format strictly according to `specifications_and_standards.commit_format.syntax`.",
+      "Phase 5: Body Generation. If the diff is complex, leave a blank line after the subject and write a detailed body explaining 'Why' and 'What'.",
+      "Phase 6: Commit Execution. Execute the commit."
+    ]
+  },
+  "agentic_release_workflow": {
+    "philosophy": "Automated, deterministic releases based entirely on semantic commit history.",
+    "phases": [
+      "Phase 1: Log Parsing. Read the git commit history since the last SemVer tag.",
+      "Phase 2: SemVer Calculation. Evaluate the `semver_impact` of all commits in the parsed log. The highest impact (MAJOR > MINOR > PATCH) dictates the bump. Exception: If current version is 0.x.x, breaking changes may only trigger a MINOR bump depending on project rules.",
+      "Phase 3: Target Resolution. Identify the file to receive the version bump (e.g., `package.json`, `VERSION`, or a standalone script).",
+      "Phase 4: File Injection. Use the `version_injection_matrix` and the `semver_regex` to safely find and update the version string in the target file without corrupting syntax.",
+      "Phase 5: Changelog Generation. Follow `changelog_generation_rules` to parse the recent commits, group them by taxonomy, and prepend to CHANGELOG.md.",
+      "Phase 6: Tag & Release. Commit the version and changelog updates using 🔖 (`:bookmark:`). Create an annotated git tag (`git tag -a v<VERSION> -m 'Release v<VERSION>'`). Suggest or execute the forge CLI command (e.g., `gh release create`) to push the tag and release notes."
+    ]
+  },
+  "changelog_generation_rules": {
+    "enforcement": "Do not dump a raw git log. Parse the hybrid commits and group them under markdown headers based on the `changelog_group` mapped in the reference matrix.",
+    "taxonomy": [
+      "Added: for new features (e.g., ✨ feat).",
+      "Changed: for changes in existing functionality (e.g., ♻️ refactor, 🎨 style).",
+      "Deprecated: for soon-to-be removed features (e.g., 🗑️).",
+      "Removed: for now removed features (e.g., 🔥).",
+      "Fixed: for any bug fixes (e.g., 🐛 fix).",
+      "Security: in case of vulnerabilities (e.g., 🔒️).",
+      "Miscellaneous: for chores, docs, and build updates (e.g., 📝 docs, 🚀 chore)."
+    ]
+  },
+  "semver_resolution_matrix": {
+    "MAJOR": "Triggered ONLY by commits containing 'BREAKING CHANGE' in the body, or an exclamation mark in the hybrid format (e.g., `feat(api)!:` or 💥 `:boom:`).",
+    "MINOR": "Triggered by any `cc_type` mapped to 'feat' (e.g., ✨ `:sparkles:`).",
+    "PATCH": "Triggered by `cc_type` mapped to 'fix', 'perf', or 'refactor' (e.g., 🐛 `:bug:`, ⚡️ `:zap:`).",
+    "NONE": "Triggered by `cc_type` mapped to 'docs', 'chore', 'test', 'ci'. Does not trigger a version bump on its own."
+  },
+  "gitmoji_reference_matrix": [
+    { "emoji": "🎨", "code": ":art:", "description": "Improve structure/format of the code", "cc_type": "style", "semver_impact": "NONE", "changelog_group": "Changed" },
+    { "emoji": "⚡️", "code": ":zap:", "description": "Improve performance", "cc_type": "perf", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🔥", "code": ":fire:", "description": "Remove code or files", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Removed" },
+    { "emoji": "🐛", "code": ":bug:", "description": "Fix a bug", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed" },
+    { "emoji": "🚑", "code": ":ambulance:", "description": "Critical hotfix", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed" },
+    { "emoji": "✨", "code": ":sparkles:", "description": "Introduce new features", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "📝", "code": ":memo:", "description": "Add or update documentation", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🚀", "code": ":rocket:", "description": "Deploy stuff", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "💄", "code": ":lipstick:", "description": "Add or update the UI and style files", "cc_type": "style", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🎉", "code": ":tada:", "description": "Begin a project", "cc_type": "init", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "✅", "code": ":white_check_mark:", "description": "Add, update, or pass tests", "cc_type": "test", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🔒️", "code": ":lock:", "description": "Fix security or privacy issues", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Security" },
+    { "emoji": "🔐", "code": ":closed_lock_with_key:", "description": "Add or update secrets", "cc_type": "chore", "semver_impact": "PATCH", "changelog_group": "Security" },
+    { "emoji": "🔖", "code": ":bookmark:", "description": "Release/Version tags", "cc_type": "release", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🚨", "code": ":rotating_light:", "description": "Fix compiler/linter warnings", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🚧", "code": ":construction:", "description": "Work in progress", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "💚", "code": ":green_heart:", "description": "Fix CI Build", "cc_type": "ci", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "⬇️", "code": ":arrow_down:", "description": "Downgrade dependencies", "cc_type": "build", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "⬆️", "code": ":arrow_up:", "description": "Upgrade dependencies", "cc_type": "build", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "📌", "code": ":pushpin:", "description": "Pin dependencies to specific versions", "cc_type": "build", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "👷", "code": ":construction_worker:", "description": "Add or update CI build system", "cc_type": "ci", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "📈", "code": ":chart_with_upwards_trend:", "description": "Add or update analytics or track code", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "♻️", "code": ":recycle:", "description": "Refactor code", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "➕", "code": ":heavy_plus_sign:", "description": "Add a dependency", "cc_type": "build", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "➖", "code": ":heavy_minus_sign:", "description": "Remove a dependency", "cc_type": "build", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🔧", "code": ":wrench:", "description": "Add or update configuration files", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🔨", "code": ":hammer:", "description": "Add or update development scripts", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🌐", "code": ":globe_with_meridians:", "description": "Internationalization and localization", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "✏️", "code": ":pencil2:", "description": "Fix typos", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "💩", "code": ":poop:", "description": "Write bad code that needs to be improved", "cc_type": "refactor", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "⏪", "code": ":rewind:", "description": "Revert changes", "cc_type": "revert", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🔀", "code": ":twisted_rightwards_arrows:", "description": "Merge branches", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "📦", "code": ":package:", "description": "Add or update compiled files or packages", "cc_type": "build", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "👽️", "code": ":alien:", "description": "Update code due to external API changes", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🚚", "code": ":truck:", "description": "Move or rename resources", "cc_type": "refactor", "semver_impact": "NONE", "changelog_group": "Changed" },
+    { "emoji": "📄", "code": ":page_facing_up:", "description": "Add or update license", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "💥", "code": ":boom:", "description": "Introduce breaking changes", "cc_type": "feat", "semver_impact": "MAJOR", "changelog_group": "Changed" },
+    { "emoji": "🍱", "code": ":bento:", "description": "Add or update assets", "cc_type": "chore", "semver_impact": "PATCH", "changelog_group": "Added" },
+    { "emoji": "♿️", "code": ":wheelchair:", "description": "Improve accessibility", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "💡", "code": ":bulb:", "description": "Add or update comments in source code", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🍻", "code": ":beers:", "description": "Write code drunkenly", "cc_type": "refactor", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "💬", "code": ":speech_balloon:", "description": "Add or update text and literals", "cc_type": "style", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🗃️", "code": ":card_file_box:", "description": "Perform database related changes", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🔊", "code": ":loud_sound:", "description": "Add or update logs", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🔇", "code": ":mute:", "description": "Remove logs", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "👥", "code": ":busts_in_silhouette:", "description": "Add or update contributor(s)", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🚸", "code": ":children_crossing:", "description": "Improve user experience/usability", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🏗️", "code": ":building_construction:", "description": "Make architectural changes", "cc_type": "refactor", "semver_impact": "MAJOR", "changelog_group": "Changed" },
+    { "emoji": "📱", "code": ":iphone:", "description": "Work on responsive design", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🤡", "code": ":clown_face:", "description": "Mock things", "cc_type": "test", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🥚", "code": ":egg:", "description": "Add or update an easter egg", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Added" },
+    { "emoji": "🙈", "code": ":see_no_evil:", "description": "Add or update a .gitignore file", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "📸", "code": ":camera_flash:", "description": "Add or update snapshots", "cc_type": "test", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "⚗️", "code": ":alembic:", "description": "Perform experiments", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🔍", "code": ":mag:", "description": "Improve SEO", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🏷️", "code": ":label:", "description": "Add or update types", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🌱", "code": ":seedling:", "description": "Add or update seed files", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "🚩", "code": ":triangular_flag_on_post:", "description": "Add, update, or remove feature flags", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "🥅", "code": ":goal_net:", "description": "Catch errors", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed" },
+    { "emoji": "💫", "code": ":dizzy:", "description": "Add or update animations and transitions", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🗑️", "code": ":wastebasket:", "description": "Deprecate code that needs to be cleaned up", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Deprecated" },
+    { "emoji": "🛂", "code": ":passport_control:", "description": "Work on code related to authorization, roles and permissions", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Security" },
+    { "emoji": "🩹", "code": ":adhesive_bandage:", "description": "Simple fix for a non-critical issue", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed" },
+    { "emoji": "🧐", "code": ":monocle_face:", "description": "Data exploration/inspection", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "⚰️", "code": ":coffin:", "description": "Remove dead code", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Removed" },
+    { "emoji": "🧪", "code": ":test_tube:", "description": "Add a failing test", "cc_type": "test", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "👔", "code": ":necktie:", "description": "Add or update business logic", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "🩺", "code": ":stethoscope:", "description": "Add or update healthcheck", "cc_type": "feat", "semver_impact": "PATCH", "changelog_group": "Added" },
+    { "emoji": "🧱", "code": ":bricks:", "description": "Infrastructure related changes", "cc_type": "ci", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "🧑‍💻", "code": ":technologist:", "description": "Improve developer experience", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous" },
+    { "emoji": "💸", "code": ":money_with_wings:", "description": "Add sponsorships or money related infrastructure", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "🧵", "code": ":thread:", "description": "Add or update code related to multithreading or concurrency", "cc_type": "refactor", "semver_impact": "MINOR", "changelog_group": "Changed" },
+    { "emoji": "🦺", "code": ":safety_vest:", "description": "Add or update code related to validation", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Changed" },
+    { "emoji": "✈️", "code": ":airplane:", "description": "Improve offline support", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added" },
+    { "emoji": "🦖", "code": ":t-rex:", "description": "Code that adds backwards compatibility", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Changed" }
+  ]
+}

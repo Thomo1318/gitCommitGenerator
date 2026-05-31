@@ -1,0 +1,15 @@
+name "git-cg"
+description "AI-powered Git commit generator with SOP enforcement."
+author "Antigravity"
+
+flag "-e --engine" help="AI engine to use (gemini, ollama, mlx, off)" default="gemini" {
+    arg "<engine>"
+}
+flag "-d --dry-run" help="Analyze and generate message without writing to file"
+flag "-v --verbose" help="Show detailed analysis and API responses"
+
+arg "commit_msg_file" help="The file where the commit message is stored"
+arg "commit_source" help="The source of the commit (message, template, merge, etc.)"
+
+example "git-cg .git/COMMIT_EDITMSG template"
+example "git-cg -e ollama .git/COMMIT_EDITMSG template"
