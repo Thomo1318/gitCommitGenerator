@@ -36,6 +36,7 @@ tests/output/
 
 # Backups
 backups/
+archive/
 
 # Logs
 *.log
@@ -43,3 +44,11 @@ agentops.log
 
 # AI Files
 repomix*
+
+# YoYo AI version control directory
+.yoyo/
+config/ADR/
+CODEBASE_REVIEW.md
+agent-handoff.md
+projectReviewOLD/
+projectReview1/
