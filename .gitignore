@@ -40,3 +40,6 @@ backups/
 # Logs
 *.log
 agentops.log
+
+# AI Files
+repomix*
