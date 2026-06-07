@@ -18,7 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from git_cg.intent import extract_diff_signals, rank_commit_intents
-from git_cg.models import Commit
+from git_cg.models import CommitPlan
 from git_cg.sop import load_sop
 
 app = typer.Typer(add_completion=False, help="GitOps AI Commit Generator and Release Automation")
@@ -136,7 +136,7 @@ def generate_commit_message(
     model_name: str,
     system_prompt: str,
     **kwargs,
-) -> str:
+) -> CommitPlan:
     """Generate a structured commit message using AI."""
     opik_context.update_current_trace(
         metadata={
@@ -154,16 +154,16 @@ def generate_commit_message(
     max_retries = 10
     for attempt in range(max_retries):
         try:
-            commit_result: Commit = client.chat.completions.create(
+            commit_result: CommitPlan = client.chat.completions.create(
                 model=model_name,
-                response_model=Commit,
+                response_model=CommitPlan,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
                 ],
                 max_retries=2,
             )
-            return commit_result.render()
+            return commit_result
         except openai.APIConnectionError:
             if attempt == max_retries - 1:
                 raise
@@ -333,9 +333,10 @@ def commit(
 
     system_prompt = (
         "You are a senior software engineer who writes perfect Conventional Commit messages. "
-        "Analyze the provided git diff and generate a structured commit message. "
-        "Be concise, use the imperative mood for descriptions, and select the most appropriate emoji and type. "
-        "CRITICAL: The final rendered commit header (emoji + type + scope + description) MUST NOT exceed 72 characters in total length."
+        "Analyze the provided git diff and the ranked intent candidates to generate a structured CommitPlan. "
+        "If the diff contains multiple distinct changes, select the best primary intent and list the rest as secondary intents. "
+        "Be concise, use the imperative mood for descriptions. "
+        "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters."
         f"{gitops_matrix_str}"
     )
 
@@ -348,11 +349,38 @@ def commit(
         thread_id = "default-thread"
 
     try:
-        result_string = generate_commit_message(
+        commit_plan = generate_commit_message(
             client, diff_output, model_name, system_prompt, opik_args={"trace": {"thread_id": thread_id}}
         )
     except Exception as e:
         _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
+
+    mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
+
+    if commit_plan.split_recommended:
+        msg = f"\n[bold yellow]⚠️  MIXED COMMIT DETECTED[/bold yellow]\n[yellow]Rationale:[/yellow] {commit_plan.rationale}\n"
+
+        if mixed_policy == "strict":
+            console.print(msg)
+            _abort(
+                "[bold red]Policy is 'strict'. Aborting commit. Please split your changes.[/bold red]", strict=strict
+            )
+
+        elif mixed_policy == "split_prompt":
+            console.print(msg)
+            if sys.stdin.isatty():
+                do_split = typer.confirm("Would you like to abort and split these changes?")
+                if do_split:
+                    _abort("[bold red]Aborting commit so you can split your changes.[/bold red]", strict=strict)
+            else:
+                if verbose:
+                    console.print("[yellow]Non-TTY environment detected; bypassing split_prompt.[/yellow]")
+
+        elif mixed_policy == "warn":
+            console.print(msg)
+            console.print("[yellow]Policy is 'warn'. Proceeding with composite commit.[/yellow]\n")
+
+    result_string = commit_plan.render()
 
     if verbose or dry_run:
         console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))

@@ -60,11 +60,16 @@ def parse_commit_impact(commit_string: str, gitmoji_matrix: list) -> str:
     subject = parts[0]
     body = parts[1] if len(parts) > 1 else ""
 
-    # Check for breaking change indicator
+    # 1. Prefer machine-readable trailer from CommitPlan
+    trailer_match = re.search(r"^SemVer-Impact:\s*(MAJOR|MINOR|PATCH|NONE)", body, flags=re.MULTILINE)
+    if trailer_match:
+        return trailer_match.group(1).upper()
+
+    # 2. Check for manual breaking change indicators
     if "BREAKING CHANGE:" in body or "BREAKING CHANGE:" in subject:
         return "MAJOR"
 
-    # Match the cc_type and check for !
+    # 3. Legacy fallback: Regex on header cc_type and breaking indicator
     match = re.search(r"^[^\s]+\s+([a-z]+)(?:\(.*?\)?)?(!?):", subject)
     if match:
         cc_type = match.group(1)
@@ -76,7 +81,7 @@ def parse_commit_impact(commit_string: str, gitmoji_matrix: list) -> str:
             if entry.get("cc_type") == cc_type:
                 return entry.get("semver_impact", "NONE")
 
-    # Fallback checking emojis directly
+    # 4. Legacy fallback: Check emojis directly
     for entry in gitmoji_matrix:
         if entry.get("emoji") in subject:
             return entry.get("semver_impact", "NONE")
@@ -213,7 +218,21 @@ def execute_release(dry_run: bool, verbose: bool):
     # Group commits
     changelog_groups = defaultdict(list)
     for commit in commits:
-        subject = commit.split("---COMMIT_BODY---")[0]
+        parts = commit.split("---COMMIT_BODY---", 1)
+        subject = parts[0]
+        body = parts[1] if len(parts) > 1 else ""
+
+        # Prefer machine-readable trailer for mixed-commit support
+        trailer_match = re.search(r"^Changelog-Groups:\s*(.+)$", body, flags=re.MULTILINE)
+        if trailer_match:
+            # Commit can belong to multiple groups if it had secondary intents
+            groups = [g.strip() for g in trailer_match.group(1).split(",")]
+            for g in groups:
+                if g:
+                    changelog_groups[g].append(subject)
+            continue
+
+        # Legacy fallback logic
         group = "Miscellaneous"
         for entry in gitmoji_matrix:
             if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
