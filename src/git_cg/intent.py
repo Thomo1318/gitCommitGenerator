@@ -511,8 +511,16 @@ def _is_docs_path(path: str) -> bool:
 
 
 def _is_test_path(path: str) -> bool:
-    parts = {part.lower() for part in PurePosixPath(path).parts}
-    return bool(parts & _TEST_PATH_PARTS) or PurePosixPath(path).name.startswith("test_")
+    p = PurePosixPath(path)
+    parts = {part.lower() for part in p.parts}
+    name = p.name.lower()
+    return (
+        bool(parts & _TEST_PATH_PARTS)
+        or name.startswith("test_")
+        or ".test." in name
+        or ".spec." in name
+        or name.endswith("_test.go")
+    )
 
 
 def _is_ci_path(path: str) -> bool:

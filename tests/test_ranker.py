@@ -106,3 +106,16 @@ def test_ranker_prefers_feature_over_docs_in_mixed_commit(sop_matrix):
     docs_idx = next(i for i, r in enumerate(ranked) if r.intent_id == "documentation_update")
 
     assert feature_idx < docs_idx, "Feature addition should outrank documentation in a mixed commit"
+
+
+def test_ranker_empty_signals(sop_matrix):
+    """
+    If no specific signals are extracted, the ranker should still return a sorted list
+    without throwing an error, likely defaulting to standard intent base scores.
+    """
+    signals = DiffSignals()
+    ranked = rank_commit_intents(signals, sop_matrix)
+
+    assert len(ranked) == len(sop_matrix)
+    # The first result should be one of the intents with highest base priority/specificity
+    assert ranked[0].score > 0
