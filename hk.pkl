@@ -8,8 +8,8 @@ local linters = new Mapping<String, Step> {
         check = "ruff format --check {{ files }}"
         fix = "ruff format {{ files }}"
     }
-    ["gitleaks"] {
-        check = "gitleaks protect -v --staged"
+    ["betterleaks"] {
+        check = "betterleaks git -v --staged"
     }
 }
 
