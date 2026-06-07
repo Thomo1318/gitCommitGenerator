@@ -18,7 +18,7 @@ This tool is the core implementation of the **Hybrid Commit Standard**, fusing G
 
 Traditional Git history is often inconsistent, making it difficult to automate releases or understand changes at a glance. `git-cg` solves this by enforcing a digitized Standard Operating Procedure (SOP) via **Deterministic Structured Data Extraction**.
 
-Instead of relying on brittle prompt engineering, `git-cg` uses the [**Instructor**](https://python.useinstructor.com/) Python library and [**Pydantic**](https://docs.pydantic.dev/) to force the LLM to output mathematically validated JSON matching the `Commit` schema.
+Instead of relying on brittle prompt engineering, `git-cg` utilizes a **Deterministic Intent Ranker** to extract boolean signals from the git diff and score them against the SOP matrix. It then injects a "Smart Menu" of the top-ranked candidates into the prompt, using the [**Instructor**](https://python.useinstructor.com/) Python library and [**Pydantic**](https://docs.pydantic.dev/) to force the LLM to output a mathematically validated `CommitPlan`.
 
 1. **Gitmoji**: Instant visual recognition of intent (e.g., 🐛 for fixes, ✨ for features).
 2. **Conventional Commits (CC)**: Machine-readable semantics that drive automated versioning.
@@ -33,7 +33,9 @@ By centralizing these rules in `config/gitops_agent_sop.json`, we ensure that bo
 The engine operates on a modernized, extremely robust toolchain managed seamlessly by [mise](https://mise.jdx.dev) and [just](https://just.systems):
 
 - **Logic Engine**: Python 3.14 (managed via [uv](https://docs.astral.sh/uv/)), leveraging [instructor](https://python.useinstructor.com/) and [pydantic](https://docs.pydantic.dev/).
-- **Validation Engine**: [Node.js](https://nodejs.org/) via `validate_commit.mjs` (acts as the absolute final gatekeeper in `commit-msg`).
+- **Signal Extraction & Ranking**: Python `intent.py` (extracts diff metrics, normalizes content, and deterministically ranks commit intents).
+- **Validation Engine**: [Node.js](https://nodejs.org/) via `validate_commit.mjs` (acts as a downstream gatekeeper in `commit-msg`).
+- **Secrets Orchestration**: `fnox` and `age` for hybrid, zero-plaintext contributor environments.
 - **Hook Orchestration**: [hk](https://hk.jdx.dev) (git hook manager).
 - **Prompt Compression**: [rtk](https://github.com/rtk-ai/rtk) (reduces LLM context size by up to 90% via structural diff compression).
 - **LLM Inference**: Native Apple Silicon serving via [oMLX](https://github.com/jundot/omlx) or [MTPLX](https://github.com/youssofal/mtplx).
@@ -48,14 +50,16 @@ flowchart TD
 
     subgraph Intelligence ["Python AI Engine (git-cg)"]
         Main["CLI & Orchestrator<br/>(main.py)"]
-        Pydantic["Pydantic Schema<br/>(models.py)"]
-        SOP["SOP Matrix<br/>(gitops_agent_sop.json)"]
+        Ranker["Intent Ranker<br/>(intent.py)"]
+        SOPLoader["SOP Loader<br/>(sop.py)"]
+        Pydantic["CommitPlan Schema<br/>(models.py)"]
         Instructor["Instructor<br/>(Validation & Retries)"]
 
         PrepareHook --> Main
-        SOP --> Pydantic
+        Main --> SOPLoader
+        Main --> Ranker
+        Ranker --> Instructor
         Pydantic --> Instructor
-        Main --> Instructor
     end
 
     subgraph Execution ["Inference Layer"]
@@ -81,8 +85,11 @@ flowchart TD
 
 | File                           | Layer       | Role                                                                                                                          |
 | :----------------------------- | :---------- | :---------------------------------------------------------------------------------------------------------------------------- |
-| `src/git_cg/main.py`           | Entry       | The main Typer CLI that reads the diff and initiates generation.                                                              |
-| `src/git_cg/models.py`         | Schema      | [Pydantic](https://docs.pydantic.dev/) models enforcing strict SOP validation and retry logic.                                |
+| `src/git_cg/main.py`           | Entry       | The main Typer CLI that manages the orchestrator loop and split policies.                                                     |
+| `src/git_cg/intent.py`         | Classifier  | Deterministic signal extraction, diff normalization, and intent ranking.                                                      |
+| `src/git_cg/sop.py`            | Configuration| Portable SOP loader supporting `.git-cg/sop.json` overrides and packaged wheel data.                                           |
+| `src/git_cg/models.py`         | Schema      | [Pydantic](https://docs.pydantic.dev/) `CommitPlan` models enforcing strict SOP validation, multi-intent rendering, and retries. |
+| `src/git_cg/release.py`        | Release     | Parses machine-readable trailers to automate SemVer bumps and grouped changelog generation.                                   |
 | `scripts/validate_commit.mjs`  | Gatekeeper  | The [Node.js](https://nodejs.org/)/[zx](https://github.com/google/zx) script that strictly enforces the 72-char hybrid limit. |
 | `usage.kdl`                    | Interface   | The declarative CLI specification for the [usage](https://usage.jdx.dev/) framework.                                          |
 | `config/gitops_agent_sop.json` | Governance  | The "Brain" containing the emoji/CC mapping matrix.                                                                           |
@@ -93,7 +100,9 @@ flowchart TD
 
 ## ✨ Features
 
-- **[Pydantic](https://docs.pydantic.dev/) Validation**: Absolute structural guarantees for commit messages. No conversational padding, no wrong emojis.
+- **[Pydantic](https://docs.pydantic.dev/) Validation**: Absolute structural guarantees using the `CommitPlan` schema. No conversational padding, no wrong emojis.
+- **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
+- **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
 - **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution.
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
@@ -157,7 +166,20 @@ All messages generated or validated by this engine follow the format:
 `<emoji> <cc_type>(<scope>): <subject>`
 
 **Example Output:**
-`✨ feat(auth): implement OAuth2 login`
+```markdown
+♻️ refactor(core): centralize SOP loading for hook portability
+
+Introduce a portable SOP loader with a resolution precedence chain for explicit environment overrides.
+
+Included changes:
+- ♻️ refactor(sop): add centralized portable SOP loader
+- 🦺 fix(cli): add strict mode for CI while keeping hooks fail-soft
+- 📦 build(package): ship SOP data in the wheel
+
+SemVer-Impact: PATCH
+Change-Types: refactor, fix, build
+Changelog-Groups: Changed, Fixed, Miscellaneous
+```
 
 #### Gitmoji Reference Matrix
 
@@ -265,6 +287,11 @@ This project heavily leverages the following open-source tools. We extend our im
 | **[just](https://just.systems)**                    | CC0                 | Command runner for project tasks          |
 | **[pkl](https://pkl-lang.org/)**                    | Apple Public Source | Embeddable configuration language         |
 | **[zx](https://github.com/google/zx)**              | Apache-2.0          | Modern Bash scripting for Node.js         |
+| **[fnox](https://github.com/jdx/fnox)**             | MIT                 | Hybrid secrets orchestration              |
+| **[age](https://github.com/FiloSottile/age)**       | BSD-3-Clause        | Simple, modern, secure file encryption    |
+| **[gitleaks](https://github.com/gitleaks/gitleaks)**| MIT                 | Fast pre-commit secret scanner            |
+| **[TruffleHog](https://github.com/trufflesecurity/trufflehog)** | AGPL-3.0 | Deep git history secret verification      |
+| **[hatchling](https://hatch.pypa.io/)**             | MIT                 | Modern, extensible Python build backend   |
 
 ---
 
