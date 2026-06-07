@@ -27,6 +27,7 @@
       "properties": {
         "purpose": { "type": "string" },
         "version": { "type": "string" },
+        "matrix_schema_version": { "type": "string" },
         "enforcement": { "type": "string" }
       }
     },
@@ -131,41 +132,128 @@
     },
     "gitmoji_reference_matrix": {
       "type": "array",
-      "description": "The mapping of Gitmojis to Conventional Commits, SemVer, and Changelog groups.",
+      "description": "Reference matrix mapping gitmoji to Conventional Commit types, SemVer impacts, changelog groups, and deterministic intent-selection metadata.",
       "items": {
         "type": "object",
-        "required": ["emoji", "code", "description", "cc_type", "semver_impact", "changelog_group"],
-        "additionalProperties": false,
-        "properties": {
-          "emoji": {
-            "type": "string",
-            "description": "The visual emoji character."
-          },
-          "code": {
-            "type": "string",
-            "description": "The markdown code for the emoji (e.g., :sparkles:)."
-          },
-          "description": {
-            "type": "string",
-            "description": "The imperative description of what this commit does."
-          },
-          "cc_type": {
-            "type": "string",
-            "description": "The Conventional Commit type (e.g., feat, fix, chore).",
-            "enum": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert", "init", "release"]
-          },
-          "semver_impact": {
-            "type": "string",
-            "description": "The impact this commit has on Semantic Versioning.",
-            "enum": ["MAJOR", "MINOR", "PATCH", "NONE"]
-          },
-          "changelog_group": {
-            "type": "string",
-            "description": "The markdown header this commit belongs under in the CHANGELOG.md.",
-            "enum": ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security", "Miscellaneous"]
-          }
+        "required": [
+          "emoji",
+          "code",
+          "intent_id",
+          "intent_group",
+          "description",
+          "cc_type",
+          "semver_impact",
+          "changelog_group",
+          "priority",
+          "specificity",
+          "split_weight",
+          "positive_signals",
+          "negative_signals",
+          "selection_rule"
+        ],
+    "additionalProperties": false,
+    "properties": {
+      "emoji": {
+        "type": "string",
+        "description": "The visual emoji character."
+      },
+      "code": {
+        "type": "string",
+        "description": "The markdown code for the emoji (e.g., :sparkles:)."
+      },
+      "intent_id": {
+        "type": "string",
+        "description": "Stable machine-readable identifier for the specific commit intent.",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "intent_group": {
+        "type": "string",
+        "description": "Higher-level intent grouping used for prompt grouping, ranking, and split detection."
+      },
+      "description": {
+        "type": "string",
+        "description": "The imperative description of what this commit type represents."
+      },
+      "cc_type": {
+        "type": "string",
+        "description": "The Conventional Commit type.",
+        "enum": [
+          "feat",
+          "fix",
+          "docs",
+          "style",
+          "refactor",
+          "perf",
+          "test",
+          "build",
+          "ci",
+          "chore",
+          "revert",
+          "init",
+          "release"
+        ]
+      },
+      "semver_impact": {
+        "type": "string",
+        "description": "The impact this commit has on Semantic Versioning.",
+        "enum": [
+          "MAJOR",
+          "MINOR",
+          "PATCH",
+          "NONE"
+        ]
+      },
+      "changelog_group": {
+        "type": "string",
+        "description": "The markdown header this commit belongs under in CHANGELOG.md.",
+        "enum": [
+          "Added",
+          "Changed",
+          "Deprecated",
+          "Removed",
+          "Fixed",
+          "Security",
+          "Miscellaneous"
+        ]
+      },
+      "priority": {
+        "type": "integer",
+        "description": "General intent-selection priority. Higher values are more important when multiple intents match.",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "specificity": {
+        "type": "integer",
+        "description": "How specific this intent is. Higher values indicate narrower, more precise matching.",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "split_weight": {
+        "type": "integer",
+        "description": "How strongly this intent should trigger split recommendations when mixed with other intents.",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "positive_signals": {
+        "type": "array",
+        "description": "Diff/file/content signals that support selecting this intent.",
+        "items": {
+          "type": "string"
         }
+      },
+      "negative_signals": {
+        "type": "array",
+        "description": "Diff/file/content signals that argue against selecting this intent.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "selection_rule": {
+        "type": "string",
+        "description": "Human-readable disambiguation rule for when to use this intent."
       }
     }
   }
+}
+}
 }
