@@ -3,5 +3,6 @@
 # We unset OP_SERVICE_ACCOUNT_TOKEN temporarily to fall back to the user's biometric session,
 # because the beta CLI has limited support for reading Environments natively through Service Accounts.
 
-eval "$(env -u OP_SERVICE_ACCOUNT_TOKEN op environment read ce3a5m2atri7cxq7mdvofergt4)"
+ENV_ID="${GIT_CG_OP_ENV:-ce3a5m2atri7cxq7mdvofergt4}"
+eval "$(env -u OP_SERVICE_ACCOUNT_TOKEN op environment read "$ENV_ID")"
 exec "$@"

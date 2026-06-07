@@ -495,6 +495,70 @@
 
 <p></p>
 
+
+<p></p>
+
+---
+
+<p></p>
+
+<H2><u>Deferred Implementation Ideas (From Architecture Review)</u></H2>
+
+These snippets and concepts were developed during the intent-ranking architecture review but deferred so they don't block the core MVP.
+
+- [ ] **Diff Line Metrics:** Count lines added/removed to provide a complexity proxy for the ranker.
+  ```python
+  # Add to DiffSignals:
+  # lines_added: int = 0
+  # lines_removed: int = 0
+  # files_changed_count: int = 0
+
+  def _apply_diff_metrics(signals: DiffSignals, diff_output: str) -> None:
+      for line in diff_output.splitlines():
+          if line.startswith("+") and not line.startswith("+++"):
+              signals.lines_added += 1
+          elif line.startswith("-") and not line.startswith("---"):
+              signals.lines_removed += 1
+
+      signals.files_changed_count = len(signals.files)
+
+      if signals.lines_added or signals.lines_removed:
+          signals.evidence.append(
+              f"Diff size: +{signals.lines_added}/-{signals.lines_removed} across {signals.files_changed_count} files"
+          )
+  ```
+
+- [ ] **Diff Normalisation:** Clean up git diff metadata before content analysis to prevent false positives on file paths appearing in diff headers.
+  ```python
+  def normalize_diff_for_content_matching(diff_output: str) -> str:
+      def _normalize_line(line: str) -> str:
+          if line.startswith(("diff --git ", "index ", "+++", "---")):
+              return ""
+          if line.startswith(("+a/", "-a/", "+b/", "-b/")):
+              return line[0] + line[3:]
+          return line
+      normalized = (_normalize_line(line) for line in diff_output.splitlines())
+      return "\n".join(filter(None, normalized)).lower()
+  ```
+
+- [ ] **Machine Learning / Vectorised Intent Scoring:** (Long-term) Convert `DiffSignals` into a numerical vector for advanced classification instead of deterministic rules.
+  ```python
+  def compute_intent_vector(signals: DiffSignals) -> list[float]:
+      def _clip_cubic(x: float) -> float:
+          return max(0.0, min(1.0, x ** 3))
+
+      binary_features = [
+          float(signals.has_breaking_change),
+          float(signals.adds_public_api),
+          # ... other binary flags ...
+      ]
+      
+      total_lines = signals.lines_added + signals.lines_removed
+      complexity = _clip_cubic(min(total_lines / 50.0, 1.0))
+      
+      return binary_features + [complexity]
+  ```
+
 **Do Not Implement:**
 
 - [ ] Explore incorporating a database into the project, whether that is `Redis`, a `SQL` database (Sqlite?) or a vector database such as `Qdrant`, `Weaviate`, `Milvus`, `Chroma`, etc. or a `postgreSQL` db with `pgvector`. The `db` would be used to store `commit messages` and their associated `diffs` and `metadata` to allow the tool to `learn` over time and `improve` its `commit message generation`.
