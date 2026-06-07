@@ -43,8 +43,7 @@ uv = "latest"                       # Fast Python package and environment manage
 rtk = "latest"                      # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
 node = "latest"                     # JS runtime for validation and release scripts (https://nodejs.org)
 just = "latest"                     # Task runner for project automation (https://just.systems)
-gitleaks = "latest"                 # Blazing fast secret scanner for pre-commit hooks (https://github.com/gitleaks/gitleaks)
-trufflehog = "latest"               # Deep secret scanner with active verification (https://trufflesecurity.com/trufflehog/)
+betterleaks = "latest"              # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
 # 1password-cli is omitted here to fall back to the Homebrew-managed `1password-cli@beta` global installation, which is required for `op environment`.
 # 1password-cli = "latest"
 

@@ -1,0 +1,21 @@
+title = "git-cg betterleaks config"
+
+# Global prefilter, it runs before expensive regex calls
+prefilter = '''
+(filter.matchesAny(attributes[?"path"].orValue(""), [
+  r"""(?i)\.(?:bmp|gif|jpe?g|png|svg|tiff|pdf|exe)$""",
+  r"""(?:^|/)node_modules(?:/.*)?$""",
+  r"""(?:^|/)vendor(?:/.*)?$""",
+  r"""(?:^|/)\.venv(?:/.*)?$"""
+]))
+|| attributes[?"git.author_name"].orValue("") == "renovate[bot]"
+'''
+
+# Example of a global filter
+filter = '''
+filter.containsAny(finding["secret"], [
+  "EXAMPLE",
+  "CHANGEME",
+  "YOUR_API_KEY_HERE"
+])
+'''
