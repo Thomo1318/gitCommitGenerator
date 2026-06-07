@@ -13,6 +13,7 @@ dependencies = [
     "openai>=2.38.0",
     "opik>=2.0.52",
     "pydantic>=2.13.4",
+    "python-dotenv>=1.0.1",
     "rich>=14.3.4",
     "typer>=0.26.3",
 ]

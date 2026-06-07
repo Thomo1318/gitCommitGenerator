@@ -1,2 +1,4 @@
+# Risk Accepted: These are historical dummy keys from AgentOps that have been eradicated from the current codebase.
+# They are ignored here to prevent TruffleHog/Gitleaks from failing on old git history without requiring a git rewrite.
 56965d04f93a0f32b972759863c369489f607cd9:docs/CODEBASE_REVIEW.md:generic-api-key:21
 8f448521773a6438eed773c2c07f19a121545b8f:src/git_cg/main.py:generic-api-key:28
