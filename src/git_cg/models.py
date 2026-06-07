@@ -67,40 +67,33 @@ class Commit(BaseModel):
 
     @model_validator(mode="after")
     def validate_and_correct_matrix(self) -> Commit:
-        import json
-        import os
+        from git_cg.sop import get_gitmoji_matrix
 
-        sop_path = os.path.join(os.getcwd(), "config", "gitops_agent_sop.json")
-        if not os.path.exists(sop_path):
-            sop_path = os.path.join(os.getcwd(), "config", "gitCommitGenerator", "config", "gitops_agent_sop.json")
+        matrix = get_gitmoji_matrix()
+        if not matrix:
+            # SOP genuinely unavailable — cannot enforce; skip rather than crash.
+            return self
 
-        if os.path.exists(sop_path):
-            try:
-                with open(sop_path) as f:
-                    sop_data = json.load(f)
-                    matrix = sop_data.get("gitmoji_reference_matrix", [])
+        # 1. Ensure the emoji is valid
+        entry = next((item for item in matrix if item.get("emoji") == self.gitmoji), None)
+        if not entry:
+            # Try fallback matching by code (e.g. :sparkles:)
+            entry = next((item for item in matrix if item.get("code") == self.gitmoji), None)
+            if entry:
+                self.gitmoji = entry["emoji"]
+            else:
+                raise ValueError(
+                    f"Emoji '{self.gitmoji}' is not in the GitOps SOP matrix. "
+                    "Please select a valid literal unicode emoji."
+                )
 
-                    # 1. Ensure the emoji is valid
-                    entry = next((item for item in matrix if item.get("emoji") == self.gitmoji), None)
-                    if not entry:
-                        # Try fallback matching by code (e.g. :sparkles:)
-                        entry = next((item for item in matrix if item.get("code") == self.gitmoji), None)
-                        if entry:
-                            self.gitmoji = entry["emoji"]
-                        else:
-                            raise ValueError(
-                                f"Emoji '{self.gitmoji}' is not in the GitOps SOP matrix. Please select a valid literal unicode emoji."
-                            )
-
-                    # 2. Assert cc_type matches the matrix exactly
-                    if entry and self.cc_type.value != entry.get("cc_type"):
-                        raise ValueError(
-                            f"Emoji / Type mismatch! According to the SOP matrix, the emoji '{self.gitmoji}' MUST be paired with the type '{entry.get('cc_type')}'. You used '{self.cc_type.value}'. Please correct either the emoji or the type to match the SOP."
-                        )
-            except ValueError:
-                raise
-            except Exception:
-                pass
+        # 2. Assert cc_type matches the matrix exactly
+        if entry and self.cc_type.value != entry.get("cc_type"):
+            raise ValueError(
+                f"Emoji / Type mismatch! According to the SOP matrix, the emoji '{self.gitmoji}' "
+                f"MUST be paired with the type '{entry.get('cc_type')}'. You used '{self.cc_type.value}'. "
+                "Please correct either the emoji or the type to match the SOP."
+            )
         return self
 
     def render(self) -> str:

@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import subprocess
@@ -7,17 +6,13 @@ from collections import defaultdict
 from rich.console import Console
 from rich.panel import Panel
 
+from git_cg.sop import load_sop
+
 console = Console()
 
 
 def get_sop_data():
-    sop_path = os.path.join(os.getcwd(), "config", "gitops_agent_sop.json")
-    if not os.path.exists(sop_path):
-        sop_path = os.path.join(os.getcwd(), "config", "gitCommitGenerator", "config", "gitops_agent_sop.json")
-    if not os.path.exists(sop_path):
-        return {}
-    with open(sop_path) as f:
-        return json.load(f)
+    return load_sop()
 
 
 def get_last_tag() -> str:

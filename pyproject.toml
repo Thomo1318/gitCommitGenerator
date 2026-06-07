@@ -19,6 +19,13 @@ git-cg = "git_cg.main:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/git_cg"]
 
+# Ship the SOP as package data so the tool works as a global hook in ANY repo.
+# Repo-root `config/` remains canonical (used by dev CLI + the Node gatekeeper);
+# this just copies it into the wheel under `git_cg/data/` at build time.
+[tool.hatch.build.targets.wheel.force-include]
+"config/gitops_agent_sop.json" = "git_cg/data/gitops_agent_sop.json"
+"config/gitops_sop.schema.json" = "git_cg/data/gitops_sop.schema.json"
+
 [tool.ruff]
 target-version = "py314"
 line-length = 120
