@@ -656,6 +656,10 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     if signals.secret_scanning_changed or signals.secrets_management_changed:
         markers.update(["security_tooling_only_without_fix", "secret_reference_changed"])
 
+    # Features & API
+    if signals.adds_public_api:
+        markers.update(["new_api", "new_user_facing_capability", "functional_code_changed"])
+
     # Architecture & Refactoring
     if signals.changes_architecture:
         markers.update(["major_subsystem_restructured", "core_architecture_changed"])
