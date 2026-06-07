@@ -142,6 +142,14 @@ This project is completely declarative. Tools are managed by [mise](https://mise
    just test
    ```
 
+### Configuration & Secrets
+
+`git-cg` uses `fnox` to securely orchestrate secrets. If you are not using `fnox` and 1Password, you must provide the necessary API keys via a `.env` file or environment variables:
+
+- **OpenAI / Custom API Keys**: Export `OPENAI_API_KEY`, `OMLX_API_KEY`, or `MTPLX_API_KEY` depending on your selected engine.
+- **Hugging Face Token**: If you are using local models via oMLX or MTPLX, you may need a Hugging Face token to download gated models without rate limits. You can generate one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and store it in your environment.
+- **Local Model Storage**: You can configure where local models are stored to save disk space on your primary drive by setting the standard caching environment variables for your engine (e.g., `HF_HOME`).
+
 ---
 
 ## 🛠 Usage

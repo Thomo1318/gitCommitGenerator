@@ -12,6 +12,8 @@ load_dotenv()
 
 # Set opik logging level before importing it
 os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "INFO"
+# Increase logging level to reduce console spam from Opik
+os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = os.environ.get("OPIK_CONSOLE_LOGGING_LEVEL", "error")
 
 import instructor  # noqa: E402
 import opik  # noqa: E402
@@ -152,7 +154,6 @@ def generate_commit_message(
             }
         }
     )
-
     import time
 
     import openai
@@ -178,6 +179,99 @@ def generate_commit_message(
                 f"[yellow]Waiting for local AI server to load model weights (attempt {attempt + 1}/{max_retries})...[/yellow]"
             )
             time.sleep(10)
+
+
+def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
+    """Assemble the system prompt from the SOP (install-relative resolution)."""
+    sop_data = load_sop()
+    if not sop_data and verbose:
+        console.log("[yellow]SOP could not be located; generating without matrix enforcement.[/yellow]")
+
+    gitops_matrix_str = ""
+    context_parts = []
+    specs = sop_data.get("specifications_and_standards", {})
+    workflow = sop_data.get("agentic_commit_workflow", {})
+    gitops_matrix = sop_data.get("gitmoji_reference_matrix", [])
+    if specs:
+        context_parts.append("Specifications and Standards:\n" + json.dumps(specs, indent=2))
+    if workflow:
+        context_parts.append("Agentic Commit Workflow:\n" + json.dumps(workflow, indent=2))
+
+    if gitops_matrix:
+        if verbose:
+            console.log("Analyzing diff signals and ranking intents...")
+
+        signals = extract_diff_signals(diff_output)
+        ranked_candidates = rank_commit_intents(signals, gitops_matrix)
+
+        # 1. Primary Candidates (Top 3 absolute matches)
+        primary_candidates = ranked_candidates[:3]
+
+        # 2. Secondary Candidates (Ensure diversity for secondary sub-changes)
+        secondary_candidates = []
+        seen_groups = {cand.intent_group for cand in primary_candidates}
+
+        for cand in ranked_candidates[3:]:
+            if len(secondary_candidates) >= 3:
+                break
+            # Only inject if it scored reasonably well (avoid hard-vetoed items) and is a distinct group
+            if cand.intent_group not in seen_groups and cand.score > 0:
+                secondary_candidates.append(cand)
+                seen_groups.add(cand.intent_group)
+
+        # If we didn't find enough diverse groups, fill with the next best positive-scoring candidates
+        if len(secondary_candidates) < 3:
+            for cand in ranked_candidates[3:]:
+                if len(secondary_candidates) >= 3:
+                    break
+                if cand not in secondary_candidates and cand.score > 0:
+                    secondary_candidates.append(cand)
+
+        candidates_str = (
+            "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
+            "Select the primary intent from the Primary Candidates. "
+            "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
+            "PRIMARY CANDIDATES (Top Matches):\n"
+        )
+
+        for i, cand in enumerate(primary_candidates, 1):
+            candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
+            candidates_str += f"   Description: {cand.description}\n"
+            if cand.selection_rule:
+                candidates_str += f"   Rule: {cand.selection_rule}\n"
+            if cand.evidence:
+                candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
+            candidates_str += "\n"
+
+        if secondary_candidates:
+            candidates_str += "SECONDARY CANDIDATES (For distinct sub-changes):\n"
+            for i, cand in enumerate(secondary_candidates, 1):
+                candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
+                candidates_str += f"   Description: {cand.description}\n"
+                if cand.evidence:
+                    candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
+                candidates_str += "\n"
+
+        # 3. Vocabulary Dictionary (Ultimate fallback to prevent hallucinated emojis)
+        vocab = [f"{r.get('intent_id', r.get('code', '').strip(':'))} ({r.get('emoji')})" for r in gitops_matrix]
+        candidates_str += "VALID INTENT DICTIONARY (Ultimate Fallback):\n"
+        candidates_str += "If NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. Do NOT invent new intents or emojis:\n"
+        candidates_str += ", ".join(vocab) + "\n"
+
+        context_parts.append(candidates_str.strip())
+    if context_parts:
+        gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
+
+    system_prompt = (
+        "You are a senior software engineer who writes perfect Conventional Commit messages. "
+        "Analyze the provided git diff and the ranked intent candidates to generate a structured CommitPlan. "
+        "If the diff contains multiple distinct changes, select the best primary intent and list the rest as secondary intents. "
+        "Be concise, use the imperative mood for descriptions. "
+        "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
+        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array."
+        f"{gitops_matrix_str}"
+    )
+    return system_prompt
 
 
 @app.command("commit")
@@ -297,95 +391,7 @@ def commit(
     if verbose:
         console.log(f"Using model: {model_name}")
 
-    # Assemble the system prompt from the SOP (install-relative resolution).
-    sop_data = load_sop()
-    if not sop_data and verbose:
-        console.log("[yellow]SOP could not be located; generating without matrix enforcement.[/yellow]")
-
-    gitops_matrix_str = ""
-    context_parts = []
-    specs = sop_data.get("specifications_and_standards", {})
-    workflow = sop_data.get("agentic_commit_workflow", {})
-    gitops_matrix = sop_data.get("gitmoji_reference_matrix", [])
-    if specs:
-        context_parts.append("Specifications and Standards:\n" + json.dumps(specs, indent=2))
-    if workflow:
-        context_parts.append("Agentic Commit Workflow:\n" + json.dumps(workflow, indent=2))
-
-    if gitops_matrix:
-        if verbose:
-            console.log("Analyzing diff signals and ranking intents...")
-
-        signals = extract_diff_signals(diff_output)
-        ranked_candidates = rank_commit_intents(signals, gitops_matrix)
-
-        # 1. Primary Candidates (Top 3 absolute matches)
-        primary_candidates = ranked_candidates[:3]
-
-        # 2. Secondary Candidates (Ensure diversity for secondary sub-changes)
-        secondary_candidates = []
-        seen_groups = {cand.intent_group for cand in primary_candidates}
-
-        for cand in ranked_candidates[3:]:
-            if len(secondary_candidates) >= 3:
-                break
-            # Only inject if it scored reasonably well (avoid hard-vetoed items) and is a distinct group
-            if cand.intent_group not in seen_groups and cand.score > 0:
-                secondary_candidates.append(cand)
-                seen_groups.add(cand.intent_group)
-
-        # If we didn't find enough diverse groups, fill with the next best positive-scoring candidates
-        if len(secondary_candidates) < 3:
-            for cand in ranked_candidates[3:]:
-                if len(secondary_candidates) >= 3:
-                    break
-                if cand not in secondary_candidates and cand.score > 0:
-                    secondary_candidates.append(cand)
-
-        candidates_str = (
-            "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
-            "Select the primary intent from the Primary Candidates. "
-            "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
-            "PRIMARY CANDIDATES (Top Matches):\n"
-        )
-
-        for i, cand in enumerate(primary_candidates, 1):
-            candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
-            candidates_str += f"   Description: {cand.description}\n"
-            if cand.selection_rule:
-                candidates_str += f"   Rule: {cand.selection_rule}\n"
-            if cand.evidence:
-                candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
-            candidates_str += "\n"
-
-        if secondary_candidates:
-            candidates_str += "SECONDARY CANDIDATES (For distinct sub-changes):\n"
-            for i, cand in enumerate(secondary_candidates, 1):
-                candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
-                candidates_str += f"   Description: {cand.description}\n"
-                if cand.evidence:
-                    candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
-                candidates_str += "\n"
-
-        # 3. Vocabulary Dictionary (Ultimate fallback to prevent hallucinated emojis)
-        vocab = [f"{r.get('intent_id', r.get('code', '').strip(':'))} ({r.get('emoji')})" for r in gitops_matrix]
-        candidates_str += "VALID INTENT DICTIONARY (Ultimate Fallback):\n"
-        candidates_str += "If NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. Do NOT invent new intents or emojis:\n"
-        candidates_str += ", ".join(vocab) + "\n"
-
-        context_parts.append(candidates_str.strip())
-    if context_parts:
-        gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
-
-    system_prompt = (
-        "You are a senior software engineer who writes perfect Conventional Commit messages. "
-        "Analyze the provided git diff and the ranked intent candidates to generate a structured CommitPlan. "
-        "If the diff contains multiple distinct changes, select the best primary intent and list the rest as secondary intents. "
-        "Be concise, use the imperative mood for descriptions. "
-        "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
-        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array."
-        f"{gitops_matrix_str}"
-    )
+    system_prompt = build_system_prompt(diff_output, verbose)
 
     try:
         repo_name = os.path.basename(
@@ -396,9 +402,13 @@ def commit(
         thread_id = "default-thread"
 
     try:
-        commit_plan = generate_commit_message(
-            client, diff_output, model_name, system_prompt, opik_args={"trace": {"thread_id": thread_id}}
-        )
+        with console.status(
+            f"[bold cyan]Generating AI commit message with {model_name}... (this may take 30-90s locally)[/bold cyan]",
+            spinner="dots",
+        ):
+            commit_plan = generate_commit_message(
+                client, diff_output, model_name, system_prompt, opik_args={"trace": {"thread_id": thread_id}}
+            )
     except Exception as e:
         _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
@@ -415,13 +425,8 @@ def commit(
 
         elif mixed_policy == "split_prompt":
             console.print(msg)
-            if sys.stdin.isatty():
-                do_split = typer.confirm("Would you like to abort and split these changes?")
-                if do_split:
-                    _abort("[bold red]Aborting commit so you can split your changes.[/bold red]", strict=strict)
-            else:
-                if verbose:
-                    console.print("[yellow]Non-TTY environment detected; bypassing split_prompt.[/yellow]")
+            if verbose:
+                console.print("[yellow]Interactive prompts are disabled in git hooks; bypassing split_prompt.[/yellow]")
 
         elif mixed_policy == "warn":
             console.print(msg)
