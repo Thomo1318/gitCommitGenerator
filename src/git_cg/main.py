@@ -5,21 +5,27 @@ import sys
 from dataclasses import dataclass
 from typing import NoReturn
 
-import instructor
+from dotenv import load_dotenv
 
+# Load .env fallback immediately
+load_dotenv()
+
+# Set opik logging level before importing it
 os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "ERROR"
-import opik
-import typer
-from openai import OpenAI
-from opik import opik_context
-from opik.integrations.openai import track_openai
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
-from git_cg.intent import extract_diff_signals, rank_commit_intents
-from git_cg.models import CommitPlan
-from git_cg.sop import load_sop
+import instructor  # noqa: E402
+import opik  # noqa: E402
+import typer  # noqa: E402
+from openai import OpenAI  # noqa: E402
+from opik import opik_context  # noqa: E402
+from opik.integrations.openai import track_openai  # noqa: E402
+from rich.console import Console  # noqa: E402
+from rich.panel import Panel  # noqa: E402
+from rich.table import Table  # noqa: E402
+
+from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
+from git_cg.models import CommitPlan  # noqa: E402
+from git_cg.sop import load_sop  # noqa: E402
 
 app = typer.Typer(add_completion=False, help="GitOps AI Commit Generator and Release Automation")
 console = Console()
