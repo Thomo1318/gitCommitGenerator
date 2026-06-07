@@ -162,6 +162,7 @@ def generate_commit_message(
                     {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
                 ],
                 max_retries=2,
+                parallel_tool_calls=False,
             )
             return commit_result
         except openai.APIConnectionError:
@@ -336,7 +337,8 @@ def commit(
         "Analyze the provided git diff and the ranked intent candidates to generate a structured CommitPlan. "
         "If the diff contains multiple distinct changes, select the best primary intent and list the rest as secondary intents. "
         "Be concise, use the imperative mood for descriptions. "
-        "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters."
+        "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
+        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array."
         f"{gitops_matrix_str}"
     )
 
