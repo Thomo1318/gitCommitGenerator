@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set opik logging level before importing it
-os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "ERROR"
+os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "INFO"
 
 import instructor  # noqa: E402
 import opik  # noqa: E402
