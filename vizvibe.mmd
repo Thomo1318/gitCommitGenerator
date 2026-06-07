@@ -1,0 +1,76 @@
+flowchart TD
+    %% === PROJECT GOALS ===
+    %% Ultimate Goal: A stable, portable, and secure GitOps commit generator ready for public release.
+    %% Current Goal: Finalize tech debt cleanup, AI refactor, and prepare for a second agent review.
+
+    %% === START ===
+    %% @project_start [start, closed, 2026-06-06, user]
+    project_start("Project Start<br/><sub>git-cg: High-performance CLI<br/>utility for generating AI-driven<br/>hybrid commit messages with<br/>strict Pydantic validation</sub>")
+
+    %% @ultimate_goal [end, opened, 2026-06-06, user]
+    ultimate_goal("Project Goal<br/><sub>A stable, portable, and<br/>secure GitOps commit generator<br/>ready for public release<br/>and daily usage</sub>")
+
+    %% === COMPLETED WORK ===
+    %% @core_engine [ai-task, closed, 2026-06-06, user]
+    core_engine("Core Logic Engine<br/><sub>Implemented the main Python<br/>AI engine using Typer, Instructor,<br/>and Pydantic for deterministic<br/>structured data extraction</sub>")
+
+    %% @hk_migration [ai-task, closed, 2026-06-06, user]
+    hk_migration("Git Hooks Migration<br/><sub>Migrated from pre-commit to<br/>hk for deterministic hook<br/>orchestration, adding linting<br/>and commit-msg hooks</sub>")
+
+    %% @version_sync_and_cleanup [ai-task, closed, 2026-06-06, ai]
+    version_sync_and_cleanup("Version Sync & Env Cleanup<br/><sub>Updated PyProject and Node versions<br/>(3.14, 0.1.7), archived obsolete scripts,<br/>cleaned up MANIFEST and scratch files,<br/>and injected Pitchfork integration notes</sub>")
+
+    %% @semver_refactor [ai-task, closed, 2026-06-06, ai]
+    semver_refactor("Semantic Versioning Engine Refactor<br/><sub>Rewrote release.py using robust<br/>regex for identifying breaking changes<br/>(via !) and isolated commit bodies<br/>using safe delimiter injection</sub>")
+
+    %% @ai_routing_compression [ai-task, closed, 2026-06-06, ai]
+    ai_routing_compression("AI Engine Routing & Compression<br/><sub>Refactored main.py with an ENGINE_REGISTRY<br/>for easy model additions. Implemented<br/>unconditional rtk diff compression<br/>to reduce token consumption overhead</sub>")
+
+    %% === FUTURE WORK ===
+    %% @second_agent_review [ai-task, opened, 2026-06-06, ai]
+    second_agent_review("Second Agent Review<br/><sub>Trigger another comprehensive<br/>agentic review to check the codebase<br/>for architecture gaps, portability,<br/>and finalize public readiness</sub>")
+
+    %% @config_system [ai-task, opened, 2026-06-06, ai]
+    config_system("Configuration System<br/><sub>Create a robust configuration<br/>system to ensure portability<br/>and manage user preferences<br/>without hardcoded values</sub>")
+
+    %% @test_suite [ai-task, opened, 2026-06-06, ai]
+    test_suite("Standardized Test Suite<br/><sub>Establish a repeatable testing<br/>system to track and compare<br/>LLM outputs for consistent<br/>commit generation</sub>")
+
+    %% === CONNECTIONS ===
+    project_start --> core_engine
+    core_engine --> hk_migration
+    hk_migration --> version_sync_and_cleanup
+    version_sync_and_cleanup --> semver_refactor
+    semver_refactor --> ai_routing_compression
+    ai_routing_compression --> second_agent_review
+    ai_routing_compression --> config_system
+    ai_routing_compression --> test_suite
+    
+    second_agent_review -.-> ultimate_goal
+    config_system -.-> ultimate_goal
+    test_suite -.-> ultimate_goal
+
+    %% === RECENT WORK HIGHLIGHT ===
+    subgraph recent [RECENT]
+        ai_routing_compression
+    end
+
+    %% === STYLES ===
+    %% Closed tasks (soft purple)
+    style project_start fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style core_engine fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style hk_migration fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style version_sync_and_cleanup fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style semver_refactor fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+
+    %% Recent node (highlighted purple)
+    style ai_routing_compression fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+
+    %% Recent subgraph (dashed border)
+    style recent fill:transparent,stroke:#c084fc,color:#c084fc,stroke-width:2px,stroke-dasharray:5 5
+
+    %% Open tasks (soft green)
+    style ultimate_goal fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
+    style second_agent_review fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
+    style config_system fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
+    style test_suite fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px

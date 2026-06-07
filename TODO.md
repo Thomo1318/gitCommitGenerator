@@ -4,9 +4,10 @@
 
 <H2><u>High Priority Tasks</u></H2>
 
-- [ ] Do a complete analysis to confirm that no secrets are hardcoded into the project, if they are found I need to determine how to handle them and only then publish this to a public repo.
-
-- [ ] Explore integrating GitLeaks or TruffleHog or BetterLeaks
+- [x] Implement a two-layered open-source secret scanning strategy before making the repo public: <!-- DONE: 2026-06-07. Note: Configured hk.pkl with Gitleaks pre-commit. -->
+  - [x] Integrate **Gitleaks** as a fast, local `pre-commit` hook (via `hk`) to prevent committing secrets. <!-- DONE: 2026-06-07. Note: Added to hk.pkl linters mapping. -->
+  - [x] Integrate **TruffleHog** to scan deep git history locally and run in CI/CD to actively verify if any leaked keys are live. <!-- DONE: 2026-06-07. Note: Set up GitHub Actions workflow (.github/workflows/security.yml). -->
+  - [x] Run a complete initial analysis across the entire project history. Resolve any findings before publishing. <!-- DONE: 2026-06-07. Note: Ran TruffleHog and Gitleaks. Ignored a dummy AgentOps UUID in .gitleaksignore. -->
 
 - [ ] Ensure this is portable so anyone could use it without having my specific system setup, e.g. 1Password for secrets management, etc. This may need to be handled with a configuration system/file.
 
@@ -45,9 +46,11 @@
 
   - [Article](https://freedium-mirror.cfd/https://levelup.gitconnected.com/how-to-manage-configuration-and-secrets-in-python-without-losing-sleep-6f49b7d71fd2)
 
-- [ ] Integrate [hk](https://hk.jdx.dev) into the project
+- [x] Integrate [hk](https://hk.jdx.dev) into the project <!-- DONE: 2026-06-06 -->
 
-- [ ] Fix the git hooks to work with hk
+- [x] Fix the git hooks to work with hk <!-- DONE: 2026-06-06 -->
+
+- [ ] Explore Pitchfork integration via mise (`hk` also can hook into mise files: https://hk.jdx.dev/mise_integration.html and https://pitchfork.en.dev/guides/mise-integration.html)
 
 - [ ] We need to ensureall tools required for the project are checked during the requirements check and install any that are missing, we need to take an inventory of everything needed to use the tool and ensure propper installation. We need to come at this as if it is being installed on a fresh system with no tools installed, e.g. a new developer starting on the project. The tool is being developed strictly for macOS currently but could be made cross platform to linux but that's a very low priority. Windows is not being targetted at all unless someone wants to fork and port to work on Windows. Mise is probably the best way to ensure that the install is universal and repeatable so we need to flesh out our `mise.toml` file which is very light because my global file already has most tools required but this wouldn't be the case for anyone else:
   - [ ] `mise`
@@ -80,13 +83,13 @@
 
 <H2><u>Medium Priority Tasks</u></H2>
 
-- [ ] Implement Automated Semver
+- [x] Implement Automated Semver <!-- DONE: 2026-06-07. Note: Implemented in release.py with strict regex impact parsing. -->
 
-- [ ] Version injection
+- [x] Version injection <!-- DONE: 2026-06-07. Note: Implemented via inject_file_versions scanning modified files. -->
 
-- [ ] Release automation
+- [x] Release automation <!-- DONE: 2026-06-07. Note: execute_release command added to CLI. -->
 
-- [ ] Changelog generation
+- [x] Changelog generation <!-- DONE: 2026-06-07. Note: Implemented, groups commits by gitmoji. -->
 
 - [ ] Allow user to select AI model
 
@@ -100,7 +103,7 @@
 
 - [ ] Add formatting/support for multiple changes within the one commit message - i.e. when you make multiple changes across different files, add a separate line for each change
 
-- [ ] Integrate an easy switch to use either `oMLX` or `MTPLX` which handles server start in the background.
+- [x] Integrate an easy switch to use either `oMLX` or `MTPLX` which handles server start in the background. <!-- DONE: 2026-06-07. Note: Implemented via ENGINE_REGISTRY in main.py, dynamically checking port 8000 and spawning in Ghostty if needed. -->
 
 - [ ] Could implementation of a specific model that is optimized for `speed` improve performance? For example, models like `Phi-3.5-mini-4k-instruct` or `Qwen3-3B`? The context window size would need to be large enough to handle the `diff`. `Gemma 4` might be an option since it has "built-in MTP heads".
 

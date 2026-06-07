@@ -1,6 +1,6 @@
 {
   "name": "git-commit-generator",
-  "version": "1.0.0",
+  "version": "0.1.7",
   "description": "AI-powered GitOps commit message generator with SOP enforcement.",
   "main": "scripts/generate_ai_commit.zsh",
   "type": "module",
