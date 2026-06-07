@@ -63,16 +63,24 @@ class CommitIntent(BaseModel):
             entry = next((item for item in matrix if item.get("code") == self.gitmoji), None)
 
         if not entry:
-            raise ValueError(f"Intent '{self.intent_id}' or Emoji '{self.gitmoji}' is not in the GitOps SOP matrix.")
+            # Graceful fallback: If the LLM hallucinates an intent (especially for secondary changes
+            # where it doesn't have the full matrix in the prompt), coerce it to a safe default
+            # rather than crashing the commit loop.
+            entry = next((item for item in matrix if item.get("code") == ":wrench:"), matrix[0])
+            self.intent_id = entry.get("intent_id", "fallback_chore")
+            self.gitmoji = entry["emoji"]
+            self.cc_type = CommitType(entry["cc_type"])
+            self.semver_impact = SemVerImpact(entry["semver_impact"])
+            self.changelog_group = entry["changelog_group"]
+            return self
 
         self.gitmoji = entry["emoji"]
 
         # 2. Assert cc_type matches the matrix exactly
         if self.cc_type.value != entry.get("cc_type"):
-            raise ValueError(
-                f"Emoji / Type mismatch! According to the SOP matrix, the intent '{self.intent_id}' "
-                f"MUST be paired with the type '{entry.get('cc_type')}'. You used '{self.cc_type.value}'."
-            )
+            # Graceful coercion instead of hard error
+            self.cc_type = CommitType(entry.get("cc_type"))
+
         return self
 
 

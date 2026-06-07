@@ -312,14 +312,38 @@ def commit(
 
         signals = extract_diff_signals(diff_output)
         ranked_candidates = rank_commit_intents(signals, gitops_matrix)
-        top_candidates = ranked_candidates[:5]
+
+        # 1. Primary Candidates (Top 3 absolute matches)
+        primary_candidates = ranked_candidates[:3]
+
+        # 2. Secondary Candidates (Ensure diversity for secondary sub-changes)
+        secondary_candidates = []
+        seen_groups = {cand.intent_group for cand in primary_candidates}
+
+        for cand in ranked_candidates[3:]:
+            if len(secondary_candidates) >= 3:
+                break
+            # Only inject if it scored reasonably well (avoid hard-vetoed items) and is a distinct group
+            if cand.intent_group not in seen_groups and cand.score > 0:
+                secondary_candidates.append(cand)
+                seen_groups.add(cand.intent_group)
+
+        # If we didn't find enough diverse groups, fill with the next best positive-scoring candidates
+        if len(secondary_candidates) < 3:
+            for cand in ranked_candidates[3:]:
+                if len(secondary_candidates) >= 3:
+                    break
+                if cand not in secondary_candidates and cand.score > 0:
+                    secondary_candidates.append(cand)
 
         candidates_str = (
-            "Based on deterministic analysis of the git diff, here are the top 5 most likely commit intents.\n"
-            "Select the primary intent from this list that best represents the changes:\n\n"
+            "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
+            "Select the primary intent from the Primary Candidates. "
+            "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
+            "PRIMARY CANDIDATES (Top Matches):\n"
         )
 
-        for i, cand in enumerate(top_candidates, 1):
+        for i, cand in enumerate(primary_candidates, 1):
             candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
             candidates_str += f"   Description: {cand.description}\n"
             if cand.selection_rule:
@@ -327,6 +351,21 @@ def commit(
             if cand.evidence:
                 candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
             candidates_str += "\n"
+
+        if secondary_candidates:
+            candidates_str += "SECONDARY CANDIDATES (For distinct sub-changes):\n"
+            for i, cand in enumerate(secondary_candidates, 1):
+                candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
+                candidates_str += f"   Description: {cand.description}\n"
+                if cand.evidence:
+                    candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
+                candidates_str += "\n"
+
+        # 3. Vocabulary Dictionary (Ultimate fallback to prevent hallucinated emojis)
+        vocab = [f"{r.get('intent_id', r.get('code', '').strip(':'))} ({r.get('emoji')})" for r in gitops_matrix]
+        candidates_str += "VALID INTENT DICTIONARY (Ultimate Fallback):\n"
+        candidates_str += "If NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. Do NOT invent new intents or emojis:\n"
+        candidates_str += ", ".join(vocab) + "\n"
 
         context_parts.append(candidates_str.strip())
     if context_parts:
