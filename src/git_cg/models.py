@@ -122,7 +122,9 @@ class CommitPlan(BaseModel):
         # Body Summary
         if self.body_summary:
             lines.append("")
-            lines.append(self.body_summary)
+            # Fix literal escaped newlines output by the LLM in JSON strings
+            clean_body = self.body_summary.replace("\\n", "\n")
+            lines.append(clean_body)
 
         # Included Changes (Secondary Intents)
         if self.secondary_intents:
