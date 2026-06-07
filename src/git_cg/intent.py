@@ -67,6 +67,10 @@ class DiffSignals(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     files: list[str] = Field(default_factory=list)
 
+    lines_added: int = 0
+    lines_removed: int = 0
+    files_changed_count: int = 0
+
 
 class DiffFileSummary(BaseModel):
     """File-level summary extracted from git diff metadata."""
@@ -235,6 +239,18 @@ _PUBLIC_API_PATTERNS = (
 )
 
 
+def _normalize_diff_for_content_matching(diff_output: str) -> str:
+    def _normalize_line(line: str) -> str:
+        if line.startswith(("diff --git ", "index ", "+++", "---")):
+            return ""
+        if line.startswith(("+a/", "-a/", "+b/", "-b/")):
+            return line[0] + line[3:]
+        return line
+
+    normalized = (_normalize_line(line) for line in diff_output.splitlines())
+    return "\n".join(filter(None, normalized))
+
+
 def extract_diff_signals(diff_output: str) -> DiffSignals:
     """Extract deterministic signals from staged diff output.
 
@@ -246,13 +262,17 @@ def extract_diff_signals(diff_output: str) -> DiffSignals:
     """
     file_summary = extract_diff_file_summary(diff_output)
     paths = file_summary.paths
-    lowered_diff = diff_output.lower()
+
+    # Normalize diff to prevent false positives from metadata lines (like file paths)
+    normalized_diff = _normalize_diff_for_content_matching(diff_output)
+    lowered_diff = normalized_diff.lower()
 
     signals = DiffSignals(files=paths)
 
     _apply_file_signals(signals, file_summary)
     _apply_content_signals(signals, diff_output, lowered_diff)
     _apply_only_signals(signals, paths)
+    _apply_diff_metrics(signals, diff_output)
 
     return signals
 
@@ -727,3 +747,18 @@ def rank_commit_intents(signals: DiffSignals, matrix: list[dict]) -> list[Ranked
     # Sort descending by score, then priority, then specificity
     ranked.sort(key=lambda x: (x.score, x.priority, x.specificity), reverse=True)
     return ranked
+
+
+def _apply_diff_metrics(signals: DiffSignals, diff_output: str) -> None:
+    for line in diff_output.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            signals.lines_added += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            signals.lines_removed += 1
+
+    signals.files_changed_count = len(signals.files)
+
+    if signals.lines_added or signals.lines_removed:
+        signals.evidence.append(
+            f"Diff size: +{signals.lines_added}/-{signals.lines_removed} across {signals.files_changed_count} files"
+        )

@@ -313,7 +313,7 @@ wheels = [
 [[package]]
 name = "gitcommitgenerator"
 version = "0.1.7"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "instructor" },
     { name = "openai" },
