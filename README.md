@@ -32,7 +32,7 @@ By centralizing these rules in `config/gitops_agent_sop.json`, we ensure that bo
 
 The engine operates on a modernized, extremely robust toolchain managed seamlessly by [mise](https://mise.jdx.dev) and [just](https://just.systems):
 
-- **Logic Engine**: Python 3.12 (managed via [uv](https://docs.astral.sh/uv/)), leveraging [instructor](https://python.useinstructor.com/) and [pydantic](https://docs.pydantic.dev/).
+- **Logic Engine**: Python 3.14 (managed via [uv](https://docs.astral.sh/uv/)), leveraging [instructor](https://python.useinstructor.com/) and [pydantic](https://docs.pydantic.dev/).
 - **Validation Engine**: [Node.js](https://nodejs.org/) via `validate_commit.mjs` (acts as the absolute final gatekeeper in `commit-msg`).
 - **Hook Orchestration**: [hk](https://hk.jdx.dev) (git hook manager).
 - **Prompt Compression**: [rtk](https://github.com/rtk-ai/rtk) (reduces LLM context size by up to 90% via structural diff compression).
@@ -243,41 +243,7 @@ All messages generated or validated by this engine follow the format:
 
 ## ROADMAP:
 
-- [ ] Do a complete analysis to confirm that no secrets are hardcoded into the project, if they are found I need to determine how to handle them and only then publish this to a public repo.
-- [ ] Index the project using DeepWiki then include the DeepWiki badge to automate the updates. Provide a link to the DeepWiki Page.
-- [ ] Automate project `repomix` generation and provide a link to it in the README.md
-- [ ] Determine if the current state of the project now warrants a migration from `instructor` to `PydanticAI` since adding changelog, tag and release functionality. This could be a major refactor so it needs to be carefully considered.
-- [ ] Create llms.txt and llms-full.txt files
-- [ ] Ensure this is portable so anyone could use it without having my specific system setup, e.g. 1Password for secrets management, etc. This may need to be handled with a configuration system/file.
-- [ ] Update documentation
-- [ ] Document that MTPLX has alternate install methods e.g. `python3 -m pip install -U mtplx` or `uv tool install mtplx`. This should be provided as an option for users who prefer it over the default installation method which is the brewfile included with the tool.
-- [ ] Add formatting/support for multiple changes within the one commit message - i.e. when you make multiple changes across different files, add a separate line for each change
-- [ ] Add a confirm dialog before the commit is applied
-- [ ] Create a standardized test suite
-- [ ] Create a TUI using go charm and bubble tea for the commit generator
-- [ ] Implement Automated Semver
-- [ ] Version injection
-- [ ] Release automation
-- [ ] Changelog generation
-- [ ] AI model download that works with both [oMLX](https://github.com/jundot/omlx) and [RTK](https://github.com/rtk-ai/rtk)
-- [ ] Allow user to select AI model
-- [ ] Allow other AI backends (Gemini, Claude, Codex, etc.)
-- [ ] Allow git hooks (pre-commit, prepare-commit-msg, commit-msg) to be installed globally
-- [ ] Integrate [hk](https://hk.jdx.dev) into the project
-- [ ] Fix the git hooks to work with hk
-- [ ] Add bash, fish, and zsh completion for git-cg
-- [ ] Update install file
-- [ ] Fix the installation process
-- [ ] Add JJ support
-- [ ] Explore options for the TUI to also be a CLI.
-- [ ] Explore integration of [communique](https://github.com/jdx/communique)
-- [ ] Add a dry run option to the TUI
-- [ ] Add a dry run option to the CLI
-- [ ] Update the SOP matrix with new emojis and commit types
-- [ ] Create an Antigravity/VS Code extension
-- [ ] Create Agent skills that can be automatically installed into their respective locations depending on AI selected
-- [ ] Explore adding support for or migrating to using PydanticAI for structure enforcement and generation
-- [ ]
+Please refer to [TODO.md](./TODO.md) for the active roadmap and planned enhancements.
 
 ---
 
