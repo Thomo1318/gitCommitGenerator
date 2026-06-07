@@ -598,6 +598,19 @@ These snippets and concepts were developed during the intent-ranking architectur
 
 <p></p>
 
+- [ ] **Multi-Turn Agentic Commit Workflow**: Instead of a single-pass LLM generation with a pre-computed "Smart Menu" of candidates, implement a multi-turn loop to achieve maximum accuracy for mixed commits:
+  1. **Turn 1 (Decomposition)**: Prompt the LLM with the diff to identify and output only a list of the distinct logical changes (e.g., "1. Refactored logic. 2. Updated config.").
+  2. **Python Intervention**: Run the `rank_commit_intents` heuristic specifically targeting the keywords/files of *each* individual chunk to generate a highly tailored candidate list per sub-change.
+  3. **Turn 2 (Classification)**: Send the chunk-specific candidate lists back to the LLM to finalize the `CommitPlan` without any risk of hallucinating secondary intents.
+  *Note: This trades commit latency (pushing it to 2-3 minutes locally) for absolute precision. Consider making this an opt-in CLI flag (e.g., `--deep-think`) rather than the default git hook behavior.*
+
+
+<p></p>
+
+---
+
+<p></p>
+
 <H2><u>Completed</u></H2>
 
 - [ ] Add a dry run option to the CLI
