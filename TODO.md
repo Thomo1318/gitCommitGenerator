@@ -8,37 +8,7 @@
 
 - [ ] Create a configuration file to store user preferences and options (e.g. model selection, spelling variants, etc.)
 
-- [ ] Explore integrating `pydantic-settings`, `SecretStr`,
-  - [ ] Create configuration levels for different environments using `pydantic-settings`:
-    - Development: ENVIRONMENT=development DEBUG=true LOG_LEVEL=DEBUG
-    - Staging: ENVIRONMENT=staging DEBUG=false LOG_LEVEL=INFO
-    - Production: ENVIRONMENT=production DEBUG=false LOG_LEVEL=WARNING
-  - [ ] Override settings for tests without touching the real configuration
-    - Example:
-
-    ```python
-    # tests/conftest.py
-    import pytest
-    from unittest.mock import patch
-
-    @pytest.fixture(autouse=True)
-    def test_settings():
-        """Override settings for all tests."""
-        with patch.dict('os.environ', {
-            'DATABASE_URL': 'sqlite:///./test.db',
-            'SECRET_KEY': 'test-secret-key-not-real',
-            'DEBUG': 'true',
-            'ENVIRONMENT': 'development',
-            'STRIPE_SECRET_KEY': 'sk_test_fake',
-        }):
-            # Re-create settings with test values
-            from app.config import Settings
-            test_settings = Settings()
-            with patch('app.config.settings', test_settings):
-                yield test_settings
-    ```
-
-  - [Article](https://freedium-mirror.cfd/https://levelup.gitconnected.com/how-to-manage-configuration-and-secrets-in-python-without-losing-sleep-6f49b7d71fd2)
+- [x] Explore integrating `pydantic-settings`, `SecretStr` (Decided against this in favor of `python-dotenv` and `fnox` for zero-friction fallback)
 
 - [ ] Explore Pitchfork integration via mise (`hk` also can hook into mise files: https://hk.jdx.dev/mise_integration.html and https://pitchfork.en.dev/guides/mise-integration.html)
 
@@ -393,11 +363,11 @@
 
 - [ ] Create a MCP Server for the tool
 
-- [ ] Ensure we document the need for a Hugging Face token - may need to point people to HF to generate one. This should be provided as an option in the installation. This is mainly to prevent rate limiting when downloading models from Hugging Face.
+- [x] Ensure we document the need for a Hugging Face token - may need to point people to HF to generate one. This should be provided as an option in the installation. This is mainly to prevent rate limiting when downloading models from Hugging Face.
 
-- [ ] Provide instructions on how to generate a personal access token for LLM providers such as OpenAI, etc. and include instructions on where to store them. `~/.gemini/token` or `~/.ollama/token` or `~/.huggingface/token`.
+- [x] Provide instructions on how to generate a personal access token for LLM providers such as OpenAI, etc. and include instructions on where to store them. `~/.gemini/token` or `~/.ollama/token` or `~/.huggingface/token`.
 
-- [ ] Add configuration option to define the folder that stores the models locally. I.e. if a user has a 1 TB SSD, they may want to store the models on there instead of on their main drive, or use an external SSD drive. `~/.ollama/models` or `~/.omlx/models` or `~/.rtk/models`. Suggest the user uses the highest speed storage device they have.
+- [x] Add configuration option to define the folder that stores the models locally. I.e. if a user has a 1 TB SSD, they may want to store the models on there instead of on their main drive, or use an external SSD drive. `~/.ollama/models` or `~/.omlx/models` or `~/.rtk/models`. Suggest the user uses the highest speed storage device they have.
 
 - [ ] Document need for GitHub Personal Access Token and where to store it. `~/.git/github-token` this is mainly to prevent rate limiting when using the GitHub API to download models from the repository.
 
