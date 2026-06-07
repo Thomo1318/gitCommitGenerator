@@ -7,7 +7,7 @@
 - [x] Implement a two-layered open-source secret scanning strategy before making the repo public: <!-- DONE: 2026-06-07. Note: Configured hk.pkl with Gitleaks pre-commit. -->
   - [x] Integrate **Gitleaks** as a fast, local `pre-commit` hook (via `hk`) to prevent committing secrets. <!-- DONE: 2026-06-07. Note: Added to hk.pkl linters mapping. -->
   - [x] Integrate **TruffleHog** to scan deep git history locally and run in CI/CD to actively verify if any leaked keys are live. <!-- DONE: 2026-06-07. Note: Set up GitHub Actions workflow (.github/workflows/security.yml). -->
-  - [x] Run a complete initial analysis across the entire project history. Resolve any findings before publishing. <!-- DONE: 2026-06-07. Note: Ran TruffleHog and Gitleaks. Ignored a dummy AgentOps UUID in .gitleaksignore. -->
+  - [x] Run a complete initial analysis across the entire project history. Resolve any findings before publishing. <!-- DONE: 2026-06-07. Note: Ran TruffleHog and Gitleaks. -->
 
 - [ ] Ensure this is portable so anyone could use it without having my specific system setup, e.g. 1Password for secrets management, etc. This may need to be handled with a configuration system/file.
 
@@ -495,7 +495,6 @@
 
 <p></p>
 
-
 <p></p>
 
 ---
@@ -507,6 +506,7 @@
 These snippets and concepts were developed during the intent-ranking architecture review but deferred so they don't block the core MVP.
 
 - [ ] **Diff Line Metrics:** Count lines added/removed to provide a complexity proxy for the ranker.
+
   ```python
   # Add to DiffSignals:
   # lines_added: int = 0
@@ -529,6 +529,7 @@ These snippets and concepts were developed during the intent-ranking architectur
   ```
 
 - [ ] **Diff Normalisation:** Clean up git diff metadata before content analysis to prevent false positives on file paths appearing in diff headers.
+
   ```python
   def normalize_diff_for_content_matching(diff_output: str) -> str:
       def _normalize_line(line: str) -> str:
@@ -542,6 +543,7 @@ These snippets and concepts were developed during the intent-ranking architectur
   ```
 
 - [ ] **Machine Learning / Vectorised Intent Scoring:** (Long-term) Convert `DiffSignals` into a numerical vector for advanced classification instead of deterministic rules.
+
   ```python
   def compute_intent_vector(signals: DiffSignals) -> list[float]:
       def _clip_cubic(x: float) -> float:
@@ -552,10 +554,10 @@ These snippets and concepts were developed during the intent-ranking architectur
           float(signals.adds_public_api),
           # ... other binary flags ...
       ]
-      
+
       total_lines = signals.lines_added + signals.lines_removed
       complexity = _clip_cubic(min(total_lines / 50.0, 1.0))
-      
+
       return binary_features + [complexity]
   ```
 
@@ -600,10 +602,9 @@ These snippets and concepts were developed during the intent-ranking architectur
 
 - [ ] **Multi-Turn Agentic Commit Workflow**: Instead of a single-pass LLM generation with a pre-computed "Smart Menu" of candidates, implement a multi-turn loop to achieve maximum accuracy for mixed commits:
   1. **Turn 1 (Decomposition)**: Prompt the LLM with the diff to identify and output only a list of the distinct logical changes (e.g., "1. Refactored logic. 2. Updated config.").
-  2. **Python Intervention**: Run the `rank_commit_intents` heuristic specifically targeting the keywords/files of *each* individual chunk to generate a highly tailored candidate list per sub-change.
+  2. **Python Intervention**: Run the `rank_commit_intents` heuristic specifically targeting the keywords/files of _each_ individual chunk to generate a highly tailored candidate list per sub-change.
   3. **Turn 2 (Classification)**: Send the chunk-specific candidate lists back to the LLM to finalize the `CommitPlan` without any risk of hallucinating secondary intents.
-  *Note: This trades commit latency (pushing it to 2-3 minutes locally) for absolute precision. Consider making this an opt-in CLI flag (e.g., `--deep-think`) rather than the default git hook behavior.*
-
+     _Note: This trades commit latency (pushing it to 2-3 minutes locally) for absolute precision. Consider making this an opt-in CLI flag (e.g., `--deep-think`) rather than the default git hook behavior._
 
 <p></p>
 

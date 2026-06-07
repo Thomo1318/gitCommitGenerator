@@ -148,34 +148,54 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
 
         method = strategy.get("method")
 
-        if method == "header_comment":
-            # Search top 5 lines for a version string
-            try:
-                with open(filepath) as f:
-                    lines = f.readlines()
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                file_content = f.read()
 
-                modified = False
-                for i in range(min(5, len(lines))):
-                    # Look for something like `# version: v1.0.0` or `// version: 1.0.0`
-                    match = re.search(r"(version:\s*)(v?\d+\.\d+\.\d+)", lines[i], re.IGNORECASE)
-                    if match:
-                        old_v = match.group(2)
-                        new_v = bump_version_string(old_v, bump_type)
-                        if old_v != new_v:
-                            lines[i] = lines[i].replace(old_v, new_v)
-                            modified = True
-                            if verbose or dry_run:
-                                console.print(
-                                    f"Bumped [cyan]{filepath}[/cyan]: [red]{old_v}[/red] -> [green]{new_v}[/green]"
-                                )
-                        break
+            modified = False
 
-                if modified and not dry_run:
-                    with open(filepath, "w") as f:
-                        f.writelines(lines)
-            except Exception as e:
-                if verbose:
-                    console.print(f"Could not inject version into {filepath}: {e}")
+            def replacer(match, current_filepath=filepath):
+                nonlocal modified
+                old_v = match.group(2)
+                new_v = bump_version_string(old_v, bump_type)
+                if old_v != new_v:
+                    modified = True
+                    if verbose or dry_run:
+                        console.print(
+                            f"Bumped [cyan]{current_filepath}[/cyan]: [red]{old_v}[/red] -> [green]{new_v}[/green]"
+                        )
+                return match.group(1) + new_v + match.group(3)
+
+            new_content = file_content
+            if method in ("root_key", "json"):
+                # Matches: "version": "1.0.0"
+                new_content = re.sub(r'("version"\s*:\s*")([^"]+)(")', replacer, file_content, count=1)
+            elif method in ("hash_comment", "header_comment"):
+                # Matches: # version: v1.0.0
+                new_content = re.sub(
+                    r"(#\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*)", replacer, file_content, count=1, flags=re.IGNORECASE
+                )
+            elif method == "slash_comment":
+                # Matches: // version: v1.0.0
+                new_content = re.sub(
+                    r"(//\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*)", replacer, file_content, count=1, flags=re.IGNORECASE
+                )
+            elif method == "block_comment":
+                # Matches: <!-- version: v1.0.0 -->
+                new_content = re.sub(
+                    r"(<!--\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*-->)",
+                    replacer,
+                    file_content,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+
+            if modified and not dry_run:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(new_content)
+        except Exception as e:
+            if verbose:
+                console.print(f"Could not inject version into {filepath}: {e}")
 
 
 def execute_release(dry_run: bool, verbose: bool):
