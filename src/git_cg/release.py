@@ -31,14 +31,15 @@ def get_commits_since(tag: str) -> list[str]:
     try:
         if tag:
             log_output = subprocess.check_output(
-                ["git", "log", f"{tag}..HEAD", "--pretty=format:%s|%b"], stderr=subprocess.DEVNULL
+                ["git", "log", f"{tag}..HEAD", "--pretty=format:%s---COMMIT_BODY---%b---COMMIT_DELIM---"],
+                stderr=subprocess.DEVNULL,
             ).decode("utf-8")
         else:
             log_output = subprocess.check_output(
-                ["git", "log", "--pretty=format:%s|%b"], stderr=subprocess.DEVNULL
+                ["git", "log", "--pretty=format:%s---COMMIT_BODY---%b---COMMIT_DELIM---"], stderr=subprocess.DEVNULL
             ).decode("utf-8")
 
-        commits = [line for line in log_output.split("\n") if line.strip()]
+        commits = [line for line in log_output.split("---COMMIT_DELIM---") if line.strip()]
         return commits
     except subprocess.CalledProcessError:
         return []
@@ -54,15 +55,23 @@ def get_modified_files_since(tag: str) -> list[str]:
         return []
 
 
-def parse_commit_impact(subject: str, gitmoji_matrix: list) -> str:
+def parse_commit_impact(commit_string: str, gitmoji_matrix: list) -> str:
+    parts = commit_string.split("---COMMIT_BODY---", 1)
+    subject = parts[0]
+    body = parts[1] if len(parts) > 1 else ""
+
     # Check for breaking change indicator
-    if "!" in subject.split(":")[0] or "BREAKING CHANGE" in subject:
+    if "BREAKING CHANGE:" in body or "BREAKING CHANGE:" in subject:
         return "MAJOR"
 
-    # Match the cc_type
-    match = re.search(r"^[^\s]+\s+([a-z]+)(\(.*?\))?:", subject)
+    # Match the cc_type and check for !
+    match = re.search(r"^[^\s]+\s+([a-z]+)(?:\(.*?\)?)?(!?):", subject)
     if match:
         cc_type = match.group(1)
+        is_breaking = match.group(2) == "!"
+        if is_breaking:
+            return "MAJOR"
+
         for entry in gitmoji_matrix:
             if entry.get("cc_type") == cc_type:
                 return entry.get("semver_impact", "NONE")
@@ -204,7 +213,7 @@ def execute_release(dry_run: bool, verbose: bool):
     # Group commits
     changelog_groups = defaultdict(list)
     for commit in commits:
-        subject = commit.split("|")[0]
+        subject = commit.split("---COMMIT_BODY---")[0]
         group = "Miscellaneous"
         for entry in gitmoji_matrix:
             if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:

@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from typing import NoReturn
 
 import instructor
@@ -16,6 +17,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from git_cg.intent import extract_diff_signals, rank_commit_intents
 from git_cg.models import Commit
 from git_cg.sop import load_sop
 
@@ -26,6 +28,19 @@ console = Console()
 # (-m/-F => "message", merge, squash, --amend/-c/-C => "commit") already has a
 # message we must NOT overwrite — critical for safe global-hook operation.
 GENERATING_SOURCES: set[str | None] = {None, "", "template"}
+
+
+@dataclass
+class EngineConfig:
+    prefix: str
+    default_base_url: str
+
+
+ENGINE_REGISTRY: dict[str, EngineConfig] = {
+    "omlx": EngineConfig(prefix="OMLX", default_base_url="http://127.0.0.1:8000/v1"),
+    "mtplx": EngineConfig(prefix="MTPLX", default_base_url="http://127.0.0.1:8000/v1"),
+    "openai": EngineConfig(prefix="OPENAI", default_base_url="https://api.openai.com/v1"),
+}
 
 
 def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
@@ -42,20 +57,85 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 def get_ai_client(engine: str) -> instructor.Instructor:
     """Initialize the AI client based on the requested engine."""
     engine_lower = engine.lower()
-    if engine_lower in ("omlx", "mtplx", "mlx"):
-        prefix = "MTPLX" if engine_lower == "mtplx" else "OMLX"
-        api_key = os.environ.get(f"{prefix}_API_KEY", os.environ.get("OMLX_API_KEY", "not-needed"))
-        base_url = os.environ.get(f"{prefix}_BASE_URL", os.environ.get("OMLX_BASE_URL", "http://localhost:8000/v1"))
 
-        openai_client = track_openai(OpenAI(base_url=base_url, api_key=api_key))
-        client = instructor.from_openai(openai_client)
-        return client
-    raise ValueError(f"Unsupported engine: {engine}")
+    config = ENGINE_REGISTRY.get(engine_lower)
+    if not config:
+        raise ValueError(f"Unsupported engine: {engine}. Supported engines: {', '.join(ENGINE_REGISTRY.keys())}")
+
+    api_key = os.environ.get(f"{config.prefix}_API_KEY", "not-needed")
+    base_url = os.environ.get(f"{config.prefix}_BASE_URL", config.default_base_url)
+
+    if "localhost" in base_url or "127.0.0.1" in base_url:
+        import time
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+
+        models_url = f"{base_url.rstrip('/')}/models"
+        server_ready = False
+
+        try:
+            req = urllib.request.Request(models_url, method="GET")
+            with urllib.request.urlopen(req, timeout=1) as response:
+                if response.status == 200:
+                    server_ready = True
+        except urllib.error.URLError, TimeoutError:
+            pass
+
+        if not server_ready:
+            console.print(
+                f"[yellow]🚀 Local AI server for {engine} is not running. Starting it in a new window...[/yellow]"
+            )
+            script_path = f"/tmp/start_{engine_lower}.command"
+            parsed = urllib.parse.urlparse(base_url)
+            port = parsed.port or 8000
+
+            server_cmd = f"mtplx start --port {port}" if engine_lower == "mtplx" else f"omlxd --port {port}"
+
+            with open(script_path, "w") as f:
+                f.write("#!/usr/bin/env bash\n")
+                f.write(f"echo 'Starting {engine_lower} server...'\n")
+                f.write(f"{server_cmd}\n")
+                f.write("echo 'Server stopped. You can close this window.'\n")
+            os.chmod(script_path, 0o755)
+
+            ret = subprocess.run(["open", "-a", "Ghostty", script_path], stderr=subprocess.DEVNULL)
+            if ret.returncode != 0:
+                subprocess.run(["open", script_path])
+
+            console.print("Waiting for AI server to become ready", end="")
+            for _ in range(60):
+                try:
+                    req = urllib.request.Request(models_url, method="GET")
+                    with urllib.request.urlopen(req, timeout=1) as response:
+                        if response.status == 200:
+                            server_ready = True
+                            console.print("\n[green]✅ AI server is ready![/green]")
+                            break
+                except urllib.error.URLError, TimeoutError:
+                    pass
+                console.print(".", end="")
+                sys.stdout.flush()
+                time.sleep(1)
+
+            if not server_ready:
+                _abort(
+                    "\n[bold red]❌ Timed out waiting for local AI server.[/bold red]",
+                    strict=True,
+                )
+
+    openai_client = track_openai(OpenAI(base_url=base_url, api_key=api_key))
+    client = instructor.from_openai(openai_client)
+    return client
 
 
 @opik.track(project_name="gitCommitGenerator")
 def generate_commit_message(
-    client: instructor.Instructor, diff_output: str, model_name: str, system_prompt: str
+    client: instructor.Instructor,
+    diff_output: str,
+    model_name: str,
+    system_prompt: str,
+    **kwargs,
 ) -> str:
     """Generate a structured commit message using AI."""
     opik_context.update_current_trace(
@@ -67,16 +147,30 @@ def generate_commit_message(
         }
     )
 
-    commit_result: Commit = client.chat.completions.create(
-        model=model_name,
-        response_model=Commit,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
-        ],
-        max_retries=2,
-    )
-    return commit_result.render()
+    import time
+
+    import openai
+
+    max_retries = 10
+    for attempt in range(max_retries):
+        try:
+            commit_result: Commit = client.chat.completions.create(
+                model=model_name,
+                response_model=Commit,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
+                ],
+                max_retries=2,
+            )
+            return commit_result.render()
+        except openai.APIConnectionError:
+            if attempt == max_retries - 1:
+                raise
+            console.print(
+                f"[yellow]Waiting for local AI server to load model weights (attempt {attempt + 1}/{max_retries})...[/yellow]"
+            )
+            time.sleep(10)
 
 
 @app.command("commit")
@@ -110,6 +204,10 @@ def commit(
         console.log(f"Commit Msg File: {commit_msg_file}")
         console.log(f"Commit Source: {commit_source}")
 
+    # hk hook framework passes the file path as the second argument if git provides no source.
+    if commit_source and (commit_source == commit_msg_file or commit_source.endswith("COMMIT_EDITMSG")):
+        commit_source = None
+
     # Fix B: never clobber an existing/user-provided message.
     if commit_source not in GENERATING_SOURCES:
         if amend_regenerate and commit_source == "commit":
@@ -142,15 +240,20 @@ def commit(
             ":(exclude)*auxly*",
         ]
 
-        diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
         max_chars = 50000
 
-        if len(diff_output) > max_chars and has_rtk:
+        if has_rtk:
             if verbose:
-                console.log(f"Standard diff exceeds {max_chars} chars. Falling back to rtk for token compression...")
-
-            diff_cmd_rtk = ["rtk", "git", "diff", "--cached", "--", ".", *diff_cmd_standard[5:]]
-            diff_output = subprocess.check_output(diff_cmd_rtk, stderr=subprocess.STDOUT, text=True)
+                console.log("Using rtk for token compression...")
+            try:
+                diff_cmd_rtk = ["rtk", "git", "diff", "--cached", "--", ".", *diff_cmd_standard[5:]]
+                diff_output = subprocess.check_output(diff_cmd_rtk, stderr=subprocess.STDOUT, text=True)
+            except subprocess.CalledProcessError as e:
+                if verbose:
+                    console.log(f"rtk failed ({e}). Falling back to standard diff.")
+                diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
+        else:
+            diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
 
         if len(diff_output) > max_chars:
             diff_output = diff_output[:max_chars] + "\n\n... [DIFF TRUNCATED DUE TO LENGTH] ..."
@@ -174,7 +277,8 @@ def commit(
     if verbose:
         console.log(f"AI Client initialized. Calling {engine} to generate commit message...")
 
-    prefix = "MTPLX" if engine.lower() == "mtplx" else "OMLX"
+    engine_config = ENGINE_REGISTRY.get(engine.lower())
+    prefix = engine_config.prefix if engine_config else "OMLX"
     model_name = os.environ.get(f"{prefix}_MODEL", os.environ.get("OMLX_MODEL", ""))
     if not model_name:
         try:
@@ -200,11 +304,30 @@ def commit(
         context_parts.append("Specifications and Standards:\n" + json.dumps(specs, indent=2))
     if workflow:
         context_parts.append("Agentic Commit Workflow:\n" + json.dumps(workflow, indent=2))
+
     if gitops_matrix:
-        context_parts.append(
-            "Use the following reference matrix to select the exact literal unicode emoji and cc_type:\n"
-            + json.dumps(gitops_matrix, indent=2)
+        if verbose:
+            console.log("Analyzing diff signals and ranking intents...")
+
+        signals = extract_diff_signals(diff_output)
+        ranked_candidates = rank_commit_intents(signals, gitops_matrix)
+        top_candidates = ranked_candidates[:5]
+
+        candidates_str = (
+            "Based on deterministic analysis of the git diff, here are the top 5 most likely commit intents.\n"
+            "Select the primary intent from this list that best represents the changes:\n\n"
         )
+
+        for i, cand in enumerate(top_candidates, 1):
+            candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
+            candidates_str += f"   Description: {cand.description}\n"
+            if cand.selection_rule:
+                candidates_str += f"   Rule: {cand.selection_rule}\n"
+            if cand.evidence:
+                candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
+            candidates_str += "\n"
+
+        context_parts.append(candidates_str.strip())
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
 
