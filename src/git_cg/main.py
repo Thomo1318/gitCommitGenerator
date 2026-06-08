@@ -27,6 +27,7 @@ from rich.table import Table  # noqa: E402
 
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
 from git_cg.models import CommitPlan  # noqa: E402
+from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
 
 app = typer.Typer(add_completion=False, help="GitOps AI Commit Generator and Release Automation")
@@ -70,8 +71,8 @@ def get_ai_client(engine: str) -> instructor.Instructor:
     if not config:
         raise ValueError(f"Unsupported engine: {engine}. Supported engines: {', '.join(ENGINE_REGISTRY.keys())}")
 
-    api_key = os.environ.get(f"{config.prefix}_API_KEY", "not-needed")
-    base_url = os.environ.get(f"{config.prefix}_BASE_URL", config.default_base_url)
+    api_key = resolve_secret(f"{config.prefix}_API_KEY", "not-needed")
+    base_url = resolve_secret(f"{config.prefix}_BASE_URL", config.default_base_url)
 
     if "localhost" in base_url or "127.0.0.1" in base_url:
         import time
@@ -280,7 +281,7 @@ def commit(
     commit_source: str | None = typer.Argument(None, help="Source of the commit message (e.g., 'message', 'template')"),
     extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
     engine: str = typer.Option(
-        os.environ.get("GIT_CG_ENGINE", "omlx"), "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
+        os.environ.get("GIT_CG_ENGINE", "mtplx"), "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
     ),
     dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Do not write the commit message, just print it"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),

@@ -29,8 +29,8 @@ hooks {
     ["prepare-commit-msg"] {
         steps = new Mapping<String, Step> {
             ["git-cg"] {
-                check = "./scripts/with_1p_env.sh uv run python -m git_cg.main commit \"{{commit_msg_file}}\" \"{{source}}\""
-                fix = "./scripts/with_1p_env.sh uv run python -m git_cg.main commit \"{{commit_msg_file}}\" \"{{source}}\""
+                check = "uv run python -m git_cg.main commit \"{{commit_msg_file}}\" \"{{source}}\""
+                fix = "uv run python -m git_cg.main commit \"{{commit_msg_file}}\" \"{{source}}\""
             }
         }
     }
