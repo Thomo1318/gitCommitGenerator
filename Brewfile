@@ -8,3 +8,7 @@ brew "youssofal/mtplx/mtplx"
 # oMLX - LLM inference server optimized for Apple Silicon
 tap "jundot/omlx"
 brew "jundot/omlx/omlx"
+
+# Alerting utility for interactive desktop notifications
+tap "vjeantet/tap"
+brew "vjeantet/tap/alerter"

@@ -53,8 +53,8 @@ betterleaks = "latest"              # Next-gen secret scanner with active verifi
 # ============================================================================ #
 
 [tasks."test:cli"]
-description = "Test the git-cg CLI scaffolding (Zero-Plaintext)"
-run = "./scripts/with_1p_env.sh uv run python -m git_cg.main --help"
+description = "Test the git-cg CLI scaffolding (Zero-Plaintext via 1Password SDK)"
+run = "uv run python -m git_cg.main --help"
 
 [tasks.pre-commit]
 run = "hk run pre-commit"

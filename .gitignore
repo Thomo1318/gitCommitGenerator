@@ -5,6 +5,7 @@
 *.pem
 *.key
 *.cer
+mise.local.toml
 
 # IDEs & Editors
 .vscode/
@@ -12,6 +13,7 @@
 *.swp
 *.swo
 *~
+scratch.txt
 
 # OS Specifics
 .DS_Store
