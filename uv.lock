@@ -355,6 +355,7 @@ version = "0.1.7"
 source = { editable = "." }
 dependencies = [
     { name = "instructor" },
+    { name = "onepassword-sdk" },
     { name = "openai" },
     { name = "opik" },
     { name = "pydantic" },
@@ -373,6 +374,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "instructor", specifier = ">=1.15.1" },
+    { name = "onepassword-sdk", specifier = ">=0.1.2" },
     { name = "openai", specifier = ">=2.38.0" },
     { name = "opik", specifier = ">=2.0.52" },
     { name = "pydantic", specifier = ">=2.13.4" },
@@ -720,6 +722,15 @@ sdist = { url = "https://files.pythonhosted.org/packages/72/b5/e38bfb6679c158c1e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/0a/999908e7920061092318a4e2ac5d8cb973561178d05d1fe56231113f93cf/mypy_boto3_bedrock_runtime-1.43.17-py3-none-any.whl", hash = "sha256:c782c01e0e581e239e83ca1d740751acdd798756142b2364d81ec75c633e6a49", size = 36212, upload-time = "2026-05-28T21:20:53.454Z" },
 ]
+
+[[package]]
+name = "onepassword-sdk"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7e/e7/004a561d60c91bf0493dfdef422813848c4695e70d9715cc832757985823/onepassword_sdk-0.4.0.tar.gz", hash = "sha256:dbfa0914a8eae46ac5a5c924cd0c96ca5be3755b320740a5ef2a389216c2f68e", size = 34477100, upload-time = "2026-02-10T11:52:08.327Z" }
 
 [[package]]
 name = "openai"

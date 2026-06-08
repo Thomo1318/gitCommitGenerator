@@ -93,43 +93,62 @@ def get_ai_client(engine: str) -> instructor.Instructor:
 
         if not server_ready:
             console.print(
-                f"[yellow]🚀 Local AI server for {engine} is not running. Starting it in a new window...[/yellow]"
+                f"[yellow]🚀 Local AI server for {engine} is not running. Starting it in the background...[/yellow]"
             )
-            script_path = f"/tmp/start_{engine_lower}.command"
             parsed = urllib.parse.urlparse(base_url)
             port = parsed.port or 8000
 
-            server_cmd = f"mtplx start --port {port}" if engine_lower == "mtplx" else f"omlxd --port {port}"
+            import shlex
+            import shutil
 
-            with open(script_path, "w") as f:
-                f.write("#!/usr/bin/env bash\n")
-                f.write(f"echo 'Starting {engine_lower} server...'\n")
-                f.write(f"{server_cmd}\n")
-                f.write("echo 'Server stopped. You can close this window.'\n")
-            os.chmod(script_path, 0o755)
+            mtplx_path = shutil.which("mtplx") or "mtplx"
+            omlxd_path = shutil.which("omlxd") or "omlxd"
 
-            ret = subprocess.run(["open", "-a", "Ghostty", script_path], stderr=subprocess.DEVNULL)
-            if ret.returncode != 0:
-                subprocess.run(["open", script_path])
+            cmd_args = (
+                shlex.split(f"{mtplx_path} quickstart --profile sustained --port {port}")
+                if engine_lower == "mtplx"
+                else shlex.split(f"{omlxd_path} --port {port}")
+            )
 
-            console.print("Waiting for AI server to become ready", end="")
-            for _ in range(60):
-                try:
-                    req = urllib.request.Request(models_url, method="GET")
-                    with urllib.request.urlopen(req, timeout=1) as response:
-                        if response.status == 200:
-                            server_ready = True
-                            console.print("\n[green]✅ AI server is ready![/green]")
-                            break
-                except urllib.error.URLError, TimeoutError:
-                    pass
-                console.print(".", end="")
-                sys.stdout.flush()
-                time.sleep(1)
+            log_path = f"/tmp/{engine_lower}_server.log"
+            with open(log_path, "a") as log_file:
+                # Launch as a detached background process
+                process = subprocess.Popen(cmd_args, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
+
+            console.print(f"[dim]Background logs: {log_path}[/dim]")
+            console.print("[yellow]Waiting for AI server to become ready (tailing logs)...[/yellow]")
+
+            with open(log_path) as f:
+                f.seek(0, 2)  # Seek to the end of the file
+                for _ in range(60):
+                    # Check if process died early
+                    if process.poll() is not None:
+                        _abort(
+                            f"\n[bold red]❌ AI server process exited unexpectedly with code {process.returncode}. Check {log_path} for details.[/bold red]",
+                            strict=True,
+                        )
+
+                    # Tail new log lines to terminal
+                    line = f.readline()
+                    while line:
+                        console.print(f"[dim]  {line.strip()}[/dim]")
+                        line = f.readline()
+
+                    try:
+                        req = urllib.request.Request(models_url, method="GET")
+                        with urllib.request.urlopen(req, timeout=1) as response:
+                            if response.status == 200:
+                                server_ready = True
+                                console.print("\n[green]✅ AI server successfully started and is ready![/green]")
+                                break
+                    except urllib.error.URLError, TimeoutError, Exception:
+                        pass
+
+                    time.sleep(1)
 
             if not server_ready:
                 _abort(
-                    "\n[bold red]❌ Timed out waiting for local AI server.[/bold red]",
+                    f"\n[bold red]❌ Timed out waiting for local AI server. Check {log_path} for details.[/bold red]",
                     strict=True,
                 )
 
@@ -281,7 +300,7 @@ def commit(
     commit_source: str | None = typer.Argument(None, help="Source of the commit message (e.g., 'message', 'template')"),
     extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
     engine: str = typer.Option(
-        os.environ.get("GIT_CG_ENGINE", "mtplx"), "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
+        os.environ.get("GIT_CG_ENGINE") or "mtplx", "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
     ),
     dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Do not write the commit message, just print it"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
