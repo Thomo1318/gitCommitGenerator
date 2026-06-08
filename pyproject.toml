@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "instructor>=1.15.1",
+    "onepassword-sdk>=0.1.2",
     "openai>=2.38.0",
     "opik>=2.0.52",
     "pydantic>=2.13.4",
@@ -53,11 +54,7 @@ docstring-code-format = true
 docstring-code-line-length = "dynamic"
 
 [dependency-groups]
-dev = [
-    "ruff>=0.15.15",
-    "pytest>=8.0.0",
-    "pytest-cov>=5.0.0",
-]
+dev = ["ruff>=0.15.15", "pytest>=8.0.0", "pytest-cov>=5.0.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
