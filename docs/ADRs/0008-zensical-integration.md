@@ -1,3 +1,5 @@
+# ADR-0008: Zensical Documentation Integration
+
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 A hyper-detailed, architectural rendering of a futuristic, glowing digital library. In the center, a massive, suspended crystalline monolith containing thousands of perfectly organized, glowing data-slates. The word "Zensical" is heavily engraved directly into the obsidian floor of the library, glowing with intense cyan and indigo neon light. Intricate holographic projections of documentation structures float in the air around the monolith. Cinematic lighting, deep shadows with vibrant neon cyan and deep indigo accents, volumetric dust particles. 8k resolution, octane render, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
 
@@ -6,8 +8,6 @@ A hyper-detailed, architectural rendering of a futuristic, glowing digital libra
 <div align="center">
 <img src="../assets/adr-0008-zensical-integration.webp" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
 </div>
-
-# ADR-0008: Zensical Documentation Integration
 
 ```yaml
 adr_number: "0008"
@@ -54,7 +54,7 @@ The primary goals are:
 
 The previous documentation approach lacked structure, making it difficult for developers and autonomous agents to locate authoritative architectural decisions (ADRs) or usage guides. Adopting an SSG solves the discoverability issue but introduces the risk of link rot if not rigorously validated.
 
-Zensical was chosen over standard MkDocs due to its Rust-powered speed and compatibility with the `mkdocs-material` plugin ecosystem, allowing us to maintain high fidelity aesthetics without sacrificing performance.
+Zensical was chosen over standard MkDocs due to its Rust-powered speed and compatibility with the `mkdocs-material` plugin ecosystem, allowing us to maintain high-fidelity aesthetics without sacrificing performance.
 
 ## 4. Solution Strategy
 
@@ -183,7 +183,7 @@ sequenceDiagram
   - **Confidence**: Strict link validation ensures the documentation is inherently trustworthy.
   - **Zero Maintenance Deployment**: Merging to `main` automatically updates the live site.
 - **Cons**:
-  - **Strictness Overhead**: Moving files or renaming headers requires careful updating of internal links, otherwise the CI build will fail.
+  - **Strictness Overhead**: Moving files or renaming headers requires careful updating of internal links; otherwise, the CI build will fail.
   - **Toolchain Expansion**: Introduces another tool (`zensical`) that developers must install (via `uv`) if they wish to preview docs locally.
 
 ---
