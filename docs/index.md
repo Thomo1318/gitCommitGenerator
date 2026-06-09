@@ -1,6 +1,6 @@
 # 🧬 GitOps AI Commit Generator (`git-cg`)
 
-![GitOps Commit Generator](docs/GitOps-Commit-Generator.jpeg)
+![GitOps Commit Generator](GitOps-Commit-Generator.jpeg)
 
 > 🤖 **"The Brain in the Machine"** — A governed, SOP-driven engine for standardized Git history.
 

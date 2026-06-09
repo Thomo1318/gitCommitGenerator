@@ -55,6 +55,7 @@ docstring-code-line-length = "dynamic"
 
 [dependency-groups]
 dev = ["ruff>=0.15.15", "pytest>=8.0.0", "pytest-cov>=5.0.0"]
+docs = ["zensical>=0.0.45", "pymdown-extensions>=10.14", "markdown>=3.7"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

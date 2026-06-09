@@ -1,9 +1,12 @@
+import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
-from typing import NoReturn
+from typing import Annotated, NoReturn
 
 from dotenv import load_dotenv
 
@@ -26,11 +29,17 @@ from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
 
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
+from git_cg.interaction import can_open_tty, emit_terminal_bell, prompt_with_gum  # noqa: E402
 from git_cg.models import CommitPlan  # noqa: E402
 from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
 
-app = typer.Typer(add_completion=False, help="GitOps AI Commit Generator and Release Automation")
+app = typer.Typer(
+    add_completion=False,
+    help="GitOps AI Commit Generator and Release Automation",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
 console = Console()
 
 # Only generate for an interactive (empty) or template commit. Everything else
@@ -99,7 +108,6 @@ def get_ai_client(engine: str) -> instructor.Instructor:
             port = parsed.port or 8000
 
             import shlex
-            import shutil
 
             mtplx_path = shutil.which("mtplx") or "mtplx"
             omlxd_path = shutil.which("omlxd") or "omlxd"
@@ -111,24 +119,21 @@ def get_ai_client(engine: str) -> instructor.Instructor:
             )
 
             log_path = f"/tmp/{engine_lower}_server.log"
-            with open(log_path, "a") as log_file:
-                # Launch as a detached background process
+            with open(log_path, "a", encoding="utf-8") as log_file:
                 process = subprocess.Popen(cmd_args, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
 
             console.print(f"[dim]Background logs: {log_path}[/dim]")
             console.print("[yellow]Waiting for AI server to become ready (tailing logs)...[/yellow]")
 
-            with open(log_path) as f:
-                f.seek(0, 2)  # Seek to the end of the file
+            with open(log_path, encoding="utf-8") as f:
+                f.seek(0, 2)
                 for _ in range(60):
-                    # Check if process died early
                     if process.poll() is not None:
                         _abort(
                             f"\n[bold red]❌ AI server process exited unexpectedly with code {process.returncode}. Check {log_path} for details.[/bold red]",
                             strict=True,
                         )
 
-                    # Tail new log lines to terminal
                     line = f.readline()
                     while line:
                         console.print(f"[dim]  {line.strip()}[/dim]")
@@ -224,22 +229,17 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
         signals = extract_diff_signals(diff_output)
         ranked_candidates = rank_commit_intents(signals, gitops_matrix)
 
-        # 1. Primary Candidates (Top 3 absolute matches)
         primary_candidates = ranked_candidates[:3]
-
-        # 2. Secondary Candidates (Ensure diversity for secondary sub-changes)
         secondary_candidates = []
         seen_groups = {cand.intent_group for cand in primary_candidates}
 
         for cand in ranked_candidates[3:]:
             if len(secondary_candidates) >= 3:
                 break
-            # Only inject if it scored reasonably well (avoid hard-vetoed items) and is a distinct group
             if cand.intent_group not in seen_groups and cand.score > 0:
                 secondary_candidates.append(cand)
                 seen_groups.add(cand.intent_group)
 
-        # If we didn't find enough diverse groups, fill with the next best positive-scoring candidates
         if len(secondary_candidates) < 3:
             for cand in ranked_candidates[3:]:
                 if len(secondary_candidates) >= 3:
@@ -272,10 +272,12 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
                     candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
                 candidates_str += "\n"
 
-        # 3. Vocabulary Dictionary (Ultimate fallback to prevent hallucinated emojis)
         vocab = [f"{r.get('intent_id', r.get('code', '').strip(':'))} ({r.get('emoji')})" for r in gitops_matrix]
         candidates_str += "VALID INTENT DICTIONARY (Ultimate Fallback):\n"
-        candidates_str += "If NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. Do NOT invent new intents or emojis:\n"
+        candidates_str += (
+            "If NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. "
+            "Do NOT invent new intents or emojis:\n"
+        )
         candidates_str += ", ".join(vocab) + "\n"
 
         context_parts.append(candidates_str.strip())
@@ -294,42 +296,69 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
     return system_prompt
 
 
-@app.command("commit")
-def commit(
-    commit_msg_file: str = typer.Argument(..., help="Path to the commit message file"),
-    commit_source: str | None = typer.Argument(None, help="Source of the commit message (e.g., 'message', 'template')"),
-    extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
-    engine: str = typer.Option(
-        os.environ.get("GIT_CG_ENGINE") or "mtplx", "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
-    ),
-    dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Do not write the commit message, just print it"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    amend_regenerate: bool = typer.Option(
-        False,
-        "--amend-regenerate",
-        help="Opt in to regenerating the message on git --amend (source 'commit'). Off by default.",
-    ),
-    strict: bool = typer.Option(
-        False,
-        "--strict",
-        help="Exit non-zero on failure. Leave OFF for git hooks so a failed "
-        "generation never blocks the commit; turn ON for CLI/CI use.",
-    ),
-):
-    """
-    Generate an AI commit message based on staged changes.
-    """
+def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: bool, verbose: bool) -> None:
+    try:
+        with open(commit_msg_file, "w", encoding="utf-8") as f:
+            f.write(result_string)
+        if verbose:
+            console.log(f"Commit message written to {commit_msg_file}")
+    except OSError as e:
+        _abort(f"[bold red]Error writing to {commit_msg_file}:[/bold red] {e}", strict=strict)
+
+
+def _interactive_review(commit_msg_file: str, result_string: str, *, verbose: bool) -> str:
+    emit_terminal_bell()
+    action = prompt_with_gum(title="git-cg Generated Commit", body=result_string)
+    if action is None:
+        if verbose:
+            console.log(
+                "[yellow]Interactive mode requested but gum or /dev/tty is unavailable (or cancelled). Proceeding non-interactively.[/yellow]"
+            )
+        return "Commit"
+
+    if action == "Edit":
+        editor = os.environ.get("EDITOR", "nano")
+        subprocess.run([editor, commit_msg_file], check=False)
+    return action
+
+
+def _interactive_review_dry_run(result_string: str, *, verbose: bool) -> str:
+    temp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", delete=False, suffix=".git-cg-preview.txt"
+        ) as temp_file:
+            temp_file.write(result_string)
+            temp_path = temp_file.name
+        return _interactive_review(temp_path, result_string, verbose=verbose)
+    finally:
+        if temp_path:
+            with contextlib.suppress(OSError):
+                os.unlink(temp_path)
+
+
+def _run_commit_generation(
+    commit_msg_file: str,
+    commit_source: str | None,
+    extra_args: list[str] | None,
+    *,
+    engine: str,
+    dry_run: bool,
+    verbose: bool,
+    amend_regenerate: bool,
+    strict: bool,
+    interactive: bool,
+) -> bool:
     if verbose:
         console.log("Starting git-cg...")
         console.log(f"Engine: {engine}")
         console.log(f"Commit Msg File: {commit_msg_file}")
         console.log(f"Commit Source: {commit_source}")
+        console.log(f"Interactive Mode: {interactive}")
 
-    # hk hook framework passes the file path as the second argument if git provides no source.
     if commit_source and (commit_source == commit_msg_file or commit_source.endswith("COMMIT_EDITMSG")):
         commit_source = None
 
-    # Fix B: never clobber an existing/user-provided message.
     if commit_source not in GENERATING_SOURCES:
         if amend_regenerate and commit_source == "commit":
             if verbose:
@@ -337,16 +366,12 @@ def commit(
         else:
             if verbose:
                 console.log(
-                    f"Commit source '{commit_source}' indicates an existing message "
-                    "(merge/squash/amend/-m). Skipping generation."
+                    f"Commit source '{commit_source}' indicates an existing message (merge/squash/amend/-m). Skipping generation."
                 )
             raise typer.Exit(code=0)
 
     try:
-        import shutil
-
         has_rtk = shutil.which("rtk") is not None
-
         diff_cmd_standard = [
             "git",
             "diff",
@@ -360,7 +385,6 @@ def commit(
             ":(exclude)*zensical*",
             ":(exclude)*auxly*",
         ]
-
         max_chars = 50000
 
         if has_rtk:
@@ -421,56 +445,187 @@ def commit(
     except Exception:
         thread_id = "default-thread"
 
-    try:
-        with console.status(
-            f"[bold cyan]Generating AI commit message with {model_name}... (this may take 30-90s locally)[/bold cyan]",
-            spinner="dots",
-        ):
-            commit_plan = generate_commit_message(
-                client, diff_output, model_name, system_prompt, opik_args={"trace": {"thread_id": thread_id}}
-            )
-    except Exception as e:
-        _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
-
-    mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
-
-    if commit_plan.split_recommended:
-        msg = f"\n[bold yellow]⚠️  MIXED COMMIT DETECTED[/bold yellow]\n[yellow]Rationale:[/yellow] {commit_plan.rationale}\n"
-
-        if mixed_policy == "strict":
-            console.print(msg)
-            _abort(
-                "[bold red]Policy is 'strict'. Aborting commit. Please split your changes.[/bold red]", strict=strict
-            )
-
-        elif mixed_policy == "split_prompt":
-            console.print(msg)
-            if verbose:
-                console.print("[yellow]Interactive prompts are disabled in git hooks; bypassing split_prompt.[/yellow]")
-
-        elif mixed_policy == "warn":
-            console.print(msg)
-            console.print("[yellow]Policy is 'warn'. Proceeding with composite commit.[/yellow]\n")
-
-    result_string = commit_plan.render()
-
-    if verbose or dry_run:
-        console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
-
-    if not dry_run:
+    while True:
         try:
-            with open(commit_msg_file, "w", encoding="utf-8") as f:
-                f.write(result_string)
-            if verbose:
-                console.log(f"Commit message written to {commit_msg_file}")
-        except OSError as e:
-            _abort(f"[bold red]Error writing to {commit_msg_file}:[/bold red] {e}", strict=strict)
+            with console.status(
+                f"[bold cyan]Generating AI commit message with {model_name}... (this may take 30-90s locally)[/bold cyan]",
+                spinner="dots",
+            ):
+                commit_plan = generate_commit_message(
+                    client,
+                    diff_output,
+                    model_name,
+                    system_prompt,
+                    opik_args={"trace": {"thread_id": thread_id}},
+                )
+        except Exception as e:
+            _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
+
+        mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
+        if commit_plan.split_recommended:
+            msg = (
+                "\n[bold yellow]⚠️  MIXED COMMIT DETECTED[/bold yellow]\n"
+                f"[yellow]Rationale:[/yellow] {commit_plan.rationale}\n"
+            )
+            if mixed_policy == "strict":
+                console.print(msg)
+                _abort(
+                    "[bold red]Policy is 'strict'. Aborting commit. Please split your changes.[/bold red]",
+                    strict=strict,
+                )
+            if mixed_policy == "warn":
+                console.print(msg)
+                console.print("[yellow]Policy is 'warn'. Proceeding with composite commit.[/yellow]\n")
+            elif mixed_policy == "split_prompt" and verbose:
+                console.print(msg)
+                console.print(
+                    "[yellow]split_prompt requested; this implementation keeps hook/default mode non-interactive. Use git-cg -i for review.[/yellow]"
+                )
+
+        result_string = commit_plan.render()
+        if verbose or dry_run:
+            console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
+
+        if dry_run:
+            should_interact = interactive and can_open_tty()
+            if interactive and not should_interact and verbose:
+                console.log(
+                    "[yellow]Interactive mode requested but /dev/tty is unavailable. Proceeding non-interactively.[/yellow]"
+                )
+            if should_interact:
+                action = _interactive_review_dry_run(result_string, verbose=verbose)
+                if action == "Regenerate":
+                    console.print("\n[yellow]Regenerating commit message...[/yellow]")
+                    continue
+                if action == "Cancel":
+                    _abort("\n[bold red]Dry-run cancelled by user.[/bold red]", strict=strict)
+            break
+
+        _write_commit_message(commit_msg_file, result_string, strict=strict, verbose=verbose)
+
+        should_interact = interactive and can_open_tty()
+        if interactive and not should_interact and verbose:
+            console.log(
+                "[yellow]Interactive mode requested but /dev/tty is unavailable. Proceeding non-interactively.[/yellow]"
+            )
+
+        if should_interact:
+            action = _interactive_review(commit_msg_file, result_string, verbose=verbose)
+            if action == "Regenerate":
+                console.print("\n[yellow]Regenerating commit message...[/yellow]")
+                continue
+            if action == "Cancel":
+                _abort("\n[bold red]Commit aborted by user.[/bold red]", strict=strict)
+            break
+
+        break
 
     opik.flush_tracker()
+    return True
+
+
+def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
+    try:
+        result = subprocess.run(["git", "commit", "-F", commit_msg_file], check=False)
+        if result.returncode != 0:
+            _abort("[bold red]git commit failed while applying generated commit message.[/bold red]", strict=strict)
+    except FileNotFoundError as e:
+        _abort(f"[bold red]Unable to execute git commit:[/bold red] {e}", strict=strict)
+
+
+@app.callback()
+def main_callback(
+    ctx: typer.Context,
+    interactive: Annotated[
+        bool,
+        typer.Option("--interactive", "-i", help="Enable terminal-native interactive review via gum."),
+    ] = False,
+    engine: Annotated[
+        str,
+        typer.Option("--engine", "-e", help="AI engine to use when running git-cg directly."),
+    ] = os.environ.get("GIT_CG_ENGINE") or "mtplx",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-d", help="Generate and print the commit message without applying a commit."),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output."),
+    ] = False,
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Exit non-zero on failure for standalone CLI use."),
+    ] = True,
+) -> None:
+    """Run git-cg directly with non-interactive default behavior.
+
+    When invoked without a subcommand, git-cg generates a commit message from the
+    staged diff and applies `git commit` automatically. Use `-i` to opt into the
+    terminal-native review flow via gum.
+    """
+    if ctx.invoked_subcommand is not None or ctx.resilient_parsing:
+        return
+
+    commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
+    _run_commit_generation(
+        commit_msg_file,
+        None,
+        None,
+        engine=engine,
+        dry_run=dry_run,
+        verbose=verbose,
+        amend_regenerate=False,
+        strict=strict,
+        interactive=interactive,
+    )
+    if not dry_run:
+        _apply_standalone_commit(commit_msg_file, strict=strict)
+    raise typer.Exit(code=0)
+
+
+@app.command("commit")
+def commit(
+    commit_msg_file: str = typer.Argument(..., help="Path to the commit message file"),
+    commit_source: str | None = typer.Argument(None, help="Source of the commit message (e.g., 'message', 'template')"),
+    extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
+    engine: str = typer.Option(
+        os.environ.get("GIT_CG_ENGINE") or "mtplx", "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", "-d", help="Do not write the commit message, just print it"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    amend_regenerate: bool = typer.Option(
+        False,
+        "--amend-regenerate",
+        help="Opt in to regenerating the message on git --amend (source 'commit'). Off by default.",
+    ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Exit non-zero on failure. Leave OFF for git hooks so a failed generation never blocks the commit; turn ON for CLI/CI use.",
+    ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        "-i",
+        help="Enable terminal-native interactive review via gum when a TTY is available.",
+    ),
+) -> None:
+    """Generate an AI commit message based on staged changes."""
+    _run_commit_generation(
+        commit_msg_file,
+        commit_source,
+        extra_args,
+        engine=engine,
+        dry_run=dry_run,
+        verbose=verbose,
+        amend_regenerate=amend_regenerate,
+        strict=strict,
+        interactive=interactive,
+    )
 
 
 @app.command("sop")
-def show_sop():
+def show_sop() -> None:
     """Display the GitOps SOP matrices and workflows."""
     data = load_sop()
     if not data:
@@ -513,10 +668,8 @@ def release(
         False, "--dry-run", "-d", help="Print changes without modifying files or executing git tags"
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-):
-    """
-    Calculate SemVer bump, inject versions into changed files, and generate Changelog.
-    """
+) -> None:
+    """Calculate SemVer bump, inject versions into changed files, and generate Changelog."""
     try:
         from git_cg.release import execute_release
 
