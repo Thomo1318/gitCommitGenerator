@@ -73,7 +73,21 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 
 
 def get_ai_client(engine: str) -> instructor.Instructor:
-    """Initialize the AI client based on the requested engine."""
+    """
+    Create and return an Instructor client configured for the named engine.
+    
+    Initialises credentials and endpoint from ENGINE_REGISTRY and resolved secrets; if the engine's base URL points at localhost the function will detect whether a local AI server is running and attempt to start and wait for one if necessary. On success returns an Instructor client wrapped for OpenAI-compatible tracking.
+    
+    Parameters:
+        engine (str): Engine name key (e.g. 'openai', 'omlx', 'mtplx') used to look up connection and secret configuration.
+    
+    Returns:
+        instructor.Instructor: An Instructor client configured to talk to the selected engine.
+    
+    Raises:
+        ValueError: If `engine` is not present in ENGINE_REGISTRY.
+        typer.Exit: Via internal `_abort` when a required local server fails to start or readiness times out (occurs only for localhost-style base URLs).
+    """
     engine_lower = engine.lower()
 
     config = ENGINE_REGISTRY.get(engine_lower)
@@ -207,7 +221,16 @@ def generate_commit_message(
 
 
 def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
-    """Assemble the system prompt from the SOP (install-relative resolution)."""
+    """
+    Build the system prompt that instructs the model to produce a CommitPlan from a git diff and optional SOP context.
+    
+    Parameters:
+        diff_output (str): The git diff text to be analysed for intent signals.
+        verbose (bool): When True, emit informational messages during prompt assembly.
+    
+    Returns:
+        system_prompt (str): The assembled system prompt including SOP-derived context and ranked intent candidates where available.
+    """
     sop_data = load_sop()
     if not sop_data and verbose:
         console.log("[yellow]SOP could not be located; generating without matrix enforcement.[/yellow]")
@@ -297,6 +320,15 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
 
 
 def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: bool, verbose: bool) -> None:
+    """
+    Write the provided commit message string to the given file path.
+    
+    If writing fails, aborts the process and exits using the program's error handler.
+    
+    Parameters:
+        strict (bool): If True, a write failure causes a non-zero exit; if False, exit code may be zero.
+        verbose (bool): If True, logs the path written to the console.
+    """
     try:
         with open(commit_msg_file, "w", encoding="utf-8") as f:
             f.write(result_string)
@@ -307,6 +339,19 @@ def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: b
 
 
 def _interactive_review(commit_msg_file: str, result_string: str, *, verbose: bool) -> str:
+    """
+    Prompt the user to review a generated commit message and optionally edit it.
+    
+    If a terminal-based prompt is available this displays `result_string` and returns the chosen action string (for example `"Commit"`, `"Edit"`, `"Regenerate"`, `"Cancel"`). If the prompt is unavailable or cancelled, logs a warning when `verbose` is true and returns `"Commit"`.
+    
+    Parameters:
+        commit_msg_file (str): Path to the commit message file; used as the target when the user chooses to edit.
+        result_string (str): The commit message text shown to the user in the prompt.
+        verbose (bool): When true, log a warning if the interactive prompt is unavailable.
+    
+    Returns:
+        action (str): The action selected by the user or `"Commit"` if interaction was not possible.
+    """
     emit_terminal_bell()
     action = prompt_with_gum(title="git-cg Generated Commit", body=result_string)
     if action is None:
@@ -323,6 +368,18 @@ def _interactive_review(commit_msg_file: str, result_string: str, *, verbose: bo
 
 
 def _interactive_review_dry_run(result_string: str, *, verbose: bool) -> str:
+    """
+    Present a commit message preview in an interactive editor using a temporary file.
+    
+    Writes `result_string` to a temporary file, calls `_interactive_review` with that file so the user can preview/edit/regenerate the message, and ensures the temporary file is removed afterwards.
+    
+    Parameters:
+        result_string (str): The commit message text to preview.
+        verbose (bool): If true, enable verbose output during the interactive flow.
+    
+    Returns:
+        action (str): The action chosen by the user (for example `"Commit"`, `"Edit"`, `"Regenerate"` or `"Cancel"`).
+    """
     temp_path = ""
     try:
         with tempfile.NamedTemporaryFile(
@@ -349,6 +406,25 @@ def _run_commit_generation(
     strict: bool,
     interactive: bool,
 ) -> bool:
+    """
+    Generate a commit message from staged changes and optionally write or preview it.
+    
+    Generates a Conventional Commit message (via the configured AI engine) from the current staged git diff, optionally presents an interactive preview, and writes the final message to the provided commit message file. The function may abort the process (via typer.Exit or the module abort helper) on user cancellation, policy violations, missing staged changes, or unrecoverable errors.
+    
+    Parameters:
+        commit_msg_file (str): Path to the commit message file to write when not in dry-run.
+        commit_source (str | None): Origin of the commit (e.g. "commit", "-m", path to an existing message); controls whether generation is skipped.
+        extra_args (list[str] | None): Unused in generation logic but preserved for command compatibility.
+        engine (str): Engine key to select an AI client from ENGINE_REGISTRY.
+        dry_run (bool): If true, show a preview and do not write to disk; may still allow interactive preview.
+        verbose (bool): Emit additional console output for debugging and progress.
+        amend_regenerate (bool): When true, allow regeneration for amend-style commits.
+        strict (bool): When true, treat failures as hard errors (non-zero exit) via the abort helper.
+        interactive (bool): When true and a TTY is available, allow user interaction (edit/regenerate/cancel).
+    
+    Returns:
+        bool: `True` when commit message generation completed (or previewed) successfully; otherwise the function will exit or abort before returning.
+    """
     if verbose:
         console.log("Starting git-cg...")
         console.log(f"Engine: {engine}")
@@ -525,6 +601,13 @@ def _run_commit_generation(
 
 
 def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
+    """
+    Apply the generated commit message by running `git commit -F` on the provided file and abort the process with an error if the commit fails or Git is unavailable.
+    
+    Parameters:
+    	commit_msg_file (str): Path to the file containing the commit message to apply.
+    	strict (bool): If True, abort with a non-zero exit code on failure; if False, abort with exit code 0.
+    """
     try:
         result = subprocess.run(["git", "commit", "-F", commit_msg_file], check=False)
         if result.returncode != 0:
@@ -610,7 +693,26 @@ def commit(
         help="Enable terminal-native interactive review via gum when a TTY is available.",
     ),
 ) -> None:
-    """Generate an AI commit message based on staged changes."""
+    """
+    Generate and optionally write an AI-crafted commit message for the current staged changes.
+    
+    Generates a Conventional Commit-style message using the configured AI engine and writes it to
+    commit_msg_file unless run with dry_run. Supports optional interactive review/editing when a TTY
+    is available. Respects amend_regenerate to allow regeneration on git --amend and strict to control
+    exit code behaviour.
+    
+    Parameters:
+        commit_msg_file (str): Path to the commit message file to write (e.g. .git/COMMIT_EDITMSG).
+        commit_source (str | None): Source identifier for the commit (e.g. 'message', 'template'); used to
+            decide whether generation should proceed.
+        extra_args (list[str] | None): Extra arguments passed by git hooks.
+        engine (str): AI engine to use (e.g. 'omlx', 'mtplx'); selected from environment or CLI option.
+        dry_run (bool): If True, do not write the commit message file; print/preview only.
+        verbose (bool): If True, enable additional diagnostic output.
+        amend_regenerate (bool): If True, allow regeneration when the source is an amended commit.
+        strict (bool): If True, exit with a non-zero code on failure; otherwise failures are non-blocking.
+        interactive (bool): If True, attempt terminal-native interactive review/editing when a TTY is present.
+    """
     _run_commit_generation(
         commit_msg_file,
         commit_source,
@@ -626,7 +728,15 @@ def commit(
 
 @app.command("sop")
 def show_sop() -> None:
-    """Display the GitOps SOP matrices and workflows."""
+    """
+    Display the loaded GitOps SOP and render key matrices and workflows to the console.
+    
+    Loads the SOP via `load_sop()`; if no SOP is found prints an error message and exits with status code 1.
+    When present, prints a success panel and renders:
+    - the `semver_resolution_matrix` as a two-column table of Impact → Rule;
+    - the `agentic_release_workflow` phases as a single-column Phase table;
+    - the `changelog_generation_rules` taxonomy as a single-column Taxonomy table.
+    """
     data = load_sop()
     if not data:
         console.print(
@@ -669,7 +779,16 @@ def release(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> None:
-    """Calculate SemVer bump, inject versions into changed files, and generate Changelog."""
+    """
+    Run the release process: determine SemVer bump, update changed files with new versions, and generate a changelog.
+    
+    Parameters:
+        dry_run (bool): If True, show planned changes without modifying files or creating git tags.
+        verbose (bool): If True, enable verbose logging of release steps.
+    
+    Notes:
+        Calls git_cg.release.execute_release(dry_run=dry_run, verbose=verbose). If the release module cannot be imported, an error is printed to the console and the process exits with status code 1.
+    """
     try:
         from git_cg.release import execute_release
 

@@ -12,12 +12,21 @@ ACTIONS: tuple[Action, ...] = ("Commit", "Edit", "Regenerate", "Cancel")
 
 
 def emit_terminal_bell() -> None:
-    """Emit a passive terminal bell notification."""
+    """
+    Emit the terminal bell (ASCII BEL) as a passive notification.
+    
+    Writes the ASCII bell character to standard output and flushes the stream immediately.
+    """
     print("\a", end="", flush=True)
 
 
 def can_open_tty() -> bool:
-    """Return True when an interactive terminal device is available."""
+    """
+    Check whether an interactive terminal device (/dev/tty) can be opened.
+    
+    Returns:
+        bool: `True` if `/dev/tty` can be opened, `False` otherwise.
+    """
     try:
         with open("/dev/tty"):
             return True
@@ -26,10 +35,17 @@ def can_open_tty() -> bool:
 
 
 def prompt_with_gum(title: str, body: str) -> Action | None:
-    """Prompt for the next action using gum on /dev/tty.
-
-    Returns None if gum or /dev/tty is unavailable, allowing the caller to
-    degrade gracefully to the non-interactive path.
+    """
+    Prompt the user to select an Action using the external `gum` chooser on /dev/tty.
+    
+    Displays `body` inside a titled panel using a console bound to `/dev/tty`, then runs `gum choose` with the available ACTIONS. If the chooser succeeds and produces a valid selection, that Action is returned; otherwise `None` is returned to allow non-interactive fallback.
+    
+    Parameters:
+        title (str): Title shown on the panel.
+        body (str): Body text displayed inside the panel.
+    
+    Returns:
+        Action | None: The selected `Action` when a valid choice is made, or `None` if `gum` or `/dev/tty` is unavailable, the chooser exits with a non-zero status, or the output is not one of the known actions.
     """
     if shutil.which("gum") is None:
         return None

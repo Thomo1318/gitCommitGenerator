@@ -7,8 +7,16 @@ Action = Literal["Commit", "Edit", "Regenerate", "Cancel", "Timeout", "Error"]
 
 def prompt_commit_message(title: str, body: str) -> Action:
     """
-    Prompt the user using macOS `alerter`.
-    Returns the action selected by the user.
+    Show a macOS notification prompting the user to choose how to proceed with a generated commit message.
+    
+    Displays an `alerter` notification with actions `Commit`, `Edit`, `Regenerate` and `Cancel`, using `title` as the subtitle and `body` as the message. The function maps the notification's stdout to the corresponding Action literal and handles timeout/close and invocation errors.
+    
+    Parameters:
+        title (str): Subtitle text shown in the notification.
+        body (str): Message body shown in the notification.
+    
+    Returns:
+        Action: One of `"Commit"`, `"Edit"`, `"Regenerate"`, `"Cancel"`, `"Timeout"` or `"Error"`. `"Timeout"` indicates the notification timed out, `"Cancel"` indicates the user closed the notification without selecting an action, and `"Error"` indicates the `alerter` command could not be invoked or returned a non-zero exit code.
     """
     # Prepare alerter command
     # Note: alerter ignores -timeout 0 on some systems, so we can omit timeout or set a high value if needed,
