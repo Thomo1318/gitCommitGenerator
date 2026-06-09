@@ -35,15 +35,16 @@ HK_LOG_FILE = "logs/hk.log"
 [tools]
 fnox = "latest"                       # Hybrid secrets orchestration
 age = "latest"                        # File encryption fallback for fnox
-hk = "latest"                       # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/)
-pkl = "latest"                      # embeddable configuration language (https://pkl-lang.org)
-python = "3.14"                     # Python runtime (https://python.org)
-usage = "latest"                    # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
-uv = "latest"                       # Fast Python package and environment manager (https://uv.astral.sh)
-rtk = "latest"                      # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
-node = "latest"                     # JS runtime for validation and release scripts (https://nodejs.org)
-just = "latest"                     # Task runner for project automation (https://just.systems)
-betterleaks = "latest"              # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
+gum = "latest"                        # Terminal-native TUI for interactive git-cg review
+hk = "latest"                         # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/)
+pkl = "latest"                        # embeddable configuration language (https://pkl-lang.org)
+python = "3.14"                       # Python runtime (https://python.org)
+usage = "latest"                      # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
+uv = "latest"                         # Fast Python package and environment manager (https://uv.astral.sh)
+rtk = "latest"                        # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
+node = "latest"                       # JS runtime for validation and release scripts (https://nodejs.org)
+just = "latest"                       # Task runner for project automation (https://just.systems)
+betterleaks = "latest"                # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
 # 1password-cli is omitted here to fall back to the Homebrew-managed `1password-cli@beta` global installation, which is required for `op environment`.
 # 1password-cli = "latest"
 
@@ -58,3 +59,11 @@ run = "uv run python -m git_cg.main --help"
 
 [tasks.pre-commit]
 run = "hk run pre-commit"
+
+[tasks."docs:build"]
+description = "Build the Zensical documentation site locally"
+run = "uv run zensical build --clean"
+
+[tasks."docs:serve"]
+description = "Serve the Zensical documentation site locally with live-reload"
+run = "uv run zensical serve -a localhost:8082"

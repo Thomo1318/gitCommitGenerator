@@ -1,0 +1,64 @@
+[project]
+site_name = "gitCommitGenerator Documentation"
+site_description = "AI-powered automated git commit generator"
+use_directory_urls = false
+
+nav = [
+    {"Home" = "index.md"},
+    {"Usage" = "usage.md"},
+    {"Walkthrough" = "walkthrough.md"},
+    {"Agent Handoff" = "agent-handoff.md"},
+    {"Internal Governance" = [
+        {"Decision Matrix" = "ADRs/0000-decision-matrix.md"},
+        {"ADR-0001: Adopt ADR Ecosystem" = "ADRs/0001-adopt-adr-ecosystem.md"},
+        {"ADR-0002: Adopt Gitleaks and Trufflehog" = "ADRs/0002-adopt-gitleaks-and-trufflehog.md"},
+        {"ADR-0003: Adopt FNOX for Secrets" = "ADRs/0003-adopt-fnox-for-secrets-management.md"},
+        {"ADR-0004: 1Password Service Account" = "ADRs/0004-1password-service-account-integration.md"},
+        {"ADR-0006: 1Password SDK Migration" = "ADRs/0006-1password-python-sdk-migration.md"},
+        {"ADR-0007: Gum TUI Integration" = "ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md"}
+    ]}
+]
+
+[project.theme]
+variant = "modern"
+primary = "indigo"
+accent = "cyan"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon-star"
+toggle.name = "Switch to system preference"
+
+features = [
+    "navigation.tabs",
+    "navigation.top",
+    "search.suggest",
+    "search.highlight"
+]
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+    { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" }
+]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
