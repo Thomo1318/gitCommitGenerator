@@ -52,10 +52,13 @@ def prompt_with_gum(title: str, body: str) -> Action | None:
                 check=False,
             )
 
+            if result.returncode != 0:
+                return None
+
             choice = result.stdout.strip()
             if choice in ACTIONS:
                 return choice  # type: ignore[return-value]
 
-            return "Commit"
+            return None
     except FileNotFoundError, OSError:
         return None

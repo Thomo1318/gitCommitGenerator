@@ -312,7 +312,7 @@ def _interactive_review(commit_msg_file: str, result_string: str, *, verbose: bo
     if action is None:
         if verbose:
             console.log(
-                "[yellow]Interactive mode requested but gum or /dev/tty is unavailable. Proceeding non-interactively.[/yellow]"
+                "[yellow]Interactive mode requested but gum or /dev/tty is unavailable (or cancelled). Proceeding non-interactively.[/yellow]"
             )
         return "Commit"
 
