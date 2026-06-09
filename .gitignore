@@ -51,6 +51,7 @@ yarn-error.log*
 # Build & Dist
 dist/
 build/
+site/
 
 # Testing (Local)
 tests/output/
