@@ -26,6 +26,12 @@ flowchart TD
     %% @ai_routing_compression [ai-task, closed, 2026-06-06, ai]
     ai_routing_compression("AI Engine Routing & Compression<br/><sub>Refactored main.py with an ENGINE_REGISTRY<br/>for easy model additions. Implemented<br/>unconditional rtk diff compression<br/>to reduce token consumption overhead</sub>")
 
+    %% @gum_tui_integration [ai-task, closed, 2026-06-10, ai]
+    gum_tui_integration("Gum TUI Integration<br/><sub>Replaced macOS alerter with<br/>Charmbracelet's Gum for a native,<br/>keyboard-centric terminal UI<br/>and eliminated DND deadlocks</sub>")
+
+    %% @zensical_docs [ai-task, closed, 2026-06-10, ai]
+    zensical_docs("Zensical Docs Pipeline<br/><sub>Configured Zensical for MkDocs<br/>generation, automated deployment<br/>via GitHub Actions, and hardened<br/>CI against zizmor warnings</sub>")
+
     %% === FUTURE WORK ===
     %% @second_agent_review [ai-task, opened, 2026-06-06, ai]
     second_agent_review("Second Agent Review<br/><sub>Trigger another comprehensive<br/>agentic review to check the codebase<br/>for architecture gaps, portability,<br/>and finalize public readiness</sub>")
@@ -42,9 +48,11 @@ flowchart TD
     hk_migration --> version_sync_and_cleanup
     version_sync_and_cleanup --> semver_refactor
     semver_refactor --> ai_routing_compression
-    ai_routing_compression --> second_agent_review
-    ai_routing_compression --> config_system
-    ai_routing_compression --> test_suite
+    ai_routing_compression --> gum_tui_integration
+    gum_tui_integration --> zensical_docs
+    zensical_docs --> second_agent_review
+    zensical_docs --> config_system
+    zensical_docs --> test_suite
     
     second_agent_review -.-> ultimate_goal
     config_system -.-> ultimate_goal
@@ -52,7 +60,7 @@ flowchart TD
 
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        ai_routing_compression
+        zensical_docs
     end
 
     %% === STYLES ===
@@ -62,9 +70,11 @@ flowchart TD
     style hk_migration fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style version_sync_and_cleanup fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style semver_refactor fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style ai_routing_compression fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style gum_tui_integration fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
 
     %% Recent node (highlighted purple)
-    style ai_routing_compression fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style zensical_docs fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Recent subgraph (dashed border)
     style recent fill:transparent,stroke:#c084fc,color:#c084fc,stroke-width:2px,stroke-dasharray:5 5

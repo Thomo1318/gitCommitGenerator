@@ -1,3 +1,5 @@
+# ADR-0007: Integrate Gum for Terminal-Native Git Hook TUI
+
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glowing holographic terminal interface projecting from a mechanical keyboard. The terminal displays a vibrant, neon magenta and cyan selection menu with the options hovering in mid-air. In the background, out of focus, a dusty, obsolete mechanical alarm bell (representing the old alerter) is disconnected and cast aside. Liquid cooling tubes and fiber optic cables route directly into the keyboard. Cinematic lighting, deep shadows with electric blue accents, volumetric smoke. 8k resolution, octane render, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
 
@@ -6,8 +8,6 @@ A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glo
 <div align="center">
 <img src="../assets/adr-0007-gum-terminal-native-tui.jpeg" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
 </div>
-
-# ADR-0007: Integrate Gum for Terminal-Native Git Hook TUI
 
 ```yaml
 adr_number: "0007"
@@ -614,7 +614,7 @@ This refinement creates several governance consequences that should be tracked e
 
 - The README and CLI usage documentation must distinguish clearly between default and interactive modes.
 - The tool should not be documented as though the TUI is universally part of every commit flow.
-- Any future implementation of sequential split commits must be recorded as a new ADR refinement or follow-on ADR, because it alters commit orchestration semantics in a substantial way.
+- Any future implementation of sequential split commits must be recorded as a new ADR refinement or follow-on ADR because it alters commit orchestration semantics in a substantial way.
 - Any repurposing of `alerter` must preserve the rule that desktop notifications are informational only, not blocking control surfaces.
 
 ### 14. Final Refined Decision Statement
@@ -631,4 +631,4 @@ That is the more correct, more durable, and more operationally safe form of the 
 
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
 - v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behavior.
-- v1.1.1 (2026-06-09 11:45:00): Added refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
+- v1.1.1 (2026-06-09 11:45:00): Incorporated refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
