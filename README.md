@@ -5,6 +5,13 @@
 > 🤖 **"The Brain in the Machine"** — A governed, SOP-driven engine for standardized Git history.
 
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-Thomo1318%2FgitCommitGenerator-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/Thomo1318/gitCommitGenerator)
+[![GitHub Release](https://img.shields.io/github/v/release/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/releases)
+[![PyPI Version](https://img.shields.io/pypi/v/gitcommitgenerator)](https://pypi.org/project/gitcommitgenerator/)
+[![Python Version](https://img.shields.io/pypi/pyversions/gitcommitgenerator)](https://pypi.org/project/gitcommitgenerator/)
+[![Docs](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/docs.yml?label=docs)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/docs.yml)
+[![Security](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/security.yml?label=security)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/security.yml)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![GitHub License](https://img.shields.io/github/license/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/blob/main/LICENSE)
 
 ---
 
@@ -89,20 +96,20 @@ flowchart TD
 
 ## 🛠 File Role Matrix
 
-| File | Layer | Role |
-| :--- | :--- | :--- |
-| `src/git_cg/main.py` | Entry | The main Typer CLI that manages orchestration, default non-interactive execution, and opt-in interactive review. |
-| `src/git_cg/intent.py` | Classifier | Deterministic signal extraction, diff normalization, and intent ranking. |
-| `src/git_cg/interaction.py` | Interaction | Terminal bell, `/dev/tty` checks, and gum-driven interactive review actions. |
-| `src/git_cg/sop.py` | Configuration | Portable SOP loader supporting `.git-cg/sop.json` overrides and packaged wheel data. |
-| `src/git_cg/models.py` | Schema | [Pydantic](https://docs.pydantic.dev/) `CommitPlan` models enforcing strict SOP validation, multi-intent rendering, and retries. |
-| `src/git_cg/release.py` | Release | Parses machine-readable trailers to automate SemVer bumps and grouped changelog generation. |
-| `src/git_cg/notifier.py` | Optional Notifications | Reserved for possible future passive desktop notification use; no longer the critical control path. |
-| `scripts/validate_commit.mjs` | Gatekeeper | The [Node.js](https://nodejs.org/)/[zx](https://github.com/google/zx) script that strictly enforces the 72-char hybrid limit. |
-| `usage.kdl` | Interface | The declarative CLI specification for the [usage](https://usage.jdx.dev/) framework. |
-| `config/gitops_agent_sop.json` | Governance | The "Brain" containing the emoji/CC mapping matrix. |
-| `hk.pkl` | Hooks | Centralized definitions for pre-commit and prepare-commit managed by [hk](https://hk.jdx.dev). |
-| `mise.toml` & `Brewfile` | Environment | Installs and locks the exact OS and runtime binaries managed by [mise](https://mise.jdx.dev). |
+| File                           | Layer                  | Role                                                                                                                             |
+| :----------------------------- | :--------------------- | :------------------------------------------------------------------------------------------------------------------------------- |
+| `src/git_cg/main.py`           | Entry                  | The main Typer CLI that manages orchestration, default non-interactive execution, and opt-in interactive review.                 |
+| `src/git_cg/intent.py`         | Classifier             | Deterministic signal extraction, diff normalization, and intent ranking.                                                         |
+| `src/git_cg/interaction.py`    | Interaction            | Terminal bell, `/dev/tty` checks, and gum-driven interactive review actions.                                                     |
+| `src/git_cg/sop.py`            | Configuration          | Portable SOP loader supporting `.git-cg/sop.json` overrides and packaged wheel data.                                             |
+| `src/git_cg/models.py`         | Schema                 | [Pydantic](https://docs.pydantic.dev/) `CommitPlan` models enforcing strict SOP validation, multi-intent rendering, and retries. |
+| `src/git_cg/release.py`        | Release                | Parses machine-readable trailers to automate SemVer bumps and grouped changelog generation.                                      |
+| `src/git_cg/notifier.py`       | Optional Notifications | Reserved for possible future passive desktop notification use; no longer the critical control path.                              |
+| `scripts/validate_commit.mjs`  | Gatekeeper             | The [Node.js](https://nodejs.org/)/[zx](https://github.com/google/zx) script that strictly enforces the 72-char hybrid limit.    |
+| `usage.kdl`                    | Interface              | The declarative CLI specification for the [usage](https://usage.jdx.dev/) framework.                                             |
+| `config/gitops_agent_sop.json` | Governance             | The "Brain" containing the emoji/CC mapping matrix.                                                                              |
+| `hk.pkl`                       | Hooks                  | Centralized definitions for pre-commit and prepare-commit managed by [hk](https://hk.jdx.dev).                                   |
+| `mise.toml` & `Brewfile`       | Environment            | Installs and locks the exact OS and runtime binaries managed by [mise](https://mise.jdx.dev).                                    |
 
 ---
 
@@ -223,6 +230,7 @@ All messages generated or validated by this engine follow the format:
 Introduce a portable SOP loader with a resolution precedence chain for explicit environment overrides.
 
 Included changes:
+
 - ♻️ refactor(sop): add centralized portable SOP loader
 - 🦺 fix(cli): add strict mode for CI while keeping hooks fail-soft
 - 📦 build(package): ship SOP data in the wheel
@@ -234,83 +242,83 @@ Changelog-Groups: Changed, Fixed, Miscellaneous
 
 #### Gitmoji Reference Matrix
 
-| Emoji | Code | Description | CC Type | SemVer Impact | Changelog Group |
-| :---: | :--- | :--- | :---: | :---: | :--- |
-| 🎨 | `:art:` | Improve structure/format of the code | `style` | NONE | Changed |
-| ⚡️ | `:zap:` | Improve performance | `perf` | PATCH | Changed |
-| 🔥 | `:fire:` | Remove code or files | `refactor` | PATCH | Removed |
-| 🐛 | `:bug:` | Fix a bug | `fix` | PATCH | Fixed |
-| 🚑 | `:ambulance:` | Critical hotfix | `fix` | PATCH | Fixed |
-| ✨ | `:sparkles:` | Introduce new features | `feat` | MINOR | Added |
-| 📝 | `:memo:` | Add or update documentation | `docs` | NONE | Miscellaneous |
-| 🚀 | `:rocket:` | Deploy stuff | `chore` | NONE | Miscellaneous |
-| 💄 | `:lipstick:` | Add or update the UI and style files | `style` | PATCH | Changed |
-| 🎉 | `:tada:` | Begin a project | `init` | NONE | Miscellaneous |
-| ✅ | `:white_check_mark:` | Add, update, or pass tests | `test` | NONE | Miscellaneous |
-| 🔒️ | `:lock:` | Fix security or privacy issues | `fix` | PATCH | Security |
-| 🔐 | `:closed_lock_with_key:` | Add or update secrets | `chore` | PATCH | Security |
-| 🔖 | `:bookmark:` | Release/Version tags | `release` | NONE | Miscellaneous |
-| 🚨 | `:rotating_light:` | Fix compiler/linter warnings | `refactor` | PATCH | Changed |
-| 🚧 | `:construction:` | Work in progress | `chore` | NONE | Miscellaneous |
-| 💚 | `:green_heart:` | Fix CI Build | `ci` | NONE | Miscellaneous |
-| ⬇️ | `:arrow_down:` | Downgrade dependencies | `build` | PATCH | Changed |
-| ⬆️ | `:arrow_up:` | Upgrade dependencies | `build` | PATCH | Changed |
-| 📌 | `:pushpin:` | Pin dependencies to specific versions | `build` | PATCH | Changed |
-| 👷 | `:construction_worker:` | Add or update CI build system | `ci` | NONE | Miscellaneous |
-| 📈 | `:chart_with_upwards_trend:` | Add or update analytics or track code | `feat` | MINOR | Added |
-| ♻️ | `:recycle:` | Refactor code | `refactor` | PATCH | Changed |
-| ➕ | `:heavy_plus_sign:` | Add a dependency | `build` | PATCH | Changed |
-| ➖ | `:heavy_minus_sign:` | Remove a dependency | `build` | PATCH | Changed |
-| 🔧 | `:wrench:` | Add or update configuration files | `chore` | NONE | Miscellaneous |
-| 🔨 | `:hammer:` | Add or update development scripts | `chore` | NONE | Miscellaneous |
-| 🌐 | `:globe_with_meridians:` | Internationalization and localization | `feat` | MINOR | Added |
-| ✏️ | `:pencil2:` | Fix typos | `docs` | NONE | Miscellaneous |
-| 💩 | `:poop:` | Write bad code that needs to be improved | `refactor` | NONE | Miscellaneous |
-| ⏪ | `:rewind:` | Revert changes | `revert` | PATCH | Changed |
-| 🔀 | `:twisted_rightwards_arrows:` | Merge branches | `chore` | NONE | Miscellaneous |
-| 📦 | `:package:` | Add or update compiled files or packages | `build` | PATCH | Changed |
-| 👽️ | `:alien:` | Update code due to external API changes | `refactor` | PATCH | Changed |
-| 🚚 | `:truck:` | Move or rename resources | `refactor` | NONE | Changed |
-| 📄 | `:page_facing_up:` | Add or update license | `docs` | NONE | Miscellaneous |
-| 💥 | `:boom:` | Introduce breaking changes | `feat` | MAJOR | Changed |
-| 🍱 | `:bento:` | Add or update assets | `chore` | PATCH | Added |
-| ♿️ | `:wheelchair:` | Improve accessibility | `feat` | PATCH | Changed |
-| 💡 | `:bulb:` | Add or update comments in source code | `docs` | NONE | Miscellaneous |
-| 🍻 | `:beers:` | Write code drunkenly | `refactor` | NONE | Miscellaneous |
-| 💬 | `:speech_balloon:` | Add or update text and literals | `style` | PATCH | Changed |
-| 🗃️ | `:card_file_box:` | Perform database related changes | `feat` | PATCH | Changed |
-| 🔊 | `:loud_sound:` | Add or update logs | `chore` | NONE | Miscellaneous |
-| 🔇 | `:mute:` | Remove logs | `chore` | NONE | Miscellaneous |
-| 👥 | `:busts_in_silhouette:` | Add or update contributor(s) | `chore` | NONE | Miscellaneous |
-| 🚸 | `:children_crossing:` | Improve user experience/usability | `feat` | PATCH | Changed |
-| 🏗️ | `:building_construction:` | Make architectural changes | `refactor` | MAJOR | Changed |
-| 📱 | `:iphone:` | Work on responsive design | `feat` | PATCH | Changed |
-| 🤡 | `:clown_face:` | Mock things | `test` | NONE | Miscellaneous |
-| 🥚 | `:egg:` | Add or update an Easter egg | `feat` | PATCH | Added |
-| 🙈 | `:see_no_evil:` | Add or update a .gitignore file | `chore` | NONE | Miscellaneous |
-| 📸 | `:camera_flash:` | Add or update snapshots | `test` | NONE | Miscellaneous |
-| ⚗️ | `:alembic:` | Perform experiments | `feat` | PATCH | Changed |
-| 🔍 | `:mag:` | Improve SEO | `feat` | PATCH | Changed |
-| 🏷️ | `:label:` | Add or update types | `refactor` | PATCH | Changed |
-| 🌱 | `:seedling:` | Add or update seed files | `chore` | NONE | Miscellaneous |
-| 🚩 | `:triangular_flag_on_post:` | Add, update, or remove feature flags | `feat` | MINOR | Added |
-| 🥅 | `:goal_net:` | Catch errors | `fix` | PATCH | Fixed |
-| 💫 | `:dizzy:` | Add or update animations and transitions | `feat` | PATCH | Changed |
-| 🗑️ | `:wastebasket:` | Deprecate code that needs to be cleaned up | `refactor` | PATCH | Deprecated |
-| 🛂 | `:passport_control:` | Work on code related to authorization, roles and permissions | `feat` | MINOR | Security |
-| 🩹 | `:adhesive_bandage:` | Simple fix for a non-critical issue | `fix` | PATCH | Fixed |
-| 🧐 | `:monocle_face:` | Data exploration/inspection | `chore` | NONE | Miscellaneous |
-| ⚰️ | `:coffin:` | Remove dead code | `refactor` | PATCH | Removed |
-| 🧪 | `:test_tube:` | Add a failing test | `test` | NONE | Miscellaneous |
-| 👔 | `:necktie:` | Add or update business logic | `feat` | MINOR | Added |
-| 🩺 | `:stethoscope:` | Add or update healthcheck | `feat` | PATCH | Added |
-| 🧱 | `:bricks:` | Infrastructure related changes | `ci` | PATCH | Changed |
-| 🧑‍💻 | `:technologist:` | Improve developer experience | `chore` | NONE | Miscellaneous |
-| 💸 | `:money_with_wings:` | Add sponsorships or money related infrastructure | `feat` | MINOR | Added |
-| 🧵 | `:thread:` | Add or update code related to multithreading or concurrency | `refactor` | MINOR | Changed |
-| 🦺 | `:safety_vest:` | Add or update code related to validation | `fix` | PATCH | Changed |
-| ✈️ | `:airplane:` | Improve offline support | `feat` | MINOR | Added |
-| 🦖 | `:t-rex:` | Code that adds backwards compatibility | `fix` | PATCH | Changed |
+| Emoji | Code                          | Description                                                  |  CC Type   | SemVer Impact | Changelog Group |
+| :---: | :---------------------------- | :----------------------------------------------------------- | :--------: | :-----------: | :-------------- |
+|  🎨   | `:art:`                       | Improve structure/format of the code                         |  `style`   |     NONE      | Changed         |
+|  ⚡️   | `:zap:`                       | Improve performance                                          |   `perf`   |     PATCH     | Changed         |
+|  🔥   | `:fire:`                      | Remove code or files                                         | `refactor` |     PATCH     | Removed         |
+|  🐛   | `:bug:`                       | Fix a bug                                                    |   `fix`    |     PATCH     | Fixed           |
+|  🚑   | `:ambulance:`                 | Critical hotfix                                              |   `fix`    |     PATCH     | Fixed           |
+|  ✨   | `:sparkles:`                  | Introduce new features                                       |   `feat`   |     MINOR     | Added           |
+|  📝   | `:memo:`                      | Add or update documentation                                  |   `docs`   |     NONE      | Miscellaneous   |
+|  🚀   | `:rocket:`                    | Deploy stuff                                                 |  `chore`   |     NONE      | Miscellaneous   |
+|  💄   | `:lipstick:`                  | Add or update the UI and style files                         |  `style`   |     PATCH     | Changed         |
+|  🎉   | `:tada:`                      | Begin a project                                              |   `init`   |     NONE      | Miscellaneous   |
+|  ✅   | `:white_check_mark:`          | Add, update, or pass tests                                   |   `test`   |     NONE      | Miscellaneous   |
+|  🔒️   | `:lock:`                      | Fix security or privacy issues                               |   `fix`    |     PATCH     | Security        |
+|  🔐   | `:closed_lock_with_key:`      | Add or update secrets                                        |  `chore`   |     PATCH     | Security        |
+|  🔖   | `:bookmark:`                  | Release/Version tags                                         | `release`  |     NONE      | Miscellaneous   |
+|  🚨   | `:rotating_light:`            | Fix compiler/linter warnings                                 | `refactor` |     PATCH     | Changed         |
+|  🚧   | `:construction:`              | Work in progress                                             |  `chore`   |     NONE      | Miscellaneous   |
+|  💚   | `:green_heart:`               | Fix CI Build                                                 |    `ci`    |     NONE      | Miscellaneous   |
+|  ⬇️   | `:arrow_down:`                | Downgrade dependencies                                       |  `build`   |     PATCH     | Changed         |
+|  ⬆️   | `:arrow_up:`                  | Upgrade dependencies                                         |  `build`   |     PATCH     | Changed         |
+|  📌   | `:pushpin:`                   | Pin dependencies to specific versions                        |  `build`   |     PATCH     | Changed         |
+|  👷   | `:construction_worker:`       | Add or update CI build system                                |    `ci`    |     NONE      | Miscellaneous   |
+|  📈   | `:chart_with_upwards_trend:`  | Add or update analytics or track code                        |   `feat`   |     MINOR     | Added           |
+|  ♻️   | `:recycle:`                   | Refactor code                                                | `refactor` |     PATCH     | Changed         |
+|  ➕   | `:heavy_plus_sign:`           | Add a dependency                                             |  `build`   |     PATCH     | Changed         |
+|  ➖   | `:heavy_minus_sign:`          | Remove a dependency                                          |  `build`   |     PATCH     | Changed         |
+|  🔧   | `:wrench:`                    | Add or update configuration files                            |  `chore`   |     NONE      | Miscellaneous   |
+|  🔨   | `:hammer:`                    | Add or update development scripts                            |  `chore`   |     NONE      | Miscellaneous   |
+|  🌐   | `:globe_with_meridians:`      | Internationalization and localization                        |   `feat`   |     MINOR     | Added           |
+|  ✏️   | `:pencil2:`                   | Fix typos                                                    |   `docs`   |     NONE      | Miscellaneous   |
+|  💩   | `:poop:`                      | Write bad code that needs to be improved                     | `refactor` |     NONE      | Miscellaneous   |
+|  ⏪   | `:rewind:`                    | Revert changes                                               |  `revert`  |     PATCH     | Changed         |
+|  🔀   | `:twisted_rightwards_arrows:` | Merge branches                                               |  `chore`   |     NONE      | Miscellaneous   |
+|  📦   | `:package:`                   | Add or update compiled files or packages                     |  `build`   |     PATCH     | Changed         |
+|  👽️   | `:alien:`                     | Update code due to external API changes                      | `refactor` |     PATCH     | Changed         |
+|  🚚   | `:truck:`                     | Move or rename resources                                     | `refactor` |     NONE      | Changed         |
+|  📄   | `:page_facing_up:`            | Add or update license                                        |   `docs`   |     NONE      | Miscellaneous   |
+|  💥   | `:boom:`                      | Introduce breaking changes                                   |   `feat`   |     MAJOR     | Changed         |
+|  🍱   | `:bento:`                     | Add or update assets                                         |  `chore`   |     PATCH     | Added           |
+|  ♿️   | `:wheelchair:`                | Improve accessibility                                        |   `feat`   |     PATCH     | Changed         |
+|  💡   | `:bulb:`                      | Add or update comments in source code                        |   `docs`   |     NONE      | Miscellaneous   |
+|  🍻   | `:beers:`                     | Write code drunkenly                                         | `refactor` |     NONE      | Miscellaneous   |
+|  💬   | `:speech_balloon:`            | Add or update text and literals                              |  `style`   |     PATCH     | Changed         |
+|  🗃️   | `:card_file_box:`             | Perform database related changes                             |   `feat`   |     PATCH     | Changed         |
+|  🔊   | `:loud_sound:`                | Add or update logs                                           |  `chore`   |     NONE      | Miscellaneous   |
+|  🔇   | `:mute:`                      | Remove logs                                                  |  `chore`   |     NONE      | Miscellaneous   |
+|  👥   | `:busts_in_silhouette:`       | Add or update contributor(s)                                 |  `chore`   |     NONE      | Miscellaneous   |
+|  🚸   | `:children_crossing:`         | Improve user experience/usability                            |   `feat`   |     PATCH     | Changed         |
+|  🏗️   | `:building_construction:`     | Make architectural changes                                   | `refactor` |     MAJOR     | Changed         |
+|  📱   | `:iphone:`                    | Work on responsive design                                    |   `feat`   |     PATCH     | Changed         |
+|  🤡   | `:clown_face:`                | Mock things                                                  |   `test`   |     NONE      | Miscellaneous   |
+|  🥚   | `:egg:`                       | Add or update an Easter egg                                  |   `feat`   |     PATCH     | Added           |
+|  🙈   | `:see_no_evil:`               | Add or update a .gitignore file                              |  `chore`   |     NONE      | Miscellaneous   |
+|  📸   | `:camera_flash:`              | Add or update snapshots                                      |   `test`   |     NONE      | Miscellaneous   |
+|  ⚗️   | `:alembic:`                   | Perform experiments                                          |   `feat`   |     PATCH     | Changed         |
+|  🔍   | `:mag:`                       | Improve SEO                                                  |   `feat`   |     PATCH     | Changed         |
+|  🏷️   | `:label:`                     | Add or update types                                          | `refactor` |     PATCH     | Changed         |
+|  🌱   | `:seedling:`                  | Add or update seed files                                     |  `chore`   |     NONE      | Miscellaneous   |
+|  🚩   | `:triangular_flag_on_post:`   | Add, update, or remove feature flags                         |   `feat`   |     MINOR     | Added           |
+|  🥅   | `:goal_net:`                  | Catch errors                                                 |   `fix`    |     PATCH     | Fixed           |
+|  💫   | `:dizzy:`                     | Add or update animations and transitions                     |   `feat`   |     PATCH     | Changed         |
+|  🗑️   | `:wastebasket:`               | Deprecate code that needs to be cleaned up                   | `refactor` |     PATCH     | Deprecated      |
+|  🛂   | `:passport_control:`          | Work on code related to authorization, roles and permissions |   `feat`   |     MINOR     | Security        |
+|  🩹   | `:adhesive_bandage:`          | Simple fix for a non-critical issue                          |   `fix`    |     PATCH     | Fixed           |
+|  🧐   | `:monocle_face:`              | Data exploration/inspection                                  |  `chore`   |     NONE      | Miscellaneous   |
+|  ⚰️   | `:coffin:`                    | Remove dead code                                             | `refactor` |     PATCH     | Removed         |
+|  🧪   | `:test_tube:`                 | Add a failing test                                           |   `test`   |     NONE      | Miscellaneous   |
+|  👔   | `:necktie:`                   | Add or update business logic                                 |   `feat`   |     MINOR     | Added           |
+|  🩺   | `:stethoscope:`               | Add or update healthcheck                                    |   `feat`   |     PATCH     | Added           |
+|  🧱   | `:bricks:`                    | Infrastructure related changes                               |    `ci`    |     PATCH     | Changed         |
+|  🧑‍💻   | `:technologist:`              | Improve developer experience                                 |  `chore`   |     NONE      | Miscellaneous   |
+|  💸   | `:money_with_wings:`          | Add sponsorships or money related infrastructure             |   `feat`   |     MINOR     | Added           |
+|  🧵   | `:thread:`                    | Add or update code related to multithreading or concurrency  | `refactor` |     MINOR     | Changed         |
+|  🦺   | `:safety_vest:`               | Add or update code related to validation                     |   `fix`    |     PATCH     | Changed         |
+|  ✈️   | `:airplane:`                  | Improve offline support                                      |   `feat`   |     MINOR     | Added           |
+|  🦖   | `:t-rex:`                     | Code that adds backwards compatibility                       |   `fix`    |     PATCH     | Changed         |
 
 ---
 
@@ -328,27 +336,27 @@ Instructions for setting up the local development environment will be added soon
 
 This project heavily leverages the following open-source tools. We extend our immense gratitude to their creators and communities:
 
-| Tool | License | Description |
-| :--- | :--- | :--- |
-| **[mise](https://mise.jdx.dev)** | MIT | Environment and Toolchain Manager |
-| **[usage](https://usage.jdx.dev/)** | MIT | Standardized CLI Specifications |
-| **[hk](https://hk.jdx.dev)** | MIT | Deterministic Git Hook Management |
-| **[oMLX](https://github.com/jundot/omlx)** | Apache-2.0 | High-performance Apple Silicon LLM Server |
-| **[MTPLX](https://github.com/youssofal/mtplx)** | Apache-2.0 | Native MTP Speculative Decoding Inference |
-| **[rtk](https://github.com/rtk-ai/rtk)** | MIT | LLM Token Compression Proxy |
-| **[uv](https://docs.astral.sh/uv/)** | MIT / Apache-2.0 | Extremely fast Python package manager |
-| **[Instructor](https://python.useinstructor.com/)** | MIT | Structured extraction library for LLMs |
-| **[Pydantic](https://docs.pydantic.dev/)** | MIT | Data validation library for Python |
-| **[just](https://just.systems)** | CC0 | Command runner for project tasks |
-| **[pkl](https://pkl-lang.org/)** | Apple Public Source | Embeddable configuration language |
-| **[zx](https://github.com/google/zx)** | Apache-2.0 | Modern Bash scripting for Node.js |
-| **[fnox](https://github.com/jdx/fnox)** | MIT | Hybrid secrets orchestration |
-| **[age](https://github.com/FiloSottile/age)** | BSD-3-Clause | Simple, modern, secure file encryption |
-| **[gitleaks](https://github.com/gitleaks/gitleaks)** | MIT | Fast pre-commit secret scanner |
-| **[TruffleHog](https://github.com/trufflesecurity/trufflehog)** | AGPL-3.0 | Deep git history secret verification |
-| **[hatchling](https://hatch.pypa.io/)** | MIT | Modern, extensible Python build backend |
-| **[alerter](https://github.com/vjeantet/alerter)** | MIT | macOS interactive desktop notifications |
-| **[gum](https://github.com/charmbracelet/gum)** | MIT | Terminal-native interactive review UI |
+| Tool                                                            | License             | Description                               |
+| :-------------------------------------------------------------- | :------------------ | :---------------------------------------- |
+| **[mise](https://mise.jdx.dev)**                                | MIT                 | Environment and Toolchain Manager         |
+| **[usage](https://usage.jdx.dev/)**                             | MIT                 | Standardized CLI Specifications           |
+| **[hk](https://hk.jdx.dev)**                                    | MIT                 | Deterministic Git Hook Management         |
+| **[oMLX](https://github.com/jundot/omlx)**                      | Apache-2.0          | High-performance Apple Silicon LLM Server |
+| **[MTPLX](https://github.com/youssofal/mtplx)**                 | Apache-2.0          | Native MTP Speculative Decoding Inference |
+| **[rtk](https://github.com/rtk-ai/rtk)**                        | MIT                 | LLM Token Compression Proxy               |
+| **[uv](https://docs.astral.sh/uv/)**                            | MIT / Apache-2.0    | Extremely fast Python package manager     |
+| **[Instructor](https://python.useinstructor.com/)**             | MIT                 | Structured extraction library for LLMs    |
+| **[Pydantic](https://docs.pydantic.dev/)**                      | MIT                 | Data validation library for Python        |
+| **[just](https://just.systems)**                                | CC0                 | Command runner for project tasks          |
+| **[pkl](https://pkl-lang.org/)**                                | Apple Public Source | Embeddable configuration language         |
+| **[zx](https://github.com/google/zx)**                          | Apache-2.0          | Modern Bash scripting for Node.js         |
+| **[fnox](https://github.com/jdx/fnox)**                         | MIT                 | Hybrid secrets orchestration              |
+| **[age](https://github.com/FiloSottile/age)**                   | BSD-3-Clause        | Simple, modern, secure file encryption    |
+| **[gitleaks](https://github.com/gitleaks/gitleaks)**            | MIT                 | Fast pre-commit secret scanner            |
+| **[TruffleHog](https://github.com/trufflesecurity/trufflehog)** | AGPL-3.0            | Deep git history secret verification      |
+| **[hatchling](https://hatch.pypa.io/)**                         | MIT                 | Modern, extensible Python build backend   |
+| **[alerter](https://github.com/vjeantet/alerter)**              | MIT                 | macOS interactive desktop notifications   |
+| **[gum](https://github.com/charmbracelet/gum)**                 | MIT                 | Terminal-native interactive review UI     |
 
 ---
 
