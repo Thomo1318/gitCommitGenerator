@@ -13,10 +13,10 @@ A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glo
 adr_number: "0007"
 title: "Integrate Gum for Terminal-Native Git Hook TUI"
 status: "Proposed"
-version: "v1.1.1"
+version: "v1.2.0"
 date: "2026-06-09"
 created: "2026-06-09 10:00:00"
-modified: "2026-06-09 11:45:00"
+modified: "2026-06-10 09:00:00"
 risk_level: "Medium"
 reversibility: "High"
 security_scope: "Local Operations"
@@ -627,8 +627,63 @@ The refined decision is:
 
 That is the more correct, more durable, and more operationally safe form of the architecture.
 
+
+---
+
+## III. Refinement 2: Structured Issue Reference Review Metadata (v1.2.0)
+
+Following the implementation of the dual-mode interaction strategy, a critical UX and data-integrity gap was identified regarding issue references (e.g., `Resolves #26`).
+
+Previously, users wishing to append issue references had to drop into the `$EDITOR` flow and manually type them into the generated message. This introduced several risks:
+- Friction for a very common operation.
+- Risk of users injecting text *below* the machine-readable trailers (`SemVer-Impact`, `Change-Types`, `Changelog-Groups`), breaking downstream parser determinism.
+
+This refinement establishes that **issue references must be handled as structured, Python-owned review metadata**, not as AI-generated schema elements, and not as unstructured manual edits.
+
+### 1. Architectural Catalyst
+
+The AI models are highly capable of structuring the semantic intent (`CommitPlan`) of a git diff. However, associating a commit with an external issue tracker ticket (like a GitHub Issue) is fundamentally a human-context action. If the LLM were tasked with this, it would be prone to hallucination.
+
+Furthermore, deterministic release parsing relies on the trailer block being the absolute final lines of the commit message.
+
+### 2. Refined Governing Decision
+
+The project will adopt the following structured metadata workflow for issue references:
+
+1. **Expansion of the Interaction Layer**: The `gum` review menu will be expanded to include an `Add issue reference` action.
+2. **Python-Owned Review State**: The system will transition from a stateless string-preview loop into a stateful review loop. The orchestration layer will hold a `ReviewState` object combining the AI-generated `CommitPlan` and a list of user-provided `IssueReference` objects.
+3. **Strict Rendering Placement**: Issue references will be injected deterministically into the commit string **above** the machine-readable trailers and **below** the `Included changes:` block.
+
+#### Example Resulting Structure
+
+```markdown
+Included changes:
+- 👷 ci(docs): add GitHub Pages deployment workflow
+- 🔧 chore(mise): add gum to toolchain and update gitignore
+
+Resolves #26
+SemVer-Impact: NONE
+Change-Types: ci, chore
+Changelog-Groups: Miscellaneous
+```
+
+### 3. Impact Radius (Cause, Change, Effect)
+
+| Component | Change | Effect |
+| :--- | :--- | :--- |
+| `src/git_cg/models.py` | Add `IssueReferenceKind` and `IssueReference` models. Update `CommitPlan.render()` signature. | Decouples metadata from the AI schema while ensuring deterministic trailer placement. |
+| `src/git_cg/interaction.py` | Add `prompt_issue_reference_type`, `prompt_issue_number`, and a state formatter. | Keeps the metadata ingestion terminal-native via `gum`. |
+| `src/git_cg/main.py` | Introduce `ReviewState` and a state-mutation review loop. | Orchestration becomes stateful; allows preview updates without spawning `$EDITOR`. |
+
+### 4. Implementation Constraints
+
+- **Phase One Scope**: The UI will initially support adding a single issue reference (e.g., `Resolves`, `Refs`, `Closes`, `Fixes`). However, the internal domain model **must** be implemented as a `list` from day one to ensure future multi-reference expansion requires no architectural tear-down.
+- **Validation**: Issue numbers must be strictly validated as numeric inputs at the interaction boundary.
+- **Idempotency**: The review-state must be idempotent. Re-rendering the state or adding an identical reference must not duplicate data or mutate prior outputs.
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
 - v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behavior.
 - v1.1.1 (2026-06-09 11:45:00): Incorporated refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
+\n- v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.\n
