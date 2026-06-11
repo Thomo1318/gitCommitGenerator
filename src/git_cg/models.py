@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -30,6 +31,38 @@ class SemVerImpact(enum.StrEnum):
     MINOR = "MINOR"
     PATCH = "PATCH"
     NONE = "NONE"
+
+
+class IssueReferenceKind(enum.StrEnum):
+    """Supported structured issue-reference verbs for review-time insertion."""
+
+    RESOLVES = "Resolves"
+    REFS = "Refs"
+    CLOSES = "Closes"
+    FIXES = "Fixes"
+
+
+@dataclass(frozen=True)
+class IssueReference:
+    """Python-owned structured issue reference inserted during interactive review."""
+
+    kind: IssueReferenceKind
+    issue_number: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.issue_number, int):
+            raise TypeError("issue_number must be an integer")
+        if self.issue_number <= 0:
+            raise ValueError("issue_number must be greater than zero")
+
+    def __str__(self) -> str:
+        """
+        Render the issue reference as "Verb #<number>" (for example "Resolves #123").
+        
+        Returns:
+            str: The issue reference formatted as '{kind.value} #{issue_number}'.
+        """
+        return f"{self.kind.value} #{self.issue_number}"
 
 
 class CommitIntent(BaseModel):
@@ -114,12 +147,29 @@ class CommitPlan(BaseModel):
 
     @model_validator(mode="after")
     def validate_breaking_change(self) -> CommitPlan:
+        """
+        Validate that a breaking-change description is present when `breaking_change` is True.
+        
+        Raises:
+            ValueError: If `breaking_change` is True and `breaking_change_description` is missing or empty.
+        
+        Returns:
+            CommitPlan: The same instance (`self`) when validation passes.
+        """
         if self.breaking_change and not self.breaking_change_description:
             raise ValueError("breaking_change_description must be provided if breaking_change is true")
         return self
 
-    def render(self) -> str:
-        """Render the structured commit plan into a standard Git commit message string."""
+    def render(self, issue_references: list[IssueReference] | None = None) -> str:
+        """
+        Render the commit plan as a complete Git commit message.
+        
+        Parameters:
+            issue_references (list[IssueReference] | None): Optional list of issue references to append immediately above the machine-readable trailers; pass None or omit to exclude issue reference lines.
+        
+        Returns:
+            commit_message (str): The full commit message including header, optional body summary, included changes, issue reference lines (if provided), machine-readable trailers (SemVer-Impact, Change-Types, Changelog-Groups), and an optional breaking change footer.
+        """
         # Header
         scope_str = f"({self.primary_intent.scope})" if self.primary_intent.scope else ""
         breaking_indicator = "!" if self.breaking_change else ""
@@ -141,6 +191,11 @@ class CommitPlan(BaseModel):
             for sec in self.secondary_intents:
                 sec_scope = f"({sec.scope})" if sec.scope else ""
                 lines.append(f"- {sec.gitmoji} {sec.cc_type.value}{sec_scope}: {sec.description}")
+
+        # Structured issue references must render above machine-readable trailers.
+        if issue_references:
+            lines.append("")
+            lines.extend(str(issue_reference) for issue_reference in issue_references)
 
         # Machine-readable Trailers
         all_intents = [self.primary_intent, *self.secondary_intents]
