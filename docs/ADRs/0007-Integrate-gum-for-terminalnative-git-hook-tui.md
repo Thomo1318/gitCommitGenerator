@@ -13,10 +13,10 @@ A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glo
 adr_number: "0007"
 title: "Integrate Gum for Terminal-Native Git Hook TUI"
 status: "Proposed"
-version: "v1.2.0"
+version: "v1.3.0"
 date: "2026-06-09"
 created: "2026-06-09 10:00:00"
-modified: "2026-06-10 09:00:00"
+modified: "2026-06-11 10:15:00"
 risk_level: "Medium"
 reversibility: "High"
 security_scope: "Local Operations"
@@ -681,9 +681,100 @@ Changelog-Groups: Miscellaneous
 - **Validation**: Issue numbers must be strictly validated as numeric inputs at the interaction boundary.
 - **Idempotency**: The review-state must be idempotent. Re-rendering the state or adding an identical reference must not duplicate data or mutate prior outputs.
 
+
+---
+
+## IV. Refinement 3: Multi-Issue Reference Review Expansion (v1.3.0)
+
+Following the successful introduction of structured issue-reference review metadata, the next architectural pressure point is no longer *whether* issue references belong in the interactive review loop. That question has already been resolved. The remaining question is how the interaction model should evolve now that the internal representation is intentionally list-backed while the phase-one TUI only exposes a single-add workflow.
+
+That mismatch is now the catalyst for refinement.
+
+The current implementation intentionally stores issue references as structured Python-owned metadata in a list so that future expansion would not require a destructive redesign of the rendering model or orchestration layer. However, the terminal UX still enforces a phase-one restriction that allows only a single reference to be attached through the `gum` review loop. That was the correct initial decision for risk control, but it is no longer the ideal steady-state behavior.
+
+There are legitimate commit scenarios in which multiple linked issues need to be carried together, for example:
+
+- a primary issue being resolved while a second issue is merely referenced
+- a grouped maintenance commit that closes several tightly related backlog items
+- a change set where one issue tracks implementation and another tracks follow-up documentation, rollout, or support work
+
+Requiring the user to drop into `$EDITOR` merely to add a second reference reintroduces exactly the class of friction and formatting risk that Refinement 2 was intended to eliminate.
+
+### 1. Architectural Catalyst
+
+Refinement 2 deliberately chose a **list-backed internal model from day one** even while restricting the UI to a single reference. That decision was future-oriented and remains correct.
+
+The catalyst for this refinement is the recognition that the internal architecture is already capable of representing multiple references safely, while the interaction layer artificially limits the operator to a narrower workflow than the model can support.
+
+This creates three undesirable consequences:
+
+1. **Unnecessary editor fallback**: users must still use `$EDITOR` for a common, structured action once they need a second issue link.
+2. **Avoidable formatting risk**: manual edits increase the chance of references being inserted below the machine-readable trailer block.
+3. **UX inconsistency**: the review loop presents issue references as structured metadata, but only partially exposes the capability already present in the state model.
+
+### 2. Refined Governing Decision
+
+The project will expand the `gum`-driven review flow to support **multiple structured issue references** while preserving deterministic rendering and state safety.
+
+This refinement establishes the following governing rules:
+
+1. **Multiple issue references will be addable through repeated review-loop actions.** The user may select `Add issue reference` more than once in the same review session.
+2. **Issue references remain Python-owned metadata, not LLM schema output.** The AI continues to generate the `CommitPlan`; issue linkage remains an explicit human-context attachment.
+3. **Insertion order must be preserved.** References should render in the order the user attached them during review.
+4. **Exact duplicates must remain idempotent no-ops.** Re-adding the same verb and issue number must not mutate state or duplicate output.
+5. **Conflicting same-issue-number verb replacement remains deferred.** If the same issue number is re-added with a different verb (for example, `Refs #80` followed by `Closes #80`), the interaction layer should reject the mutation cleanly rather than silently replacing or merging semantics.
+6. **Rendering placement remains unchanged.** All structured issue references must continue to render above machine-readable trailers and below any `Included changes:` block.
+
+#### Example Resulting Structure
+
+```markdown
+Included changes:
+- 📝 docs(readme): document multi-issue review flow
+- ✅ test(issue_references): add ordering and conflict coverage
+
+Resolves #80
+Refs #81
+Closes #82
+SemVer-Impact: MINOR
+Change-Types: feat, docs, test
+Changelog-Groups: Features, Documentation, Tests
+```
+
+### 3. Interaction Model Consequences
+
+The review loop remains state-driven, but its operational semantics expand in a controlled way.
+
+The user interaction model should now behave as follows:
+
+- the preview screen continues to show the rendered commit body
+- the preview metadata line must summarize current attachment state for zero, one, or many references
+- selecting `Add issue reference` repeatedly should append valid new entries in order
+- duplicate additions should be acknowledged but treated as no-ops
+- conflicting same-number different-verb attempts should be rejected with a clear explanatory message
+- remove/edit/replace interactions remain out of scope for this refinement and continue to be deferred
+
+This preserves tight scope discipline while still unlocking the most valuable next step in usability.
+
+### 4. Impact Radius (Cause, Change, Effect)
+
+| Component | Change | Effect |
+| :--- | :--- | :--- |
+| `src/git_cg/main.py` | Remove the phase-one single-reference UI guard and expand review-state mutation handling. | Allows repeated structured issue-reference addition while preserving idempotency and rejecting conflicting re-adds. |
+| `src/git_cg/interaction.py` | Update preview-state formatting and user-facing interaction copy for plural issue-reference display. | Keeps the TUI concise and understandable as the number of attached references grows. |
+| `tests/test_issue_references.py` | Add multi-reference ordering, idempotency, and same-number conflict tests. | Protects the refinement contract and prevents regressions in state mutation behavior. |
+| `README.md` | Document repeated add behavior and clarify deferred remove/replace semantics. | Aligns user expectations with the actual TUI workflow. |
+
+### 5. Implementation Constraints
+
+- **Ordering is contractual**: multiple issue references must render in insertion order.
+- **Duplicate handling must be deterministic**: identical additions are no-ops and must not mutate state.
+- **Conflict handling must be conservative**: same-number different-verb replacement is intentionally deferred rather than guessed.
+- **Trailer integrity remains absolute**: issue references must never be rendered below `SemVer-Impact`, `Change-Types`, or `Changelog-Groups`.
+- **Scope discipline remains important**: this refinement enables multi-add, but does not yet require full remove/edit/replace issue-reference management inside the TUI.
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
 - v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behavior.
 - v1.1.1 (2026-06-09 11:45:00): Incorporated refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
-\n- v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.\n
+\n- v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.\n- v1.3.0 (2026-06-11 10:15:00): Added Refinement 3 expanding the gum review flow to support multiple structured issue references with insertion-order-preserving rendering, idempotent duplicate handling, and conservative rejection of conflicting same-number verb changes while deferring remove/replace UX.
