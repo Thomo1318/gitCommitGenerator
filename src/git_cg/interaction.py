@@ -20,7 +20,7 @@ ISSUE_REFERENCE_TYPE_CHOICES: tuple[IssueReferenceTypeChoice, ...] = ("Resolves"
 def emit_terminal_bell() -> None:
     """
     Emit an ASCII terminal bell to stdout.
-    
+
     Writes the ASCII BEL character ('\a') to standard output without a trailing newline and flushes the stream so the bell is emitted immediately.
     """
     print("\a", end="", flush=True)
@@ -29,7 +29,7 @@ def emit_terminal_bell() -> None:
 def can_open_tty() -> bool:
     """
     Determine whether an interactive terminal device is available.
-    
+
     Returns:
         True if `/dev/tty` can be opened, False otherwise.
     """
@@ -43,12 +43,12 @@ def can_open_tty() -> bool:
 def _print_tty_message(message: str, *, style: str = "yellow") -> None:
     """
     Write a styled message to /dev/tty when available.
-    
+
     If the TTY cannot be opened the function returns silently without raising.
-    
+
     Parameters:
-    	message (str): Text to print to the TTY.
-    	style (str): Rich style tag name used to wrap the message (default "yellow").
+        message (str): Text to print to the TTY.
+        style (str): Rich style tag name used to wrap the message (default "yellow").
     """
     try:
         with open("/dev/tty", "w", encoding="utf-8", errors="ignore") as tty_out:
@@ -67,16 +67,16 @@ def _run_gum_command(
 ) -> str | None:
     """
     Run a gum command bound to the controlling TTY, optionally render prompt text beforehand, and return the trimmed output.
-    
+
     Parameters:
-    	command (list[str]): The gum command and its arguments to execute.
-    	title (str | None): Optional title to render above the prompt.
-    	body (str | None): Optional body text to render in a bordered panel below the title.
-    	status_text (str | None): Optional status line to render before invoking the command.
-    	prompt_text (str | None): Optional prompt line to display prior to running the command.
-    
+        command (list[str]): The gum command and its arguments to execute.
+        title (str | None): Optional title to render above the prompt.
+        body (str | None): Optional body text to render in a bordered panel below the title.
+        status_text (str | None): Optional status line to render before invoking the command.
+        prompt_text (str | None): Optional prompt line to display prior to running the command.
+
     Returns:
-    	str | None: The command's stdout with surrounding whitespace removed, or `None` if gum is not available, the command exits non‑zero, or the output is empty.
+        str | None: The command's stdout with surrounding whitespace removed, or `None` if gum is not available, the command exits non-zero, or the output is empty.
     """
     if shutil.which("gum") is None:
         return None
@@ -119,12 +119,12 @@ def _run_gum_command(
 def prompt_with_gum(title: str, body: str, *, status_text: str | None = None) -> Action | None:
     """
     Show an interactive menu on /dev/tty for choosing the next action.
-    
+
     Parameters:
         title (str): Title displayed above the menu.
         body (str): Body text or instructions shown in the menu panel.
         status_text (str | None): Optional status text displayed above the prompt.
-    
+
     Returns:
         Action | None: The selected `Action` if it matches a known choice, `None` if the prompt failed or returned an unexpected value.
     """
@@ -143,7 +143,7 @@ def prompt_with_gum(title: str, body: str, *, status_text: str | None = None) ->
 def prompt_issue_reference_type() -> IssueReferenceTypeChoice | None:
     """
     Prompt the user to select an issue-reference verb from a gum submenu.
-    
+
     Returns:
         choice (IssueReferenceTypeChoice | None): The selected issue-reference type, or `None` if the prompt was cancelled or returned an invalid choice.
     """
@@ -160,7 +160,7 @@ def prompt_issue_reference_type() -> IssueReferenceTypeChoice | None:
 def prompt_issue_number() -> int | None:
     """
     Prompt the user for an issue number, re-prompting until a digits-only value is provided or the prompt is cancelled.
-    
+
     Returns:
         int: The entered issue number.
         None: If the prompt is cancelled or fails.
@@ -185,10 +185,10 @@ def prompt_issue_number() -> int | None:
 def format_issue_reference_status(issue_references: Sequence[IssueReference] | None) -> str:
     """
     Render a compact status line describing the current issue reference(s).
-    
+
     Parameters:
         issue_references (Sequence[IssueReference] | None): Sequence of issue references to describe, or `None`.
-    
+
     Returns:
         str: A status string. If `issue_references` is empty or `None` returns "Current issue reference: None"; if it contains one item returns "Current issue reference: <item>"; if it contains multiple items returns "Current issue references: <item1>, <item2>, ...".
     """
