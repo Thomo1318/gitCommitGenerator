@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -30,6 +31,26 @@ class SemVerImpact(enum.StrEnum):
     MINOR = "MINOR"
     PATCH = "PATCH"
     NONE = "NONE"
+
+
+class IssueReferenceKind(enum.StrEnum):
+    """Supported structured issue-reference verbs for review-time insertion."""
+
+    RESOLVES = "Resolves"
+    REFS = "Refs"
+    CLOSES = "Closes"
+    FIXES = "Fixes"
+
+
+@dataclass(frozen=True)
+class IssueReference:
+    """Python-owned structured issue reference inserted during interactive review."""
+
+    kind: IssueReferenceKind
+    issue_number: int
+
+    def __str__(self) -> str:
+        return f"{self.kind.value} #{self.issue_number}"
 
 
 class CommitIntent(BaseModel):
@@ -118,7 +139,7 @@ class CommitPlan(BaseModel):
             raise ValueError("breaking_change_description must be provided if breaking_change is true")
         return self
 
-    def render(self) -> str:
+    def render(self, issue_references: list[IssueReference] | None = None) -> str:
         """Render the structured commit plan into a standard Git commit message string."""
         # Header
         scope_str = f"({self.primary_intent.scope})" if self.primary_intent.scope else ""
@@ -141,6 +162,11 @@ class CommitPlan(BaseModel):
             for sec in self.secondary_intents:
                 sec_scope = f"({sec.scope})" if sec.scope else ""
                 lines.append(f"- {sec.gitmoji} {sec.cc_type.value}{sec_scope}: {sec.description}")
+
+        # Structured issue references must render above machine-readable trailers.
+        if issue_references:
+            lines.append("")
+            lines.extend(str(issue_reference) for issue_reference in issue_references)
 
         # Machine-readable Trailers
         all_intents = [self.primary_intent, *self.secondary_intents]

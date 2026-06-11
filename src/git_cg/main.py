@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, NoReturn
 
 from dotenv import load_dotenv
@@ -29,8 +29,15 @@ from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
 
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
-from git_cg.interaction import can_open_tty, emit_terminal_bell, prompt_with_gum  # noqa: E402
-from git_cg.models import CommitPlan  # noqa: E402
+from git_cg.interaction import (  # noqa: E402
+    can_open_tty,
+    emit_terminal_bell,
+    format_issue_reference_status,
+    prompt_issue_number,
+    prompt_issue_reference_type,
+    prompt_with_gum,
+)
+from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind  # noqa: E402
 from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
 
@@ -46,6 +53,23 @@ console = Console()
 # (-m/-F => "message", merge, squash, --amend/-c/-C => "commit") already has a
 # message we must NOT overwrite — critical for safe global-hook operation.
 GENERATING_SOURCES: set[str | None] = {None, "", "template"}
+
+
+@dataclass
+class ReviewState:
+    commit_plan: CommitPlan
+    issue_references: list[IssueReference] = field(default_factory=list)
+
+    def render(self) -> str:
+        """Render the current review state deterministically."""
+        return self.commit_plan.render(issue_references=self.issue_references)
+
+    def add_issue_reference(self, issue_reference: IssueReference) -> bool:
+        """Add an issue reference idempotently."""
+        if issue_reference in self.issue_references:
+            return False
+        self.issue_references.append(issue_reference)
+        return True
 
 
 @dataclass
@@ -306,31 +330,68 @@ def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: b
         _abort(f"[bold red]Error writing to {commit_msg_file}:[/bold red] {e}", strict=strict)
 
 
-def _interactive_review(commit_msg_file: str, result_string: str, *, verbose: bool) -> str:
+def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
+    """Prompt for a structured issue reference and build it when valid."""
+    if review_state.issue_references:
+        console.print(
+            "[yellow]An issue reference is already attached. Multi-reference add/replace support is deferred for phase one. Use Edit for manual changes.[/yellow]"
+        )
+        return None
+
+    reference_type = prompt_issue_reference_type()
+    if reference_type in (None, "Back"):
+        return None
+
+    issue_number = prompt_issue_number()
+    if issue_number is None:
+        return None
+
+    return IssueReference(kind=IssueReferenceKind(reference_type), issue_number=issue_number)
+
+
+def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
     emit_terminal_bell()
-    action = prompt_with_gum(title="git-cg Generated Commit", body=result_string)
-    if action is None:
-        if verbose:
-            console.log(
-                "[yellow]Interactive mode requested but gum or /dev/tty is unavailable (or cancelled). Proceeding non-interactively.[/yellow]"
-            )
-        return "Commit"
 
-    if action == "Edit":
-        editor = os.environ.get("EDITOR", "nano")
-        subprocess.run([editor, commit_msg_file], check=False)
-    return action
+    while True:
+        result_string = review_state.render()
+        action = prompt_with_gum(
+            title="git-cg Generated Commit",
+            body=result_string,
+            status_text=format_issue_reference_status(review_state.issue_references),
+        )
+        if action is None:
+            if verbose:
+                console.log(
+                    "[yellow]Interactive mode requested but gum or /dev/tty is unavailable (or cancelled). Proceeding non-interactively.[/yellow]"
+                )
+            return "Commit"
+
+        if action == "Add issue reference":
+            issue_reference = _build_issue_reference(review_state)
+            if issue_reference is None:
+                continue
+
+            if review_state.add_issue_reference(issue_reference):
+                _write_commit_message(commit_msg_file, review_state.render(), strict=strict, verbose=verbose)
+            else:
+                console.print(f"[yellow]{issue_reference} is already attached to this review state.[/yellow]")
+            continue
+
+        if action == "Edit":
+            editor = os.environ.get("EDITOR", "nano")
+            subprocess.run([editor, commit_msg_file], check=False)
+        return action
 
 
-def _interactive_review_dry_run(result_string: str, *, verbose: bool) -> str:
+def _interactive_review_dry_run(review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
     temp_path = ""
     try:
         with tempfile.NamedTemporaryFile(
             "w", encoding="utf-8", delete=False, suffix=".git-cg-preview.txt"
         ) as temp_file:
-            temp_file.write(result_string)
+            temp_file.write(review_state.render())
             temp_path = temp_file.name
-        return _interactive_review(temp_path, result_string, verbose=verbose)
+        return _interactive_review(temp_path, review_state, verbose=verbose, strict=strict)
     finally:
         if temp_path:
             with contextlib.suppress(OSError):
@@ -482,7 +543,8 @@ def _run_commit_generation(
                     "[yellow]split_prompt requested; this implementation keeps hook/default mode non-interactive. Use git-cg -i for review.[/yellow]"
                 )
 
-        result_string = commit_plan.render()
+        review_state = ReviewState(commit_plan=commit_plan)
+        result_string = review_state.render()
         if verbose or dry_run:
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
 
@@ -493,7 +555,7 @@ def _run_commit_generation(
                     "[yellow]Interactive mode requested but /dev/tty is unavailable. Proceeding non-interactively.[/yellow]"
                 )
             if should_interact:
-                action = _interactive_review_dry_run(result_string, verbose=verbose)
+                action = _interactive_review_dry_run(review_state, verbose=verbose, strict=strict)
                 if action == "Regenerate":
                     console.print("\n[yellow]Regenerating commit message...[/yellow]")
                     continue
@@ -510,7 +572,7 @@ def _run_commit_generation(
             )
 
         if should_interact:
-            action = _interactive_review(commit_msg_file, result_string, verbose=verbose)
+            action = _interactive_review(commit_msg_file, review_state, verbose=verbose, strict=strict)
             if action == "Regenerate":
                 console.print("\n[yellow]Regenerating commit message...[/yellow]")
                 continue
