@@ -174,7 +174,11 @@ def prompt_issue_number() -> int | None:
         if raw_value is None:
             return None
         if raw_value.isdigit():
-            return int(raw_value)
+            issue_num = int(raw_value)
+            if issue_num > 0:
+                return issue_num
+            _print_tty_message("Issue number must be greater than zero.")
+            continue
         _print_tty_message("Issue number must contain digits only.")
 
 

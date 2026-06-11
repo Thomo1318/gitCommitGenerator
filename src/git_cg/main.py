@@ -57,6 +57,8 @@ GENERATING_SOURCES: set[str | None] = {None, "", "template"}
 
 @dataclass
 class ReviewState:
+    """A deterministic container for review-related state, holding the CommitPlan and associated IssueReferences."""
+
     commit_plan: CommitPlan
     issue_references: list[IssueReference] = field(default_factory=list)
 

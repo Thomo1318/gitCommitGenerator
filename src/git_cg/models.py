@@ -49,6 +49,12 @@ class IssueReference:
     kind: IssueReferenceKind
     issue_number: int
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.issue_number, int):
+            raise TypeError("issue_number must be an integer")
+        if self.issue_number <= 0:
+            raise ValueError("issue_number must be greater than zero")
+
     def __str__(self) -> str:
         """
         Render the issue reference as "Verb #<number>" (for example "Resolves #123").
