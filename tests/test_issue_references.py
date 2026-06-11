@@ -14,6 +14,11 @@ from git_cg.models import (
 
 @pytest.fixture(autouse=True)
 def disable_matrix_validation(monkeypatch):
+    """
+    Disable gitmoji matrix validation for tests by monkeypatching git_cg.sop.get_gitmoji_matrix to return an empty list.
+    
+    Used as an autouse pytest fixture so tests run without requiring gitmoji matrix data.
+    """
     monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: [])
 
 
@@ -27,6 +32,21 @@ def _make_intent(
     changelog_group: str,
     scope: str | None = None,
 ) -> CommitIntent:
+    """
+    Create a CommitIntent test helper populated with the provided fields.
+    
+    Parameters:
+        intent_id (str): Identifier for the intent.
+        gitmoji (str): Gitmoji string associated with the intent.
+        cc_type (CommitType): Conventional commit type for the intent.
+        description (str): Short description of the intent.
+        semver_impact (SemVerImpact): SemVer impact level for the intent.
+        changelog_group (str): Changelog group name for the intent.
+        scope (str | None): Optional scope for the intent; pass None if not applicable.
+    
+    Returns:
+        CommitIntent: A CommitIntent instance initialised with the supplied values.
+    """
     return CommitIntent(
         intent_id=intent_id,
         gitmoji=gitmoji,
@@ -39,6 +59,12 @@ def _make_intent(
 
 
 def _make_commit_plan() -> CommitPlan:
+    """
+    Create a sample CommitPlan for tests with one primary FIX intent and one secondary DOCS intent.
+    
+    Returns:
+        CommitPlan: A plan containing a primary intent (scope "main", SemVer impact PATCH, changelog group "Bug Fixes"), a single secondary intent (scope "readme", SemVer impact NONE, changelog group "Documentation"), and fixed `rationale` and `body_summary`.
+    """
     return CommitPlan(
         primary_intent=_make_intent(
             intent_id="primary_fix",
@@ -78,6 +104,11 @@ def test_issue_reference_renders_above_trailers(reference_kind: IssueReferenceKi
 
 
 def test_render_without_issue_reference_adds_nothing_extra():
+    """
+    Verify that rendering a CommitPlan with no issue references omits issue-reference trailers while still including SemVer and changelog trailers.
+    
+    Asserts that the rendered output does not contain any issue-reference prefixes ("Resolves #", "Refs #", "Closes #", "Fixes #") and that "SemVer-Impact: PATCH" and "Changelog-Groups: Bug Fixes, Documentation" are present.
+    """
     commit_plan = _make_commit_plan()
     rendered = commit_plan.render()
 

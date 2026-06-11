@@ -50,6 +50,12 @@ class IssueReference:
     issue_number: int
 
     def __str__(self) -> str:
+        """
+        Render the issue reference as "Verb #<number>" (for example "Resolves #123").
+        
+        Returns:
+            str: The issue reference formatted as '{kind.value} #{issue_number}'.
+        """
         return f"{self.kind.value} #{self.issue_number}"
 
 
@@ -135,12 +141,29 @@ class CommitPlan(BaseModel):
 
     @model_validator(mode="after")
     def validate_breaking_change(self) -> CommitPlan:
+        """
+        Validate that a breaking-change description is present when `breaking_change` is True.
+        
+        Raises:
+            ValueError: If `breaking_change` is True and `breaking_change_description` is missing or empty.
+        
+        Returns:
+            CommitPlan: The same instance (`self`) when validation passes.
+        """
         if self.breaking_change and not self.breaking_change_description:
             raise ValueError("breaking_change_description must be provided if breaking_change is true")
         return self
 
     def render(self, issue_references: list[IssueReference] | None = None) -> str:
-        """Render the structured commit plan into a standard Git commit message string."""
+        """
+        Render the commit plan as a complete Git commit message.
+        
+        Parameters:
+            issue_references (list[IssueReference] | None): Optional list of issue references to append immediately above the machine-readable trailers; pass None or omit to exclude issue reference lines.
+        
+        Returns:
+            commit_message (str): The full commit message including header, optional body summary, included changes, issue reference lines (if provided), machine-readable trailers (SemVer-Impact, Change-Types, Changelog-Groups), and an optional breaking change footer.
+        """
         # Header
         scope_str = f"({self.primary_intent.scope})" if self.primary_intent.scope else ""
         breaking_indicator = "!" if self.breaking_change else ""

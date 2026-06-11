@@ -61,11 +61,24 @@ class ReviewState:
     issue_references: list[IssueReference] = field(default_factory=list)
 
     def render(self) -> str:
-        """Render the current review state deterministically."""
+        """
+        Render the current review state as a commit message string.
+        
+        Returns:
+            str: The rendered commit plan including any issue references stored in this review state.
+        """
         return self.commit_plan.render(issue_references=self.issue_references)
 
     def add_issue_reference(self, issue_reference: IssueReference) -> bool:
-        """Add an issue reference idempotently."""
+        """
+        Add an IssueReference to the review state if it is not already present.
+        
+        Parameters:
+            issue_reference (IssueReference): The issue reference to add.
+        
+        Returns:
+            bool: `True` if the reference was appended, `False` if it was already present.
+        """
         if issue_reference in self.issue_references:
             return False
         self.issue_references.append(issue_reference)
@@ -321,6 +334,17 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
 
 
 def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: bool, verbose: bool) -> None:
+    """
+    Write the provided commit message string to the specified file.
+    
+    Writes `result_string` as UTF‑8 to `commit_msg_file`. If `verbose` is true, logs the destination path. On filesystem errors (`OSError`) the function aborts by calling `_abort(...)` with the provided `strict` behaviour.
+    
+    Parameters:
+        commit_msg_file (str): Path to the commit message file to write.
+        result_string (str): Commit message content to write.
+        strict (bool): Passed to `_abort`; controls whether the process exits with a non‑zero code.
+        verbose (bool): When true, log the path of the written commit message.
+    """
     try:
         with open(commit_msg_file, "w", encoding="utf-8") as f:
             f.write(result_string)
@@ -331,7 +355,21 @@ def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: b
 
 
 def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
-    """Prompt for a structured issue reference and build it when valid."""
+    """
+    Prompt the user to add a single structured issue reference to the given review state.
+    
+    If the review state already contains an issue reference, this prints a warning and returns None.
+    Otherwise prompts for a reference type and an issue number; returns a constructed IssueReference
+    when both are provided, or None if the user cancels or selects the back option.
+    
+    Parameters:
+        review_state (ReviewState): The current review state; used to detect existing references
+            and to supply context for the new IssueReference.
+    
+    Returns:
+        IssueReference or None: An IssueReference when the user supplies a valid type and number,
+        `None` if the operation was cancelled, the user selected "Back", or a reference already exists.
+    """
     if review_state.issue_references:
         console.print(
             "[yellow]An issue reference is already attached. Multi-reference add/replace support is deferred for phase one. Use Edit for manual changes.[/yellow]"
@@ -350,6 +388,18 @@ def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
 
 
 def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
+    """
+    Display an interactive review UI for the generated commit and allow adding issue references or editing before finalising.
+    
+    Parameters:
+        commit_msg_file (str): Path to the commit message file that will be updated if the message changes.
+        review_state (ReviewState): Current review state containing the generated CommitPlan and attached IssueReference(s).
+        verbose (bool): Enable additional informational messages when interactive UI is unavailable.
+        strict (bool): Passed through to the commit-message writer to control strict write/abort behaviour.
+    
+    Returns:
+        action (str): The action chosen by the user (for example "Commit", "Edit", "Regenerate", "Cancel"). When "Add issue reference" is selected the reference is processed and the loop continues; the returned value is the final action that ends the review.
+    """
     emit_terminal_bell()
 
     while True:
@@ -384,6 +434,19 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
 
 
 def _interactive_review_dry_run(review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
+    """
+    Present the current ReviewState to the user via a temporary preview file and run the interactive review flow.
+    
+    Writes the rendered commit message from `review_state` to a temporary file, invokes the same interactive review routine used for actual commits, and ensures the temporary file is removed afterwards.
+    
+    Parameters:
+        review_state (ReviewState): The review state containing the generated CommitPlan and any issue references to preview.
+        verbose (bool): If True, enable verbose logging within the interactive flow.
+        strict (bool): If True, treat interactive failures as strict errors (affects behaviour in the interactive routine).
+    
+    Returns:
+        str: The action chosen by the user (for example `"Regenerate"`, `"Edit"`, `"Commit"`, `"Cancel"`).
+    """
     temp_path = ""
     try:
         with tempfile.NamedTemporaryFile(
@@ -410,6 +473,30 @@ def _run_commit_generation(
     strict: bool,
     interactive: bool,
 ) -> bool:
+    """
+    Generate a commit message from staged changes using an AI client and write it to a commit message file, optionally running an interactive review or dry-run.
+    
+    This function:
+    - extracts the staged git diff (with token-compression via `rtk` when available) and truncates it if very large;
+    - initialises an AI client and model, builds a system prompt, and requests a CommitPlan from the model;
+    - handles mixed-change policies (warn/strict/split_prompt) based on `GIT_CG_MIXED_POLICY`;
+    - renders a deterministic ReviewState and either writes the commit message file or presents interactive review/dry-run UI flows that can regenerate or cancel;
+    - honours `amend_regenerate` for commits originating from amend flows and uses `strict` to decide exit codes for aborts.
+    
+    Parameters:
+        commit_msg_file (str): Path to the commit message file to write when not in dry-run.
+        commit_source (str | None): Origin of the commit (e.g. "commit", file path, or None). Values outside GENERATING_SOURCES will skip generation unless `amend_regenerate` permits.
+        extra_args (list[str] | None): Additional command-line args (present for signature compatibility; not interpreted here).
+        engine (str): Engine key to select the AI backend (matches keys in ENGINE_REGISTRY).
+        dry_run (bool): If true, do not write to `commit_msg_file`; allow interactive dry-run flows instead.
+        verbose (bool): Enable verbose logging to the global console.
+        amend_regenerate (bool): When true, allow regeneration for amend-origin commits even if `commit_source` would normally skip generation.
+        strict (bool): When true, aborts raise non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
+        interactive (bool): If true and a TTY is available, present interactive review UI which can add issue references, edit, regenerate, or cancel.
+    
+    Returns:
+        bool: `True` when commit message generation (and any interactive flow) completed successfully.
+    """
     if verbose:
         console.log("Starting git-cg...")
         console.log(f"Engine: {engine}")
