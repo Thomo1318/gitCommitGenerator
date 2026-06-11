@@ -119,7 +119,7 @@ flowchart TD
 - **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
 - **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
-- **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, and `Cancel` actions without relying on desktop notifications.
+- **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
 - **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution.
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
@@ -197,7 +197,33 @@ This generates the commit message, writes it first, emits a passive terminal bel
 - `Commit`
 - `Edit`
 - `Regenerate`
+- `Add issue reference`
 - `Cancel`
+
+Phase-one structured issue references support:
+
+- `Resolves`
+- `Refs`
+- `Closes`
+- `Fixes`
+
+The review preview also shows a compact current issue-reference status line so you can confirm whether a reference is attached without mentally re-parsing the full commit body.
+
+Structured issue references render above machine-readable trailers. Example:
+
+```markdown
+🥅 fix(main): add exception handling for AI generation
+
+Explain the why and how.
+
+Included changes:
+- 📝 docs(readme): document review flow
+
+Resolves #80
+SemVer-Impact: PATCH
+Change-Types: fix, docs
+Changelog-Groups: Bug Fixes, Documentation
+```
 
 If no terminal device is available, the tool degrades cleanly and completes without trying to open the TUI.
 
@@ -235,6 +261,7 @@ Included changes:
 - 🦺 fix(cli): add strict mode for CI while keeping hooks fail-soft
 - 📦 build(package): ship SOP data in the wheel
 
+Refs #80
 SemVer-Impact: PATCH
 Change-Types: refactor, fix, build
 Changelog-Groups: Changed, Fixed, Miscellaneous
