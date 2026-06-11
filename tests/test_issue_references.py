@@ -168,3 +168,220 @@ def test_review_state_uses_list_backing_even_for_phase_one_ui():
 
     assert isinstance(state.issue_references, list)
     assert state.issue_references == []
+
+
+# ---------------------------------------------------------------------------
+# IssueReference.__str__
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "kind, issue_number, expected",
+    [
+        (IssueReferenceKind.RESOLVES, 1, "Resolves #1"),
+        (IssueReferenceKind.REFS, 99, "Refs #99"),
+        (IssueReferenceKind.CLOSES, 100, "Closes #100"),
+        (IssueReferenceKind.FIXES, 9999, "Fixes #9999"),
+    ],
+)
+def test_issue_reference_str(kind: IssueReferenceKind, issue_number: int, expected: str):
+    """__str__ must produce 'Verb #<number>' for every supported kind."""
+    assert str(IssueReference(kind=kind, issue_number=issue_number)) == expected
+
+
+# ---------------------------------------------------------------------------
+# IssueReferenceKind enum contract
+# ---------------------------------------------------------------------------
+
+def test_issue_reference_kind_string_values():
+    """IssueReferenceKind must expose the exact verb strings used in commit messages."""
+    assert IssueReferenceKind.RESOLVES.value == "Resolves"
+    assert IssueReferenceKind.REFS.value == "Refs"
+    assert IssueReferenceKind.CLOSES.value == "Closes"
+    assert IssueReferenceKind.FIXES.value == "Fixes"
+
+
+def test_issue_reference_kind_has_exactly_four_members():
+    assert len(list(IssueReferenceKind)) == 4
+
+
+# ---------------------------------------------------------------------------
+# IssueReference dataclass properties
+# ---------------------------------------------------------------------------
+
+def test_issue_reference_equality():
+    """Two IssueReferences with identical fields must be equal."""
+    a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=42)
+    b = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=42)
+    assert a == b
+
+
+def test_issue_reference_inequality_on_different_kind():
+    a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=42)
+    b = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=42)
+    assert a != b
+
+
+def test_issue_reference_inequality_on_different_number():
+    a = IssueReference(kind=IssueReferenceKind.REFS, issue_number=1)
+    b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=2)
+    assert a != b
+
+
+def test_issue_reference_is_hashable():
+    """frozen=True must make IssueReference usable in sets and as dict keys."""
+    refs = {
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=1),
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=1),  # duplicate
+        IssueReference(kind=IssueReferenceKind.FIXES, issue_number=2),
+    }
+    assert len(refs) == 2
+
+
+def test_issue_reference_is_immutable():
+    """frozen=True must prevent attribute mutation."""
+    import dataclasses
+
+    ref = IssueReference(kind=IssueReferenceKind.REFS, issue_number=5)
+    with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
+        ref.issue_number = 99  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# format_issue_reference_status – all branches
+# ---------------------------------------------------------------------------
+
+def test_format_issue_reference_status_with_none():
+    assert format_issue_reference_status(None) == "Current issue reference: None"
+
+
+def test_format_issue_reference_status_with_multiple_references():
+    refs = [
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10),
+        IssueReference(kind=IssueReferenceKind.REFS, issue_number=20),
+    ]
+    result = format_issue_reference_status(refs)
+    assert result == "Current issue references: Resolves #10, Refs #20"
+
+
+def test_format_issue_reference_status_plural_label_for_two_items():
+    """The plural label 'Current issue references:' must be used for two or more items."""
+    refs = [
+        IssueReference(kind=IssueReferenceKind.FIXES, issue_number=5),
+        IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=6),
+    ]
+    assert format_issue_reference_status(refs).startswith("Current issue references:")
+
+
+def test_format_issue_reference_status_singular_label_for_one_item():
+    """The singular label 'Current issue reference:' must be used for exactly one item."""
+    refs = [IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=7)]
+    assert format_issue_reference_status(refs).startswith("Current issue reference:")
+    assert not format_issue_reference_status(refs).startswith("Current issue references:")
+
+
+# ---------------------------------------------------------------------------
+# CommitPlan.render – issue_references edge cases
+# ---------------------------------------------------------------------------
+
+def test_render_with_empty_list_omits_issue_references():
+    """Passing an empty list must produce the same output as passing None."""
+    commit_plan = _make_commit_plan()
+    rendered_none = commit_plan.render(issue_references=None)
+    rendered_empty = commit_plan.render(issue_references=[])
+    assert rendered_none == rendered_empty
+
+
+def test_render_with_multiple_issue_references_preserves_insertion_order():
+    """Multiple issue references must appear in the order they were supplied."""
+    commit_plan = _make_commit_plan()
+    refs = [
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80),
+        IssueReference(kind=IssueReferenceKind.REFS, issue_number=42),
+    ]
+    rendered = commit_plan.render(issue_references=refs)
+    lines = rendered.splitlines()
+
+    resolves_idx = lines.index("Resolves #80")
+    refs_idx = lines.index("Refs #42")
+    assert resolves_idx < refs_idx
+
+
+def test_render_with_multiple_issue_references_all_above_trailers():
+    """All issue references must appear before SemVer-Impact regardless of count."""
+    commit_plan = _make_commit_plan()
+    refs = [
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80),
+        IssueReference(kind=IssueReferenceKind.REFS, issue_number=42),
+    ]
+    rendered = commit_plan.render(issue_references=refs)
+    lines = rendered.splitlines()
+
+    semver_idx = lines.index("SemVer-Impact: PATCH")
+    for ref in refs:
+        assert lines.index(str(ref)) < semver_idx
+
+
+def test_render_with_single_issue_reference_explicit_none_is_same_as_omit():
+    commit_plan = _make_commit_plan()
+    assert commit_plan.render(issue_references=None) == commit_plan.render()
+
+
+# ---------------------------------------------------------------------------
+# ReviewState – multiple distinct issue references
+# ---------------------------------------------------------------------------
+
+def test_review_state_add_multiple_distinct_references():
+    """Adding two distinct references must keep both in insertion order."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10)
+    ref_b = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=20)
+
+    assert state.add_issue_reference(ref_a) is True
+    assert state.add_issue_reference(ref_b) is True
+    assert state.issue_references == [ref_a, ref_b]
+
+
+def test_review_state_render_includes_all_references():
+    """render() must forward all attached issue references to CommitPlan.render()."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80)
+    ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=42)
+    state.add_issue_reference(ref_a)
+    state.add_issue_reference(ref_b)
+
+    rendered = state.render()
+    assert "Resolves #80" in rendered
+    assert "Refs #42" in rendered
+
+
+def test_review_state_render_no_references():
+    """render() with no references should not include any issue-reference lines."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    rendered = state.render()
+
+    for kind in IssueReferenceKind:
+        assert f"{kind.value} #" not in rendered
+
+
+# ---------------------------------------------------------------------------
+# interaction module constants
+# ---------------------------------------------------------------------------
+
+def test_actions_tuple_includes_add_issue_reference():
+    from git_cg.interaction import ACTIONS
+
+    assert "Add issue reference" in ACTIONS
+
+
+def test_actions_tuple_contains_all_expected_actions():
+    from git_cg.interaction import ACTIONS
+
+    expected = {"Commit", "Edit", "Regenerate", "Add issue reference", "Cancel"}
+    assert set(ACTIONS) == expected
+
+
+def test_issue_reference_type_choices_contains_all_verbs_and_back():
+    from git_cg.interaction import ISSUE_REFERENCE_TYPE_CHOICES
+
+    expected = {"Resolves", "Refs", "Closes", "Fixes", "Back"}
+    assert set(ISSUE_REFERENCE_TYPE_CHOICES) == expected
