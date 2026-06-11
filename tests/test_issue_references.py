@@ -473,27 +473,15 @@ def test_review_state_mutation_result_all_members_present():
 
 
 # ---------------------------------------------------------------------------
-# add_issue_reference – conflict detection across all verb pairs
+# add_issue_reference - conflict detection across all verb pairs
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "first_kind, second_kind",
-    [
-        (IssueReferenceKind.RESOLVES, IssueReferenceKind.REFS),
-        (IssueReferenceKind.RESOLVES, IssueReferenceKind.CLOSES),
-        (IssueReferenceKind.RESOLVES, IssueReferenceKind.FIXES),
-        (IssueReferenceKind.REFS, IssueReferenceKind.RESOLVES),
-        (IssueReferenceKind.REFS, IssueReferenceKind.CLOSES),
-        (IssueReferenceKind.REFS, IssueReferenceKind.FIXES),
-        (IssueReferenceKind.CLOSES, IssueReferenceKind.RESOLVES),
-        (IssueReferenceKind.CLOSES, IssueReferenceKind.FIXES),
-        (IssueReferenceKind.FIXES, IssueReferenceKind.REFS),
-    ],
+    [(first, second) for first in IssueReferenceKind for second in IssueReferenceKind if first != second],
 )
-def test_review_state_conflict_all_verb_pairs(
-    first_kind: IssueReferenceKind, second_kind: IssueReferenceKind
-):
+def test_review_state_conflict_all_verb_pairs(first_kind: IssueReferenceKind, second_kind: IssueReferenceKind):
     """Any attempt to attach the same issue number with a different verb must return CONFLICTING_ISSUE_NUMBER."""
     state = ReviewState(commit_plan=_make_commit_plan())
     ref_first = IssueReference(kind=first_kind, issue_number=42)
@@ -562,7 +550,7 @@ def test_review_state_duplicate_after_failed_conflict_attempt():
 
 
 # ---------------------------------------------------------------------------
-# get_issue_reference_by_issue_number – extended coverage
+# get_issue_reference_by_issue_number - extended coverage
 # ---------------------------------------------------------------------------
 
 
