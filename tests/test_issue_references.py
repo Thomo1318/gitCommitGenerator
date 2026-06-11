@@ -439,3 +439,201 @@ def test_format_issue_reference_status_with_three_references():
         IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=82),
     ]
     assert format_issue_reference_status(refs) == "Current issue references: Resolves #80, Refs #81, Closes #82"
+
+
+# ---------------------------------------------------------------------------
+# ReviewStateMutationResult enum contract
+# ---------------------------------------------------------------------------
+
+
+def test_review_state_mutation_result_has_exactly_three_members():
+    """ReviewStateMutationResult must have exactly ADDED, DUPLICATE, and CONFLICTING_ISSUE_NUMBER."""
+    assert len(list(ReviewStateMutationResult)) == 3
+
+
+def test_review_state_mutation_result_string_values():
+    """ReviewStateMutationResult must expose the exact lowercase string values."""
+    assert ReviewStateMutationResult.ADDED == "added"
+    assert ReviewStateMutationResult.DUPLICATE == "duplicate"
+    assert ReviewStateMutationResult.CONFLICTING_ISSUE_NUMBER == "conflicting_issue_number"
+
+
+def test_review_state_mutation_result_is_str_enum():
+    """ReviewStateMutationResult is a StrEnum so instances compare equal to their string values."""
+    result = ReviewStateMutationResult.ADDED
+    assert result == "added"
+    assert isinstance(result, str)
+
+
+def test_review_state_mutation_result_all_members_present():
+    """All three expected member names must exist on the enum."""
+    assert hasattr(ReviewStateMutationResult, "ADDED")
+    assert hasattr(ReviewStateMutationResult, "DUPLICATE")
+    assert hasattr(ReviewStateMutationResult, "CONFLICTING_ISSUE_NUMBER")
+
+
+# ---------------------------------------------------------------------------
+# add_issue_reference – conflict detection across all verb pairs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "first_kind, second_kind",
+    [
+        (IssueReferenceKind.RESOLVES, IssueReferenceKind.REFS),
+        (IssueReferenceKind.RESOLVES, IssueReferenceKind.CLOSES),
+        (IssueReferenceKind.RESOLVES, IssueReferenceKind.FIXES),
+        (IssueReferenceKind.REFS, IssueReferenceKind.RESOLVES),
+        (IssueReferenceKind.REFS, IssueReferenceKind.CLOSES),
+        (IssueReferenceKind.REFS, IssueReferenceKind.FIXES),
+        (IssueReferenceKind.CLOSES, IssueReferenceKind.RESOLVES),
+        (IssueReferenceKind.CLOSES, IssueReferenceKind.FIXES),
+        (IssueReferenceKind.FIXES, IssueReferenceKind.REFS),
+    ],
+)
+def test_review_state_conflict_all_verb_pairs(
+    first_kind: IssueReferenceKind, second_kind: IssueReferenceKind
+):
+    """Any attempt to attach the same issue number with a different verb must return CONFLICTING_ISSUE_NUMBER."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_first = IssueReference(kind=first_kind, issue_number=42)
+    ref_conflicting = IssueReference(kind=second_kind, issue_number=42)
+
+    assert state.add_issue_reference(ref_first) == ReviewStateMutationResult.ADDED
+    assert state.add_issue_reference(ref_conflicting) == ReviewStateMutationResult.CONFLICTING_ISSUE_NUMBER
+
+
+def test_review_state_conflict_does_not_modify_state():
+    """A CONFLICTING_ISSUE_NUMBER result must leave the issue_references list unchanged."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    existing = IssueReference(kind=IssueReferenceKind.REFS, issue_number=55)
+    conflicting = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=55)
+
+    state.add_issue_reference(existing)
+    snapshot = list(state.issue_references)
+
+    state.add_issue_reference(conflicting)
+
+    assert state.issue_references == snapshot
+    assert len(state.issue_references) == 1
+    assert state.issue_references[0] == existing
+
+
+def test_review_state_add_third_distinct_reference():
+    """Adding a third distinct issue reference must succeed and preserve insertion order."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10)
+    ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=20)
+    ref_c = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=30)
+
+    assert state.add_issue_reference(ref_a) == ReviewStateMutationResult.ADDED
+    assert state.add_issue_reference(ref_b) == ReviewStateMutationResult.ADDED
+    assert state.add_issue_reference(ref_c) == ReviewStateMutationResult.ADDED
+    assert state.issue_references == [ref_a, ref_b, ref_c]
+
+
+def test_review_state_conflict_on_second_of_multiple_refs():
+    """A conflict must be detected correctly when the conflicting number matches the second of two stored refs."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10)
+    ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=20)
+    conflicting = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=20)
+
+    state.add_issue_reference(ref_a)
+    state.add_issue_reference(ref_b)
+    result = state.add_issue_reference(conflicting)
+
+    assert result == ReviewStateMutationResult.CONFLICTING_ISSUE_NUMBER
+    assert state.issue_references == [ref_a, ref_b]
+
+
+def test_review_state_duplicate_after_failed_conflict_attempt():
+    """After a rejected conflict attempt, re-adding the original exact reference must still return DUPLICATE."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    original = IssueReference(kind=IssueReferenceKind.REFS, issue_number=77)
+    conflicting = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=77)
+
+    state.add_issue_reference(original)
+    state.add_issue_reference(conflicting)  # rejected
+    result = state.add_issue_reference(original)  # exact duplicate of original
+
+    assert result == ReviewStateMutationResult.DUPLICATE
+    assert state.issue_references == [original]
+
+
+# ---------------------------------------------------------------------------
+# get_issue_reference_by_issue_number – extended coverage
+# ---------------------------------------------------------------------------
+
+
+def test_get_issue_reference_by_issue_number_on_empty_state():
+    """Querying an empty ReviewState must return None for any issue number."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    assert state.get_issue_reference_by_issue_number(1) is None
+    assert state.get_issue_reference_by_issue_number(0) is None
+
+
+def test_get_issue_reference_by_issue_number_returns_correct_ref_from_multiple():
+    """When multiple refs are present, the lookup must return the one with the matching issue number."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10)
+    ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=20)
+    ref_c = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=30)
+
+    state.add_issue_reference(ref_a)
+    state.add_issue_reference(ref_b)
+    state.add_issue_reference(ref_c)
+
+    assert state.get_issue_reference_by_issue_number(10) == ref_a
+    assert state.get_issue_reference_by_issue_number(20) == ref_b
+    assert state.get_issue_reference_by_issue_number(30) == ref_c
+    assert state.get_issue_reference_by_issue_number(99) is None
+
+
+def test_get_issue_reference_by_issue_number_does_not_mutate_state():
+    """Calling get_issue_reference_by_issue_number must never mutate the issue_references list."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=5)
+    state.add_issue_reference(ref)
+    snapshot = list(state.issue_references)
+
+    state.get_issue_reference_by_issue_number(5)
+    state.get_issue_reference_by_issue_number(999)
+
+    assert state.issue_references == snapshot
+
+
+# ---------------------------------------------------------------------------
+# Insertion-order preservation across add / conflict / duplicate sequences
+# ---------------------------------------------------------------------------
+
+
+def test_insertion_order_preserved_after_duplicate_and_conflict_attempts():
+    """Duplicate and conflict rejections must not reorder or alter existing references."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=1)
+    ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=2)
+    ref_c = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=3)
+
+    state.add_issue_reference(ref_a)
+    state.add_issue_reference(ref_b)
+    state.add_issue_reference(ref_c)
+
+    # Attempt duplicate of ref_b
+    state.add_issue_reference(IssueReference(kind=IssueReferenceKind.REFS, issue_number=2))
+    # Attempt conflict on ref_a's number
+    state.add_issue_reference(IssueReference(kind=IssueReferenceKind.FIXES, issue_number=1))
+
+    assert state.issue_references == [ref_a, ref_b, ref_c]
+
+
+def test_render_reflects_state_after_conflict_rejection():
+    """The rendered output must not include a conflicting reference that was rejected."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    original = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=99)
+    state.add_issue_reference(original)
+    state.add_issue_reference(IssueReference(kind=IssueReferenceKind.FIXES, issue_number=99))
+
+    rendered = state.render()
+    assert "Resolves #99" in rendered
+    assert "Fixes #99" not in rendered
