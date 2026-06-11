@@ -200,14 +200,18 @@ This generates the commit message, writes it first, emits a passive terminal bel
 - `Add issue reference`
 - `Cancel`
 
-Phase-one structured issue references support:
+Structured issue references support:
 
 - `Resolves`
 - `Refs`
 - `Closes`
 - `Fixes`
 
-The review preview also shows a compact current issue-reference status line so you can confirm whether a reference is attached without mentally re-parsing the full commit body.
+You can attach multiple issue references by selecting `Add issue reference` repeatedly during review.
+
+The review preview also shows a compact current issue-reference status line so you can confirm whether references are attached without mentally re-parsing the full commit body.
+
+Exact duplicate references are treated as no-ops, and re-adding the same issue number with a different verb is rejected in this phase to avoid ambiguous semantics. Remove/replace issue-reference UX remains deferred.
 
 Structured issue references render above machine-readable trailers. Example:
 
@@ -220,6 +224,7 @@ Included changes:
 - 📝 docs(readme): document review flow
 
 Resolves #80
+Refs #81
 SemVer-Impact: PATCH
 Change-Types: fix, docs
 Changelog-Groups: Bug Fixes, Documentation

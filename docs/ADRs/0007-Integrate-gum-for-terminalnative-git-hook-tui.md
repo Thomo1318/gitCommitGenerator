@@ -13,10 +13,10 @@ A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glo
 adr_number: "0007"
 title: "Integrate Gum for Terminal-Native Git Hook TUI"
 status: "Proposed"
-version: "v1.3.0"
+version: "v1.4.0"
 date: "2026-06-09"
 created: "2026-06-09 10:00:00"
-modified: "2026-06-11 10:15:00"
+modified: "2026-06-11 14:30:00"
 risk_level: "Medium"
 reversibility: "High"
 security_scope: "Local Operations"
@@ -772,9 +772,254 @@ This preserves tight scope discipline while still unlocking the most valuable ne
 - **Trailer integrity remains absolute**: issue references must never be rendered below `SemVer-Impact`, `Change-Types`, or `Changelog-Groups`.
 - **Scope discipline remains important**: this refinement enables multi-add, but does not yet require full remove/edit/replace issue-reference management inside the TUI.
 
+
+---
+
+## V. Refinement 4: Guided Regeneration Feedback Loop (v1.4.0)
+
+Following the move to a stateful gum-based review loop and the subsequent expansion toward structured multi-issue references, a new usability gap has become clear: users can often identify *why* a generated commit message is unsatisfactory, but they currently have no lightweight, structured mechanism to steer the next regeneration without either accepting a blind retry or dropping all the way down into manual editing.
+
+That gap is substantial enough to warrant its own refinement.
+
+The current architecture already supports a meaningful separation of concerns:
+
+- the LLM owns generation of the `CommitPlan`
+- Python owns orchestration and structured metadata insertion
+- the terminal review loop owns human-in-the-loop control over whether to commit, edit, regenerate, or enrich the review state
+
+What is missing is a first-class feedback channel that lets the user say, in effect:
+
+- "this should be a feature, not a fix"
+- "focus on the multi-issue-reference capability, not the internal validation details"
+- "make the subject shorter"
+- "prefer scope `tui`"
+- "do not emphasize refactors in the body"
+
+Today that kind of steering is either impossible or inefficient. The user must keep regenerating until the model happens to align, or manually edit the final message. That is not the best architecture for a tool whose core purpose is structured, human-supervised AI commit generation.
+
+This refinement therefore establishes a **guided regeneration feedback loop** in which the user can enter a short text instruction in the TUI, store it in explicit review state, and then feed it back into the next regeneration request without contaminating the final commit body or turning the review experience into an open-ended chat session.
+
+### 1. Architectural Catalyst
+
+The catalyst for this refinement is the recognition that the existing `Regenerate` action is too coarse.
+
+A plain regenerate action assumes one of two things:
+
+1. that the model will naturally produce a better answer on retry without more context, or
+2. that the user should abandon AI steering and move straight to `$EDITOR`.
+
+Neither assumption is ideal.
+
+The first is too optimistic and wastes cycles when the model has made a stable framing mistake. The second is too heavy for cases where the user actually has very clear, compact feedback that could improve the next generation immediately.
+
+The project therefore needs a middle path:
+
+- **lighter than manual editing**
+- **more structured than free-form post-hoc correction**
+- **more explicit than repeated blind regeneration**
+
+This refinement supplies that middle path.
+
+### 2. Refined Governing Decision
+
+The project will introduce an explicit, Python-owned **regeneration guidance** mechanism in the gum review loop.
+
+This refinement establishes the following governing rules:
+
+1. **Guidance is user-authored review metadata, not part of the final commit message.** It exists solely to steer a subsequent regeneration request.
+2. **Guidance is stored explicitly in review state.** It must be visible to the user as part of the current review context rather than being hidden or silently accumulated.
+3. **Guidance affects regeneration only.** It must not alter the already-rendered commit body until a new regeneration is actually performed.
+4. **Guidance is single-slot, not conversational.** The system should store one current guidance string rather than maintaining a multi-turn chat history.
+5. **Guidance must be editable and clearable.** The user needs a deterministic way to replace or remove it before regenerating.
+6. **Guidance must never be emitted into the final commit body or trailer block.** It is orchestration metadata only.
+7. **Guidance should be concise and bounded.** The interaction model should encourage short steering text rather than essay-length commentary.
+8. **This refinement is sequenced after the current multi-issue-reference expansion.** It should not be merged into the same implementation scope as Refinement 3, because it modifies regeneration semantics and deserves isolated validation.
+
+#### Example Guidance Inputs
+
+Examples of valid guidance text include:
+
+- `This is a feature, not a fix.`
+- `Focus on multi-issue references rather than validation internals.`
+- `Use scope tui.`
+- `Keep the subject shorter and more user-facing.`
+- `Do not emphasize helper refactors in the summary.`
+
+These are intentionally compact and directive. They are not intended to be full prompt rewrites.
+
+### 3. Refined Interaction Model
+
+The interactive review flow is now refined conceptually into three categories of state:
+
+1. **AI-owned generated state**
+   - the `CommitPlan`
+2. **Python-owned structured review metadata**
+   - issue references
+   - regeneration guidance
+3. **user-selected control actions**
+   - commit
+   - edit
+   - regenerate
+   - attach metadata
+   - cancel
+
+Under this refinement, the terminal review loop should expose a lightweight guidance entry path such as:
+
+- `Add regenerate guidance`
+
+and, when guidance already exists, either:
+
+- `Edit regenerate guidance`
+- `Clear regenerate guidance`
+
+or an equivalent deterministic replacement/clear strategy.
+
+The exact menu wording may evolve during implementation, but the architectural requirement is clear: guidance must be **explicitly manageable** inside the review loop and must not require the user to rely on invisible internal state.
+
+The expected flow is:
+
+1. user reviews generated commit
+2. user decides the framing is wrong or incomplete
+3. user opens a gum input field and writes a short instruction
+4. review state displays the presence and/or contents of that guidance
+5. user chooses `Regenerate`
+6. Python injects the guidance into the next generation request
+7. a new `CommitPlan` is produced
+8. guidance remains visible until replaced or cleared according to the implementation rule
+
+This preserves the human-in-the-loop character of the tool without turning commit generation into a chat agent.
+
+### 4. Refined Runtime & Interaction Diagrams
+
+#### A. Guided Review-State Flow
+
+```mermaid
+flowchart TD
+    Start["Generated CommitPlan available"] --> Review["Render review state
+CommitPlan + issue refs + optional guidance"]
+    Review --> Action{"User selects action"}
+
+    Action -- "Commit" --> Commit["Accept current message"]
+    Action -- "Edit" --> Edit["Open $EDITOR on current message"]
+    Action -- "Cancel" --> Cancel["Abort workflow"]
+    Action -- "Add issue reference" --> AddIssue["Attach structured issue reference metadata"]
+    Action -- "Add/Edit regenerate guidance" --> Guidance["Capture short user steering text via gum input"]
+    Action -- "Clear regenerate guidance" --> ClearGuidance["Remove stored guidance from review state"]
+    Action -- "Regenerate" --> Regen{"Guidance present?"}
+
+    AddIssue --> Review
+    Guidance --> Review
+    ClearGuidance --> Review
+
+    Regen -- "No" --> PlainRegen["Regenerate from diff + normal prompt"]
+    Regen -- "Yes" --> GuidedRegen["Regenerate from diff + normal prompt + user guidance"]
+
+    PlainRegen --> Review
+    GuidedRegen --> Review
+```
+
+#### B. Guided Regeneration Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as Developer
+    participant Gum as Gum TUI
+    participant CG as git-cg (Python)
+    participant RS as ReviewState
+    participant LLM as LLM API
+
+    User->>Gum: Select "Add regenerate guidance"
+    Gum->>User: Open text input
+    User->>Gum: Enter short guidance text
+    Gum-->>CG: Return guidance string
+    CG->>RS: Store/replace regeneration guidance
+    CG->>Gum: Re-render review preview with guidance status
+
+    User->>Gum: Select "Regenerate"
+    Gum-->>CG: Return action
+    CG->>RS: Read current guidance + issue refs
+    CG->>LLM: Send diff + ranked intents + guidance context
+    LLM-->>CG: Return new CommitPlan
+    CG->>RS: Replace CommitPlan, preserve explicit review metadata per policy
+    CG->>Gum: Re-render updated review state
+```
+
+### 5. Impact Radius (Cause, Change, Effect)
+
+| Component | Change | Effect |
+| :--- | :--- | :--- |
+| `src/git_cg/main.py` | Extend `ReviewState` to hold optional regeneration guidance and feed it into regeneration requests. | Introduces explicit human steering into the AI regeneration path without affecting final commit rendering. |
+| `src/git_cg/interaction.py` | Add gum input helpers and review-status formatting for guidance state. | Keeps guidance capture terminal-native and visible to the user. |
+| Prompt construction path | Accept optional user guidance when building the next regeneration request. | Improves regeneration precision when the first result is structurally valid but contextually wrong. |
+| `tests/` | Add review-state, prompt-injection, and clear/replace guidance tests. | Protects determinism and prevents hidden-state regressions. |
+| `README.md` | Document guided regeneration as an explicit review capability. | Clarifies the difference between regenerate, edit, and guided regenerate flows. |
+
+### 6. Implementation Constraints
+
+- **Guidance is not commit content**: it must never be written into the final commit message body or trailers.
+- **Guidance must be visible**: the user must be able to see whether guidance is currently attached.
+- **Guidance must be replaceable and clearable**: stale steering text must not become sticky hidden state.
+- **Guidance must remain bounded**: implementation should discourage long-form prompt essays and keep the feature lightweight.
+- **Deterministic state handling remains mandatory**: re-rendering the same review state must not mutate the stored guidance.
+- **This is not a chat interface**: the tool should not accumulate a conversational transcript or attempt free-form agent dialogue inside the TUI.
+
+### 7. Refined Consequences
+
+#### Positive
+
+- gives the user a lightweight way to correct bad framing without abandoning AI-assisted generation
+- reduces blind regeneration loops
+- preserves the distinction between AI-generated commit structure and human-provided orchestration metadata
+- keeps the review loop more efficient for experienced users who know exactly what to fix conceptually
+- avoids polluting the final commit body with temporary prompt-steering text
+
+#### Negative
+
+- adds another stateful metadata field to the review loop
+- requires careful UX design so guidance does not become confusing hidden context
+- introduces prompt-construction complexity, because regeneration prompts now become state-aware beyond the git diff alone
+- requires explicit policy decisions about whether guidance persists after a successful regeneration or should be cleared manually
+
+These tradeoffs are acceptable because they improve controllability without collapsing the tool into a general-purpose chat UI.
+
+### 8. Refined Verification Expectations
+
+Any implementation of this refinement should verify at least the following scenarios:
+
+- user can add regeneration guidance through the terminal UI
+- review preview shows whether guidance is currently attached
+- regenerating with guidance includes that steering input in the regeneration path
+- guidance does not appear in the final rendered commit message
+- replacing guidance overwrites prior guidance deterministically
+- clearing guidance removes it from review state deterministically
+- repeated rendering of unchanged state does not mutate guidance
+- guided regeneration still coexists cleanly with issue-reference metadata
+
+### 9. Refined Governance Follow-up
+
+This refinement should be implemented **after** the current multi-issue-reference issue is completed and closed, because it builds on the same stateful review architecture but changes regeneration semantics rather than merely extending structured metadata.
+
+Governance implications:
+
+- the follow-up implementation should be tracked as its own GitHub issue and branch
+- the README should document guided regeneration as distinct from both `Edit` and blind `Regenerate`
+- if later iterations expand this into multi-turn dialogue, that should almost certainly require another ADR refinement or a dedicated ADR because it would represent a qualitatively different interaction model
+
+### 10. Final Refined Decision Statement
+
+The decision is no longer that regeneration is a simple retry loop.
+
+The refined decision is:
+
+> `git-cg` will evolve its gum-based review workflow to support explicit, user-authored regeneration guidance as Python-owned review metadata. This guidance will be visible in review state, captured via lightweight terminal input, and applied only to subsequent regeneration requests. It will remain separate from the final commit message content and will not transform the review loop into an open-ended conversational chat interface.
+
+That is the correct architectural next step for controlled human steering of AI-generated commit messages.
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
 - v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behavior.
 - v1.1.1 (2026-06-09 11:45:00): Incorporated refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
 \n- v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.\n- v1.3.0 (2026-06-11 10:15:00): Added Refinement 3 expanding the gum review flow to support multiple structured issue references with insertion-order-preserving rendering, idempotent duplicate handling, and conservative rejection of conflicting same-number verb changes while deferring remove/replace UX.
+- v1.4.0 (2026-06-11 14:30:00): Added Refinement 4 formalizing a guided regeneration feedback loop with explicit user-authored steering text stored as review metadata, visible in TUI state, applied only to regeneration requests, and documented with updated refinement-specific diagrams reflecting the new state-aware interaction model.

@@ -1,7 +1,7 @@
 import pytest
 
 from git_cg.interaction import format_issue_reference_status
-from git_cg.main import ReviewState
+from git_cg.main import ReviewState, ReviewStateMutationResult
 from git_cg.models import (
     CommitIntent,
     CommitPlan,
@@ -16,7 +16,7 @@ from git_cg.models import (
 def disable_matrix_validation(monkeypatch):
     """
     Disable gitmoji matrix validation for tests by monkeypatching git_cg.sop.get_gitmoji_matrix to return an empty list.
-    
+
     Used as an autouse pytest fixture so tests run without requiring gitmoji matrix data.
     """
     monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: [])
@@ -34,7 +34,7 @@ def _make_intent(
 ) -> CommitIntent:
     """
     Create a CommitIntent test helper populated with the provided fields.
-    
+
     Parameters:
         intent_id (str): Identifier for the intent.
         gitmoji (str): Gitmoji string associated with the intent.
@@ -43,7 +43,7 @@ def _make_intent(
         semver_impact (SemVerImpact): SemVer impact level for the intent.
         changelog_group (str): Changelog group name for the intent.
         scope (str | None): Optional scope for the intent; pass None if not applicable.
-    
+
     Returns:
         CommitIntent: A CommitIntent instance initialised with the supplied values.
     """
@@ -61,7 +61,7 @@ def _make_intent(
 def _make_commit_plan() -> CommitPlan:
     """
     Create a sample CommitPlan for tests with one primary FIX intent and one secondary DOCS intent.
-    
+
     Returns:
         CommitPlan: A plan containing a primary intent (scope "main", SemVer impact PATCH, changelog group "Bug Fixes"), a single secondary intent (scope "readme", SemVer impact NONE, changelog group "Documentation"), and fixed `rationale` and `body_summary`.
     """
@@ -106,7 +106,7 @@ def test_issue_reference_renders_above_trailers(reference_kind: IssueReferenceKi
 def test_render_without_issue_reference_adds_nothing_extra():
     """
     Verify that rendering a CommitPlan with no issue references omits issue-reference trailers while still including SemVer and changelog trailers.
-    
+
     Asserts that the rendered output does not contain any issue-reference prefixes ("Resolves #", "Refs #", "Closes #", "Fixes #") and that "SemVer-Impact: PATCH" and "Changelog-Groups: Bug Fixes, Documentation" are present.
     """
     commit_plan = _make_commit_plan()
@@ -132,16 +132,16 @@ def test_review_state_add_issue_reference_updates_state():
     state = ReviewState(commit_plan=_make_commit_plan())
     issue_reference = IssueReference(kind=IssueReferenceKind.REFS, issue_number=26)
 
-    added = state.add_issue_reference(issue_reference)
+    result = state.add_issue_reference(issue_reference)
 
-    assert added is True
+    assert result == ReviewStateMutationResult.ADDED
     assert state.issue_references == [issue_reference]
 
 
 def test_review_state_render_is_deterministic_and_state_is_unchanged():
     state = ReviewState(commit_plan=_make_commit_plan())
     issue_reference = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80)
-    state.add_issue_reference(issue_reference)
+    assert state.add_issue_reference(issue_reference) == ReviewStateMutationResult.ADDED
     before_state = list(state.issue_references)
 
     first_render = state.render()
@@ -158,8 +158,8 @@ def test_review_state_add_issue_reference_is_idempotent():
     first_add = state.add_issue_reference(issue_reference)
     second_add = state.add_issue_reference(issue_reference)
 
-    assert first_add is True
-    assert second_add is False
+    assert first_add == ReviewStateMutationResult.ADDED
+    assert second_add == ReviewStateMutationResult.DUPLICATE
     assert state.issue_references == [issue_reference]
 
 
@@ -173,6 +173,7 @@ def test_review_state_uses_list_backing_even_for_phase_one_ui():
 # ---------------------------------------------------------------------------
 # IssueReference.__str__
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "kind, issue_number, expected",
@@ -192,6 +193,7 @@ def test_issue_reference_str(kind: IssueReferenceKind, issue_number: int, expect
 # IssueReferenceKind enum contract
 # ---------------------------------------------------------------------------
 
+
 def test_issue_reference_kind_string_values():
     """IssueReferenceKind must expose the exact verb strings used in commit messages."""
     assert IssueReferenceKind.RESOLVES.value == "Resolves"
@@ -207,6 +209,7 @@ def test_issue_reference_kind_has_exactly_four_members():
 # ---------------------------------------------------------------------------
 # IssueReference dataclass properties
 # ---------------------------------------------------------------------------
+
 
 def test_issue_reference_equality():
     """Two IssueReferences with identical fields must be equal."""
@@ -247,8 +250,9 @@ def test_issue_reference_is_immutable():
 
 
 # ---------------------------------------------------------------------------
-# format_issue_reference_status – all branches
+# format_issue_reference_status - all branches
 # ---------------------------------------------------------------------------
+
 
 def test_format_issue_reference_status_with_none():
     assert format_issue_reference_status(None) == "Current issue reference: None"
@@ -280,8 +284,9 @@ def test_format_issue_reference_status_singular_label_for_one_item():
 
 
 # ---------------------------------------------------------------------------
-# CommitPlan.render – issue_references edge cases
+# CommitPlan.render - issue_references edge cases
 # ---------------------------------------------------------------------------
+
 
 def test_render_with_empty_list_omits_issue_references():
     """Passing an empty list must produce the same output as passing None."""
@@ -327,8 +332,9 @@ def test_render_with_single_issue_reference_explicit_none_is_same_as_omit():
 
 
 # ---------------------------------------------------------------------------
-# ReviewState – multiple distinct issue references
+# ReviewState - multiple distinct issue references
 # ---------------------------------------------------------------------------
+
 
 def test_review_state_add_multiple_distinct_references():
     """Adding two distinct references must keep both in insertion order."""
@@ -336,8 +342,8 @@ def test_review_state_add_multiple_distinct_references():
     ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10)
     ref_b = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=20)
 
-    assert state.add_issue_reference(ref_a) is True
-    assert state.add_issue_reference(ref_b) is True
+    assert state.add_issue_reference(ref_a) == ReviewStateMutationResult.ADDED
+    assert state.add_issue_reference(ref_b) == ReviewStateMutationResult.ADDED
     assert state.issue_references == [ref_a, ref_b]
 
 
@@ -346,8 +352,8 @@ def test_review_state_render_includes_all_references():
     state = ReviewState(commit_plan=_make_commit_plan())
     ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80)
     ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=42)
-    state.add_issue_reference(ref_a)
-    state.add_issue_reference(ref_b)
+    assert state.add_issue_reference(ref_a) == ReviewStateMutationResult.ADDED
+    assert state.add_issue_reference(ref_b) == ReviewStateMutationResult.ADDED
 
     rendered = state.render()
     assert "Resolves #80" in rendered
@@ -367,6 +373,7 @@ def test_review_state_render_no_references():
 # interaction module constants
 # ---------------------------------------------------------------------------
 
+
 def test_actions_tuple_includes_add_issue_reference():
     from git_cg.interaction import ACTIONS
 
@@ -385,3 +392,50 @@ def test_issue_reference_type_choices_contains_all_verbs_and_back():
 
     expected = {"Resolves", "Refs", "Closes", "Fixes", "Back"}
     assert set(ISSUE_REFERENCE_TYPE_CHOICES) == expected
+
+
+def test_review_state_rejects_same_issue_number_with_different_verb():
+    """Re-adding the same issue number with a different verb must be rejected conservatively."""
+    state = ReviewState(commit_plan=_make_commit_plan())
+    existing_reference = IssueReference(kind=IssueReferenceKind.REFS, issue_number=80)
+    conflicting_reference = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=80)
+
+    assert state.add_issue_reference(existing_reference) == ReviewStateMutationResult.ADDED
+    assert state.add_issue_reference(conflicting_reference) == ReviewStateMutationResult.CONFLICTING_ISSUE_NUMBER
+    assert state.issue_references == [existing_reference]
+
+
+def test_review_state_get_issue_reference_by_issue_number_returns_match():
+    state = ReviewState(commit_plan=_make_commit_plan())
+    existing_reference = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=12)
+    assert state.add_issue_reference(existing_reference) == ReviewStateMutationResult.ADDED
+
+    assert state.get_issue_reference_by_issue_number(12) == existing_reference
+    assert state.get_issue_reference_by_issue_number(99) is None
+
+
+def test_render_with_three_issue_references_preserves_order_above_trailers():
+    commit_plan = _make_commit_plan()
+    refs = [
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80),
+        IssueReference(kind=IssueReferenceKind.REFS, issue_number=81),
+        IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=82),
+    ]
+    rendered = commit_plan.render(issue_references=refs)
+    lines = rendered.splitlines()
+
+    assert (
+        lines.index("Resolves #80")
+        < lines.index("Refs #81")
+        < lines.index("Closes #82")
+        < lines.index("SemVer-Impact: PATCH")
+    )
+
+
+def test_format_issue_reference_status_with_three_references():
+    refs = [
+        IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80),
+        IssueReference(kind=IssueReferenceKind.REFS, issue_number=81),
+        IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=82),
+    ]
+    assert format_issue_reference_status(refs) == "Current issue references: Resolves #80, Refs #81, Closes #82"
