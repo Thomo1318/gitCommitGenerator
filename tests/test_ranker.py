@@ -1,6 +1,6 @@
 import pytest
 
-from git_cg.intent import DiffSignals, derive_intent_selection_constraints, rank_commit_intents
+from git_cg.intent import DiffSignals, derive_intent_selection_constraints, matrix_row_intent_id, rank_commit_intents
 from git_cg.sop import load_sop
 
 
@@ -121,20 +121,16 @@ def test_ranker_empty_signals(sop_matrix):
     assert ranked[0].score > 0
 
 
-def _matrix_intent_id(row: dict) -> str:
-    return row.get("intent_id", row.get("code", "unknown").strip(":"))
-
-
 def test_docs_only_constraints_export_allowed_and_disallowed_intents(sop_matrix):
     signals = DiffSignals(only_docs=True)
     constraints = derive_intent_selection_constraints(signals, sop_matrix)
 
     expected_allowed = {
-        _matrix_intent_id(row)
+        matrix_row_intent_id(row)
         for row in sop_matrix
         if row.get("intent_group", "miscellaneous") in {"docs", "miscellaneous"}
     }
-    expected_disallowed = {_matrix_intent_id(row) for row in sop_matrix} - expected_allowed
+    expected_disallowed = {matrix_row_intent_id(row) for row in sop_matrix} - expected_allowed
 
     assert "docs_only" in constraints.reasons
     assert set(constraints.allowed_intent_ids) == expected_allowed
@@ -146,11 +142,11 @@ def test_tests_only_constraints_export_allowed_and_disallowed_intents(sop_matrix
     constraints = derive_intent_selection_constraints(signals, sop_matrix)
 
     expected_allowed = {
-        _matrix_intent_id(row)
+        matrix_row_intent_id(row)
         for row in sop_matrix
         if row.get("intent_group", "miscellaneous") in {"tests", "miscellaneous"}
     }
-    expected_disallowed = {_matrix_intent_id(row) for row in sop_matrix} - expected_allowed
+    expected_disallowed = {matrix_row_intent_id(row) for row in sop_matrix} - expected_allowed
 
     assert "tests_only" in constraints.reasons
     assert set(constraints.allowed_intent_ids) == expected_allowed
@@ -162,11 +158,11 @@ def test_dependency_only_constraints_export_allowed_and_disallowed_intents(sop_m
     constraints = derive_intent_selection_constraints(signals, sop_matrix)
 
     expected_allowed = {
-        _matrix_intent_id(row)
+        matrix_row_intent_id(row)
         for row in sop_matrix
         if row.get("intent_group", "miscellaneous") in {"runtime_build_package", "miscellaneous"}
     }
-    expected_disallowed = {_matrix_intent_id(row) for row in sop_matrix} - expected_allowed
+    expected_disallowed = {matrix_row_intent_id(row) for row in sop_matrix} - expected_allowed
 
     assert "dependency_only" in constraints.reasons
     assert set(constraints.allowed_intent_ids) == expected_allowed

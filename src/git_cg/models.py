@@ -108,7 +108,7 @@ class CommitIntent(BaseModel):
             return self
 
         # Canonicalize all matrix-owned semantic fields for matched rows.
-        self.intent_id = entry.get("intent_id", self.intent_id)
+        self.intent_id = entry["intent_id"]
         self.gitmoji = entry["emoji"]
         self.cc_type = CommitType(entry["cc_type"])
         self.semver_impact = SemVerImpact(entry["semver_impact"])

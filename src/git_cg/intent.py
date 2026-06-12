@@ -615,7 +615,7 @@ class IntentSelectionConstraints(BaseModel):
     disallowed_intent_ids: list[str] = Field(default_factory=list)
 
 
-def _matrix_row_intent_id(row: dict) -> str:
+def matrix_row_intent_id(row: dict) -> str:
     """Return the canonical intent identifier for a matrix row."""
     return row.get("intent_id", row.get("code", "unknown").strip(":"))
 
@@ -652,7 +652,7 @@ def derive_intent_selection_constraints(signals: DiffSignals, matrix: list[dict]
     disallowed_intent_ids: list[str] = []
 
     for row in matrix:
-        intent_id = _matrix_row_intent_id(row)
+        intent_id = matrix_row_intent_id(row)
         intent_group = row.get("intent_group", "miscellaneous")
         if intent_group in allowed_groups:
             _append_unique(allowed_intent_ids, intent_id)
@@ -756,7 +756,7 @@ def rank_commit_intents(signals: DiffSignals, matrix: list[dict]) -> list[Ranked
 
     for row in matrix:
         # Fallback values for matrices that haven't been fully updated yet
-        intent_id = row.get("intent_id", row.get("code", "unknown").strip(":"))
+        intent_id = matrix_row_intent_id(row)
         intent_group = row.get("intent_group", "miscellaneous")
         priority = int(row.get("priority", 50))
         specificity = int(row.get("specificity", 50))
