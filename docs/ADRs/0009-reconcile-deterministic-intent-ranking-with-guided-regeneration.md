@@ -1063,7 +1063,7 @@ Presenting Primary Candidates, Secondary Candidates, *and* Guidance-Aligned Alte
 
 #### Problem A.3: No defined override semantics
 
-The original analysis says the prompt "explicitly authorize[s] the model to choose the primary intent from the alternative lane when the human guidance clearly conflicts." But who determines "clearly conflicts"? The model itself. That means the final arbiter is still the model's free-form interpretation, which is exactly the anti-pattern this ADR says it wants to avoid.
+The original analysis says the prompt "explicitly authorize\[s\] the model to choose the primary intent from the alternative lane when the human guidance clearly conflicts." But who determines "clearly conflicts"? The model itself. That means the final arbiter is still the model's free-form interpretation, which is exactly the anti-pattern this ADR says it wants to avoid.
 
 #### Problem A.4: Stale lanes on repeated regeneration
 
@@ -1177,7 +1177,7 @@ The core insight: on first generation, the deterministic shortlist should have h
     - Still includes the deterministic shortlist (preserving the ranking's value as context)
     - **Downgrades shortlist authority** from "select from these" to "these were the initial candidates based on diff analysis"
     - **Elevates user guidance** to an explicit, governed override instruction within the system prompt itself (not as a trailing user message)
-    - Adds an explicit precedence rule: "The developer has reviewed the initial result and provided correction guidance. Their guidance takes precedence over the initial ranking for intent selection. However, the following hard constraints remain inviolate: [hard-veto rules]."
+    - Adds an explicit precedence rule: "The developer has reviewed the initial result and provided correction guidance. Their guidance takes precedence over the initial ranking for intent selection. However, the following hard constraints remain inviolate: \[hard-veto rules\]."
 
 3. **Hard vetoes remain inviolate**: The reauthorization does not override hard vetoes. If the user says "this is a feature" on a docs-only diff, the system prompt explicitly states that `only_docs` hard-veto constraints still apply. This prevents degenerate outcomes.
 
