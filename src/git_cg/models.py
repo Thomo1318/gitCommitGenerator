@@ -83,9 +83,9 @@ class CommitIntent(BaseModel):
     def validate_and_correct_matrix(self) -> CommitIntent:
         """
         Align this CommitIntent to the canonical gitmoji SOP matrix, or apply a safe fallback.
-        
+
         Looks up a matrix entry (from git_cg.sop.get_gitmoji_matrix) in this order: matching `intent_id`, then `emoji`, then `code`. If the matrix is unavailable, returns the instance unchanged. If no matching entry is found, selects the entry with `code == ":wrench:"` when present or the first matrix entry as a fallback. In both matched and fallback cases, replaces the matrix-owned fields `intent_id`, `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` with the values from the chosen matrix entry and returns the instance. Does not raise on missing matrix data.
-         
+
         Returns:
             CommitIntent: The same instance after canonicalisation or fallback application.
         """
@@ -108,7 +108,13 @@ class CommitIntent(BaseModel):
             # where it doesn't have the full matrix in the prompt), coerce it to a safe default
             # rather than crashing the commit loop.
             entry = next((item for item in matrix if item.get("code") == ":wrench:"), matrix[0])
-            self.intent_id = entry.get("intent_id", "fallback_chore")
+
+            fallback_intent_id = entry.get("intent_id")
+            if not fallback_intent_id:
+                fallback_code = entry.get("code")
+                fallback_intent_id = str(fallback_code or "fallback_chore").strip(":")
+
+            self.intent_id = fallback_intent_id
             self.gitmoji = entry["emoji"]
             self.cc_type = CommitType(entry["cc_type"])
             self.semver_impact = SemVerImpact(entry["semver_impact"])
@@ -116,7 +122,12 @@ class CommitIntent(BaseModel):
             return self
 
         # Canonicalize all matrix-owned semantic fields for matched rows.
-        self.intent_id = entry["intent_id"]
+        intent_id = entry.get("intent_id")
+        if not intent_id:
+            code = entry.get("code")
+            intent_id = str(code or "unknown").strip(":")
+
+        self.intent_id = intent_id
         self.gitmoji = entry["emoji"]
         self.cc_type = CommitType(entry["cc_type"])
         self.semver_impact = SemVerImpact(entry["semver_impact"])
@@ -157,10 +168,10 @@ class CommitPlan(BaseModel):
     def validate_breaking_change(self) -> CommitPlan:
         """
         Validate that a breaking-change description is present when breaking_change is True.
-        
+
         Raises:
             ValueError: If `breaking_change` is True and `breaking_change_description` is missing or empty.
-        
+
         Returns:
             CommitPlan: The same CommitPlan instance (`self`).
         """
