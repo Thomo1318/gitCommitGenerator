@@ -423,14 +423,14 @@ def build_system_prompt(
 ) -> str:
     """
     Compose the system instruction prompt supplied to the AI for generating a structured Conventional Commit `CommitPlan`.
-    
+
     Parameters:
         diff_output (str): Git diff content used to derive intent signals and contextualise candidate ranking.
         verbose (bool): If True, include additional diagnostic context when constructing the prompt.
         active_directives (dict[str, str] | None): Deterministic overrides (for example `preferred_type`, `preferred_scope`) that must be applied as locked semantics during regeneration; omitted when no locked directives exist.
-        residual_guidance (str | None): Free‑text developer guidance that should influence intent selection and framing but is not a locked override.
+        residual_guidance (str | None): Free-text developer guidance that should influence intent selection and framing but is not a locked override.
         previous_plan (CommitPlan | None): Previously generated commit plan to present when regenerating; instructs the model to treat generation as a structural delta update.
-    
+
     Returns:
         system_prompt (str): The complete system-level prompt text including SOP-derived context, ranked intent candidates (when available), and an explicit regeneration guidance section when `active_directives`, `residual_guidance` or `previous_plan` are provided.
     """
@@ -737,7 +737,7 @@ def _run_commit_generation(
 ) -> bool:
     """
     Generate a Conventional Commit message from staged changes, optionally present an interactive or dry-run review, and write the final message to a commit message file.
-    
+
     Parameters:
         commit_msg_file (str): Path to the commit message file to write when not performing a dry run.
         commit_source (str | None): Origin of the commit (for example "commit", a file path, or None). Controls whether generation is skipped for non-hook sources; when "commit" and `amend_regenerate` is true, regeneration is allowed.
@@ -748,7 +748,7 @@ def _run_commit_generation(
         amend_regenerate (bool): When true, permit regeneration for commits originating from amend flows even if the source would normally skip generation.
         strict (bool): When true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
         interactive (bool): When true and a TTY is available, present the interactive review UI which can edit, add issue references, regenerate, or cancel.
-    
+
     Returns:
         bool: `True` when commit message generation (including any interactive or dry-run flow) completed successfully, `False` only on internal non-exceptional early termination.
     """
@@ -895,7 +895,7 @@ def _run_commit_generation(
         except Exception as e:
             _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
-        if (active_directives or residual_guidance) and gen_context and review_state is not None:
+        if review_state is not None and gen_context:
             # We are in regenerate mode. Resolve semantic contract to lock semantics.
             regen_state = RegenerationState(
                 previous_plan=review_state.commit_plan,
@@ -992,10 +992,10 @@ def _run_commit_generation(
 def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
     """
     Run `git commit -F <commit_msg_file>` to create a commit from the specified message file and abort on failure.
-    
+
     Parameters:
-    	commit_msg_file (str): Path to the file containing the commit message to apply.
-    	strict (bool): If True, a failed commit results in a non-zero exit (strict abort); if False, abort exits with code 0 to avoid blocking hooks.
+        commit_msg_file (str): Path to the file containing the commit message to apply.
+        strict (bool): If True, a failed commit results in a non-zero exit (strict abort); if False, abort exits with code 0 to avoid blocking hooks.
     """
     try:
         result = subprocess.run(["git", "commit", "-F", commit_msg_file], check=False)
@@ -1025,9 +1025,9 @@ def main_callback(
 ) -> None:
     """
     Entrypoint callback for the CLI that generates a Conventional Commit from staged changes and, when invoked without a subcommand, applies it to the repository.
-    
+
     Runs the commit-generation and optional interactive review flow using the provided options, resolves the repository COMMIT_EDITMSG path, and — unless `dry_run` is true — runs a standalone `git commit` with the generated message. Always terminates the CLI by raising `typer.Exit` (exit code 0 on success).
-    
+
     Parameters:
         ctx (typer.Context): Typer invocation context; if a subcommand was invoked or resilient parsing is active, the callback returns early.
         interactive (bool): If true, enable terminal-native interactive review via gum.
@@ -1035,7 +1035,7 @@ def main_callback(
         dry_run (bool): If true, generate and display the commit message without applying a commit.
         verbose (bool): If true, enable verbose output.
         strict (bool): If true, exit with a non-zero code on failure suitable for standalone CLI usage.
-    
+
     Raises:
         typer.Exit: Raised at the end to terminate the CLI; exit code reflects success or configured strict behaviour.
     """

@@ -176,9 +176,9 @@ def prompt_issue_reference_type() -> IssueReferenceTypeChoice | None:
 def prompt_issue_number() -> int | None:
     """
     Prompt for an issue number using an interactive TTY prompt.
-    
+
     The prompt repeats until the user enters a positive integer or cancels. Invalid inputs produce a brief TTY message and re-prompt.
-    
+
     Returns:
         int | None: The entered issue number (an integer greater than zero), or None if the prompt was cancelled or fails.
     """
@@ -202,12 +202,12 @@ def prompt_issue_number() -> int | None:
 def prompt_regeneration_guidance(current_guidance: str | None = None) -> str | None:
     """
     Prompt the user to enter a short line of guidance for the next regenerate action.
-    
+
     The input is normalised by collapsing internal whitespace and trimming, and validated to be non-empty and at most 200 characters. The provided current_guidance, if any, is shown as contextual status only and is not included in the returned value.
-    
+
     Parameters:
         current_guidance (str | None): Existing guidance to display as status context, or `None` if none.
-    
+
     Returns:
         str | None: The normalised guidance string when valid, or `None` if the prompt was cancelled.
     """
@@ -234,11 +234,11 @@ def prompt_regeneration_guidance(current_guidance: str | None = None) -> str | N
 def format_regeneration_guidance_status(regeneration_guidance: str | None, *, max_length: int = 80) -> str:
     """
     Produce a single-line status describing the current regeneration guidance.
-    
+
     Parameters:
         regeneration_guidance (str | None): Current guidance text, or None/empty if absent.
         max_length (int): Maximum number of characters to include from the guidance before truncation.
-    
+
     Returns:
         str: "'Regeneration guidance: None'" when `regeneration_guidance` is falsy; otherwise
         "Regeneration guidance: <text>". If the guidance exceeds `max_length` characters it is
