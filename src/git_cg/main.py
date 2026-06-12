@@ -2,6 +2,7 @@ import contextlib
 import enum
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,16 @@ os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "INFO"
 # Increase logging level to reduce console spam from Opik
 os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = os.environ.get("OPIK_CONSOLE_LOGGING_LEVEL", "error")
 
+# Pre-populate 1Password secrets so they are available in os.environ for Opik and OpenAI
+try:
+    from git_cg.secrets import _populate_cache
+
+    _populate_cache()
+except Exception as e:
+    import sys
+
+    print(f"[Debug] Failed to load 1Password secrets: {e}", file=sys.stderr)
+
 import instructor  # noqa: E402
 import opik  # noqa: E402
 import typer  # noqa: E402
@@ -34,8 +45,10 @@ from git_cg.interaction import (  # noqa: E402
     can_open_tty,
     emit_terminal_bell,
     format_issue_reference_status,
+    format_regeneration_guidance_status,
     prompt_issue_number,
     prompt_issue_reference_type,
+    prompt_regeneration_guidance,
     prompt_with_gum,
 )
 from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind  # noqa: E402
@@ -66,10 +79,13 @@ class ReviewStateMutationResult(enum.StrEnum):
 
 @dataclass
 class ReviewState:
-    """A deterministic container for review-related state, holding the CommitPlan and associated IssueReferences."""
+    """A deterministic container for review-related state, holding the CommitPlan and associated review metadata."""
 
     commit_plan: CommitPlan
     issue_references: list[IssueReference] = field(default_factory=list)
+    regeneration_guidance: str | None = None
+    active_directives: dict[str, str] = field(default_factory=dict)
+    residual_guidance: str | None = None
 
     def render(self) -> str:
         """
@@ -86,11 +102,15 @@ class ReviewState:
 
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
-        Add an IssueReference to the review state using deterministic idempotency and conflict rules.
+        Append an issue reference to the review state, enforcing idempotency and conflict detection.
+
+        Parameters:
+            issue_reference (IssueReference): The issue reference to add.
 
         Returns:
-            ReviewStateMutationResult: `ADDED` when appended, `DUPLICATE` when already present,
-            or `CONFLICTING_ISSUE_NUMBER` when the issue number already exists with a different verb.
+            ReviewStateMutationResult: `ADDED` when the reference was appended,
+            `DUPLICATE` when an identical reference already exists,
+            `CONFLICTING_ISSUE_NUMBER` when the same issue number exists with a different reference.
         """
         existing_issue_reference = self.get_issue_reference_by_issue_number(issue_reference.issue_number)
         if existing_issue_reference is not None:
@@ -100,6 +120,83 @@ class ReviewState:
 
         self.issue_references.append(issue_reference)
         return ReviewStateMutationResult.ADDED
+
+    def _extract_directives(self, text: str) -> tuple[dict[str, str], str | None]:
+        """
+        Extract high-confidence deterministic directives from a guidance string.
+
+        This parses terse, high-certainty overrides embedded in freeform guidance and returns any recognised directives and the remaining (residual) guidance text. Currently recognises:
+        - `preferred_type`: conventional commit type (e.g. `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `init`, `release`)
+        - `preferred_scope`: a single token scope (alphanumeric, underscore or hyphen)
+
+        Parameters:
+            text (str): Freeform regeneration guidance provided by the user.
+
+        Returns:
+            tuple[dict[str, str], str | None]: A tuple of (directives, residual_guidance). `directives` maps directive names to their extracted values. `residual_guidance` is the remaining guidance with recognised directives removed, or `None` if empty.
+        """
+        directives = {}
+        residual = text
+
+        # Extremely basic heuristics for high-confidence overrides
+        # E.g., "this is a feat", "make it a fix", "docs only"
+
+        type_match = re.search(
+            r"\b(?:this is a|make it a|use type|type is)\s+(feat|feature|fix|docs|style|refactor|perf|test|build|ci|chore|revert|init|release)\b",
+            residual,
+            re.IGNORECASE,
+        )
+        if type_match:
+            matched_type = type_match.group(1).lower()
+            # Normalize synonyms to canonical Conventional Commit types
+            if matched_type == "feature":
+                matched_type = "feat"
+            directives["preferred_type"] = matched_type
+            # Remove the match from residual to leave only what wasn't deterministically parsed
+            residual = residual[: type_match.start()] + residual[type_match.end() :]
+
+        scope_match = re.search(r"\b(?:use scope)\s+([a-zA-Z0-9_-]+)\b", residual, re.IGNORECASE)
+        if scope_match:
+            directives["preferred_scope"] = scope_match.group(1).lower()
+            residual = residual[: scope_match.start()] + residual[scope_match.end() :]
+
+        residual = " ".join(residual.split()).strip()
+        return directives, (residual if residual else None)
+
+    def set_regeneration_guidance(self, guidance: str) -> bool:
+        """
+        Set regeneration guidance for the review state and parse any embedded directives.
+
+        Normalises the provided guidance, ignores empty input, and if the stored guidance changes updates the review state's regeneration guidance, active directives and residual guidance.
+
+        Parameters:
+            guidance (str): User-provided text guiding how subsequent regenerations should frame intent and scope.
+
+        Returns:
+            bool: `True` if the stored guidance was changed, `False` otherwise.
+        """
+        normalized_guidance = " ".join(guidance.split()).strip()
+        if not normalized_guidance:
+            return False
+        if self.regeneration_guidance == normalized_guidance:
+            return False
+        self.regeneration_guidance = normalized_guidance
+        self.active_directives, self.residual_guidance = self._extract_directives(normalized_guidance)
+        return True
+
+    def clear_regeneration_guidance(self) -> bool:
+        """
+        Clear any stored regeneration guidance, parsed directives and residual guidance.
+
+        Returns:
+            `True` if guidance was present and was cleared, `False` if no guidance was set.
+        """
+        if self.regeneration_guidance is None:
+            return False
+        self.regeneration_guidance = None
+        self.active_directives = {}
+        self.residual_guidance = None
+        return True
 
 
 @dataclass
@@ -127,7 +224,20 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 
 
 def get_ai_client(engine: str) -> instructor.Instructor:
-    """Initialize the AI client based on the requested engine."""
+    """
+    Create and return an Instructor AI client configured for the named engine.
+
+    Initialises an OpenAI-compatible client using credentials and base URL resolved from environment/secrets for the given engine key. If the configured base URL points to a local server and that server is not reachable, this function will attempt to start a compatible local server in the background and wait for it to become ready before returning.
+
+    Parameters:
+        engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (for example "omlx", "mtplx", "openai").
+
+    Returns:
+        instructor.Instructor: A wrapped Instructor client ready for use.
+
+    Raises:
+        ValueError: If the provided engine is not present in ENGINE_REGISTRY.
+    """
     engine_lower = engine.lower()
 
     config = ENGINE_REGISTRY.get(engine_lower)
@@ -216,15 +326,55 @@ def get_ai_client(engine: str) -> instructor.Instructor:
     return client
 
 
+def build_generation_messages(
+    system_prompt: str,
+    diff_output: str,
+) -> list[dict[str, str]]:
+    """
+    Construct the chat messages used to generate a commit message from a git diff.
+
+    Returns:
+        messages (list[dict[str, str]]): Ordered chat messages containing the system prompt followed by a user message with the diff in a fenced `diff` block.
+    """
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
+    ]
+    return messages
+
+
 @opik.track(project_name="gitCommitGenerator")
 def generate_commit_message(
     client: instructor.Instructor,
     diff_output: str,
     model_name: str,
     system_prompt: str,
+    active_directives: dict[str, str] | None = None,
+    residual_guidance: str | None = None,
     **kwargs,
 ) -> CommitPlan:
-    """Generate a structured commit message using AI."""
+    """
+    Generate a structured CommitPlan for the staged diff by invoking the AI client.
+
+    Builds chat messages from the provided system prompt, diff output and optional
+    active directives and residual guidance, sends them to the specified model via
+    the instructor client, and returns the parsed CommitPlan produced by the model.
+    The function will retry transient connection failures (up to 10 attempts, with
+    a 10s pause between waits) and will raise an `openai.APIConnectionError` if the
+    model never becomes reachable.
+
+    Parameters:
+        diff_output (str): The git diff to include in the request messages.
+        model_name (str): Identifier of the model to request from the AI client.
+        system_prompt (str): The system-level prompt context to send to the model.
+        active_directives (dict[str, str] | None): Optional parsed directives that
+            enforce deterministic overrides (e.g., preferred_type, preferred_scope).
+        residual_guidance (str | None): Optional user-provided guidance that
+            influences intent selection and framing contextually.
+
+    Returns:
+        CommitPlan: The structured commit plan returned by the model.
+    """
     opik_context.update_current_trace(
         metadata={
             "_opik_graph_definition": {
@@ -243,13 +393,17 @@ def generate_commit_message(
             commit_result: CommitPlan = client.chat.completions.create(
                 model=model_name,
                 response_model=CommitPlan,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
-                ],
+                messages=build_generation_messages(system_prompt, diff_output),
                 max_retries=2,
                 parallel_tool_calls=False,
             )
+            if active_directives:
+                from git_cg.models import CommitType
+
+                if "preferred_type" in active_directives:
+                    commit_result.primary_intent.cc_type = CommitType(active_directives["preferred_type"])
+                if "preferred_scope" in active_directives:
+                    commit_result.primary_intent.scope = active_directives["preferred_scope"]
             return commit_result
         except openai.APIConnectionError:
             if attempt == max_retries - 1:
@@ -260,8 +414,27 @@ def generate_commit_message(
             time.sleep(10)
 
 
-def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
-    """Assemble the system prompt from the SOP (install-relative resolution)."""
+def build_system_prompt(
+    diff_output: str,
+    verbose: bool = False,
+    active_directives: dict[str, str] | None = None,
+    residual_guidance: str | None = None,
+) -> str:
+    """
+    Builds the system-level instruction prompt used by the AI to generate a structured Conventional Commit CommitPlan.
+
+    Parameters:
+        diff_output (str): The git diff to be analysed and summarised; used to derive intent signals.
+        verbose (bool): If True, emits diagnostic logs during prompt construction.
+        active_directives (dict[str, str] | None): Optional parsed directives that enforce deterministic
+            overrides (e.g., preferred_type, preferred_scope) and are applied as locked semantics.
+        residual_guidance (str | None): Optional developer-provided guidance that, if present, is injected
+            into the prompt as contextual free-text for intent selection and framing.
+
+    Returns:
+        system_prompt (str): The complete system prompt text, including SOP-derived context, ranked intent
+        candidates (when available), and an explicit regeneration guidance section when supplied.
+    """
     sop_data = load_sop()
     if not sop_data and verbose:
         console.log("[yellow]SOP could not be located; generating without matrix enforcement.[/yellow]")
@@ -301,12 +474,20 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
                 if cand not in secondary_candidates and cand.score > 0:
                     secondary_candidates.append(cand)
 
-        candidates_str = (
-            "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
-            "Select the primary intent from the Primary Candidates. "
-            "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
-            "PRIMARY CANDIDATES (Top Matches):\n"
-        )
+        if active_directives or residual_guidance:
+            candidates_str = (
+                "INITIAL DETERMINISTIC ANALYSIS:\n"
+                "The following intents were initially ranked as the most likely based purely on the diff.\n"
+                "These are provided for context, but you must prioritize the explicit Regeneration Guidance below.\n\n"
+                "PRIMARY CANDIDATES (Initial Top Matches):\n"
+            )
+        else:
+            candidates_str = (
+                "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
+                "Select the primary intent from the Primary Candidates. "
+                "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
+                "PRIMARY CANDIDATES (Top Matches):\n"
+            )
 
         for i, cand in enumerate(primary_candidates, 1):
             candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
@@ -314,27 +495,22 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
             if cand.selection_rule:
                 candidates_str += f"   Rule: {cand.selection_rule}\n"
             if cand.evidence:
-                candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
-            candidates_str += "\n"
+                candidates_str += f"   Evidence: {', '.join(cand.evidence)}\n"
 
         if secondary_candidates:
-            candidates_str += "SECONDARY CANDIDATES (For distinct sub-changes):\n"
-            for i, cand in enumerate(secondary_candidates, 1):
-                candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
-                candidates_str += f"   Description: {cand.description}\n"
-                if cand.evidence:
-                    candidates_str += f"   Evidence: {', '.join(cand.evidence[:3])}\n"
-                candidates_str += "\n"
+            candidates_str += "\nSECONDARY CANDIDATES (For distinct sub-changes):\n"
+            for _i, cand in enumerate(secondary_candidates, 1):
+                candidates_str += f"- {cand.emoji} {cand.cc_type} ({cand.intent_id}): {cand.description}\n"
 
-        vocab = [f"{r.get('intent_id', r.get('code', '').strip(':'))} ({r.get('emoji')})" for r in gitops_matrix]
-        candidates_str += "VALID INTENT DICTIONARY (Ultimate Fallback):\n"
+        vocab = [f"{c['emoji']} {c['cc_type']} ({c.get('intent_id', c['cc_type'])})" for c in gitops_matrix]
         candidates_str += (
-            "If NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. "
+            "\nIf NONE of the detailed candidates above fit a secondary change, you MUST select an intent_id from this list. "
             "Do NOT invent new intents or emojis:\n"
         )
         candidates_str += ", ".join(vocab) + "\n"
 
         context_parts.append(candidates_str.strip())
+
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
 
@@ -344,9 +520,30 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
         "If the diff contains multiple distinct changes, select the best primary intent and list the rest as secondary intents. "
         "Be concise, use the imperative mood for descriptions. "
         "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
-        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array."
-        f"{gitops_matrix_str}"
+        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array. "
+        "CRITICAL: Do not output reasoning, XML, pseudo-tool-call tags, or explanatory prose outside the single CommitPlan response. "
     )
+
+    system_prompt += f"{gitops_matrix_str}"
+
+    if active_directives or residual_guidance:
+        system_prompt += "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
+        system_prompt += "The developer has reviewed the initial result and provided correction guidance.\n"
+
+        if active_directives:
+            system_prompt += "\nDETERMINISTIC OVERRIDES (LOCKED SEMANTICS):\n"
+            for key, value in active_directives.items():
+                system_prompt += f"- {key}: {value}\n"
+            system_prompt += "\nCRITICAL: These directives are LOCKED and MUST be applied exactly as specified. "
+            system_prompt += "They override all other intent signals and ranking. "
+
+        if residual_guidance:
+            system_prompt += f'\n\nCONTEXTUAL GUIDANCE (FREE-TEXT):\n"{residual_guidance}"\n'
+            system_prompt += "Use this contextual guidance to refine framing and emphasis. "
+
+        system_prompt += "\n\nCRITICAL PRECEDENCE RULE: The deterministic overrides and guidance above take absolute precedence over the initial deterministic ranking for intent selection and framing. "
+        system_prompt += "Do not treat the guidance text itself as final commit content or trailer text.\n"
+
     return system_prompt
 
 
@@ -373,17 +570,13 @@ def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: b
 
 def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
     """
-    Prompt the user to add a structured issue reference to the given review state.
-
-    Prompts for a reference type and an issue number; returns a constructed IssueReference
-    when both are provided, or None if the user cancels or selects the back option.
+    Prompt the user to select an issue reference type and an issue number, and construct the corresponding IssueReference.
 
     Parameters:
-        review_state (ReviewState): The current review state; accepted for orchestration symmetry.
+        review_state (ReviewState): Accepted for orchestration symmetry with the interactive flow; not modified.
 
     Returns:
-        IssueReference or None: An IssueReference when the user supplies a valid type and number,
-        `None` if the operation was cancelled or the user selected "Back".
+        IssueReference or None: An `IssueReference` when the user supplies both a reference type and an issue number, `None` if the user cancels or selects "Back".
     """
     reference_type = prompt_issue_reference_type()
     if reference_type in (None, "Back"):
@@ -396,9 +589,24 @@ def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
     return IssueReference(kind=IssueReferenceKind(reference_type), issue_number=issue_number)
 
 
+def _build_regeneration_guidance(review_state: ReviewState) -> str | None:
+    """
+    Prompt for regeneration guidance to influence the next AI generation attempt.
+
+    Uses the review state's current `regeneration_guidance` value as the prompt's initial/default text.
+
+    Parameters:
+        review_state (ReviewState): The review state providing the current guidance to pre-populate the prompt.
+
+    Returns:
+        str | None: The entered regeneration guidance, or `None` if the prompt was cancelled.
+    """
+    return prompt_regeneration_guidance(review_state.regeneration_guidance)
+
+
 def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
     """
-    Display an interactive review UI for the generated commit and allow adding issue references or editing before finalising.
+    Display an interactive review UI for the generated commit and allow adding review metadata or editing before finalising.
 
     Parameters:
         commit_msg_file (str): Path to the commit message file that will be updated if the message changes.
@@ -407,16 +615,22 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
         strict (bool): Passed through to the commit-message writer to control strict write/abort behaviour.
 
     Returns:
-        action (str): The action chosen by the user (for example "Commit", "Edit", "Regenerate", "Cancel"). When "Add issue reference" is selected the reference is processed and the loop continues; the returned value is the final action that ends the review.
+        action (str): The action chosen by the user (for example "Commit", "Edit", "Regenerate", "Cancel"). Metadata actions such as adding issue references or regeneration guidance are processed in-place and the loop continues until a terminating action is selected.
     """
     emit_terminal_bell()
 
     while True:
         result_string = review_state.render()
+        status_text = "\n".join(
+            [
+                format_issue_reference_status(review_state.issue_references),
+                format_regeneration_guidance_status(review_state.regeneration_guidance),
+            ]
+        )
         action = prompt_with_gum(
             title="git-cg Generated Commit",
             body=result_string,
-            status_text=format_issue_reference_status(review_state.issue_references),
+            status_text=status_text,
         )
         if action is None:
             if verbose:
@@ -451,6 +665,24 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
                     "Use Edit for manual changes."
                     "[/yellow]"
                 )
+            continue
+
+        if action == "Add regenerate guidance":
+            regeneration_guidance = _build_regeneration_guidance(review_state)
+            if regeneration_guidance is None:
+                continue
+
+            if review_state.set_regeneration_guidance(regeneration_guidance):
+                console.print("[green]Regeneration guidance updated.[/green]")
+            else:
+                console.print("[yellow]Regeneration guidance is already set to that value.[/yellow]")
+            continue
+
+        if action == "Clear regenerate guidance":
+            if review_state.clear_regeneration_guidance():
+                console.print("[yellow]Regeneration guidance cleared.[/yellow]")
+            else:
+                console.print("[yellow]No regeneration guidance is currently attached.[/yellow]")
             continue
 
         if action == "Edit":
@@ -500,28 +732,27 @@ def _run_commit_generation(
     interactive: bool,
 ) -> bool:
     """
-    Generate a commit message from staged changes using an AI client and write it to a commit message file, optionally running an interactive review or dry-run.
-
-    This function:
-    - extracts the staged git diff (with token-compression via `rtk` when available) and truncates it if very large;
-    - initialises an AI client and model, builds a system prompt, and requests a CommitPlan from the model;
-    - handles mixed-change policies (warn/strict/split_prompt) based on `GIT_CG_MIXED_POLICY`;
-    - renders a deterministic ReviewState and either writes the commit message file or presents interactive review/dry-run UI flows that can regenerate or cancel;
-    - honours `amend_regenerate` for commits originating from amend flows and uses `strict` to decide exit codes for aborts.
+    try:
+        from git_cg.secrets import _populate_cache
+        _populate_cache()
+    except Exception as e:
+        if verbose:
+            console.log(f"Failed to load 1Password secrets: {e}")
+    Generate a Conventional Commit message from staged changes, write it to a commit message file, and optionally run interactive review or a dry-run review.
 
     Parameters:
         commit_msg_file (str): Path to the commit message file to write when not in dry-run.
-        commit_source (str | None): Origin of the commit (e.g. "commit", file path, or None). Values outside GENERATING_SOURCES will skip generation unless `amend_regenerate` permits.
-        extra_args (list[str] | None): Additional command-line args (present for signature compatibility; not interpreted here).
-        engine (str): Engine key to select the AI backend (matches keys in ENGINE_REGISTRY).
-        dry_run (bool): If true, do not write to `commit_msg_file`; allow interactive dry-run flows instead.
-        verbose (bool): Enable verbose logging to the global console.
-        amend_regenerate (bool): When true, allow regeneration for amend-origin commits even if `commit_source` would normally skip generation.
-        strict (bool): When true, aborts raise non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
-        interactive (bool): If true and a TTY is available, present interactive review UI which can add issue references, edit, regenerate, or cancel.
+        commit_source (str | None): Origin of the commit (for example `"commit"`, a file path, or `None`). Values outside GENERATING_SOURCES cause generation to be skipped unless `amend_regenerate` permits regeneration for amend-origin commits.
+        extra_args (list[str] | None): Additional CLI arguments preserved for signature compatibility; not interpreted by this function.
+        engine (str): Engine key selecting the AI backend (must match a key in ENGINE_REGISTRY).
+        dry_run (bool): If true, do not write to `commit_msg_file`; perform a dry-run and optionally present the dry-run interactive flow.
+        verbose (bool): Enable verbose console logging for diagnostic messages.
+        amend_regenerate (bool): When true, allow regeneration for commits originating from amend flows even if the source would normally skip generation.
+        strict (bool): When true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
+        interactive (bool): When true and a TTY is available, present the interactive review UI which can add issue references, edit, regenerate, or cancel.
 
     Returns:
-        bool: `True` when commit message generation (and any interactive flow) completed successfully.
+        bool: `True` when commit message generation (and any interactive or dry-run flow) completed successfully.
     """
     if verbose:
         console.log("Starting git-cg...")
@@ -609,7 +840,8 @@ def _run_commit_generation(
     if verbose:
         console.log(f"Using model: {model_name}")
 
-    system_prompt = build_system_prompt(diff_output, verbose)
+    issue_references: list[IssueReference] = []
+    regeneration_guidance: str | None = None
 
     try:
         repo_name = os.path.basename(
@@ -619,7 +851,17 @@ def _run_commit_generation(
     except Exception:
         thread_id = "default-thread"
 
+    active_directives: dict[str, str] = {}
+    residual_guidance: str | None = None
+
     while True:
+        system_prompt = build_system_prompt(
+            diff_output,
+            verbose,
+            active_directives=active_directives,
+            residual_guidance=residual_guidance,
+        )
+
         try:
             with console.status(
                 f"[bold cyan]Generating AI commit message with {model_name}... (this may take 30-90s locally)[/bold cyan]",
@@ -630,6 +872,8 @@ def _run_commit_generation(
                     diff_output,
                     model_name,
                     system_prompt,
+                    active_directives=active_directives,
+                    residual_guidance=residual_guidance,
                     opik_args={"trace": {"thread_id": thread_id}},
                 )
         except Exception as e:
@@ -656,7 +900,11 @@ def _run_commit_generation(
                     "[yellow]split_prompt requested; this implementation keeps hook/default mode non-interactive. Use git-cg -i for review.[/yellow]"
                 )
 
-        review_state = ReviewState(commit_plan=commit_plan)
+        review_state = ReviewState(
+            commit_plan=commit_plan,
+            issue_references=list(issue_references),
+            regeneration_guidance=regeneration_guidance,
+        )
         result_string = review_state.render()
         if verbose or dry_run:
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
@@ -669,6 +917,10 @@ def _run_commit_generation(
                 )
             if should_interact:
                 action = _interactive_review_dry_run(review_state, verbose=verbose, strict=strict)
+                issue_references = list(review_state.issue_references)
+                regeneration_guidance = review_state.regeneration_guidance
+                active_directives = review_state.active_directives
+                residual_guidance = review_state.residual_guidance
                 if action == "Regenerate":
                     console.print("\n[yellow]Regenerating commit message...[/yellow]")
                     continue
@@ -686,6 +938,10 @@ def _run_commit_generation(
 
         if should_interact:
             action = _interactive_review(commit_msg_file, review_state, verbose=verbose, strict=strict)
+            issue_references = list(review_state.issue_references)
+            regeneration_guidance = review_state.regeneration_guidance
+            active_directives = review_state.active_directives
+            residual_guidance = review_state.residual_guidance
             if action == "Regenerate":
                 console.print("\n[yellow]Regenerating commit message...[/yellow]")
                 continue
@@ -732,16 +988,22 @@ def main_callback(
         typer.Option("--strict", help="Exit non-zero on failure for standalone CLI use."),
     ] = True,
 ) -> None:
-    """Run git-cg directly with non-interactive default behavior.
+    """
+    Top-level CLI callback that generates a Conventional Commit from staged changes and applies it when invoked without a subcommand.
 
-    When invoked without a subcommand, git-cg generates a commit message from the
-    staged diff and applies `git commit` automatically. Use `-i` to opt into the
-    terminal-native review flow via gum.
+    Resolves the repository's COMMIT_EDITMSG path, runs the commit-generation and optional interactive review flow according to the provided flags, and—unless `dry_run` is set—applies the resulting message with `git commit`. Exits the process on completion.
+
+    Raises:
+        typer.Exit: Always raised at the end to terminate the CLI (exit code 0 on success).
     """
     if ctx.invoked_subcommand is not None or ctx.resilient_parsing:
         return
 
-    commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
+    try:
+        git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
+        commit_msg_file = os.path.join(git_dir, "COMMIT_EDITMSG")
+    except subprocess.CalledProcessError, FileNotFoundError, OSError:
+        commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
     _run_commit_generation(
         commit_msg_file,
         None,

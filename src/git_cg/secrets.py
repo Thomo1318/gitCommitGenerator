@@ -10,8 +10,26 @@ except ImportError:
 
 _op_cache = None
 
+# Environment variable allow-list for libraries that cannot use resolve_secret()
+ENV_EXPORT_ALLOWLIST = {
+    "OPIK_API_KEY",
+    "OPIK_WORKSPACE",
+    "OPIK_BASE_URL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OMLX_API_KEY",
+    "OMLX_BASE_URL",
+    "MTPLX_API_KEY",
+    "MTPLX_BASE_URL",
+}
+
 
 def _populate_cache():
+    """
+    Populate the module-level 1Password cache and mirror discovered secret fields into environment variables.
+
+    If the 1Password SDK is unavailable or OP_SERVICE_ACCOUNT_TOKEN is not set, the function returns without side effects. Otherwise it authenticates using the service account token, iterates all accessible vaults and items, and for every item field that has a title and a non-empty value stores that value in the module cache `_op_cache` and sets the corresponding process environment variable. If no items are found or an error occurs during fetching, a debug message is printed to stderr.
+    """
     global _op_cache
     _op_cache = {}
 
@@ -23,27 +41,48 @@ def _populate_cache():
         return
 
     async def fetch():
+        """
+        Fetch all accessible vault items from 1Password and populate the module cache and process environment with discovered field values.
+
+        For each field that has a title and a non-empty value, stores the value in the module-level `_op_cache`. Only exports to `os.environ` if the field title is in ENV_EXPORT_ALLOWLIST. If no items are found, writes a debug message to stderr; if the fetch process fails, writes a debug error message to stderr.
+        """
         try:
             client = await Client.authenticate(
                 auth=op_token, integration_name="gitCommitGenerator", integration_version="0.1.7"
             )
-            env_id = os.environ.get("GIT_CG_OP_ENV", "ce3a5m2atri7cxq7mdvofergt4")
 
-            vaults = await client.vaults.list()
-            item = None
+            # Service accounts have scoped access. We load all fields from all accessible items
+            # into the cache. Only export to os.environ for libraries that cannot use resolve_secret().
+            vaults = await client.vaults.list_all()
+            found_items = False
             for vault in vaults:
                 try:
-                    item = await client.items.get(vault.id, env_id)
-                    break
+                    items = await client.items.list_all(vault.id)
+                    for item_summary in items:
+                        try:
+                            item = await client.items.get(vault.id, item_summary.id)
+                            found_items = True
+                            for field in item.fields:
+                                if field.title and getattr(field, "value", None):
+                                    # Detect duplicate field titles and fail fast
+                                    if field.title in _op_cache:
+                                        raise ValueError(
+                                            f"Duplicate field title '{field.title}' found in vault '{vault.id}' "
+                                            f"item '{item_summary.id}'. This would cause silent overwrites. "
+                                            f"Please ensure field titles are unique across all 1Password items."
+                                        )
+                                    _op_cache[field.title] = field.value
+                                    # Only export to os.environ if explicitly allowed
+                                    if field.title in ENV_EXPORT_ALLOWLIST:
+                                        os.environ[field.title] = field.value
+                        except Exception:
+                            continue
                 except Exception:
                     continue
 
-            if item:
-                for field in item.fields:
-                    if field.title and getattr(field, "value", None):
-                        _op_cache[field.title] = field.value
-            else:
-                print(f"[Debug] 1Password SDK fetch failed: Item {env_id} not found in any vault.", file=sys.stderr)
+            if not found_items:
+                print("[Debug] 1Password SDK: No items found in any accessible vault.", file=sys.stderr)
+
         except Exception as e:
             print(f"[Debug] 1Password SDK fetch failed: {e}", file=sys.stderr)
 
