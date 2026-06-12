@@ -58,7 +58,7 @@ class IssueReference:
     def __str__(self) -> str:
         """
         Render the issue reference as "Verb #<number>" (for example "Resolves #123").
-        
+
         Returns:
             str: The issue reference formatted as '{kind.value} #{issue_number}'.
         """
@@ -107,12 +107,12 @@ class CommitIntent(BaseModel):
             self.changelog_group = entry["changelog_group"]
             return self
 
+        # Canonicalize all matrix-owned semantic fields for matched rows.
+        self.intent_id = entry.get("intent_id", self.intent_id)
         self.gitmoji = entry["emoji"]
-
-        # 2. Assert cc_type matches the matrix exactly
-        if self.cc_type.value != entry.get("cc_type"):
-            # Graceful coercion instead of hard error
-            self.cc_type = CommitType(entry.get("cc_type"))
+        self.cc_type = CommitType(entry["cc_type"])
+        self.semver_impact = SemVerImpact(entry["semver_impact"])
+        self.changelog_group = entry["changelog_group"]
 
         return self
 
@@ -149,10 +149,10 @@ class CommitPlan(BaseModel):
     def validate_breaking_change(self) -> CommitPlan:
         """
         Validate that a breaking-change description is present when `breaking_change` is True.
-        
+
         Raises:
             ValueError: If `breaking_change` is True and `breaking_change_description` is missing or empty.
-        
+
         Returns:
             CommitPlan: The same instance (`self`) when validation passes.
         """
@@ -163,10 +163,10 @@ class CommitPlan(BaseModel):
     def render(self, issue_references: list[IssueReference] | None = None) -> str:
         """
         Render the commit plan as a complete Git commit message.
-        
+
         Parameters:
             issue_references (list[IssueReference] | None): Optional list of issue references to append immediately above the machine-readable trailers; pass None or omit to exclude issue reference lines.
-        
+
         Returns:
             commit_message (str): The full commit message including header, optional body summary, included changes, issue reference lines (if provided), machine-readable trailers (SemVer-Impact, Change-Types, Changelog-Groups), and an optional breaking change footer.
         """

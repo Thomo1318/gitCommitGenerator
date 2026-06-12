@@ -607,6 +607,65 @@ class RankedIntent(BaseModel):
     penalties: list[str] = Field(default_factory=list)
 
 
+class IntentSelectionConstraints(BaseModel):
+    """Explicit allowed/disallowed intent constraints derived from deterministic diff signals."""
+
+    reasons: list[str] = Field(default_factory=list)
+    allowed_intent_ids: list[str] = Field(default_factory=list)
+    disallowed_intent_ids: list[str] = Field(default_factory=list)
+
+
+def _matrix_row_intent_id(row: dict) -> str:
+    """Return the canonical intent identifier for a matrix row."""
+    return row.get("intent_id", row.get("code", "unknown").strip(":"))
+
+
+def derive_intent_selection_constraints(signals: DiffSignals, matrix: list[dict]) -> IntentSelectionConstraints:
+    """
+    Export explicit allowed/disallowed intent sets without changing existing ranking behaviour.
+
+    This is a sidecar to rank_commit_intents, not a replacement for it. Later phases can
+    consume these explicit constraints while preserving backwards compatibility with the
+    current scoring-based ranker.
+    """
+    reasons: list[str] = []
+    allowed_groups: set[str] | None = None
+
+    def _apply_allowed_groups(groups: set[str], reason: str) -> None:
+        nonlocal allowed_groups
+        allowed_groups = groups if allowed_groups is None else allowed_groups.intersection(groups)
+        _append_unique(reasons, reason)
+
+    if signals.only_docs:
+        _apply_allowed_groups({"docs", "miscellaneous"}, "docs_only")
+
+    if signals.only_tests:
+        _apply_allowed_groups({"tests", "miscellaneous"}, "tests_only")
+
+    if signals.only_dependency_changes:
+        _apply_allowed_groups({"runtime_build_package", "miscellaneous"}, "dependency_only")
+
+    if allowed_groups is None:
+        return IntentSelectionConstraints()
+
+    allowed_intent_ids: list[str] = []
+    disallowed_intent_ids: list[str] = []
+
+    for row in matrix:
+        intent_id = _matrix_row_intent_id(row)
+        intent_group = row.get("intent_group", "miscellaneous")
+        if intent_group in allowed_groups:
+            _append_unique(allowed_intent_ids, intent_id)
+        else:
+            _append_unique(disallowed_intent_ids, intent_id)
+
+    return IntentSelectionConstraints(
+        reasons=reasons,
+        allowed_intent_ids=allowed_intent_ids,
+        disallowed_intent_ids=disallowed_intent_ids,
+    )
+
+
 def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     """
     Map deterministic boolean signals to the semantic string markers used in the
