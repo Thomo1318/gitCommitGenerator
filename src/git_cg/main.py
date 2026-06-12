@@ -34,8 +34,10 @@ from git_cg.interaction import (  # noqa: E402
     can_open_tty,
     emit_terminal_bell,
     format_issue_reference_status,
+    format_regeneration_guidance_status,
     prompt_issue_number,
     prompt_issue_reference_type,
+    prompt_regeneration_guidance,
     prompt_with_gum,
 )
 from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind  # noqa: E402
@@ -66,10 +68,11 @@ class ReviewStateMutationResult(enum.StrEnum):
 
 @dataclass
 class ReviewState:
-    """A deterministic container for review-related state, holding the CommitPlan and associated IssueReferences."""
+    """A deterministic container for review-related state, holding the CommitPlan and associated review metadata."""
 
     commit_plan: CommitPlan
     issue_references: list[IssueReference] = field(default_factory=list)
+    regeneration_guidance: str | None = None
 
     def render(self) -> str:
         """
@@ -100,6 +103,23 @@ class ReviewState:
 
         self.issue_references.append(issue_reference)
         return ReviewStateMutationResult.ADDED
+
+    def set_regeneration_guidance(self, guidance: str) -> bool:
+        """Store normalized regeneration guidance and return True when the stored value changes."""
+        normalized_guidance = " ".join(guidance.split()).strip()
+        if not normalized_guidance:
+            return False
+        if self.regeneration_guidance == normalized_guidance:
+            return False
+        self.regeneration_guidance = normalized_guidance
+        return True
+
+    def clear_regeneration_guidance(self) -> bool:
+        """Clear stored regeneration guidance and return True when guidance was present."""
+        if self.regeneration_guidance is None:
+            return False
+        self.regeneration_guidance = None
+        return True
 
 
 @dataclass
@@ -216,12 +236,37 @@ def get_ai_client(engine: str) -> instructor.Instructor:
     return client
 
 
+def build_generation_messages(
+    system_prompt: str,
+    diff_output: str,
+    regeneration_guidance: str | None = None,
+) -> list[dict[str, str]]:
+    """Build the chat messages used for commit generation, optionally adding separate user-authored regeneration guidance."""
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
+    ]
+    if regeneration_guidance:
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Regeneration guidance for this retry only: "
+                    f"{regeneration_guidance}\n\n"
+                    "Use this guidance to improve framing and emphasis, but do not treat it as final commit content."
+                ),
+            }
+        )
+    return messages
+
+
 @opik.track(project_name="gitCommitGenerator")
 def generate_commit_message(
     client: instructor.Instructor,
     diff_output: str,
     model_name: str,
     system_prompt: str,
+    regeneration_guidance: str | None = None,
     **kwargs,
 ) -> CommitPlan:
     """Generate a structured commit message using AI."""
@@ -243,10 +288,7 @@ def generate_commit_message(
             commit_result: CommitPlan = client.chat.completions.create(
                 model=model_name,
                 response_model=CommitPlan,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
-                ],
+                messages=build_generation_messages(system_prompt, diff_output, regeneration_guidance),
                 max_retries=2,
                 parallel_tool_calls=False,
             )
@@ -260,8 +302,12 @@ def generate_commit_message(
             time.sleep(10)
 
 
-def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
-    """Assemble the system prompt from the SOP (install-relative resolution)."""
+def build_system_prompt(
+    diff_output: str,
+    verbose: bool = False,
+    regeneration_guidance: str | None = None,
+) -> str:
+    """Assemble the system prompt from the SOP, noting that optional regeneration guidance may be supplied separately."""
     sop_data = load_sop()
     if not sop_data and verbose:
         console.log("[yellow]SOP could not be located; generating without matrix enforcement.[/yellow]")
@@ -344,7 +390,9 @@ def build_system_prompt(diff_output: str, verbose: bool = False) -> str:
         "If the diff contains multiple distinct changes, select the best primary intent and list the rest as secondary intents. "
         "Be concise, use the imperative mood for descriptions. "
         "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
-        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array."
+        "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array. "
+        "CRITICAL: Do not output reasoning, XML, pseudo-tool-call tags, or explanatory prose outside the single CommitPlan response. "
+        "CRITICAL: If regeneration guidance is provided separately in a later user message, use it to improve framing and emphasis, but do not treat it as final commit content or trailer text."
         f"{gitops_matrix_str}"
     )
     return system_prompt
@@ -396,9 +444,14 @@ def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
     return IssueReference(kind=IssueReferenceKind(reference_type), issue_number=issue_number)
 
 
+def _build_regeneration_guidance(review_state: ReviewState) -> str | None:
+    """Prompt the user for regeneration guidance to steer the next AI retry."""
+    return prompt_regeneration_guidance(review_state.regeneration_guidance)
+
+
 def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
     """
-    Display an interactive review UI for the generated commit and allow adding issue references or editing before finalising.
+    Display an interactive review UI for the generated commit and allow adding review metadata or editing before finalising.
 
     Parameters:
         commit_msg_file (str): Path to the commit message file that will be updated if the message changes.
@@ -407,16 +460,22 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
         strict (bool): Passed through to the commit-message writer to control strict write/abort behaviour.
 
     Returns:
-        action (str): The action chosen by the user (for example "Commit", "Edit", "Regenerate", "Cancel"). When "Add issue reference" is selected the reference is processed and the loop continues; the returned value is the final action that ends the review.
+        action (str): The action chosen by the user (for example "Commit", "Edit", "Regenerate", "Cancel"). Metadata actions such as adding issue references or regeneration guidance are processed in-place and the loop continues until a terminating action is selected.
     """
     emit_terminal_bell()
 
     while True:
         result_string = review_state.render()
+        status_text = "\n".join(
+            [
+                format_issue_reference_status(review_state.issue_references),
+                format_regeneration_guidance_status(review_state.regeneration_guidance),
+            ]
+        )
         action = prompt_with_gum(
             title="git-cg Generated Commit",
             body=result_string,
-            status_text=format_issue_reference_status(review_state.issue_references),
+            status_text=status_text,
         )
         if action is None:
             if verbose:
@@ -451,6 +510,24 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
                     "Use Edit for manual changes."
                     "[/yellow]"
                 )
+            continue
+
+        if action == "Add regenerate guidance":
+            regeneration_guidance = _build_regeneration_guidance(review_state)
+            if regeneration_guidance is None:
+                continue
+
+            if review_state.set_regeneration_guidance(regeneration_guidance):
+                console.print("[green]Regeneration guidance updated.[/green]")
+            else:
+                console.print("[yellow]Regeneration guidance is already set to that value.[/yellow]")
+            continue
+
+        if action == "Clear regenerate guidance":
+            if review_state.clear_regeneration_guidance():
+                console.print("[yellow]Regeneration guidance cleared.[/yellow]")
+            else:
+                console.print("[yellow]No regeneration guidance is currently attached.[/yellow]")
             continue
 
         if action == "Edit":
@@ -609,7 +686,8 @@ def _run_commit_generation(
     if verbose:
         console.log(f"Using model: {model_name}")
 
-    system_prompt = build_system_prompt(diff_output, verbose)
+    issue_references: list[IssueReference] = []
+    regeneration_guidance: str | None = None
 
     try:
         repo_name = os.path.basename(
@@ -620,6 +698,12 @@ def _run_commit_generation(
         thread_id = "default-thread"
 
     while True:
+        system_prompt = build_system_prompt(
+            diff_output,
+            verbose,
+            regeneration_guidance=regeneration_guidance,
+        )
+
         try:
             with console.status(
                 f"[bold cyan]Generating AI commit message with {model_name}... (this may take 30-90s locally)[/bold cyan]",
@@ -630,6 +714,7 @@ def _run_commit_generation(
                     diff_output,
                     model_name,
                     system_prompt,
+                    regeneration_guidance=regeneration_guidance,
                     opik_args={"trace": {"thread_id": thread_id}},
                 )
         except Exception as e:
@@ -656,7 +741,11 @@ def _run_commit_generation(
                     "[yellow]split_prompt requested; this implementation keeps hook/default mode non-interactive. Use git-cg -i for review.[/yellow]"
                 )
 
-        review_state = ReviewState(commit_plan=commit_plan)
+        review_state = ReviewState(
+            commit_plan=commit_plan,
+            issue_references=list(issue_references),
+            regeneration_guidance=regeneration_guidance,
+        )
         result_string = review_state.render()
         if verbose or dry_run:
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
@@ -669,6 +758,8 @@ def _run_commit_generation(
                 )
             if should_interact:
                 action = _interactive_review_dry_run(review_state, verbose=verbose, strict=strict)
+                issue_references = list(review_state.issue_references)
+                regeneration_guidance = review_state.regeneration_guidance
                 if action == "Regenerate":
                     console.print("\n[yellow]Regenerating commit message...[/yellow]")
                     continue
@@ -686,6 +777,8 @@ def _run_commit_generation(
 
         if should_interact:
             action = _interactive_review(commit_msg_file, review_state, verbose=verbose, strict=strict)
+            issue_references = list(review_state.issue_references)
+            regeneration_guidance = review_state.regeneration_guidance
             if action == "Regenerate":
                 console.print("\n[yellow]Regenerating commit message...[/yellow]")
                 continue
