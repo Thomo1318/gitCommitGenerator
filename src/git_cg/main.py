@@ -142,12 +142,16 @@ class ReviewState:
         # E.g., "this is a feat", "make it a fix", "docs only"
 
         type_match = re.search(
-            r"\b(?:this is a|make it a|use type|type is)\s+(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|init|release)\b",
+            r"\b(?:this is a|make it a|use type|type is)\s+(feat|feature|fix|docs|style|refactor|perf|test|build|ci|chore|revert|init|release)\b",
             residual,
             re.IGNORECASE,
         )
         if type_match:
-            directives["preferred_type"] = type_match.group(1).lower()
+            matched_type = type_match.group(1).lower()
+            # Normalize synonyms to canonical Conventional Commit types
+            if matched_type == "feature":
+                matched_type = "feat"
+            directives["preferred_type"] = matched_type
             # Remove the match from residual to leave only what wasn't deterministically parsed
             residual = residual[: type_match.start()] + residual[type_match.end() :]
 
@@ -325,11 +329,12 @@ def get_ai_client(engine: str) -> instructor.Instructor:
 def build_generation_messages(
     system_prompt: str,
     diff_output: str,
-    regeneration_guidance: str | None = None,
+    active_directives: dict[str, str] | None = None,
+    residual_guidance: str | None = None,
 ) -> list[dict[str, str]]:
     """
     Construct the chat messages used to generate a commit message from a git diff.
-    
+
     Returns:
         messages (list[dict[str, str]]): Ordered chat messages containing the system prompt followed by a user message with the diff in a fenced `diff` block.
     """
@@ -346,26 +351,29 @@ def generate_commit_message(
     diff_output: str,
     model_name: str,
     system_prompt: str,
-    regeneration_guidance: str | None = None,
+    active_directives: dict[str, str] | None = None,
+    residual_guidance: str | None = None,
     **kwargs,
 ) -> CommitPlan:
     """
     Generate a structured CommitPlan for the staged diff by invoking the AI client.
-    
+
     Builds chat messages from the provided system prompt, diff output and optional
-    regeneration guidance, sends them to the specified model via the instructor
-    client, and returns the parsed CommitPlan produced by the model. The function
-    will retry transient connection failures (up to 10 attempts, with a 10s pause
-    between waits) and will raise an `openai.APIConnectionError` if the model never
-    becomes reachable.
-    
+    active directives and residual guidance, sends them to the specified model via
+    the instructor client, and returns the parsed CommitPlan produced by the model.
+    The function will retry transient connection failures (up to 10 attempts, with
+    a 10s pause between waits) and will raise an `openai.APIConnectionError` if the
+    model never becomes reachable.
+
     Parameters:
         diff_output (str): The git diff to include in the request messages.
         model_name (str): Identifier of the model to request from the AI client.
         system_prompt (str): The system-level prompt context to send to the model.
-        regeneration_guidance (str | None): Optional user-provided guidance that
-            influences intent selection and framing; included in the messages when present.
-    
+        active_directives (dict[str, str] | None): Optional parsed directives that
+            enforce deterministic overrides (e.g., preferred_type, preferred_scope).
+        residual_guidance (str | None): Optional user-provided guidance that
+            influences intent selection and framing contextually.
+
     Returns:
         CommitPlan: The structured commit plan returned by the model.
     """
@@ -387,7 +395,7 @@ def generate_commit_message(
             commit_result: CommitPlan = client.chat.completions.create(
                 model=model_name,
                 response_model=CommitPlan,
-                messages=build_generation_messages(system_prompt, diff_output, regeneration_guidance),
+                messages=build_generation_messages(system_prompt, diff_output, active_directives, residual_guidance),
                 max_retries=2,
                 parallel_tool_calls=False,
             )
@@ -404,17 +412,20 @@ def generate_commit_message(
 def build_system_prompt(
     diff_output: str,
     verbose: bool = False,
-    regeneration_guidance: str | None = None,
+    active_directives: dict[str, str] | None = None,
+    residual_guidance: str | None = None,
 ) -> str:
     """
     Builds the system-level instruction prompt used by the AI to generate a structured Conventional Commit CommitPlan.
-    
+
     Parameters:
         diff_output (str): The git diff to be analysed and summarised; used to derive intent signals.
         verbose (bool): If True, emits diagnostic logs during prompt construction.
-        regeneration_guidance (str | None): Optional developer-provided guidance that, if present, is injected
-            into the prompt and given precedence for intent selection and framing.
-    
+        active_directives (dict[str, str] | None): Optional parsed directives that enforce deterministic
+            overrides (e.g., preferred_type, preferred_scope) and are applied as locked semantics.
+        residual_guidance (str | None): Optional developer-provided guidance that, if present, is injected
+            into the prompt as contextual free-text for intent selection and framing.
+
     Returns:
         system_prompt (str): The complete system prompt text, including SOP-derived context, ranked intent
         candidates (when available), and an explicit regeneration guidance section when supplied.
@@ -458,7 +469,7 @@ def build_system_prompt(
                 if cand not in secondary_candidates and cand.score > 0:
                     secondary_candidates.append(cand)
 
-        if regeneration_guidance:
+        if active_directives or residual_guidance:
             candidates_str = (
                 "INITIAL DETERMINISTIC ANALYSIS:\n"
                 "The following intents were initially ranked as the most likely based purely on the diff.\n"
@@ -513,14 +524,23 @@ def build_system_prompt(
         "CRITICAL: Do not output reasoning, XML, pseudo-tool-call tags, or explanatory prose outside the single CommitPlan response. "
     )
 
-    if regeneration_guidance:
-        system_prompt += (
-            "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
-            "The developer has reviewed the initial result and provided correction guidance.\n"
-            f'Guidance: "{regeneration_guidance}"\n\n'
-            "CRITICAL PRECEDENCE RULE: This guidance takes absolute precedence over the initial deterministic ranking for intent selection and framing. "
-            "Use this guidance to drive your primary intent selection, framing, and emphasis. Do not treat the guidance text itself as final commit content or trailer text."
-        )
+    if active_directives or residual_guidance:
+        system_prompt += "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
+        system_prompt += "The developer has reviewed the initial result and provided correction guidance.\n"
+
+        if active_directives:
+            system_prompt += "\nDETERMINISTIC OVERRIDES (LOCKED SEMANTICS):\n"
+            for key, value in active_directives.items():
+                system_prompt += f"- {key}: {value}\n"
+            system_prompt += "\nCRITICAL: These directives are LOCKED and MUST be applied exactly as specified. "
+            system_prompt += "They override all other intent signals and ranking. "
+
+        if residual_guidance:
+            system_prompt += f'\n\nCONTEXTUAL GUIDANCE (FREE-TEXT):\n"{residual_guidance}"\n'
+            system_prompt += "Use this contextual guidance to refine framing and emphasis. "
+
+        system_prompt += "\n\nCRITICAL PRECEDENCE RULE: The deterministic overrides and guidance above take absolute precedence over the initial deterministic ranking for intent selection and framing. "
+        system_prompt += "Do not treat the guidance text itself as final commit content or trailer text.\n"
 
     system_prompt += f"{gitops_matrix_str}"
     return system_prompt
@@ -824,11 +844,15 @@ def _run_commit_generation(
     except Exception:
         thread_id = "default-thread"
 
+    active_directives: dict[str, str] = {}
+    residual_guidance: str | None = None
+
     while True:
         system_prompt = build_system_prompt(
             diff_output,
             verbose,
-            regeneration_guidance=regeneration_guidance,
+            active_directives=active_directives,
+            residual_guidance=residual_guidance,
         )
 
         try:
@@ -841,7 +865,8 @@ def _run_commit_generation(
                     diff_output,
                     model_name,
                     system_prompt,
-                    regeneration_guidance=regeneration_guidance,
+                    active_directives=active_directives,
+                    residual_guidance=residual_guidance,
                     opik_args={"trace": {"thread_id": thread_id}},
                 )
         except Exception as e:
@@ -887,6 +912,8 @@ def _run_commit_generation(
                 action = _interactive_review_dry_run(review_state, verbose=verbose, strict=strict)
                 issue_references = list(review_state.issue_references)
                 regeneration_guidance = review_state.regeneration_guidance
+                active_directives = review_state.active_directives
+                residual_guidance = review_state.residual_guidance
                 if action == "Regenerate":
                     console.print("\n[yellow]Regenerating commit message...[/yellow]")
                     continue
@@ -906,6 +933,8 @@ def _run_commit_generation(
             action = _interactive_review(commit_msg_file, review_state, verbose=verbose, strict=strict)
             issue_references = list(review_state.issue_references)
             regeneration_guidance = review_state.regeneration_guidance
+            active_directives = review_state.active_directives
+            residual_guidance = review_state.residual_guidance
             if action == "Regenerate":
                 console.print("\n[yellow]Regenerating commit message...[/yellow]")
                 continue

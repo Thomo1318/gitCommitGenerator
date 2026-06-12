@@ -211,7 +211,7 @@ Structured issue references support:
 
 You can attach multiple issue references by selecting `Add issue reference` repeatedly during review.
 
-The review preview also shows compact status lines for both attached issue references and regeneration guidance so you can confirm the current review metadata without mentally re-parsing the full commit body.
+The review preview also shows compact status lines for both attached issue references and regeneration guidance so you can confirm the current review metadata without mentally reparsing the full commit body.
 
 Exact duplicate references are treated as no-ops, and re-adding the same issue number with a different verb is rejected in this phase to avoid ambiguous semantics. Remove/replace issue-reference UX remains deferred.
 

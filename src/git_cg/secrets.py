@@ -10,6 +10,19 @@ except ImportError:
 
 _op_cache = None
 
+# Environment variable allow-list for libraries that cannot use resolve_secret()
+ENV_EXPORT_ALLOWLIST = {
+    "OPIK_API_KEY",
+    "OPIK_WORKSPACE",
+    "OPIK_BASE_URL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OMLX_API_KEY",
+    "OMLX_BASE_URL",
+    "MTPLX_API_KEY",
+    "MTPLX_BASE_URL",
+}
+
 
 def _populate_cache():
     """
@@ -30,8 +43,8 @@ def _populate_cache():
     async def fetch():
         """
         Fetch all accessible vault items from 1Password and populate the module cache and process environment with discovered field values.
-        
-        For each field that has a title and a non-empty value, stores the value in the module-level `_op_cache` and sets the same key in `os.environ`. If no items are found, writes a debug message to stderr; if the fetch process fails, writes a debug error message to stderr.
+
+        For each field that has a title and a non-empty value, stores the value in the module-level `_op_cache`. Only exports to `os.environ` if the field title is in ENV_EXPORT_ALLOWLIST. If no items are found, writes a debug message to stderr; if the fetch process fails, writes a debug error message to stderr.
         """
         try:
             client = await Client.authenticate(
@@ -39,7 +52,7 @@ def _populate_cache():
             )
 
             # Service accounts have scoped access. We load all fields from all accessible items
-            # directly into the environment so dependencies like Opik can initialize correctly.
+            # into the cache. Only export to os.environ for libraries that cannot use resolve_secret().
             vaults = await client.vaults.list_all()
             found_items = False
             for vault in vaults:
@@ -51,8 +64,17 @@ def _populate_cache():
                             found_items = True
                             for field in item.fields:
                                 if field.title and getattr(field, "value", None):
+                                    # Detect duplicate field titles and fail fast
+                                    if field.title in _op_cache:
+                                        raise ValueError(
+                                            f"Duplicate field title '{field.title}' found in vault '{vault.id}' "
+                                            f"item '{item_summary.id}'. This would cause silent overwrites. "
+                                            f"Please ensure field titles are unique across all 1Password items."
+                                        )
                                     _op_cache[field.title] = field.value
-                                    os.environ[field.title] = field.value
+                                    # Only export to os.environ if explicitly allowed
+                                    if field.title in ENV_EXPORT_ALLOWLIST:
+                                        os.environ[field.title] = field.value
                         except Exception:
                             continue
                 except Exception:
