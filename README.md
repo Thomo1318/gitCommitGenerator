@@ -86,7 +86,7 @@ flowchart TD
 
     subgraph Outputs ["Downstream Targets"]
         Instructor -->|Validated Object| Formatter["String Formatter"]
-        Formatter -->|Pre-fills| Target[".git/COMMIT_EDITMSG"]
+        Formatter -->|Pre-fills| Target["resolved git dir COMMIT_EDITMSG path"]
         Target --> CommitMsgHook
         CommitMsgHook --> Gatekeeper["Node Gatekeeper<br/>(validate_commit.mjs)"]
     end
@@ -244,7 +244,7 @@ If you stage files and run:
 git commit
 ```
 
-the `prepare-commit-msg` hook can still invoke `git-cg` to generate and inject a commit message into `.git/COMMIT_EDITMSG`. Hook-driven operation remains conservative and does not require a TUI by default.
+the `prepare-commit-msg` hook can still invoke `git-cg` to generate and inject a commit message into `resolved git dir COMMIT_EDITMSG path`. Hook-driven operation remains conservative and does not require a TUI by default.
 
 If you wish to explore the CLI options:
 

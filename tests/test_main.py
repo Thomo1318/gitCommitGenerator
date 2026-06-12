@@ -122,12 +122,6 @@ def test_build_generation_messages_returns_list_of_dicts():
         assert "content" in msg
 
 
-def test_build_generation_messages_with_regeneration_guidance_still_returns_two_messages():
-    """Passing regeneration_guidance must not alter the message count (guidance goes in the system prompt)."""
-    messages = build_generation_messages("system", "diff", residual_guidance="This is a feat.")
-    assert len(messages) == 2
-
-
 def test_build_generation_messages_message_order():
     """System message must always be first, user message second."""
     messages = build_generation_messages("my system prompt", "my diff")
