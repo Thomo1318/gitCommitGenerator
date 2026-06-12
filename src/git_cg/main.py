@@ -732,14 +732,10 @@ def _run_commit_generation(
     interactive: bool,
 ) -> bool:
     """
-    try:
-        from git_cg.secrets import _populate_cache
-        _populate_cache()
-    except Exception as e:
-        if verbose:
-            console.log(f"Failed to load 1Password secrets: {e}")
-    Generate a Conventional Commit message from staged changes, write it to a commit message file, and optionally run interactive review or a dry-run review.
-
+    Generate a Conventional Commit message from staged changes, optionally present an interactive or dry-run review, and write the final message to a commit message file.
+    
+    Performs a staged diff analysis and uses the configured AI engine to produce a structured CommitPlan, then renders that plan to a commit message. Depending on flags, the function either writes the message to commit_msg_file or runs a dry-run flow; it can also present an interactive TTY-based review that allows editing, adding issue references, regenerating, or cancelling. Mixed-change (split) recommendations are handled according to the GIT_CG_MIXED_POLICY environment setting.
+    
     Parameters:
         commit_msg_file (str): Path to the commit message file to write when not in dry-run.
         commit_source (str | None): Origin of the commit (for example `"commit"`, a file path, or `None`). Values outside GENERATING_SOURCES cause generation to be skipped unless `amend_regenerate` permits regeneration for amend-origin commits.
@@ -748,9 +744,9 @@ def _run_commit_generation(
         dry_run (bool): If true, do not write to `commit_msg_file`; perform a dry-run and optionally present the dry-run interactive flow.
         verbose (bool): Enable verbose console logging for diagnostic messages.
         amend_regenerate (bool): When true, allow regeneration for commits originating from amend flows even if the source would normally skip generation.
-        strict (bool): When true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
+        strict (bool): Controls abort exit behaviour: when true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
         interactive (bool): When true and a TTY is available, present the interactive review UI which can add issue references, edit, regenerate, or cancel.
-
+    
     Returns:
         bool: `True` when commit message generation (and any interactive or dry-run flow) completed successfully.
     """

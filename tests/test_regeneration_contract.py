@@ -7,6 +7,11 @@ from git_cg.regeneration import GenerationContext, RegenerationState, resolve_se
 
 @pytest.fixture(autouse=True)
 def mock_matrix(monkeypatch):
+    """
+    Provide a deterministic gitmoji matrix for tests by monkeypatching git_cg.regeneration.get_gitmoji_matrix.
+    
+    Patches get_gitmoji_matrix to return a fixed list of three intent entries (feature_addition, bug_fix, documentation_update) including their emoji, code, conventional-commit type (`cc_type`), semantic version impact (`semver_impact`), changelog group and intent group. Intended for use as an autouse pytest fixture to control intent/type resolution in tests.
+    """
     matrix = [
         {
             "intent_id": "feature_addition",
@@ -40,6 +45,16 @@ def mock_matrix(monkeypatch):
 
 
 def _make_commit_plan(intent_id: str = "bug_fix", cc_type: CommitType = CommitType.FIX) -> CommitPlan:
+    """
+    Create a reusable CommitPlan for tests with a primary intent set to the given intent identifier and commit type.
+    
+    Parameters:
+        intent_id (str): Identifier to set on the primary intent.
+        cc_type (CommitType): Commit classification to assign to the primary intent.
+    
+    Returns:
+        CommitPlan: A CommitPlan whose `primary_intent` uses the provided `intent_id` and `cc_type`, with fixed test values for `gitmoji`, `scope`, `description`, `semver_impact`, and `changelog_group`, and simple `rationale` and `body_summary`.
+    """
     return CommitPlan(
         primary_intent=CommitIntent(
             intent_id=intent_id,
