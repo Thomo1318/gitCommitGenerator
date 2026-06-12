@@ -53,11 +53,11 @@ def _populate_cache():
 
             # Service accounts have scoped access. We load all fields from all accessible items
             # into the cache. Only export to os.environ for libraries that cannot use resolve_secret().
-            vaults = await client.vaults.list_all()
+            vaults = await client.vaults.list()
             found_items = False
             for vault in vaults:
                 try:
-                    items = await client.items.list_all(vault.id)
+                    items = await client.items.list(vault.id)
                     for item_summary in items:
                         try:
                             item = await client.items.get(vault.id, item_summary.id)
