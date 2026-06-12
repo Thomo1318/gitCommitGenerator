@@ -40,16 +40,16 @@ class ResolvedCommitContract:
 def resolve_semantic_contract(context: GenerationContext, state: RegenerationState) -> ResolvedCommitContract:
     """
     Determine the semantic commit contract to use for the next generation cycle.
-    
+
     Selects a primary intent row from the gitmoji contract matrix using an optional
     active directive (`preferred_type`) while respecting allowed-intent constraints,
     and otherwise anchors selection to the previous plan's primary intent to avoid
     semantic drift. Secondary intent ids are taken from the previous plan.
-    
+
     Parameters:
         context (GenerationContext): Deterministic inputs for resolution, including ranked intents and selection constraints.
         state (RegenerationState): Review-loop steering state, including active directives and the previous commit plan.
-    
+
     Returns:
         ResolvedCommitContract: The resolved semantic contract containing the chosen primary intent id, associated emoji, commit classification type, SemVer impact, changelog group, and secondary intent ids.
     """
@@ -83,7 +83,18 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
 
         if not resolved_row:
             # Fallback to the first matrix row matching the type if no ranked candidates work
-            resolved_row = next((r for r in matrix if r.get("cc_type") == preferred_type), None)
+            if allowed_ids:
+                resolved_row = next(
+                    (
+                        r
+                        for r in matrix
+                        if r.get("cc_type") == preferred_type
+                        and r.get("intent_id", r.get("code", "").strip(":")) in allowed_ids
+                    ),
+                    None,
+                )
+            else:
+                resolved_row = next((r for r in matrix if r.get("cc_type") == preferred_type), None)
 
     if not resolved_row:
         # Stable anchor to the previous plan

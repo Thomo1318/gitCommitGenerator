@@ -9,7 +9,7 @@ from git_cg.regeneration import GenerationContext, RegenerationState, resolve_se
 def mock_matrix(monkeypatch):
     """
     Provide a deterministic gitmoji matrix for tests by monkeypatching git_cg.regeneration.get_gitmoji_matrix.
-    
+
     Patches get_gitmoji_matrix to return a fixed list of three intent entries (feature_addition, bug_fix, documentation_update) including their emoji, code, conventional-commit type (`cc_type`), semantic version impact (`semver_impact`), changelog group and intent group. Intended for use as an autouse pytest fixture to control intent/type resolution in tests.
     """
     matrix = [
@@ -47,11 +47,11 @@ def mock_matrix(monkeypatch):
 def _make_commit_plan(intent_id: str = "bug_fix", cc_type: CommitType = CommitType.FIX) -> CommitPlan:
     """
     Create a reusable CommitPlan for tests with a primary intent set to the given intent identifier and commit type.
-    
+
     Parameters:
         intent_id (str): Identifier to set on the primary intent.
         cc_type (CommitType): Commit classification to assign to the primary intent.
-    
+
     Returns:
         CommitPlan: A CommitPlan whose `primary_intent` uses the provided `intent_id` and `cc_type`, with fixed test values for `gitmoji`, `scope`, `description`, `semver_impact`, and `changelog_group`, and simple `rationale` and `body_summary`.
     """
@@ -153,9 +153,8 @@ def test_resolve_semantic_contract_respects_allowed_constraints_when_directive_p
 
     contract = resolve_semantic_contract(context, state)
 
-    # Since the ranked "feature_addition" is disallowed, it should fallback to the first matrix row that matches the type.
-    # Our mock matrix has "feature_addition", but wait, the fallback in resolve_semantic_contract iterates the matrix.
-    # The matrix row itself isn't constraint-checked in the ultimate fallback.
-    # But it will resolve to "feature_addition" from the dictionary fallback.
-    assert contract.primary_intent_id == "feature_addition"
-    assert contract.cc_type == "feat"
+    # Since the ranked "feature_addition" is disallowed, it should fallback to the first matrix row that matches the type
+    # and is allowed. Our mock matrix has "feature_addition", but it's disallowed. There are no other "feat" rows.
+    # Therefore, it will fall through to the stable anchor (previous plan), which is "bug_fix".
+    assert contract.primary_intent_id == "bug_fix"
+    assert contract.cc_type == "fix"
