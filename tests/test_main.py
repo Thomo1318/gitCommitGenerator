@@ -26,7 +26,7 @@ def test_build_system_prompt_includes_regeneration_guidance_when_present():
 -old
 +new
 """
-    prompt = build_system_prompt(test_diff, regeneration_guidance="This is a feature, not a fix.")
+    prompt = build_system_prompt(test_diff, residual_guidance="This is a feature, not a fix.")
 
     assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" in prompt
     assert "This is a feature, not a fix." in prompt
@@ -124,7 +124,7 @@ def test_build_generation_messages_returns_list_of_dicts():
 
 def test_build_generation_messages_with_regeneration_guidance_still_returns_two_messages():
     """Passing regeneration_guidance must not alter the message count (guidance goes in the system prompt)."""
-    messages = build_generation_messages("system", "diff", regeneration_guidance="This is a feat.")
+    messages = build_generation_messages("system", "diff", residual_guidance="This is a feat.")
     assert len(messages) == 2
 
 
@@ -149,7 +149,7 @@ def test_build_system_prompt_with_guidance_uses_initial_deterministic_analysis_h
 -old
 +new
 """
-    prompt = build_system_prompt(test_diff, regeneration_guidance="Focus on user-facing behavior.")
+    prompt = build_system_prompt(test_diff, residual_guidance="Focus on user-facing behavior.")
 
     # The guidance-present path changes the candidates header
     assert "INITIAL DETERMINISTIC ANALYSIS:" in prompt or "REGENERATION GUIDANCE" in prompt
@@ -159,20 +159,20 @@ def test_build_system_prompt_guidance_contains_quoted_guidance_text():
     """The regeneration guidance must appear quoted in the system prompt."""
     test_diff = "diff --git a/x.py b/x.py\n-old\n+new"
     guidance = "Focus on user-facing behavior."
-    prompt = build_system_prompt(test_diff, regeneration_guidance=guidance)
+    prompt = build_system_prompt(test_diff, residual_guidance=guidance)
 
-    assert f'Guidance: "{guidance}"' in prompt
+    assert f'CONTEXTUAL GUIDANCE (FREE-TEXT):\n"{guidance}"' in prompt
 
 
 def test_build_system_prompt_guidance_contains_critical_precedence_rule():
     test_diff = "diff --git a/x.py b/x.py\n-old\n+new"
-    prompt = build_system_prompt(test_diff, regeneration_guidance="This is a fix.")
+    prompt = build_system_prompt(test_diff, residual_guidance="This is a fix.")
 
     assert "CRITICAL PRECEDENCE RULE" in prompt
 
 
 def test_build_system_prompt_guidance_instructs_not_to_use_as_commit_content():
     test_diff = "diff --git a/x.py b/x.py\n-old\n+new"
-    prompt = build_system_prompt(test_diff, regeneration_guidance="This is a fix.")
+    prompt = build_system_prompt(test_diff, residual_guidance="This is a fix.")
 
     assert "Do not treat the guidance text itself as final commit content" in prompt
