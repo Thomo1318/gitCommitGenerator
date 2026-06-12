@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
-from typing import Annotated, NoReturn
+from typing import NoReturn
 
 from dotenv import load_dotenv
 
@@ -419,21 +419,20 @@ def build_system_prompt(
     verbose: bool = False,
     active_directives: dict[str, str] | None = None,
     residual_guidance: str | None = None,
+    previous_plan: CommitPlan | None = None,
 ) -> str:
     """
-    Builds the system-level instruction prompt used by the AI to generate a structured Conventional Commit CommitPlan.
+    Compose the system instruction prompt supplied to the AI for generating a structured Conventional Commit `CommitPlan`.
 
     Parameters:
-        diff_output (str): The git diff to be analysed and summarised; used to derive intent signals.
-        verbose (bool): If True, emits diagnostic logs during prompt construction.
-        active_directives (dict[str, str] | None): Optional parsed directives that enforce deterministic
-            overrides (e.g., preferred_type, preferred_scope) and are applied as locked semantics.
-        residual_guidance (str | None): Optional developer-provided guidance that, if present, is injected
-            into the prompt as contextual free-text for intent selection and framing.
+        diff_output (str): Git diff content used to derive intent signals and contextualise candidate ranking.
+        verbose (bool): If True, include additional diagnostic context when constructing the prompt.
+        active_directives (dict[str, str] | None): Deterministic overrides (for example `preferred_type`, `preferred_scope`) that must be applied as locked semantics during regeneration; omitted when no locked directives exist.
+        residual_guidance (str | None): Free-text developer guidance that should influence intent selection and framing but is not a locked override.
+        previous_plan (CommitPlan | None): Previously generated commit plan to present when regenerating; instructs the model to treat generation as a structural delta update.
 
     Returns:
-        system_prompt (str): The complete system prompt text, including SOP-derived context, ranked intent
-        candidates (when available), and an explicit regeneration guidance section when supplied.
+        system_prompt (str): The complete system-level prompt text including SOP-derived context, ranked intent candidates (when available), and an explicit regeneration guidance section when `active_directives`, `residual_guidance` or `previous_plan` are provided.
     """
     sop_data = load_sop()
     if not sop_data and verbose:
@@ -526,9 +525,14 @@ def build_system_prompt(
 
     system_prompt += f"{gitops_matrix_str}"
 
-    if active_directives or residual_guidance:
+    if active_directives or residual_guidance or previous_plan:
         system_prompt += "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
         system_prompt += "The developer has reviewed the initial result and provided correction guidance.\n"
+
+        if previous_plan:
+            system_prompt += "\nPREVIOUS COMMIT PLAN:\n"
+            system_prompt += "You are regenerating the following commit. You MUST treat this as a structural delta update. Do not rewrite from scratch unless the guidance demands it. Keep the original intent intact unless directed otherwise.\n"
+            system_prompt += "```json\n" + previous_plan.model_dump_json(indent=2) + "\n```\n"
 
         if active_directives:
             system_prompt += "\nDETERMINISTIC OVERRIDES (LOCKED SEMANTICS):\n"
@@ -734,21 +738,19 @@ def _run_commit_generation(
     """
     Generate a Conventional Commit message from staged changes, optionally present an interactive or dry-run review, and write the final message to a commit message file.
 
-    Performs a staged diff analysis and uses the configured AI engine to produce a structured CommitPlan, then renders that plan to a commit message. Depending on flags, the function either writes the message to commit_msg_file or runs a dry-run flow; it can also present an interactive TTY-based review that allows editing, adding issue references, regenerating, or cancelling. Mixed-change (split) recommendations are handled according to the GIT_CG_MIXED_POLICY environment setting.
-
     Parameters:
-        commit_msg_file (str): Path to the commit message file to write when not in dry-run.
-        commit_source (str | None): Origin of the commit (for example `"commit"`, a file path, or `None`). Values outside GENERATING_SOURCES cause generation to be skipped unless `amend_regenerate` permits regeneration for amend-origin commits.
-        extra_args (list[str] | None): Additional CLI arguments preserved for signature compatibility; not interpreted by this function.
+        commit_msg_file (str): Path to the commit message file to write when not performing a dry run.
+        commit_source (str | None): Origin of the commit (for example "commit", a file path, or None). Controls whether generation is skipped for non-hook sources; when "commit" and `amend_regenerate` is true, regeneration is allowed.
+        extra_args (list[str] | None): Additional CLI arguments preserved for compatibility; not interpreted by this function.
         engine (str): Engine key selecting the AI backend (must match a key in ENGINE_REGISTRY).
-        dry_run (bool): If true, do not write to `commit_msg_file`; perform a dry-run and optionally present the dry-run interactive flow.
+        dry_run (bool): If true, do not write to `commit_msg_file`; run generation and optional dry-run interactive review only.
         verbose (bool): Enable verbose console logging for diagnostic messages.
-        amend_regenerate (bool): When true, allow regeneration for commits originating from amend flows even if the source would normally skip generation.
-        strict (bool): Controls abort exit behaviour: when true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
-        interactive (bool): When true and a TTY is available, present the interactive review UI which can add issue references, edit, regenerate, or cancel.
+        amend_regenerate (bool): When true, permit regeneration for commits originating from amend flows even if the source would normally skip generation.
+        strict (bool): When true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
+        interactive (bool): When true and a TTY is available, present the interactive review UI which can edit, add issue references, regenerate, or cancel.
 
     Returns:
-        bool: `True` when commit message generation (and any interactive or dry-run flow) completed successfully.
+        bool: `True` when commit message generation (including any interactive or dry-run flow) completed successfully, `False` only on internal non-exceptional early termination.
     """
     if verbose:
         console.log("Starting git-cg...")
@@ -873,6 +875,7 @@ def _run_commit_generation(
             verbose,
             active_directives=active_directives,
             residual_guidance=residual_guidance,
+            previous_plan=review_state.commit_plan if review_state else None,
         )
 
         try:
@@ -892,7 +895,7 @@ def _run_commit_generation(
         except Exception as e:
             _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
-        if (active_directives or residual_guidance) and gen_context and review_state is not None:
+        if review_state is not None and gen_context:
             # We are in regenerate mode. Resolve semantic contract to lock semantics.
             regen_state = RegenerationState(
                 previous_plan=review_state.commit_plan,
@@ -900,12 +903,15 @@ def _run_commit_generation(
                 residual_guidance=residual_guidance,
             )
             contract = resolve_semantic_contract(gen_context, regen_state)
-            # Note: Integration of the resolved contract to override 'commit_plan.primary_intent'
-            # is deferred to Phase 4 (Selective Delta Rendering).
-            # Currently we just resolve and log to establish the state anchor, preserving deterministic
-            # intent selection without mutating the render path yet.
+
+            from git_cg.regeneration import enforce_semantic_contract
+
+            commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
+
             if verbose:
-                console.log(f"Resolved Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})")
+                console.log(
+                    f"Resolved and Enforced Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})"
+                )
 
         mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
         if commit_plan.split_recommended:
@@ -984,6 +990,13 @@ def _run_commit_generation(
 
 
 def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
+    """
+    Run `git commit -F <commit_msg_file>` to create a commit from the specified message file and abort on failure.
+
+    Parameters:
+        commit_msg_file (str): Path to the file containing the commit message to apply.
+        strict (bool): If True, a failed commit results in a non-zero exit (strict abort); if False, abort exits with code 0 to avoid blocking hooks.
+    """
     try:
         result = subprocess.run(["git", "commit", "-F", commit_msg_file], check=False)
         if result.returncode != 0:
@@ -992,37 +1005,39 @@ def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
         _abort(f"[bold red]Unable to execute git commit:[/bold red] {e}", strict=strict)
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main_callback(
     ctx: typer.Context,
-    interactive: Annotated[
-        bool,
-        typer.Option("--interactive", "-i", help="Enable terminal-native interactive review via gum."),
-    ] = False,
-    engine: Annotated[
-        str,
-        typer.Option("--engine", "-e", help="AI engine to use when running git-cg directly."),
-    ] = os.environ.get("GIT_CG_ENGINE") or "mtplx",
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", "-d", help="Generate and print the commit message without applying a commit."),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Enable verbose output."),
-    ] = False,
-    strict: Annotated[
-        bool,
-        typer.Option("--strict", help="Exit non-zero on failure for standalone CLI use."),
-    ] = True,
+    interactive: bool = typer.Option(
+        False, "--interactive", "-i", help="Enable terminal-native interactive review via gum."
+    ),
+    engine: str = typer.Option(
+        os.environ.get("GIT_CG_ENGINE") or "mtplx",
+        "--engine",
+        "-e",
+        help="AI engine to use when running git-cg directly.",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-d", help="Generate and print the commit message without applying a commit."
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output."),
+    strict: bool = typer.Option(True, "--strict", help="Exit non-zero on failure for standalone CLI use."),
 ) -> None:
     """
-    Top-level CLI callback that generates a Conventional Commit from staged changes and applies it when invoked without a subcommand.
+    Entrypoint callback for the CLI that generates a Conventional Commit from staged changes and, when invoked without a subcommand, applies it to the repository.
 
-    Resolves the repository's COMMIT_EDITMSG path, runs the commit-generation and optional interactive review flow according to the provided flags, and—unless `dry_run` is set—applies the resulting message with `git commit`. Exits the process on completion.
+    Runs the commit-generation and optional interactive review flow using the provided options, resolves the repository COMMIT_EDITMSG path, and — unless `dry_run` is true — runs a standalone `git commit` with the generated message. Always terminates the CLI by raising `typer.Exit` (exit code 0 on success).
+
+    Parameters:
+        ctx (typer.Context): Typer invocation context; if a subcommand was invoked or resilient parsing is active, the callback returns early.
+        interactive (bool): If true, enable terminal-native interactive review via gum.
+        engine (str): AI engine identifier to use when generating the commit message.
+        dry_run (bool): If true, generate and display the commit message without applying a commit.
+        verbose (bool): If true, enable verbose output.
+        strict (bool): If true, exit with a non-zero code on failure suitable for standalone CLI usage.
 
     Raises:
-        typer.Exit: Always raised at the end to terminate the CLI (exit code 0 on success).
+        typer.Exit: Raised at the end to terminate the CLI; exit code reflects success or configured strict behaviour.
     """
     if ctx.invoked_subcommand is not None or ctx.resilient_parsing:
         return
