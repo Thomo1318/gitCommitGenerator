@@ -60,6 +60,17 @@ def test_review_state_set_regeneration_guidance_normalizes_whitespace():
     assert state.regeneration_guidance == "This is a feature."
 
 
+def test_review_state_extracts_directives():
+    state = ReviewState(commit_plan=_make_commit_plan())
+
+    changed = state.set_regeneration_guidance("This is a feat. Make sure to use scope tui. And keep it short.")
+
+    assert changed is True
+    assert state.active_directives.get("preferred_type") == "feat"
+    assert state.active_directives.get("preferred_scope") == "tui"
+    assert state.residual_guidance == ". Make sure to . And keep it short."
+
+
 def test_review_state_set_regeneration_guidance_noops_when_unchanged():
     state = ReviewState(commit_plan=_make_commit_plan(), regeneration_guidance="Use scope tui.")
 

@@ -27,23 +27,30 @@ def _populate_cache():
             client = await Client.authenticate(
                 auth=op_token, integration_name="gitCommitGenerator", integration_version="0.1.7"
             )
-            env_id = os.environ.get("GIT_CG_OP_ENV", "ce3a5m2atri7cxq7mdvofergt4")
 
-            vaults = await client.vaults.list()
-            item = None
+            # Service accounts have scoped access. We load all fields from all accessible items
+            # directly into the environment so dependencies like Opik can initialize correctly.
+            vaults = await client.vaults.list_all()
+            found_items = False
             for vault in vaults:
                 try:
-                    item = await client.items.get(vault.id, env_id)
-                    break
+                    items = await client.items.list_all(vault.id)
+                    for item_summary in items:
+                        try:
+                            item = await client.items.get(vault.id, item_summary.id)
+                            found_items = True
+                            for field in item.fields:
+                                if field.title and getattr(field, "value", None):
+                                    _op_cache[field.title] = field.value
+                                    os.environ[field.title] = field.value
+                        except Exception:
+                            continue
                 except Exception:
                     continue
 
-            if item:
-                for field in item.fields:
-                    if field.title and getattr(field, "value", None):
-                        _op_cache[field.title] = field.value
-            else:
-                print(f"[Debug] 1Password SDK fetch failed: Item {env_id} not found in any vault.", file=sys.stderr)
+            if not found_items:
+                print("[Debug] 1Password SDK: No items found in any accessible vault.", file=sys.stderr)
+
         except Exception as e:
             print(f"[Debug] 1Password SDK fetch failed: {e}", file=sys.stderr)
 

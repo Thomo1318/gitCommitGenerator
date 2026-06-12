@@ -2,6 +2,7 @@ import contextlib
 import enum
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,16 @@ load_dotenv()
 os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "INFO"
 # Increase logging level to reduce console spam from Opik
 os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = os.environ.get("OPIK_CONSOLE_LOGGING_LEVEL", "error")
+
+# Pre-populate 1Password secrets so they are available in os.environ for Opik and OpenAI
+try:
+    from git_cg.secrets import _populate_cache
+
+    _populate_cache()
+except Exception as e:
+    import sys
+
+    print(f"[Debug] Failed to load 1Password secrets: {e}", file=sys.stderr)
 
 import instructor  # noqa: E402
 import opik  # noqa: E402
@@ -73,6 +84,8 @@ class ReviewState:
     commit_plan: CommitPlan
     issue_references: list[IssueReference] = field(default_factory=list)
     regeneration_guidance: str | None = None
+    active_directives: dict[str, str] = field(default_factory=dict)
+    residual_guidance: str | None = None
 
     def render(self) -> str:
         """
@@ -104,21 +117,53 @@ class ReviewState:
         self.issue_references.append(issue_reference)
         return ReviewStateMutationResult.ADDED
 
+    def _extract_directives(self, text: str) -> tuple[dict[str, str], str | None]:
+        """
+        Extract high-confidence deterministic directives from raw guidance.
+        Returns a tuple of (extracted_directives, residual_guidance).
+        """
+        directives = {}
+        residual = text
+
+        # Extremely basic heuristics for high-confidence overrides
+        # E.g., "this is a feat", "make it a fix", "docs only"
+
+        type_match = re.search(
+            r"\b(?:this is a|make it a|use type|type is)\s+(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|init|release)\b",
+            residual,
+            re.IGNORECASE,
+        )
+        if type_match:
+            directives["preferred_type"] = type_match.group(1).lower()
+            # Remove the match from residual to leave only what wasn't deterministically parsed
+            residual = residual[: type_match.start()] + residual[type_match.end() :]
+
+        scope_match = re.search(r"\b(?:use scope)\s+([a-zA-Z0-9_-]+)\b", residual, re.IGNORECASE)
+        if scope_match:
+            directives["preferred_scope"] = scope_match.group(1).lower()
+            residual = residual[: scope_match.start()] + residual[scope_match.end() :]
+
+        residual = " ".join(residual.split()).strip()
+        return directives, (residual if residual else None)
+
     def set_regeneration_guidance(self, guidance: str) -> bool:
-        """Store normalized regeneration guidance and return True when the stored value changes."""
+        """Store normalized regeneration guidance, extract directives, and return True when the stored value changes."""
         normalized_guidance = " ".join(guidance.split()).strip()
         if not normalized_guidance:
             return False
         if self.regeneration_guidance == normalized_guidance:
             return False
         self.regeneration_guidance = normalized_guidance
+        self.active_directives, self.residual_guidance = self._extract_directives(normalized_guidance)
         return True
 
     def clear_regeneration_guidance(self) -> bool:
-        """Clear stored regeneration guidance and return True when guidance was present."""
+        """Clear stored regeneration guidance and directives, returning True when guidance was present."""
         if self.regeneration_guidance is None:
             return False
         self.regeneration_guidance = None
+        self.active_directives = {}
+        self.residual_guidance = None
         return True
 
 
@@ -241,22 +286,11 @@ def build_generation_messages(
     diff_output: str,
     regeneration_guidance: str | None = None,
 ) -> list[dict[str, str]]:
-    """Build the chat messages used for commit generation, optionally adding separate user-authored regeneration guidance."""
+    """Build the chat messages used for commit generation."""
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
     ]
-    if regeneration_guidance:
-        messages.append(
-            {
-                "role": "user",
-                "content": (
-                    "Regeneration guidance for this retry only: "
-                    f"{regeneration_guidance}\n\n"
-                    "Use this guidance to improve framing and emphasis, but do not treat it as final commit content."
-                ),
-            }
-        )
     return messages
 
 
@@ -347,12 +381,20 @@ def build_system_prompt(
                 if cand not in secondary_candidates and cand.score > 0:
                     secondary_candidates.append(cand)
 
-        candidates_str = (
-            "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
-            "Select the primary intent from the Primary Candidates. "
-            "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
-            "PRIMARY CANDIDATES (Top Matches):\n"
-        )
+        if regeneration_guidance:
+            candidates_str = (
+                "INITIAL DETERMINISTIC ANALYSIS:\n"
+                "The following intents were initially ranked as the most likely based purely on the diff.\n"
+                "These are provided for context, but you must prioritize the explicit Regeneration Guidance below.\n\n"
+                "PRIMARY CANDIDATES (Initial Top Matches):\n"
+            )
+        else:
+            candidates_str = (
+                "Based on deterministic analysis of the git diff, here is your Smart Menu of commit intents.\n"
+                "Select the primary intent from the Primary Candidates. "
+                "If the diff contains distinct sub-changes, select secondary intents from the Secondary Candidates.\n\n"
+                "PRIMARY CANDIDATES (Top Matches):\n"
+            )
 
         for i, cand in enumerate(primary_candidates, 1):
             candidates_str += f"{i}. {cand.emoji} {cand.cc_type} ({cand.intent_id})\n"
@@ -392,9 +434,18 @@ def build_system_prompt(
         "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
         "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array. "
         "CRITICAL: Do not output reasoning, XML, pseudo-tool-call tags, or explanatory prose outside the single CommitPlan response. "
-        "CRITICAL: If regeneration guidance is provided separately in a later user message, use it to improve framing and emphasis, but do not treat it as final commit content or trailer text."
-        f"{gitops_matrix_str}"
     )
+
+    if regeneration_guidance:
+        system_prompt += (
+            "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
+            "The developer has reviewed the initial result and provided correction guidance.\n"
+            f'Guidance: "{regeneration_guidance}"\n\n'
+            "CRITICAL PRECEDENCE RULE: This guidance takes absolute precedence over the initial deterministic ranking for intent selection and framing. "
+            "Use this guidance to drive your primary intent selection, framing, and emphasis. Do not treat the guidance text itself as final commit content or trailer text."
+        )
+
+    system_prompt += f"{gitops_matrix_str}"
     return system_prompt
 
 
@@ -834,7 +885,11 @@ def main_callback(
     if ctx.invoked_subcommand is not None or ctx.resilient_parsing:
         return
 
-    commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
+    try:
+        git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
+        commit_msg_file = os.path.join(git_dir, "COMMIT_EDITMSG")
+    except subprocess.CalledProcessError:
+        commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
     _run_commit_generation(
         commit_msg_file,
         None,
