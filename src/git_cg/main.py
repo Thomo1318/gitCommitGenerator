@@ -732,13 +732,9 @@ def _run_commit_generation(
     interactive: bool,
 ) -> bool:
     """
-    try:
-        from git_cg.secrets import _populate_cache
-        _populate_cache()
-    except Exception as e:
-        if verbose:
-            console.log(f"Failed to load 1Password secrets: {e}")
-    Generate a Conventional Commit message from staged changes, write it to a commit message file, and optionally run interactive review or a dry-run review.
+    Generate a Conventional Commit message from staged changes, optionally present an interactive or dry-run review, and write the final message to a commit message file.
+
+    Performs a staged diff analysis and uses the configured AI engine to produce a structured CommitPlan, then renders that plan to a commit message. Depending on flags, the function either writes the message to commit_msg_file or runs a dry-run flow; it can also present an interactive TTY-based review that allows editing, adding issue references, regenerating, or cancelling. Mixed-change (split) recommendations are handled according to the GIT_CG_MIXED_POLICY environment setting.
 
     Parameters:
         commit_msg_file (str): Path to the commit message file to write when not in dry-run.
@@ -748,7 +744,7 @@ def _run_commit_generation(
         dry_run (bool): If true, do not write to `commit_msg_file`; perform a dry-run and optionally present the dry-run interactive flow.
         verbose (bool): Enable verbose console logging for diagnostic messages.
         amend_regenerate (bool): When true, allow regeneration for commits originating from amend flows even if the source would normally skip generation.
-        strict (bool): When true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
+        strict (bool): Controls abort exit behaviour: when true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
         interactive (bool): When true and a TTY is available, present the interactive review UI which can add issue references, edit, regenerate, or cancel.
 
     Returns:
@@ -853,6 +849,23 @@ def _run_commit_generation(
 
     active_directives: dict[str, str] = {}
     residual_guidance: str | None = None
+    review_state: ReviewState | None = None
+
+    from git_cg.intent import derive_intent_selection_constraints
+
+    signals = extract_diff_signals(diff_output)
+    gitops_matrix = load_sop().get("gitmoji_reference_matrix", [])
+    ranked_candidates = rank_commit_intents(signals, gitops_matrix) if gitops_matrix else []
+    constraints = derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else None
+
+    # Pre-compute GenerationContext once per run
+    from git_cg.regeneration import GenerationContext, RegenerationState, resolve_semantic_contract
+
+    gen_context = (
+        GenerationContext(diff_signals=signals, ranked_intents=ranked_candidates, constraints=constraints)
+        if constraints
+        else None
+    )
 
     while True:
         system_prompt = build_system_prompt(
@@ -878,6 +891,21 @@ def _run_commit_generation(
                 )
         except Exception as e:
             _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
+
+        if (active_directives or residual_guidance) and gen_context and review_state is not None:
+            # We are in regenerate mode. Resolve semantic contract to lock semantics.
+            regen_state = RegenerationState(
+                previous_plan=review_state.commit_plan,
+                active_directives=active_directives,
+                residual_guidance=residual_guidance,
+            )
+            contract = resolve_semantic_contract(gen_context, regen_state)
+            # Note: Integration of the resolved contract to override 'commit_plan.primary_intent'
+            # is deferred to Phase 4 (Selective Delta Rendering).
+            # Currently we just resolve and log to establish the state anchor, preserving deterministic
+            # intent selection without mutating the render path yet.
+            if verbose:
+                console.log(f"Resolved Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})")
 
         mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
         if commit_plan.split_recommended:
