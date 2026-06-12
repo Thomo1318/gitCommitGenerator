@@ -119,7 +119,7 @@ flowchart TD
 - **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
 - **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
-- **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, and `Cancel` actions without relying on desktop notifications.
+- **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
 - **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution.
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
@@ -198,6 +198,8 @@ This generates the commit message, writes it first, emits a passive terminal bel
 - `Edit`
 - `Regenerate`
 - `Add issue reference`
+- `Add regenerate guidance`
+- `Clear regenerate guidance`
 - `Cancel`
 
 Structured issue references support:
@@ -209,9 +211,11 @@ Structured issue references support:
 
 You can attach multiple issue references by selecting `Add issue reference` repeatedly during review.
 
-The review preview also shows a compact current issue-reference status line so you can confirm whether references are attached without mentally re-parsing the full commit body.
+The review preview also shows compact status lines for both attached issue references and regeneration guidance so you can confirm the current review metadata without mentally re-parsing the full commit body.
 
 Exact duplicate references are treated as no-ops, and re-adding the same issue number with a different verb is rejected in this phase to avoid ambiguous semantics. Remove/replace issue-reference UX remains deferred.
+
+If the generated framing is wrong but close, you can attach short regeneration guidance such as `This is a feature, not a fix.` or `Focus on the user-facing behavior.` and then select `Regenerate`. Guidance is used only to steer the next AI retry; it is not written into the final commit body or trailer block.
 
 Structured issue references render above machine-readable trailers. Example:
 

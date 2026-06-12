@@ -10,10 +10,26 @@ from rich.panel import Panel
 
 from git_cg.models import IssueReference
 
-Action = Literal["Commit", "Edit", "Regenerate", "Add issue reference", "Cancel"]
+Action = Literal[
+    "Commit",
+    "Edit",
+    "Regenerate",
+    "Add issue reference",
+    "Add regenerate guidance",
+    "Clear regenerate guidance",
+    "Cancel",
+]
 IssueReferenceTypeChoice = Literal["Resolves", "Refs", "Closes", "Fixes", "Back"]
 
-ACTIONS: tuple[Action, ...] = ("Commit", "Edit", "Regenerate", "Add issue reference", "Cancel")
+ACTIONS: tuple[Action, ...] = (
+    "Commit",
+    "Edit",
+    "Regenerate",
+    "Add issue reference",
+    "Add regenerate guidance",
+    "Clear regenerate guidance",
+    "Cancel",
+)
 ISSUE_REFERENCE_TYPE_CHOICES: tuple[IssueReferenceTypeChoice, ...] = ("Resolves", "Refs", "Closes", "Fixes", "Back")
 
 
@@ -180,6 +196,46 @@ def prompt_issue_number() -> int | None:
             _print_tty_message("Issue number must be greater than zero.")
             continue
         _print_tty_message("Issue number must contain digits only.")
+
+
+def prompt_regeneration_guidance(current_guidance: str | None = None) -> str | None:
+    """
+    Prompt the user for short regeneration guidance and return normalized guidance text.
+
+    The prompt loops until the user provides non-empty guidance of at most 200 characters
+    or cancels the input. Existing guidance is shown as status context only; it is not
+    injected into the final commit message.
+    """
+    while True:
+        raw_value = _run_gum_command(
+            ["gum", "input", "--placeholder", "This is a feature, not a fix.", "--prompt", "> "],
+            title="Add regenerate guidance",
+            status_text=format_regeneration_guidance_status(current_guidance),
+            prompt_text="[bold cyan]Enter short guidance for the next regenerate[/bold cyan]",
+        )
+        if raw_value is None:
+            return None
+
+        normalized_value = " ".join(raw_value.split()).strip()
+        if not normalized_value:
+            _print_tty_message("Regeneration guidance cannot be empty.")
+            continue
+        if len(normalized_value) > 200:
+            _print_tty_message("Regeneration guidance must be 200 characters or fewer.")
+            continue
+        return normalized_value
+
+
+def format_regeneration_guidance_status(regeneration_guidance: str | None, *, max_length: int = 80) -> str:
+    """Render a compact status line describing the current regeneration guidance."""
+    if not regeneration_guidance:
+        return "Regeneration guidance: None"
+
+    normalized_guidance = " ".join(regeneration_guidance.split()).strip()
+    if len(normalized_guidance) <= max_length:
+        return f"Regeneration guidance: {normalized_guidance}"
+    truncated_guidance = normalized_guidance[: max_length - 3].rstrip() + "..."
+    return f"Regeneration guidance: {truncated_guidance}"
 
 
 def format_issue_reference_status(issue_references: Sequence[IssueReference] | None) -> str:

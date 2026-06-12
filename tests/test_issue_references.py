@@ -383,7 +383,15 @@ def test_actions_tuple_includes_add_issue_reference():
 def test_actions_tuple_contains_all_expected_actions():
     from git_cg.interaction import ACTIONS
 
-    expected = {"Commit", "Edit", "Regenerate", "Add issue reference", "Cancel"}
+    expected = {
+        "Commit",
+        "Edit",
+        "Regenerate",
+        "Add issue reference",
+        "Add regenerate guidance",
+        "Clear regenerate guidance",
+        "Cancel",
+    }
     assert set(ACTIONS) == expected
 
 
