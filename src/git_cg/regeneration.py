@@ -113,3 +113,36 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
         changelog_group=resolved_row.get("changelog_group", "Miscellaneous"),
         secondary_intent_ids=[sec.intent_id for sec in state.previous_plan.secondary_intents],
     )
+
+
+def enforce_semantic_contract(
+    plan: CommitPlan, contract: ResolvedCommitContract, active_directives: dict[str, str] | None = None
+) -> CommitPlan:
+    """
+    Forcefully overwrite the LLM-generated semantic fields with the established contract.
+
+    This ensures that style-only regenerations cannot drift or hallucinate new intents,
+    and explicitly applies deterministic overrides like preferred_scope.
+
+    Parameters:
+        plan (CommitPlan): The potentially hallucinated plan from the LLM.
+        contract (ResolvedCommitContract): The locked deterministic semantic contract.
+        active_directives (dict[str, str] | None): User-provided deterministic overrides.
+
+    Returns:
+        CommitPlan: The modified plan aligned with the contract.
+    """
+    from git_cg.models import CommitType, SemVerImpact
+
+    # 1. Lock primary intent fields to the contract
+    plan.primary_intent.intent_id = contract.primary_intent_id
+    plan.primary_intent.gitmoji = contract.gitmoji
+    plan.primary_intent.cc_type = CommitType(contract.cc_type)
+    plan.primary_intent.semver_impact = SemVerImpact(contract.semver_impact)
+    plan.primary_intent.changelog_group = contract.changelog_group
+
+    # 2. Lock scope if a preferred_scope directive is active
+    if active_directives and "preferred_scope" in active_directives:
+        plan.primary_intent.scope = active_directives["preferred_scope"]
+
+    return plan

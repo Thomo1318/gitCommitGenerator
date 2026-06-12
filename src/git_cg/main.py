@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
-from typing import Annotated, NoReturn
+from typing import NoReturn
 
 from dotenv import load_dotenv
 
@@ -419,6 +419,7 @@ def build_system_prompt(
     verbose: bool = False,
     active_directives: dict[str, str] | None = None,
     residual_guidance: str | None = None,
+    previous_plan: CommitPlan | None = None,
 ) -> str:
     """
     Builds the system-level instruction prompt used by the AI to generate a structured Conventional Commit CommitPlan.
@@ -526,9 +527,14 @@ def build_system_prompt(
 
     system_prompt += f"{gitops_matrix_str}"
 
-    if active_directives or residual_guidance:
+    if active_directives or residual_guidance or previous_plan:
         system_prompt += "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
         system_prompt += "The developer has reviewed the initial result and provided correction guidance.\n"
+
+        if previous_plan:
+            system_prompt += "\nPREVIOUS COMMIT PLAN:\n"
+            system_prompt += "You are regenerating the following commit. You MUST treat this as a structural delta update. Do not rewrite from scratch unless the guidance demands it. Keep the original intent intact unless directed otherwise.\n"
+            system_prompt += "```json\n" + previous_plan.model_dump_json(indent=2) + "\n```\n"
 
         if active_directives:
             system_prompt += "\nDETERMINISTIC OVERRIDES (LOCKED SEMANTICS):\n"
@@ -873,6 +879,7 @@ def _run_commit_generation(
             verbose,
             active_directives=active_directives,
             residual_guidance=residual_guidance,
+            previous_plan=review_state.commit_plan if review_state else None,
         )
 
         try:
@@ -900,12 +907,15 @@ def _run_commit_generation(
                 residual_guidance=residual_guidance,
             )
             contract = resolve_semantic_contract(gen_context, regen_state)
-            # Note: Integration of the resolved contract to override 'commit_plan.primary_intent'
-            # is deferred to Phase 4 (Selective Delta Rendering).
-            # Currently we just resolve and log to establish the state anchor, preserving deterministic
-            # intent selection without mutating the render path yet.
+
+            from git_cg.regeneration import enforce_semantic_contract
+
+            commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
+
             if verbose:
-                console.log(f"Resolved Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})")
+                console.log(
+                    f"Resolved and Enforced Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})"
+                )
 
         mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
         if commit_plan.split_recommended:
@@ -992,29 +1002,23 @@ def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
         _abort(f"[bold red]Unable to execute git commit:[/bold red] {e}", strict=strict)
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main_callback(
     ctx: typer.Context,
-    interactive: Annotated[
-        bool,
-        typer.Option("--interactive", "-i", help="Enable terminal-native interactive review via gum."),
-    ] = False,
-    engine: Annotated[
-        str,
-        typer.Option("--engine", "-e", help="AI engine to use when running git-cg directly."),
-    ] = os.environ.get("GIT_CG_ENGINE") or "mtplx",
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", "-d", help="Generate and print the commit message without applying a commit."),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Enable verbose output."),
-    ] = False,
-    strict: Annotated[
-        bool,
-        typer.Option("--strict", help="Exit non-zero on failure for standalone CLI use."),
-    ] = True,
+    interactive: bool = typer.Option(
+        False, "--interactive", "-i", help="Enable terminal-native interactive review via gum."
+    ),
+    engine: str = typer.Option(
+        os.environ.get("GIT_CG_ENGINE") or "mtplx",
+        "--engine",
+        "-e",
+        help="AI engine to use when running git-cg directly.",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-d", help="Generate and print the commit message without applying a commit."
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output."),
+    strict: bool = typer.Option(True, "--strict", help="Exit non-zero on failure for standalone CLI use."),
 ) -> None:
     """
     Top-level CLI callback that generates a Conventional Commit from staged changes and applies it when invoked without a subcommand.
