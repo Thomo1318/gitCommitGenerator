@@ -616,22 +616,42 @@ class IntentSelectionConstraints(BaseModel):
 
 
 def matrix_row_intent_id(row: dict) -> str:
-    """Return the canonical intent identifier for a matrix row."""
+    """
+    Get the canonical intent identifier for a matrix row.
+    
+    Parameters:
+        row (dict): Mapping representing a matrix row; may contain `intent_id` or `code`.
+    
+    Returns:
+        intent_id (str): The value of `intent_id` if present; otherwise the `code` value with surrounding colons stripped; `'unknown'` if neither field exists.
+    """
     return row.get("intent_id", row.get("code", "unknown").strip(":"))
 
 
 def derive_intent_selection_constraints(signals: DiffSignals, matrix: list[dict]) -> IntentSelectionConstraints:
     """
-    Export explicit allowed/disallowed intent sets without changing existing ranking behaviour.
-
-    This is a sidecar to rank_commit_intents, not a replacement for it. Later phases can
-    consume these explicit constraints while preserving backwards compatibility with the
-    current scoring-based ranker.
+    Derives explicit allow/disallow intent ID constraints from diff-only signals and the provided intent matrix.
+    
+    When one or more `only_*` signals on `signals` are set this function computes a narrowed set of allowed intent groups (for example docs-only, tests-only, dependency-only), records the applied gate reasons, and classifies each matrix row's intent identifier into `allowed_intent_ids` or `disallowed_intent_ids` based on the row's `intent_group` (rows default to group `"miscellaneous"` when absent). If no `only_*` gate applies the function returns an empty IntentSelectionConstraints instance (no restrictions).
+    
+    Parameters:
+        signals (DiffSignals): Extracted deterministic diff signals (used to detect `only_*` gates).
+        matrix (list[dict]): SOP matrix rows to classify; each row should expose an intent identifier and may include an `intent_group` (defaults to `"miscellaneous"`).
+    
+    Returns:
+        IntentSelectionConstraints: A constraints object containing `reasons` for applied gates and explicit `allowed_intent_ids` and `disallowed_intent_ids` lists.
     """
     reasons: list[str] = []
     allowed_groups: set[str] | None = None
 
     def _apply_allowed_groups(groups: set[str], reason: str) -> None:
+        """
+        Update the running allowed_groups by intersecting it with `groups` (or set it if unset) and record the given `reason`.
+        
+        Parameters:
+            groups (set[str]): Group identifiers to allow or intersect with the current allowed set.
+            reason (str): Short identifier explaining why these groups are being applied; recorded once.
+        """
         nonlocal allowed_groups
         allowed_groups = groups if allowed_groups is None else allowed_groups.intersection(groups)
         _append_unique(reasons, reason)
@@ -668,8 +688,10 @@ def derive_intent_selection_constraints(signals: DiffSignals, matrix: list[dict]
 
 def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     """
-    Map deterministic boolean signals to the semantic string markers used in the
-    SOP matrix's `positive_signals` and `negative_signals` arrays.
+    Map DiffSignals into the SOP matrix semantic marker strings.
+    
+    Returns:
+        markers (set[str]): Set of marker identifiers representing active signals (for example: 'breaking_change_declared', 'docs_only', 'dependency_added').
     """
     markers = set()
 
@@ -748,8 +770,19 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
 
 def rank_commit_intents(signals: DiffSignals, matrix: list[dict]) -> list[RankedIntent]:
     """
-    Score and rank SOP matrix rows against the extracted diff signals.
-    Returns the ranked list of candidates, highest score first.
+    Rank SOP matrix rows against extracted diff signals and return them sorted by score.
+    
+    Scores each matrix row using priority and specificity as a base, then adjusts the score for matched positive and negative signals and applies hard vetoes when the diff is exclusively docs, tests, or dependency changes. Evidence and penalty messages for matches and vetoes are included on each returned item.
+    
+    Parameters:
+        signals (DiffSignals): Extracted deterministic signals and metadata from the diff.
+        matrix (list[dict]): SOP matrix rows where each row may include keys such as
+            "intent_id" or "code", "intent_group", "priority", "specificity",
+            "split_weight", "positive_signals", "negative_signals" and descriptive fields.
+    
+    Returns:
+        list[RankedIntent]: Ranked intents with computed `score`, `evidence` and `penalties`,
+        sorted highest score first (ties broken by `priority` then `specificity`).
     """
     ranked: list[RankedIntent] = []
     active_markers = _generate_signal_markers(signals)

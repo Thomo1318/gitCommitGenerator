@@ -135,6 +135,11 @@ def test_commit_intent_canonicalizes_intent_id_when_resolved_by_emoji(monkeypatc
 
 
 def test_commit_intent_unknown_intent_falls_back_to_wrench_entry(monkeypatch):
+    """
+    Verify that an unknown intent is resolved to the "configuration_update" (wrench) matrix entry and its semantic fields are canonicalised.
+    
+    When the provided `intent_id` is not found and the `gitmoji` does not match any matrix entry, the intent should fall back to the wrench/configuration_update entry from the gitmoji matrix and adopt that entry's `emoji`, `cc_type`, `semver_impact` and `changelog_group`.
+    """
     matrix = [
         {
             "intent_id": "feature_addition",
