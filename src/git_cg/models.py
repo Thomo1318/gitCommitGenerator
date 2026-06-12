@@ -58,7 +58,7 @@ class IssueReference:
     def __str__(self) -> str:
         """
         Render the issue reference as "Verb #<number>" (for example "Resolves #123").
-        
+
         Returns:
             str: The issue reference formatted as '{kind.value} #{issue_number}'.
         """
@@ -81,6 +81,14 @@ class CommitIntent(BaseModel):
 
     @model_validator(mode="after")
     def validate_and_correct_matrix(self) -> CommitIntent:
+        """
+        Align this CommitIntent to the canonical gitmoji SOP matrix, or apply a safe fallback.
+
+        Looks up a matrix entry (from git_cg.sop.get_gitmoji_matrix) in this order: matching `intent_id`, then `emoji`, then `code`. If the matrix is unavailable, returns the instance unchanged. If no matching entry is found, selects the entry with `code == ":wrench:"` when present or the first matrix entry as a fallback. In both matched and fallback cases, replaces the matrix-owned fields `intent_id`, `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` with the values from the chosen matrix entry and returns the instance. Does not raise on missing matrix data.
+
+        Returns:
+            CommitIntent: The same instance after canonicalisation or fallback application.
+        """
         from git_cg.sop import get_gitmoji_matrix
 
         matrix = get_gitmoji_matrix()
@@ -100,19 +108,30 @@ class CommitIntent(BaseModel):
             # where it doesn't have the full matrix in the prompt), coerce it to a safe default
             # rather than crashing the commit loop.
             entry = next((item for item in matrix if item.get("code") == ":wrench:"), matrix[0])
-            self.intent_id = entry.get("intent_id", "fallback_chore")
+
+            fallback_intent_id = entry.get("intent_id")
+            if not fallback_intent_id:
+                fallback_code = entry.get("code")
+                fallback_intent_id = str(fallback_code or "fallback_chore").strip(":")
+
+            self.intent_id = fallback_intent_id
             self.gitmoji = entry["emoji"]
             self.cc_type = CommitType(entry["cc_type"])
             self.semver_impact = SemVerImpact(entry["semver_impact"])
             self.changelog_group = entry["changelog_group"]
             return self
 
-        self.gitmoji = entry["emoji"]
+        # Canonicalize all matrix-owned semantic fields for matched rows.
+        intent_id = entry.get("intent_id")
+        if not intent_id:
+            code = entry.get("code")
+            intent_id = str(code or "unknown").strip(":")
 
-        # 2. Assert cc_type matches the matrix exactly
-        if self.cc_type.value != entry.get("cc_type"):
-            # Graceful coercion instead of hard error
-            self.cc_type = CommitType(entry.get("cc_type"))
+        self.intent_id = intent_id
+        self.gitmoji = entry["emoji"]
+        self.cc_type = CommitType(entry["cc_type"])
+        self.semver_impact = SemVerImpact(entry["semver_impact"])
+        self.changelog_group = entry["changelog_group"]
 
         return self
 
@@ -148,13 +167,13 @@ class CommitPlan(BaseModel):
     @model_validator(mode="after")
     def validate_breaking_change(self) -> CommitPlan:
         """
-        Validate that a breaking-change description is present when `breaking_change` is True.
-        
+        Validate that a breaking-change description is present when breaking_change is True.
+
         Raises:
             ValueError: If `breaking_change` is True and `breaking_change_description` is missing or empty.
-        
+
         Returns:
-            CommitPlan: The same instance (`self`) when validation passes.
+            CommitPlan: The same CommitPlan instance (`self`).
         """
         if self.breaking_change and not self.breaking_change_description:
             raise ValueError("breaking_change_description must be provided if breaking_change is true")
@@ -163,10 +182,10 @@ class CommitPlan(BaseModel):
     def render(self, issue_references: list[IssueReference] | None = None) -> str:
         """
         Render the commit plan as a complete Git commit message.
-        
+
         Parameters:
             issue_references (list[IssueReference] | None): Optional list of issue references to append immediately above the machine-readable trailers; pass None or omit to exclude issue reference lines.
-        
+
         Returns:
             commit_message (str): The full commit message including header, optional body summary, included changes, issue reference lines (if provided), machine-readable trailers (SemVer-Impact, Change-Types, Changelog-Groups), and an optional breaking change footer.
         """

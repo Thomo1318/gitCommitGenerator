@@ -7,6 +7,7 @@ from git_cg.intent import (
     extract_diff_file_summary,
     extract_diff_signals,
 )
+from git_cg.models import CommitIntent, CommitType, SemVerImpact
 
 
 def test_is_hook_path():
@@ -73,3 +74,103 @@ def test_extract_diff_signals_metrics_and_booleans():
     assert "src/api.py" in signals.files
     assert signals.has_breaking_change is True
     assert signals.adds_public_api is True
+
+
+def test_commit_intent_canonicalizes_semantics_for_matched_intent_id(monkeypatch):
+    matrix = [
+        {
+            "intent_id": "feature_addition",
+            "emoji": "✨",
+            "code": ":sparkles:",
+            "cc_type": "feat",
+            "semver_impact": "MINOR",
+            "changelog_group": "Added",
+        }
+    ]
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: matrix)
+
+    intent = CommitIntent(
+        intent_id="feature_addition",
+        gitmoji="🧪",
+        cc_type=CommitType.CHORE,
+        description="add feature",
+        semver_impact=SemVerImpact.NONE,
+        changelog_group="Miscellaneous",
+    )
+
+    assert intent.intent_id == "feature_addition"
+    assert intent.gitmoji == "✨"
+    assert intent.cc_type == CommitType.FEAT
+    assert intent.semver_impact == SemVerImpact.MINOR
+    assert intent.changelog_group == "Added"
+
+
+def test_commit_intent_canonicalizes_intent_id_when_resolved_by_emoji(monkeypatch):
+    matrix = [
+        {
+            "intent_id": "feature_addition",
+            "emoji": "✨",
+            "code": ":sparkles:",
+            "cc_type": "feat",
+            "semver_impact": "MINOR",
+            "changelog_group": "Added",
+        }
+    ]
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: matrix)
+
+    intent = CommitIntent(
+        intent_id="unknown_intent",
+        gitmoji="✨",
+        cc_type=CommitType.CHORE,
+        description="add feature",
+        semver_impact=SemVerImpact.NONE,
+        changelog_group="Miscellaneous",
+    )
+
+    assert intent.intent_id == "feature_addition"
+    assert intent.gitmoji == "✨"
+    assert intent.cc_type == CommitType.FEAT
+    assert intent.semver_impact == SemVerImpact.MINOR
+    assert intent.changelog_group == "Added"
+
+
+def test_commit_intent_unknown_intent_falls_back_to_wrench_entry(monkeypatch):
+    """
+    Verify that an unknown intent is resolved to the "configuration_update" (wrench) matrix entry and its semantic fields are canonicalised.
+    
+    When the provided `intent_id` is not found and the `gitmoji` does not match any matrix entry, the intent should fall back to the wrench/configuration_update entry from the gitmoji matrix and adopt that entry's `emoji`, `cc_type`, `semver_impact` and `changelog_group`.
+    """
+    matrix = [
+        {
+            "intent_id": "feature_addition",
+            "emoji": "✨",
+            "code": ":sparkles:",
+            "cc_type": "feat",
+            "semver_impact": "MINOR",
+            "changelog_group": "Added",
+        },
+        {
+            "intent_id": "configuration_update",
+            "emoji": "🔧",
+            "code": ":wrench:",
+            "cc_type": "chore",
+            "semver_impact": "NONE",
+            "changelog_group": "Miscellaneous",
+        },
+    ]
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: matrix)
+
+    intent = CommitIntent(
+        intent_id="unknown_intent",
+        gitmoji="❓",
+        cc_type=CommitType.FEAT,
+        description="mystery change",
+        semver_impact=SemVerImpact.MAJOR,
+        changelog_group="Added",
+    )
+
+    assert intent.intent_id == "configuration_update"
+    assert intent.gitmoji == "🔧"
+    assert intent.cc_type == CommitType.CHORE
+    assert intent.semver_impact == SemVerImpact.NONE
+    assert intent.changelog_group == "Miscellaneous"
