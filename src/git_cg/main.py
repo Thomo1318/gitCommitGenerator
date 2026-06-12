@@ -853,6 +853,23 @@ def _run_commit_generation(
 
     active_directives: dict[str, str] = {}
     residual_guidance: str | None = None
+    review_state: ReviewState | None = None
+
+    from git_cg.intent import derive_intent_selection_constraints
+
+    signals = extract_diff_signals(diff_output)
+    gitops_matrix = load_sop().get("gitmoji_reference_matrix", [])
+    ranked_candidates = rank_commit_intents(signals, gitops_matrix) if gitops_matrix else []
+    constraints = derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else None
+
+    # Pre-compute GenerationContext once per run
+    from git_cg.regeneration import GenerationContext, RegenerationState, resolve_semantic_contract
+
+    gen_context = (
+        GenerationContext(diff_signals=signals, ranked_intents=ranked_candidates, constraints=constraints)
+        if constraints
+        else None
+    )
 
     while True:
         system_prompt = build_system_prompt(
@@ -878,6 +895,19 @@ def _run_commit_generation(
                 )
         except Exception as e:
             _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
+
+        if (active_directives or residual_guidance) and gen_context and review_state is not None:
+            # We are in regenerate mode. Resolve semantic contract to lock semantics.
+            regen_state = RegenerationState(
+                previous_plan=review_state.commit_plan,
+                active_directives=active_directives,
+                residual_guidance=residual_guidance,
+            )
+            contract = resolve_semantic_contract(gen_context, regen_state)
+            # For PR 3, we just resolve and log it or inject it. PR 4 does selective delta rendering.
+            # Here we just ensure it's resolved successfully and previous plan is anchored.
+            if verbose:
+                console.log(f"Resolved Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})")
 
         mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
         if commit_plan.split_recommended:
