@@ -2,6 +2,11 @@ from git_cg.main import ReviewState, build_generation_messages, build_system_pro
 
 
 def test_build_system_prompt_contains_diff():
+    """
+    Verify build_system_prompt includes the extracted diff candidates section and core instructions.
+    
+    Pass a sample unified diff to build_system_prompt and assert the resulting system prompt contains the "PRIMARY CANDIDATES" header and the instruction "You are a senior software engineer".
+    """
     test_diff = """diff --git a/test.py b/test.py
 --- a/test.py
 +++ b/test.py

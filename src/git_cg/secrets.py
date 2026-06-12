@@ -12,6 +12,11 @@ _op_cache = None
 
 
 def _populate_cache():
+    """
+    Populate the module-level 1Password cache and mirror discovered secret fields into environment variables.
+    
+    If the 1Password SDK is unavailable or OP_SERVICE_ACCOUNT_TOKEN is not set, the function returns without side effects. Otherwise it authenticates using the service account token, iterates all accessible vaults and items, and for every item field that has a title and a non-empty value stores that value in the module cache `_op_cache` and sets the corresponding process environment variable. If no items are found or an error occurs during fetching, a debug message is printed to stderr.
+    """
     global _op_cache
     _op_cache = {}
 
@@ -23,6 +28,11 @@ def _populate_cache():
         return
 
     async def fetch():
+        """
+        Fetch all accessible vault items from 1Password and populate the module cache and process environment with discovered field values.
+        
+        For each field that has a title and a non-empty value, stores the value in the module-level `_op_cache` and sets the same key in `os.environ`. If no items are found, writes a debug message to stderr; if the fetch process fails, writes a debug error message to stderr.
+        """
         try:
             client = await Client.authenticate(
                 auth=op_token, integration_name="gitCommitGenerator", integration_version="0.1.7"

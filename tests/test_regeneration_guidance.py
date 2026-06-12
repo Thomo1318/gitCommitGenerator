@@ -7,10 +7,23 @@ from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
 
 @pytest.fixture(autouse=True)
 def disable_matrix_validation(monkeypatch):
+    """
+    Disable gitmoji matrix validation for the test module by stubbing get_gitmoji_matrix to return an empty matrix.
+    
+    This autouse fixture prevents tests from loading or relying on the real gitmoji matrix.
+    """
     monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: [])
 
 
 def _make_commit_plan() -> CommitPlan:
+    """
+    Create a pre-populated CommitPlan representing a primary feature intent for tests.
+    
+    The returned CommitPlan contains a primary CommitIntent with intent_id "primary_feat", gitmoji "✨", commit type `CommitType.FEAT`, scope "tui", description "add guided regeneration", semver impact `SemVerImpact.MINOR` and changelog group "Features". The CommitPlan also includes a rationale "Primary feature dominates." and a body_summary "Adds review-time regeneration guidance.".
+    
+    Returns:
+        CommitPlan: A CommitPlan instance populated with the described primary intent and metadata.
+    """
     return CommitPlan(
         primary_intent=CommitIntent(
             intent_id="primary_feat",

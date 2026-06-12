@@ -102,11 +102,15 @@ class ReviewState:
 
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
-        Add an IssueReference to the review state using deterministic idempotency and conflict rules.
-
+        Append an issue reference to the review state, enforcing idempotency and conflict detection.
+        
+        Parameters:
+            issue_reference (IssueReference): The issue reference to add.
+        
         Returns:
-            ReviewStateMutationResult: `ADDED` when appended, `DUPLICATE` when already present,
-            or `CONFLICTING_ISSUE_NUMBER` when the issue number already exists with a different verb.
+            ReviewStateMutationResult: `ADDED` when the reference was appended,
+            `DUPLICATE` when an identical reference already exists,
+            `CONFLICTING_ISSUE_NUMBER` when the same issue number exists with a different reference.
         """
         existing_issue_reference = self.get_issue_reference_by_issue_number(issue_reference.issue_number)
         if existing_issue_reference is not None:
@@ -119,8 +123,17 @@ class ReviewState:
 
     def _extract_directives(self, text: str) -> tuple[dict[str, str], str | None]:
         """
-        Extract high-confidence deterministic directives from raw guidance.
-        Returns a tuple of (extracted_directives, residual_guidance).
+        Extract high-confidence deterministic directives from a guidance string.
+        
+        This parses terse, high-certainty overrides embedded in freeform guidance and returns any recognised directives and the remaining (residual) guidance text. Currently recognises:
+        - `preferred_type`: conventional commit type (e.g. `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `init`, `release`)
+        - `preferred_scope`: a single token scope (alphanumeric, underscore or hyphen)
+        
+        Parameters:
+            text (str): Freeform regeneration guidance provided by the user.
+        
+        Returns:
+            tuple[dict[str, str], str | None]: A tuple of (directives, residual_guidance). `directives` maps directive names to their extracted values. `residual_guidance` is the remaining guidance with recognised directives removed, or `None` if empty.
         """
         directives = {}
         residual = text
@@ -147,7 +160,17 @@ class ReviewState:
         return directives, (residual if residual else None)
 
     def set_regeneration_guidance(self, guidance: str) -> bool:
-        """Store normalized regeneration guidance, extract directives, and return True when the stored value changes."""
+        """
+        Set regeneration guidance for the review state and parse any embedded directives.
+        
+        Normalises the provided guidance, ignores empty input, and if the stored guidance changes updates the review state's regeneration guidance, active directives and residual guidance.
+        
+        Parameters:
+            guidance (str): User-provided text guiding how subsequent regenerations should frame intent and scope.
+        
+        Returns:
+            bool: `True` if the stored guidance was changed, `False` otherwise.
+        """
         normalized_guidance = " ".join(guidance.split()).strip()
         if not normalized_guidance:
             return False
@@ -158,7 +181,12 @@ class ReviewState:
         return True
 
     def clear_regeneration_guidance(self) -> bool:
-        """Clear stored regeneration guidance and directives, returning True when guidance was present."""
+        """
+        Clear any stored regeneration guidance, parsed directives and residual guidance.
+        
+        Returns:
+            `True` if guidance was present and was cleared, `False` if no guidance was set.
+        """
         if self.regeneration_guidance is None:
             return False
         self.regeneration_guidance = None
@@ -192,7 +220,20 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 
 
 def get_ai_client(engine: str) -> instructor.Instructor:
-    """Initialize the AI client based on the requested engine."""
+    """
+    Create and return an Instructor AI client configured for the named engine.
+    
+    Initialises an OpenAI-compatible client using credentials and base URL resolved from environment/secrets for the given engine key. If the configured base URL points to a local server and that server is not reachable, this function will attempt to start a compatible local server in the background and wait for it to become ready before returning.
+    
+    Parameters:
+        engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (for example "omlx", "mtplx", "openai").
+    
+    Returns:
+        instructor.Instructor: A wrapped Instructor client ready for use.
+    
+    Raises:
+        ValueError: If the provided engine is not present in ENGINE_REGISTRY.
+    """
     engine_lower = engine.lower()
 
     config = ENGINE_REGISTRY.get(engine_lower)
@@ -286,7 +327,12 @@ def build_generation_messages(
     diff_output: str,
     regeneration_guidance: str | None = None,
 ) -> list[dict[str, str]]:
-    """Build the chat messages used for commit generation."""
+    """
+    Construct the chat messages used to generate a commit message from a git diff.
+    
+    Returns:
+        messages (list[dict[str, str]]): Ordered chat messages containing the system prompt followed by a user message with the diff in a fenced `diff` block.
+    """
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Here is the diff:\n\n```diff\n{diff_output}\n```"},
@@ -303,7 +349,26 @@ def generate_commit_message(
     regeneration_guidance: str | None = None,
     **kwargs,
 ) -> CommitPlan:
-    """Generate a structured commit message using AI."""
+    """
+    Generate a structured CommitPlan for the staged diff by invoking the AI client.
+    
+    Builds chat messages from the provided system prompt, diff output and optional
+    regeneration guidance, sends them to the specified model via the instructor
+    client, and returns the parsed CommitPlan produced by the model. The function
+    will retry transient connection failures (up to 10 attempts, with a 10s pause
+    between waits) and will raise an `openai.APIConnectionError` if the model never
+    becomes reachable.
+    
+    Parameters:
+        diff_output (str): The git diff to include in the request messages.
+        model_name (str): Identifier of the model to request from the AI client.
+        system_prompt (str): The system-level prompt context to send to the model.
+        regeneration_guidance (str | None): Optional user-provided guidance that
+            influences intent selection and framing; included in the messages when present.
+    
+    Returns:
+        CommitPlan: The structured commit plan returned by the model.
+    """
     opik_context.update_current_trace(
         metadata={
             "_opik_graph_definition": {
@@ -341,7 +406,19 @@ def build_system_prompt(
     verbose: bool = False,
     regeneration_guidance: str | None = None,
 ) -> str:
-    """Assemble the system prompt from the SOP, noting that optional regeneration guidance may be supplied separately."""
+    """
+    Builds the system-level instruction prompt used by the AI to generate a structured Conventional Commit CommitPlan.
+    
+    Parameters:
+        diff_output (str): The git diff to be analysed and summarised; used to derive intent signals.
+        verbose (bool): If True, emits diagnostic logs during prompt construction.
+        regeneration_guidance (str | None): Optional developer-provided guidance that, if present, is injected
+            into the prompt and given precedence for intent selection and framing.
+    
+    Returns:
+        system_prompt (str): The complete system prompt text, including SOP-derived context, ranked intent
+        candidates (when available), and an explicit regeneration guidance section when supplied.
+    """
     sop_data = load_sop()
     if not sop_data and verbose:
         console.log("[yellow]SOP could not be located; generating without matrix enforcement.[/yellow]")
@@ -472,17 +549,13 @@ def _write_commit_message(commit_msg_file: str, result_string: str, *, strict: b
 
 def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
     """
-    Prompt the user to add a structured issue reference to the given review state.
-
-    Prompts for a reference type and an issue number; returns a constructed IssueReference
-    when both are provided, or None if the user cancels or selects the back option.
-
+    Prompt the user to select an issue reference type and an issue number, and construct the corresponding IssueReference.
+    
     Parameters:
-        review_state (ReviewState): The current review state; accepted for orchestration symmetry.
-
+        review_state (ReviewState): Accepted for orchestration symmetry with the interactive flow; not modified.
+    
     Returns:
-        IssueReference or None: An IssueReference when the user supplies a valid type and number,
-        `None` if the operation was cancelled or the user selected "Back".
+        IssueReference or None: An `IssueReference` when the user supplies both a reference type and an issue number, `None` if the user cancels or selects "Back".
     """
     reference_type = prompt_issue_reference_type()
     if reference_type in (None, "Back"):
@@ -496,7 +569,17 @@ def _build_issue_reference(review_state: ReviewState) -> IssueReference | None:
 
 
 def _build_regeneration_guidance(review_state: ReviewState) -> str | None:
-    """Prompt the user for regeneration guidance to steer the next AI retry."""
+    """
+    Prompt for regeneration guidance to influence the next AI generation attempt.
+    
+    Uses the review state's current `regeneration_guidance` value as the prompt's initial/default text.
+    
+    Parameters:
+        review_state (ReviewState): The review state providing the current guidance to pre-populate the prompt.
+    
+    Returns:
+        str | None: The entered regeneration guidance, or `None` if the prompt was cancelled.
+    """
     return prompt_regeneration_guidance(review_state.regeneration_guidance)
 
 
@@ -628,28 +711,21 @@ def _run_commit_generation(
     interactive: bool,
 ) -> bool:
     """
-    Generate a commit message from staged changes using an AI client and write it to a commit message file, optionally running an interactive review or dry-run.
-
-    This function:
-    - extracts the staged git diff (with token-compression via `rtk` when available) and truncates it if very large;
-    - initialises an AI client and model, builds a system prompt, and requests a CommitPlan from the model;
-    - handles mixed-change policies (warn/strict/split_prompt) based on `GIT_CG_MIXED_POLICY`;
-    - renders a deterministic ReviewState and either writes the commit message file or presents interactive review/dry-run UI flows that can regenerate or cancel;
-    - honours `amend_regenerate` for commits originating from amend flows and uses `strict` to decide exit codes for aborts.
-
+    Generate a Conventional Commit message from staged changes, write it to a commit message file, and optionally run interactive review or a dry-run review.
+    
     Parameters:
         commit_msg_file (str): Path to the commit message file to write when not in dry-run.
-        commit_source (str | None): Origin of the commit (e.g. "commit", file path, or None). Values outside GENERATING_SOURCES will skip generation unless `amend_regenerate` permits.
-        extra_args (list[str] | None): Additional command-line args (present for signature compatibility; not interpreted here).
-        engine (str): Engine key to select the AI backend (matches keys in ENGINE_REGISTRY).
-        dry_run (bool): If true, do not write to `commit_msg_file`; allow interactive dry-run flows instead.
-        verbose (bool): Enable verbose logging to the global console.
-        amend_regenerate (bool): When true, allow regeneration for amend-origin commits even if `commit_source` would normally skip generation.
-        strict (bool): When true, aborts raise non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
-        interactive (bool): If true and a TTY is available, present interactive review UI which can add issue references, edit, regenerate, or cancel.
-
+        commit_source (str | None): Origin of the commit (for example `"commit"`, a file path, or `None`). Values outside GENERATING_SOURCES cause generation to be skipped unless `amend_regenerate` permits regeneration for amend-origin commits.
+        extra_args (list[str] | None): Additional CLI arguments preserved for signature compatibility; not interpreted by this function.
+        engine (str): Engine key selecting the AI backend (must match a key in ENGINE_REGISTRY).
+        dry_run (bool): If true, do not write to `commit_msg_file`; perform a dry-run and optionally present the dry-run interactive flow.
+        verbose (bool): Enable verbose console logging for diagnostic messages.
+        amend_regenerate (bool): When true, allow regeneration for commits originating from amend flows even if the source would normally skip generation.
+        strict (bool): When true, aborts use non-zero exit codes; when false, aborts exit with code 0 to avoid blocking git hooks.
+        interactive (bool): When true and a TTY is available, present the interactive review UI which can add issue references, edit, regenerate, or cancel.
+    
     Returns:
-        bool: `True` when commit message generation (and any interactive flow) completed successfully.
+        bool: `True` when commit message generation (and any interactive or dry-run flow) completed successfully.
     """
     if verbose:
         console.log("Starting git-cg...")
@@ -876,11 +952,13 @@ def main_callback(
         typer.Option("--strict", help="Exit non-zero on failure for standalone CLI use."),
     ] = True,
 ) -> None:
-    """Run git-cg directly with non-interactive default behavior.
-
-    When invoked without a subcommand, git-cg generates a commit message from the
-    staged diff and applies `git commit` automatically. Use `-i` to opt into the
-    terminal-native review flow via gum.
+    """
+    Top-level CLI callback that generates a Conventional Commit from staged changes and applies it when invoked without a subcommand.
+    
+    Resolves the repository's COMMIT_EDITMSG path, runs the commit-generation and optional interactive review flow according to the provided flags, and—unless `dry_run` is set—applies the resulting message with `git commit`. Exits the process on completion.
+    
+    Raises:
+        typer.Exit: Always raised at the end to terminate the CLI (exit code 0 on success).
     """
     if ctx.invoked_subcommand is not None or ctx.resilient_parsing:
         return
