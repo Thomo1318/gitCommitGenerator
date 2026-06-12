@@ -2,6 +2,13 @@
 site_name = "gitCommitGenerator Documentation"
 site_description = "AI-powered automated git commit generator"
 use_directory_urls = false
+extra_javascript = [
+    "https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js",
+    "javascripts/tablesort-init.js"
+]
+extra_css = [
+    "stylesheets/tablesort.css"
+]
 
 nav = [
     { "Home" = "index.md" },
