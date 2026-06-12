@@ -17,6 +17,7 @@ nav = [
         { "ADR-0006: 1Password SDK Migration" = "ADRs/0006-1password-python-sdk-migration.md" },
         { "ADR-0007: Gum TUI Integration" = "ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md" },
         { "ADR-0008: Zensical Integration" = "ADRs/0008-zensical-integration.md" },
+        { "ADR-0009: Guided Regeneration" = "ADRs/0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md" },
     ] },
 ]
 
