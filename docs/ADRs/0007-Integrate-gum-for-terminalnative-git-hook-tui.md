@@ -189,6 +189,7 @@ _(To be populated post-implementation)_
 - [Charmbracelet Gum Documentation](https://github.com/charmbracelet/gum)
 - [Git Hooks and /dev/tty Constraints](https://git-scm.com/docs/githooks)
 - [vjeantet/alerter](https://github.com/vjeantet/alerter)
+- [ADR-0009: Reconcile Deterministic Intent Ranking with Guided Regeneration](0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md)
 
 ---
 
