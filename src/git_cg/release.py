@@ -184,7 +184,7 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
                 # Matches: "version": "1.0.0"
                 new_content = re.sub(r'("version"\s*:\s*")([^"]+)(")', replacer, file_content, count=1)
             elif method in ("hash_comment", "header_comment"):
-                # Matches: # version: v1.0.0
+                # Matches: # version: v2.0.0
                 new_content = re.sub(
                     r"(#\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*)", replacer, file_content, count=1, flags=re.IGNORECASE
                 )
