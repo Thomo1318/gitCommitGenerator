@@ -128,7 +128,10 @@ def _run_gum_command(
 
             stripped = result.stdout.strip()
             return stripped or None
-    except FileNotFoundError, OSError:
+    except (
+        FileNotFoundError,
+        OSError,
+    ):
         return None
 
 

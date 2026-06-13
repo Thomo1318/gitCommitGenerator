@@ -198,6 +198,34 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
                 console.print(f"Could not inject version into {filepath}: {e}")
 
 
+def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
+    changelog_groups = defaultdict(list)
+    for commit in commits:
+        parts = commit.split("---COMMIT_BODY---", 1)
+        subject = parts[0]
+        body = parts[1] if len(parts) > 1 else ""
+
+        # Prefer machine-readable trailer for mixed-commit support
+        trailer_match = re.search(r"^Changelog-Groups:\s*(.+)$", body, flags=re.MULTILINE)
+        if trailer_match:
+            # Commit can belong to multiple groups if it had secondary intents
+            groups = [g.strip() for g in trailer_match.group(1).split(",")]
+            for g in groups:
+                if g:
+                    changelog_groups[g].append(subject)
+            continue
+
+        # Legacy fallback logic
+        group = "Miscellaneous"
+        for entry in gitmoji_matrix:
+            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
+                group = entry.get("changelog_group", "Miscellaneous")
+                break
+        changelog_groups[group].append(subject)
+
+    return changelog_groups
+
+
 def execute_release(dry_run: bool, verbose: bool):
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
@@ -235,30 +263,7 @@ def execute_release(dry_run: bool, verbose: bool):
 
     # Generate Changelog
 
-    # Group commits
-    changelog_groups = defaultdict(list)
-    for commit in commits:
-        parts = commit.split("---COMMIT_BODY---", 1)
-        subject = parts[0]
-        body = parts[1] if len(parts) > 1 else ""
-
-        # Prefer machine-readable trailer for mixed-commit support
-        trailer_match = re.search(r"^Changelog-Groups:\s*(.+)$", body, flags=re.MULTILINE)
-        if trailer_match:
-            # Commit can belong to multiple groups if it had secondary intents
-            groups = [g.strip() for g in trailer_match.group(1).split(",")]
-            for g in groups:
-                if g:
-                    changelog_groups[g].append(subject)
-            continue
-
-        # Legacy fallback logic
-        group = "Miscellaneous"
-        for entry in gitmoji_matrix:
-            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
-                group = entry.get("changelog_group", "Miscellaneous")
-                break
-        changelog_groups[group].append(subject)
+    changelog_groups = group_commits_for_changelog(commits, gitmoji_matrix)
 
     # Format changelog
     changelog_str = f"## {new_tag}\n\n"

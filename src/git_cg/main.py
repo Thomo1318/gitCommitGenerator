@@ -261,7 +261,10 @@ def get_ai_client(engine: str) -> instructor.Instructor:
             with urllib.request.urlopen(req, timeout=1) as response:
                 if response.status == 200:
                     server_ready = True
-        except urllib.error.URLError, TimeoutError:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+        ):
             pass
 
         if not server_ready:
@@ -310,7 +313,11 @@ def get_ai_client(engine: str) -> instructor.Instructor:
                                 server_ready = True
                                 console.print("\n[green]✅ AI server successfully started and is ready![/green]")
                                 break
-                    except urllib.error.URLError, TimeoutError, Exception:
+                    except (
+                        urllib.error.URLError,
+                        TimeoutError,
+                        Exception,
+                    ):
                         pass
 
                     time.sleep(1)
@@ -1045,7 +1052,11 @@ def main_callback(
     try:
         git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
         commit_msg_file = os.path.join(git_dir, "COMMIT_EDITMSG")
-    except subprocess.CalledProcessError, FileNotFoundError, OSError:
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        OSError,
+    ):
         commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
     _run_commit_generation(
         commit_msg_file,
