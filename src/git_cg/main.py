@@ -226,13 +226,13 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 def get_ai_client(engine: str) -> instructor.Instructor:
     """
     Create an Instructor AI client for the given engine; if the engine's base URL points to a local server that is not responsive, attempt to start a compatible local server and wait for it to become ready.
-    
+
     Parameters:
         engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (e.g. "omlx", "mtplx", "openai").
-    
+
     Returns:
         instructor.Instructor: A configured Instructor client ready for use.
-    
+
     Raises:
         ValueError: If the provided engine is not present in ENGINE_REGISTRY.
     """
@@ -1074,8 +1074,8 @@ def main_callback(
 
 @app.command("commit")
 def commit(
-    commit_msg_file: str = typer.Argument(..., help="Path to the commit message file"),
-    commit_source: str | None = typer.Argument(None, help="Source of the commit message (e.g., 'message', 'template')"),
+    commit_msg_file: str = typer.Argument(".git/COMMIT_EDITMSG", help="Path to the commit message file"),
+    commit_source: str = typer.Argument("message", help="Source of the commit message (e.g., 'message', 'template')"),
     extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx", "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
