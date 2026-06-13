@@ -40,16 +40,16 @@ class ResolvedCommitContract:
 def resolve_semantic_contract(context: GenerationContext, state: RegenerationState) -> ResolvedCommitContract:
     """
     Resolve the semantic commit contract for the next generation cycle.
-    
+
     Selects a primary intent from the gitmoji contract matrix, respecting an optional
     `preferred_type` directive and any allowed-intent constraints, and falls back to the
     previous plan's primary intent to avoid semantic drift. Secondary intent ids are
     sourced from the previous commit plan.
-    
+
     Parameters:
         context (GenerationContext): Deterministic inputs for resolution, including ranked intents and selection constraints.
         state (RegenerationState): Review-loop steering state containing active directives and the previous commit plan.
-    
+
     Returns:
         ResolvedCommitContract: Resolved contract populated with:
             - `primary_intent_id`: chosen primary intent identifier,
@@ -126,12 +126,12 @@ def enforce_semantic_contract(
 ) -> CommitPlan:
     """
     Overwrite a CommitPlan's primary intent fields to match a resolved semantic contract.
-    
+
     If `active_directives` contains `preferred_scope`, the plan's primary intent scope is set to that value.
-    
+
     Parameters:
         active_directives (dict[str, str] | None): Optional directives; recognise `preferred_scope` to override the primary intent scope.
-    
+
     Returns:
         CommitPlan: The same plan instance with its primary intent aligned to the contract.
     """
