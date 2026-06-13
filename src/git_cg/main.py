@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import NoReturn
 
@@ -425,6 +426,45 @@ def generate_commit_message(
             time.sleep(10)
 
 
+def detect_primary_language(diff_output: str) -> str | None:
+    """
+    Detect the primary language of the diff based on file extensions.
+    """
+    pattern = re.compile(r"^diff --git a/.*\.([a-zA-Z0-9]+) b/.*$", re.MULTILINE)
+    extensions = pattern.findall(diff_output)
+    if not extensions:
+        return None
+
+    # Common mappings
+    ext_map = {
+        "py": "Python",
+        "rs": "Rust",
+        "ts": "TypeScript",
+        "js": "JavaScript",
+        "go": "Go",
+        "c": "C",
+        "cpp": "C++",
+        "java": "Java",
+        "rb": "Ruby",
+        "php": "PHP",
+        "cs": "C#",
+        "swift": "Swift",
+        "kt": "Kotlin",
+        "sh": "Shell",
+        "yaml": "YAML",
+        "yml": "YAML",
+        "json": "JSON",
+        "html": "HTML",
+        "css": "CSS",
+        "md": "Markdown",
+        "tf": "Terraform",
+    }
+
+    counter = Counter(extensions)
+    most_common_ext = counter.most_common(1)[0][0].lower()
+    return ext_map.get(most_common_ext, most_common_ext.upper())
+
+
 def build_system_prompt(
     diff_output: str,
     verbose: bool = False,
@@ -533,6 +573,10 @@ def build_system_prompt(
         "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array. "
         "CRITICAL: Do not output reasoning, XML, pseudo-tool-call tags, or explanatory prose outside the single CommitPlan response. "
     )
+
+    primary_lang = detect_primary_language(diff_output)
+    if primary_lang:
+        system_prompt += f"CRITICAL: The primary language detected in this diff is {primary_lang}. Act as an expert in this language and use its specific terminology when describing changes. "
 
     system_prompt += f"{gitops_matrix_str}"
 
