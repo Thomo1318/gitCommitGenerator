@@ -1079,7 +1079,9 @@ def main_callback(
 @app.command("commit")
 def commit(
     commit_msg_file: str = typer.Argument(".git/COMMIT_EDITMSG", help="Path to the commit message file"),
-    commit_source: str = typer.Argument("message", help="Source of the commit message (e.g., 'message', 'template')"),
+    commit_source: str = typer.Argument(
+        "", help="Source of the commit message (e.g., 'message', 'template', or empty for default generation)"
+    ),
     extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx", "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"
