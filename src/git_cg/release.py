@@ -124,6 +124,19 @@ def bump_version_string(version: str, bump_type: str) -> str:
 
 
 def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_run: bool, verbose: bool):
+    """
+    Inject updated version strings into files according to configured version-injection strategies.
+    
+    Reads each given file and, when a matching strategy is found in `sop_data["specifications_and_standards"]["version_injection_matrix"]["strategies"]`, replaces the first version occurrence using the specified strategy and the provided `bump_type`. Modified files are written back unless `dry_run` is True.
+    
+    Parameters:
+        files (list[str]): File paths to scan for injectable version strings.
+        bump_type (str): One of "MAJOR", "MINOR", "PATCH" or "NONE"; no action is taken when "NONE".
+        sop_data (dict): SOP configuration containing the version injection matrix under
+            `specifications_and_standards.version_injection_matrix.strategies`.
+        dry_run (bool): If True, perform detection and logging only; do not write changes to disk.
+        verbose (bool): If True, print detailed messages about injections and errors.
+    """
     if bump_type == "NONE":
         return
 
@@ -199,6 +212,18 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
 
 
 def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
+    """
+    Map commit entries to changelog groups based on explicit trailers or gitmoji metadata.
+    
+    Parses each raw commit string (expected to contain the subject and an optional body separated by '---COMMIT_BODY---') and assigns the commit subject to one or more changelog groups. If the commit body contains a `Changelog-Groups:` trailer, the listed comma-separated groups (trimmed) are used. Otherwise, the function falls back to legacy matching: it compares the commit subject against entries in `gitmoji_matrix` (matching either the `emoji` substring or the `:{code}:` token) and uses the entry's `changelog_group` value; if no entry matches, the subject is placed in the "Miscellaneous" group.
+    
+    Parameters:
+        commits (list[str]): Raw commit strings where the subject is before `---COMMIT_BODY---` and the optional body after it.
+        gitmoji_matrix (list): List of mapping entries describing gitmoji metadata; each entry may contain `emoji`, `code`, and `changelog_group` keys used for legacy grouping.
+    
+    Returns:
+        dict[str, list[str]]: Mapping of changelog group name to a list of commit subjects assigned to that group.
+    """
     changelog_groups = defaultdict(list)
     for commit in commits:
         parts = commit.split("---COMMIT_BODY---", 1)
@@ -227,6 +252,15 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
 
 
 def execute_release(dry_run: bool, verbose: bool):
+    """
+    Prepare a release by analysing commits since the last Git tag, computing the required SemVer bump, optionally injecting the new version into files, and prepending a generated changelog section to CHANGELOG.md.
+    
+    When dry_run is True, no files are written; when False, modified files may be updated and CHANGELOG.md will be prepended. This function does not create Git tags or perform commits.
+    
+    Parameters:
+        dry_run (bool): If True, perform a simulation without writing files or updating CHANGELOG.md.
+        verbose (bool): If True, emit additional diagnostic output to the console.
+    """
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
 

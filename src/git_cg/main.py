@@ -225,16 +225,14 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 
 def get_ai_client(engine: str) -> instructor.Instructor:
     """
-    Create and return an Instructor AI client configured for the named engine.
-
-    Initialises an OpenAI-compatible client using credentials and base URL resolved from environment/secrets for the given engine key. If the configured base URL points to a local server and that server is not reachable, this function will attempt to start a compatible local server in the background and wait for it to become ready before returning.
-
+    Create an Instructor AI client for the given engine; if the engine's base URL points to a local server that is not responsive, attempt to start a compatible local server and wait for it to become ready.
+    
     Parameters:
-        engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (for example "omlx", "mtplx", "openai").
-
+        engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (e.g. "omlx", "mtplx", "openai").
+    
     Returns:
-        instructor.Instructor: A wrapped Instructor client ready for use.
-
+        instructor.Instructor: A configured Instructor client ready for use.
+    
     Raises:
         ValueError: If the provided engine is not present in ENGINE_REGISTRY.
     """
