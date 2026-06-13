@@ -2,7 +2,7 @@
   "$schema": "./gitops_sop.schema.json",
   "_meta": {
     "purpose": "Comprehensive GitOps SOP and reference matrix for AI Agents generating Hybrid Gitmoji/Conventional Commits, calculating SemVer bumps, generating Changelogs, and handling Releases.",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "matrix_schema_version": "2.0.0",
     "enforcement": "MANDATORY: Agents MUST ingest these rules and use the embedded matrices for all version control operations to prevent malformed history and corrupted file syntaxes. SemVer and changelog classification MUST be derived from the exact selected intent rows, not broad Conventional Commit cc_type categories."
   },
