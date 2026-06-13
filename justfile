@@ -45,6 +45,10 @@ gen-completions:
 # Alias for gen-completions
 completions: gen-completions
 
+# Hook helper: Generate docs and immediately stage them
+docs-hook: gen-docs gen-completions
+    @git add docs/usage.md completions/_git-cg
+
 # Run all quality checks and generation tasks
 all: lint gen-docs gen-completions test
 

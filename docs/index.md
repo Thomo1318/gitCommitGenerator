@@ -27,13 +27,15 @@ This tool is the core implementation of the **Hybrid Commit Standard**, fusing G
 
 Traditional Git history is often inconsistent, making it difficult to automate releases or understand changes at a glance. `git-cg` solves this by enforcing a digitized Standard Operating Procedure (SOP) via **Deterministic Structured Data Extraction**.
 
-Instead of relying on brittle prompt engineering, `git-cg` utilizes a **Deterministic Intent Ranker** to extract boolean signals from the git diff and score them against the SOP matrix. It then injects a "Smart Menu" of the top-ranked candidates into the prompt, using the [**Instructor**](https://python.useinstructor.com/) Python library and [**Pydantic**](https://docs.pydantic.dev/) to force the LLM to output a mathematically validated `CommitPlan`.
+Instead of relying on brittle prompt engineering, `git-cg` utilizes a **Deterministic Intent Ranker** to extract boolean signals from the git diff and score them against the SOP matrix. The highest-ranking intent establishes a **Semantic Contract** which dictates the commit type, gitmoji, SemVer impact, and changelog group.
+
+The LLM is explicitly constrained to perform **Selective Delta Rendering**—it generates the human-readable subject and body within the bounds of the locked semantic contract. If the LLM hallucinates or breaks the 72-character limit constraint, the [Instructor](https://python.useinstructor.com/) validation loop automatically kicks in. Furthermore, the Python orchestrator forcefully asserts the semantic invariants over any AI-generated structure before writing the commit.
 
 1. **Gitmoji**: Instant visual recognition of intent (e.g., 🐛 for fixes, ✨ for features).
 2. **Conventional Commits (CC)**: Machine-readable semantics that drive automated versioning.
-3. **Semantic Versioning (SemVer)**: Mathematical version bumping based on commit taxonomy.
+3. **Semantic Versioning (SemVer)**: Mathematical version bumping based on commit taxonomy via machine-readable trailers.
 
-By centralizing these rules in `config/gitops_agent_sop.json`, we ensure that both AI Agents and Human Developers produce identical, high-quality output. If the LLM hallucinates or breaks the 72-character limit constraint, the [Instructor](https://python.useinstructor.com/) validation loop automatically kicks in, feeding the error back to the LLM for a self-correcting retry.
+By centralizing these rules in `config/gitops_agent_sop.json`, we ensure that both AI Agents and Human Developers produce identical, high-quality output.
 
 ---
 

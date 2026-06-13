@@ -15,16 +15,22 @@ _git_cg() {
 
   local spec_file="${TMPDIR:-/tmp}/usage__usage_spec_git_cg.spec"
   cat >| "$spec_file" <<'__USAGE_EOF__'
-name generate_ai_commit
-bin generate_ai_commit
-about "Generate AI commit messages based on staged changes"
-flag "-e --engine" help="AI engine to use" default=gemini {
+name git-cg
+bin git-cg
+about "GitOps AI Commit Generator and Release Automation"
+flag "-i --interactive" help="Enable terminal-native interactive review via gum."
+flag "-e --engine" help="AI engine to use when running git-cg directly." default=mtplx {
     arg <ENGINE>
 }
-flag "-d --dry-run" help="Do not write the commit message, just print it"
-flag "-v --verbose" help="Enable verbose output"
-arg <COMMIT_MSG_FILE> help="Path to the commit message file"
-arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')" required=#false
+flag "-d --dry-run" help="Generate and print the commit message without applying a commit."
+flag "-v --verbose" help="Enable verbose output."
+flag --strict help="Exit non-zero on failure for standalone CLI use."
+cmd commit help="Generate an AI commit message based on staged changes." {
+    arg "[COMMIT_MSG_FILE]" help="Path to the commit message file" required=#false default=".git/COMMIT_EDITMSG"
+    arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')" required=#false default=message
+}
+cmd sop help="Display the GitOps SOP matrices and workflows."
+cmd release help="Calculate SemVer bump, inject versions into changed files, and generate Changelog."
 __USAGE_EOF__
   local -a completions=()
   while IFS= read -r line; do
