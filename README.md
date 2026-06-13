@@ -13,8 +13,8 @@
 [![Pydantic Badge](https://img.shields.io/badge/Pydantic-E92063?logo=pydantic&logoColor=fff&style=flat)](https://docs.pydantic.dev/)
 ![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FThomo1318%2FgitCommitGenerator%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
 
-
 [![codecov](https://codecov.io/github/Thomo1318/gitCommitGenerator/graph/badge.svg?token=AVMG5EPOY6)](https://codecov.io/github/Thomo1318/gitCommitGenerator)
+[![GitMCP](https://img.shields.io/badge/Git-MCP-blue?logo=git)](https://gitmcp.io/Thomo1318/gitCommitGenerator)
 
 [![Docs](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/docs.yml?label=docs)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/docs.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/security.yml?label=security)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/security.yml)
@@ -265,6 +265,7 @@ Structured issue references render above machine-readable trailers. Example:
 Explain the why and how.
 
 Included changes:
+
 - 📝 docs(readme): document review flow
 
 Resolves #80

@@ -429,11 +429,19 @@ def generate_commit_message(
 def detect_primary_language(diff_output: str) -> str | None:
     """
     Detect the primary language of the diff based on file extensions.
+    Ignores non-code extensions (like .md, .txt) so that a single code file change
+    takes precedence over multiple documentation changes.
     """
     pattern = re.compile(r"^diff --git a/.*\.([a-zA-Z0-9]+) b/.*$", re.MULTILINE)
     extensions = pattern.findall(diff_output)
     if not extensions:
         return None
+
+    ignored_exts = {"md", "txt", "json", "yaml", "yml", "csv", "toml", "ini", "lock", "gitignore", "env", "pkl"}
+    code_extensions = [ext.lower() for ext in extensions if ext.lower() not in ignored_exts]
+
+    # Fallback to all extensions if only non-code files were modified
+    target_extensions = code_extensions if code_extensions else [ext.lower() for ext in extensions]
 
     # Common mappings
     ext_map = {
@@ -451,17 +459,13 @@ def detect_primary_language(diff_output: str) -> str | None:
         "swift": "Swift",
         "kt": "Kotlin",
         "sh": "Shell",
-        "yaml": "YAML",
-        "yml": "YAML",
-        "json": "JSON",
         "html": "HTML",
         "css": "CSS",
-        "md": "Markdown",
         "tf": "Terraform",
     }
 
-    counter = Counter(extensions)
-    most_common_ext = counter.most_common(1)[0][0].lower()
+    counter = Counter(target_extensions)
+    most_common_ext = counter.most_common(1)[0][0]
     return ext_map.get(most_common_ext, most_common_ext.upper())
 
 
