@@ -390,6 +390,7 @@ def test_actions_tuple_contains_all_expected_actions():
         "Add issue reference",
         "Add regenerate guidance",
         "Clear regenerate guidance",
+        "Print plain text",
         "Cancel",
     }
     assert set(ACTIONS) == expected

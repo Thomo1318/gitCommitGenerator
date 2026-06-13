@@ -160,10 +160,10 @@ sequenceDiagram
 
 ## 11. Verification Plan
 
-- [ ] **Terminal Test**: Execute `git commit` from a standard terminal (Ghostty/iTerm). Verify the bell sounds, `gum` renders correctly, and arrow keys function.
-- [ ] **Editor Test**: Select "Edit" in `gum` and verify `$EDITOR` opens seamlessly on `/dev/tty`.
-- [ ] **GUI Client Test**: Execute a commit from VS Code's source control panel. Verify `git-cg` exits silently and the generated message populates the VS Code input box without hanging.
-- [ ] **DND Test**: Turn on macOS "Do Not Disturb" and ensure the commit process still executes and prompts via `gum` without issues.
+- [x] **Terminal Test**: Execute `git commit` from a standard terminal (Ghostty/iTerm). Verify the bell sounds, `gum` renders correctly, and arrow keys function.
+- [x] **Editor Test**: Select "Edit" in `gum` and verify `$EDITOR` opens seamlessly on `/dev/tty`.
+- [x] **GUI Client Test**: Execute a commit from VS Code's source control panel. Verify `git-cg` exits silently and the generated message populates the VS Code input box without hanging.
+- [x] **DND Test**: Turn on macOS "Do Not Disturb" and ensure the commit process still executes and prompts via `gum` without issues.
 
 ## 12. Review / Revisit Criteria
 

@@ -4,16 +4,50 @@
 
 > 🤖 **"The Brain in the Machine"** — A governed, SOP-driven engine for standardized Git history.
 
+<div align="center">
+
 [![DeepWiki](https://img.shields.io/badge/DeepWiki-Thomo1318%2FgitCommitGenerator-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/Thomo1318/gitCommitGenerator)
-[![GitHub Release](https://img.shields.io/github/v/release/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/releases)
-[![PyPI Version](https://img.shields.io/pypi/v/gitcommitgenerator)](https://pypi.org/project/gitcommitgenerator/)
-[![Python Version](https://img.shields.io/pypi/pyversions/gitcommitgenerator)](https://pypi.org/project/gitcommitgenerator/)
+
+[![uv Badge](https://img.shields.io/badge/uv-DE5FE9?logo=uv&logoColor=fff&style=flat)](https://github.com/astral-sh/uv)
+[![Ruff Badge](https://img.shields.io/badge/Ruff-D7FF64?logo=ruff&logoColor=000&style=flat)](https://github.com/astral-sh/ruff)
+[![Pydantic Badge](https://img.shields.io/badge/Pydantic-E92063?logo=pydantic&logoColor=fff&style=flat)](https://docs.pydantic.dev/)
+![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FThomo1318%2FgitCommitGenerator%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
+
+
+[![codecov](https://codecov.io/github/Thomo1318/gitCommitGenerator/graph/badge.svg?token=AVMG5EPOY6)](https://codecov.io/github/Thomo1318/gitCommitGenerator)
+
 [![Docs](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/docs.yml?label=docs)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/docs.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/security.yml?label=security)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/security.yml)
-[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![GitHub License](https://img.shields.io/github/license/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/blob/main/LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/releases)
+
+</div>
 
 ---
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+- [🧬 GitOps AI Commit Generator (`git-cg`)](#-gitops-ai-commit-generator-git-cg)
+  - [📚 Overview](#-overview)
+  - [🧠 Core Philosophy \& Architecture](#-core-philosophy--architecture)
+  - [🏗 System Stack](#-system-stack)
+  - [🛠 File Role Matrix](#-file-role-matrix)
+  - [✨ Features](#-features)
+  - [🚀 Installation \& Provisioning](#-installation--provisioning)
+    - [Configuration \& Secrets](#configuration--secrets)
+  - [🛠 Usage](#-usage)
+    - [Default non-interactive mode](#default-non-interactive-mode)
+    - [Interactive review mode](#interactive-review-mode)
+    - [Hook-driven usage](#hook-driven-usage)
+    - [The Standard: Hybrid Commits](#the-standard-hybrid-commits)
+      - [Gitmoji Reference Matrix](#gitmoji-reference-matrix)
+  - [🤝 Contributing](#-contributing)
+  - [🧑‍💻 Development](#-development)
+  - [🏆 Acknowledgements \& Open Source Licenses](#-acknowledgements--open-source-licenses)
+  - [📄 License](#-license)
+
+<!-- END doctoc -->
 
 ## 📚 Overview
 
@@ -68,6 +102,8 @@ flowchart TD
         SOPLoader["SOP Loader<br/>(sop.py)"]
         Pydantic["CommitPlan Schema<br/>(models.py)"]
         Instructor["Instructor<br/>(Validation & Retries)"]
+        Regeneration["Regeneration Layer<br/>(regeneration.py)"]
+        Release["Release Manager<br/>(release.py)"]
 
         PrepareHook --> Main
         Main --> SOPLoader
@@ -75,6 +111,8 @@ flowchart TD
         Main --> Interaction
         Ranker --> Instructor
         Pydantic --> Instructor
+        Instructor --> Regeneration
+        Main --> Release
     end
 
     subgraph Execution ["Inference Layer"]
@@ -123,7 +161,7 @@ flowchart TD
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
 - **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, `Print plain text`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
-- **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution.
+- **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution with Local LLMs depending on your hardware.
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
 - **Spec-Driven**: Uses the [usage](https://usage.jdx.dev/) standard for automated autocompletion and help generation.
 - **Safe Dry-Runs**: Validate AI output before modifying your git message file.
@@ -360,11 +398,11 @@ Changelog-Groups: Changed, Fixed, Miscellaneous
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
 We welcome community contributions! Please review the open issues on our [GitHub Tracker](https://github.com/Thomo1318/gitCommitGenerator/issues).
 
-## Development
+## 🧑‍💻 Development
 
 Instructions for setting up the local development environment will be added soon.
 
@@ -379,6 +417,10 @@ This project heavily leverages the following open-source tools. We extend our im
 | **[mise](https://mise.jdx.dev)**                                | MIT                 | Environment and Toolchain Manager         |
 | **[usage](https://usage.jdx.dev/)**                             | MIT                 | Standardized CLI Specifications           |
 | **[hk](https://hk.jdx.dev)**                                    | MIT                 | Deterministic Git Hook Management         |
+| **[Opik](https://comet.com/site/products/opik/)**               | Apache-2.0          | Open-source LLM Evaluation & Tracing      |
+| **[BetterLeaks](https://github.com/Thomo1318/betterleaks)**     | MIT                 | Secret Scanning & Prevention              |
+| **[CodeRabbit](https://coderabbit.ai/)**                        | Commercial          | AI-powered Code Review                    |
+| **[Qodo](https://www.qodo.ai/)**                                | Commercial          | AI Coding Assistant                       |
 | **[oMLX](https://github.com/jundot/omlx)**                      | Apache-2.0          | High-performance Apple Silicon LLM Server |
 | **[MTPLX](https://github.com/youssofal/mtplx)**                 | Apache-2.0          | Native MTP Speculative Decoding Inference |
 | **[rtk](https://github.com/rtk-ai/rtk)**                        | MIT                 | LLM Token Compression Proxy               |

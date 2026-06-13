@@ -20,5 +20,8 @@
   "license": "MIT",
   "dependencies": {
     "zx": "^8.1.0"
+  },
+  "devDependencies": {
+    "doctoc": "^2.5.0"
   }
 }

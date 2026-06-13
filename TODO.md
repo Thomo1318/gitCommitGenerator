@@ -4,19 +4,37 @@ All tasks and planned features have been formally migrated to [GitHub Issues](ht
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
-## New Issue: Change the agents prompt depending on the main code language identified in the diff
+- [ ] Change the agents prompt depending on the main code language identified in the diff
 
 This should assist with early steering of the LLM.
 
 ---
 
-## New Issue: Opik Telemetry Pipeline for Model Training and Prompt Engineering
+- [ ] Opik Telemetry Pipeline for Model Training and Prompt Engineering
 
 Look at obtaining the test data from opik, we may look at further developing the opik integration, further we can start using the data to train our own model. Additionally, we can run prompt improvements on the data via opiks prompt engineering tools.
 
 ---
 
-## New Issue: Investigate LLM Inference Runtimes for On-Device ML
+- [ ] Add code examples to the documentation.
+
+---
+
+- [ ] Add snyk and codecov as hk hooks to scan code
+
+```
+snyk code test --org=fcd71871-87fc-4f54-b77a-74fc83e0531c
+```
+
+[Codecov](https://docs.codecov.com/docs/about-code-coverage)
+
+---
+
+- [ ] Look at using [axolotl](https://github.com/axolotl-ai-cloud/axolotl) to train the agent
+
+---
+
+- [ ] Investigate LLM Inference Runtimes for On-Device ML
 
 Compare:
 
@@ -33,25 +51,25 @@ Compare:
 
 ---
 
-## New Issue: Dashboard for MTPLX
+- [ ] Dashboard for MTPLX
 
 - Install and use [hipdash](https://github.com/daniel-farina/hipdash) a dashboard for MTPLX
 
 ---
 
-## New Issue: Determine if we should be updating the MTPLX model regularly
+- [ ] Determine if we should be updating the MTPLX model regularly
 
 [MTPLX_Updates](https://huggingface.co/Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed/tree/main)
 
 ---
 
-## New Issue: Determine if tools from
+- [ ] Determine if tools from
 
 [mlxetend](https://rasbt.github.io/mlxtend/USER_GUIDE_INDEX/) determine if can be of assistance.
 
 ---
 
-## New Issue: Alter the badges to be added to the README.md doc.
+- [ ] Alter the badges to be added to the README.md doc.
 
 <div align="center">
 
@@ -74,6 +92,23 @@ Compare:
 [![GitMCP](https://img.shields.io/badge/Git-MCP-blue?logo=git)](https://gitmcp.io/Thomo1318/jjConfig)
 
 </div>
+
+---
+
+- [ ] Zensical Documentation Overhaul
+
+- Remove obsolete pages such as "Agent Handoff" and "Walkthrough".
+- Ensure the content of the documentation site reflects recent PRs, Issues, and architectural changes (e.g. `git-cg` tool, guided regeneration, new SOP loading logic).
+- Ensure documentation formatting aligns with `git-cg` standard formatting.
+- Add `CHANGELOG.md` to the top-level navigation.
+
+---
+
+- [ ] Configure Package Publishing
+
+- Although the package `gitcommitgenerator` is built with `hatchling` (CLI tool `git-cg`), there is currently no pipeline for publishing to PyPI or Homebrew.
+- Investigate and set up a GitHub Action workflow to automatically publish releases to PyPI upon tagging.
+- Ensure the package metadata and entry points in `pyproject.toml` are correctly configured for public consumption.
 
 ---
 

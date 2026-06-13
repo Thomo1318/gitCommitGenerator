@@ -55,6 +55,8 @@ site/
 
 # Testing (Local)
 tests/output/
+tests/test_data/opik_exports/
+tests/test_data/op_*
 
 # Logs & Backups
 *.log
@@ -72,3 +74,4 @@ projectReview1/
 .neurotrace/
 config/ADR/
 DEV_WORKFLOW.md
+scratch.txt

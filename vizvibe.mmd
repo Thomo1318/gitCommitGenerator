@@ -32,6 +32,18 @@ flowchart TD
     %% @zensical_docs [ai-task, closed, 2026-06-10, ai]
     zensical_docs("Zensical Docs Pipeline<br/><sub>Configured Zensical for MkDocs<br/>generation, automated deployment<br/>via GitHub Actions, and hardened<br/>CI against zizmor warnings</sub>")
 
+    %% @test_suite [ai-task, closed, 2026-06-13, ai]
+    test_suite("Standardized Test Suite<br/><sub>Established comprehensive tests<br/>for intent, main, ranker,<br/>and sop modules to track<br/>and compare LLM outputs</sub>")
+
+    %% @guided_regeneration [ai-task, closed, 2026-06-13, ai]
+    guided_regeneration("Guided Regeneration<br/><sub>Implemented selective delta<br/>rendering and invariant contract<br/>enforcement. Added prompt reauthorisation<br/>and bounded directives</sub>")
+
+    %% @tui_enhancements [ai-task, closed, 2026-06-13, ai]
+    tui_enhancements("TUI Enhancements<br/><sub>Added structured multi-issue<br/>references to the interactive<br/>review flow for robust<br/>issue tracking</sub>")
+
+    %% @release_v0_1_0 [ai-task, closed, 2026-06-13, ai]
+    release_v0_1_0("v0.1.0 Release<br/><sub>Released v0.1.0 with plain text<br/>commit output, semver bumping,<br/>and changelog generation based on<br/>the gitmoji matrix</sub>")
+
     %% === FUTURE WORK ===
     %% @second_agent_review [ai-task, opened, 2026-06-06, ai]
     second_agent_review("Second Agent Review<br/><sub>Trigger another comprehensive<br/>agentic review to check the codebase<br/>for architecture gaps, portability,<br/>and finalize public readiness</sub>")
@@ -39,8 +51,11 @@ flowchart TD
     %% @config_system [ai-task, opened, 2026-06-06, ai]
     config_system("Configuration System<br/><sub>Create a robust configuration<br/>system to ensure portability<br/>and manage user preferences<br/>without hardcoded values</sub>")
 
-    %% @test_suite [ai-task, opened, 2026-06-06, ai]
-    test_suite("Standardized Test Suite<br/><sub>Establish a repeatable testing<br/>system to track and compare<br/>LLM outputs for consistent<br/>commit generation</sub>")
+    %% @docs_overhaul [ai-task, opened, 2026-06-13, ai]
+    docs_overhaul("Documentation Overhaul<br/><sub>Overhaul Zensical docs to<br/>reflect recent architecture changes,<br/>remove obsolete pages, and<br/>align with git-cg formatting</sub>")
+
+    %% @package_publishing [ai-task, opened, 2026-06-13, ai]
+    package_publishing("Package Publishing<br/><sub>Configure GitHub Actions to<br/>automatically publish the hatchling<br/>package to PyPI and Homebrew<br/>upon release tagging</sub>")
 
     %% === CONNECTIONS ===
     project_start --> core_engine
@@ -50,17 +65,24 @@ flowchart TD
     semver_refactor --> ai_routing_compression
     ai_routing_compression --> gum_tui_integration
     gum_tui_integration --> zensical_docs
-    zensical_docs --> second_agent_review
-    zensical_docs --> config_system
     zensical_docs --> test_suite
+    test_suite --> guided_regeneration
+    guided_regeneration --> tui_enhancements
+    tui_enhancements --> release_v0_1_0
     
+    release_v0_1_0 --> second_agent_review
+    release_v0_1_0 --> config_system
+    release_v0_1_0 --> docs_overhaul
+    release_v0_1_0 --> package_publishing
+
     second_agent_review -.-> ultimate_goal
     config_system -.-> ultimate_goal
-    test_suite -.-> ultimate_goal
+    docs_overhaul -.-> ultimate_goal
+    package_publishing -.-> ultimate_goal
 
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        zensical_docs
+        release_v0_1_0
     end
 
     %% === STYLES ===
@@ -72,9 +94,13 @@ flowchart TD
     style semver_refactor fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style ai_routing_compression fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style gum_tui_integration fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style zensical_docs fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style test_suite fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style guided_regeneration fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style tui_enhancements fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
 
     %% Recent node (highlighted purple)
-    style zensical_docs fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style release_v0_1_0 fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Recent subgraph (dashed border)
     style recent fill:transparent,stroke:#c084fc,color:#c084fc,stroke-width:2px,stroke-dasharray:5 5
@@ -83,4 +109,5 @@ flowchart TD
     style ultimate_goal fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
     style second_agent_review fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
     style config_system fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
-    style test_suite fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
+    style docs_overhaul fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
+    style package_publishing fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
