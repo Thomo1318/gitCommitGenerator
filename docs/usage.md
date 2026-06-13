@@ -48,7 +48,7 @@ Path to the commit message file
 
 Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')
 
-**Default:** `message`
+**Default:** ``
 
 ## `git-cg sop`
 

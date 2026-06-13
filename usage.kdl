@@ -34,7 +34,7 @@ cmd "commit" {
     arg "<COMMIT_SOURCE>" {
         help "Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')"
         required #false
-        default "message"
+        default ""
     }
 }
 

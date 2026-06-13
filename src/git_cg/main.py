@@ -314,9 +314,13 @@ def get_ai_client(engine: str) -> instructor.Instructor:
                     except (
                         urllib.error.URLError,
                         TimeoutError,
-                        Exception,
+                        ConnectionError,
+                        OSError,
                     ):
                         pass
+                    except Exception as e:
+                        console.print(f"[bold red]❌ Unexpected error checking AI server status: {e}[/bold red]")
+                        raise
 
                     time.sleep(1)
 

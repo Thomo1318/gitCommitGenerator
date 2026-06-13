@@ -27,7 +27,7 @@ flag "-v --verbose" help="Enable verbose output."
 flag --strict help="Exit non-zero on failure for standalone CLI use."
 cmd commit help="Generate an AI commit message based on staged changes." {
     arg "[COMMIT_MSG_FILE]" help="Path to the commit message file" required=#false default=".git/COMMIT_EDITMSG"
-    arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')" required=#false default=message
+    arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')" required=#false default=""
 }
 cmd sop help="Display the GitOps SOP matrices and workflows."
 cmd release help="Calculate SemVer bump, inject versions into changed files, and generate Changelog."
