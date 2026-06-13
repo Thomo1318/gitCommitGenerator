@@ -225,15 +225,13 @@ def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
 
 def get_ai_client(engine: str) -> instructor.Instructor:
     """
-    Create and return an Instructor AI client configured for the named engine.
-
-    Initialises an OpenAI-compatible client using credentials and base URL resolved from environment/secrets for the given engine key. If the configured base URL points to a local server and that server is not reachable, this function will attempt to start a compatible local server in the background and wait for it to become ready before returning.
+    Create an Instructor AI client for the given engine; if the engine's base URL points to a local server that is not responsive, attempt to start a compatible local server and wait for it to become ready.
 
     Parameters:
-        engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (for example "omlx", "mtplx", "openai").
+        engine (str): Engine identifier (case-insensitive) as listed in ENGINE_REGISTRY (e.g. "omlx", "mtplx", "openai").
 
     Returns:
-        instructor.Instructor: A wrapped Instructor client ready for use.
+        instructor.Instructor: A configured Instructor client ready for use.
 
     Raises:
         ValueError: If the provided engine is not present in ENGINE_REGISTRY.
@@ -261,7 +259,10 @@ def get_ai_client(engine: str) -> instructor.Instructor:
             with urllib.request.urlopen(req, timeout=1) as response:
                 if response.status == 200:
                     server_ready = True
-        except urllib.error.URLError, TimeoutError:
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+        ):
             pass
 
         if not server_ready:
@@ -310,8 +311,16 @@ def get_ai_client(engine: str) -> instructor.Instructor:
                                 server_ready = True
                                 console.print("\n[green]✅ AI server successfully started and is ready![/green]")
                                 break
-                    except urllib.error.URLError, TimeoutError, Exception:
+                    except (
+                        urllib.error.URLError,
+                        TimeoutError,
+                        ConnectionError,
+                        OSError,
+                    ):
                         pass
+                    except Exception as e:
+                        console.print(f"[bold red]❌ Unexpected error checking AI server status: {e}[/bold red]")
+                        raise
 
                     time.sleep(1)
 
@@ -689,6 +698,10 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
                 console.print("[yellow]No regeneration guidance is currently attached.[/yellow]")
             continue
 
+        if action == "Print plain text":
+            console.print(review_state.render())
+            continue
+
         if action == "Edit":
             editor = os.environ.get("EDITOR", "nano")
             subprocess.run([editor, commit_msg_file], check=False)
@@ -1045,7 +1058,11 @@ def main_callback(
     try:
         git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
         commit_msg_file = os.path.join(git_dir, "COMMIT_EDITMSG")
-    except subprocess.CalledProcessError, FileNotFoundError, OSError:
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        OSError,
+    ):
         commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
     _run_commit_generation(
         commit_msg_file,
@@ -1065,8 +1082,10 @@ def main_callback(
 
 @app.command("commit")
 def commit(
-    commit_msg_file: str = typer.Argument(..., help="Path to the commit message file"),
-    commit_source: str | None = typer.Argument(None, help="Source of the commit message (e.g., 'message', 'template')"),
+    commit_msg_file: str = typer.Argument(".git/COMMIT_EDITMSG", help="Path to the commit message file"),
+    commit_source: str = typer.Argument(
+        "", help="Source of the commit message (e.g., 'message', 'template', or empty for default generation)"
+    ),
     extra_args: list[str] | None = typer.Argument(None, help="Any extra arguments passed by git hooks"),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx", "--engine", "-e", help="AI engine to use (e.g. omlx, mtplx)"

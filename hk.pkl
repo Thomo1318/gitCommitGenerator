@@ -11,6 +11,11 @@ local linters = new Mapping<String, Step> {
     ["betterleaks"] {
         check = "betterleaks git -v --staged"
     }
+    ["gen-docs"] {
+        glob = "usage.kdl"
+        check = "just docs-hook"
+        fix = "just docs-hook"
+    }
 }
 
 hooks {

@@ -1,10 +1,8 @@
 #!/usr/bin/env zsh
 # git-cg
-# Simple wrapper for the AI Git Commit Generator leveraging jdx/usage.
+# Simple wrapper for the AI Git Commit Generator.
 
 SCRIPT_DIR="${0:A:h}"
-TARGET_SCRIPT="$SCRIPT_DIR/../scripts/generate_ai_commit.zsh"
 
-# Pass all arguments directly to the script.
-# Since the target script has a usage shebang, we execute it directly.
-exec "$TARGET_SCRIPT" "$@"
+# Pass all arguments directly to the python module
+exec uv run python -m git_cg.main "$@"
