@@ -4,6 +4,18 @@ All tasks and planned features have been formally migrated to [GitHub Issues](ht
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
+## New Issue: Change the agents prompt depending on the main code language identified in the diff
+
+This should assist with early steering of the LLM.
+
+---
+
+## New Issue: Opik Telemetry Pipeline for Model Training and Prompt Engineering
+
+Look at obtaining the test data from opik, we may look at further developing the opik integration, further we can start using the data to train our own model. Additionally, we can run prompt improvements on the data via opiks prompt engineering tools.
+
+---
+
 ## New Issue: Investigate LLM Inference Runtimes for On-Device ML
 
 Compare:
