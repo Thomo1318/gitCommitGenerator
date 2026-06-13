@@ -1,0 +1,21 @@
+coverage:
+  status:
+    project:
+      default:
+        # Ensure overall project coverage doesn't drop by more than 1%
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        # Ensure new code in PRs is reasonably tested
+        target: auto
+        threshold: 1%
+
+ignore:
+  - "tests/*"
+  - "docs/*"
+
+comment:
+  layout: "header, reach, diff, flags, files"
+  behavior: default
+  require_changes: false  # Always post a comment, even if coverage doesn't change

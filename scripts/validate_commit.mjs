@@ -13,8 +13,10 @@ if (!fs.existsSync(commitMsgFile)) process.exit(0);
 const sop = JSON.parse(fs.readFileSync(sopPath, 'utf8'));
 const matrix = sop.gitmoji_reference_matrix;
 
-// Read and clean the commit message (ignore comments)
-const rawMsg = fs.readFileSync(commitMsgFile, 'utf8');
+const safePath = path.resolve(process.cwd(), commitMsgFile);
+if (!safePath.startsWith(process.cwd())) process.exit(1);
+
+const rawMsg = fs.readFileSync(safePath, 'utf8');
 const lines = rawMsg.split('\n').filter(line => !line.trim().startsWith('#'));
 if (lines.length === 0) process.exit(0);
 

@@ -10,6 +10,7 @@ import tempfile
 from dataclasses import dataclass, field
 from typing import NoReturn
 
+import click
 from dotenv import load_dotenv
 
 # Load .env fallback immediately
@@ -283,7 +284,8 @@ def get_ai_client(engine: str) -> instructor.Instructor:
                 else shlex.split(f"{omlxd_path} --port {port}")
             )
 
-            log_path = f"/tmp/{engine_lower}_server.log"
+            engine_safe = os.path.basename(engine_lower)
+            log_path = f"/tmp/{engine_safe}_server.log"
             with open(log_path, "a", encoding="utf-8") as log_file:
                 process = subprocess.Popen(cmd_args, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
 
@@ -703,8 +705,7 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
             continue
 
         if action == "Edit":
-            editor = os.environ.get("EDITOR", "nano")
-            subprocess.run([editor, commit_msg_file], check=False)
+            click.edit(filename=commit_msg_file)
         return action
 
 
@@ -1013,6 +1014,9 @@ def _apply_standalone_commit(commit_msg_file: str, *, strict: bool) -> None:
     try:
         result = subprocess.run(["git", "commit", "-F", commit_msg_file], check=False)
         if result.returncode != 0:
+            console.print(f"\n[yellow]Your generated commit message was safely retained at: {commit_msg_file}[/yellow]")
+            console.print("[green]To retry applying it after fixing the hook errors, run:[/green]")
+            console.print("[bold cyan]  git-cg --recover[/bold cyan]\n")
             _abort("[bold red]git commit failed while applying generated commit message.[/bold red]", strict=strict)
     except FileNotFoundError as e:
         _abort(f"[bold red]Unable to execute git commit:[/bold red] {e}", strict=strict)
@@ -1035,6 +1039,9 @@ def main_callback(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output."),
     strict: bool = typer.Option(True, "--strict", help="Exit non-zero on failure for standalone CLI use."),
+    recover: bool = typer.Option(
+        False, "--recover", "-r", help="Recover and retry the last generated commit message without querying the AI."
+    ),
 ) -> None:
     """
     Entrypoint callback for the CLI that generates a Conventional Commit from staged changes and, when invoked without a subcommand, applies it to the repository.
@@ -1064,6 +1071,16 @@ def main_callback(
         OSError,
     ):
         commit_msg_file = os.path.join(".git", "COMMIT_EDITMSG")
+
+    if recover:
+        if os.path.exists(commit_msg_file) and os.path.getsize(commit_msg_file) > 0:
+            console.print(f"[green]Recovering previous commit message from {commit_msg_file}...[/green]")
+            if not dry_run:
+                _apply_standalone_commit(commit_msg_file, strict=strict)
+            raise typer.Exit(code=0)
+        else:
+            _abort("[red]No previous commit message found to recover.[/red]", strict=strict)
+
     _run_commit_generation(
         commit_msg_file,
         None,
