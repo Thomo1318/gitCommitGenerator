@@ -16,6 +16,11 @@ local linters = new Mapping<String, Step> {
         check = "just docs-hook"
         fix = "just docs-hook"
     }
+    ["gen-toc"] {
+        glob = "README.md"
+        check = "npx doctoc {{ files }} --notitle"
+        fix = "npx doctoc {{ files }} --notitle"
+    }
 }
 
 hooks {

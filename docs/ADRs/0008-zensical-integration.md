@@ -194,7 +194,7 @@ sequenceDiagram
 
 - [x] Ensure `uv sync --group docs` installs Zensical successfully.
 - [x] Execute `uv run zensical build --strict` and verify it exits with code 0 ("No issues found").
-- [ ] Monitor the initial GitHub Actions run upon the next push to `main` to confirm the Pages deployment succeeds.
+- [x] Monitor the initial GitHub Actions run upon the next push to `main` to confirm the Pages deployment succeeds.
 
 ### Manual Verification
 
