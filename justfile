@@ -58,7 +58,7 @@ test:
     @mkdir -p .test_repo
     @./scripts/setup_test_scenario.zsh .test_repo
     @echo "📂 Testing in temporary repo: .test_repo"
-    @cd .test_repo && ../bin/git-cg --dry-run .git/COMMIT_EDITMSG template
+    @cd .test_repo && ../bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template
     @echo "🧹 Cleaning up..."
     @rm -rf .test_repo
     @echo "✅ Robust integration test complete."

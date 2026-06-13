@@ -17,6 +17,7 @@ Action = Literal[
     "Add issue reference",
     "Add regenerate guidance",
     "Clear regenerate guidance",
+    "Print plain text",
     "Cancel",
 ]
 IssueReferenceTypeChoice = Literal["Resolves", "Refs", "Closes", "Fixes", "Back"]
@@ -28,6 +29,7 @@ ACTIONS: tuple[Action, ...] = (
     "Add issue reference",
     "Add regenerate guidance",
     "Clear regenerate guidance",
+    "Print plain text",
     "Cancel",
 )
 ISSUE_REFERENCE_TYPE_CHOICES: tuple[IssueReferenceTypeChoice, ...] = ("Resolves", "Refs", "Closes", "Fixes", "Back")

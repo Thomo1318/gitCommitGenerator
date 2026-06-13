@@ -121,7 +121,7 @@ flowchart TD
 - **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
 - **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
-- **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, and `Cancel` actions without relying on desktop notifications.
+- **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, `Print plain text`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
 - **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution.
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).

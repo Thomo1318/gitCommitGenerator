@@ -694,6 +694,10 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
                 console.print("[yellow]No regeneration guidance is currently attached.[/yellow]")
             continue
 
+        if action == "Print plain text":
+            console.print(review_state.render())
+            continue
+
         if action == "Edit":
             editor = os.environ.get("EDITOR", "nano")
             subprocess.run([editor, commit_msg_file], check=False)
