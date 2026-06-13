@@ -1,9 +1,6 @@
 """Tests for git_cg.secrets - covering the _populate_cache and resolve_secret changes."""
 
-import os
-import sys
 import unittest.mock as mock
-
 
 # ---------------------------------------------------------------------------
 # _populate_cache - early-exit paths (no SDK, no token)

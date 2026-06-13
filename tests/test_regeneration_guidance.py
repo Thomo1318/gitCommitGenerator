@@ -148,7 +148,7 @@ def test_format_regeneration_guidance_status_one_over_max_length():
     assert result.endswith("...")
     # Total display portion after prefix must be at most max_length chars
     prefix = "Regeneration guidance: "
-    display = result[len(prefix):]
+    display = result[len(prefix) :]
     assert len(display) <= 80
 
 
@@ -166,7 +166,7 @@ def test_format_regeneration_guidance_status_custom_small_max_length():
     """Custom small max_length must clamp the display window correctly."""
     result = format_regeneration_guidance_status("Hello world this is guidance", max_length=10)
     prefix = "Regeneration guidance: "
-    display = result[len(prefix):]
+    display = result[len(prefix) :]
     assert len(display) <= 10
     assert result.endswith("...")
 
@@ -237,10 +237,24 @@ def test_extract_directives_empty_residual_when_fully_extracted():
 
 def test_extract_directives_all_supported_types():
     """Each supported commit type keyword must be extracted correctly."""
-    supported_types = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert", "init", "release"]
+    supported_types = [
+        "feat",
+        "fix",
+        "docs",
+        "style",
+        "refactor",
+        "perf",
+        "test",
+        "build",
+        "ci",
+        "chore",
+        "revert",
+        "init",
+        "release",
+    ]
     state = ReviewState(commit_plan=_make_commit_plan())
     for commit_type in supported_types:
-        changed = state.set_regeneration_guidance(f"this is a {commit_type} change")
+        state.set_regeneration_guidance(f"this is a {commit_type} change")
         assert state.active_directives.get("preferred_type") == commit_type, f"Failed for type: {commit_type}"
 
 
