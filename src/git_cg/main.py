@@ -334,7 +334,24 @@ def get_ai_client(engine: str) -> instructor.Instructor:
                 )
 
     openai_client = track_openai(OpenAI(base_url=base_url, api_key=api_key))
-    client = instructor.from_openai(openai_client)
+    if engine_lower in ["mtplx", "omlx"]:
+        # Monkeypatch create to strip <think> blocks before instructor parses it
+        original_create = openai_client.chat.completions.create
+
+        def patched_create(*args, **kwargs):
+            response = original_create(*args, **kwargs)
+            if hasattr(response, "choices") and response.choices:
+                content = response.choices[0].message.content
+                if content and "</think>" in content:
+                    # Keep everything after the </think> tag
+                    response.choices[0].message.content = content.split("</think>")[-1].strip()
+            return response
+
+        openai_client.chat.completions.create = patched_create
+
+        client = instructor.from_openai(openai_client, mode=instructor.Mode.JSON)
+    else:
+        client = instructor.from_openai(openai_client)
     return client
 
 
@@ -1047,6 +1064,43 @@ def _run_commit_generation(
 
         break
 
+    try:
+        import dataclasses
+
+        from git_cg.telemetry import (
+            GenerationTelemetry,
+            compute_diff_hash,
+            compute_prompt_hash,
+            run_deterministic_checks,
+            write_telemetry_state,
+        )
+
+        score_card = run_deterministic_checks(review_state.commit_plan)
+
+        telemetry = GenerationTelemetry(
+            trace_id=thread_id,  # Using thread_id/repo_name as correlation ID for now
+            diff_hash=compute_diff_hash(diff_output),
+            diff_output=diff_output,
+            repo_name=repo_name,
+            engine=engine,
+            model_name=model_name,
+            system_prompt_hash=compute_prompt_hash(system_prompt),
+            generated_message=review_state.render(),
+            commit_plan_json=review_state.commit_plan.model_dump(),
+            score_card=dataclasses.asdict(score_card),
+        )
+        try:
+            git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
+            write_telemetry_state(git_dir, telemetry)
+            if verbose:
+                console.log(f"Opik telemetry state written to {git_dir}/GIT_CG_OPIK_STATE.json")
+        except Exception as inner_e:
+            if verbose:
+                console.log(f"[yellow]Failed to resolve git dir or write state: {inner_e}[/yellow]")
+    except Exception as e:
+        if verbose:
+            console.log(f"[yellow]Failed to write telemetry state: {e}[/yellow]")
+
     opik.flush_tracker()
     return True
 
@@ -1241,6 +1295,85 @@ def release(
     except ImportError as e:
         console.print(f"[bold red]Error loading release module:[/bold red] {e}")
         sys.exit(1)
+
+
+@app.command("record-telemetry")
+def record_telemetry(
+    commit_msg_file: str = typer.Argument(".git/COMMIT_EDITMSG", help="Path to the final commit message file"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+) -> None:
+    """Read the final commit message and the Two-Point trace state, then log to Opik."""
+    import subprocess
+
+    from git_cg.telemetry import (
+        classify_edit,
+        clear_telemetry_state,
+        read_telemetry_state,
+    )
+
+    try:
+        git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
+    except Exception:
+        git_dir = ".git"
+
+    state = read_telemetry_state(git_dir)
+    if not state:
+        if verbose:
+            console.log("No git-cg telemetry state found. Skipping.")
+        raise typer.Exit(code=0)
+
+    try:
+        with open(commit_msg_file, encoding="utf-8") as f:
+            final_message = f.read()
+    except Exception as e:
+        if verbose:
+            console.log(f"Failed to read final commit message: {e}")
+        clear_telemetry_state(git_dir)
+        raise typer.Exit(code=0) from e
+
+    provenance = classify_edit(state.generated_message, final_message)
+    if verbose:
+        console.log(f"Edit classification: {provenance.value}")
+
+    # Log the final trace data to Opik
+    try:
+
+        @opik.track(project_name="gitCommitGenerator")
+        def log_final_commit_telemetry(
+            final_commit_message: str,
+            provenance: str,
+            telemetry_state: dict,
+        ):
+            # The decorator automatically logs inputs/outputs
+            opik_context.update_current_trace(
+                tags=[provenance, "git-cg-final"],
+                metadata={
+                    "diff_hash": telemetry_state.get("diff_hash"),
+                    "repo_name": telemetry_state.get("repo_name"),
+                    "engine": telemetry_state.get("engine"),
+                    "model_name": telemetry_state.get("model_name"),
+                    "system_prompt_hash": telemetry_state.get("system_prompt_hash"),
+                    "score_card": telemetry_state.get("score_card"),
+                    "commit_plan": telemetry_state.get("commit_plan_json"),
+                },
+            )
+            return {"status": "recorded", "provenance": provenance}
+
+        log_final_commit_telemetry(
+            final_commit_message=final_message,
+            provenance=provenance.value,
+            telemetry_state=state.__dict__,
+        )
+        opik.flush_tracker()
+        if verbose:
+            console.log("Successfully recorded final telemetry to Opik.")
+    except Exception as e:
+        if verbose:
+            console.log(f"Failed to log telemetry to Opik: {e}")
+
+    # Always clear state to prevent stale reads
+    clear_telemetry_state(git_dir)
+    raise typer.Exit(code=0)
 
 
 if __name__ == "__main__":
