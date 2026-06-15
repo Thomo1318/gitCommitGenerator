@@ -267,7 +267,7 @@ After reading all source files, here is the relevant architecture:
 
 ## Proposed New Modules
 
-### 1. `src/git_cg/telemetry.py` [NEW]
+### 1. `src/git_cg/telemetry.py` (NEW)
 
 The telemetry orchestration module. Encapsulates all Opik-specific logic outside of `main.py`:
 
@@ -515,7 +515,7 @@ def flush_trace_metadata(telemetry: GenerationTelemetry) -> None:
 
 ---
 
-### 2. `src/git_cg/eval_metrics.py` [NEW]
+### 2. `src/git_cg/eval_metrics.py` (NEW)
 
 Custom Opik metrics tailored to git-cg's domain:
 

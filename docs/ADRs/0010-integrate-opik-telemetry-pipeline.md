@@ -17,7 +17,7 @@
 - **Security Scope:** Low (Data sanitization required for secret leaking)
 - **Risk Level:** Medium
 - **Reversibility:** High
-- **Tags:** [telemetry, opik, dataset, llm, evaluation, prompt-management]
+- **Tags:** \[telemetry, opik, dataset, llm, evaluation, prompt-management\]
 
 ## Catalyst
 
