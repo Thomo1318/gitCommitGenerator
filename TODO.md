@@ -10,6 +10,53 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 
 ---
 
+- [ ] Look at [Janis Article](https://medium.com/@PowerUpSkills/stop-making-ai-agents-rediscover-your-codebase-and-burn-your-tokens-7943325671d4)
+
+---
+
+- [ ] Install and test this [Codegraph](https://github.com/colbymchenry/codegraph)
+
+---
+
+- [ ] Confirm this [no vector search](https://buzzgrewal.medium.com/ai-agents-dont-need-vector-search-anymore-inside-the-agentic-search-stack-replacing-rag-in-2026-58efcabe4f6f)
+
+---
+
+Consider integfrating this: [hunk](https://github.com/modem-dev/hunk)
+
+---
+
+- [ ] ELK Stack
+
+---
+
+- [ ] Rapid-MLX
+
+---
+
+- [ ] [task](https://taskfile.dev/)
+
+---
+
+- [ ] [iii](https://iii.dev/)
+
+---
+
+- [ ] [dify](https://github.com/langgenius/dify)
+
+---
+
+- [ ] [RAG vs RLM](https://www.towardsdeeplearning.com/rlms-the-mit-trick-that-makes-a-small-ai-beat-gpt-5-668c7744cda7)
+
+---
+
+- [ ] Add a function `git-cg config` that will allow the user to configure the model they want to use which will switch the `$MODEL` environment variable.
+  - [ ] It should also allow them to tune the model to find the best depth for their system. It should also allow them to select the depth they want to use. These should be saved to the .env file. It should also be able to save these settings to a file that can be copied to other systems, but only contain the settings and not any other information. It should have some kind of safety mechanism to prevent accidental changes to the .env file, so that it is not corrupted. I have already created the skeleton for the `gum` wizard in the `git-cg-config` function in the script so I will just need to flesh out the details.
+  - [ ] This will also allow them to set up the remote repository connection with git. I have already created the file `git-cg-config-test.sh` to test the `git-cg-config` function.
+  - [ ] This will be part of an overall configuration package which will be able to be set easily via the CLI and a `gum` wizard to help them get set up or change configuration after the initial setup.
+
+---
+
 - [ ] if they want to commit in stages they can select which files to commit and which to skip and run `git-cg stage` or `git-cg -s` to stage the selected files and `git-cg push` or `git-cg -p` to push the staged files and commit them with the generated commit message. For example currently I have about 10 files that need to be commited. they are a mixture of `.py` and `.md` files. I would like to commit the `.py` files first with a commit message, then the `.md` files with a different commit message. This allows me to generate better commit messages because I can pick out the code files and documentation, test, image files, etc. this method has seemed to provide the best results for me so far.
 
 ---
@@ -205,4 +252,143 @@ Organise into a table.
 
 ---
 
-## New Issue: ...
+- [ ] Consider adding these libraries where needed:
+  - [ ] polars
+  - [ ] rich
+    - [ ] ? Full go front end with python backend. This would open the whole charmbracelet suite to us.
+    - [ ] [progress bars](https://arc.net/l/quote/yncaivfb)
+    - [ ] [Logging with rich handler](https://arc.net/l/quote/kvyuysnl)
+    - [ ] [Console recording and export](https://arc.net/l/quote/zhqzjuwr)
+  - [ ] sentence-transformers (for semantic similarity and matching the `intent`)
+  - [ ] perfect
+  - [ ] "walrus" operator for fetching the gitmoji's to match with intent
+  - [ ] functools.cache
+  - [ ] cached_property
+  - [ ] contextlib.contextmanager
+    - [ ] `ExitStack`
+  - [ ] `@dataclasses`
+    - [ ] `field()`
+    - [ ] `__post_init__`
+    - [ ] `frozen=True`
+    - [ ] `repr=False`
+  - [ ] `executing`
+  - [ ] `python-magic`
+  - [ ] `glom`
+  - [ ] `deal`
+  - [ ] `crosshair`
+  - [ ] `immutables`
+  - [ ] `tenacity`
+  - [ ] `boltons`
+  - [ ] `msgspec`
+  - [ ] `structlog`
+  - [ ] `diskcache`
+  - [ ] `pyinstrument`
+  - [ ] `anyio`
+  - [ ] `orjson`
+  - [ ] `py-spy`
+  - [ ] `loguru`
+  - [ ] `pydantic-settings`
+  - [ ] `pydantic-aioredis`
+  - [ ] `pydantic-yaml`
+  - [ ] `sqlite-utils`
+  - [ ] `rapidfuzz`
+  - [ ] `sqlglot`
+  - [ ] `__init_subclass__`
+  - [ ] `betterproto`
+  - [ ] `tqdm`
+  - [ ] `dotenv`
+  - [ ] `SQLAlchemy 2.0 Async`
+  - [ ] `alembic`
+  - [ ] `pytest-asyncio`
+  - [ ] `sentry_sdk`
+  - [ ] `redis.asyncio`
+  - [ ] Swagger UI
+  - [ ] ReDoc
+  - [ ] GraphQL — Strawberry
+  - [ ] fastapi-versioning
+  - [ ] Uvicorn
+  - [ ] `logging`
+  - [ ] `prometheus_client`
+    - [ ] `Counter`
+    - [ ] `Gauge`
+    - [ ] `Histogram`
+    - [ ] `Summary`
+  - [ ] Structural Pattern Matching for Complex Conditionals
+  - [ ] Context Manager Protocol for Resource Management
+  - [ ] Descriptor Protocol for Reusable Validation
+  - [ ] Slots for Memory-Efficient Classes
+  - [ ] Functools Cache Decorators Beyond Simple Memoization
+  - [ ] Generator Expressions for Memory-Efficient Pipelines
+  - [ ] ChainMap for Elegant Configuration Management
+  - [ ] Singledispatch for Clean Polymorphism
+  - [ ] Walrus Operator for Efficient Conditionals
+  - [ ] `msgpack`
+  - [ ] `alive_progress`
+  - [ ] `dask`
+  - [ ] `pathlib`
+  - [ ] `cerebrus`
+  - [ ] `hypothesis`
+  - [ ] `pyinstrument`
+  - [ ] `uvloop`
+  - [ ] `multiprocessing`
+  - [ ] `RustPython Extensions`
+  - [ ] `joblib`
+  - [ ]
+
+---
+
+- [ ] [ML Algorithms](https://medium.com/@atharvjaiswal56/7-machine-learning-algorithms-every-python-developer-should-know-in-2026-51abe7921b12)
+  ```
+  Your data has labels?
+  ├── YES → Supervised Learning
+  │   ├── Predicting a number → Linear Regression or XGBoost
+  │   ├── Predicting a category
+  │   │   ├── Small dataset / text data → Logistic Regression or SVM
+  │   │   ├── Tabular / structured data → Random Forest or XGBoost
+  │   │   └── Images / audio / large data → Neural Network
+  │   └── Need to explain the model to stakeholders → Random Forest
+  └── NO → Unsupervised Learning
+      └── Find groups in data → K-Means Clustering
+  ```
+
+---
+
+- [ ] RAG Architectures
+  - [ ] Naive RAG
+  - [ ] Hybrid RAG + Reranking
+  - [ ] Agentic RAG with LangGraph
+  - [ ] GRAPHRAG
+
+---
+
+- [ ] `llm-wiki` integration
+
+---
+
+- [ ] [dflash](https://github.com/dflash-dev/dflash)
+
+---
+
+- [ ] [lat.md](https://medium.com/agentic-builders/how-to-use-lat-md-turn-any-folder-into-a-validated-knowledge-graph-8cffac54ceaa)
+
+---
+
+- [ ] `Cloup` is an extension of Click that enhances help messages and adds advanced parameter grouping.
+
+---
+
+- [ ] [Prompt Toolkit](https://github.com/prompt-toolkit/python-prompt-toolkit)is a library for building highly interactive command-line applications. It supports advanced features like auto-completion, syntax highlighting, and multiline editing.
+
+---
+
+- [ ] [Best Python CLI Libraries](https://levelup.gitconnected.com/best-python-libraries-for-command-line-interface-cli-development-31f7894a85aa)
+
+---
+
+- [ ] [RAGFlow](https://github.com/infiniflow/ragflow)
+
+---
+
+- [ ] [Vector Observability](https://github.com/vectordotdev/vector)
+
+---
