@@ -4,94 +4,186 @@ All tasks and planned features have been formally migrated to [GitHub Issues](ht
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
-- [ ] Change the agents prompt depending on the main code language identified in the diff
+- [ ] Look at this [MTPLX Server](https://github.com/youssofal/MTPLX#the-server)
 
-This should assist with early steering of the LLM.
-
----
-
-- [ ] Opik Telemetry Pipeline for Model Training and Prompt Engineering
-
-Look at obtaining the test data from opik, we may look at further developing the opik integration, further we can start using the data to train our own model. Additionally, we can run prompt improvements on the data via opiks prompt engineering tools.
+- [x] Configure git ssh signing using 1Password
 
 ---
 
-- [ ] Add code examples to the documentation.
+- [ ] if they want to commit in stages they can select which files to commit and which to skip and run `git-cg stage` or `git-cg -s` to stage the selected files and `git-cg push` or `git-cg -p` to push the staged files and commit them with the generated commit message. For example currently I have about 10 files that need to be commited. they are a mixture of `.py` and `.md` files. I would like to commit the `.py` files first with a commit message, then the `.md` files with a different commit message. This allows me to generate better commit messages because I can pick out the code files and documentation, test, image files, etc. this method has seemed to provide the best results for me so far.
 
 ---
 
-- [ ] Add snyk and codecov as hk hooks to scan code
-
-```
-snyk code test --org=fcd71871-87fc-4f54-b77a-74fc83e0531c
-```
-
-[Codecov](https://docs.codecov.com/docs/about-code-coverage)
+- [ ] start logging start to finish times everytime we create a commit message, this can be viewed with `git-cg-logs`
 
 ---
 
-- [ ] Look at using [axolotl](https://github.com/axolotl-ai-cloud/axolotl) to train the agent
+- [ ] Review "[text](https://pub.towardsai.net/llmops-the-end-to-end-pipeline-for-reliable-ai-applications-a-complete-guide-2285564a6d6b)" for possibly integrating the articles solutions.
 
 ---
 
-- [ ] Investigate LLM Inference Runtimes for On-Device ML
-
-Compare:
-
-- MTPLX
-- oMLX
-- [lightning-mlx](https://github.com/samuelfaj/lightning-mlx),
-- Rapid-MLX
-- [apfel](https://github.com/Arthur-Ficial/apfel)
-- [uzu](https://github.com/trymirai/uzu)
-- [Miri SDK](https://platform.trymirai.com/new)
-- [Miri Inference](https://trymirai.com/inference-runtime)
-- [MetalRT](https://github.com/RunanywhereAI/metalrt-binaries)
-- [MetalRT HF](https://huggingface.co/blog/runanywhere/metalrt-fastest-inference-apple-silicon)
+- [ ] Look at integrating some of the principals from this into our project [text](https://pub.towardsai.net/claude-code-is-a-mess-until-you-install-this-official-plugin-f94e7cac723f)
 
 ---
 
-- [ ] Dashboard for MTPLX
-
-- Install and use [hipdash](https://github.com/daniel-farina/hipdash) a dashboard for MTPLX
+- [ ] Add to the initial install script to run `mtplx tune`
 
 ---
 
-- [ ] Determine if we should be updating the MTPLX model regularly
-
-[MTPLX_Updates](https://huggingface.co/Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed/tree/main)
+- [ ] Add an option to the TUI menu `print plain text and add to clipboard`
 
 ---
 
-- [ ] Determine if tools from
-
-[mlxetend](https://rasbt.github.io/mlxtend/USER_GUIDE_INDEX/) determine if can be of assistance.
+- [ ] Add new TUI option `review changes` to review changes with `git diff` and `git log`.
 
 ---
 
-- [ ] Alter the badges to be added to the README.md doc.
+- [ ] Add the files being commited to the bottom of the commit message. (Determine if this is wanted data in a commit message or not)
 
-<div align="center">
+---
 
-[![GitGuardian](https://img.shields.io/github/actions/workflow/status/Thomo1318/jjConfig/ggshield.yml?label=Security&logo=gitguardian)](https://github.com/Thomo1318/jjConfig/actions/workflows/ggshield.yml)
-[![Docs](https://img.shields.io/github/actions/workflow/status/Thomo1318/jjConfig/ci-docs.yml?label=Docs&logo=materialformkdocs)](https://github.com/Thomo1318/jjConfig/actions/workflows/ci-docs.yml)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
-![CodeRabbit Badge](https://img.shields.io/badge/CodeRabbit-FF570A?logo=coderabbit&logoColor=fff&style=flat)
+- [ ] Integrate a feature that allows the user to select a previously generated commit message and view its `git log` summary of each file, and `git diff` summary of each file.
+  - [ ] Create a submenu that shows the git log summaries of each file for a selected commit, with the option of viewing the full log of each file.
+  - [ ] Create a submenu that shows the git diff summaries of each file for a selected commit, with the option of viewing the full diff of each file.
 
-[![Jujutsu](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Thomo1318/e766526dd2d577b808dc24e114e1cd0b/raw/jj.json)](https://github.com/jj-vcs/jj)
-[![Shell Script](https://img.shields.io/badge/shell_script-%23121011.svg?logo=gnu-bash&logoColor=white)]()
-![TOML Badge](https://img.shields.io/badge/TOML-9C4121?logo=toml&logoColor=fff&style=flat)
-![JSON Badge](https://img.shields.io/badge/JSON-000?logo=json&logoColor=fff&style=flat)
+---
 
-[![Version](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Thomo1318/e766526dd2d577b808dc24e114e1cd0b/raw/version.json)](https://github.com/Thomo1318/jjConfig/releases)
-[![Last Commit](https://img.shields.io/github/last-commit/Thomo1318/jjConfig?color=red)](https://github.com/Thomo1318/jjConfig/commits)
-[![Repo Size](https://img.shields.io/github/repo-size/Thomo1318/jjConfig)](https://github.com/Thomo1318/jjConfig)
+- [ ] Add all successful git messages to a db and index them as they are added to easily search and view logs, and diffs of previous commits. If they either have the same number e.g. `#43` as they have on GitHub that could help with filtering or searching for specific commits.
 
-[![repomix](https://img.shields.io/npm/v/repomix?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cGF0aCBkPSJNMTIgMkw0IDZWMThMMTIgMjJMMjAgMThWNkwxMiAyWiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBmaWxsPSJub25lIi8+CiAgPHBhdGggZD0iTTEyIDJWMTJNMTIgMTJMMjAgNk0xMiAxMkw0IDYiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4=&label=repomix&color=D97D54)](https://www.npmjs.com/package/repomix)
-[![DeepWiki](https://img.shields.io/badge/DeepWiki-Thomo1318%2FjjConfig-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/Thomo1318/jjConfig)
-[![GitMCP](https://img.shields.io/badge/Git-MCP-blue?logo=git)](https://gitmcp.io/Thomo1318/jjConfig)
+---
 
-</div>
+- [ ] We can look at integrating fd, rg and rga which will be the tools working in the background to search for items relating to commits or other data.
+
+---
+
+- [ ] Add a feature where git-cg runs in background constantly updating diff and commit message, so it is generated by the time the user goes to actually generate and push the commit message.
+  - It could then have a feature where the user gets to the point of wanting to review and push the commit, if they are unhappy with the message they can edit it, if they want to commit in stages they can select which files to commit and which to skip and run `git-cg stage` or `git-cg -s` to stage the selected files and `git-cg push` or `git-cg -p` to push the staged files and commit them with the generated commit message. For example currently I have about 10 files that need to be commited. they are a mixture of `.py` and `.md` files. I would like to commit the `.py` files first with a commit message, then the `.md` files with a different commit message. This allows me to generate better commit messages because I can pick out the code files and documentation, test, image files, etc. this method has seemed to provide the best results for me so far.
+
+---
+
+- [ ] Look at LLMOps and MLOps and how we can use them to improve our project. [text](https://aimultiple.com/llmops-tools)
+
+| Tools                  | Type                           |
+| ---------------------- | ------------------------------ |
+| Dust                   | Integration framework          |
+| LlamaIndex             | Integration framework          |
+| Langchain              | Integration framework          |
+| Deep Lake              | Vector databases               |
+| Weaviate               | Vector databases               |
+| Bespoken               | LLM testing tools              |
+| Trulens                | LLM testing tools              |
+| Scale                  | LLM testing tools              |
+| Prolific               | RLHF services                  |
+| Appen                  | RLHF services                  |
+| Clickworker            | RLHF services                  |
+| Argilla                | Fine-tuning tools              |
+| PromptLayer            | Fine-tuning tools              |
+| Octo ML                | Fine-tuning tools              |
+| Together AI            | Fine-tuning tools              |
+| DeepSpeed              | Fine-tuning tools              |
+| Phoenix by Arize       | LLM monitoring & observability |
+| Fiddler                | LLM monitoring & observability |
+| Helicone               | LLM monitoring & observability |
+| Gantry                 | LLM monitoring & observability |
+| Clear ML               | MLOPs tools & frameworks       |
+| Ignazio                | MLOPs tools & frameworks       |
+| HuggingFace            | MLOPs tools & frameworks       |
+| Tecton                 | MLOPs tools & frameworks       |
+| Weights & Biases       | MLOPs tools & frameworks       |
+| Amazon Bedrock         | Data / cloud platforms         |
+| DataBricks             | Data / cloud platforms         |
+| Azure ML               | Data / cloud platforms         |
+| Vertex AI              | Data / cloud platforms         |
+| Snowflake              | Data / cloud platforms         |
+| Nemo by Nvidia         | LLMOps frameworks              |
+| Deep Lake              | LLMOps frameworks              |
+| Fine-Tuner AI          | LLMOps frameworks              |
+| Snorkel AI             | LLMOps frameworks              |
+| Zen ML                 | LLMOps frameworks              |
+| Lamini AI              | LLMOps frameworks              |
+| Comet                  | LLMOps frameworks              |
+| TrueFoundry            | LLMOps Frameworks              |
+| Titan ML               | LLMOps frameworks              |
+| Haystack by Deepset AI | LLMOps frameworks              |
+| Valohai                | LLMOps frameworks              |
+| OpenAI                 | LLMs                           |
+| Anthropic Claude       | LLMs                           |
+| Cohere                 | LLMs                           |
+| AI21 Labs              | LLMs                           |
+
+<p>Cem Dilmegani (2026) - &ldquo;Top LLMOps Tools & Compare them to MLOPs&rdquo;. Published online at AIMultiple.com. Retrieved May 18, 2026, from: <a href="https://aimultiple.com/llmops-tools">https://aimultiple.com/llmops-tools</a> [Online Resource]</p>
+
+<p>Cem Dilmegani (2026) - &ldquo;Compare 45+ MLOps Tools in 2026&rdquo;. Published online at AIMultiple.com. Retrieved March 2, 2026, from: <a href="https://aimultiple.com/mlops-tools">https://aimultiple.com/mlops-tools</a> [Online Resource]</p>
+
+- [ ] Look at [Supervised Fine-Tuning vs Reinforcement Learning](https://aimultiple.com/rl-vs-sft)
+
+- [ ] Run "Braintrust" evals through pytest everytime a meaningful change is made.
+
+- [ ] Look at enforching: "Why JSON and not markdown? Anthropic found that models are “less likely to inappropriately change or overwrite JSON files compared to Markdown.” A small detail, but it matters when the agent is running autonomously for hours."
+
+- [ ] Review this article for possible harness setup [Harness Engineering](https://ai.gopubby.com/harness-engineering-what-every-ai-engineer-needs-to-know-in-2026-0ab649e5686a)
+
+- [ ] Look at [eval-view](https://github.com/hidai25/eval-view)
+
+- [ ] Explore the use of "Synthtic Data" for:
+  - **Machine learning**
+    - **Training data augmentation**:
+      Synthetic data expands the available dataset by creating realistic, statistically accurate samples that mirror the distribution of real-world data. This is especially valuable when training AI models that suffer from class imbalance or when collecting real data is too costly, time-consuming, or legally restricted.
+
+      By including additional variations in the dataset, such as lighting changes in computer vision or noise variations in audio, models become more resilient to environmental changes and unexpected inputs.
+
+    - **Rare event simulation**:
+
+      Many AI models underperform when predicting events that occur infrequently because these events are poorly represented in real datasets. Synthetic data solves this by generating numerous realistic examples of such rare events, preserving their statistical and contextual properties.
+
+      This approach enables models to “experience” and learn from scenarios they might never encounter during traditional training, leading to higher recall and better preparedness for mission-critical situations such as fraud detection, equipment failure prediction, or emergency response planning.
+
+    - **Automated data labeling**:
+
+      Manually labeling data is often one of the most expensive and time-consuming stages of AI development, particularly for tasks like object detection or speech recognition. Synthetic data generation can include automatic label assignment during the creation process.
+
+      This eliminates human annotation errors, speeds up model development, and allows teams to create large, precisely labeled datasets tailored to specific business needs, whether for detecting anomalies in manufacturing, recognizing entities in legal documents, or identifying objects in aerial imagery.
+
+        <p>Cem Dilmegani (2026) - &ldquo;Top 25 Synthetic Data Use Cases&rdquo;. Published online at AIMultiple.com. Retrieved March 5, 2026, from: <a href="https://aimultiple.com/synthetic-data-use-cases">https://aimultiple.com/synthetic-data-use-cases</a> [Online Resource]</p>
+
+- [ ] Review these tools for possible integration:
+
+Organise into a table.
+
+| Tool          | Category   | Open Source      | Best For                        |
+| ------------- | ---------- | ---------------- | ------------------------------- |
+| Langfuse      | All-in-One | Yes (MIT)        | Most teams starting out         |
+| LangSmith     | All-in-One | No               | LangChain users                 |
+| Braintrust    | All-in-One | No               | Prompt experimentation          |
+| Opik          | All-in-One | Yes (Apache 2.0) | Comet users, low-code platforms |
+| Confident AI  | Evaluation | No               | Evaluation-first observability  |
+| Arize Phoenix | Evaluation | Yes              | OpenTelemetry integration       |
+| TruLens       | Evaluation | Yes              | RAG quality metrics             |
+| Galileo AI    | Evaluation | No               | Real-time guardrails            |
+| Evidently AI  | Evaluation | Yes              | ML + LLM unified monitoring     |
+| Helicone      | Gateway    | Yes              | Fastest setup, caching          |
+| Portkey       | Gateway    | Yes              | Multi-provider routing          |
+| OpenLLMetry   | Gateway    | Yes              | Existing APM integration        |
+| Datadog       | Enterprise | No               | Datadog customers               |
+| New Relic     | Enterprise | No               | New Relic customers             |
+| W&B Weave     | Enterprise | Yes              | MLOps experiment tracking       |
+
+- [ ] Review [LLM Observability Tools](https://www.firecrawl.dev/blog/best-llm-observability-tools)
+
+- [ ] Review:
+
+| If You Need...              | Best Choice         | Runner-Up           | Why                                                  |
+| --------------------------- | ------------------- | ------------------- | ---------------------------------------------------- |
+| RAG evaluation              | Ragas               | DeepEval            | Purpose-built RAG metrics + synthetic test data      |
+| CI/CD test gating           | Promptfoo           | DeepEval            | CLI-native, YAML config, integrates with any CI      |
+| Production observability    | Langfuse            | Arize Phoenix       | Open-source, self-hostable, vendor-agnostic          |
+| LangChain-native monitoring | LangSmith           | Langfuse            | Deepest integration, annotation queues, datasets     |
+| Agent evaluation            | DeepEval            | Braintrust          | Dedicated agent metrics, multi-step trace evaluation |
+| Security / red teaming      | Promptfoo           | DeepEval            | 50+ vulnerability types, adversarial test generation |
+| All-in-one platform         | Braintrust          | Confident AI        | Eval + tracing + experiments in one tool             |
+| $0 budget (fully free)      | Promptfoo + Phoenix | DeepEval + Langfuse | Both combos cover testing + observability at $0      |
+| Human eval / annotation     | LangSmith           | Braintrust          | Best annotation UI and labeling workflows            |
+| Compliance / EU AI Act      | Confident AI        | Braintrust          | Built-in audit trails and documentation              |
 
 ---
 
@@ -101,6 +193,7 @@ Compare:
 - Ensure the content of the documentation site reflects recent PRs, Issues, and architectural changes (e.g. `git-cg` tool, guided regeneration, new SOP loading logic).
 - Ensure documentation formatting aligns with `git-cg` standard formatting.
 - Add `CHANGELOG.md` to the top-level navigation.
+- Add a "Feature Spotlight" entry documenting the GUI editor `index.lock` hook collision, `hk` stash safety, and the `--gui`/`--term` flags.
 
 ---
 

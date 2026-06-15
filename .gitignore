@@ -14,6 +14,10 @@ mise.local.toml
 *.swo
 *~
 scratch.txt
+scratch/
+
+# Local outputs
+outputs/
 
 # OS Specifics
 .DS_Store

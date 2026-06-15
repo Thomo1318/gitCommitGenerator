@@ -88,6 +88,8 @@ The engine operates on a modernized, extremely robust toolchain managed seamless
 - **TUI Runtime**: [gum](https://github.com/charmbracelet/gum) for opt-in terminal-native review.
 - **SOP (The Brain)**: `config/gitops_agent_sop.json`.
 
+**Deep-Dive Architecture**
+
 ```mermaid
 flowchart TD
     subgraph Git ["Git Hooks (hk)"]
@@ -104,6 +106,7 @@ flowchart TD
         Instructor["Instructor<br/>(Validation & Retries)"]
         Regeneration["Regeneration Layer<br/>(regeneration.py)"]
         Release["Release Manager<br/>(release.py)"]
+        Telemetry["Telemetry Pipeline<br/>(telemetry.py)"]
 
         PrepareHook --> Main
         Main --> SOPLoader
@@ -113,6 +116,7 @@ flowchart TD
         Pydantic --> Instructor
         Instructor --> Regeneration
         Main --> Release
+        Main -. "Starts Trace" .-> Telemetry
     end
 
     subgraph Execution ["Inference Layer"]
@@ -129,7 +133,22 @@ flowchart TD
         Formatter -->|Pre-fills| Target[".git/COMMIT_EDITMSG"]
         Target --> CommitMsgHook
         CommitMsgHook --> Gatekeeper["Node Gatekeeper<br/>(validate_commit.mjs)"]
+        CommitMsgHook --> Telemetry
     end
+
+    subgraph Observability ["Evaluation & Tracing"]
+        Opik["Opik Cloud Platform<br/>(Datasets & Experiments)"]
+        Telemetry -- "Logs Final State" --> Opik
+    end
+```
+
+**High-Level Agent Graph (Opik Telemetry)**
+
+```mermaid
+flowchart LR
+    Hook["Git Hook"] <--> CG["git-cg"]
+    CG <--> Instructor["Instructor"]
+    Instructor <--> LLM["LLM API"]
 ```
 
 ---
@@ -144,6 +163,7 @@ flowchart TD
 | `src/git_cg/sop.py`            | Configuration          | Portable SOP loader supporting `.git-cg/sop.json` overrides and packaged wheel data.                                             |
 | `src/git_cg/models.py`         | Schema                 | [Pydantic](https://docs.pydantic.dev/) `CommitPlan` models enforcing strict SOP validation, multi-intent rendering, and retries. |
 | `src/git_cg/release.py`        | Release                | Parses machine-readable trailers to automate SemVer bumps and grouped changelog generation.                                      |
+| `src/git_cg/telemetry.py`      | Observability          | Captures two-point traces, runs deterministic validation scorecards, and logs interaction datasets to the Opik Cloud Platform.   |
 | `src/git_cg/notifier.py`       | Optional Notifications | Reserved for possible future passive desktop notification use; no longer the critical control path.                              |
 | `scripts/validate_commit.mjs`  | Gatekeeper             | The [Node.js](https://nodejs.org/)/[zx](https://github.com/google/zx) script that strictly enforces the 72-char hybrid limit.    |
 | `usage.kdl`                    | Interface              | The declarative CLI specification for the [usage](https://usage.jdx.dev/) framework.                                             |
@@ -157,6 +177,7 @@ flowchart TD
 
 - **[Pydantic](https://docs.pydantic.dev/) Validation**: Absolute structural guarantees using the `CommitPlan` schema. No conversational padding, no wrong emojis.
 - **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
+- **Two-Point Telemetry & Tracing**: Natively integrates with the Opik Ecosystem. Logs generation heuristics, catches human editor modifications via `commit-msg` hooks, and compiles interaction datasets for model fine-tuning.
 - **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
 - **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, `Print plain text`, and `Cancel` actions without relying on desktop notifications.
@@ -396,6 +417,26 @@ Changelog-Groups: Changed, Fixed, Miscellaneous
 |  🤡   | `:clown_face:`                | Mock things                                                  |   `test`   |     NONE      | Miscellaneous   |
 |  📸   | `:camera_flash:`              | Add or update snapshots                                      |   `test`   |     NONE      | Miscellaneous   |
 |  🧪   | `:test_tube:`                 | Add a failing test                                           |   `test`   |     NONE      | Miscellaneous   |
+
+---
+
+## ✨ Feature Spotlight: Hook Safety & GUI Editors (`index.lock`)
+
+When using the interactive terminal review (`git-cg -i`), selecting `Edit` will launch an editor so you can manually tweak the generated commit message. By default, `git-cg` uses your Terminal Editor (`$EDITOR`).
+
+If your system's default `$VISUAL` editor is a GUI application (like VS Code, Cursor, or Antigravity IDE), it usually forks into the background and immediately returns control to the terminal. If `git-cg` used this by default, it would think you had finished editing instantly and proceed to execute `git commit` in the background, locking the repository (`.git/index.lock`). 
+
+If your repository uses deterministic `pre-commit` hooks (like **[hk](https://hk.jdx.dev)**) that safely stash your unstaged changes before running, they would crash head-first into this locked index! This safety feature of `hk`—stashing to prevent data loss—is exactly why it is superior to standard hooks, but it requires that editors block execution properly.
+
+**Customizing Your Editor:**
+`git-cg` explicitly overrides standard behavior to prefer terminal-bound blocking editors (via `$GIT_CG_EDITOR` or `$EDITOR`) to preserve this hook safety.
+
+However, if you wish to use a GUI editor and have configured it to block (e.g. `code --wait`), you can simply pass the `-g` or `--gui` flag to `git-cg` to use your `$VISUAL` editor:
+```bash
+git-cg -i -g
+```
+
+If you ever experience missing unstaged files after an unexpected GUI hook crash, check your stashes (`git stash list`) and pop the most recent one (`git stash pop`), as `hk` safely stored them there before the collision.
 
 ---
 
