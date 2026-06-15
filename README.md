@@ -18,7 +18,7 @@
 
 [![Docs](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/docs.yml?label=docs)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/docs.yml)
 [![Security](https://img.shields.io/github/actions/workflow/status/Thomo1318/gitCommitGenerator/security.yml?label=security)](https://github.com/Thomo1318/gitCommitGenerator/actions/workflows/security.yml)
-[![GitHub License](https://img.shields.io/github/license/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/blob/main/LICENSE)
+[![GitHub License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Thomo1318/gitCommitGenerator/blob/main/LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/Thomo1318/gitCommitGenerator)](https://github.com/Thomo1318/gitCommitGenerator/releases)
 
 </div>
