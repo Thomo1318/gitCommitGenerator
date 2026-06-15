@@ -128,6 +128,7 @@ def test_populate_cache_handles_async_exception_gracefully(monkeypatch, capsys):
 
     fake_token = "op_service_account_test_token"
     monkeypatch.setenv("OP_SERVICE_ACCOUNT_TOKEN", fake_token)
+    monkeypatch.delenv("OPIK_API_KEY", raising=False)
     monkeypatch.setattr(secrets_module, "_op_cache", None)
 
     # Provide a mock Client whose authenticate raises
@@ -149,6 +150,7 @@ def test_populate_cache_prints_debug_message_on_failure(monkeypatch, capsys):
 
     fake_token = "op_service_account_test_token"
     monkeypatch.setenv("OP_SERVICE_ACCOUNT_TOKEN", fake_token)
+    monkeypatch.delenv("OPIK_API_KEY", raising=False)
     monkeypatch.setattr(secrets_module, "_op_cache", None)
 
     async def _failing_authenticate(*args, **kwargs):

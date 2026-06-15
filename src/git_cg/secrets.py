@@ -40,6 +40,12 @@ def _populate_cache():
     if not op_token:
         return
 
+    # Short-circuit to prevent 1Password rate-limiting (hammering) when invoked multiple times by hooks.
+    # If the environment already has the necessary secrets (e.g. via .env), skip the O(N) vault fetch.
+    opik_key = os.environ.get("OPIK_API_KEY")
+    if opik_key and not opik_key.startswith("op://"):
+        return
+
     async def fetch():
         """
         Fetch all accessible vault items from 1Password and populate the module cache and process environment with discovered field values.

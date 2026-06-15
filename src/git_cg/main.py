@@ -684,7 +684,9 @@ def _build_regeneration_guidance(review_state: ReviewState) -> str | None:
     return prompt_regeneration_guidance(review_state.regeneration_guidance)
 
 
-def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
+def _interactive_review(
+    commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool, gui_editor: bool = False
+) -> str:
     """
     Display an interactive review UI for the generated commit and allow adding review metadata or editing before finalising.
 
@@ -770,11 +772,17 @@ def _interactive_review(commit_msg_file: str, review_state: ReviewState, *, verb
             continue
 
         if action == "Edit":
-            click.edit(filename=commit_msg_file)
+            if gui_editor:
+                preferred_editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+            else:
+                preferred_editor = os.environ.get("GIT_CG_EDITOR") or os.environ.get("EDITOR")
+            click.edit(filename=commit_msg_file, editor=preferred_editor)
         return action
 
 
-def _interactive_review_dry_run(review_state: ReviewState, *, verbose: bool, strict: bool) -> str:
+def _interactive_review_dry_run(
+    review_state: ReviewState, *, verbose: bool, strict: bool, gui_editor: bool = False
+) -> str:
     """
     Present the current ReviewState to the user via a temporary preview file and run the interactive review flow.
 
@@ -795,7 +803,7 @@ def _interactive_review_dry_run(review_state: ReviewState, *, verbose: bool, str
         ) as temp_file:
             temp_file.write(review_state.render())
             temp_path = temp_file.name
-        return _interactive_review(temp_path, review_state, verbose=verbose, strict=strict)
+        return _interactive_review(temp_path, review_state, verbose=verbose, strict=strict, gui_editor=gui_editor)
     finally:
         if temp_path:
             with contextlib.suppress(OSError):
@@ -813,6 +821,7 @@ def _run_commit_generation(
     amend_regenerate: bool,
     strict: bool,
     interactive: bool,
+    gui_editor: bool = False,
 ) -> bool:
     """
     Generate a Conventional Commit message from staged changes, optionally present an interactive or dry-run review, and write the final message to a commit message file.
@@ -1029,7 +1038,9 @@ def _run_commit_generation(
                     "[yellow]Interactive mode requested but /dev/tty is unavailable. Proceeding non-interactively.[/yellow]"
                 )
             if should_interact:
-                action = _interactive_review_dry_run(review_state, verbose=verbose, strict=strict)
+                action = _interactive_review_dry_run(
+                    review_state, verbose=verbose, strict=strict, gui_editor=gui_editor
+                )
                 issue_references = list(review_state.issue_references)
                 regeneration_guidance = review_state.regeneration_guidance
                 active_directives = review_state.active_directives
@@ -1050,7 +1061,9 @@ def _run_commit_generation(
             )
 
         if should_interact:
-            action = _interactive_review(commit_msg_file, review_state, verbose=verbose, strict=strict)
+            action = _interactive_review(
+                commit_msg_file, review_state, verbose=verbose, strict=strict, gui_editor=gui_editor
+            )
             issue_references = list(review_state.issue_references)
             regeneration_guidance = review_state.regeneration_guidance
             active_directives = review_state.active_directives
@@ -1130,6 +1143,12 @@ def main_callback(
     interactive: bool = typer.Option(
         False, "--interactive", "-i", help="Enable terminal-native interactive review via gum."
     ),
+    term_editor: bool = typer.Option(
+        True, "--term", "-t", help="Use Terminal Editor ($EDITOR) when editing commit messages (Default)."
+    ),
+    gui_editor: bool = typer.Option(
+        False, "--gui", "-g", help="Use GUI Editor ($VISUAL) when editing commit messages."
+    ),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx",
         "--engine",
@@ -1193,6 +1212,7 @@ def main_callback(
         amend_regenerate=False,
         strict=strict,
         interactive=interactive,
+        gui_editor=gui_editor,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -1227,6 +1247,12 @@ def commit(
         "-i",
         help="Enable terminal-native interactive review via gum when a TTY is available.",
     ),
+    term_editor: bool = typer.Option(
+        True, "--term", "-t", help="Use Terminal Editor ($EDITOR) when editing commit messages (Default)."
+    ),
+    gui_editor: bool = typer.Option(
+        False, "--gui", "-g", help="Use GUI Editor ($VISUAL) when editing commit messages."
+    ),
 ) -> None:
     """Generate an AI commit message based on staged changes."""
     _run_commit_generation(
@@ -1239,6 +1265,7 @@ def commit(
         amend_regenerate=amend_regenerate,
         strict=strict,
         interactive=interactive,
+        gui_editor=gui_editor,
     )
 
 
