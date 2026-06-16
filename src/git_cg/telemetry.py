@@ -62,7 +62,7 @@ class DeterministicScoreCard:
 class GenerationTelemetry:
     """Telemetry data collected across the hook invocation lifecycle."""
 
-    trace_id: str
+    trace_id: str | None
     diff_hash: str
     diff_output: str
     repo_name: str
@@ -72,6 +72,7 @@ class GenerationTelemetry:
     generated_message: str
     commit_plan_json: dict
     score_card: dict  # Dict representation of DeterministicScoreCard
+    thread_id: str | None = None
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -209,6 +210,10 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
     try:
         with state_file.open("r", encoding="utf-8") as f:
             data = json.load(f)
+            if "trace_id" not in data:
+                data["trace_id"] = None
+            if "thread_id" not in data:
+                data["thread_id"] = None
             return GenerationTelemetry(**data)
     except Exception:
         return None

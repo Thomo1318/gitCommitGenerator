@@ -220,6 +220,8 @@ ENGINE_REGISTRY: dict[str, EngineConfig] = {
     "openai": EngineConfig(prefix="OPENAI", default_base_url="https://api.openai.com/v1"),
 }
 
+LAST_OPIK_TRACE_ID: str | None = None
+
 
 def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
     """Print an error and exit.
@@ -419,6 +421,11 @@ def generate_commit_message(
             }
         }
     )
+
+    global LAST_OPIK_TRACE_ID
+    trace_data = opik_context.get_current_trace_data()
+    if trace_data:
+        LAST_OPIK_TRACE_ID = trace_data.id
     import time
 
     import openai
@@ -1098,7 +1105,7 @@ def _run_commit_generation(
         score_card = run_deterministic_checks(review_state.commit_plan)
 
         telemetry = GenerationTelemetry(
-            trace_id=thread_id,  # Using thread_id/repo_name as correlation ID for now
+            trace_id=LAST_OPIK_TRACE_ID,
             diff_hash=compute_diff_hash(diff_output),
             diff_output=diff_output,
             repo_name=repo_name,
@@ -1108,6 +1115,7 @@ def _run_commit_generation(
             generated_message=review_state.render(),
             commit_plan_json=review_state.commit_plan.model_dump(),
             score_card=dataclasses.asdict(score_card),
+            thread_id=thread_id,
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1377,6 +1385,7 @@ def record_telemetry(
             final_commit_message: str,
             provenance: str,
             telemetry_state: dict,
+            **kwargs,
         ):
             # The decorator automatically logs inputs/outputs
             opik_context.update_current_trace(
@@ -1393,10 +1402,19 @@ def record_telemetry(
             )
             return {"status": "recorded", "provenance": provenance}
 
+        opik_args = {}
+        if state.trace_id:
+            opik_args["trace"] = {"id": state.trace_id}
+        if state.thread_id:
+            if "trace" not in opik_args:
+                opik_args["trace"] = {}
+            opik_args["trace"]["thread_id"] = state.thread_id
+
         log_final_commit_telemetry(
             final_commit_message=final_message,
             provenance=provenance.value,
             telemetry_state=state.__dict__,
+            opik_args=opik_args if opik_args else None,
         )
         opik.flush_tracker()
         if verbose:
