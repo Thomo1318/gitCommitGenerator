@@ -1,0 +1,13 @@
+version = 1
+
+[trust]
+github_orgs = [ "getsentry" ]
+
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents"
+
+[[skills]]
+name = "*"
+source = "getsentry/sentry-for-ai"
