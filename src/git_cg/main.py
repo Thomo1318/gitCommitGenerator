@@ -425,8 +425,7 @@ def generate_commit_message(
 
     global LAST_OPIK_TRACE_ID
     trace_data = opik_context.get_current_trace_data()
-    if trace_data:
-        LAST_OPIK_TRACE_ID = trace_data.id
+    LAST_OPIK_TRACE_ID = trace_data.id if trace_data else None
     import time
 
     import openai
