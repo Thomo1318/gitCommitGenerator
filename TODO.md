@@ -4,6 +4,157 @@ All tasks and planned features have been formally migrated to [GitHub Issues](ht
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
+- [ ] Ensure that when a commit is triggeredx in an IDE the process doesn't continue until the user has either saved or clicked the tick to accept the commit. Currently the IDE shows the user the proposed commit message but continues and commits it regardless of the users actions.
+
+- [ ] have a check run that identifies if there is a newer release of the users chosen LLM model, if there is ask them if they want to download it and use it. if the user selcts no then do not ask them again but inform them that a persistant message will be shown eachtime they run the tool with the command to download and use the newer version. This will be an unobtrusive message shown as an additional colour item in the start up message:
+
+  ```
+  gitCommitGenerator  main 📦+3?14⇡3 🐍 v3.14.5 (gitcommitgenerator)
+  ❯ git-cg -i -v
+  [22:55:25] Starting git-cg...                                                                             main.py:851
+             Engine: mtplx                                                                                  main.py:852
+             Commit Msg File: .git/COMMIT_EDITMSG                                                           main.py:853
+             Commit Source: None                                                                            main.py:854
+             Interactive Mode: True                                                                         main.py:855
+             Using rtk for token compression...                                                             main.py:890
+             Extracted git diff (14631 characters).                                                         main.py:913
+             AI Client initialized. Calling mtplx to generate commit message...                             main.py:921
+             Using model: Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed                                       main.py:934
+             A newer model is available run  `git-cg --update-model`  to download it.                       main.py:934
+             Analyzing diff signals and ranking intents...                                                  main.py:532
+  ```
+
+- [ ] **[Umbrella]** Epic: LLMOps Stack Augmentation (Opik + Promptfoo + OpenLLMetry + Sentry)
+- [ ] **[Integrate OpenLLMetry]** Integrate OpenLLMetry for vendor-neutral OTel tracing
+- [ ] **[Integrate Promptfoo]** Integrate Promptfoo for automated CI evaluation and red-teaming
+- [ ] **[Integrate Sentry]** Integrate Sentry SDK for application crash reporting and error tracking
+  - [ ] Explore `Feature Flag` SDKs from the listed solutions or alternate better options if available. I would prefer to stick with the listed options as they are the ones recomended by Sentry. We need to identify which solution proivides us with the best features on free, freemium or 'free self-hosted' options. Listed `Feature Flag` SDKs:
+    - [ ] LaunchDarkly
+    - [ ] OpenFeature
+    - [ ] Statsig
+    - [ ] Unleash
+    - [ ] Additionally, Sentry allows "different sollutions to evaluate feature flags" if we want to choose an option not listed here.
+  - [ ] To integrate the `sentry-sdk` with one of the listed `Feature Flag` SDKs the code for each is provided by Sentry:
+    - #### LaunchDarkly
+      - Configure SDK - Add `LaunchDarklyIntegration` to your integrations list.
+
+        ```
+        import sentry_sdk
+        from sentry_sdk.integrations.launchdarkly import LaunchDarklyIntegration
+        import ldclient
+
+        sentry_sdk.init(
+          dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
+          # Add data like request headers and IP for users, if applicable;
+          # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+          send_default_pii=True,
+          integrations=[
+              LaunchDarklyIntegration(),
+          ],
+        )
+        ```
+
+      - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
+
+        ```
+        client = ldclient.get()
+        client.variation("hello", Context.create("test-context"), False)  # Evaluate a flag with a default value.
+        sentry_sdk.capture_exception(Exception("Something went wrong!"))
+        ```
+
+    - #### OpenFeature:
+      - Configure SDK - Add `OpenFeatureIntegration` to your integrations list.
+
+        ```
+        import sentry_sdk
+        from sentry_sdk.integrations.openfeature import OpenFeatureIntegration
+        from openfeature import api
+
+        sentry_sdk.init(
+            dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
+            # Add data like request headers and IP for users, if applicable;
+            # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+            send_default_pii=True,
+            integrations=[
+                OpenFeatureIntegration(),
+            ],
+        )
+        ```
+
+      - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
+
+        ```
+        client = api.get_client()
+        client.get_boolean_value("hello", default_value=False)  # Evaluate a flag with a default value.
+        sentry_sdk.capture_exception(Exception("Something went wrong!"))
+        ```
+
+    - #### Statsig:
+      - Configure SDK - Add `StatsigIntegration` to your integrations list.
+
+        ```
+        import sentry_sdk
+        from sentry_sdk.integrations.statsig import StatsigIntegration
+        from statsig.statsig_user import StatsigUser
+        from statsig import statsig
+        import time
+
+        sentry_sdk.init(
+            dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
+            # Add data like request headers and IP for users, if applicable;
+            # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+            send_default_pii=True,
+            integrations=[
+                StatsigIntegration(),
+            ],
+        )
+        statsig.initialize("server-secret-key")
+        ```
+
+      - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
+
+        ```
+        while not statsig.is_initialized():
+            time.sleep(0.2)
+
+        result = statsig.check_gate(StatsigUser("my-user-id"), "my-feature-gate")  # Evaluate a flag.
+        sentry_sdk.capture_exception(Exception("Something went wrong!"))
+        ```
+
+    - #### Unleash:
+      - Configure SDK - Add `UnleashIntegration` to your integrations list.
+
+        ```
+        import sentry_sdk
+        from sentry_sdk.integrations.unleash import UnleashIntegration
+        from UnleashClient import UnleashClient
+
+        sentry_sdk.init(
+            dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
+            # Add data like request headers and IP for users, if applicable;
+            # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+            send_default_pii=True,
+            integrations=[UnleashIntegration()],
+        )
+
+        unleash = UnleashClient(...)  # See Unleash quickstart.
+        unleash.initialize_client()
+        ```
+
+      - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
+
+        ```
+        test_flag_enabled = unleash.is_enabled("test-flag")  # Evaluate a flag.
+        sentry_sdk.capture_exception(Exception("Something went wrong!"))
+        ```
+
+  - [ ] Once we have identified which one we will use we will integrate it into the project and then integrate it with the Sentry SDK.
+  - [ ] When the chosen `Feature Flag` option has been integrated we will then configure `Change Tracking`.
+
+    > Integrating Sentry with your feature flag provider enables Sentry to correlate feature flag changes with new error events and mark certain changes as suspicious. Learn more about how to interact with feature flag insights within the Sentry UI by reading the documentation.
+
+---
+
 - [ ] Look at this [MTPLX Server](https://github.com/youssofal/MTPLX#the-server)
 
 - [x] Configure git ssh signing using 1Password
