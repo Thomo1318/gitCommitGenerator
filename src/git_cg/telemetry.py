@@ -10,7 +10,17 @@ import contextlib
 import enum
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass
+
+import sentry_sdk
+
+if os.environ.get("GIT_CG_DISABLE_SENTRY", "0") != "1":
+    sentry_sdk.init(
+        dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
+        send_default_pii=True,
+    )
+
 from pathlib import Path
 
 from git_cg.models import CommitPlan, CommitType

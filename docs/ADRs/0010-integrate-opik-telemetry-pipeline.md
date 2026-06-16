@@ -158,3 +158,26 @@ We initially attempted to use `instructor.Mode.MD_JSON` to instruct the model to
 
 ## CHANGELOG
 - v1.1.0 (2026-06-15): Resolved UnboundLocalError and Instructor parsing fallback issues during initial telemetry pipeline deployment.
+- v1.2.0 (2026-06-16): Added LLMOps Stack Augmentation strategy (Opik + Promptfoo + OpenLLMetry).
+
+---
+
+## II. Update 2: LLMOps Stack Augmentation (Opik + Promptfoo + OpenLLMetry) (v1.2.0)
+
+After successfully deploying the Two-Point Telemetry Trace to Opik, we conducted a Tier-1 comparative analysis of LLMOps platforms (Opik, Langfuse, Promptfoo, MLflow, Phoenix, etc.) to determine if we should replace Opik or augment it.
+
+### The Decision: Augment Opik
+We decided to **keep Opik** as our incumbent unified dashboard. It provides excellent dataset management, trace visualization, and a robust Python SDK. However, we identified two critical gaps in our CI/CD and instrumentation architecture that required complementary tools. We are adopting **Stack A (Opik + Promptfoo + OpenLLMetry)** to close these gaps.
+
+### 1. Vendor-Neutral Instrumentation (OpenLLMetry)
+- **The Problem:** We are currently using Opik's proprietary `@opik.track` decorators. This creates vendor lock-in; migrating to another platform would require rewriting all telemetry code.
+- **The Solution:** We will migrate our instrumentation to **OpenLLMetry** (`traceloop-sdk`). OpenLLMetry generates standard OpenTelemetry (OTel) traces. Opik natively ingests OTel. This allows us to keep Opik as our dashboard while ensuring our codebase remains 100% vendor-neutral.
+
+### 2. CI/CD Evaluation & Red-Teaming (Promptfoo)
+- **The Problem:** Opik excels at runtime observability and dataset management, but we need a robust, automated "gate" in our GitHub Actions Pull Requests to catch regressions, jailbreaks, and PII leaks before code merges.
+- **The Solution:** We will integrate **Promptfoo** into our CI pipeline. Promptfoo is a stateless, CLI-first testing engine that excels at automated red-teaming and prompt assertion testing. 
+- **Self-Hosting Strategy:** Because we are utilizing a local 35B model (via oMLX/MTPLX), Promptfoo will be executed via a **Self-Hosted GitHub Actions Runner** on the developer's Mac. This allows the CI job to hit `localhost:8080` instantly, securely, and at zero cost.
+
+### 3. Application Crash Reporting (Sentry SDK)
+- **The Problem:** Opik and OpenLLMetry are focused on AI/LLM tracing (prompts, tokens, latency, generation quality). However, if the `git-cg` application itself crashes due to a standard Python exception (e.g., `UnboundLocalError`, `FileNotFoundError`), these traces may drop or fail to capture the underlying stack trace properly.
+- **The Solution:** We will integrate the **Sentry SDK** specifically for application-level crash reporting and error tracking. Sentry will catch unhandled exceptions in the CLI execution and provide deep stack traces, separating application bugs from LLM inference issues.

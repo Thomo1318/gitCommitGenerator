@@ -12,10 +12,17 @@ from dataclasses import dataclass, field
 from typing import NoReturn
 
 import click
+import sentry_sdk
 from dotenv import load_dotenv
 
 # Load .env fallback immediately
 load_dotenv()
+
+if os.environ.get("GIT_CG_DISABLE_SENTRY", "0") != "1":
+    sentry_sdk.init(
+        dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
+        send_default_pii=True,
+    )
 
 # Set opik logging level before importing it
 os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "INFO"
