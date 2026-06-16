@@ -62,7 +62,7 @@ class DeterministicScoreCard:
 class GenerationTelemetry:
     """Telemetry data collected across the hook invocation lifecycle."""
 
-    trace_id: str
+    trace_id: str | None
     diff_hash: str
     diff_output: str
     repo_name: str
@@ -72,10 +72,16 @@ class GenerationTelemetry:
     generated_message: str
     commit_plan_json: dict
     score_card: dict  # Dict representation of DeterministicScoreCard
+    thread_id: str | None = None
 
 
 def compute_prompt_hash(prompt: str) -> str:
-    """SHA-256 hash of the system prompt for version tracking."""
+    """
+    Compute a version-tracking hash of the prompt.
+    
+    Returns:
+    	str: A version-tracking hash of the prompt
+    """
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
 
@@ -202,13 +208,22 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
 
 
 def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
-    """Read the telemetry state written by prepare-commit-msg."""
+    """
+    Reads the telemetry state written by prepare-commit-msg, backfilling missing fields for backwards compatibility.
+    
+    Returns:
+        The persisted GenerationTelemetry instance, or None if the state file does not exist or cannot be read.
+    """
     state_file = get_state_file_path(git_dir)
     if not state_file.exists():
         return None
     try:
         with state_file.open("r", encoding="utf-8") as f:
             data = json.load(f)
+            if "trace_id" not in data:
+                data["trace_id"] = None
+            if "thread_id" not in data:
+                data["thread_id"] = None
             return GenerationTelemetry(**data)
     except Exception:
         return None
