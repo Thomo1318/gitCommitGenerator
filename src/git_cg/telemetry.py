@@ -76,7 +76,12 @@ class GenerationTelemetry:
 
 
 def compute_prompt_hash(prompt: str) -> str:
-    """SHA-256 hash of the system prompt for version tracking."""
+    """
+    Compute a version-tracking hash of the prompt.
+    
+    Returns:
+    	str: A version-tracking hash of the prompt
+    """
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
 
@@ -203,7 +208,12 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
 
 
 def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
-    """Read the telemetry state written by prepare-commit-msg."""
+    """
+    Reads the telemetry state written by prepare-commit-msg, backfilling missing fields for backwards compatibility.
+    
+    Returns:
+        The persisted GenerationTelemetry instance, or None if the state file does not exist or cannot be read.
+    """
     state_file = get_state_file_path(git_dir)
     if not state_file.exists():
         return None
