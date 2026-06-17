@@ -23,7 +23,7 @@ local linters = new Mapping<String, Step> {
     }
 
     ["codecov"] {
-        check = "pytest --cov --cov-branch --cov-report=xml"
+        check = "uv run pytest --cov --cov-branch --cov-report=xml"
     }
 }
 

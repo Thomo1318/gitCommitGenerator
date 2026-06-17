@@ -60,6 +60,7 @@ docs = ["zensical>=0.0.45", "pymdown-extensions>=10.14", "markdown>=3.7"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = "test_*.py"
 addopts = "--cov=src/git_cg --cov-report=term-missing"
 
