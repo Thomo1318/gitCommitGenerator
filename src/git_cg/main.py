@@ -393,21 +393,21 @@ def generate_commit_message(
 ) -> CommitPlan:
     """
     Generate a commit plan from a git diff.
-    
+
     Deterministic directives are applied to override specific fields in the result.
-    
+
     Parameters:
-    	diff_output (str): The git diff to include in the request.
-    	model_name (str): The name of the language model to use.
-    	system_prompt (str): The system context and formatting instructions.
-    	active_directives (dict[str, str] | None): Optional constraints such as `preferred_type` and `preferred_scope` that override generated values.
-    	residual_guidance (str | None): Optional additional guidance context.
-    
+        diff_output (str): The git diff to include in the request.
+        model_name (str): The name of the language model to use.
+        system_prompt (str): The system context and formatting instructions.
+        active_directives (dict[str, str] | None): Optional constraints such as `preferred_type` and `preferred_scope` that override generated values.
+        residual_guidance (str | None): Optional additional guidance context.
+
     Returns:
-    	CommitPlan: The structured commit plan.
-    
+        CommitPlan: The structured commit plan.
+
     Raises:
-    	openai.APIConnectionError: If the model cannot be reached after retrying.
+        openai.APIConnectionError: If the model cannot be reached after retrying.
     """
     import time
 
@@ -1422,13 +1422,13 @@ def record_telemetry(
             # The decorator automatically logs inputs/outputs
             """
             Record telemetry metadata and commit acceptance score to Opik.
-            
+
             Parameters:
-            	provenance (str): Classification of how the commit message was modified (one of ai_accepted, ai_accepted_refs_only, ai_edited_minor, ai_edited_substantive, human_authored, cancelled).
-            	telemetry_state (dict): Dictionary containing telemetry metadata (diff_hash, repo_name, engine, model_name, system_prompt_hash, score_card, commit_plan_json).
-            
+                provenance (str): Classification of how the commit message was modified (one of ai_accepted, ai_accepted_refs_only, ai_edited_minor, ai_edited_substantive, human_authored, cancelled).
+                telemetry_state (dict): Dictionary containing telemetry metadata (diff_hash, repo_name, engine, model_name, system_prompt_hash, score_card, commit_plan_json).
+
             Returns:
-            	dict: Dictionary with "status" set to "recorded" and "provenance" echoing the input provenance classification.
+                dict: Dictionary with "status" set to "recorded" and "provenance" echoing the input provenance classification.
             """
             opik_args = kwargs.get("opik_args") or {}
             thread_id = opik_args.get("trace", {}).get("thread_id")
@@ -1445,7 +1445,13 @@ def record_telemetry(
             feedback_score = score_mapping.get(provenance, 0.0)
 
             opik_context.update_current_trace(
-                tags=[provenance, "git-cg-final"],
+                tags=[
+                    provenance,
+                    "git-cg-final",
+                    "git-cg",
+                    f"engine:{telemetry_state.get('engine')}",
+                    f"repo:{telemetry_state.get('repo_name')}",
+                ],
                 metadata={
                     "diff_hash": telemetry_state.get("diff_hash"),
                     "repo_name": telemetry_state.get("repo_name"),
