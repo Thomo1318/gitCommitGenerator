@@ -315,3 +315,76 @@ def test_score_clamped_at_one_for_perfect(format_metric):
     msg = "✨ feat(eval): perfect short subject"
     result = format_metric.score(msg)
     assert result.value <= 1.0
+
+
+# --- Single-line commit (no trailer check triggered) ---
+
+
+def test_single_line_commit_does_not_trigger_trailer_check(format_metric):
+    """A commit with exactly one line must never trigger the trailer check.
+
+    The trailer check only fires when len(lines) > 1, so a single-line commit
+    with a valid header and short subject must score 1.0.
+    """
+    msg = "✨ feat(eval): single line commit"
+    assert len(msg.split("\n")) == 1
+    result = format_metric.score(msg)
+    # No trailer penalty because there is only one line
+    assert result.value == 1.0
+
+
+def test_single_line_commit_with_bad_format_no_trailer_penalty(format_metric):
+    """A malformed single-line commit incurs only the format penalty, not the trailer penalty."""
+    msg = "✨ invalid: short single line"
+    assert len(msg.split("\n")) == 1
+    result = format_metric.score(msg)
+    # Only format penalty (-0.5), no trailer penalty
+    assert result.value == pytest.approx(0.5)
+    assert "Missing required trailers" not in result.reason
+
+
+# --- score() accepts extra keyword arguments ---
+
+
+def test_score_accepts_extra_kwargs(format_metric):
+    """score() must accept arbitrary keyword arguments without raising."""
+    msg = "✨ feat(eval): short subject"
+    result = format_metric.score(msg, extra_kwarg="ignored", another=42)
+    assert result.value == 1.0
+
+
+# --- Combined penalty arithmetic: long subject + missing trailers ---
+
+
+def test_score_long_subject_and_missing_trailers(format_metric):
+    """Length (-0.3) + trailer (-0.2) = 0.5 for a valid-format-but-long multi-line commit."""
+    prefix = "✨ feat(eval): "
+    long_subject = prefix + "a" * (73 - len(prefix))
+    msg = long_subject + "\n\nBody without trailers."
+    assert len(long_subject) == 73
+    result = format_metric.score(msg)
+    assert result.value == pytest.approx(0.5)
+    assert "exceeds 72 characters" in result.reason
+    assert "Missing required trailers" in result.reason
+
+
+# --- Subject extracted after strip of whole message ---
+
+
+def test_first_line_after_strip_is_used_as_subject(format_metric):
+    """When the message starts with blank lines, stripping yields the correct subject."""
+    msg = "\n\n✨ feat(eval): real subject here\n\nSemVer-Impact: MINOR\nChange-Types: feat\n"
+    result = format_metric.score(msg)
+    # Subject should be '✨ feat(eval): real subject here' which is well within limits
+    assert "exceeds 72 characters" not in result.reason
+    assert "does not match convention" not in result.reason
+
+
+# --- Regex: multi-character emoji prefix ---
+
+
+def test_multi_char_emoji_prefix_matches_regex(format_metric):
+    """\\S+ in the regex should match multi-codepoint emoji sequences like 🐛✨."""
+    msg = "🐛✨ fix(scope): multi emoji prefix"
+    result = format_metric.score(msg)
+    assert "does not match convention" not in result.reason
