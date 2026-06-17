@@ -245,15 +245,15 @@ class TestGenerationCache:
 
         result1 = ecm.evaluation_task(item)
         # Modify the stub so a second real generation would return a different value
-        original_fn = sys.modules["git_cg.main"].generate_commit_message
-        sys.modules["git_cg.main"].generate_commit_message = lambda *args, **kwargs: (
+        original_fn = ecm.generate_commit_message
+        ecm.generate_commit_message = lambda *args, **kwargs: (
             type("Plan", (), {"render": lambda self: "different message"})()
         )
 
         result2 = ecm.evaluation_task(item)
 
         # Restore
-        sys.modules["git_cg.main"].generate_commit_message = original_fn
+        ecm.generate_commit_message = original_fn
 
         assert result1["output"] == result2["output"]
 
@@ -286,53 +286,53 @@ class TestEngineResolution:
     def test_env_var_with_leading_trailing_whitespace_is_stripped(self, monkeypatch):
         """GIT_CG_ENGINE with whitespace should be stripped before use."""
         captured = {}
-        original_get_ai_client = sys.modules["git_cg.main"].get_ai_client
-        sys.modules["git_cg.main"].get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
+        original_get_ai_client = ecm.get_ai_client
+        ecm.get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
 
         monkeypatch.setenv("GIT_CG_ENGINE", "  mtplx  ")
         item = {"diff_output": "whitespace engine diff", "expected_output": "expected"}
         ecm.evaluation_task(item)
 
-        sys.modules["git_cg.main"].get_ai_client = original_get_ai_client
+        ecm.get_ai_client = original_get_ai_client
         assert captured.get("engine") == "mtplx"
 
     def test_empty_env_var_defaults_to_mtplx(self, monkeypatch):
         """Empty GIT_CG_ENGINE should default to 'mtplx'."""
         captured = {}
-        original_get_ai_client = sys.modules["git_cg.main"].get_ai_client
-        sys.modules["git_cg.main"].get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
+        original_get_ai_client = ecm.get_ai_client
+        ecm.get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
 
         monkeypatch.setenv("GIT_CG_ENGINE", "")
         item = {"diff_output": "empty engine diff", "expected_output": "expected"}
         ecm.evaluation_task(item)
 
-        sys.modules["git_cg.main"].get_ai_client = original_get_ai_client
+        ecm.get_ai_client = original_get_ai_client
         assert captured.get("engine") == "mtplx"
 
     def test_whitespace_only_env_var_defaults_to_mtplx(self, monkeypatch):
         """Whitespace-only GIT_CG_ENGINE should default to 'mtplx' after strip."""
         captured = {}
-        original_get_ai_client = sys.modules["git_cg.main"].get_ai_client
-        sys.modules["git_cg.main"].get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
+        original_get_ai_client = ecm.get_ai_client
+        ecm.get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
 
         monkeypatch.setenv("GIT_CG_ENGINE", "   ")
         item = {"diff_output": "whitespace-only engine diff", "expected_output": "expected"}
         ecm.evaluation_task(item)
 
-        sys.modules["git_cg.main"].get_ai_client = original_get_ai_client
+        ecm.get_ai_client = original_get_ai_client
         assert captured.get("engine") == "mtplx"
 
     def test_valid_engine_env_var_is_passed_through(self, monkeypatch):
         """A valid non-default engine name should be passed to get_ai_client."""
         captured = {}
-        original_get_ai_client = sys.modules["git_cg.main"].get_ai_client
-        sys.modules["git_cg.main"].get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
+        original_get_ai_client = ecm.get_ai_client
+        ecm.get_ai_client = lambda engine: captured.update({"engine": engine}) or object()
 
         monkeypatch.setenv("GIT_CG_ENGINE", "ollama")
         item = {"diff_output": "custom engine diff", "expected_output": "expected"}
         ecm.evaluation_task(item)
 
-        sys.modules["git_cg.main"].get_ai_client = original_get_ai_client
+        ecm.get_ai_client = original_get_ai_client
         assert captured.get("engine") == "ollama"
 
 
