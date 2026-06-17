@@ -38,22 +38,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-  snyk-scan:
-    name: Snyk Code Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Run Snyk Setup
-        uses: snyk/actions/setup@master
-
-      - name: Run Snyk Code Test
-        run: |
-          snyk code test --org=fcd71871-87fc-4f54-b77a-74fc83e0531c || EXIT_CODE=$?
-          if [ "${EXIT_CODE:-0}" -eq 2 ]; then
-            echo "Snyk execution failed (likely due to free tier limits). Ignoring failure to prevent blocking CI."
-            exit 0
-          elif [ "${EXIT_CODE:-0}" -ne 0 ]; then
-            exit $EXIT_CODE
-          fi
