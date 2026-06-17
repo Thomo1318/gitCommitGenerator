@@ -99,11 +99,10 @@ def test_non_string_input_list(format_metric):
 
 
 def test_whitespace_only_input(format_metric):
-    """Whitespace-only string passes the guard but subject is empty after strip; bad format penalised."""
+    """Whitespace-only string triggers the guard clause and returns 0.0 with specific reason."""
     result = format_metric.score("   ")
-    # subject = "", len 0 (no length penalty), regex fails (-0.5), single line (no trailer check)
-    assert result.value == pytest.approx(0.5)
-    assert "does not match convention" in result.reason
+    assert result.value == 0.0
+    assert "empty or not a string" in result.reason
 
 
 # --- Constructor / naming ---
@@ -157,8 +156,8 @@ def test_subject_exactly_73_chars_triggers_penalty(format_metric):
 # --- Trailer check logic ---
 
 
-def test_only_semver_impact_satisfies_trailer_check(format_metric):
-    """Having SemVer-Impact: alone satisfies the trailer check (no Change-Types needed)."""
+def test_only_semver_impact_fails_trailer_check(format_metric):
+    """Having SemVer-Impact: alone fails the trailer check (Change-Types is also needed)."""
     msg = """✨ feat(eval): integrate atomic metrics
 
 Body line here.
@@ -166,11 +165,11 @@ Body line here.
 SemVer-Impact: MINOR
 """
     result = format_metric.score(msg)
-    assert "Missing required trailers" not in result.reason
+    assert "Missing required trailers" in result.reason
 
 
-def test_only_change_types_satisfies_trailer_check(format_metric):
-    """Having Change-Types: alone satisfies the trailer check (no SemVer-Impact needed)."""
+def test_only_change_types_fails_trailer_check(format_metric):
+    """Having Change-Types: alone fails the trailer check (SemVer-Impact is also needed)."""
     msg = """✨ feat(eval): integrate atomic metrics
 
 Body line here.
@@ -178,7 +177,7 @@ Body line here.
 Change-Types: feat
 """
     result = format_metric.score(msg)
-    assert "Missing required trailers" not in result.reason
+    assert "Missing required trailers" in result.reason
 
 
 def test_two_line_commit_skips_trailer_check(format_metric):
@@ -211,9 +210,7 @@ def test_all_valid_commit_types_match_regex(format_metric, commit_type):
     """Every type listed in the header_regex should pass format check."""
     msg = f"✨ {commit_type}(scope): subject line"
     result = format_metric.score(msg)
-    assert "does not match convention" not in result.reason, (
-        f"Type '{commit_type}' should be accepted but was rejected"
-    )
+    assert "does not match convention" not in result.reason, f"Type '{commit_type}' should be accepted but was rejected"
 
 
 def test_format_without_scope(format_metric):
@@ -290,7 +287,7 @@ def test_multiple_failures_use_pipe_separator(format_metric):
 
 def test_perfect_message_reason_string(format_metric):
     """A perfect message should return 'Perfect formatting.' as the reason."""
-    msg = "✨ feat(eval): short and correct subject\n\nBody.\n\nSemVer-Impact: MINOR\n"
+    msg = "✨ feat(eval): short and correct subject\n\nBody.\n\nSemVer-Impact: MINOR\nChange-Types: feat\n"
     result = format_metric.score(msg)
     assert result.reason == "Perfect formatting."
 
@@ -300,7 +297,7 @@ def test_perfect_message_reason_string(format_metric):
 
 def test_leading_trailing_whitespace_in_message(format_metric):
     """Leading/trailing whitespace around the whole message is stripped; scoring still works."""
-    msg = "\n\n✨ feat(eval): clean subject\n\nSemVer-Impact: MINOR\n\n"
+    msg = "\n\n✨ feat(eval): clean subject\n\nSemVer-Impact: MINOR\nChange-Types: feat\n\n"
     result = format_metric.score(msg)
     # After strip(), first line is the subject; should pass all checks
     assert result.value == 1.0

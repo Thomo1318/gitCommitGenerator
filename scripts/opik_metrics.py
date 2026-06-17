@@ -18,14 +18,14 @@ class FormatMetric(BaseMetric):
     def score(self, output: str, **kwargs) -> ScoreResult:
         """
         Score a commit message's formatting compliance.
-        
+
         Parameters:
             output (str): The commit message to evaluate.
-        
+
         Returns:
             ScoreResult: Score between 0.0 and 1.0 with reasons for formatting deductions.
         """
-        if not output or not isinstance(output, str):
+        if not output or not isinstance(output, str) or not output.strip():
             return ScoreResult(name=self.name, value=0.0, reason="Commit message is empty or not a string.")
 
         lines = output.strip().split("\n")
@@ -50,9 +50,9 @@ class FormatMetric(BaseMetric):
         if len(lines) > 2:
             has_semver = any("SemVer-Impact:" in line for line in lines)
             has_changes = any("Change-Types:" in line for line in lines)
-            if not has_semver and not has_changes:
+            if not has_semver or not has_changes:
                 score -= 0.2
-                reasons.append("Missing required trailers (SemVer-Impact or Change-Types).")
+                reasons.append("Missing required trailers (SemVer-Impact and Change-Types must both be present).")
 
         # Clamp score between 0.0 and 1.0
         final_score = max(0.0, min(1.0, score))

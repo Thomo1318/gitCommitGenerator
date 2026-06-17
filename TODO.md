@@ -1,6 +1,6 @@
 # Roadmap & Tasks
 
-All tasks and planned features have been formally migrated to [GitHub Issues](https://github.com/Thomo1318/gitCommitGenerator/issues).
+While the main backlog has been formally migrated to [GitHub Issues](https://github.com/Thomo1318/gitCommitGenerator/issues), some items may still be tracked in this file prior to promotion.
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
