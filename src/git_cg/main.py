@@ -381,7 +381,7 @@ def build_generation_messages(
     return messages
 
 
-@opik.track(project_name="gitCommitGenerator")
+@opik.track(project_name="gitCommitGenerator", ignore_arguments=["client"])
 def generate_commit_message(
     client: instructor.Instructor,
     diff_output: str,
@@ -401,10 +401,10 @@ def generate_commit_message(
 
     Parameters:
         diff_output (str): The git diff to include in the request messages.
-        model_name (str): The model identifier to request from the AI client.
-        system_prompt (str): The system-level prompt context to provide to the model.
-        active_directives (dict[str, str] | None): Optional deterministic overrides
-            (e.g., preferred_type, preferred_scope) to apply to the result.
+        model_name (str): The name of the language model to use.
+        system_prompt (str): The initial prompt providing context and formatting instructions.
+        active_directives (dict[str, str] | None): A dictionary of constraints (e.g., {"preferred_type": "feat"})
+            that influence the generated output.
         residual_guidance (str | None): Optional user-provided contextual guidance
             that influences intent selection.
 
@@ -414,18 +414,6 @@ def generate_commit_message(
     Raises:
         openai.APIConnectionError: If the model remains unreachable after all retries.
     """
-    opik_context.update_current_trace(
-        metadata={
-            "_opik_graph_definition": {
-                "format": "mermaid",
-                "data": "graph TD; User[Git Hook] --> App[git-cg]; App --> Instructor[Instructor]; Instructor --> API[LLM API]; API --> Instructor; Instructor --> App; App --> User;",
-            }
-        }
-    )
-
-    global LAST_OPIK_TRACE_ID
-    trace_data = opik_context.get_current_trace_data()
-    LAST_OPIK_TRACE_ID = trace_data.id if trace_data else None
     import time
 
     import openai
@@ -500,6 +488,7 @@ def detect_primary_language(diff_output: str) -> str | None:
     return ext_map.get(most_common_ext, most_common_ext.upper())
 
 
+@opik.track(project_name="gitCommitGenerator")
 def build_system_prompt(
     diff_output: str,
     verbose: bool = False,
@@ -824,6 +813,59 @@ def _interactive_review_dry_run(
                 os.unlink(temp_path)
 
 
+@opik.track(project_name="gitCommitGenerator")
+def extract_git_diff(verbose: bool, strict: bool) -> str:
+    """
+    Extract the staged git diff to use for commit message generation.
+    """
+    try:
+        has_rtk = shutil.which("rtk") is not None
+        diff_cmd_standard = [
+            "git",
+            "diff",
+            "--cached",
+            "--",
+            ".",
+            ":(exclude)*.lock",
+            ":(exclude)*-lock.json",
+            ":(exclude)*-lock.yaml",
+            ":(exclude)*.lockb",
+            ":(exclude)*zensical*",
+            ":(exclude)*auxly*",
+        ]
+        max_chars = 50000
+
+        if has_rtk:
+            if verbose:
+                console.log("Using rtk for token compression...")
+            try:
+                diff_cmd_rtk = ["rtk", "git", "diff", "--cached", "--", ".", *diff_cmd_standard[5:]]
+                diff_output = subprocess.check_output(diff_cmd_rtk, stderr=subprocess.STDOUT, text=True)
+            except subprocess.CalledProcessError as e:
+                if verbose:
+                    console.log(f"rtk failed ({e}). Falling back to standard diff.")
+                diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
+        else:
+            diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
+
+        if len(diff_output) > max_chars:
+            diff_output = diff_output[:max_chars] + "\n\n... [DIFF TRUNCATED DUE TO LENGTH] ..."
+            if verbose:
+                console.log(f"Diff truncated to {max_chars} chars.")
+    except subprocess.CalledProcessError as e:
+        _abort(f"[bold red]Error getting git diff:[/bold red] {e.output}", strict=strict)
+
+    if not diff_output.strip():
+        console.print("[yellow]No staged changes found. Aborting commit message generation.[/yellow]")
+        raise typer.Exit(code=0)
+
+    if verbose:
+        console.log(f"Extracted git diff ({len(diff_output)} characters).")
+
+    return diff_output
+
+
+@opik.track(project_name="gitCommitGenerator")
 def _run_commit_generation(
     commit_msg_file: str,
     commit_source: str | None,
@@ -877,48 +919,25 @@ def _run_commit_generation(
             raise typer.Exit(code=0)
 
     try:
-        has_rtk = shutil.which("rtk") is not None
-        diff_cmd_standard = [
-            "git",
-            "diff",
-            "--cached",
-            "--",
-            ".",
-            ":(exclude)*.lock",
-            ":(exclude)*-lock.json",
-            ":(exclude)*-lock.yaml",
-            ":(exclude)*.lockb",
-            ":(exclude)*zensical*",
-            ":(exclude)*auxly*",
-        ]
-        max_chars = 50000
+        repo_name = os.path.basename(
+            subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
+        )
+    except Exception:
+        repo_name = "unknown"
 
-        if has_rtk:
-            if verbose:
-                console.log("Using rtk for token compression...")
-            try:
-                diff_cmd_rtk = ["rtk", "git", "diff", "--cached", "--", ".", *diff_cmd_standard[5:]]
-                diff_output = subprocess.check_output(diff_cmd_rtk, stderr=subprocess.STDOUT, text=True)
-            except subprocess.CalledProcessError as e:
-                if verbose:
-                    console.log(f"rtk failed ({e}). Falling back to standard diff.")
-                diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
-        else:
-            diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
+    opik_context.update_current_trace(
+        tags=["interactive" if interactive else "non-interactive", engine],
+        metadata={
+            "repo_name": repo_name,
+            "commit_source": commit_source,
+        },
+    )
 
-        if len(diff_output) > max_chars:
-            diff_output = diff_output[:max_chars] + "\n\n... [DIFF TRUNCATED DUE TO LENGTH] ..."
-            if verbose:
-                console.log(f"Diff truncated to {max_chars} chars.")
-    except subprocess.CalledProcessError as e:
-        _abort(f"[bold red]Error getting git diff:[/bold red] {e.output}", strict=strict)
+    global LAST_OPIK_TRACE_ID
+    trace_data = opik_context.get_current_trace_data()
+    LAST_OPIK_TRACE_ID = trace_data.id if trace_data else None
 
-    if not diff_output.strip():
-        console.print("[yellow]No staged changes found. Aborting commit message generation.[/yellow]")
-        raise typer.Exit(code=0)
-
-    if verbose:
-        console.log(f"Extracted git diff ({len(diff_output)} characters).")
+    diff_output = extract_git_diff(verbose=verbose, strict=strict)
 
     try:
         client = get_ai_client(engine)
