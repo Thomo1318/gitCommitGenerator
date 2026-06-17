@@ -6,6 +6,9 @@ from opik.evaluation.metrics.score_result import ScoreResult
 
 class FormatMetric(BaseMetric):
     def __init__(self, name: str = "CommitFormatQuality"):
+        """
+        Initialise a FormatMetric instance for evaluating commit message formatting.
+        """
         super().__init__(name=name)
         # Matches: "<emoji> <type>[(<scope>)]: <subject>"
         self.header_regex = re.compile(
@@ -13,6 +16,18 @@ class FormatMetric(BaseMetric):
         )
 
     def score(self, output: str, **kwargs) -> ScoreResult:
+        """
+        Evaluate the formatting quality of a commit message.
+        
+        Determines a quality score between 0.0 and 1.0 based on formatting compliance,
+        returning reasons for any deductions detected.
+        
+        Parameters:
+            output (str): The commit message to evaluate.
+        
+        Returns:
+            A ScoreResult containing the quality score and detailed reasons for deductions.
+        """
         if not output or not isinstance(output, str):
             return ScoreResult(name=self.name, value=0.0, reason="Commit message is empty or not a string.")
 

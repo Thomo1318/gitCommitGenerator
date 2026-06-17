@@ -20,6 +20,15 @@ Provide a score from 0.0 to 1.0, where 1.0 means it's an excellent, accurate com
 
 
 def evaluation_task(item):
+    """
+    Generate a commit message for a diff and return the evaluation payload.
+    
+    Parameters:
+    	item (dict or object): An evaluation item containing 'diff_output' and 'expected_output' fields.
+    
+    Returns:
+    	dict: Evaluation payload with 'input', 'output', and 'expected_output' keys.
+    """
     print("Starting evaluation_task for item...")
     # Extract data, handling both dict and object formats
     if isinstance(item, dict):
@@ -67,6 +76,9 @@ def evaluation_task(item):
 
 
 def main():
+    """
+    Execute the commit message evaluation pipeline.
+    """
     dataset_name = "commit-message-eval"
     print(f"Starting evaluation on dataset: {dataset_name}")
 
