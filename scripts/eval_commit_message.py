@@ -4,6 +4,7 @@ import os
 import opik
 from opik.evaluation import evaluate
 from opik.evaluation.metrics import GEval
+from opik_metrics import FormatMetric
 
 from git_cg.main import ENGINE_REGISTRY, build_system_prompt, generate_commit_message, get_ai_client
 
@@ -44,6 +45,8 @@ def evaluation_task(item):
 
     # Get client
     engine = os.environ.get("GIT_CG_ENGINE", "mtplx")
+    if not engine:  # Handle empty string
+        engine = "mtplx"
     client = get_ai_client(engine)
 
     # Get model name
@@ -70,7 +73,9 @@ def main():
     client = opik.Opik()
     dataset = client.get_dataset(name=dataset_name)
 
-    evaluate(dataset=dataset, task=evaluation_task, scoring_metrics=[commit_quality_metric])
+    format_metric = FormatMetric()
+
+    evaluate(dataset=dataset, task=evaluation_task, scoring_metrics=[format_metric, commit_quality_metric])
 
 
 if __name__ == "__main__":
