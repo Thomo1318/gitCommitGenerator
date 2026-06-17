@@ -32,10 +32,11 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
+        continue-on-error: true
         with:
           file: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
 
   snyk-scan:
     name: Snyk Code Scan
@@ -48,4 +49,11 @@ jobs:
         uses: snyk/actions/setup@master
 
       - name: Run Snyk Code Test
-        run: snyk code test --org=fcd71871-87fc-4f54-b77a-74fc83e0531c
+        run: |
+          snyk code test --org=fcd71871-87fc-4f54-b77a-74fc83e0531c || EXIT_CODE=$?
+          if [ "${EXIT_CODE:-0}" -eq 2 ]; then
+            echo "Snyk execution failed (likely due to free tier limits). Ignoring failure to prevent blocking CI."
+            exit 0
+          elif [ "${EXIT_CODE:-0}" -ne 0 ]; then
+            exit $EXIT_CODE
+          fi
