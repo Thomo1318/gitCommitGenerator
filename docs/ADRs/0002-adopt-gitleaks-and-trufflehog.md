@@ -13,10 +13,10 @@ An awe-inspiring, hyper-realistic macro shot of a massive, two-tiered security s
 adr_number: "0002"
 title: "Adopt Gitleaks and TruffleHog for Two-Tier Secret Scanning"
 status: "Accepted"
-version: "v1.1.0"
+version: "v1.2.0"
 date: "2026-06-07"
 created: "2026-06-07 12:00:00"
-modified: "2026-06-18 09:35:00"
+modified: "2026-06-18 09:50:00"
 risk_level: "High"
 reversibility: "Low"
 security_scope: "Project"
@@ -111,7 +111,24 @@ While configuring the CI pipeline, **Codecov** was also integrated to handle tes
 
 ---
 
+## III. Update 2: Consolidation of Secret Scanning to BetterLeaks (v1.2.0)
+
+As the project scaled, maintaining two disparate tools for local prevention (Gitleaks) and CI verification (TruffleHog) introduced configuration drift and duplicated efforts when tuning false positives. 
+
+To streamline the secret scanning architecture, we migrated from the two-tier Gitleaks/TruffleHog setup to **BetterLeaks**. 
+
+### Rationale
+- **Unified Tooling**: BetterLeaks acts as an all-in-one "next-gen secret scanner" that combines the fast, regex-based scanning capabilities needed for local pre-commit hooks with the active verification capabilities required in CI pipelines.
+- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration reduces overhead, preventing the need to synchronize a `.gitleaksignore` file and TruffleHog's equivalent. 
+- **Portability Maintained**: BetterLeaks is seamlessly integrated into `mise.toml` and local pre-commit hooks (`hk.pkl`), retaining the original portability constraint of the project.
+
+### References
+- [BetterLeaks GitHub Repository](https://github.com/betterleaks/betterleaks)
+
+---
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-07 12:00:00): Initial drafting and finalization of the two-tier secret scanning strategy using Gitleaks and TruffleHog.
 - v1.1.0 (2026-06-18): Replaced Snyk with GitHub CodeQL and Dependabot to resolve execution limits; documented the addition of tokenless Codecov for coverage metrics.
+- v1.2.0 (2026-06-18): Documented the migration from Gitleaks and TruffleHog to BetterLeaks for unified secret scanning and active verification.
