@@ -418,6 +418,11 @@ def generate_commit_message(
 
     import openai
 
+    opik_args = kwargs.get("opik_args") or {}
+    opik_prompt = opik_args.get("prompt")
+    if opik_prompt:
+        opik_context.update_current_span(prompts=[opik_prompt])
+
     max_retries = 10
     for attempt in range(max_retries):
         try:
@@ -1000,6 +1005,18 @@ def _run_commit_generation(
             previous_plan=review_state.commit_plan if review_state else None,
         )
 
+        # Register prompt version in Opik
+        try:
+            opik_client = opik.Opik()
+            opik_prompt = opik_client.create_prompt(
+                name="git_cg_system_prompt",
+                prompt=system_prompt,
+            )
+        except Exception as e:
+            if verbose:
+                console.print(f"[yellow]Failed to register prompt in Opik: {e}[/yellow]")
+            opik_prompt = None
+
         try:
             with console.status(
                 f"[bold cyan]Generating AI commit message with {model_name}... (this may take 30-90s locally)[/bold cyan]",
@@ -1012,7 +1029,7 @@ def _run_commit_generation(
                     system_prompt,
                     active_directives=active_directives,
                     residual_guidance=residual_guidance,
-                    opik_args={"trace": {"thread_id": thread_id}},
+                    opik_args={"trace": {"thread_id": thread_id}, "prompt": opik_prompt},
                 )
         except Exception as e:
             _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
@@ -1422,6 +1439,17 @@ def record_telemetry(
             opik_args = kwargs.get("opik_args") or {}
             thread_id = opik_args.get("trace", {}).get("thread_id")
 
+            # Map provenance to feedback score
+            score_mapping = {
+                "ai_accepted": 1.0,
+                "ai_accepted_refs_only": 0.9,
+                "ai_edited_minor": 0.5,
+                "ai_edited_substantive": 0.1,
+                "human_authored": 0.0,
+                "cancelled": 0.0,
+            }
+            feedback_score = score_mapping.get(provenance, 0.0)
+
             opik_context.update_current_trace(
                 tags=[provenance, "git-cg-final"],
                 metadata={
@@ -1433,6 +1461,7 @@ def record_telemetry(
                     "score_card": telemetry_state.get("score_card"),
                     "commit_plan": telemetry_state.get("commit_plan_json"),
                 },
+                feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
                 thread_id=thread_id,
             )
             return {"status": "recorded", "provenance": provenance}
