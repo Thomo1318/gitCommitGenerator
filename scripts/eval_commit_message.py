@@ -21,13 +21,13 @@ Provide a score from 0.0 to 1.0, where 1.0 means it's an excellent, accurate com
 
 def evaluation_task(item):
     """
-    Generate a commit message for a diff and return the evaluation payload.
+    Generate a commit message from a diff and return the evaluation payload.
     
     Parameters:
-    	item (dict or object): An evaluation item containing 'diff_output' and 'expected_output' fields.
+    	item: An evaluation item containing 'diff_output' and 'expected_output' fields. Accepts either a dict or object with these attributes. The 'expected_output' field may be a string, JSON string, or dict containing an 'output' key.
     
     Returns:
-    	dict: Evaluation payload with 'input', 'output', and 'expected_output' keys.
+    	dict: Evaluation payload with keys 'input' (the diff), 'output' (the generated commit message), and 'expected_output' (the normalised expected message).
     """
     print("Starting evaluation_task for item...")
     # Extract data, handling both dict and object formats
@@ -77,7 +77,7 @@ def evaluation_task(item):
 
 def main():
     """
-    Execute the commit message evaluation pipeline.
+    Run the Opik evaluation pipeline to score generated commit messages against format and quality standards.
     """
     dataset_name = "commit-message-eval"
     print(f"Starting evaluation on dataset: {dataset_name}")

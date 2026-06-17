@@ -17,16 +17,13 @@ class FormatMetric(BaseMetric):
 
     def score(self, output: str, **kwargs) -> ScoreResult:
         """
-        Evaluate the formatting quality of a commit message.
-        
-        Determines a quality score between 0.0 and 1.0 based on formatting compliance,
-        returning reasons for any deductions detected.
+        Score a commit message's formatting compliance.
         
         Parameters:
             output (str): The commit message to evaluate.
         
         Returns:
-            A ScoreResult containing the quality score and detailed reasons for deductions.
+            ScoreResult: Score between 0.0 and 1.0 with reasons for formatting deductions.
         """
         if not output or not isinstance(output, str):
             return ScoreResult(name=self.name, value=0.0, reason="Commit message is empty or not a string.")
