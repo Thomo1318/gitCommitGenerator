@@ -13,7 +13,7 @@ jobs = 8                            # Parallel job count for faster installs
 env_cache = true                    # Cache environment evaluations for speed
 not_found_auto_install = true       # Auto-install tools when entering directory
 plugin_autoupdate_last_check_duration = "1d" # Check for plugin updates daily
-yes = false                         # Auto-answer yes? (False for safety, use -y in scripts)
+
 idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go", "java", "yarn", "terraform", "packer"]  # Read .nvmrc, .python-version, etc.
 
 [settings.python]
