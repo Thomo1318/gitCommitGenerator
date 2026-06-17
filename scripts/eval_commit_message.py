@@ -19,6 +19,8 @@ Provide a score from 0.0 to 1.0, where 1.0 means it's an excellent, accurate com
 )
 
 
+_generation_cache = {}
+
 def evaluation_task(item):
     """
     Generate a commit message from a diff and return the evaluation payload.
@@ -44,10 +46,16 @@ def evaluation_task(item):
     elif isinstance(expected, str):
         try:
             parsed = json.loads(expected)
-            if "output" in parsed:
+            if isinstance(parsed, dict) and "output" in parsed:
                 expected = parsed["output"]
         except json.JSONDecodeError:
             pass
+
+    # Use cache if already generated for this diff
+    if diff_output in _generation_cache:
+        print("Using cached generation for Tier-2 evaluation.")
+        result_string = _generation_cache[diff_output]
+        return {"input": diff_output, "output": result_string, "expected_output": expected}
 
     # Build the prompt
     system_prompt = build_system_prompt(diff_output, verbose=False)
@@ -73,6 +81,8 @@ def evaluation_task(item):
 
     result_string = commit_plan.render()
     print(f"Generation complete. Generated message length: {len(result_string)}")
+
+    _generation_cache[diff_output] = result_string
 
     return {"input": diff_output, "output": result_string, "expected_output": expected}
 

@@ -45,11 +45,11 @@ class FormatMetric(BaseMetric):
             reasons.append("Subject line does not match convention: '<emoji> <type>[(<scope>)]: <subject>'.")
 
         # Check 3: Substantive commits should have specific headers
-        # We look for SemVer-Impact or Change-Types if it's not a tiny commit.
+        # We look for SemVer-Impact or Change-Types if it has any body content.
         # This is a soft check.
-        if len(lines) > 2:
-            has_semver = any("SemVer-Impact:" in line for line in lines)
-            has_changes = any("Change-Types:" in line for line in lines)
+        if len(lines) > 1:
+            has_semver = any(line.startswith("SemVer-Impact:") for line in lines)
+            has_changes = any(line.startswith("Change-Types:") for line in lines)
             if not has_semver or not has_changes:
                 score -= 0.2
                 reasons.append("Missing required trailers (SemVer-Impact and Change-Types must both be present).")

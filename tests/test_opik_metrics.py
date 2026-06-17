@@ -180,15 +180,15 @@ Change-Types: feat
     assert "Missing required trailers" in result.reason
 
 
-def test_two_line_commit_skips_trailer_check(format_metric):
-    """A commit with exactly 2 lines (subject + blank or subject + body) skips trailer check.
+def test_two_line_commit_triggers_trailer_check(format_metric):
+    """A commit with exactly 2 lines (subject + blank or subject + body) triggers trailer check.
 
-    len(lines) > 2 is required to trigger check 3; with 2 lines it must not fire.
+    len(lines) > 1 is required to trigger check 3; with 2 lines it must fire.
     """
     msg = "✨ feat(eval): add something\nThis is only two lines total"
     assert len(msg.split("\n")) == 2
     result = format_metric.score(msg)
-    assert "Missing required trailers" not in result.reason
+    assert "Missing required trailers" in result.reason
 
 
 def test_three_line_commit_triggers_trailer_check(format_metric):
