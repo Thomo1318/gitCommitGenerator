@@ -388,9 +388,9 @@ sequenceDiagram
 
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
-- **Cause**: The original plan was to build a composite "short-circuit" metric that aborts LLM scoring if deterministic checks (regex/length) fail, saving tokens. However, this breaks Opik's atomic metric paradigm (leading to missing UI columns) and prevents retroactive evaluation. Additionally, running on local models makes token costs irrelevant, prioritizing data collection over optimization.
-- **Change**: Implement atomic, side-by-side metrics: `FormatMetric` (deterministic) and `CommitMessageQuality` (LLM). Both run simultaneously on every generation. Future token optimizations will use dataset filtering rather than metric short-circuits.
-- **Effect**: Guarantees atomic, reliable data logging for every trace, prevents UI confusion, and establishes a foundational baseline of LLM evaluation behavior on deterministically flawed commits.
+- **Cause**: The offline evaluation suite lacks deterministic validation gates before running expensive semantic GEval scoring, risking wasted execution on fundamentally broken formats.
+- **Change**: Implement a two-stage metric pipeline: `FormatMetric` (deterministic) runs unconditionally as Tier-1. The `CommitMessageQuality` (LLM semantic judge) runs as Tier-2 and is explicitly gated, only invoking when the Tier-1 format check passes.
+- **Effect**: Ensures Tier-1 deterministic format failures explicitly block Tier-2 semantic GEval execution, optimizing the evaluation pipeline while maintaining clear separation of concerns.
 
 ### Phase 6: Datasets and Test Suites (Opik Phase E)
 

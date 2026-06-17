@@ -1,6 +1,7 @@
 # Roadmap & Tasks
 
-While the main backlog has been formally migrated to [GitHub Issues](https://github.com/Thomo1318/gitCommitGenerator/issues), some items may still be tracked in this file prior to promotion.
+> [!NOTE]
+> The primary backlog has been formally migrated to [GitHub Issues](https://github.com/Thomo1318/gitCommitGenerator/issues) to provide better visibility, tracking, and collaboration. However, the migration is not yet fully complete, and some active implementation features may still be added and temporarily tracked in this file before being transitioned.
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
