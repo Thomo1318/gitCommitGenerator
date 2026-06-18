@@ -8,7 +8,6 @@ Tests for project configuration files added/modified in this PR:
 import tomllib
 from pathlib import Path
 
-import pytest
 import yaml
 
 # ---------------------------------------------------------------------------
@@ -274,13 +273,16 @@ class TestPromptfooConfig:
         """The javascript assertion must verify output is non-trivially long."""
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
+        has_length_check = False
         for assertion in first_case["assert"]:
             if assertion["type"] == "javascript":
                 value = assertion["value"]
-                assert "output" in value, "Assertion must reference 'output'"
-                assert "length" in value, "Assertion should check output length"
-                # Verify the minimum length threshold is greater than 0
-                assert ">" in value
+                if "output" in value and "length" in value:
+                    has_length_check = True
+                    # Verify the minimum length threshold is greater than 0
+                    assert ">" in value
+                    break
+        assert has_length_check, "At least one JS assertion should check output length"
 
     def test_javascript_assertion_trims_whitespace(self):
         """The javascript assertion should call trim() to ignore leading/trailing whitespace."""
@@ -297,7 +299,17 @@ class TestPromptfooConfig:
 
     def test_no_unknown_top_level_keys(self):
         """Only recognised promptfoo top-level keys should be present."""
-        known_keys = {"description", "prompts", "providers", "tests", "defaultTest", "outputPath", "sharing", "env"}
+        known_keys = {
+            "description",
+            "prompts",
+            "providers",
+            "tests",
+            "defaultTest",
+            "outputPath",
+            "sharing",
+            "env",
+            "redteam",
+        }
         data = _load_promptfoo_yaml()
         unknown = set(data.keys()) - known_keys
         assert not unknown, f"Unexpected top-level keys in promptfooconfig.yaml: {unknown}"

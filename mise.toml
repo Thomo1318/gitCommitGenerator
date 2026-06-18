@@ -72,3 +72,13 @@ run = "uv run zensical serve -a localhost:8082"
 [tasks."setup:brew"]
 description = "Install system-level dependencies required by the project"
 run = "brew bundle --file=Brewfile"
+
+[tasks."eval:promptfoo"]
+description = "Evaluate and red-team GitOps commit generation, then sync to Opik"
+run = """
+#!/usr/bin/env bash
+npx promptfoo eval -o promptfoo_results.json
+npx promptfoo redteam run -o promptfoo_redteam_results.json
+uv run python scripts/sync_promptfoo_to_opik.py promptfoo_results.json
+uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
+"""
