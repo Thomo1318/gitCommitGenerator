@@ -9,6 +9,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,7 +24,6 @@ def _load_mise() -> dict:
 
 
 def _load_promptfoo_yaml() -> dict:
-    yaml = pytest.importorskip("yaml", reason="PyYAML not installed")
     with open(REPO_ROOT / "promptfooconfig.yaml") as f:
         return yaml.safe_load(f)
 
@@ -46,12 +46,13 @@ class TestBrewfile:
     def test_promptfoo_brew_entry_not_commented_out(self):
         """The promptfoo entry must be active (not commented)."""
         lines = _brewfile_lines()
+        found = False
         for line in lines:
             stripped = line.strip()
-            if "promptfoo" in stripped:
-                assert not stripped.startswith("#"), (
-                    "promptfoo entry must not be commented out in Brewfile"
-                )
+            if 'brew "promptfoo"' in stripped:
+                found = True
+                assert not stripped.startswith("#"), "promptfoo entry must not be commented out in Brewfile"
+        assert found, "promptfoo entry not found in Brewfile"
 
     def test_promptfoo_comment_describes_purpose(self):
         """A descriptive comment precedes the promptfoo entry."""
@@ -60,7 +61,7 @@ class TestBrewfile:
             if line.strip() == 'brew "promptfoo"':
                 # Look for a comment within the two lines before this entry
                 preceding = lines[max(0, i - 2) : i]
-                assert any(l.strip().startswith("#") for l in preceding), (
+                assert any(ln.strip().startswith("#") for ln in preceding), (
                     "A comment describing promptfoo should appear before its brew entry"
                 )
                 break
@@ -80,9 +81,7 @@ class TestBrewfile:
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            assert any(stripped.startswith(d) for d in valid_directives), (
-                f"Unexpected Brewfile directive: {stripped!r}"
-            )
+            assert any(stripped.startswith(d) for d in valid_directives), f"Unexpected Brewfile directive: {stripped!r}"
 
 
 # ===========================================================================
@@ -120,24 +119,28 @@ class TestMiseToml:
         """npm:promptfoo must be disabled (moved to Brewfile)."""
         raw = (REPO_ROOT / "mise.toml").read_text()
         # The key should only appear in a comment, never as an active tool
+        found = False
         for line in raw.splitlines():
             stripped = line.strip()
             if "npm:promptfoo" in stripped:
-                assert stripped.startswith("#"), (
-                    "npm:promptfoo should be commented out (moved to Brewfile)"
-                )
+                found = True
+                assert stripped.startswith("#"), "npm:promptfoo should be commented out (moved to Brewfile)"
+        assert found, "npm:promptfoo missing from mise.toml"
 
     def test_npm_promptfoo_comment_explains_reason(self):
         """The comment for npm:promptfoo should mention why it was moved."""
         raw = (REPO_ROOT / "mise.toml").read_text()
+        found = False
         for line in raw.splitlines():
             stripped = line.strip()
             if stripped.startswith("#") and "npm:promptfoo" in stripped:
+                found = True
                 lower = stripped.lower()
                 assert "brewfile" in lower or "brew" in lower, (
                     "Comment should mention Brewfile as the new home for promptfoo"
                 )
                 break
+        assert found, "Commented npm:promptfoo entry not found in mise.toml"
 
     def test_mise_toml_is_valid_toml(self):
         """Whole file must parse as valid TOML without errors."""
@@ -186,9 +189,7 @@ class TestPromptfooConfig:
         """Each prompt must reference the {{diff}} variable."""
         data = _load_promptfoo_yaml()
         for prompt in data["prompts"]:
-            assert "{{diff}}" in prompt, (
-                f"Prompt does not contain {{{{diff}}}} template variable: {prompt!r}"
-            )
+            assert "{{diff}}" in prompt, f"Prompt does not contain {{{{diff}}}} template variable: {prompt!r}"
 
     def test_providers_list_present(self):
         """providers must be a non-empty list."""
