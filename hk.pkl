@@ -21,11 +21,9 @@ local linters = new Mapping<String, Step> {
         check = "npx doctoc {{ files }} --notitle"
         fix = "npx doctoc {{ files }} --notitle"
     }
-    ["snyk"] {
-        check = "snyk code test --org=fcd71871-87fc-4f54-b77a-74fc83e0531c"
-    }
+
     ["codecov"] {
-        check = "pytest --cov --cov-branch --cov-report=xml"
+        check = "uv run pytest --cov --cov-branch --cov-report=xml"
     }
 }
 

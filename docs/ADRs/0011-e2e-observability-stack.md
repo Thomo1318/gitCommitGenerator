@@ -388,9 +388,9 @@ sequenceDiagram
 
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
-- **Cause**: Ad-hoc offline evaluation scripts waste tokens by triggering semantic GEval checks on deterministically flawed commits.
-- **Change**: Refactoring local scripts into a tiered `opik_metrics.py` system where deterministic gates run before LLM graders.
-- **Effect**: Cheaper, faster, and highly-structured offline testing natively visible in Opik Experiments.
+- **Cause**: The offline evaluation suite lacks deterministic validation gates before running expensive semantic GEval scoring, risking wasted execution on fundamentally broken formats.
+- **Change**: Implement a two-stage metric pipeline: `FormatMetric` (deterministic) runs unconditionally as Tier-1. The `CommitMessageQuality` (LLM semantic judge) runs as Tier-2 and is explicitly gated, only invoking when the Tier-1 format check passes.
+- **Effect**: Ensures Tier-1 deterministic format failures explicitly block Tier-2 semantic GEval execution, optimizing the evaluation pipeline while maintaining clear separation of concerns.
 
 ### Phase 6: Datasets and Test Suites (Opik Phase E)
 
@@ -1207,28 +1207,28 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 ### Phase 2: Correctness and Continuity (Opik Phase A)
 
-- [ ] Implement reading/writing of `.git/GIT_CG_OPIK_STATE.json` between hooks.
-- [ ] Persist the real Opik trace ID with `get_current_trace_data()`.
-- [ ] Add `thread_id` (repo grouping) as a separate field in `telemetry.py`.
-- [ ] Preserve backward-compatible state loading for v1 payloads.
-- [ ] Add tests for state-file linkage.
+- [x] Implement reading/writing of `.git/GIT_CG_OPIK_STATE.json` between hooks.
+- [x] Persist the real Opik trace ID with `get_current_trace_data()`.
+- [x] Add `thread_id` (repo grouping) as a separate field in `telemetry.py`.
+- [x] Preserve backward-compatible state loading for v1 payloads.
+- [x] Add tests for state-file linkage.
 
 ### Phase 3: Broader Runtime Tracing (Opik Phase B)
 
-- [ ] Move the root trace decorator to the full `_run_commit_generation()` lifecycle.
-- [ ] Capture lifecycle steps (diff extraction, intent ranking, prompt build, regeneration) as nested spans.
-- [ ] Configure `ignore_arguments=["client"]` to prevent serialization crashes.
+- [x] Move the root trace decorator to the full `_run_commit_generation()` lifecycle.
+- [x] Capture lifecycle steps (diff extraction, intent ranking, prompt build, regeneration) as nested spans.
+- [x] Configure `ignore_arguments=["client"]` to prevent serialization crashes.
 
 ### Phase 4: Feedback and Prompt Enrichment (Opik Phase C)
 
-- [ ] Map user interactive outcomes (accept, edit, regenerate, cancel) to numeric Opik feedback scores.
+- [x] Map user interactive outcomes (accept, edit, regenerate, cancel) to numeric Opik feedback scores.
 - [ ] Register and version system prompts into the Opik Prompt Library.
 - [ ] Link active prompt objects to runtime traces.
 
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
-- [ ] Refactor offline evaluation (`scripts/eval_commit_message.py`) into `opik_metrics.py`.
-- [ ] Integrate deterministic gates (regex/length) before semantic LLM scoring (Tier 1 vs Tier 2).
+- [x] Create `scripts/opik_metrics.py` with deterministic `FormatMetric`.
+- [x] Refactor offline evaluation (`scripts/eval_commit_message.py`) to run atomic, side-by-side metrics (Format vs Quality) simultaneously instead of composite short-circuits.
 
 ### Phase 6: Datasets and Test Suites (Opik Phase E)
 

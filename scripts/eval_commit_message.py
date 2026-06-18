@@ -4,6 +4,7 @@ import os
 import opik
 from opik.evaluation import evaluate
 from opik.evaluation.metrics import GEval
+from opik_metrics import FormatMetric
 
 from git_cg.main import ENGINE_REGISTRY, build_system_prompt, generate_commit_message, get_ai_client
 
@@ -18,7 +19,18 @@ Provide a score from 0.0 to 1.0, where 1.0 means it's an excellent, accurate com
 )
 
 
+_generation_cache = {}
+
 def evaluation_task(item):
+    """
+    Generate a commit message from a diff and return the evaluation payload.
+
+    Parameters:
+        item: An evaluation item containing 'diff_output' and 'expected_output' fields. Accepts either a dict or object with these attributes. The 'expected_output' field may be a string, JSON string, or dict containing an 'output' key.
+
+    Returns:
+        dict: Evaluation payload with keys 'input' (the diff), 'output' (the generated commit message), and 'expected_output' (the normalised expected message).
+    """
     print("Starting evaluation_task for item...")
     # Extract data, handling both dict and object formats
     if isinstance(item, dict):
@@ -34,16 +46,26 @@ def evaluation_task(item):
     elif isinstance(expected, str):
         try:
             parsed = json.loads(expected)
-            if "output" in parsed:
+            if isinstance(parsed, dict) and "output" in parsed:
                 expected = parsed["output"]
         except json.JSONDecodeError:
             pass
+
+    # Use cache if already generated for this diff
+    if diff_output in _generation_cache:
+        print("Using cached generation for Tier-2 evaluation.")
+        result_string = _generation_cache[diff_output]
+        return {"input": diff_output, "output": result_string, "expected_output": expected}
 
     # Build the prompt
     system_prompt = build_system_prompt(diff_output, verbose=False)
 
     # Get client
     engine = os.environ.get("GIT_CG_ENGINE", "mtplx")
+    if engine:
+        engine = engine.strip()
+    if not engine:  # Handle empty or whitespace-only string
+        engine = "mtplx"
     client = get_ai_client(engine)
 
     # Get model name
@@ -60,16 +82,44 @@ def evaluation_task(item):
     result_string = commit_plan.render()
     print(f"Generation complete. Generated message length: {len(result_string)}")
 
+    _generation_cache[diff_output] = result_string
+
     return {"input": diff_output, "output": result_string, "expected_output": expected}
 
 
 def main():
+    """
+    Run the Opik evaluation pipeline to score generated commit messages against format and quality standards.
+    """
     dataset_name = "commit-message-eval"
     print(f"Starting evaluation on dataset: {dataset_name}")
 
     client = opik.Opik()
     dataset = client.get_dataset(name=dataset_name)
 
+    format_metric = FormatMetric()
+
+    print("Running Tier-1 evaluation (Format validation)...")
+    eval_results = evaluate(dataset=dataset, task=evaluation_task, scoring_metrics=[format_metric])
+
+    # Ensure format validation passes before proceeding to semantic evaluation
+    all_passed = True
+    for test_result in getattr(eval_results, "test_results", []):
+        for metric_result in getattr(test_result, "score_results", []):
+            if (
+                getattr(metric_result, "name", "") == "CommitFormatQuality"
+                and getattr(metric_result, "value", 0.0) < 1.0
+            ):
+                all_passed = False
+                break
+        if not all_passed:
+            break
+
+    if not all_passed:
+        print("Tier-1 format validation failed for one or more items. Aborting Tier-2 semantic evaluation.")
+        return
+
+    print("Tier-1 format validation passed. Running Tier-2 semantic evaluation...")
     evaluate(dataset=dataset, task=evaluation_task, scoring_metrics=[commit_quality_metric])
 
 
