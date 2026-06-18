@@ -43,6 +43,7 @@ usage = "latest"                      # Usage is a spec and CLI for defining CLI
 uv = "latest"                         # Fast Python package and environment manager (https://uv.astral.sh)
 rtk = "latest"                        # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
 node = "latest"                       # JS runtime for validation and release scripts (https://nodejs.org)
+#"npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
 just = "latest"                       # Task runner for project automation (https://just.systems)
 betterleaks = "latest"                # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
 # 1password-cli is omitted here to fall back to the Homebrew-managed `1password-cli@beta` global installation, which is required for `op environment`.
@@ -67,3 +68,7 @@ run = "uv run zensical build --clean"
 [tasks."docs:serve"]
 description = "Serve the Zensical documentation site locally with live-reload"
 run = "uv run zensical serve -a localhost:8082"
+
+[tasks."setup:brew"]
+description = "Install system-level dependencies required by the project"
+run = "brew bundle --file=Brewfile"

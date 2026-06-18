@@ -1,0 +1,17 @@
+description: "Git Commit Generator - MTPLX Evaluation"
+
+prompts:
+  - "Write a short commit message for the following diff: {{diff}}"
+
+providers:
+  - id: "openai:chat:MTPLX"
+    config:
+      apiBaseUrl: "http://localhost:8000/v1"
+      apiKey: "dummy"
+
+tests:
+  - vars:
+      diff: "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old line\n+new line"
+    assert:
+      - type: "javascript"
+        value: "output.trim().length > 5"
