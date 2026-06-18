@@ -10,7 +10,6 @@ import json
 import os
 import sys
 import types
-import importlib
 
 import pytest
 
@@ -18,6 +17,7 @@ import pytest
 # Stub out all heavy external dependencies before importing the module under
 # test so that import succeeds without a real opik installation or git_cg env.
 # ---------------------------------------------------------------------------
+
 
 def _stub_opik():
     """Return a minimal opik stub."""
@@ -53,39 +53,16 @@ def _stub_opik():
     sys.modules.setdefault("opik.evaluation.metrics.score_result", score_result_mod)
 
 
-def _stub_git_cg():
-    """Return a minimal git_cg stub."""
-    git_cg = types.ModuleType("git_cg")
-    git_cg_main = types.ModuleType("git_cg.main")
-
-    class _FakeCommitPlan:
-        def render(self):
-            return "✨ feat(test): generated commit message"
-
-    git_cg_main.ENGINE_REGISTRY = {
-        "mtplx": type("EngineConfig", (), {"prefix": "OMLX"})(),
-    }
-    git_cg_main.build_system_prompt = lambda diff_output, verbose=False: "system prompt"
-    git_cg_main.generate_commit_message = lambda client, diff_output, model_name, system_prompt: _FakeCommitPlan()
-    git_cg_main.get_ai_client = lambda engine: object()
-
-    sys.modules.setdefault("git_cg", git_cg)
-    sys.modules.setdefault("git_cg.main", git_cg_main)
-
-
-_stub_opik()
-_stub_git_cg()
-
 # Add scripts to path so opik_metrics is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts")))
 
 # Now import the module under test
 import eval_commit_message as ecm  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _FakeItem:
     """Simulate a non-dict dataset item (attribute-based access)."""
@@ -103,9 +80,27 @@ def clear_generation_cache():
     ecm._generation_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def mock_git_cg_dependencies(monkeypatch):
+    """Automatically mock AI generation dependencies for all tests in this file."""
+
+    class _FakeCommitPlan:
+        def render(self):
+            return "✨ feat(test): generated commit message"
+
+    # We must allow kwargs to pass through because generate_commit_message accepts **kwargs
+    monkeypatch.setattr(
+        ecm,
+        "generate_commit_message",
+        lambda client, diff_output, model_name, system_prompt, **kwargs: _FakeCommitPlan(),
+    )
+    monkeypatch.setattr(ecm, "get_ai_client", lambda engine: object())
+
+
 # ---------------------------------------------------------------------------
-# evaluation_task – dict input handling
+# evaluation_task - dict input handling
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluationTaskDictInput:
     def test_dict_input_returns_dict_with_required_keys(self):
@@ -135,8 +130,9 @@ class TestEvaluationTaskDictInput:
 
 
 # ---------------------------------------------------------------------------
-# evaluation_task – object (attribute) input handling
+# evaluation_task - object (attribute) input handling
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluationTaskObjectInput:
     def test_object_input_returns_dict_with_required_keys(self):
@@ -152,6 +148,7 @@ class TestEvaluationTaskObjectInput:
     def test_object_input_missing_diff_defaults_to_empty_string(self):
         class _NoFields:
             pass
+
         result = ecm.evaluation_task(_NoFields())
         assert result["input"] == ""
 
@@ -162,8 +159,9 @@ class TestEvaluationTaskObjectInput:
 
 
 # ---------------------------------------------------------------------------
-# evaluation_task – expected_output normalisation
+# evaluation_task - expected_output normalisation
 # ---------------------------------------------------------------------------
+
 
 class TestExpectedOutputNormalisation:
     def test_dict_expected_with_output_key_is_unwrapped(self):
@@ -190,7 +188,7 @@ class TestExpectedOutputNormalisation:
         payload = json.dumps({"other": "value"})
         item = {"diff_output": "diff", "expected_output": payload}
         result = ecm.evaluation_task(item)
-        # No "output" key – the original string is preserved (json.loads raises no error,
+        # No "output" key - the original string is preserved (json.loads raises no error,
         # but the branch condition `isinstance(parsed, dict) and "output" in parsed` is False)
         assert result["expected_output"] == payload
 
@@ -228,8 +226,9 @@ class TestExpectedOutputNormalisation:
 
 
 # ---------------------------------------------------------------------------
-# _generation_cache – caching behaviour
+# _generation_cache - caching behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestGenerationCache:
     def test_result_is_cached_after_first_call(self):
@@ -246,9 +245,9 @@ class TestGenerationCache:
         result1 = ecm.evaluation_task(item)
         # Modify the stub so a second real generation would return a different value
         original_fn = ecm.generate_commit_message
-        ecm.generate_commit_message = lambda *args, **kwargs: (
-            type("Plan", (), {"render": lambda self: "different message"})()
-        )
+        ecm.generate_commit_message = lambda *args, **kwargs: type(
+            "Plan", (), {"render": lambda self: "different message"}
+        )()
 
         result2 = ecm.evaluation_task(item)
 
@@ -281,6 +280,7 @@ class TestGenerationCache:
 # ---------------------------------------------------------------------------
 # Engine resolution logic (GIT_CG_ENGINE env var)
 # ---------------------------------------------------------------------------
+
 
 class TestEngineResolution:
     def test_env_var_with_leading_trailing_whitespace_is_stripped(self, monkeypatch):
@@ -340,6 +340,7 @@ class TestEngineResolution:
 # Tier-1 / Tier-2 gating logic
 # ---------------------------------------------------------------------------
 
+
 class TestTierGatingLogic:
     """
     Test the all_passed gating logic extracted from main().
@@ -397,7 +398,8 @@ class TestTierGatingLogic:
         """Empty test_results should leave all_passed True."""
 
         class EmptyResults:
-            test_results = []
+            def __init__(self):
+                self.test_results = []
 
         assert self._eval_all_passed(EmptyResults()) is True
 
@@ -442,18 +444,22 @@ class TestTierGatingLogic:
                 self.test_results = test_results
 
         # First test_result passes, second fails
-        results = EvalResults([
-            TestResult([MetricResult("CommitFormatQuality", 1.0)]),
-            TestResult([MetricResult("CommitFormatQuality", 0.5)]),
-        ])
+        results = EvalResults(
+            [
+                TestResult([MetricResult("CommitFormatQuality", 1.0)]),
+                TestResult([MetricResult("CommitFormatQuality", 0.5)]),
+            ]
+        )
         assert self._eval_all_passed(results) is False
 
     def test_all_passed_with_mixed_metrics_where_format_passes(self):
         """Multiple metrics; CommitFormatQuality passes; all_passed should be True."""
-        results = self._make_eval_results([
-            ("CommitFormatQuality", 1.0),
-            ("CommitMessageQuality", 0.4),  # other metric, should be ignored
-        ])
+        results = self._make_eval_results(
+            [
+                ("CommitFormatQuality", 1.0),
+                ("CommitMessageQuality", 0.4),  # other metric, should be ignored
+            ]
+        )
         assert self._eval_all_passed(results) is True
 
     def test_all_passed_with_missing_name_attribute(self):
@@ -463,10 +469,12 @@ class TestTierGatingLogic:
             value = 0.0
 
         class TestResult:
-            score_results = [NoName()]
+            def __init__(self):
+                self.score_results = [NoName()]
 
         class EvalResults:
-            test_results = [TestResult()]
+            def __init__(self):
+                self.test_results = [TestResult()]
 
         assert self._eval_all_passed(EvalResults()) is True
 
@@ -477,10 +485,12 @@ class TestTierGatingLogic:
             name = "CommitFormatQuality"
 
         class TestResult:
-            score_results = [NoValue()]
+            def __init__(self):
+                self.score_results = [NoValue()]
 
         class EvalResults:
-            test_results = [TestResult()]
+            def __init__(self):
+                self.test_results = [TestResult()]
 
         # value defaults to 0.0 which is < 1.0 → all_passed should be False
         assert self._eval_all_passed(EvalResults()) is False
@@ -489,6 +499,7 @@ class TestTierGatingLogic:
 # ---------------------------------------------------------------------------
 # Regression: JSON list input does not raise TypeError
 # ---------------------------------------------------------------------------
+
 
 def test_json_list_expected_output_does_not_raise():
     """Regression: JSON list as expected_output must not raise TypeError.
