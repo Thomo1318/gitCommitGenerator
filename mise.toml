@@ -71,4 +71,4 @@ run = "uv run zensical serve -a localhost:8082"
 
 [tasks."setup:brew"]
 description = "Install system-level dependencies required by the project"
-run = "brew bundle --file=/Users/admin/dev/activeProjects/MacSetup/config/Brewfile"
+run = "brew bundle --file=Brewfile"

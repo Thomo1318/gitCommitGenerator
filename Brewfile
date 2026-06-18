@@ -12,3 +12,6 @@ brew "jundot/omlx/omlx"
 # Alerting utility for interactive desktop notifications
 tap "vjeantet/tap"
 brew "vjeantet/tap/alerter"
+
+# Prompt evaluation and red-teaming
+brew "promptfoo"
