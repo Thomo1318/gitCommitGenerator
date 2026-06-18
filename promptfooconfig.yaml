@@ -14,4 +14,4 @@ tests:
       diff: "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old line\n+new line"
     assert:
       - type: "javascript"
-        value: "output.length > 0"
+        value: "output.trim().length > 5"
