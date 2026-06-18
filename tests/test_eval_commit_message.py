@@ -56,6 +56,8 @@ def _stub_opik():
 # Add scripts to path so opik_metrics is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts")))
 
+_stub_opik()
+
 # Now import the module under test
 import eval_commit_message as ecm  # noqa: E402
 

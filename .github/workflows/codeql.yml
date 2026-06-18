@@ -12,6 +12,9 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       actions: read
       contents: read
@@ -19,14 +22,16 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        persist-credentials: false
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357
       with:
         languages: python
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357
       with:
         category: "/language:python"

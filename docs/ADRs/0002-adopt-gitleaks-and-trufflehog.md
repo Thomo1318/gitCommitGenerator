@@ -93,6 +93,7 @@ During the continuous evolution of our CI pipeline, it was determined that Snykâ
 To address this, Snyk has been entirely removed from both the local `hk.pkl` hooks and the CI workflows. In its place, we have adopted fully native and genuinely free GitHub tooling to handle SAST and SCA workloads without compromising scan quality.
 
 ### Adopted Alternatives
+
 1. **GitHub CodeQL (SAST)**:
    - **Role**: Replaces `snyk code test`.
    - **Reasoning**: CodeQL is an industry-leading semantic analysis engine that compiles Python to trace deep vulnerabilities. It is 100% free and unlimited for open-source repositories natively inside GitHub Actions.
@@ -101,28 +102,31 @@ To address this, Snyk has been entirely removed from both the local `hk.pkl` hoo
    - **Reasoning**: Natively integrated into GitHub, Dependabot is completely free for all repositories. It automatically scans dependencies and opens Pull Requests to address vulnerabilities without external quota limitations.
 
 ### Addition of Codecov
+
 While configuring the CI pipeline, **Codecov** was also integrated to handle test coverage reporting. Codecov provides free, unmetered coverage analytics for public open-source repositories.
 - **Tokenless Support**: As verified by proof provided for this project, no token is needed for our public repositories to upload coverage metrics, drastically simplifying secrets management for external contributors while delivering robust visual coverage metrics directly on Pull Requests.
 
 ### References
+
 - [GitHub CodeQL for Open Source](https://docs.github.com/en/code-security/code-scanning/introduction-to-code-scanning/about-code-scanning)
 - [Dependabot Documentation](https://docs.github.com/en/code-security/dependabot)
 - [Codecov Public Repositories Documentation](https://docs.codecov.com/docs/adding-the-codecov-token)
 
 ---
 
-## III. Update 2: Consolidation of Secret Scanning to BetterLeaks (v1.2.0)
+## III. Update 2: Proposed Consolidation of Secret Scanning to BetterLeaks (v1.2.0)
 
-As the project scaled, maintaining two disparate tools for local prevention (Gitleaks) and CI verification (TruffleHog) introduced configuration drift and duplicated efforts when tuning false positives. 
+As the project scales, maintaining two disparate tools for local prevention (Gitleaks) and CI verification (TruffleHog) could introduce configuration drift and duplicated efforts when tuning false positives. 
 
-To streamline the secret scanning architecture, we migrated from the two-tier Gitleaks/TruffleHog setup to **BetterLeaks**. 
+To streamline the secret scanning architecture, we plan to migrate from the two-tier Gitleaks/TruffleHog setup to **BetterLeaks**. 
 
 ### Rationale
-- **Unified Tooling**: BetterLeaks acts as an all-in-one "next-gen secret scanner" that combines the fast, regex-based scanning capabilities needed for local pre-commit hooks with the active verification capabilities required in CI pipelines.
-- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration reduces overhead, preventing the need to synchronize a `.gitleaksignore` file and TruffleHog's equivalent. 
-- **Portability Maintained**: BetterLeaks is seamlessly integrated into `mise.toml` and local pre-commit hooks (`hk.pkl`), retaining the original portability constraint of the project.
+- **Unified Tooling**: BetterLeaks would act as an all-in-one "next-gen secret scanner" that combines the fast, regex-based scanning capabilities needed for local pre-commit hooks with the active verification capabilities required in CI pipelines.
+- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration would reduce overhead, preventing the need to synchronize a `.gitleaksignore` file and TruffleHog's equivalent. 
+- **Portability Maintained**: BetterLeaks would be seamlessly integrated into `mise.toml` and local pre-commit hooks (`hk.pkl`), retaining the original portability constraint of the project.
 
 ### References
+
 - [BetterLeaks GitHub Repository](https://github.com/betterleaks/betterleaks)
 
 ---
@@ -131,4 +135,4 @@ To streamline the secret scanning architecture, we migrated from the two-tier Gi
 
 - v1.0.0 (2026-06-07 12:00:00): Initial drafting and finalization of the two-tier secret scanning strategy using Gitleaks and TruffleHog.
 - v1.1.0 (2026-06-18): Replaced Snyk with GitHub CodeQL and Dependabot to resolve execution limits; documented the addition of tokenless Codecov for coverage metrics.
-- v1.2.0 (2026-06-18): Documented the migration from Gitleaks and TruffleHog to BetterLeaks for unified secret scanning and active verification.
+- v1.2.0 (2026-06-18): Proposed the future migration from Gitleaks and TruffleHog to BetterLeaks for unified secret scanning and active verification.
