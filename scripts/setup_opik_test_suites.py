@@ -25,7 +25,7 @@ def run_test_suite(dataset_name: str, metric_name: str):
         dataset = client.get_dataset(name=dataset_name)
     except Exception as e:
         print(f"Error: Dataset '{dataset_name}' could not be fetched. Ensure it exists in Opik Cloud. Details: {e}")
-        return
+        sys.exit(1)
 
     # Choose metrics based on the argument
     metrics: list[Any] = []
@@ -37,7 +37,7 @@ def run_test_suite(dataset_name: str, metric_name: str):
         metrics = [commit_quality_metric]
     else:
         print(f"Unknown metric suite: {metric_name}")
-        return
+        sys.exit(1)
 
     print("Executing evaluation...")
     try:
@@ -50,6 +50,7 @@ def run_test_suite(dataset_name: str, metric_name: str):
         print("Evaluation completed successfully.")
     except Exception as e:
         print(f"Evaluation failed: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

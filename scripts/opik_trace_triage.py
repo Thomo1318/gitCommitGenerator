@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import sys
 
 import opik
 
@@ -22,6 +23,7 @@ def triage_traces(project_name: str):
             print("  ... (truncated)")
     except Exception as e:
         print(f"Failed to fetch Golden traces: {e}")
+        sys.exit(1)
 
     # Regression Traces (< 0.2)
     try:
@@ -36,6 +38,7 @@ def triage_traces(project_name: str):
             print("  ... (truncated)")
     except Exception as e:
         print(f"Failed to fetch Regression traces: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

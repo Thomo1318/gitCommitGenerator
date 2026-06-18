@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import json
+import sys
 
 import opik
 
@@ -15,7 +16,7 @@ def compile_dataset(project_name: str, dataset_name: str, threshold: float):
         )
     except Exception as e:
         print(f"Failed to fetch traces: {e}")
-        return
+        sys.exit(1)
 
     dataset = client.get_or_create_dataset(name=dataset_name)
 
@@ -61,7 +62,7 @@ def compile_dataset(project_name: str, dataset_name: str, threshold: float):
             if cp_json:
                 try:
                     commit_plan = json.loads(cp_json)
-                except json.JSONDecodeError as e:
+                except (json.JSONDecodeError, TypeError) as e:
                     print(f"Warning: Failed to parse commit_plan_json for trace {trace.id}: {e}")
 
         score_card = metadata.get("score_card")
@@ -78,6 +79,11 @@ def compile_dataset(project_name: str, dataset_name: str, threshold: float):
             expected_output = kwargs.get("generated_message")
         if not expected_output:
             expected_output = telemetry.get("generated_message")
+
+        if not expected_output:
+            print(f"Skipping trace {trace.id}: missing expected_output")
+            rejected_commits += 1
+            continue
 
         # Deterministic Gating: Reject if score_card shows failures
         all_pass = all(score_card.values()) if score_card else False
@@ -112,6 +118,7 @@ def compile_dataset(project_name: str, dataset_name: str, threshold: float):
             dataset.insert(dataset_items)
         except Exception as e:
             print(f"Error inserting dataset items: {e}")
+            sys.exit(1)
 
     print(f"Compiled dataset '{dataset_name}' with {valid_commits} valid commit records.")
     print(f"Rejected {rejected_commits} traces due to deterministic check failures.")
