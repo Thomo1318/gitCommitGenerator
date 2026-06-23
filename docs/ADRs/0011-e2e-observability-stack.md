@@ -1267,7 +1267,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
 - [x] Create `scripts/opik_metrics.py` with deterministic `FormatMetric`.
-- ~~[ ] Refactor offline evaluation (`scripts/eval_commit_message.py`) to gate Tier-2 behind Tier-1 (composite short-circuits).~~
+- ~~Refactor offline evaluation (`scripts/eval_commit_message.py`) to gate Tier-2 behind Tier-1 (composite short-circuits).~~
 - [x] Refactor offline evaluation (`scripts/eval_commit_message.py`) to run atomic, side-by-side metrics (Format vs Quality) simultaneously instead of composite short-circuits.
 
 ### Phase 6: Datasets and Test Suites (Opik Phase E)
@@ -1280,7 +1280,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 ### Phase 7: Stack Augmentation (Promptfoo Tooling)
 
-- ~[ ] Add `promptfoo` to `mise.toml` NPM dependencies.~
+- ~~Add `promptfoo` to `mise.toml` NPM dependencies.~~
 - [x] Add `promptfoo` to `Brewfile`.
 - [x] Generate baseline `promptfooconfig.yaml`.
 - [x] Point promptfoo provider explicitly to `http://localhost:8000/v1` (MTPLX).
@@ -1289,7 +1289,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 - [x] Map `gitops_agent_sop.json` constraints to Promptfoo Javascript and Regex assertions.
 - [x] Configure Jailbreak/Red-Teaming adversarial probes.
-- ~~[ ] Add `just eval` recipe to `justfile`.~~
+- ~~Add `just eval` recipe to `justfile`.~~
 - [x] Add `eval:promptfoo` task to `mise.toml`.
 - [x] Create `scripts/sync_promptfoo_to_opik.py` to sync Promptfoo results to Opik Cloud.
 
