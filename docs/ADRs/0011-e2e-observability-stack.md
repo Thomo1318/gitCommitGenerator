@@ -786,6 +786,12 @@ Described in ADR 0011 Section 14 (Feedback and Prompt Enrichment). Review action
 
 - ADR 0011
 
+##### Deviations from Original Plan
+
+- **Deviation Overview:** The planned development of a dedicated `opik_prompts.py` module to dynamically sync local system prompt templates to the Opik Cloud Prompt Library, as well as the implementation of explicit global tagging to trace runs, was abandoned mid-execution.
+- **Detailed Context & Rationale:** During the implementation of Phase 4, the initial setup for Opik tracing feedback scores was completed successfully. However, before executing the prompt synchronization logic, the development team paused to confirm whether Phase 4 should be wrapped up prior to advancing to the Dataset logic in Phase 6. At this juncture, the user explicitly queried about the completion status of Phase 5. Immediately following this pivot, the project encountered several critical CI/CD pipeline blockers, including GitHub Actions limits, CodeRabbit static analysis findings, and Snyk vulnerability scanning issues. Because resolving these infrastructure and security gating issues was deemed a higher immediate priority, the remaining tasks for Phase 4 were entirely superseded in the session and never revisited.
+- **Approval Status:** This was **NOT an explicitly agreed-upon architectural pivot or alternate solution**. It was a circumstantial omission caused by a sudden shift in development priorities toward fixing broken CI/CD pipelines.
+
 ---
 
 #### ✨ feat(eval): Phase 5 Evaluation Expansion (Opik Phase D)
@@ -856,6 +862,12 @@ Convert the local script into a modular `opik_metrics.py` system. Deterministic 
 
 - ADR 0011
 
+##### Deviations from Original Plan
+
+- **Deviation Overview:** The initial architectural design demanded a strict, tiered "composite short-circuit" evaluation pipeline. In that model, deterministic format checks (Tier-1, such as the 72-character limit and Gitmoji matrix) would execute first, and any failure would immediately abort the subsequent execution of the LLM-based semantic grader (Tier-2). This design was replaced with an architecture utilizing atomic, concurrent metrics.
+- **Detailed Context & Rationale:** During the implementation phase, the development agent identified that a strict short-circuit architecture would unnecessarily obscure partial metric data in the Opik dashboard. If a commit message had a minor formatting issue but perfect semantic quality, the semantic score would never be calculated or logged. To improve observability, evaluation modularity, and dashboard completeness, the agent proposed running all metrics (both `FormatMetric` and `CommitMessageQuality`) concurrently.
+- **Approval Status:** This deviation was explicitly **APPROVED** by the user. The agent detailed the advantages of side-by-side metric execution, and the user formally accepted the proposal with the instruction: "- I approve your proposed solution - Ensure the issue, ADR0011 and any additional documentation are updated to reflect this solution." Consequently, the actual codebase (`scripts/eval_commit_message.py` and `scripts/opik_metrics.py`) accurately reflects the approved atomic design, even though the original Phase 5 summary text in this ADR was left unedited.
+
 ---
 
 #### ✨ feat(dataset): Phase 6 Datasets and Test Suites (Opik Phase E)
@@ -920,6 +932,12 @@ Scripts will interact directly with the Opik API to curate traces based on the f
 
 - ADR 0011
 
+##### Deviations from Original Plan
+
+- **Deviation Overview:** First, the dataset compilation script (`compile_opik_dataset.py`) was augmented to produce and retain a local `.jsonl` backup file instead of exclusively interacting with the Opik API in memory. Second, the Phase 6 Markdown documentation artifacts (`implementation_plan_phase_6.md` and `walkthrough_phase_6.md`) completely omitted any mention of the dynamic trace triage script (`opik_trace_triage.py`), creating a false impression that the script was abandoned.
+- **Detailed Context & Rationale:** During the architectural planning for Phase 6, the user was presented with multiple approaches for how `compile_opik_dataset.py` should handle data. The user explicitly chose "Option B", authorizing the generation of a local `.jsonl` backup file to provide a failsafe for local debugging without incurring a noticeable performance penalty. Separately, the dynamic trace triage pipeline (`opik_trace_triage.py`), which filters traces where `user_acceptance > 0.8` for golden datasets and `< 0.2` for regressions, was successfully written and tested. The failure to document this script was entirely an oversight by the automated agent responsible for generating the final walkthrough markdown artifacts.
+- **Approval Status:** The retention of the `.jsonl` backup file was an explicitly **APPROVED** alternate solution. The omission of `opik_trace_triage.py` from the documentation artifacts was an unapproved clerical error, though the underlying codebase remains 100% compliant with the original ADR design.
+
 ---
 
 ### Promptfoo Implementation
@@ -953,6 +971,15 @@ Install via `mise.toml` to guarantee developer environment parity, and route `pr
 
 - Defining exact assertion logic (Phase 8).
 - CI/CD GitHub Actions integration (Deferred).
+
+##### Performance and Latency Considerations
+
+The introduction of Promptfoo raises significant latency concerns that must be structurally mitigated. To ensure developers are not penalized by this tooling:
+
+- **Zero Runtime Latency:** Promptfoo is strictly an offline evaluation harness. It is entirely decoupled from the `git-cg` runtime loop. When a developer executes the `git commit` hook, Promptfoo is never loaded or invoked. The runtime relies solely on the lightweight `instructor` and `opik` libraries.
+- **CI/CD Deferment & Parallelization:** Executing red-team probes and evaluation matrices against local or remote models takes several minutes. For this reason, GitHub Actions CI/CD integration has been explicitly deferred from Phase 7. When implemented in the future, it must be configured as a parallel asynchronous job that does not block standard linting or unit test pipelines.
+- **Proxy Caching for Local Evaluations:** To mitigate latency during manual local execution (`mise run eval:promptfoo`), the `promptfooconfig.yaml` is intentionally pointed at the local MTPLX proxy (`http://localhost:8000/v1`). This ensures repeated evaluation loops hit local cache boundaries, avoiding duplicate network egress and drastically accelerating the developer feedback cycle.
+- **Strictly Manual Invocation:** To prevent accidental latency, the `mise run eval:promptfoo` task must remain strictly isolated as a manual, opt-in developer command. It must **never** be automatically chained into standard developer lifecycle hooks (e.g., git `pre-commit` or `pre-push` hooks), as doing so would render the offline mitigation strategy entirely redundant.
 
 ##### Expected workflow
 
@@ -1057,6 +1084,12 @@ Translate the `gitops_agent_sop.json` constraints into deterministic `javascript
 
 - ADR 0011
 
+##### Deviations from Original Plan
+
+- **Deviation Overview:** The original ADR specified that Promptfoo assertion results needed to be visible natively in the Opik dashboard, but it did not prescribe the exact synchronization mechanism. The implementation resulted in the creation of a custom Python synchronization script (`scripts/sync_promptfoo_to_opik.py`).
+- **Detailed Context & Rationale:** During implementation, it was discovered that Promptfoo lacks native, out-of-the-box telemetry streaming support directly to Opik Cloud. To satisfy the ADR's requirement that Red Teaming and local CI assertion results be centralized in the Opik dashboard, the agent proposed building a dedicated synchronization layer. This Python script parses the generated Promptfoo JSON output and explicitly translates the assertion results, jailbreak attempts, and token metrics into Opik traces via the Opik Python SDK.
+- **Approval Status:** This architectural bridge was explicitly **APPROVED** by the user as it functionally satisfies the overarching goal of centralizing all observability data in Opik, despite requiring an additional script in the execution pipeline.
+
 ---
 
 ### Sentry Implementation
@@ -1065,32 +1098,38 @@ Translate the `gitops_agent_sop.json` constraints into deterministic `javascript
 
 ##### Summary
 
-Centralize Sentry initialisation, scrub all PII, and inject explicit crash reporting at critical boundaries where Python currently swallows exceptions.
+Centralize Sentry initialisation, scrub all PII, implement explicit lifecycle draining for short-lived git hooks, and inject enriched crash reporting (with tags, contexts, and breadcrumbs) at critical execution boundaries.
 
 ##### Why this matters
 
-When the CLI aborts due to environmental issues, `sys.exit(1)` prevents Sentry from capturing the exception. We are blind to zero-day failures. Furthermore, without scrubbing, we risk leaking proprietary git diffs to Sentry servers.
+When the CLI aborts due to environmental issues, fast-exiting hooks often swallow background thread events before they transmit. We are currently blind to zero-day failures. Furthermore, without a strict `before_send` scrubber, we risk leaking proprietary git diffs and developer PII to Sentry servers. Finally, bare exceptions lack the necessary contextual state (e.g., active model, engine, stage) to be truly actionable.
 
 ##### Architectural direction
 
-Sentry initialization must be centralized. We must use a `before_send` hook to mutate the event payload to strip PII and diffs. Refer to ADR 0011 Section 14.
+Sentry initialization must be centralized. We must use a `before_send` hook to mutate the event payload to strip PII and diffs. Because this is a short-lived git hook, explicit `sentry_sdk.flush(timeout=2.0)` calls must be added before terminal exits. Additionally, since Opik handles AI tracing, Sentry's tracing overhead should be explicitly disabled (`traces_sample_rate=0.0`).
 
 ##### Core decision
 
-- `sentry_sdk.init()` must be executed exactly once.
-- PII and proprietary diffs must be irreversibly stripped before leaving the machine.
-- `capture_exception` must wrap all `_abort` paths.
+- `sentry_sdk.init()` must be executed exactly once via a centralized module.
+- `traces_sample_rate=0.0` to avoid duplicate tracing overhead vs Opik.
+- PII and proprietary diffs must be irreversibly stripped via a `before_send` hook.
+- `capture_exception` and `sentry_sdk.flush()` must wrap all `_abort` and terminal exit paths.
+- `sentry_sdk.add_breadcrumb()` will be used to track state transitions (e.g., diff extraction, AI invocation).
 
 ##### In scope
 
-- Centralising SDK bootstrap logic.
-- Defining strict `SENTRY_ENVIRONMENT` and `SENTRY_RELEASE`.
-- Building a strict `before_send` scrubber.
-- Targeting critical `try/except` boundaries.
+- Centralising SDK bootstrap logic (`sentry_config.py`).
+- Defining strict `SENTRY_ENVIRONMENT` and `SENTRY_RELEASE` (tied to `gitCommitGenerator`).
+- Building a strict `before_send` scrubber for payload sanitation.
+- Targeting critical `try/except` boundaries with `sentry_sdk.new_scope()` for tag/context enrichment.
+- Adding manual lifecycle breadcrumbs.
 
 ##### Out of scope
 
 - Automatic Sentry Issue to GitHub Issue syncing.
+- Sentry Performance Tracing and Profiling (Opik handles this).
+- Standard library `logging` integration (deferred).
+- Feature-flag provider integration (deferred).
 
 ##### Expected workflow
 
@@ -1222,31 +1261,37 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 ### Phase 4: Feedback and Prompt Enrichment (Opik Phase C)
 
 - [x] Map user interactive outcomes (accept, edit, regenerate, cancel) to numeric Opik feedback scores.
-- [ ] Register and version system prompts into the Opik Prompt Library.
-- [ ] Link active prompt objects to runtime traces.
+- [ ] Register and version system prompts into the Opik Prompt Library (create `opik_prompts.py`).
+- [ ] Link active prompt objects to runtime traces (global trace tagging).
 
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
 - [x] Create `scripts/opik_metrics.py` with deterministic `FormatMetric`.
+- ~~[ ] Refactor offline evaluation (`scripts/eval_commit_message.py`) to gate Tier-2 behind Tier-1 (composite short-circuits).~~
 - [x] Refactor offline evaluation (`scripts/eval_commit_message.py`) to run atomic, side-by-side metrics (Format vs Quality) simultaneously instead of composite short-circuits.
 
 ### Phase 6: Datasets and Test Suites (Opik Phase E)
 
-- [ ] Create promotion pipeline scripts manipulating Opik Cloud datasets via API.
-- [ ] Add golden dataset promotion (`feedback_score > 0.8`).
-- [ ] Add regression dataset promotion (`feedback_score < 0.2`).
+- [x] Create promotion pipeline scripts manipulating Opik Cloud datasets via API.
+- [x] Add golden dataset promotion (`feedback_score > 0.8`).
+- [x] Add regression dataset promotion (`feedback_score < 0.2`).
+- [x] Configure dataset script to retain a local `.jsonl` backup file.
+- [x] Create trace triage utility (`scripts/opik_trace_triage.py`).
 
 ### Phase 7: Stack Augmentation (Promptfoo Tooling)
 
-- [ ] Add `promptfoo` to `mise.toml` NPM dependencies.
-- [ ] Generate baseline `promptfooconfig.yaml`.
-- [ ] Point promptfoo provider explicitly to `http://localhost:8000/v1` (MTPLX).
+- ~[ ] Add `promptfoo` to `mise.toml` NPM dependencies.~
+- [x] Add `promptfoo` to `Brewfile`.
+- [x] Generate baseline `promptfooconfig.yaml`.
+- [x] Point promptfoo provider explicitly to `http://localhost:8000/v1` (MTPLX).
 
 ### Phase 8: Stack Augmentation (Promptfoo Logic & Security)
 
-- [ ] Map `gitops_agent_sop.json` constraints to Promptfoo Javascript and Regex assertions.
-- [ ] Configure Jailbreak/Red-Teaming adversarial probes.
-- [ ] Add `just eval` recipe to `justfile`.
+- [x] Map `gitops_agent_sop.json` constraints to Promptfoo Javascript and Regex assertions.
+- [x] Configure Jailbreak/Red-Teaming adversarial probes.
+- ~~[ ] Add `just eval` recipe to `justfile`.~~
+- [x] Add `eval:promptfoo` task to `mise.toml`.
+- [x] Create `scripts/sync_promptfoo_to_opik.py` to sync Promptfoo results to Opik Cloud.
 
 ### Phase 9: Sentry Architecture & Observability Expansion
 

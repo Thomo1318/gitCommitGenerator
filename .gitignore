@@ -84,3 +84,4 @@ docs/reviews/
 agents.lock
 .agents/.gitignore
 promptfoo_*.json
+docs/phase_artifacts/
