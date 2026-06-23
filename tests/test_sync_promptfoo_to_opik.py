@@ -6,6 +6,7 @@ Covers:
   - sync_results: file-not-found, invalid JSON, empty results, v1/v2 structures,
     success/failure feedback scores, grading component scores, timestamp/latency math
 """
+
 import datetime
 import json
 import sys
@@ -21,7 +22,6 @@ SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from sync_promptfoo_to_opik import parse_iso_timestamp, sync_results  # noqa: E402
-
 
 # ===========================================================================
 # parse_iso_timestamp tests
@@ -106,27 +106,24 @@ class TestSyncResultsFileErrors:
     def test_exits_1_when_file_not_found(self, tmp_path):
         """sync_results must call sys.exit(1) for a missing file."""
         missing = tmp_path / "does_not_exist.json"
-        with patch("sync_promptfoo_to_opik.opik"):
-            with pytest.raises(SystemExit) as exc_info:
-                sync_results(str(missing))
+        with patch("sync_promptfoo_to_opik.opik.Opik"), pytest.raises(SystemExit) as exc_info:
+            sync_results(str(missing))
         assert exc_info.value.code == 1
 
     def test_exits_1_when_json_is_invalid(self, tmp_path):
         """sync_results must call sys.exit(1) for malformed JSON."""
         bad_file = tmp_path / "bad.json"
         bad_file.write_text("{ this is not json }")
-        with patch("sync_promptfoo_to_opik.opik"):
-            with pytest.raises(SystemExit) as exc_info:
-                sync_results(str(bad_file))
+        with patch("sync_promptfoo_to_opik.opik.Opik"), pytest.raises(SystemExit) as exc_info:
+            sync_results(str(bad_file))
         assert exc_info.value.code == 1
 
     def test_exits_1_for_empty_file(self, tmp_path):
         """sync_results must call sys.exit(1) for a completely empty file (invalid JSON)."""
         empty_file = tmp_path / "empty.json"
         empty_file.write_text("")
-        with patch("sync_promptfoo_to_opik.opik"):
-            with pytest.raises(SystemExit) as exc_info:
-                sync_results(str(empty_file))
+        with patch("sync_promptfoo_to_opik.opik.Opik"), pytest.raises(SystemExit) as exc_info:
+            sync_results(str(empty_file))
         assert exc_info.value.code == 1
 
 
@@ -137,9 +134,8 @@ class TestSyncResultsEmptyResults:
         json_file = tmp_path / "empty_results.json"
         json_file.write_text(json.dumps(data))
         mock_opik_class, _, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
-            with pytest.raises(SystemExit) as exc_info:
-                sync_results(str(json_file))
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class), pytest.raises(SystemExit) as exc_info:
+            sync_results(str(json_file))
         assert exc_info.value.code == 0
 
     def test_exits_0_when_results_key_missing(self, tmp_path):
@@ -148,9 +144,8 @@ class TestSyncResultsEmptyResults:
         json_file = tmp_path / "no_results.json"
         json_file.write_text(json.dumps(data))
         mock_opik_class, _, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
-            with pytest.raises(SystemExit) as exc_info:
-                sync_results(str(json_file))
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class), pytest.raises(SystemExit) as exc_info:
+            sync_results(str(json_file))
         assert exc_info.value.code == 0
 
     def test_exits_0_when_v1_results_list_is_empty(self, tmp_path):
@@ -159,9 +154,8 @@ class TestSyncResultsEmptyResults:
         json_file = tmp_path / "empty_v1.json"
         json_file.write_text(json.dumps(data))
         mock_opik_class, _, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
-            with pytest.raises(SystemExit) as exc_info:
-                sync_results(str(json_file))
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class), pytest.raises(SystemExit) as exc_info:
+            sync_results(str(json_file))
         assert exc_info.value.code == 0
 
 
@@ -182,7 +176,7 @@ class TestSyncResultsV2Structure:
         ]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         assert mock_client.trace.call_count == 2
 
@@ -191,7 +185,7 @@ class TestSyncResultsV2Structure:
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "latencyMs": 10}]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args
         assert call_kwargs.kwargs.get("name") == "promptfoo_eval" or call_kwargs.args[0] == "promptfoo_eval"
@@ -200,8 +194,8 @@ class TestSyncResultsV2Structure:
         """A result with success=True must log a feedback score of 1.0."""
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "latencyMs": 0}]
         file_path = self._write_v2_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         mock_trace.log_feedback_score.assert_any_call(name="success", value=1.0)
 
@@ -209,8 +203,8 @@ class TestSyncResultsV2Structure:
         """A result with success=False must log a feedback score of 0.0."""
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": False, "latencyMs": 0}]
         file_path = self._write_v2_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         mock_trace.log_feedback_score.assert_any_call(name="success", value=0.0)
 
@@ -219,7 +213,7 @@ class TestSyncResultsV2Structure:
         results = [{"prompt": {"raw": "my prompt"}, "response": {"output": "o"}, "success": True, "latencyMs": 0}]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["input"]["prompt"] == "my prompt"
@@ -229,7 +223,7 @@ class TestSyncResultsV2Structure:
         results = [{"prompt": {"raw": "p"}, "response": {"output": "the output"}, "success": True, "latencyMs": 0}]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["output"]["output"] == "the output"
@@ -238,11 +232,18 @@ class TestSyncResultsV2Structure:
         """start_time must be end_time minus latency milliseconds."""
         ts = "2026-06-22T10:00:01.000Z"
         latency_ms = 500
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "timestamp": ts, "latencyMs": latency_ms}]
+        results = [
+            {
+                "prompt": {"raw": "p"},
+                "response": {"output": "o"},
+                "success": True,
+                "timestamp": ts,
+                "latencyMs": latency_ms,
+            }
+        ]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         delta = call_kwargs["end_time"] - call_kwargs["start_time"]
@@ -251,11 +252,12 @@ class TestSyncResultsV2Structure:
     def test_zero_latency_makes_start_equal_end(self, tmp_path):
         """A latencyMs of 0 must result in start_time == end_time."""
         ts = "2026-06-22T10:00:00Z"
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "timestamp": ts, "latencyMs": 0}]
+        results = [
+            {"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "timestamp": ts, "latencyMs": 0}
+        ]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["start_time"] == call_kwargs["end_time"]
@@ -265,17 +267,24 @@ class TestSyncResultsV2Structure:
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "latencyMs": 100}]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         assert mock_client.trace.call_count == 1
 
     def test_vars_passed_to_trace_input(self, tmp_path):
         """The 'vars' dict from each result must be passed into the trace input."""
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "vars": {"diff": "some diff"}, "latencyMs": 0}]
+        results = [
+            {
+                "prompt": {"raw": "p"},
+                "response": {"output": "o"},
+                "success": True,
+                "vars": {"diff": "some diff"},
+                "latencyMs": 0,
+            }
+        ]
         file_path = self._write_v2_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["input"]["vars"] == {"diff": "some diff"}
@@ -288,47 +297,55 @@ class TestSyncResultsV2Structure:
                 {"type": "javascript", "pass": False, "reason": "regex failed"},
             ]
         }
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "latencyMs": 0, "gradingResult": grading}]
+        results = [
+            {
+                "prompt": {"raw": "p"},
+                "response": {"output": "o"},
+                "success": True,
+                "latencyMs": 0,
+                "gradingResult": grading,
+            }
+        ]
         file_path = self._write_v2_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
-        mock_trace.log_feedback_score.assert_any_call(
-            name="assertion_javascript", value=1.0, reason="length ok"
-        )
-        mock_trace.log_feedback_score.assert_any_call(
-            name="assertion_javascript", value=0.0, reason="regex failed"
-        )
+        mock_trace.log_feedback_score.assert_any_call(name="assertion_javascript", value=1.0, reason="length ok")
+        mock_trace.log_feedback_score.assert_any_call(name="assertion_javascript", value=0.0, reason="regex failed")
 
     def test_grading_component_uses_custom_type_when_missing(self, tmp_path):
         """A grading component without a 'type' field defaults to 'custom'."""
         grading = {"componentResults": [{"pass": True, "reason": "ok"}]}
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "latencyMs": 0, "gradingResult": grading}]
+        results = [
+            {
+                "prompt": {"raw": "p"},
+                "response": {"output": "o"},
+                "success": True,
+                "latencyMs": 0,
+                "gradingResult": grading,
+            }
+        ]
         file_path = self._write_v2_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
-        mock_trace.log_feedback_score.assert_any_call(
-            name="assertion_custom", value=1.0, reason="ok"
-        )
+        mock_trace.log_feedback_score.assert_any_call(name="assertion_custom", value=1.0, reason="ok")
 
     def test_no_grading_only_success_score_logged(self, tmp_path):
         """Without a gradingResult, only the success feedback score must be logged."""
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "latencyMs": 0}]
         file_path = self._write_v2_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
-        # Only one call: the success score
-        assert mock_trace.log_feedback_score.call_count == 1
+        # Expect two calls: 'feedback_score' and 'success'
+        assert mock_trace.log_feedback_score.call_count == 2
 
     def test_dummy_json_fixture_parses_successfully(self, tmp_path):
         """The repo dummy.json fixture must process without error."""
         dummy_path = Path(__file__).parent.parent / "dummy.json"
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(str(dummy_path))
         assert mock_client.trace.call_count == 1
 
@@ -349,7 +366,7 @@ class TestSyncResultsV1Structure:
         ]
         file_path = self._write_v1_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         assert mock_client.trace.call_count == 1
 
@@ -357,8 +374,8 @@ class TestSyncResultsV1Structure:
         """v1 success=True must log a 1.0 feedback score."""
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "latencyMs": 0}]
         file_path = self._write_v1_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         mock_trace.log_feedback_score.assert_any_call(name="success", value=1.0)
 
@@ -377,7 +394,7 @@ class TestSyncResultsMissingFields:
         results = [{"response": {"output": "o"}, "success": True, "latencyMs": 0}]
         file_path = self._write_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["input"]["prompt"] == ""
@@ -387,7 +404,7 @@ class TestSyncResultsMissingFields:
         results = [{"prompt": {"raw": "p"}, "success": True, "latencyMs": 0}]
         file_path = self._write_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["output"]["output"] == ""
@@ -396,19 +413,18 @@ class TestSyncResultsMissingFields:
         """A result without a 'success' key must default to False → score 0.0."""
         results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "latencyMs": 0}]
         file_path = self._write_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         mock_trace.log_feedback_score.assert_any_call(name="success", value=0.0)
 
     def test_missing_latency_ms_defaults_to_zero(self, tmp_path):
         """A result without 'latencyMs' must default to 0 (start==end for a given timestamp)."""
         ts = "2026-06-22T10:00:00Z"
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "timestamp": ts}]
+        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True, "timestamp": ts}]
         file_path = self._write_file(tmp_path, results)
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
         call_kwargs = mock_client.trace.call_args.kwargs
         assert call_kwargs["start_time"] == call_kwargs["end_time"]
@@ -416,26 +432,40 @@ class TestSyncResultsMissingFields:
     def test_empty_grading_component_results_list(self, tmp_path):
         """An empty componentResults list must not raise and only logs success score."""
         grading = {"componentResults": []}
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "latencyMs": 0, "gradingResult": grading}]
+        results = [
+            {
+                "prompt": {"raw": "p"},
+                "response": {"output": "o"},
+                "success": True,
+                "latencyMs": 0,
+                "gradingResult": grading,
+            }
+        ]
         file_path = self._write_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
-        # Only success score, no component scores
-        assert mock_trace.log_feedback_score.call_count == 1
+        # Only success scores, no component scores
+        assert mock_trace.log_feedback_score.call_count == 2
 
     def test_grading_result_without_component_results_key(self, tmp_path):
         """A gradingResult without 'componentResults' key must not raise."""
         grading = {"score": 0.5}
-        results = [{"prompt": {"raw": "p"}, "response": {"output": "o"}, "success": True,
-                    "latencyMs": 0, "gradingResult": grading}]
+        results = [
+            {
+                "prompt": {"raw": "p"},
+                "response": {"output": "o"},
+                "success": True,
+                "latencyMs": 0,
+                "gradingResult": grading,
+            }
+        ]
         file_path = self._write_file(tmp_path, results)
-        mock_opik_class, mock_client, mock_trace = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        mock_opik_class, _mock_client, mock_trace = _make_mock_opik()
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(file_path)
-        # Only success score
-        assert mock_trace.log_feedback_score.call_count == 1
+        # Only success scores
+        assert mock_trace.log_feedback_score.call_count == 2
 
     def test_multiple_results_each_get_own_trace(self, tmp_path):
         """Each result in a multi-result file must get its own independent trace."""
@@ -448,6 +478,6 @@ class TestSyncResultsMissingFields:
         f = tmp_path / "multi.json"
         f.write_text(json.dumps(data))
         mock_opik_class, mock_client, _ = _make_mock_opik()
-        with patch("sync_promptfoo_to_opik.opik", mock_opik_class):
+        with patch("sync_promptfoo_to_opik.opik.Opik", mock_opik_class):
             sync_results(str(f))
         assert mock_client.trace.call_count == 3
