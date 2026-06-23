@@ -77,6 +77,7 @@ run = "brew bundle --file=Brewfile"
 description = "Evaluate and red-team GitOps commit generation, then sync to Opik"
 run = """
 #!/usr/bin/env bash
+set -euo pipefail
 npx promptfoo eval -o promptfoo_results.json
 npx promptfoo redteam run -o promptfoo_redteam_results.json
 uv run python scripts/sync_promptfoo_to_opik.py promptfoo_results.json

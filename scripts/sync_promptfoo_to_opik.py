@@ -50,31 +50,41 @@ def sync_results(file_path: str):
         # Mapping timestamps
         # Promptfoo usually provides timestamp and latencyMs
         timestamp_str = result.get("timestamp")
-        latency_ms = result.get("latencyMs", 0)
+        raw_latency = result.get("latencyMs", 0)
+        try:
+            latency_ms = max(0.0, float(raw_latency or 0))
+        except TypeError, ValueError:
+            latency_ms = 0.0
 
         end_time = parse_iso_timestamp(timestamp_str) if timestamp_str else datetime.datetime.now(datetime.UTC)
         start_time = end_time - datetime.timedelta(milliseconds=latency_ms)
 
-        trace = client.trace(
-            name="promptfoo_eval",
-            input={"prompt": prompt_raw, "vars": result.get("vars", {})},
-            output={"output": output},
-            start_time=start_time,
-            end_time=end_time,
-        )
+        try:
+            trace = client.trace(
+                name="promptfoo_eval",
+                input={"prompt": prompt_raw, "vars": result.get("vars", {})},
+                output={"output": output},
+                start_time=start_time,
+                end_time=end_time,
+            )
 
-        trace.log_feedback_score(name="success", value=1.0 if success else 0.0)
+            score = 1.0 if success else 0.0
+            trace.log_feedback_score(name="feedback_score", value=score)
+            trace.log_feedback_score(name="success", value=score)
 
-        # Log assertion level scores if present
-        grading = result.get("gradingResult")
-        if grading and "componentResults" in grading:
-            for comp in grading["componentResults"]:
-                assertion_type = comp.get("type", "custom")
-                trace.log_feedback_score(
-                    name=f"assertion_{assertion_type}",
-                    value=1.0 if comp.get("pass") else 0.0,
-                    reason=comp.get("reason", ""),
-                )
+            # Log assertion level scores if present
+            grading = result.get("gradingResult")
+            if grading and "componentResults" in grading:
+                for comp in grading["componentResults"]:
+                    assertion_type = comp.get("type", "custom")
+                    trace.log_feedback_score(
+                        name=f"assertion_{assertion_type}",
+                        value=1.0 if comp.get("pass") else 0.0,
+                        reason=comp.get("reason", ""),
+                    )
+        except Exception as exc:
+            print(f"Warning: failed to sync one result to Opik: {exc}", file=sys.stderr)
+            continue
 
     print("Sync complete! Traces are available in Opik.")
 

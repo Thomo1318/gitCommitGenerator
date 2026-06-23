@@ -454,9 +454,11 @@ A targeted example for a broad workspace would be:
 ```json
 {
   "files.watcherExclude": {
+    "**/.env": true,
     "**/gitCommitGenerator/.env": true
   },
   "search.exclude": {
+    "**/.env": true,
     "**/gitCommitGenerator/.env": true
   }
 }
@@ -802,7 +804,14 @@ The decision affects both explicit files and implicit workflows.
 
 The following verification steps should be used after implementation:
 
-- [ ] Confirm the mounted root `.env` remains a FIFO if the 1Password local `.env` destination remains enabled:
+- [ ] Confirm the mounted workspace-root `.env` remains a FIFO if the 1Password local `.env` destination remains enabled at the workspace level:
+
+```bash
+ls -la /Users/admin/dev/activeProjects/.env
+file /Users/admin/dev/activeProjects/.env
+```
+
+- [ ] Confirm the mounted repo-root `.env` remains a FIFO if the 1Password local `.env` destination remains enabled at the repo level:
 
 ```bash
 ls -la .env

@@ -401,7 +401,7 @@ sequenceDiagram
 ### Phase 7: Stack Augmentation (Promptfoo Tooling)
 
 - **Cause**: Lack of a standardized, deterministic local-first evaluation engine tailored to prompt testing.
-- **Change**: Adding `promptfoo` to `mise.toml` and configuring `promptfooconfig.yaml` to route to local MTPLX endpoints.
+- **Change**: Adding `promptfoo` to `Brewfile` (instead of `mise.toml`) and configuring `promptfooconfig.yaml` to route to local MTPLX endpoints.
 - **Effect**: Environment parity for all contributors and a ready execution harness for red-teaming.
 
 ### Phase 8: Stack Augmentation (Promptfoo Logic & Security)
@@ -788,8 +788,8 @@ Described in ADR 0011 Section 14 (Feedback and Prompt Enrichment). Review action
 
 ##### Deviations from Original Plan
 
-- **Deviation Overview:** The planned development of a dedicated `opik_prompts.py` module to dynamically sync local system prompt templates to the Opik Cloud Prompt Library, as well as the implementation of explicit global tagging to trace runs, was abandoned mid-execution.
-- **Detailed Context & Rationale:** During the implementation of Phase 4, the initial setup for Opik tracing feedback scores was completed successfully. However, before executing the prompt synchronization logic, the development team paused to confirm whether Phase 4 should be wrapped up prior to advancing to the Dataset logic in Phase 6. At this juncture, the user explicitly queried about the completion status of Phase 5. Immediately following this pivot, the project encountered several critical CI/CD pipeline blockers, including GitHub Actions limits, CodeRabbit static analysis findings, and Snyk vulnerability scanning issues. Because resolving these infrastructure and security gating issues was deemed a higher immediate priority, the remaining tasks for Phase 4 were entirely superseded in the session and never revisited.
+- **Deviation Overview:** The planned development of a dedicated `opik_prompts.py` module to dynamically sync local system prompt templates to the Opik Cloud Prompt Library, as well as the implementation of explicit global tagging to trace runs, was deferred.
+- **Detailed Context & Rationale:** During the implementation of Phase 4, the initial setup for Opik tracing feedback scores was completed successfully. However, before executing the prompt synchronization logic, the development team paused to confirm whether Phase 4 should be wrapped up prior to advancing to the Dataset logic in Phase 6. At this juncture, the user explicitly queried about the completion status of Phase 5. Immediately following this pivot, the project encountered several critical CI/CD pipeline blockers, including GitHub Actions limits, CodeRabbit static analysis findings, and Snyk vulnerability scanning issues. Because resolving these infrastructure and security gating issues was deemed a higher immediate priority, the remaining tasks for Phase 4 (opik_prompts.py and global tagging) were deferred. These items remain open/outstanding on the Phase 4 Execution Run Sheet checklist.
 - **Approval Status:** This was **NOT an explicitly agreed-upon architectural pivot or alternate solution**. It was a circumstantial omission caused by a sudden shift in development priorities toward fixing broken CI/CD pipelines.
 
 ---
@@ -1094,7 +1094,7 @@ Translate the `gitops_agent_sop.json` constraints into deterministic `javascript
 
 ### Sentry Implementation
 
-#### ✨ feat(sentry): Phase 9 Sentry Architecture & Observability Expansion
+#### ✨ feat(sentry): Phase 9 Sentry Architecture & Observability Expansion (Status: Pending/Planned)
 
 ##### Summary
 
