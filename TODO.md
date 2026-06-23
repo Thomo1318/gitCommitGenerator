@@ -18,8 +18,32 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
   - **Note**: This is a standalone core engine feature and should be tracked in a separate issue outside of the current LLMOps epic.
   - Would [Difftastic](https://github.com/Wilfred/difftastic) assist with this?
 
-- [ ] Ensure that when a commit is triggeredx in an IDE the process doesn't continue until the user has either saved or clicked the tick to accept the commit. Currently the IDE shows the user the proposed commit message but continues and commits it regardless of the users actions.
+- [ ] (This needs extensive analysis review and documentation for the user as well as a good understanding of the options available, best practices etc.) Improve the viusal TUI from the very start of the process to the end to make the process more fluid and user friendly. i.e. as soon as the user runs `git-cg -i` the TUI should display the `git diff` in the main body of the screen and ask the user if they want to generate a commit message. The prompt should be displayed in the main body of the screen as well, i.e. not in a sidebar. This TUI should be interactive and allow the user to scroll through the `git diff` and the generated commit message. It should also allow the user to edit the generated commit message. The user should be able to generate a new commit message by clicking the generate button or pressing the enter key. The user should be able to save the commit message by clicking the save button or pressing the enter key. The user should be able to exit the tool by clicking the exit button or pressing the escape key.
 
+- [ ] Include a help and/or a `Keyboard Shortcuts` option for the TUI that displays the same information as the `--help` option for the CLI, but in a TUI format. this could be a section in the TUI that can be toggled on and off, i.e. the user can press a key to display the help information and press the same key to hide it.
+
+- [ ] Include a `begginers` option during initial install of the tool which will install a `begginers` module which will provide them with easy to understand explanations on each of the `git` actions/principals/commands used by the tool. and also the reasoning behind using the tool in a way they can understand. This needs to be an option so experienced developers don't need to have it enabled and can skip through the prompts. The option should be enabled by default and can be disabled by the user during installation or at a later time via the tools settings.
+  - [ ] This could spin-off to a tutorial/learning module for `git` itself.
+  - [ ] This could be its own tool, i.e. a `git-cg-begginer` command that can be run independently of the main tool.
+  - [ ] It should provide suggestions for how to improve the commit message to be more like a professional commit message.
+  - [ ] It could provide a step by step walkthrough of how to use the tool, interactive and customisable.
+  - [ ] Provide the learning material in a clear concise manner, that can be toggled on and off, i.e. the user can press a key to display the help information and press the same key to hide it.
+  - [ ] Provide a "dry-run" sandbox mode where beginners can practice generating and editing commits without actually modifying their local git history.
+  - [ ] Add inline tooltips to the TUI (e.g., hovering or pressing ? over "feat" explains what a feature commit is according to Conventional Commits).
+  - [ ] Let the user know what to look out for in the agent-generated commits, since they are not always perfect.
+  - This includes working through the tools' output from top to bottom, ensuring the title is correctly structured.
+    - Ensure that the points in the body of the commit message actually identify the changes made.
+    - Verify that the most important point is the title of the commit message.
+    - Check that additional changes aren't missing from the body, and that the metadata at the end of the commit message is correct.
+    - If the user identifies any problems with the generated message, explain to the user how to use the `Regenerate` function.
+    - Explain the language to use when prompting the agent when using the `Regenerate` option (e.g., "This is the most important change, make it the title of the commit message" or "The `SemVer-Impact` needs to be minor", etc).
+    - (TODO: I think I need to come up with some improved examples.) Output some examples of excellent and bad commit messages with clear explanations. I haveclosed
+  - [ ] Create an onboarding wizard on first run that asks the user their experience level ("Beginner", "Intermediate", "Expert") and configures the default verbosity of the tool accordingly.
+  - [ ] interactivly be able to "click-through" all of the sections of the commit message with clear explanations for each section e.g. "📝 docs(adr): update observability stack" my very first thoughts are
+
+- [ ] Ensure that when a commit is triggered in an IDE the process doesn't continue until the user has either saved or clicked the tick to accept the commit. Currently the IDE shows the user the proposed commit message but continues and commits it regardless of the users actions.
+
+- [ ] Explore implementing either [Baseline](https://github.com/SecondSonConsulting/Baseline) or a similar function.
 - [ ] have a check run that identifies if there is a newer release of the users chosen LLM model, if there is ask them if they want to download it and use it. if the user selcts no then do not ask them again but inform them that a persistant message will be shown eachtime they run the tool with the command to download and use the newer version. This will be an unobtrusive message shown as an additional colour item in the start up message:
 
   ```
