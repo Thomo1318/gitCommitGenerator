@@ -9,7 +9,7 @@ import sys
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import click
 import sentry_sdk
@@ -367,12 +367,12 @@ def get_ai_client(engine: str) -> instructor.Instructor:
 def build_generation_messages(
     system_prompt: str,
     diff_output: str,
-) -> list[dict[str, str]]:
+) -> list[Any]:
     """
     Construct the chat messages used to generate a commit message from a git diff.
 
     Returns:
-        messages (list[dict[str, str]]): Ordered chat messages containing the system prompt followed by a user message with the diff in a fenced `diff` block.
+        messages (list[Any]): Ordered chat messages containing the system prompt followed by a user message with the diff in a fenced `diff` block.
     """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -443,6 +443,8 @@ def generate_commit_message(
                 f"[yellow]Waiting for local AI server to load model weights (attempt {attempt + 1}/{max_retries})...[/yellow]"
             )
             time.sleep(10)
+
+    raise RuntimeError("Failed to generate commit message after maximum retries.")
 
 
 def detect_primary_language(diff_output: str) -> str | None:
