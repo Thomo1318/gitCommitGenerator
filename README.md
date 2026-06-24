@@ -179,6 +179,7 @@ flowchart LR
 - **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
 - **Two-Point Telemetry & Tracing**: Natively integrates with the Opik Ecosystem. Logs generation heuristics, catches human editor modifications via `commit-msg` hooks, and compiles interaction datasets for model fine-tuning.
 - **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
+- **Native Git Hook Validation**: The semantic standard and required trailing metadata are natively enforced via a strict `commit-msg` git hook (`validateCommitHook.mjs`) driven by `hk`. This rejects invalid commits (both from humans and AI) with a detailed `[AI_CORRECTION_REQUIRED]` breakdown to facilitate automatic self-healing.
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
 - **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, `Print plain text`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
@@ -318,6 +319,8 @@ git-cg --help
 
 All messages generated or validated by this engine follow the format:
 `<emoji> <cc_type>(<scope>): <subject>`
+
+*Note: This standard is immutably enforced by a native `commit-msg` git hook (`validateCommitHook.mjs`) which uses strict regex, trailer validation, and SOP alignment to reject any non-compliant commit message with a detailed `[AI_CORRECTION_REQUIRED]` prompt designed to steer agents into auto-correcting their format.*
 
 **Example Output:**
 

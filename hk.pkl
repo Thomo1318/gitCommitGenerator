@@ -50,6 +50,10 @@ hooks {
     }
     ["commit-msg"] {
         steps = new Mapping<String, Step> {
+            ["validate-commit"] {
+                check = "node scripts/validateCommitHook.mjs \"{{commit_msg_file}}\""
+                fix = "node scripts/validateCommitHook.mjs \"{{commit_msg_file}}\""
+            }
             ["git-cg-telemetry"] {
                 check = "uv run python -m git_cg.main record-telemetry \"{{commit_msg_file}}\""
                 fix = "uv run python -m git_cg.main record-telemetry \"{{commit_msg_file}}\""
