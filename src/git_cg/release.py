@@ -93,13 +93,13 @@ def parse_commit_impact(commit_string: str, gitmoji_matrix: list) -> str:
 def calculate_global_bump(commits: list[str], gitmoji_matrix: list) -> str:
     """
     Determine the highest SemVer bump required by the given commits.
-    
+
     Parameters:
-    	commits (list[str]): Commit strings to evaluate.
-    	gitmoji_matrix (list): Metadata used to interpret commit impact.
-    
+        commits (list[str]): Commit strings to evaluate.
+        gitmoji_matrix (list): Metadata used to interpret commit impact.
+
     Returns:
-    	str: "MAJOR", "MINOR", "PATCH", or "NONE", depending on the highest impact found.
+        str: "MAJOR", "MINOR", "PATCH", or "NONE", depending on the highest impact found.
     """
     highest_bump = "NONE"
     for commit in commits:
@@ -116,14 +116,14 @@ def calculate_global_bump(commits: list[str], gitmoji_matrix: list) -> str:
 def bump_version_string(version: str, bump_type: str, pre_release: str | None = None) -> str:
     """
     Update a semantic version string.
-    
+
     Parameters:
-    	version (str): The version string to update.
-    	bump_type (str): The version increment to apply.
-    	pre_release (str | None): Pre-release identifier to apply or advance.
-    
+        version (str): The version string to update.
+        bump_type (str): The version increment to apply.
+        pre_release (str | None): Pre-release identifier to apply or advance.
+
     Returns:
-    	str: The updated version string, or the original version if parsing or bumping fails.
+        str: The updated version string, or the original version if parsing or bumping fails.
     """
     prefix = "v" if version.startswith("v") else ""
     v_str = version.lstrip("v")
@@ -173,9 +173,9 @@ def inject_file_versions(
 ):
     """
     Inject bumped version strings into matching files.
-    
+
     Updates the first version string found in each file when its extension matches a configured injection strategy.
-    
+
     Parameters:
         files (list[str]): File paths to scan.
         bump_type (str): The SemVer bump to apply.
@@ -217,13 +217,13 @@ def inject_file_versions(
             def replacer(match, current_filepath=filepath):
                 """
                 Update a matched version string and report the change.
-                
+
                 Parameters:
-                	match: The regex match object.
-                	current_filepath: The file currently being processed.
-                
+                        match: The regex match object.
+                        current_filepath: The file currently being processed.
+
                 Returns:
-                	str: The replacement text for the matched version.
+                        str: The replacement text for the matched version.
                 """
                 nonlocal modified
                 old_v = match.group(2)
@@ -279,15 +279,15 @@ def inject_file_versions(
 def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
     """
     Group commit subjects into changelog sections.
-    
+
     Uses the `Changelog-Groups:` trailer when present to place a commit subject in one or more sections. Otherwise, falls back to the first matching gitmoji changelog group, or `Miscellaneous` when no match is found.
-    
+
     Parameters:
-    	commits (list[str]): Raw commit strings containing a subject and optional body.
-    	gitmoji_matrix (list): Gitmoji metadata used to resolve legacy changelog groups.
-    
+        commits (list[str]): Raw commit strings containing a subject and optional body.
+        gitmoji_matrix (list): Gitmoji metadata used to resolve legacy changelog groups.
+
     Returns:
-    	dict[str, list[str]]: Changelog groups mapped to their commit subjects.
+        dict[str, list[str]]: Changelog groups mapped to their commit subjects.
     """
     changelog_groups = defaultdict(list)
     for commit in commits:
@@ -343,13 +343,13 @@ def validate_release(new_tag: str) -> bool:
 def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None):
     """
     Prepare a release from the commits since the last Git tag.
-    
+
     Determines the required SemVer bump, updates configured version fields, and prepends a generated changelog entry to CHANGELOG.md unless dry run mode is enabled. If no version change is needed, the release is skipped.
-    
+
     Parameters:
-    	dry_run (bool): Simulate the release without writing files.
-    	verbose (bool): Emit additional progress output.
-    	pre_release (str | None): Optional pre-release identifier to apply to the generated version.
+        dry_run (bool): Simulate the release without writing files.
+        verbose (bool): Emit additional progress output.
+        pre_release (str | None): Optional pre-release identifier to apply to the generated version.
     """
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
@@ -374,6 +374,15 @@ def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None
         return
 
     console.print(f"[bold green]Calculated Release Impact:[/bold green] {bump_type}")
+
+    if not last_tag and pre_release:
+        try:
+            semver.VersionInfo.parse(f"0.1.0-{pre_release}.0")
+        except Exception:
+            console.print(
+                f"[bold red]Validation Error:[/bold red] Invalid pre-release identifier '{pre_release}'. Must comply with SemVer 2.0.0."
+            )
+            return
 
     new_tag = (
         bump_version_string(last_tag, bump_type, pre_release=pre_release)

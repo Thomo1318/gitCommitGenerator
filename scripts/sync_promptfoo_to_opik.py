@@ -10,26 +10,26 @@ import opik
 def parse_iso_timestamp(ts: str) -> datetime.datetime:
     """
     Parse an ISO 8601 timestamp string.
-    
+
     Parameters:
-    	ts (str): The timestamp string to parse.
-    
+        ts (str): The timestamp string to parse.
+
     Returns:
-    	datetime.datetime: The parsed datetime, or the current UTC time if parsing fails.
+        datetime.datetime: The parsed datetime, or the current UTC time if parsing fails.
     """
     try:
         # handle Z and fractional seconds
         if ts and isinstance(ts, str) and ts.endswith("Z"):
             ts = ts[:-1] + "+00:00"
         return datetime.datetime.fromisoformat(str(ts))
-    except ValueError, TypeError, AttributeError, Exception:
+    except Exception:
         return datetime.datetime.now(datetime.UTC)
 
 
 def sync_results(file_path: str):
     """
     Sync Promptfoo evaluation results to Opik traces.
-    
+
     Parameters:
         file_path (str): Path to the Promptfoo evaluation JSON file.
     """
@@ -68,7 +68,7 @@ def sync_results(file_path: str):
         raw_latency = result.get("latencyMs", 0)
         try:
             latency_ms = max(0.0, float(raw_latency or 0))
-        except TypeError, ValueError:
+        except Exception:
             latency_ms = 0.0
 
         end_time = parse_iso_timestamp(timestamp_str) if timestamp_str else datetime.datetime.now(datetime.UTC)

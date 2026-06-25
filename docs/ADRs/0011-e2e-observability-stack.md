@@ -806,20 +806,20 @@ Offline evaluation relies on an ad-hoc Python script (`scripts/eval_commit_messa
 
 ##### Architectural direction
 
-Convert the local script into a modular `opik_metrics.py` system. Deterministic checks execute first, gating the semantic LLM graders (Tier 1 -> Tier 2).
+Convert the local script into a modular `opik_metrics.py` system. Metrics (`FormatMetric` and `CommitMessageQuality`) execute concurrently to provide complete observability data on every trace.
 
 ##### Core decision
 
-- Deterministic checks (72-char limit, Gitmoji matrix) act as Tier 1.
-- GEval checks act as Tier 2.
-- Failure in Tier 1 aborts Tier 2 execution to save tokens.
+- Deterministic format checks (72-char limit, Gitmoji matrix) are encapsulated in `FormatMetric`.
+- Semantic checks are encapsulated in `CommitMessageQuality` (GEval).
+- Both metrics execute concurrently side-by-side to ensure partial formatting issues do not obscure semantic quality scores.
 - We don't really care what Promptfoo returns beyond the raw payload; the Sentry hook and telemetry extraction will occur post-Promptfoo using the Opik SDK explicitly, rather than trying to stuff telemetry inside Promptfoo's custom assertions.
 
 ##### In scope
 
 - Refactoring the local evaluation script into a reusable module (`opik_metrics.py`).
-- Establishing Tier 1, Tier 2, and Tier 3 evaluators.
-- Integrating deterministic gating logic.
+- Establishing modular, independent evaluators for formatting and semantic quality.
+- Ensuring concurrent atomic evaluation execution.
 
 ##### Out of scope
 
@@ -830,8 +830,8 @@ Convert the local script into a modular `opik_metrics.py` system. Deterministic 
 
 1. Developer runs evaluation suite.
 2. Suite pulls dataset from Opik.
-3. For each trace, Tier 1 runs regex/length checks.
-4. If Tier 1 passes, GEval runs semantic checks.
+3. For each trace, `FormatMetric` and `CommitMessageQuality` execute concurrently.
+4. Evaluation scores and reasons are compiled and attached to the trace.
 
 ##### Acceptance criteria
 
@@ -1111,11 +1111,11 @@ Sentry initialization must be centralized. We must use a `before_send` hook to m
 
 ##### Core decision
 
-- `sentry_sdk.init()` must be executed exactly once via a centralized module.
-- `traces_sample_rate=0.0` to avoid duplicate tracing overhead vs Opik.
-- PII and proprietary diffs must be irreversibly stripped via a `before_send` hook.
-- `capture_exception` and `sentry_sdk.flush()` must wrap all `_abort` and terminal exit paths.
-- `sentry_sdk.add_breadcrumb()` will be used to track state transitions (e.g., diff extraction, AI invocation).
+- [ ] `sentry_sdk.init()` must be executed exactly once via a centralized module.
+- [ ] Explicitly configure `traces_sample_rate=0.0` to avoid duplicate tracing overhead vs Opik.
+- [ ] PII and proprietary diffs must be irreversibly stripped via a `before_send` hook.
+- [ ] `capture_exception` and `sentry_sdk.flush(timeout=2.0)` must wrap all `_abort` and terminal exit paths.
+- [ ] Add manual `sentry_sdk.add_breadcrumb()` calls to track state transitions (e.g., diff extraction, AI invocation).
 
 ##### In scope
 
