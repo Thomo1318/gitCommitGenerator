@@ -24,7 +24,7 @@ const errors = [];
 const subjectLine = lines[0].trim();
 
 // Regex to capture: Emoji (unicode or shortcode), CC Type, Scope (optional), Breaking (!), and Subject
-const commitRegex = /^((?:\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?|:[a-z0-9_+\-]+:)\s+([a-z]+)(?:\(([a-z0-9\-,\s]+)\))?(!?):\s+(.+)$/u;
+const commitRegex = /^((?:\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?|:[a-z0-9_+\-]+:)\s+([a-z]+)(?:\(([a-z0-9_\-,\s]+)\))?(!?):\s+(.+)$/u;
 const match = subjectLine.match(commitRegex);
 
 let ccType = '';
@@ -105,7 +105,7 @@ const includedChangesMatch = fullText.match(/^Included changes:\n((?:- .+\n?)+)/
 if (includedChangesMatch) {
     const changesLines = includedChangesMatch[1].trim().split('\n');
     changesLines.forEach(line => {
-        const itemMatch = line.match(/^- ((?:\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?|:[a-z0-9_+\-]+:)\s+([a-z]+)(?:\(([a-z0-9\-,\s]+)\))?(!?):\s+(.+)$/u);
+        const itemMatch = line.match(/^- ((?:\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?|:[a-z0-9_+\-]+:)\s+([a-z]+)(?:\(([a-z0-9_\-,\s]+)\))?(!?):\s+(.+)$/u);
         if (!itemMatch) {
             errors.push(`Invalid 'Included changes' item format: '${line}'. Must match '- <emoji> <cc_type>(<scope>): <subject>'.`);
         }

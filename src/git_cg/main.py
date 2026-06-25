@@ -83,7 +83,7 @@ class ReviewStateMutationResult(enum.StrEnum):
 
     ADDED = "added"
     DUPLICATE = "duplicate"
-    CONFLICTING_ISSUE_NUMBER = "conflicting_issue_number"
+    UPDATED = "updated"
 
 
 @dataclass
@@ -111,7 +111,7 @@ class ReviewState:
 
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
-        Append an issue reference to the review state, enforcing idempotency and conflict detection.
+        Append an issue reference to the review state, replacing any existing reference for the same issue number.
 
         Parameters:
             issue_reference (IssueReference): The issue reference to add.
@@ -119,13 +119,16 @@ class ReviewState:
         Returns:
             ReviewStateMutationResult: `ADDED` when the reference was appended,
             `DUPLICATE` when an identical reference already exists,
-            `CONFLICTING_ISSUE_NUMBER` when the same issue number exists with a different reference.
+            `UPDATED` when an existing reference for the same issue was replaced.
         """
         existing_issue_reference = self.get_issue_reference_by_issue_number(issue_reference.issue_number)
         if existing_issue_reference is not None:
             if existing_issue_reference == issue_reference:
                 return ReviewStateMutationResult.DUPLICATE
-            return ReviewStateMutationResult.CONFLICTING_ISSUE_NUMBER
+
+            idx = self.issue_references.index(existing_issue_reference)
+            self.issue_references[idx] = issue_reference
+            return ReviewStateMutationResult.UPDATED
 
         self.issue_references.append(issue_reference)
         return ReviewStateMutationResult.ADDED
@@ -732,26 +735,10 @@ def _interactive_review(
                 continue
 
             mutation_result = review_state.add_issue_reference(issue_reference)
-            if mutation_result == ReviewStateMutationResult.ADDED:
+            if mutation_result in (ReviewStateMutationResult.ADDED, ReviewStateMutationResult.UPDATED):
                 _write_commit_message(commit_msg_file, review_state.render(), strict=strict, verbose=verbose)
             elif mutation_result == ReviewStateMutationResult.DUPLICATE:
                 console.print(f"[yellow]{issue_reference} is already attached to this review state.[/yellow]")
-            else:
-                existing_issue_reference = review_state.get_issue_reference_by_issue_number(
-                    issue_reference.issue_number
-                )
-                existing_issue_reference_text = (
-                    str(existing_issue_reference)
-                    if existing_issue_reference
-                    else f"issue #{issue_reference.issue_number}"
-                )
-                console.print(
-                    "[yellow]"
-                    f"{existing_issue_reference_text} is already attached to this review state. "
-                    "Changing the verb for an existing issue reference is deferred for this phase. "
-                    "Use Edit for manual changes."
-                    "[/yellow]"
-                )
             continue
 
         if action == "Add regenerate guidance":
@@ -963,6 +950,17 @@ def _run_commit_generation(
         console.log(f"Using model: {model_name}")
 
     issue_references: list[IssueReference] = []
+    try:
+        branch_name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        # Match common branch patterns like feat/121-description or 121-description
+        match = re.search(r"(?:/|^)(\d+)-", branch_name)
+        if match:
+            issue_number = int(match.group(1))
+            issue_references.append(IssueReference(kind=IssueReferenceKind.REFS, issue_number=issue_number))
+            if verbose:
+                console.log(f"Auto-detected issue #{issue_number} from branch '{branch_name}'.")
+    except Exception:
+        pass
     regeneration_guidance: str | None = None
 
     try:
