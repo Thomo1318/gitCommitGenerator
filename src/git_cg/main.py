@@ -111,10 +111,10 @@ class ReviewState:
 
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
-        Add an issue reference to the review state, replacing any existing reference for the same issue number.
+        Add an issue reference to the review state.
         
         Parameters:
-            issue_reference (IssueReference): The issue reference to add.
+            issue_reference (IssueReference): The issue reference to store.
         
         Returns:
             ReviewStateMutationResult: `ADDED` if the reference was appended, `DUPLICATE` if an identical reference already exists, `UPDATED` if an existing reference for the same issue number was replaced.
@@ -395,17 +395,17 @@ def generate_commit_message(
     """
     Generate a commit plan from a git diff.
     
-    Applies any recognised deterministic directives to the generated result.
+    Applies any recognised locked directives to the generated result.
     
     Parameters:
         diff_output (str): The git diff to include in the request.
         model_name (str): The language model to use.
         system_prompt (str): The system context and formatting instructions.
-        active_directives (dict[str, str] | None): Optional locked values such as `preferred_type` and `preferred_scope`.
-        residual_guidance (str | None): Optional free-text guidance to include with the request.
+        active_directives (dict[str, str] | None): Locked values such as `preferred_type` and `preferred_scope`.
+        residual_guidance (str | None): Free-text guidance to include with the request.
     
     Returns:
-        CommitPlan: The structured commit plan.
+        CommitPlan: The generated commit plan.
     
     Raises:
         openai.APIConnectionError: If the model cannot be reached after retrying.
@@ -451,10 +451,13 @@ def generate_commit_message(
 
 def detect_primary_language(diff_output: str) -> str | None:
     """
-    Identify the primary language represented in a diff.
+    Determine the primary language represented in a diff.
+    
+    Parameters:
+    	diff_output (str): Unified diff text to inspect.
     
     Returns:
-    	str | None: The most common file extension mapped to a language name, or `None` if the diff contains no file extensions.
+    	str | None: The mapped language name for the most common code file extension, or the upper-cased extension when unmapped. Returns `None` if no file extensions are found.
     """
     pattern = re.compile(r"^diff --git a/.*\.([a-zA-Z0-9]+) b/.*$", re.MULTILINE)
     extensions = pattern.findall(diff_output)
@@ -702,7 +705,7 @@ def _interactive_review(
     	commit_msg_file (str): Path to the commit message file to update after edits or metadata changes.
     	review_state (ReviewState): Current review state for the generated commit and attached issue references.
     	verbose (bool): Print extra status messages when interactive mode is unavailable or when actions update the review state.
-    	strict (bool): Control strict write behaviour when the commit message file is updated.
+    	strict (bool): Control write behaviour when the commit message file is updated.
     	gui_editor (bool): Use the graphical editor environment variables when opening the message for editing.
     
     Returns:
@@ -870,14 +873,14 @@ def _run_commit_generation(
     gui_editor: bool = False,
 ) -> bool:
     """
-    Generate a commit message from staged changes and handle optional review, regeneration, and telemetry.
+    Generate a commit message from staged changes and handle review, regeneration, and telemetry.
     
     Parameters:
     	commit_msg_file (str): Path to the commit message file.
     	commit_source (str | None): Source of the commit request, used to decide whether generation is skipped.
     	extra_args (list[str] | None): Additional CLI arguments kept for compatibility.
     	engine (str): AI engine key to use.
-    	dry_run (bool): Write no commit message file and only preview the generated result.
+    	dry_run (bool): Preview the generated message without applying it.
     	verbose (bool): Enable detailed console output.
     	amend_regenerate (bool): Allow regeneration when the commit source would otherwise be skipped.
     	strict (bool): Use non-zero exit codes when aborting.

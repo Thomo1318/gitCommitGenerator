@@ -57,7 +57,7 @@ class IssueReference:
 
     def __str__(self) -> str:
         """
-        Render the issue reference as `<verb>: #<number>`.
+        Format the issue reference for display.
         
         Returns:
         	str: The issue reference in the form `{kind.value}: #{issue_number}`.

@@ -12,7 +12,7 @@ def parse_iso_timestamp(ts: str) -> datetime.datetime:
     Parse an ISO 8601 timestamp string.
     
     Parameters:
-    	ts (str): The timestamp to parse.
+    	ts (str): The timestamp string to parse.
     
     Returns:
     	datetime.datetime: The parsed datetime, or the current UTC time if parsing fails.

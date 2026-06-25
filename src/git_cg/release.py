@@ -92,14 +92,14 @@ def parse_commit_impact(commit_string: str, gitmoji_matrix: list) -> str:
 
 def calculate_global_bump(commits: list[str], gitmoji_matrix: list) -> str:
     """
-    Determine the highest SemVer bump required by a set of commits.
+    Determine the highest SemVer bump required by the given commits.
     
     Parameters:
     	commits (list[str]): Commit strings to evaluate.
-    	gitmoji_matrix (list): Gitmoji metadata used to interpret commit impact.
+    	gitmoji_matrix (list): Metadata used to interpret commit impact.
     
     Returns:
-    	str: The highest bump level found: "MAJOR", "MINOR", "PATCH", or "NONE".
+    	str: "MAJOR", "MINOR", "PATCH", or "NONE", depending on the highest impact found.
     """
     highest_bump = "NONE"
     for commit in commits:
@@ -115,12 +115,12 @@ def calculate_global_bump(commits: list[str], gitmoji_matrix: list) -> str:
 
 def bump_version_string(version: str, bump_type: str, pre_release: str | None = None) -> str:
     """
-    Bump a semantic version string.
+    Update a semantic version string.
     
     Parameters:
     	version (str): The version string to update.
-    	bump_type (str): The bump to apply.
-    	pre_release (str | None): Optional pre-release identifier to apply or advance.
+    	bump_type (str): The version increment to apply.
+    	pre_release (str | None): Pre-release identifier to apply or advance.
     
     Returns:
     	str: The updated version string, or the original version if parsing or bumping fails.
@@ -168,18 +168,17 @@ def inject_file_versions(
     files: list[str], bump_type: str, sop_data: dict, dry_run: bool, verbose: bool, pre_release: str | None = None
 ):
     """
-    Inject updated version strings into matching files.
+    Inject bumped version strings into matching files.
     
-    Scans each file for the first version string covered by the configured injection strategy and replaces it with the bumped value. Changes are written back only when a replacement is made and `dry_run` is false.
+    Updates the first version string found in each file when its extension matches a configured injection strategy.
     
     Parameters:
-    	files (list[str]): File paths to scan for injectable version strings.
-    	bump_type (str): The SemVer bump to apply.
-    	sop_data (dict): SOP configuration containing the version injection matrix.
-    	dry_run (bool): When true, do not write changes to disk.
-    	verbose (bool): When true, print injection details and file-level errors.
-    	pre_release (str | None): Optional pre-release identifier to apply or advance.
-    
+        files (list[str]): File paths to scan.
+        bump_type (str): The SemVer bump to apply.
+        sop_data (dict): SOP configuration containing the version injection matrix.
+        dry_run (bool): When true, do not write changes to disk.
+        verbose (bool): When true, print injection details and file-level errors.
+        pre_release (str | None): Optional pre-release identifier to apply or advance.
     """
     if bump_type == "NONE" and not pre_release:
         return
@@ -212,6 +211,16 @@ def inject_file_versions(
             modified = False
 
             def replacer(match, current_filepath=filepath):
+                """
+                Update a matched version string and report the change.
+                
+                Parameters:
+                	match: The regex match object.
+                	current_filepath: The file currently being processed.
+                
+                Returns:
+                	str: The replacement text for the matched version.
+                """
                 nonlocal modified
                 old_v = match.group(2)
                 new_v = bump_version_string(old_v, bump_type, pre_release=pre_release)
@@ -259,7 +268,7 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
     """
     Group commit subjects into changelog sections.
     
-    Each commit string is split on `---COMMIT_BODY---` to obtain the subject and optional body. If the body contains a `Changelog-Groups:` trailer, the subject is added to each listed group. Otherwise, the subject is assigned to the first matching gitmoji-defined changelog group, or to `Miscellaneous` when no match is found.
+    Uses the `Changelog-Groups:` trailer when present to place a commit subject in one or more sections. Otherwise, falls back to the first matching gitmoji changelog group, or `Miscellaneous` when no match is found.
     
     Parameters:
     	commits (list[str]): Raw commit strings containing a subject and optional body.
@@ -299,7 +308,7 @@ def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None
     """
     Prepare a release from the commits since the last Git tag.
     
-    Analyses commit history to determine the SemVer bump, updates matching version fields when configured, and prepends a generated changelog section to CHANGELOG.md unless dry run mode is enabled. If no release is required, the function exits early.
+    Determines the required SemVer bump, updates configured version fields, and prepends a generated changelog entry to CHANGELOG.md unless dry run mode is enabled. If no version change is needed, the release is skipped.
     
     Parameters:
     	dry_run (bool): Simulate the release without writing files.

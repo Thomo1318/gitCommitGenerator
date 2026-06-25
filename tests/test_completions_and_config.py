@@ -23,6 +23,15 @@ USAGE_KDL_PATH = REPO_ROOT / "usage.kdl"
 
 
 def _read(path: Path) -> str:
+    """
+    Read a text file as UTF-8.
+    
+    Parameters:
+    	path (Path): The file to read.
+    
+    Returns:
+    	str: The file contents.
+    """
     return path.read_text(encoding="utf-8")
 
 

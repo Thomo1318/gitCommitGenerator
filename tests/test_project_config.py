@@ -468,7 +468,11 @@ class TestMiseTomlEvalPromptfoo:
         assert "redteam run" in run, "eval:promptfoo run must invoke 'promptfoo redteam run'"
 
     def test_eval_promptfoo_run_syncs_eval_results_to_opik(self):
-        """The run script must call sync_promptfoo_to_opik.py for promptfoo_results.json."""
+        """Checks that the eval:promptfoo task syncs Promptfoo results to Opik.
+        
+        Returns:
+        	None
+        """
         task = _load_mise()["tasks"]["eval:promptfoo"]
         run = task["run"]
         assert "sync_promptfoo_to_opik.py" in run, (
