@@ -8,6 +8,15 @@ import opik
 
 
 def parse_iso_timestamp(ts: str) -> datetime.datetime:
+    """
+    Parse an ISO 8601 timestamp string.
+    
+    Parameters:
+    	ts (str): The timestamp to parse.
+    
+    Returns:
+    	datetime.datetime: The parsed datetime, or the current UTC time if parsing fails.
+    """
     try:
         # handle Z and fractional seconds
         if ts.endswith("Z"):
@@ -18,6 +27,12 @@ def parse_iso_timestamp(ts: str) -> datetime.datetime:
 
 
 def sync_results(file_path: str):
+    """
+    Sync Promptfoo evaluation results to Opik traces.
+    
+    Parameters:
+        file_path (str): Path to the Promptfoo evaluation JSON file.
+    """
     print(f"Loading Promptfoo results from {file_path}...")
     try:
         with open(file_path) as f:

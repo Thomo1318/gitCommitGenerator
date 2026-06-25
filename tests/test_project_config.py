@@ -381,7 +381,7 @@ class TestPromptfooConfig:
         # If we reach here the assertion wasn't found — let the has_upper_bound test handle it
 
     def test_conventional_commit_regex_assertion_present(self):
-        """A second JS assertion enforcing conventional-commit format must be present."""
+        """Checks that the first Promptfoo test case includes a JavaScript assertion using a regular expression to validate conventional-commit format."""
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
         regex_assertions = [
@@ -405,7 +405,10 @@ class TestPromptfooConfig:
         assert False, "No regex-based JS assertion found"
 
     def test_conventional_commit_regex_uses_trim(self):
-        """The regex assertion must call trim() before testing."""
+        """Ensures the conventional commit regex assertion trims the output before matching.
+        
+        Parameters:
+        """
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
         for assertion in first_case["assert"]:

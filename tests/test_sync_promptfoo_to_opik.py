@@ -354,6 +354,16 @@ class TestSyncResultsV1Structure:
     """Tests using v1 Promptfoo JSON structure (results directly as a list)."""
 
     def _write_v1_file(self, tmp_path, results_list):
+        """
+        Write a Promptfoo v1 results fixture to a temporary JSON file.
+        
+        Parameters:
+        	tmp_path: Temporary directory used to create the file.
+        	results_list: Results data to serialise under the top-level ``results`` key.
+        
+        Returns:
+        	str: Path to the written JSON file.
+        """
         data = {"results": results_list}
         f = tmp_path / "results_v1.json"
         f.write_text(json.dumps(data))
@@ -384,6 +394,16 @@ class TestSyncResultsMissingFields:
     """Tests that missing optional fields don't crash sync_results."""
 
     def _write_file(self, tmp_path, results_list):
+        """
+        Write a Promptfoo v2 results fixture to a temporary JSON file.
+        
+        Parameters:
+        	tmp_path: Temporary directory used to create the file.
+        	results_list: Result entries to serialise under the nested ``results`` key.
+        
+        Returns:
+        	str: Path to the written JSON file.
+        """
         data = {"results": {"results": results_list}}
         f = tmp_path / "results.json"
         f.write_text(json.dumps(data))
