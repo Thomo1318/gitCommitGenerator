@@ -4,7 +4,7 @@ A highly detailed cyberpunk architectural schematic showing the git-cg local CLI
 📋 Target Filename: adr-0011-e2e-observability.webp
 -->
 
-![Header Image](../assets/adr-0011-e2e-observability.webp)
+![Header Image](../assets/adr-0011-e2e-observability.jpeg)
 
 # ADR-0011: E2E Observability and LLMOps Stack Augmentation
 
