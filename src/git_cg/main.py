@@ -440,7 +440,7 @@ def generate_commit_message(
             return commit_result
         except openai.APIConnectionError:
             if attempt == max_retries - 1:
-                raise
+                break
             console.print(
                 f"[yellow]Waiting for local AI server to load model weights (attempt {attempt + 1}/{max_retries})...[/yellow]"
             )
@@ -1075,8 +1075,9 @@ def _run_commit_generation(
         review_state = ReviewState(
             commit_plan=commit_plan,
             issue_references=list(issue_references),
-            regeneration_guidance=regeneration_guidance,
         )
+        if regeneration_guidance:
+            review_state.set_regeneration_guidance(regeneration_guidance)
         result_string = review_state.render()
         if verbose or dry_run:
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))

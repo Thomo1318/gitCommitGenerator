@@ -287,14 +287,13 @@ Structured issue references render above machine-readable trailers. Example:
 Explain the why and how.
 
 Included changes:
-
 - 📝 docs(readme): document review flow
 
-Resolves #80
-Refs #81
+Resolves: #80
+Refs: #81
 SemVer-Impact: PATCH
 Change-Types: fix, docs
-Changelog-Groups: Bug Fixes, Documentation
+Changelog-Groups: Fixed, Miscellaneous
 ```
 
 If no terminal device is available, the tool degrades cleanly and completes without trying to open the TUI.
@@ -330,12 +329,11 @@ All messages generated or validated by this engine follow the format:
 Introduce a portable SOP loader with a resolution precedence chain for explicit environment overrides.
 
 Included changes:
-
 - ♻️ refactor(sop): add centralized portable SOP loader
 - 🦺 fix(cli): add strict mode for CI while keeping hooks fail-soft
 - 📦 build(package): ship SOP data in the wheel
 
-Refs #80
+Refs: #80
 SemVer-Impact: PATCH
 Change-Types: refactor, fix, build
 Changelog-Groups: Changed, Fixed, Miscellaneous

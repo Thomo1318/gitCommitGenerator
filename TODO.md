@@ -15,10 +15,10 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
   - **Problem**: The project relies on Node.js and a `package.json` file exclusively for running `scripts/validateCommitHook.mjs` during the `commit-msg` git hook phase, and generating Markdown Table of Contents via `doctoc`.
   - **Solution**: Replace both of these dependencies with Python-native equivalents to fully consolidate the repository into a pure Python/uv ecosystem.
   - **Implementation**:
-    - Create `src/git_cg/validate.py` and a `git-cg validate` CLI command to natively handle commit syntax validation, trailer checks, and issue reference validation by reading `gitops_agent_sop.json`.
-    - Update `hk.pkl` to run `uv run python -m git_cg.main validate "{{commit_msg_file}}"`.
-    - Replace `doctoc` in `hk.pkl` with `mdformat-toc` (or remove if Zensical handles TOC natively).
-    - Delete `package.json` and `scripts/validateCommitHook.mjs`.
+    - [ ] Create `src/git_cg/validate.py` and a `git-cg validate` CLI command to natively handle commit syntax validation, trailer checks, and issue reference validation by reading `gitops_agent_sop.json`.
+    - [ ] Update `hk.pkl` to run `uv run python -m git_cg.main validate "{{commit_msg_file}}"`.
+    - [ ] Replace `doctoc` in `hk.pkl` with `mdformat-toc` (or remove if Zensical handles TOC natively).
+    - [ ] Delete `package.json` and `scripts/validateCommitHook.mjs`.
 
 - [ ] Can we somehow allocate a higher priority/system resources to `git-cg` when it is running? i.e. allocate more CPU / GPU / RAM to it? or `nice` it? So that it runs faster and more efficiently? I'm not sure if this is possible, but it's worth investigating.
 

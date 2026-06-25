@@ -6,32 +6,47 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sopPath = path.resolve(__dirname, '../config/gitops_agent_sop.json');
 const commitMsgFile = process.argv[2];
+if (!commitMsgFile) {
+    console.error(`\n[AI_CORRECTION_REQUIRED]: Missing commit message file argument.\n`);
+    process.exit(1);
+}
 
-if (!fs.existsSync(commitMsgFile)) process.exit(0);
+const safePath = path.resolve(process.cwd(), commitMsgFile);
+const relativePath = path.relative(process.cwd(), safePath);
+if (relativePath.startsWith(`..${path.sep}`) || relativePath === '..' || path.isAbsolute(relativePath)) {
+    console.error(`\n[AI_CORRECTION_REQUIRED]: Path traversal detected.\n`);
+    process.exit(1);
+}
+
+if (!fs.existsSync(safePath)) {
+    console.error(`\n[AI_CORRECTION_REQUIRED]: Commit message file not found.\n`);
+    process.exit(1);
+}
 
 // Load the SOP
 const sop = JSON.parse(fs.readFileSync(sopPath, 'utf8'));
 const matrix = sop.gitmoji_reference_matrix;
 
-const safePath = path.resolve(process.cwd(), commitMsgFile);
-if (!safePath.startsWith(process.cwd())) process.exit(1);
-
 const rawMsg = fs.readFileSync(safePath, 'utf8');
 const lines = rawMsg.split('\n').filter(line => !line.trim().startsWith('#'));
-if (lines.length === 0) process.exit(0);
+if (lines.length === 0) {
+    console.error(`\n[AI_CORRECTION_REQUIRED]: Empty commit message.\n`);
+    process.exit(1);
+}
 
 const errors = [];
 const subjectLine = lines[0].trim();
 
 // Regex to capture: Emoji (unicode or shortcode), CC Type, Scope (optional), Breaking (!), and Subject
-const commitRegex = /^((?:\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?|:[a-z0-9_+\-]+:)\s+([a-z]+)(?:\(([a-z0-9_\-,\s]+)\))?(!?):\s+(.+)$/u;
+const commitRegex = /^((?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D]+|:[a-z0-9_]+:))\s+([a-z]+)(?:\(([a-z0-9_\-,\s]+)\))?(!?):\s+(.+)$/u;
 const match = subjectLine.match(commitRegex);
 
 let ccType = '';
 if (!match) {
     errors.push(`Invalid Hybrid Syntax in subject line.\n   Expected: <emoji> <cc_type>(<scope>): <subject>\n   Received: ${subjectLine}`);
 } else {
-    const [ , emoji, parsedCcType, scope, breaking, subject ] = match;
+    const [ , rawEmoji, parsedCcType, scope, breaking, subject ] = match;
+    const emoji = rawEmoji.replace(/\uFE0F/g, '');
     ccType = parsedCcType;
 
     // Rule 1: Validate length
@@ -40,11 +55,12 @@ if (!match) {
     }
 
     // Rule 2: Validate the Emoji and CC Type against the SOP Matrix
-    const validEntry = matrix.find(item => item.emoji === emoji || item.code === emoji);
+    // Note: We also strip \uFE0F from the matrix emoji for a robust comparison
+    const validEntry = matrix.find(item => item.emoji.replace(/\uFE0F/g, '') === emoji || item.code === rawEmoji);
     if (!validEntry) {
-        errors.push(`The emoji '${emoji}' is not in the GitOps SOP.`);
+        errors.push(`The emoji '${rawEmoji}' is not in the GitOps SOP.`);
     } else if (validEntry.cc_type !== ccType) {
-        errors.push(`Emoji / Type mismatch! According to the SOP, '${emoji}' MUST be paired with type '${validEntry.cc_type}'. You used: '${emoji} ${ccType}'.`);
+        errors.push(`Emoji / Type mismatch! According to the SOP, '${rawEmoji}' MUST be paired with type '${validEntry.cc_type}'. You used: '${rawEmoji} ${ccType}'.`);
     }
 }
 
@@ -105,7 +121,7 @@ const includedChangesMatch = fullText.match(/^Included changes:\n((?:- .+\n?)+)/
 if (includedChangesMatch) {
     const changesLines = includedChangesMatch[1].trim().split('\n');
     changesLines.forEach(line => {
-        const itemMatch = line.match(/^- ((?:\p{Emoji_Presentation}|\p{Extended_Pictographic})\uFE0F?|:[a-z0-9_+\-]+:)\s+([a-z]+)(?:\(([a-z0-9_\-,\s]+)\))?(!?):\s+(.+)$/u);
+        const itemMatch = line.match(/^- ((?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D]+|:[a-z0-9_]+:))\s+([a-z]+)(?:\(([a-z0-9_\-,\s]+)\))?(!?):\s+(.+)$/u);
         if (!itemMatch) {
             errors.push(`Invalid 'Included changes' item format: '${line}'. Must match '- <emoji> <cc_type>(<scope>): <subject>'.`);
         }

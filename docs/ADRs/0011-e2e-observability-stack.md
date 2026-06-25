@@ -389,8 +389,8 @@ sequenceDiagram
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
 - **Cause**: The offline evaluation suite lacks deterministic validation gates before running expensive semantic GEval scoring, risking wasted execution on fundamentally broken formats.
-- **Change**: Implement a two-stage metric pipeline: `FormatMetric` (deterministic) runs unconditionally as Tier-1. The `CommitMessageQuality` (LLM semantic judge) runs as Tier-2 and is explicitly gated, only invoking when the Tier-1 format check passes.
-- **Effect**: Ensures Tier-1 deterministic format failures explicitly block Tier-2 semantic GEval execution, optimizing the evaluation pipeline while maintaining clear separation of concerns.
+- **Change**: Implement a concurrent evaluation pipeline where `FormatMetric` (deterministic) and `CommitMessageQuality` (LLM semantic judge) run side-by-side as atomic metrics.
+- **Effect**: Maximizes observability and dashboard completeness by ensuring partial metric data (e.g., perfect semantic quality but minor formatting issues) is always calculated and logged to Opik.
 
 ### Phase 6: Datasets and Test Suites (Opik Phase E)
 
@@ -813,6 +813,7 @@ Convert the local script into a modular `opik_metrics.py` system. Deterministic 
 - Deterministic checks (72-char limit, Gitmoji matrix) act as Tier 1.
 - GEval checks act as Tier 2.
 - Failure in Tier 1 aborts Tier 2 execution to save tokens.
+- We don't really care what Promptfoo returns beyond the raw payload; the Sentry hook and telemetry extraction will occur post-Promptfoo using the Opik SDK explicitly, rather than trying to stuff telemetry inside Promptfoo's custom assertions.
 
 ##### In scope
 
@@ -1123,6 +1124,7 @@ Sentry initialization must be centralized. We must use a `before_send` hook to m
 - Building a strict `before_send` scrubber for payload sanitation.
 - Targeting critical `try/except` boundaries with `sentry_sdk.new_scope()` for tag/context enrichment.
 - Adding manual lifecycle breadcrumbs.
+- Extract Promptfoo raw completion latencies and errors to ship separately to Sentry.
 
 ##### Out of scope
 
@@ -1297,8 +1299,11 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 - [ ] Centralize `sentry_sdk.init()` in `sentry_config.py`.
 - [ ] Explicitly configure `environment` and `release`.
+- [ ] Configure `traces_sample_rate=0.0` to disable duplicate Sentry tracing.
 - [ ] Build a strict `before_send` hook to scrub PII, raw git diffs, file paths, and prompt text.
 - [ ] Wrap critical `try/except` boundaries (prior to `_abort()`) with `sentry_sdk.capture_exception()`.
+- [ ] Add explicit `sentry_sdk.flush(timeout=2.0)` calls before terminal exits.
+- [ ] Add manual `sentry_sdk.add_breadcrumb()` calls to track state transitions.
 
 ### Phase 10: Documentation Refactoring
 

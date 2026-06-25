@@ -8,7 +8,7 @@ A highly detailed cyberpunk architectural schematic showing a two-tier AI code r
 
 # ADR-0012: Adopt CodeRabbit and Qodo for AI-Augmented Quality Gates
 
-```yaml
+---
 adr_number: "0012"
 title: "Adopt CodeRabbit and Qodo for AI-Augmented Quality Gates"
 status: "Proposed"
@@ -31,7 +31,7 @@ tags:
   ]
 supersedes: []
 superseded_by: []
-```
+---
 
 ## 📖 User Guide: AI Quality Gate Operations
 

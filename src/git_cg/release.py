@@ -136,16 +136,20 @@ def bump_version_string(version: str, bump_type: str, pre_release: str | None = 
 
         if pre_release:
             if bump_type == "MAJOR":
-                ver = ver.bump_major().replace(prerelease=f"{pre_release}.0")
+                ver = ver.bump_major().replace(prerelease=f"{pre_release}.1")
             elif bump_type == "MINOR":
-                ver = ver.bump_minor().replace(prerelease=f"{pre_release}.0")
+                ver = ver.bump_minor().replace(prerelease=f"{pre_release}.1")
             elif bump_type == "PATCH":
-                ver = ver.bump_patch().replace(prerelease=f"{pre_release}.0")
+                ver = ver.bump_patch().replace(prerelease=f"{pre_release}.1")
             elif bump_type == "PRERELEASE" or bump_type == "NONE":
-                if ver.prerelease and ver.prerelease.split(".")[0] == pre_release:
-                    ver = ver.bump_prerelease(token=pre_release)
+                if ver.prerelease:
+                    if ver.prerelease.split(".")[0] == pre_release:
+                        ver = ver.bump_prerelease(token=pre_release)
+                    else:
+                        ver = ver.replace(prerelease=f"{pre_release}.1")
                 else:
-                    ver = ver.replace(prerelease=f"{pre_release}.0")
+                    # SemVer Rule 9: transitioning from stable to prerelease requires bumping patch
+                    ver = ver.bump_patch().replace(prerelease=f"{pre_release}.1")
         else:
             if ver.prerelease and bump_type in ("NONE", "PRERELEASE", "PATCH"):
                 ver = ver.finalize_version()
@@ -255,6 +259,14 @@ def inject_file_versions(
                     count=1,
                     flags=re.IGNORECASE,
                 )
+            elif method == "python_variable":
+                # Matches: __version__ = "1.0.0" or __version__ = '1.0.0'
+                new_content = re.sub(
+                    r'(__version__\s*=\s*[\'"])(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)([\'"])',
+                    replacer,
+                    file_content,
+                    count=1,
+                )
 
             if modified and not dry_run:
                 with open(filepath, "w", encoding="utf-8") as f:
@@ -304,6 +316,30 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
     return changelog_groups
 
 
+def validate_release(new_tag: str) -> bool:
+    """Ensure the new tag does not already exist locally or remotely."""
+    try:
+        subprocess.check_call(["git", "fetch", "--tags"], stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        console.print(
+            "[yellow]Warning: Could not fetch tags from remote (offline?). Falling back to local uniqueness check.[/yellow]"
+        )
+
+    try:
+        existing_tags = (
+            subprocess.check_output(["git", "tag", "-l"], stderr=subprocess.DEVNULL).decode("utf-8").splitlines()
+        )
+        if new_tag in existing_tags:
+            console.print(
+                f"[bold red]Validation Error:[/bold red] Git tag '{new_tag}' already exists locally. Release aborted to prevent collision."
+            )
+            return False
+    except subprocess.CalledProcessError:
+        pass
+
+    return True
+
+
 def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None):
     """
     Prepare a release from the commits since the last Git tag.
@@ -349,6 +385,9 @@ def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None
 
     if new_tag == last_tag:
         console.print("[yellow]Calculated version is identical to the current tag. Aborting release.[/yellow]")
+        return
+
+    if not validate_release(new_tag):
         return
 
     console.print(f"[bold green]Next Version:[/bold green] {new_tag}")

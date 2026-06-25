@@ -58,12 +58,21 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
-- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
+- **Usage**: `git-cg release [-d] [-v] [--pre-release <IDENTIFIER>]`
 
 Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
 
 ### Flags
 
+#### `-d --dry-run`
+
+Run the release process without making any changes (no commits, tags, or file modifications).
+
+#### `-v --verbose`
+
+Enable verbose output during the release process.
+
 #### `--pre-release <IDENTIFIER>`
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
+

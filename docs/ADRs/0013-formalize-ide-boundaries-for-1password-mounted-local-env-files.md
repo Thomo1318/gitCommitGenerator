@@ -4,7 +4,7 @@ A high-fidelity, highly detailed cyberpunk technical infographic. At the top cen
 📋 Target Filename: adr-0013-ide-boundaries-for-1password-mounted-local-env-files.webp
 -->
 
-![Header Image](../assets/adr-0013-ide-boundaries-for-1password-mounted-local-env-files.jpeg)
+![Header Image](../assets/adr-0013-ide-boundaries-for-1password-mounted-local-env-files.webp)
 
 # ADR-0013: Formalize IDE Boundaries for 1Password-Mounted Local `.env` Files
 
@@ -428,7 +428,7 @@ Recommended configuration when the broader `activeProjects` workspace is open an
 
 ```json
 {
-  "python.envFile": "/Users/admin/dev/activeProjects/gitCommitGenerator/.vscode/python.env"
+  "python.envFile": "${workspaceFolder}/gitCommitGenerator/.vscode/python.env"
 }
 ```
 

@@ -48,6 +48,12 @@
           "method": "header_comment",
           "syntax": "<!-- version: v{SEMVER} -->",
           "rule": "Inject or replace at the top of the document."
+        },
+        "python_variable": {
+          "extensions": [".py"],
+          "method": "python_variable",
+          "syntax": "__version__ = \"{SEMVER}\"",
+          "rule": "Replace __version__ string assignment."
         }
       }
     }
