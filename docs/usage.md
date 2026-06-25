@@ -58,6 +58,12 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
-- **Usage**: `git-cg release`
+- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
 
-Calculate SemVer bump, inject versions into changed files, and generate Changelog.
+Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
+
+### Flags
+
+#### `--pre-release <IDENTIFIER>`
+
+Add or bump a pre-release identifier (e.g., 'alpha', 'rc')

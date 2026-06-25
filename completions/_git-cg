@@ -30,7 +30,11 @@ cmd commit help="Generate an AI commit message based on staged changes." {
     arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')" required=#false default=""
 }
 cmd sop help="Display the GitOps SOP matrices and workflows."
-cmd release help="Calculate SemVer bump, inject versions into changed files, and generate Changelog."
+cmd release help="Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog." {
+    flag --pre-release help="Add or bump a pre-release identifier (e.g., 'alpha', 'rc')" {
+        arg <IDENTIFIER>
+    }
+}
 __USAGE_EOF__
   local -a completions=()
   while IFS= read -r line; do

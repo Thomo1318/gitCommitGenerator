@@ -43,5 +43,9 @@ cmd "sop" {
 }
 
 cmd "release" {
-    help "Calculate SemVer bump, inject versions into changed files, and generate Changelog."
+    help "Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog."
+    flag "--pre-release" {
+        help "Add or bump a pre-release identifier (e.g., 'alpha', 'rc')"
+        arg "<IDENTIFIER>"
+    }
 }

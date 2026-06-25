@@ -1362,12 +1362,15 @@ def release(
         False, "--dry-run", "-d", help="Print changes without modifying files or executing git tags"
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    pre_release: str | None = typer.Option(
+        None, "--pre-release", help="Add or bump a pre-release identifier (e.g., 'alpha', 'rc')"
+    ),
 ) -> None:
-    """Calculate SemVer bump, inject versions into changed files, and generate Changelog."""
+    """Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog."""
     try:
         from git_cg.release import execute_release
 
-        execute_release(dry_run=dry_run, verbose=verbose)
+        execute_release(dry_run=dry_run, verbose=verbose, pre_release=pre_release)
     except ImportError as e:
         console.print(f"[bold red]Error loading release module:[/bold red] {e}")
         sys.exit(1)

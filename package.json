@@ -7,7 +7,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "validate": "node scripts/validate_commit.mjs",
-    "release": "node scripts/cut_release.mjs"
+    "release": "git-cg release"
   },
   "keywords": [
     "git",
