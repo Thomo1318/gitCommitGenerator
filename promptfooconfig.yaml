@@ -9,9 +9,17 @@ providers:
       apiBaseUrl: "http://localhost:8000/v1"
       apiKey: "dummy"
 
+redteam:
+  plugins:
+    - hijacking
+    - indirect-prompt-injection
+    - pii:direct
+
 tests:
   - vars:
       diff: "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old line\n+new line"
     assert:
       - type: "javascript"
-        value: "output.trim().length > 5"
+        value: "output.trim().length > 5 && output.trim().length <= 72"
+      - type: "javascript"
+        value: "/^[\\p{Emoji_Presentation}\\p{Extended_Pictographic}\\u200d\\uFE0F]+\\s[a-z_]+(\\([^)]+\\))?!?: .+$/u.test(output.trim())"

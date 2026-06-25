@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dotenv>=1.0.1",
     "rich>=14.3.4",
+    "semver>=3.0.4",
     "sentry-sdk>=2.61.0",
     "typer>=0.26.3",
 ]

@@ -9,7 +9,7 @@ import sys
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import click
 import sentry_sdk
@@ -83,7 +83,7 @@ class ReviewStateMutationResult(enum.StrEnum):
 
     ADDED = "added"
     DUPLICATE = "duplicate"
-    CONFLICTING_ISSUE_NUMBER = "conflicting_issue_number"
+    UPDATED = "updated"
 
 
 @dataclass
@@ -111,21 +111,22 @@ class ReviewState:
 
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
-        Append an issue reference to the review state, enforcing idempotency and conflict detection.
-
+        Add an issue reference to the review state.
+        
         Parameters:
-            issue_reference (IssueReference): The issue reference to add.
-
+            issue_reference (IssueReference): The issue reference to store.
+        
         Returns:
-            ReviewStateMutationResult: `ADDED` when the reference was appended,
-            `DUPLICATE` when an identical reference already exists,
-            `CONFLICTING_ISSUE_NUMBER` when the same issue number exists with a different reference.
+            ReviewStateMutationResult: `ADDED` if the reference was appended, `DUPLICATE` if an identical reference already exists, `UPDATED` if an existing reference for the same issue number was replaced.
         """
         existing_issue_reference = self.get_issue_reference_by_issue_number(issue_reference.issue_number)
         if existing_issue_reference is not None:
             if existing_issue_reference == issue_reference:
                 return ReviewStateMutationResult.DUPLICATE
-            return ReviewStateMutationResult.CONFLICTING_ISSUE_NUMBER
+
+            idx = self.issue_references.index(existing_issue_reference)
+            self.issue_references[idx] = issue_reference
+            return ReviewStateMutationResult.UPDATED
 
         self.issue_references.append(issue_reference)
         return ReviewStateMutationResult.ADDED
@@ -367,12 +368,12 @@ def get_ai_client(engine: str) -> instructor.Instructor:
 def build_generation_messages(
     system_prompt: str,
     diff_output: str,
-) -> list[dict[str, str]]:
+) -> list[Any]:
     """
     Construct the chat messages used to generate a commit message from a git diff.
-
+    
     Returns:
-        messages (list[dict[str, str]]): Ordered chat messages containing the system prompt followed by a user message with the diff in a fenced `diff` block.
+    	messages (list[Any]): Chat messages with the system prompt first and the diff wrapped in a fenced `diff` block as the user message.
     """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -393,21 +394,22 @@ def generate_commit_message(
 ) -> CommitPlan:
     """
     Generate a commit plan from a git diff.
-
-    Deterministic directives are applied to override specific fields in the result.
-
+    
+    Applies any recognised locked directives to the generated result.
+    
     Parameters:
         diff_output (str): The git diff to include in the request.
-        model_name (str): The name of the language model to use.
+        model_name (str): The language model to use.
         system_prompt (str): The system context and formatting instructions.
-        active_directives (dict[str, str] | None): Optional constraints such as `preferred_type` and `preferred_scope` that override generated values.
-        residual_guidance (str | None): Optional additional guidance context.
-
+        active_directives (dict[str, str] | None): Locked values such as `preferred_type` and `preferred_scope`.
+        residual_guidance (str | None): Free-text guidance to include with the request.
+    
     Returns:
-        CommitPlan: The structured commit plan.
-
+        CommitPlan: The generated commit plan.
+    
     Raises:
         openai.APIConnectionError: If the model cannot be reached after retrying.
+        RuntimeError: If no commit plan is produced after the maximum retries.
     """
     import time
 
@@ -438,18 +440,24 @@ def generate_commit_message(
             return commit_result
         except openai.APIConnectionError:
             if attempt == max_retries - 1:
-                raise
+                break
             console.print(
                 f"[yellow]Waiting for local AI server to load model weights (attempt {attempt + 1}/{max_retries})...[/yellow]"
             )
             time.sleep(10)
 
+    raise RuntimeError("Failed to generate commit message after maximum retries.")
+
 
 def detect_primary_language(diff_output: str) -> str | None:
     """
-    Detect the primary language of the diff based on file extensions.
-    Ignores non-code extensions (like .md, .txt) so that a single code file change
-    takes precedence over multiple documentation changes.
+    Determine the primary language represented in a diff.
+    
+    Parameters:
+    	diff_output (str): Unified diff text to inspect.
+    
+    Returns:
+    	str | None: The mapped language name for the most common code file extension, or the upper-cased extension when unmapped. Returns `None` if no file extensions are found.
     """
     pattern = re.compile(r"^diff --git a/.*\.([a-zA-Z0-9]+) b/.*$", re.MULTILINE)
     extensions = pattern.findall(diff_output)
@@ -691,16 +699,17 @@ def _interactive_review(
     commit_msg_file: str, review_state: ReviewState, *, verbose: bool, strict: bool, gui_editor: bool = False
 ) -> str:
     """
-    Display an interactive review UI for the generated commit and allow adding review metadata or editing before finalising.
-
+    Display an interactive review prompt for a generated commit message.
+    
     Parameters:
-        commit_msg_file (str): Path to the commit message file that will be updated if the message changes.
-        review_state (ReviewState): Current review state containing the generated CommitPlan and attached IssueReference(s).
-        verbose (bool): Enable additional informational messages when interactive UI is unavailable.
-        strict (bool): Passed through to the commit-message writer to control strict write/abort behaviour.
-
+    	commit_msg_file (str): Path to the commit message file to update after edits or metadata changes.
+    	review_state (ReviewState): Current review state for the generated commit and attached issue references.
+    	verbose (bool): Print extra status messages when interactive mode is unavailable or when actions update the review state.
+    	strict (bool): Control write behaviour when the commit message file is updated.
+    	gui_editor (bool): Use the graphical editor environment variables when opening the message for editing.
+    
     Returns:
-        action (str): The action chosen by the user (for example "Commit", "Edit", "Regenerate", "Cancel"). Metadata actions such as adding issue references or regeneration guidance are processed in-place and the loop continues until a terminating action is selected.
+    	str: The selected action, such as "Commit", "Edit", "Regenerate", or "Cancel".
     """
     emit_terminal_bell()
 
@@ -730,26 +739,10 @@ def _interactive_review(
                 continue
 
             mutation_result = review_state.add_issue_reference(issue_reference)
-            if mutation_result == ReviewStateMutationResult.ADDED:
+            if mutation_result in (ReviewStateMutationResult.ADDED, ReviewStateMutationResult.UPDATED):
                 _write_commit_message(commit_msg_file, review_state.render(), strict=strict, verbose=verbose)
             elif mutation_result == ReviewStateMutationResult.DUPLICATE:
                 console.print(f"[yellow]{issue_reference} is already attached to this review state.[/yellow]")
-            else:
-                existing_issue_reference = review_state.get_issue_reference_by_issue_number(
-                    issue_reference.issue_number
-                )
-                existing_issue_reference_text = (
-                    str(existing_issue_reference)
-                    if existing_issue_reference
-                    else f"issue #{issue_reference.issue_number}"
-                )
-                console.print(
-                    "[yellow]"
-                    f"{existing_issue_reference_text} is already attached to this review state. "
-                    "Changing the verb for an existing issue reference is deferred for this phase. "
-                    "Use Edit for manual changes."
-                    "[/yellow]"
-                )
             continue
 
         if action == "Add regenerate guidance":
@@ -880,22 +873,22 @@ def _run_commit_generation(
     gui_editor: bool = False,
 ) -> bool:
     """
-    Orchestrate the generation and optional review of a Conventional Commit message from staged changes, managing regeneration cycles and writing the final result.
-
+    Generate a commit message from staged changes and handle review, regeneration, and telemetry.
+    
     Parameters:
-        commit_msg_file (str): Path to the commit message file to write when not in dry-run mode.
-        commit_source (str | None): Origin of the commit message request; controls whether generation is skipped (e.g. 'commit' allows regeneration if `amend_regenerate` is true).
-        extra_args (list[str] | None): Additional CLI arguments; preserved for compatibility but not used.
-        engine (str): Engine key selecting the AI backend (must be a key in ENGINE_REGISTRY).
-        dry_run (bool): If true, skip writing `commit_msg_file` and perform generation with optional interactive preview only.
-        verbose (bool): Enable detailed console logging for diagnostic messages.
-        amend_regenerate (bool): If true, permit regeneration even when `commit_source` would normally skip generation.
-        strict (bool): If true, aborts use non-zero exit codes; otherwise aborts exit with code 0 to avoid blocking git hooks.
-        interactive (bool): If true and a TTY is available, present the interactive review interface for editing, issue reference addition, regeneration, or cancellation.
-        gui_editor (bool): If true, use GUI editor preferences; otherwise use command-line editor.
-
+    	commit_msg_file (str): Path to the commit message file.
+    	commit_source (str | None): Source of the commit request, used to decide whether generation is skipped.
+    	extra_args (list[str] | None): Additional CLI arguments kept for compatibility.
+    	engine (str): AI engine key to use.
+    	dry_run (bool): Preview the generated message without applying it.
+    	verbose (bool): Enable detailed console output.
+    	amend_regenerate (bool): Allow regeneration when the commit source would otherwise be skipped.
+    	strict (bool): Use non-zero exit codes when aborting.
+    	interactive (bool): Present the interactive review flow when a TTY is available.
+    	gui_editor (bool): Use the GUI editor preference for edit actions.
+    
     Returns:
-        bool: `True` when commit message generation and optional review completed successfully.
+    	bool: ``True`` when generation completes successfully.
     """
     if verbose:
         console.log("Starting git-cg...")
@@ -961,6 +954,17 @@ def _run_commit_generation(
         console.log(f"Using model: {model_name}")
 
     issue_references: list[IssueReference] = []
+    try:
+        branch_name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        # Match common branch patterns like feat/121-description or 121-description
+        match = re.search(r"(?:/|^)(\d+)-", branch_name)
+        if match:
+            issue_number = int(match.group(1))
+            issue_references.append(IssueReference(kind=IssueReferenceKind.REFS, issue_number=issue_number))
+            if verbose:
+                console.log(f"Auto-detected issue #{issue_number} from branch '{branch_name}'.")
+    except Exception:
+        pass
     regeneration_guidance: str | None = None
 
     try:
@@ -1071,8 +1075,9 @@ def _run_commit_generation(
         review_state = ReviewState(
             commit_plan=commit_plan,
             issue_references=list(issue_references),
-            regeneration_guidance=regeneration_guidance,
         )
+        if regeneration_guidance:
+            review_state.set_regeneration_guidance(regeneration_guidance)
         result_string = review_state.render()
         if verbose or dry_run:
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
@@ -1360,12 +1365,20 @@ def release(
         False, "--dry-run", "-d", help="Print changes without modifying files or executing git tags"
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    pre_release: str | None = typer.Option(
+        None, "--pre-release", help="Add or bump a pre-release identifier (e.g., 'alpha', 'rc')"
+    ),
 ) -> None:
-    """Calculate SemVer bump, inject versions into changed files, and generate Changelog."""
+    """
+    Run the release workflow.
+    
+    Parameters:
+    	pre_release (str | None): A pre-release identifier to add or bump, such as `alpha` or `rc`.
+    """
     try:
         from git_cg.release import execute_release
 
-        execute_release(dry_run=dry_run, verbose=verbose)
+        execute_release(dry_run=dry_run, verbose=verbose, pre_release=pre_release)
     except ImportError as e:
         console.print(f"[bold red]Error loading release module:[/bold red] {e}")
         sys.exit(1)

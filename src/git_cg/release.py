@@ -3,6 +3,7 @@ import re
 import subprocess
 from collections import defaultdict
 
+import semver
 from rich.console import Console
 from rich.panel import Panel
 
@@ -90,6 +91,16 @@ def parse_commit_impact(commit_string: str, gitmoji_matrix: list) -> str:
 
 
 def calculate_global_bump(commits: list[str], gitmoji_matrix: list) -> str:
+    """
+    Determine the highest SemVer bump required by the given commits.
+
+    Parameters:
+        commits (list[str]): Commit strings to evaluate.
+        gitmoji_matrix (list): Metadata used to interpret commit impact.
+
+    Returns:
+        str: "MAJOR", "MINOR", "PATCH", or "NONE", depending on the highest impact found.
+    """
     highest_bump = "NONE"
     for commit in commits:
         impact = parse_commit_impact(commit, gitmoji_matrix)
@@ -102,42 +113,78 @@ def calculate_global_bump(commits: list[str], gitmoji_matrix: list) -> str:
     return highest_bump
 
 
-def bump_version_string(version: str, bump_type: str) -> str:
-    # version can be v1.0.0 or 1.0.0
+def bump_version_string(version: str, bump_type: str, pre_release: str | None = None) -> str:
+    """
+    Update a semantic version string.
+
+    Parameters:
+        version (str): The version string to update.
+        bump_type (str): The version increment to apply.
+        pre_release (str | None): Pre-release identifier to apply or advance.
+
+    Returns:
+        str: The updated version string, or the original version if parsing or bumping fails.
+    """
     prefix = "v" if version.startswith("v") else ""
     v_str = version.lstrip("v")
     try:
-        major, minor, patch = map(int, v_str.split("."))
-        if bump_type == "MAJOR":
-            major += 1
-            minor = 0
-            patch = 0
-        elif bump_type == "MINOR":
-            minor += 1
-            patch = 0
-        elif bump_type == "PATCH":
-            patch += 1
-        return f"{prefix}{major}.{minor}.{patch}"
-    except Exception:
-        # If parsing fails, don't bump
+        ver = semver.VersionInfo.parse(v_str)
+
+        # Rule 4: If major is 0, a breaking change should bump minor instead
+        if ver.major == 0 and bump_type == "MAJOR":
+            bump_type = "MINOR"
+
+        if pre_release:
+            if bump_type == "MAJOR":
+                ver = ver.bump_major().replace(prerelease=f"{pre_release}.1")
+            elif bump_type == "MINOR":
+                ver = ver.bump_minor().replace(prerelease=f"{pre_release}.1")
+            elif bump_type == "PATCH":
+                ver = ver.bump_patch().replace(prerelease=f"{pre_release}.1")
+            elif bump_type == "PRERELEASE" or bump_type == "NONE":
+                if ver.prerelease:
+                    if ver.prerelease.split(".")[0] == pre_release:
+                        ver = ver.bump_prerelease(token=pre_release)
+                    else:
+                        ver = ver.replace(prerelease=f"{pre_release}.1")
+                else:
+                    # SemVer Rule 9: transitioning from stable to prerelease requires bumping patch
+                    ver = ver.bump_patch().replace(prerelease=f"{pre_release}.1")
+        else:
+            if ver.prerelease and bump_type in ("NONE", "PRERELEASE", "PATCH"):
+                ver = ver.finalize_version()
+            elif bump_type == "MAJOR":
+                ver = ver.bump_major()
+            elif bump_type == "MINOR":
+                ver = ver.bump_minor()
+            elif bump_type == "PATCH":
+                ver = ver.bump_patch()
+
+        return f"{prefix}{ver!s}"
+    except Exception as e:
+        console.print(
+            f"[yellow]Failed to parse or bump version '{version}' with semver: {e}. Returning unmodified.[/yellow]"
+        )
         return version
 
 
-def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_run: bool, verbose: bool):
+def inject_file_versions(
+    files: list[str], bump_type: str, sop_data: dict, dry_run: bool, verbose: bool, pre_release: str | None = None
+):
     """
-    Inject updated version strings into files according to configured version-injection strategies.
+    Inject bumped version strings into matching files.
 
-    Reads each given file and, when a matching strategy is found in `sop_data["specifications_and_standards"]["version_injection_matrix"]["strategies"]`, replaces the first version occurrence using the specified strategy and the provided `bump_type`. Modified files are written back unless `dry_run` is True.
+    Updates the first version string found in each file when its extension matches a configured injection strategy.
 
     Parameters:
-        files (list[str]): File paths to scan for injectable version strings.
-        bump_type (str): One of "MAJOR", "MINOR", "PATCH" or "NONE"; no action is taken when "NONE".
-        sop_data (dict): SOP configuration containing the version injection matrix under
-            `specifications_and_standards.version_injection_matrix.strategies`.
-        dry_run (bool): If True, perform detection and logging only; do not write changes to disk.
-        verbose (bool): If True, print detailed messages about injections and errors.
+        files (list[str]): File paths to scan.
+        bump_type (str): The SemVer bump to apply.
+        sop_data (dict): SOP configuration containing the version injection matrix.
+        dry_run (bool): When true, do not write changes to disk.
+        verbose (bool): When true, print injection details and file-level errors.
+        pre_release (str | None): Optional pre-release identifier to apply or advance.
     """
-    if bump_type == "NONE":
+    if bump_type == "NONE" and not pre_release:
         return
 
     strategies = (
@@ -168,9 +215,19 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
             modified = False
 
             def replacer(match, current_filepath=filepath):
+                """
+                Update a matched version string and report the change.
+
+                Parameters:
+                        match: The regex match object.
+                        current_filepath: The file currently being processed.
+
+                Returns:
+                        str: The replacement text for the matched version.
+                """
                 nonlocal modified
                 old_v = match.group(2)
-                new_v = bump_version_string(old_v, bump_type)
+                new_v = bump_version_string(old_v, bump_type, pre_release=pre_release)
                 if old_v != new_v:
                     modified = True
                     if verbose or dry_run:
@@ -202,6 +259,14 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
                     count=1,
                     flags=re.IGNORECASE,
                 )
+            elif method == "python_variable":
+                # Matches: __version__ = "1.0.0" or __version__ = '1.0.0'
+                new_content = re.sub(
+                    r'(__version__\s*=\s*[\'"])(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)([\'"])',
+                    replacer,
+                    file_content,
+                    count=1,
+                )
 
             if modified and not dry_run:
                 with open(filepath, "w", encoding="utf-8") as f:
@@ -213,16 +278,16 @@ def inject_file_versions(files: list[str], bump_type: str, sop_data: dict, dry_r
 
 def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
     """
-    Map commit entries to changelog groups based on explicit trailers or gitmoji metadata.
+    Group commit subjects into changelog sections.
 
-    Parses each raw commit string (expected to contain the subject and an optional body separated by '---COMMIT_BODY---') and assigns the commit subject to one or more changelog groups. If the commit body contains a `Changelog-Groups:` trailer, the listed comma-separated groups (trimmed) are used. Otherwise, the function falls back to legacy matching: it compares the commit subject against entries in `gitmoji_matrix` (matching either the `emoji` substring or the `:{code}:` token) and uses the entry's `changelog_group` value; if no entry matches, the subject is placed in the "Miscellaneous" group.
+    Uses the `Changelog-Groups:` trailer when present to place a commit subject in one or more sections. Otherwise, falls back to the first matching gitmoji changelog group, or `Miscellaneous` when no match is found.
 
     Parameters:
-        commits (list[str]): Raw commit strings where the subject is before `---COMMIT_BODY---` and the optional body after it.
-        gitmoji_matrix (list): List of mapping entries describing gitmoji metadata; each entry may contain `emoji`, `code`, and `changelog_group` keys used for legacy grouping.
+        commits (list[str]): Raw commit strings containing a subject and optional body.
+        gitmoji_matrix (list): Gitmoji metadata used to resolve legacy changelog groups.
 
     Returns:
-        dict[str, list[str]]: Mapping of changelog group name to a list of commit subjects assigned to that group.
+        dict[str, list[str]]: Changelog groups mapped to their commit subjects.
     """
     changelog_groups = defaultdict(list)
     for commit in commits:
@@ -251,15 +316,40 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
     return changelog_groups
 
 
-def execute_release(dry_run: bool, verbose: bool):
-    """
-    Prepare a release by analysing commits since the last Git tag, computing the required SemVer bump, optionally injecting the new version into files, and prepending a generated changelog section to CHANGELOG.md.
+def validate_release(new_tag: str) -> bool:
+    """Ensure the new tag does not already exist locally or remotely."""
+    try:
+        subprocess.check_call(["git", "fetch", "--tags"], stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        console.print(
+            "[yellow]Warning: Could not fetch tags from remote (offline?). Falling back to local uniqueness check.[/yellow]"
+        )
 
-    When dry_run is True, no files are written; when False, modified files may be updated and CHANGELOG.md will be prepended. This function does not create Git tags or perform commits.
+    try:
+        existing_tags = (
+            subprocess.check_output(["git", "tag", "-l"], stderr=subprocess.DEVNULL).decode("utf-8").splitlines()
+        )
+        if new_tag in existing_tags:
+            console.print(
+                f"[bold red]Validation Error:[/bold red] Git tag '{new_tag}' already exists locally. Release aborted to prevent collision."
+            )
+            return False
+    except subprocess.CalledProcessError:
+        pass
+
+    return True
+
+
+def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None):
+    """
+    Prepare a release from the commits since the last Git tag.
+
+    Determines the required SemVer bump, updates configured version fields, and prepends a generated changelog entry to CHANGELOG.md unless dry run mode is enabled. If no version change is needed, the release is skipped.
 
     Parameters:
-        dry_run (bool): If True, perform a simulation without writing files or updating CHANGELOG.md.
-        verbose (bool): If True, emit additional diagnostic output to the console.
+        dry_run (bool): Simulate the release without writing files.
+        verbose (bool): Emit additional progress output.
+        pre_release (str | None): Optional pre-release identifier to apply to the generated version.
     """
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
@@ -267,24 +357,47 @@ def execute_release(dry_run: bool, verbose: bool):
     last_tag = get_last_tag()
     commits = get_commits_since(last_tag)
 
-    if not commits:
-        console.print("[yellow]No commits found since last tag. Nothing to release.[/yellow]")
-        return
-
     if verbose:
         console.log(f"Found {len(commits)} commits since tag '{last_tag}'.")
 
     bump_type = calculate_global_bump(commits, gitmoji_matrix)
 
-    if bump_type == "NONE":
+    is_prerelease = False
+    try:
+        if last_tag:
+            is_prerelease = bool(semver.VersionInfo.parse(last_tag.lstrip("v")).prerelease)
+    except Exception:
+        pass
+
+    if bump_type == "NONE" and not pre_release and not is_prerelease:
         console.print("[yellow]No changes warrant a SemVer bump. Aborting release.[/yellow]")
         return
 
     console.print(f"[bold green]Calculated Release Impact:[/bold green] {bump_type}")
 
-    new_tag = bump_version_string(last_tag, bump_type) if last_tag else "v0.1.0"
-    if not last_tag and not new_tag.startswith("v"):
+    if not last_tag and pre_release:
+        try:
+            semver.VersionInfo.parse(f"0.1.0-{pre_release}.0")
+        except Exception:
+            console.print(
+                f"[bold red]Validation Error:[/bold red] Invalid pre-release identifier '{pre_release}'. Must comply with SemVer 2.0.0."
+            )
+            return
+
+    new_tag = (
+        bump_version_string(last_tag, bump_type, pre_release=pre_release)
+        if last_tag
+        else (f"v0.1.0-{pre_release}.0" if pre_release else "v0.1.0")
+    )
+    if not new_tag.startswith("v"):
         new_tag = "v" + new_tag
+
+    if new_tag == last_tag:
+        console.print("[yellow]Calculated version is identical to the current tag. Aborting release.[/yellow]")
+        return
+
+    if not validate_release(new_tag):
+        return
 
     console.print(f"[bold green]Next Version:[/bold green] {new_tag}")
 
@@ -293,7 +406,7 @@ def execute_release(dry_run: bool, verbose: bool):
     if verbose:
         console.log(f"Scanning {len(modified_files)} modified files for version headers...")
 
-    inject_file_versions(modified_files, bump_type, sop_data, dry_run, verbose)
+    inject_file_versions(modified_files, bump_type, sop_data, dry_run, verbose, pre_release=pre_release)
 
     # Generate Changelog
 

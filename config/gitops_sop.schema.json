@@ -75,7 +75,7 @@
                     },
                     "method": {
                       "type": "string",
-                      "enum": ["root_key", "header_comment"]
+                      "enum": ["root_key", "header_comment", "python_variable"]
                     },
                     "syntax": { "type": "string" },
                     "rule": { "type": "string" }

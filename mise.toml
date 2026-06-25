@@ -42,7 +42,7 @@ python = "3.14"                       # Python runtime (https://python.org)
 usage = "latest"                      # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
 uv = "latest"                         # Fast Python package and environment manager (https://uv.astral.sh)
 rtk = "latest"                        # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
-node = "latest"                       # JS runtime for validation and release scripts (https://nodejs.org)
+node = "latest"                       # JS runtime for validation hook (https://nodejs.org)
 #"npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
 just = "latest"                       # Task runner for project automation (https://just.systems)
 betterleaks = "latest"                # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
@@ -72,3 +72,14 @@ run = "uv run zensical serve -a localhost:8082"
 [tasks."setup:brew"]
 description = "Install system-level dependencies required by the project"
 run = "brew bundle --file=Brewfile"
+
+[tasks."eval:promptfoo"]
+description = "Evaluate and red-team GitOps commit generation, then sync to Opik"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+npx promptfoo eval -o promptfoo_results.json
+npx promptfoo redteam run -o promptfoo_redteam_results.json
+uv run python scripts/sync_promptfoo_to_opik.py promptfoo_results.json
+uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
+"""

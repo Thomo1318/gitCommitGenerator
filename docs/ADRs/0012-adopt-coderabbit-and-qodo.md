@@ -4,7 +4,7 @@ A highly detailed cyberpunk architectural schematic showing a two-tier AI code r
 📋 Target Filename: adr-0012-coderabbit-and-qodo.webp
 -->
 
-![Header Image](../assets/adr-0012-coderabbit-and-qodo.webp)
+![Header Image](../assets/adr-0012-coderabbit-and-qodo.jpeg)
 
 # ADR-0012: Adopt CodeRabbit and Qodo for AI-Augmented Quality Gates
 
@@ -27,7 +27,7 @@ tags:
     "qodo",
     "testing",
     "quality-gates",
-    "pull-requests"
+    "pull-requests",
   ]
 supersedes: []
 superseded_by: []
@@ -38,8 +38,8 @@ superseded_by: []
 > [!IMPORTANT]
 > **Two-Tier AI Governance:** This project utilizes an interconnected, two-tier AI quality assurance process.
 >
-> 1. **Qodo (Local / Shift-Left)**: Used natively within the IDE (VS Code / JetBrains). Focuses on *generative* assistance—producing exhaustive edge-case tests, refactoring suggestions, and local semantic context *before* a commit is even created.
-> 2. **CodeRabbit (CI/CD / Shift-Right)**: Operates entirely within the GitHub Pull Request lifecycle. Focuses on *evaluative* assistance—detecting logical bugs, security vulnerabilities, and architectural drift across the full scope of a PR before merge.
+> 1. **Qodo (Local / Shift-Left)**: Used natively within the IDE (VS Code / JetBrains). Focuses on _generative_ assistance—producing exhaustive edge-case tests, refactoring suggestions, and local semantic context _before_ a commit is even created.
+> 2. **CodeRabbit (CI/CD / Shift-Right)**: Operates entirely within the GitHub Pull Request lifecycle. Focuses on _evaluative_ assistance—detecting logical bugs, security vulnerabilities, and architectural drift across the full scope of a PR before merge.
 >
 > **Do NOT rely solely on one tier.** They are complementary. Qodo prevents bugs from leaving your machine; CodeRabbit prevents bugs from entering the main branch.
 
@@ -59,13 +59,13 @@ The goal is to deeply augment our development lifecycle with specialized AI tool
 
 - **Source Code Privacy**: CodeRabbit will only be authorized for specific repositories. We must rely on CodeRabbit's SOC2 compliance and zero-retention policies for parsed code.
 - **Local Overhead**: Qodo IDE plugins must not introduce severe latency or memory bloat to the developer's local environment.
-- **Non-Blocking CI**: CodeRabbit reviews must execute asynchronously. While CodeRabbit provides actionable feedback, it must *not* act as a hard CI blocker (i.e., failing the build automatically) unless explicitly configured for severe security vulnerabilities. Human oversight retains final merge authority.
+- **Non-Blocking CI**: CodeRabbit reviews must execute asynchronously. While CodeRabbit provides actionable feedback, it must _not_ act as a hard CI blocker (i.e., failing the build automatically) unless explicitly configured for severe security vulnerabilities. Human oversight retains final merge authority.
 
 ## 3. Context and Scope
 
-Our evaluation of AI-augmented development tools highlighted a clear dichotomy in the market: tools that excel at *generative* tasks within the IDE (like GitHub Copilot and Qodo) and tools that excel at *evaluative* and *contextual* tasks at the repository level (like CodeRabbit and Qodo Merge).
+Our evaluation of AI-augmented development tools highlighted a clear dichotomy in the market: tools that excel at _generative_ tasks within the IDE (like GitHub Copilot and Qodo) and tools that excel at _evaluative_ and _contextual_ tasks at the repository level (like CodeRabbit and Qodo Merge).
 
-We recognized that relying solely on a generic LLM chat interface requires immense prompting overhead from the developer. We needed purpose-built platforms. 
+We recognized that relying solely on a generic LLM chat interface requires immense prompting overhead from the developer. We needed purpose-built platforms.
 
 - **Qodo** provides a highly structured approach to test-driven development. It parses local files and intelligently proposes boundary tests and behavioral coverage that developers often miss.
 - **CodeRabbit** natively understands the GitHub PR lifecycle. It provides line-by-line comments, generates comprehensive PR summaries (alleviating the burden of writing manual release notes), and traces data flow across multiple files in a diff, identifying issues that static analysis tools miss.
@@ -91,7 +91,7 @@ flowchart TD
         IDE["Developer IDE<br/><sub>(VS Code)</sub>"]
         QODO["Qodo Extension<br/><sub>(Test Generation & Logic)</sub>"]
         GIT["Local Git<br/><sub>(git commit)</sub>"]
-        
+
         IDE <--> QODO
         QODO -. "Validates Code" .-> IDE
         IDE --> GIT
@@ -101,7 +101,7 @@ flowchart TD
         PR["Pull Request Created"]
         ACTIONS["GitHub Actions<br/><sub>(Standard CI)</sub>"]
         CR["CodeRabbit App<br/><sub>(AI PR Reviewer)</sub>"]
-        
+
         GIT -- "git push" --> PR
         PR --> ACTIONS
         PR --> CR
@@ -117,7 +117,7 @@ flowchart TD
         DevCode["Source Code edits"]
         QodoGen["Qodo IDE Extension"]
         Tests["Test Suite"]
-        
+
         DevCode --> QodoGen
         QodoGen -- "Generates Edge Cases" --> Tests
         Tests -- "Local Verification" --> DevCode
@@ -154,7 +154,7 @@ sequenceDiagram
     participant Qodo as Qodo (Local)
     participant Git as GitHub
     participant CR as CodeRabbit
-    
+
     Dev->>Qodo: Request test generation for new function
     Qodo-->>Dev: Suggests boundary & negative tests
     Note over Dev,Qodo: Developer accepts and runs tests locally
@@ -172,7 +172,7 @@ sequenceDiagram
 ### Network & Security
 
 - **CodeRabbit Access**: CodeRabbit requires access to the GitHub repository via an installed GitHub App. It operates strictly on a webhook basis, analyzing diffs and contextual files.
-- **Data Retention**: We rely on standard Enterprise terms for zero-day retention of parsed source code by the LLM providers powering CodeRabbit and Qodo. 
+- **Data Retention**: We rely on standard Enterprise terms for zero-day retention of parsed source code by the LLM providers powering CodeRabbit and Qodo.
 
 ### Development Workflow
 
@@ -239,7 +239,7 @@ sequenceDiagram
 
 ## 14. Implementation Findings
 
-*(To be populated as integration is completed)*
+_(To be populated as integration is completed)_
 
 ## 15. Governance Follow-up
 

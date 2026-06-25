@@ -179,6 +179,7 @@ flowchart LR
 - **Multi-Intent Split Detection**: Detects unrelated changes in a single diff, generates structured `Included changes:` bodies, and enforces mixed-commit policies (`strict`, `warn`, `split_prompt`).
 - **Two-Point Telemetry & Tracing**: Natively integrates with the Opik Ecosystem. Logs generation heuristics, catches human editor modifications via `commit-msg` hooks, and compiles interaction datasets for model fine-tuning.
 - **Machine-Readable Trailers**: Automatically appends `SemVer-Impact` and `Change-Types` trailers so release automation never relies on brittle regex.
+- **Native Git Hook Validation**: The semantic standard and required trailing metadata are natively enforced via a strict `commit-msg` git hook (`validateCommitHook.mjs`) driven by `hk`. This rejects invalid commits (both from humans and AI) with a detailed `[AI_CORRECTION_REQUIRED]` breakdown to facilitate automatic self-healing.
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
 - **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, `Print plain text`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
@@ -286,14 +287,13 @@ Structured issue references render above machine-readable trailers. Example:
 Explain the why and how.
 
 Included changes:
-
 - 📝 docs(readme): document review flow
 
-Resolves #80
-Refs #81
+Resolves: #80
+Refs: #81
 SemVer-Impact: PATCH
 Change-Types: fix, docs
-Changelog-Groups: Bug Fixes, Documentation
+Changelog-Groups: Fixed, Miscellaneous
 ```
 
 If no terminal device is available, the tool degrades cleanly and completes without trying to open the TUI.
@@ -319,6 +319,8 @@ git-cg --help
 All messages generated or validated by this engine follow the format:
 `<emoji> <cc_type>(<scope>): <subject>`
 
+*Note: This standard is immutably enforced by a native `commit-msg` git hook (`validateCommitHook.mjs`) which uses strict regex, trailer validation, and SOP alignment to reject any non-compliant commit message with a detailed `[AI_CORRECTION_REQUIRED]` prompt designed to steer agents into auto-correcting their format.*
+
 **Example Output:**
 
 ```markdown
@@ -327,12 +329,11 @@ All messages generated or validated by this engine follow the format:
 Introduce a portable SOP loader with a resolution precedence chain for explicit environment overrides.
 
 Included changes:
-
 - ♻️ refactor(sop): add centralized portable SOP loader
 - 🦺 fix(cli): add strict mode for CI while keeping hooks fail-soft
 - 📦 build(package): ship SOP data in the wheel
 
-Refs #80
+Refs: #80
 SemVer-Impact: PATCH
 Change-Types: refactor, fix, build
 Changelog-Groups: Changed, Fixed, Miscellaneous

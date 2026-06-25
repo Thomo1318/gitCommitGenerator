@@ -47,6 +47,9 @@ flowchart TD
     %% @opik_datasets_phase6 [ai-task, closed, 2026-06-18, ai]
     opik_datasets_phase6("Opik Datasets Phase 6<br/><sub>Migrated evaluation pipeline to<br/>use Opik Cloud datasets instead of<br/>local JSONL files. Implemented triage<br/>and compilation scripts.</sub>")
 
+    %% @promptfoo_phase7_8 [ai-task, closed, 2026-06-18, ai]
+    promptfoo_phase7_8("Promptfoo Security & Eval<br/><sub>Implemented promptfoo eval with JS assertions<br/>for message length and hybrid syntax regex.<br/>Configured red-teaming plugins and<br/>sync script to ingest traces into Opik.</sub>")
+
     %% === FUTURE WORK ===
     %% @second_agent_review [ai-task, opened, 2026-06-06, ai]
     second_agent_review("Second Agent Review<br/><sub>Trigger another comprehensive<br/>agentic review to check the codebase<br/>for architecture gaps, portability,<br/>and finalize public readiness</sub>")
@@ -59,6 +62,9 @@ flowchart TD
 
     %% @package_publishing [ai-task, opened, 2026-06-13, ai]
     package_publishing("Package Publishing<br/><sub>Configure GitHub Actions to<br/>automatically publish the hatchling<br/>package to PyPI and Homebrew<br/>upon release tagging</sub>")
+
+    %% @sentry_phase9 [ai-task, opened, 2026-06-18, ai]
+    sentry_phase9("Sentry Observability Phase 9<br/><sub>Centralize Sentry init, implement<br/>before_send PII scrubber, and target<br/>exception-swallowing boundaries.</sub>")
 
     %% === CONNECTIONS ===
     project_start --> core_engine
@@ -78,15 +84,18 @@ flowchart TD
     release_v0_1_0 --> docs_overhaul
     release_v0_1_0 --> package_publishing
     release_v0_1_0 --> opik_datasets_phase6
+    opik_datasets_phase6 --> promptfoo_phase7_8
+    promptfoo_phase7_8 --> sentry_phase9
 
     second_agent_review -.-> ultimate_goal
     config_system -.-> ultimate_goal
     docs_overhaul -.-> ultimate_goal
     package_publishing -.-> ultimate_goal
+    sentry_phase9 -.-> ultimate_goal
 
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        opik_datasets_phase6
+        promptfoo_phase7_8
     end
 
     %% === STYLES ===
@@ -103,9 +112,10 @@ flowchart TD
     style guided_regeneration fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style tui_enhancements fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style release_v0_1_0 fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style opik_datasets_phase6 fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
 
     %% Recent node (highlighted purple)
-    style opik_datasets_phase6 fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style promptfoo_phase7_8 fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Recent subgraph (dashed border)
     style recent fill:transparent,stroke:#c084fc,color:#c084fc,stroke-width:2px,stroke-dasharray:5 5
@@ -116,3 +126,4 @@ flowchart TD
     style config_system fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
     style docs_overhaul fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
     style package_publishing fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px
+    style sentry_phase9 fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px

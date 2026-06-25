@@ -1,0 +1,15 @@
+{
+  "results": {
+    "results": [
+      {
+        "provider": { "id": "test" },
+        "prompt": { "raw": "test prompt" },
+        "vars": { "diff": "diff" },
+        "response": { "output": "output" },
+        "success": true,
+        "score": 1,
+        "latencyMs": 1500
+      }
+    ]
+  }
+}
