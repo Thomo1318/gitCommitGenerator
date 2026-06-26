@@ -75,6 +75,8 @@ By centralizing these rules in `config/gitops_agent_sop.json`, we ensure that bo
 
 ## 🏗 System Stack
 
+![Automating Hybrid Git Commit Workflows](docs/assets/Automating%20Hybrid%20Git%20Commit%20Workflows.png)
+
 The engine operates on a modernized, extremely robust toolchain managed seamlessly by [mise](https://mise.jdx.dev) and [just](https://just.systems):
 
 - **Logic Engine**: Python 3.14 (managed via [uv](https://docs.astral.sh/uv/)), leveraging [instructor](https://python.useinstructor.com/) and [pydantic](https://docs.pydantic.dev/).
@@ -447,7 +449,7 @@ We welcome community contributions! Please review the open issues on our [GitHub
 
 ## 🧑‍💻 Development
 
-Instructions for setting up the local development environment will be added soon.
+For detailed instructions on setting up your local environment, running tests, and understanding the GitOps lifecycle, please see our dedicated [Development Guide](DEVELOPMENT.md).
 
 ---
 
