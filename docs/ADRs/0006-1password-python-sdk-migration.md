@@ -5,10 +5,10 @@
 >
 > PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO battery icons, NO X buttons, NO device frames or bounding boxes. Wide aspect ratio, designed for document embedding.
 
-📋 Target Filename: adr-0006-1password-python-sdk-migration.webp
+📋 Target Filename: adr-0006-1password-python-sdk-migration.png
 -->
 
-![1Password Python SDK Migration](../assets/adr-0006-1password-python-sdk-migration.webp)
+![1Password Python SDK Migration](../assets/adr-0006-1password-python-sdk-migration.png)
 
 # ADR-0006: 1Password Python SDK Migration
 
@@ -16,7 +16,7 @@
 adr_number: "0006"
 title: "1Password Python SDK Migration"
 status: "Implemented"
-version: "v1.0.0"
+version: "v1.0.1"
 date: "2026-06-08"
 created: "2026-06-08T16:55:00"
 modified: "2026-06-08T16:55:00"
@@ -106,14 +106,7 @@ sequenceDiagram
 - **State Isolation**: The Python script is now decoupled from the system `op` CLI context, ensuring standard desktop flows are unaffected.
 - **Error Safety**: The SDK failure cases (e.g., lack of token or network issues) gracefully fall back to missing values without crashing the tool, mimicking `os.environ.get()` behavior.
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
-- **Why this visual aid was chosen**: Clearly demonstrates the SDK resolving directly to 1Password cloud without intercepting or utilizing the system `op` binaries.
-
-## 9. Impact Radius (Cause, Change, Effect)
+## 8. Impact Radius (Cause, Change, Effect)
 
 ### 1. `scripts/with_1p_env.sh`
 
@@ -127,7 +120,7 @@ sequenceDiagram
 - **Change**: New module created to wrap SDK client logic.
 - **Effect**: Secrets are safely retrieved without polluting `os.environ`.
 
-## 10. Consequences
+## 9. Consequences
 
 - **Pros**:
   - Solves the `403 Forbidden` issues natively by preserving `op` CLI behavior for sub-processes.
@@ -136,7 +129,7 @@ sequenceDiagram
 - **Cons**:
   - Introduces a new pip dependency (`onepassword-sdk`).
 
-## 11. Verification Plan
+## 10. Verification Plan
 
 ### Automated Verification
 
@@ -147,20 +140,31 @@ sequenceDiagram
 - Run `git commit` via `git-cg`. Confirm successful extraction of secrets from the specified 1Password Environment UUID.
 - Verify `gh` commands executed via the system (if any) succeed normally.
 
-## 12. Review / Revisit Criteria
+## 11. Review / Revisit Criteria
 
 Revisit if 1Password introduces a more stable way to inject environments into isolated child processes via standard configurations without bleeding context globally.
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 1. Remove `onepassword-sdk` from `pyproject.toml`.
 2. Delete `src/git_cg/secrets.py`.
 3. Restore `with_1p_env.sh` and revert `main.py` back to standard `os.environ.get()` calls.
 
-## 14. Governance Follow-up
+## 13. Governance Follow-up
 
 - **Antigravity rule assessment**: The `1Password SDK` is now the canonical method for extracting secrets in Python tools within this ecosystem.
 
 ## CHANGELOG
 
+
+
 - v1.0.0 (2026-06-08T16:55:00): Initial Draft created.
+- v1.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
+- **Why this visual aid was chosen**: Clearly demonstrates the SDK resolving directly to 1Password cloud without intercepting or utilizing the system `op` binaries.
+-->

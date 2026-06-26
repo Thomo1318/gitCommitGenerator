@@ -5,15 +5,13 @@ A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glo
 
 📋 Target Filename: adr-0007-gum-terminal-native-tui.jpeg
 -->
-<div align="center">
-<img src="../assets/adr-0007-gum-terminal-native-tui.jpeg" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
-</div>
+![Header Image](../assets/adr-0007-gum-terminal-native-tui.png)
 
 ```yaml
 adr_number: "0007"
 title: "Integrate Gum for Terminal-Native Git Hook TUI"
 status: "Proposed"
-version: "v1.4.0"
+version: "v1.4.1"
 date: "2026-06-09"
 created: "2026-06-09 10:00:00"
 modified: "2026-06-11 14:30:00"
@@ -129,15 +127,7 @@ sequenceDiagram
 - **Portability**: Unlike `alerter`, which relies on proprietary macOS `UNUserNotificationCenter` APIs, `gum` is cross-platform. If `git-cg` is ever ported to Linux, the TUI will function identically without code changes.
 - **Safe Degradation**: The explicit `/dev/tty` check ensures that GUI Git users are never frozen by an invisible terminal prompt awaiting input.
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Primary data shape or explanatory need**: System topology for execution routing and a timeline of the user interaction loop.
-- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
-- **Why this visual aid was chosen**: The flowchart clearly delineates the critical fork in execution logic (TTY vs No TTY). The sequence diagram illustrates how control is passed between Python, the external `gum` binary, and the user's terminal to circumvent standard Git hook limitations.
-
-## 9. Impact Radius (Cause, Change, Effect)
+## 8. Impact Radius (Cause, Change, Effect)
 
 | Component | Change | Effect |
 | :--- | :--- | :--- |
@@ -146,7 +136,7 @@ sequenceDiagram
 | `mise.toml` | Added `gum = "latest"` | Guarantees the binary is present in the environment before the hook fires. |
 | Developer Workflow | Shifts from Mouse to Keyboard | Faster context-switching; terminal never loses focus when opening `$EDITOR`. |
 
-## 10. Consequences
+## 9. Consequences
 
 ### Positive
 
@@ -158,33 +148,33 @@ sequenceDiagram
 
 - **Missed Notifications**: If the developer walks away from their desk and misses the audio/visual terminal bell, there is no persistent desktop notification waiting for them (though the terminal will safely wait indefinitely for their input).
 
-## 11. Verification Plan
+## 10. Verification Plan
 
 - [x] **Terminal Test**: Execute `git commit` from a standard terminal (Ghostty/iTerm). Verify the bell sounds, `gum` renders correctly, and arrow keys function.
 - [x] **Editor Test**: Select "Edit" in `gum` and verify `$EDITOR` opens seamlessly on `/dev/tty`.
 - [x] **GUI Client Test**: Execute a commit from VS Code's source control panel. Verify `git-cg` exits silently and the generated message populates the VS Code input box without hanging.
 - [x] **DND Test**: Turn on macOS "Do Not Disturb" and ensure the commit process still executes and prompts via `gum` without issues.
 
-## 12. Review / Revisit Criteria
+## 11. Review / Revisit Criteria
 
 Revisit this architectural decision if a native Python library (such as `Textual` or `rich.prompt`) is determined to be lighter weight or more performant than executing the external `gum` binary, or if `gum` introduces breaking changes to its subprocess output formatting.
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 1. Remove `gum` from `mise.toml`.
 2. Revert `src/git_cg/main.py` to either silently accept the commit without a prompt, or utilize a basic Python `input()` (routed through `/dev/tty`) as a primitive fallback.
 3. Do not roll back to `alerter` due to the proven system deadlock risks.
 
-## 14. Implementation Findings
+## 13. Implementation Findings
 
 _(To be populated post-implementation)_
 
-## 15. Governance Follow-up
+## 14. Governance Follow-up
 
 - Update `usage.kdl` or internal project documentation to reflect the new dependency on `gum`.
 - Ensure `hk.pkl` logic correctly scopes terminal execution requirements.
 
-## 16. Links & References
+## 15. Links & References
 
 - [Charmbracelet Gum Documentation](https://github.com/charmbracelet/gum)
 - [Git Hooks and /dev/tty Constraints](https://git-scm.com/docs/githooks)
@@ -1019,8 +1009,20 @@ That is the correct architectural next step for controlled human steering of AI-
 
 ## CHANGELOG
 
+
+
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
 - v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behavior.
 - v1.1.1 (2026-06-09 11:45:00): Incorporated refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
 - v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.\n- v1.3.0 (2026-06-11 10:15:00): Added Refinement 3 expanding the gum review flow to support multiple structured issue references with insertion-order-preserving rendering, idempotent duplicate handling, and conservative rejection of conflicting same-number verb changes while deferring remove/replace UX.
 - v1.4.0 (2026-06-11 14:30:00): Added Refinement 4 formalizing a guided regeneration feedback loop with explicit user-authored steering text stored as review metadata, visible in TUI state, applied only to regeneration requests, and documented with updated refinement-specific diagrams reflecting the new state-aware interaction model.
+- v1.4.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Primary data shape or explanatory need**: System topology for execution routing and a timeline of the user interaction loop.
+- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
+- **Why this visual aid was chosen**: The flowchart clearly delineates the critical fork in execution logic (TTY vs No TTY). The sequence diagram illustrates how control is passed between Python, the external `gum` binary, and the user's terminal to circumvent standard Git hook limitations.
+-->

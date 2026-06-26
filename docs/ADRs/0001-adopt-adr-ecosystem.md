@@ -3,9 +3,7 @@ A hyper-detailed, photorealistic cyberpunk macro-photography shot of a massive f
 
 📋 Target Filename: adr-0001-adopt-adr-ecosystem.jpeg
 -->
-<div align="center">
-<img src="../assets/adr-0001-adopt-adr-ecosystem.jpeg" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
-</div>
+![Header Image](../assets/adr-0001-adopt-adr-ecosystem.jpeg)
 
 # ADR-0001: Adopt the MacSetup ADR Ecosystem
 
@@ -27,11 +25,12 @@ superseded_by: []
 
 ## 1. Introduction and Goals
 
-This Architectural Decision Record (ADR) formalizes the decision to adopt the ADR tracking ecosystem from the `MacSetup` project to govern the `gitCommitGenerator` project's architecture and decisions. 
+This Architectural Decision Record (ADR) formalizes the decision to adopt the ADR tracking ecosystem from the `MacSetup` project to govern the `gitCommitGenerator` project's architecture and decisions.
 
-As the project scales and more tooling, integrations, and architectural patterns are established, there is a clear need for a disciplined, reviewable history of why technical choices were made. 
+As the project scales and more tooling, integrations, and architectural patterns are established, there is a clear need for a disciplined, reviewable history of why technical choices were made.
 
 ### Core Goals
+
 - Establish a formal, reviewable methodology for capturing architectural decisions.
 - Maintain consistency across projects by adopting the existing, proven `MacSetup` ADR ecosystem.
 - Implement an append-only lifecycle pattern for ADRs where subsequent changes are captured as new sections rather than overwriting historical context.
@@ -55,6 +54,7 @@ The project needs a standard way of recording major architectural changes, such 
 ## 4. Solution Strategy
 
 We will adopt the full `MacSetup` ADR ecosystem.
+
 - The templates, scripts, and governance files are copied to `config/ADR` and `.gitignore`d.
 - Generated ADRs will reside in `docs/ADRs/` and will be committed to the repository.
 - Decisions will follow the append-only modification model established in `MacSetup` ADR 0062.
@@ -63,11 +63,11 @@ We will adopt the full `MacSetup` ADR ecosystem.
 
 ## 5. Consequences
 
-- **Pros**: 
+- **Pros**:
   - Standardized decision logging.
   - Highly detailed historical context.
   - Consistent presentation through high-fidelity header images.
-- **Cons**: 
+- **Cons**:
   - Slight overhead when making new architectural decisions.
 
 ---

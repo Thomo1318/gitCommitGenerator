@@ -1,18 +1,18 @@
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 A highly detailed cyberpunk architectural schematic showing a two-tier AI code review system. On the left, a developer's local IDE (represented by glowing neon blue code blocks) integrates with Qodo for real-time test generation. Data flows via a central hub to the right side, representing a GitHub Pull Request environment (neon purple and orange) where the CodeRabbit AI agent is performing deep semantic reviews, analyzing a network of code dependencies. Glowing digital nodes, wireframes, and data packets flowing through separate channels. Dark void background. Pure technical graphic, no UI elements, wide aspect ratio. Designed for high-fidelity technical documentation.
 
-📋 Target Filename: adr-0012-coderabbit-and-qodo.webp
+📋 Target Filename: adr-0012-coderabbit-and-qodo.png
 -->
 
-![Header Image](../assets/adr-0012-coderabbit-and-qodo.jpeg)
+![Header Image](../assets/adr-0012-coderabbit-and-qodo.png)
 
 # ADR-0012: Adopt CodeRabbit and Qodo for AI-Augmented Quality Gates
 
----
+```yaml
 adr_number: "0012"
 title: "Adopt CodeRabbit and Qodo for AI-Augmented Quality Gates"
 status: "Proposed"
-version: "v1.0.0"
+version: "v1.0.1"
 date: "2026-06-18"
 created: "2026-06-18 10:00:00"
 modified: "2026-06-18 10:00:00"
@@ -31,7 +31,7 @@ tags:
   ]
 supersedes: []
 superseded_by: []
----
+```
 
 ## 📖 User Guide: AI Quality Gate Operations
 
@@ -178,22 +178,7 @@ sequenceDiagram
 
 - **Configurability**: CodeRabbit's behavior is dictated by a `.coderabbit.yaml` file in the repository root. This allows us to tune the chattiness, disable certain review categories (like nitpicks), and set custom system instructions.
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Primary data shape or explanatory need**: Understanding the separation of concerns between local test generation (Qodo) and remote PR review (CodeRabbit).
-- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
-- **Why this visual aid was chosen**: It explicitly maps out the "Shift-Left" and "Shift-Right" paradigms, proving that the tools do not overlap or conflict.
-- **Alternative aids considered**: A bulleted list would fail to show the temporal sequence of the developer journey from local IDE to GitHub PR.
-
-### Supporting Visuals and Generated Artifacts
-
-- **Reference source**: `visualAidQuickReference.md`
-- **Chosen method**: Mermaid
-- **Generated artifact path(s)**: Embedded above in Sections 5 and 6. Target header image: `../assets/adr-0012-coderabbit-and-qodo.webp`
-
-## 9. Impact Radius (Cause, Change, Effect)
+## 8. Impact Radius (Cause, Change, Effect)
 
 ### Phase 1: Local Test Generation (Qodo)
 
@@ -207,7 +192,7 @@ sequenceDiagram
 - **Change**: Installation of CodeRabbit GitHub App.
 - **Effect**: Every PR receives an instantaneous, comprehensive review, complete with sequence diagrams and architectural summaries, significantly accelerating the merge lifecycle.
 
-## 10. Consequences
+## 9. Consequences
 
 - **Pros**:
   - Eliminates "rubber-stamp" code reviews by providing a rigorous first-pass analysis.
@@ -217,7 +202,7 @@ sequenceDiagram
   - Adds dependency on external AI services for core quality gates.
   - Potential for "AI noise" if CodeRabbit is not properly tuned via `.coderabbit.yaml`, leading to developer fatigue from nitpicky comments.
 
-## 11. Verification Plan
+## 10. Verification Plan
 
 ### Automated Verification
 
@@ -228,27 +213,27 @@ sequenceDiagram
 - [ ] **Qodo Setup**: Install Qodo in the IDE and generate a test suite for a complex Python function. Verify the tests pass and cover edge cases.
 - [ ] **CodeRabbit Integration**: Open a test PR containing intentional logical flaws. Verify that CodeRabbit automatically comments on the PR, identifies the flaws, and generates a cohesive summary.
 
-## 12. Review / Revisit Criteria
+## 11. Review / Revisit Criteria
 
 - This decision should be revisited in 90 days. We must assess if CodeRabbit's feedback remains actionable or if it is generating too much noise. If noise is high, we will refine `.coderabbit.yaml` to disable non-critical review categories.
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 1. **Remove CodeRabbit**: Uninstall the CodeRabbit GitHub App from the organization/repository and delete `.coderabbit.yaml`.
 2. **Remove Qodo**: Instruct developers to uninstall the Qodo IDE extension.
 
-## 14. Implementation Findings
+## 13. Implementation Findings
 
 _(To be populated as integration is completed)_
 
-## 15. Governance Follow-up
+## 14. Governance Follow-up
 
 All work within this project must strictly adhere to the following governance and documentation standards for Milestones, Issues, and Pull Requests:
 
 1. **Gitmoji Alignment**: All Issue titles and PR titles must use the appropriate Gitmoji prefix and conventional commit scoping.
 2. **Configuration as Code**: CodeRabbit configuration must be checked into version control via `.coderabbit.yaml`.
 
-## 16. Links & References
+## 15. Links & References
 
 - [CodeRabbit Documentation](https://coderabbit.ai/docs)
 - [Qodo Documentation](https://qodo.ai/docs)
@@ -256,3 +241,21 @@ All work within this project must strictly adhere to the following governance an
 ## CHANGELOG
 
 - **v1.0.0 (2026-06-18)**: Initial proposal for CodeRabbit and Qodo integration.
+- v1.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+<!--
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Primary data shape or explanatory need**: Understanding the separation of concerns between local test generation (Qodo) and remote PR review (CodeRabbit).
+- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
+- **Why this visual aid was chosen**: It explicitly maps out the "Shift-Left" and "Shift-Right" paradigms, proving that the tools do not overlap or conflict.
+- **Alternative aids considered**: A bulleted list would fail to show the temporal sequence of the developer journey from local IDE to GitHub PR.
+
+### Supporting Visuals and Generated Artifacts
+
+- **Reference source**: `visualAidQuickReference.md`
+- **Chosen method**: Mermaid
+- **Generated artifact path(s)**: Embedded above in Sections 5 and 6. Target header image: `../assets/adr-0012-coderabbit-and-qodo.png`
+-->

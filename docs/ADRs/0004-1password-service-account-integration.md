@@ -5,10 +5,10 @@
 >
 > PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO battery icons, NO X buttons, NO device frames or bounding boxes. Wide aspect ratio, designed for document embedding.
 
-📋 Target Filename: adr-0004-1password-service-account-integration.webp
+📋 Target Filename: adr-0004-1password-service-account-integration.png
 -->
 
-![1Password Service Account Integration](../assets/adr-0004-1password-service-account-integration.webp)
+![1Password Service Account Integration](../assets/adr-0004-1password-service-account-integration.png)
 
 # ADR-0004: 1Password Service Account Integration
 
@@ -16,7 +16,7 @@
 adr_number: "0004"
 title: "1Password Service Account Integration"
 status: "Superseded"
-version: "v1.1.0"
+version: "v1.1.1"
 date: "2026-06-08"
 created: "2026-06-08T00:00:00"
 modified: "2026-06-08T16:58:00"
@@ -114,15 +114,7 @@ sequenceDiagram
 - **Environment Override**: Standard environment variable prioritization completely overrides desktop GUI integration.
 - **Stateless Execution**: The Service Account architecture ensures scripts are fully deterministic and repeatable across different machines or CI environments without manual login states.
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Primary data shape or explanatory need**: System topology and authentication flow override.
-- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
-- **Why this visual aid was chosen**: Clearly illustrates the divergence between interactive biometric authentication and the headless environment-variable override.
-
-## 9. Impact Radius (Cause, Change, Effect)
+## 8. Impact Radius (Cause, Change, Effect)
 
 ### 1. `scripts/with_1p_env.sh`
 
@@ -136,7 +128,7 @@ sequenceDiagram
 - **Change**: Plugin `vault_id` and `item_id` must explicitly target the `Dev` vault.
 - **Effect**: If the plugin configuration drifts, CLI commands like `gh` will fail with `403 Forbidden`.
 
-## 10. Consequences
+## 9. Consequences
 
 - **Pros**:
   - Automated scripts do not rely on the user's local biometric session to execute.
@@ -144,7 +136,7 @@ sequenceDiagram
 - **Cons**:
   - The Service Account execution model can silently override local desktop integration, leading to confusing `403` errors if plugin configs are not aligned with the Service Account's vault access.
 
-## 11. Verification Plan
+## 10. Verification Plan
 
 ### Automated Verification
 
@@ -157,17 +149,17 @@ sequenceDiagram
 - [ ] Confirm successful authentication via the service account token.
 - [ ] Verify `op vault list` only displays the authorized vaults (e.g. `Dev`).
 
-## 12. Review / Revisit Criteria
+## 11. Review / Revisit Criteria
 
 Revisit this architecture if 1Password introduces a newer, more robust headless authentication primitive that does not globally override desktop integration via a single environment variable, or if we migrate away from GitHub CLI plugins to a different secrets manager.
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 1. Remove `OP_SERVICE_ACCOUNT_TOKEN` from `mise.toml` and `.env` files.
 2. Delete `scripts/with_1p_env.sh`.
 3. Return to relying on the interactive 1Password desktop application.
 
-## 14. Troubleshooting Procedures
+## 13. Troubleshooting Procedures
 
 If CLI plugins (like `gh`) throw `403 Forbidden` errors during execution:
 
@@ -187,12 +179,24 @@ If CLI plugins (like `gh`) throw `403 Forbidden` errors during execution:
    If it points to a wrong vault, manually update `~/.config/op/plugins/gh.json` or clear and re-initialize the plugin interactively.
 4. **Verify Token Scopes**: Ensure the token itself has the required scopes for the requested action.
 
-## 15. Governance Follow-up
+## 14. Governance Follow-up
 
 - **Antigravity rule assessment**: Ensure any new agents or tools operating on this repository are aware of the `OP_SERVICE_ACCOUNT_TOKEN` override behavior.
 - **Affected rule**: Authentication and Secret Injection Protocols.
 
 ## CHANGELOG
 
-- v1.1.0 (2026-06-08T12:00:00): Expanded to full ADR template standard (-vvv) with Mermaid diagrams, full Impact Radius, and Verification plans.
+
+
 - v1.0.0 (2026-06-08T00:00:00): Initial Draft created.
+- v1.1.0 (2026-06-08T12:00:00): Expanded to full ADR template standard (-vvv) with Mermaid diagrams, full Impact Radius, and Verification plans.
+- v1.1.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Primary data shape or explanatory need**: System topology and authentication flow override.
+- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
+- **Why this visual aid was chosen**: Clearly illustrates the divergence between interactive biometric authentication and the headless environment-variable override.
+-->
