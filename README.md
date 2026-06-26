@@ -28,24 +28,25 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [📚 Overview](#-overview)
-- [🧠 Core Philosophy & Architecture](#-core-philosophy--architecture)
-- [🏗 System Stack](#-system-stack)
-- [🛠 File Role Matrix](#-file-role-matrix)
-- [✨ Features](#-features)
-- [🚀 Installation & Provisioning](#-installation--provisioning)
-  - [Configuration & Secrets](#configuration--secrets)
-- [🛠 Usage](#-usage)
-  - [Default non-interactive mode](#default-non-interactive-mode)
-  - [Interactive review mode](#interactive-review-mode)
-  - [Hook-driven usage](#hook-driven-usage)
-  - [The Standard: Hybrid Commits](#the-standard-hybrid-commits)
-    - [Gitmoji Reference Matrix](#gitmoji-reference-matrix)
-- [✨ Feature Spotlight: Hook Safety & GUI Editors (`index.lock`)](#-feature-spotlight-hook-safety--gui-editors-indexlock)
-- [🤝 Contributing](#-contributing)
-- [🧑‍💻 Development](#-development)
-- [🏆 Acknowledgements & Open Source Licenses](#-acknowledgements--open-source-licenses)
-- [📄 License](#-license)
+- [🧬 GitOps AI Commit Generator (`git-cg`)](#-gitops-ai-commit-generator-git-cg)
+  - [📚 Overview](#-overview)
+  - [🧠 Core Philosophy \& Architecture](#-core-philosophy--architecture)
+  - [🏗 System Stack](#-system-stack)
+  - [🛠 File Role Matrix](#-file-role-matrix)
+  - [✨ Features](#-features)
+  - [🚀 Installation \& Provisioning](#-installation--provisioning)
+    - [Configuration \& Secrets](#configuration--secrets)
+  - [🛠 Usage](#-usage)
+    - [Default non-interactive mode](#default-non-interactive-mode)
+    - [Interactive review mode](#interactive-review-mode)
+    - [Hook-driven usage](#hook-driven-usage)
+    - [The Standard: Hybrid Commits](#the-standard-hybrid-commits)
+      - [Gitmoji Reference Matrix](#gitmoji-reference-matrix)
+  - [✨ Feature Spotlight: Hook Safety \& GUI Editors (`index.lock`)](#-feature-spotlight-hook-safety--gui-editors-indexlock)
+  - [🤝 Contributing](#-contributing)
+  - [🧑‍💻 Development](#-development)
+  - [🏆 Acknowledgements \& Open Source Licenses](#-acknowledgements--open-source-licenses)
+  - [📄 License](#-license)
 
 <!-- END doctoc -->
 
@@ -289,6 +290,7 @@ Structured issue references render above machine-readable trailers. Example:
 Explain the why and how.
 
 Included changes:
+
 - 📝 docs(readme): document review flow
 
 Resolves: #80
@@ -321,7 +323,7 @@ git-cg --help
 All messages generated or validated by this engine follow the format:
 `<emoji> <cc_type>(<scope>): <subject>`
 
-*Note: This standard is immutably enforced by a native `commit-msg` git hook (`validateCommitHook.mjs`) which uses strict regex, trailer validation, and SOP alignment to reject any non-compliant commit message with a detailed `[AI_CORRECTION_REQUIRED]` prompt designed to steer agents into auto-correcting their format.*
+_Note: This standard is immutably enforced by a native `commit-msg` git hook (`validateCommitHook.mjs`) which uses strict regex, trailer validation, and SOP alignment to reject any non-compliant commit message with a detailed `[AI_CORRECTION_REQUIRED]` prompt designed to steer agents into auto-correcting their format._
 
 **Example Output:**
 
@@ -331,6 +333,7 @@ All messages generated or validated by this engine follow the format:
 Introduce a portable SOP loader with a resolution precedence chain for explicit environment overrides.
 
 Included changes:
+
 - ♻️ refactor(sop): add centralized portable SOP loader
 - 🦺 fix(cli): add strict mode for CI while keeping hooks fail-soft
 - 📦 build(package): ship SOP data in the wheel
@@ -427,7 +430,7 @@ Changelog-Groups: Changed, Fixed, Miscellaneous
 
 When using the interactive terminal review (`git-cg -i`), selecting `Edit` will launch an editor so you can manually tweak the generated commit message. By default, `git-cg` uses your Terminal Editor (`$EDITOR`).
 
-If your system's default `$VISUAL` editor is a GUI application (like VS Code, Cursor, or Antigravity IDE), it usually forks into the background and immediately returns control to the terminal. If `git-cg` used this by default, it would think you had finished editing instantly and proceed to execute `git commit` in the background, locking the repository (`.git/index.lock`). 
+If your system's default `$VISUAL` editor is a GUI application (like VS Code, Cursor, or Antigravity IDE), it usually forks into the background and immediately returns control to the terminal. If `git-cg` used this by default, it would think you had finished editing instantly and proceed to execute `git commit` in the background, locking the repository (`.git/index.lock`).
 
 If your repository uses deterministic `pre-commit` hooks (like **[hk](https://hk.jdx.dev)**) that safely stash your unstaged changes before running, they would crash head-first into this locked index! This safety feature of `hk`—stashing to prevent data loss—is exactly why it is superior to standard hooks, but it requires that editors block execution properly.
 
@@ -435,6 +438,7 @@ If your repository uses deterministic `pre-commit` hooks (like **[hk](https://hk
 `git-cg` explicitly overrides standard behavior to prefer terminal-bound blocking editors (via `$GIT_CG_EDITOR` or `$EDITOR`) to preserve this hook safety.
 
 However, if you wish to use a GUI editor and have configured it to block (e.g. `code --wait`), you can simply pass the `-g` or `--gui` flag to `git-cg` to use your `$VISUAL` editor:
+
 ```bash
 git-cg -i -g
 ```
