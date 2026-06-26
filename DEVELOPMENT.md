@@ -15,25 +15,31 @@ This repository relies on modern, declarative toolchains. Before starting, ensur
 
 ## 🚀 Environment Setup
 
-The provisioning process is completely automated.
+The provisioning process is heavily automated, though some final manual actions are required for secrets and Git hooks.
 
 1. **Install Runtime Dependencies**:
+
    ```bash
    mise install
    ```
+
    *This automatically installs and configures Python, `uv`, Node.js, `just`, `usage`, `hk`, `pkl`, `rtk`, and `gum` according to our `mise.toml`.*
 
 2. **Install Inference Engines**:
+
    ```bash
    brew bundle
    ```
+
    *Installs `oMLX` and `MTPLX` for local, hardware-accelerated AI execution on Apple Silicon.*
 
-3. **Install Git Hooks**:
+3. **Install Git Hooks** (Manual Action Required):
+
    ```bash
    hk install
    ```
-   *Configures deterministic `pre-commit` and `prepare-commit-msg` hooks.*
+
+   *Manually configure deterministic `pre-commit` and `prepare-commit-msg` hooks.*
 
 ---
 
@@ -61,10 +67,13 @@ MTPLX_API_KEY="sk-your-mtplx-key"
 We use `pytest` for the Python test suite and `just` as our command runner.
 
 - **Run all tests**:
+
   ```bash
   just test
   ```
+
 - **Run tests manually via uv**:
+
   ```bash
   uv run pytest tests/
   ```
@@ -78,10 +87,13 @@ We use `pytest` for the Python test suite and `just` as our command runner.
 We enforce strict linting and formatting using `ruff` and type-checking via `pyright`.
 
 - **Run linting**:
+
   ```bash
   just lint
   ```
+
 - **Auto-format code**:
+
   ```bash
   just format
   ```
