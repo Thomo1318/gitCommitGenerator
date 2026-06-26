@@ -410,8 +410,8 @@ def test_review_state_updates_same_issue_number_with_different_verb():
     new_reference = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=80)
 
     assert state.add_issue_reference(existing_reference) == ReviewStateMutationResult.ADDED
-    assert state.add_issue_reference(new_reference) == ReviewStateMutationResult.UPDATED
-    assert state.issue_references == [new_reference]
+    assert state.add_issue_reference(new_reference) == ReviewStateMutationResult.CONFLICT
+    assert state.issue_references == [existing_reference]
 
 
 def test_review_state_get_issue_reference_by_issue_number_returns_match():
@@ -464,7 +464,7 @@ def test_review_state_mutation_result_string_values():
     """ReviewStateMutationResult must expose the exact lowercase string values."""
     assert ReviewStateMutationResult.ADDED == "added"
     assert ReviewStateMutationResult.DUPLICATE == "duplicate"
-    assert ReviewStateMutationResult.UPDATED == "updated"
+    assert ReviewStateMutationResult.CONFLICT == "conflict"
 
 
 def test_review_state_mutation_result_is_str_enum():
@@ -478,7 +478,7 @@ def test_review_state_mutation_result_all_members_present():
     """All three expected member names must exist on the enum."""
     assert hasattr(ReviewStateMutationResult, "ADDED")
     assert hasattr(ReviewStateMutationResult, "DUPLICATE")
-    assert hasattr(ReviewStateMutationResult, "UPDATED")
+    assert hasattr(ReviewStateMutationResult, "CONFLICT")
 
 
 # ---------------------------------------------------------------------------
@@ -497,8 +497,8 @@ def test_review_state_update_all_verb_pairs(first_kind: IssueReferenceKind, seco
     ref_updated = IssueReference(kind=second_kind, issue_number=42)
 
     assert state.add_issue_reference(ref_first) == ReviewStateMutationResult.ADDED
-    assert state.add_issue_reference(ref_updated) == ReviewStateMutationResult.UPDATED
-    assert state.issue_references == [ref_updated]
+    assert state.add_issue_reference(ref_updated) == ReviewStateMutationResult.CONFLICT
+    assert state.issue_references == [ref_first]
 
 
 def test_review_state_add_third_distinct_reference():
@@ -525,8 +525,8 @@ def test_review_state_update_on_second_of_multiple_refs():
     state.add_issue_reference(ref_b)
     result = state.add_issue_reference(updated)
 
-    assert result == ReviewStateMutationResult.UPDATED
-    assert state.issue_references == [ref_a, updated]
+    assert result == ReviewStateMutationResult.CONFLICT
+    assert state.issue_references == [ref_a, ref_b]
 
 
 def test_review_state_duplicate_after_update():
@@ -536,11 +536,12 @@ def test_review_state_duplicate_after_update():
     updated = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=77)
 
     state.add_issue_reference(original)
-    state.add_issue_reference(updated)
-    result = state.add_issue_reference(updated)
+    result_update = state.add_issue_reference(updated)
+    result_duplicate = state.add_issue_reference(original)
 
-    assert result == ReviewStateMutationResult.DUPLICATE
-    assert state.issue_references == [updated]
+    assert result_update == ReviewStateMutationResult.CONFLICT
+    assert result_duplicate == ReviewStateMutationResult.DUPLICATE
+    assert state.issue_references == [original]
 
 
 # ---------------------------------------------------------------------------
@@ -605,9 +606,10 @@ def test_insertion_order_preserved_after_duplicate_and_update_attempts():
     state.add_issue_reference(IssueReference(kind=IssueReferenceKind.REFS, issue_number=2))
     # Update ref_a
     updated_a = IssueReference(kind=IssueReferenceKind.FIXES, issue_number=1)
-    state.add_issue_reference(updated_a)
+    result_update = state.add_issue_reference(updated_a)
 
-    assert state.issue_references == [updated_a, ref_b, ref_c]
+    assert result_update == ReviewStateMutationResult.CONFLICT
+    assert state.issue_references == [ref_a, ref_b, ref_c]
 
 
 def test_render_reflects_state_after_update():
@@ -618,5 +620,5 @@ def test_render_reflects_state_after_update():
     state.add_issue_reference(IssueReference(kind=IssueReferenceKind.FIXES, issue_number=99))
 
     rendered = state.render()
-    assert "Resolves: #99" not in rendered
-    assert "Fixes: #99" in rendered
+    assert "Resolves: #99" in rendered
+    assert "Fixes: #99" not in rendered
