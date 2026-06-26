@@ -11,11 +11,11 @@ A highly detailed cyberpunk architectural schematic showing the git-cg local CLI
 ```yaml
 adr_number: "0011"
 title: "E2E Observability and LLMOps Stack Augmentation"
-status: "Proposed"
-version: "v3.0.1"
+status: "Implemented"
+version: "v3.1.0"
 date: "2026-06-17"
 created: "2026-06-17 00:00:00"
-modified: "2026-06-17 00:50:00"
+modified: "2026-06-26 14:15:00"
 risk_level: "High"
 reversibility: "Medium"
 security_scope: "Local Operations & Source Control"
@@ -1317,6 +1317,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - v2.0.0 (2026-06-17): Architectural Overhaul
 - v3.0.0 (2026-06-17): Added strict documentation governance standards and fully integrated the E2E milestone issue specifications as the implementation trace.
 - v3.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+- v3.1.0 (2026-06-26): Marked status as Implemented following successful integration of Sentry and Opik telemetry across git hooks.
 
 <!-- ## Supporting Visual Aids
 
