@@ -17,13 +17,13 @@ from git_cg.telemetry import GenerationTelemetry, get_state_file_path, read_tele
 
 def _minimal_telemetry(**overrides) -> GenerationTelemetry:
     """
-    Build a minimal `GenerationTelemetry` instance for tests.
+    Create a minimal `GenerationTelemetry` instance for tests.
     
     Parameters:
         overrides: Keyword values that replace the default telemetry fields.
     
     Returns:
-        GenerationTelemetry: A telemetry object with all required fields populated.
+        GenerationTelemetry: A telemetry object with the required fields populated.
     """
     defaults = dict(
         trace_id=None,

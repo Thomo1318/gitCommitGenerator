@@ -95,10 +95,10 @@ class TestParseIsoTimestamp:
 
 def _make_mock_opik():
     """
-    Create mock Opik objects for tests.
-
+    Create mocked Opik objects for test assertions.
+    
     Returns:
-        tuple: A `(mock_opik_class, mock_client, mock_trace)` triple.
+        tuple: The mock Opik class, client, and trace objects.
     """
     mock_trace = MagicMock()
     mock_client = MagicMock()

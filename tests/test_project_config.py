@@ -379,7 +379,7 @@ class TestPromptfooConfig:
         # If we reach here the assertion wasn't found — let the has_upper_bound test handle it
 
     def test_conventional_commit_regex_assertion_present(self):
-        """Checks that the first Promptfoo test case includes a JavaScript assertion using a regular expression to validate conventional-commit format."""
+        """Verifies that the first Promptfoo test case includes a JavaScript assertion that uses a regular expression to check conventional-commit format."""
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
         regex_assertions = [a for a in first_case["assert"] if a["type"] == "javascript" and ".test(" in a["value"]]
