@@ -7,18 +7,13 @@ Tests for git_cg.telemetry covering the PR changes:
 """
 
 import json
-import os
-import tempfile
-from pathlib import Path
-
-import pytest
 
 from git_cg.telemetry import GenerationTelemetry, get_state_file_path, read_telemetry_state, write_telemetry_state
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _minimal_telemetry(**overrides) -> GenerationTelemetry:
     """Return a GenerationTelemetry with all required fields populated."""
@@ -39,7 +34,7 @@ def _minimal_telemetry(**overrides) -> GenerationTelemetry:
 
 
 # ---------------------------------------------------------------------------
-# GenerationTelemetry dataclass – field typing
+# GenerationTelemetry dataclass - field typing
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +79,7 @@ def test_generation_telemetry_both_ids_can_be_set():
 
 
 # ---------------------------------------------------------------------------
-# write_telemetry_state / read_telemetry_state – round-trip (v2 format)
+# write_telemetry_state / read_telemetry_state - round-trip (v2 format)
 # ---------------------------------------------------------------------------
 
 
@@ -151,7 +146,7 @@ def test_write_serializes_trace_id_to_json(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# read_telemetry_state – backward compatibility for legacy (v1) JSON
+# read_telemetry_state - backward compatibility for legacy (v1) JSON
 # ---------------------------------------------------------------------------
 
 
@@ -264,7 +259,7 @@ def test_read_legacy_json_missing_only_thread_id(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# read_telemetry_state – failure / absence cases
+# read_telemetry_state - failure / absence cases
 # ---------------------------------------------------------------------------
 
 

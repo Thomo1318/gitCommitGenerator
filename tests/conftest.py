@@ -15,5 +15,5 @@ import types
 
 if "sentry_sdk" not in sys.modules:
     _sentry_stub = types.ModuleType("sentry_sdk")
-    _sentry_stub.init = lambda *args, **kwargs: None  # noqa: E731
+    _sentry_stub.init = lambda *args, **kwargs: None
     sys.modules["sentry_sdk"] = _sentry_stub

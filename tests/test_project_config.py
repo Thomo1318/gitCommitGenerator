@@ -341,9 +341,7 @@ class TestPromptfooConfig:
         """The 'indirect-prompt-injection' red-team plugin must be configured."""
         data = _load_promptfoo_yaml()
         plugins = data["redteam"]["plugins"]
-        assert "indirect-prompt-injection" in plugins, (
-            "redteam.plugins must include 'indirect-prompt-injection'"
-        )
+        assert "indirect-prompt-injection" in plugins, "redteam.plugins must include 'indirect-prompt-injection'"
 
     def test_redteam_includes_pii_direct_plugin(self):
         """The 'pii:direct' red-team plugin must be configured."""
@@ -384,10 +382,7 @@ class TestPromptfooConfig:
         """Checks that the first Promptfoo test case includes a JavaScript assertion using a regular expression to validate conventional-commit format."""
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
-        regex_assertions = [
-            a for a in first_case["assert"]
-            if a["type"] == "javascript" and ".test(" in a["value"]
-        ]
+        regex_assertions = [a for a in first_case["assert"] if a["type"] == "javascript" and ".test(" in a["value"]]
         assert len(regex_assertions) >= 1, (
             "At least one JS assertion must use a regex .test() for conventional-commit format"
         )
@@ -398,24 +393,20 @@ class TestPromptfooConfig:
         first_case = data["tests"][0]
         for assertion in first_case["assert"]:
             if assertion["type"] == "javascript" and ".test(" in assertion["value"]:
-                assert "output" in assertion["value"], (
-                    "The regex assertion must reference 'output'"
-                )
+                assert "output" in assertion["value"], "The regex assertion must reference 'output'"
                 return
-        assert False, "No regex-based JS assertion found"
+        raise AssertionError("No regex-based JS assertion found")
 
     def test_conventional_commit_regex_uses_trim(self):
         """Ensures the conventional commit regex assertion trims the output before matching.
-        
+
         Parameters:
         """
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
         for assertion in first_case["assert"]:
             if assertion["type"] == "javascript" and ".test(" in assertion["value"]:
-                assert "trim()" in assertion["value"], (
-                    "Regex assertion should call trim() before testing"
-                )
+                assert "trim()" in assertion["value"], "Regex assertion should call trim() before testing"
                 return
 
     def test_at_least_two_javascript_assertions_in_first_test(self):
@@ -423,9 +414,7 @@ class TestPromptfooConfig:
         data = _load_promptfoo_yaml()
         first_case = data["tests"][0]
         js_assertions = [a for a in first_case["assert"] if a["type"] == "javascript"]
-        assert len(js_assertions) >= 2, (
-            f"Expected at least 2 JS assertions, got {len(js_assertions)}"
-        )
+        assert len(js_assertions) >= 2, f"Expected at least 2 JS assertions, got {len(js_assertions)}"
 
 
 # ===========================================================================
@@ -438,9 +427,7 @@ class TestMiseTomlEvalPromptfoo:
         """[tasks.'eval:promptfoo'] must be present in mise.toml after this PR."""
         data = _load_mise()
         assert "tasks" in data
-        assert "eval:promptfoo" in data["tasks"], (
-            "'eval:promptfoo' task must be present in mise.toml tasks"
-        )
+        assert "eval:promptfoo" in data["tasks"], "'eval:promptfoo' task must be present in mise.toml tasks"
 
     def test_eval_promptfoo_has_description(self):
         """The eval:promptfoo task must carry a non-empty description."""
@@ -469,18 +456,14 @@ class TestMiseTomlEvalPromptfoo:
 
     def test_eval_promptfoo_run_syncs_eval_results_to_opik(self):
         """Checks that the eval:promptfoo task syncs Promptfoo results to Opik.
-        
+
         Returns:
-        	None
+            None
         """
         task = _load_mise()["tasks"]["eval:promptfoo"]
         run = task["run"]
-        assert "sync_promptfoo_to_opik.py" in run, (
-            "eval:promptfoo must call sync_promptfoo_to_opik.py"
-        )
-        assert "promptfoo_results.json" in run, (
-            "eval:promptfoo must pass promptfoo_results.json to the sync script"
-        )
+        assert "sync_promptfoo_to_opik.py" in run, "eval:promptfoo must call sync_promptfoo_to_opik.py"
+        assert "promptfoo_results.json" in run, "eval:promptfoo must pass promptfoo_results.json to the sync script"
 
     def test_eval_promptfoo_run_syncs_redteam_results_to_opik(self):
         """The run script must also sync promptfoo_redteam_results.json to Opik."""
@@ -501,6 +484,4 @@ class TestMiseTomlEvalPromptfoo:
     def test_eval_promptfoo_output_files_are_gitignored(self):
         """promptfoo_*.json output files must be listed in .gitignore."""
         gitignore = (REPO_ROOT / ".gitignore").read_text()
-        assert "promptfoo_*.json" in gitignore, (
-            "promptfoo_*.json must be excluded via .gitignore"
-        )
+        assert "promptfoo_*.json" in gitignore, "promptfoo_*.json must be excluded via .gitignore"
