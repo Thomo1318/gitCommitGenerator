@@ -96,7 +96,7 @@ class TestParseIsoTimestamp:
 def _make_mock_opik():
     """
     Create mock Opik objects for tests.
-    
+
     Returns:
         tuple: A `(mock_opik_class, mock_client, mock_trace)` triple.
     """
@@ -361,13 +361,13 @@ class TestSyncResultsV1Structure:
     def _write_v1_file(self, tmp_path, results_list):
         """
         Write a Promptfoo v1 results fixture to a temporary JSON file.
-        
+
         Parameters:
-        	tmp_path: Temporary directory used to create the file.
-        	results_list: Results data to serialise under the top-level ``results`` key.
-        
+            tmp_path: Temporary directory used to create the file.
+            results_list: Results data to serialise under the top-level ``results`` key.
+
         Returns:
-        	str: Path to the written JSON file.
+            str: Path to the written JSON file.
         """
         data = {"results": results_list}
         f = tmp_path / "results_v1.json"
@@ -401,13 +401,13 @@ class TestSyncResultsMissingFields:
     def _write_file(self, tmp_path, results_list):
         """
         Write a Promptfoo v2 results fixture to a temporary JSON file.
-        
+
         Parameters:
-        	tmp_path: Temporary directory used to create the file.
-        	results_list: Result entries to serialise under the nested ``results`` key.
-        
+            tmp_path: Temporary directory used to create the file.
+            results_list: Result entries to serialise under the nested ``results`` key.
+
         Returns:
-        	str: Path to the written JSON file.
+            str: Path to the written JSON file.
         """
         data = {"results": {"results": results_list}}
         f = tmp_path / "results.json"

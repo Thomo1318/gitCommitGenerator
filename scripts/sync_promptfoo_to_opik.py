@@ -21,7 +21,7 @@ def parse_iso_timestamp(ts: str) -> datetime.datetime:
         # handle Z and fractional seconds
         if ts and isinstance(ts, str) and ts.endswith("Z"):
             ts = ts[:-1] + "+00:00"
-        return datetime.datetime.fromisoformat(str(ts))
+        return datetime.datetime.fromisoformat(ts)
     except Exception:
         return datetime.datetime.now(datetime.UTC)
 
