@@ -3,17 +3,15 @@
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 A hyper-detailed, architectural rendering of a futuristic, glowing digital library. In the center, a massive, suspended crystalline monolith containing thousands of perfectly organized, glowing data-slates. The word "Zensical" is heavily engraved directly into the obsidian floor of the library, glowing with intense cyan and indigo neon light. Intricate holographic projections of documentation structures float in the air around the monolith. Cinematic lighting, deep shadows with vibrant neon cyan and deep indigo accents, volumetric dust particles. 8k resolution, octane render, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
 
-📋 Target Filename: adr-0008-zensical-integration.webp
+📋 Target Filename: adr-0008-zensical-integration.png
 -->
-<div align="center">
-<img src="../assets/adr-0008-zensical-integration.webp" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
-</div>
+![Header Image](../assets/adr-0008-zensical-integration.png)
 
 ```yaml
 adr_number: "0008"
 title: "Zensical Documentation Integration"
 status: "Implemented"
-version: "v1.0.0"
+version: "v1.0.1"
 date: "2026-06-09"
 created: "2026-06-09 23:00:00"
 modified: "2026-06-09 23:00:00"
@@ -138,17 +136,7 @@ sequenceDiagram
 
 ---
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Primary data shape or explanatory need**: System topology showing the flow of markdown files into the published site, and a sequence diagram detailing the automated deployment logic.
-- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
-- **Why this visual aid was chosen**: The flowchart succinctly maps the relationship between the configuration files, the Python environment, and the source markdown. The sequence diagram effectively models the fail-safe strict build process within GitHub Actions.
-
----
-
-## 9. Impact Radius (Cause, Change, Effect)
+## 8. Impact Radius (Cause, Change, Effect)
 
 ### 1. `pyproject.toml`
 
@@ -176,7 +164,7 @@ sequenceDiagram
 
 ---
 
-## 10. Consequences
+## 9. Consequences
 
 - **Pros**:
   - **Professional Polish**: The project now boasts a highly readable, searchable, and aesthetically pleasing documentation hub.
@@ -188,7 +176,7 @@ sequenceDiagram
 
 ---
 
-## 11. Verification Plan
+## 10. Verification Plan
 
 ### Automated Verification
 
@@ -202,14 +190,14 @@ sequenceDiagram
 
 ---
 
-## 12. Review / Revisit Criteria
+## 11. Review / Revisit Criteria
 
 - If `zensical` introduces breaking changes that conflict with the standard MkDocs plugin ecosystem, evaluate migrating back to standard `mkdocs-material`.
 - As the volume of ADRs grows, revisit the navigation structure in `zensical.toml` to ensure the sidebar remains easily scannable.
 
 ---
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 1. Delete `zensical.toml` and `.github/workflows/docs.yml`.
 2. Remove the `docs` dependency group from `pyproject.toml` and run `uv lock`.
@@ -218,13 +206,13 @@ sequenceDiagram
 
 ---
 
-## 14. Implementation Findings / Audit Findings
+## 13. Implementation Findings / Audit Findings
 
 During the initial rollout, executing `zensical build --strict` failed immediately due to unresolvable links inside `docs/projectReviewOLD/CODEBASE_REVIEW.md` and related files. Because these were historical, point-in-time review artifacts rather than living documentation, the decision was made to quarantine them in an `archive/` directory at the repository root rather than investing time in fixing the dead links. This successfully unblocked the strict compiler.
 
 ---
 
-## 15. Governance Follow-up
+## 14. Governance Follow-up
 
 - **Antigravity rule assessment**: A new project-level rule should be established to enforce the usage of `zensical build --strict` before committing documentation changes, ensuring CI pipelines are not broken by careless link modifications.
 - **Affected rule**: A potential new rule governing Documentation Standards.
@@ -233,4 +221,18 @@ During the initial rollout, executing `zensical build --strict` failed immediate
 
 ## CHANGELOG
 
+
+
 - v1.0.0 (2026-06-09 23:00:00): Initial Implemented ADR generated.
+- v1.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Primary data shape or explanatory need**: System topology showing the flow of markdown files into the published site, and a sequence diagram detailing the automated deployment logic.
+- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
+- **Why this visual aid was chosen**: The flowchart succinctly maps the relationship between the configuration files, the Python environment, and the source markdown. The sequence diagram effectively models the fail-safe strict build process within GitHub Actions.
+
+---
+-->

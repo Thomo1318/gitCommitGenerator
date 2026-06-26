@@ -3,9 +3,7 @@ A hyper-detailed, photorealistic cyberpunk technical schematic showing two massi
 
 📋 Target Filename: adr-0009-intent-ranking-guided-regeneration-reconciliation.jpeg
 -->
-<div align="center">
-<img src="../assets/adr-0009-intent-ranking-guided-regeneration-reconciliation.jpeg" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
-</div>
+![Header Image](../assets/adr-0009-intent-ranking-guided-regeneration-reconciliation.png)
 
 # ADR-0009: Reconcile Deterministic Intent Ranking with Guided Regeneration
 
@@ -13,7 +11,7 @@ A hyper-detailed, photorealistic cyberpunk technical schematic showing two massi
 adr_number: "0009"
 title: "Reconcile Deterministic Intent Ranking with Guided Regeneration"
 status: "Accepted"
-version: "v1.5.0"
+version: "v1.5.1"
 date: "2026-06-11"
 created: "2026-06-11 16:10:00"
 modified: "2026-06-12 10:20:00"
@@ -230,22 +228,7 @@ This decision will likely affect future work such as:
 - explanation surfaces in the TUI
 - guided retries for semver and changelog grouping
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Primary data shape or explanatory need**: ranked candidate flow, runtime contradiction, and multi-option architectural comparison.
-- **Chosen visual aids**: Mermaid flowcharts, sequence diagrams, and matrix comparison tables.
-- **Why these visual aids were chosen**: this problem is not just a single topology problem. It involves layered decision flow, runtime interaction, and tradeoff comparison across multiple architectural options.
-- **Alternative aids considered**: C4-style diagrams were considered but rejected because the decision boundary here is less about service containers and more about arbitration logic, prompt flow, and metadata reconciliation.
-
-### Supporting Visuals and Generated Artifacts
-
-- **Reference source**: `visualAidQuickReference.md`
-- **Chosen method**: Mermaid + Markdown comparison tables
-- **Generated artifact path(s)**: Embedded in this ADR in Sections 5, 6, 10, 11, 12, 13, and 14
-
-## 9. Current Logic Analysis
+## 8. Current Logic Analysis
 
 This section records the current behavior precisely and forms the analytical baseline for all solution comparisons.
 
@@ -451,7 +434,7 @@ The architecture currently does not clearly define whether, during regenerate:
 
 That missing precedence model is the core design gap.
 
-## 10. Solution A: Guidance-Aware Alternative Candidate Lane
+## 9. Solution A: Guidance-Aware Alternative Candidate Lane
 
 ### 10.1 Concept
 
@@ -534,7 +517,7 @@ It integrates less cleanly with future ambitions such as:
 
 because it preserves a split-lane architecture rather than a single reconciled scoring model.
 
-## 11. Solution B: Guidance-Aware Re-ranking
+## 10. Solution B: Guidance-Aware Re-ranking
 
 ### 11.1 Concept
 
@@ -608,7 +591,7 @@ This solution integrates very well with future work such as:
 
 It also has a larger blast radius because it directly affects the ranking core and therefore touches more fundamental system behavior.
 
-## 12. Solution C: Structured Steering Controls
+## 11. Solution C: Structured Steering Controls
 
 ### 12.1 Concept
 
@@ -689,7 +672,7 @@ It integrates well with:
 
 It integrates less elegantly with very lightweight casual workflows where users only want to type one short sentence and move on.
 
-## 13. Solution D: Hybrid Reconciliation Layer
+## 12. Solution D: Hybrid Reconciliation Layer
 
 ### 13.1 Concept
 
@@ -773,7 +756,7 @@ It provides a path toward:
 
 without requiring that all of that be implemented immediately.
 
-## 14. Comparative Evaluation of All Solutions
+## 13. Comparative Evaluation of All Solutions
 
 This section compares the solutions across the major decision dimensions that matter for this project.
 
@@ -871,7 +854,7 @@ Less good for:
 | strongest determinism and testability    | Solution C        |
 | best balanced long-term direction        | Solution D        |
 
-## 15. Potential Impact Radius Across the Solution Space
+## 14. Potential Impact Radius Across the Solution Space
 
 Because no solution has been selected yet, the impact radius is described across the option space rather than as a final implementation scope.
 
@@ -885,7 +868,7 @@ Because no solution has been selected yet, the impact radius is described across
 | `README.md`                    | User-facing regenerate behavior and explanation of steering semantics               | Affected by all solutions                                                                                                                   |
 | ADR-0007                       | Cross-reference with gum review mechanics                                           | Contextual reference only; no immediate supersession required                                                                               |
 
-## 16. Consequences
+## 15. Consequences
 
 Because no solution is yet selected, this section records the consequences of the current posture and of the decision being deferred.
 
@@ -910,7 +893,7 @@ Every solution must guard against one common failure mode:
 
 That is the principal anti-pattern this ADR is trying to avoid.
 
-## 17. Verification and Evaluation Plan
+## 16. Verification and Evaluation Plan
 
 Before choosing a solution, the following evaluation criteria should be used.
 
@@ -943,7 +926,7 @@ The eventual solution should be judged successful if it can demonstrate:
 - preserved machine-readable final commit output
 - maintained or improved test coverage and architectural explainability
 
-## 18. Review / Revisit Criteria
+## 17. Review / Revisit Criteria
 
 This ADR must be revisited when one of the following occurs:
 
@@ -953,7 +936,7 @@ This ADR must be revisited when one of the following occurs:
 - prompt-only reconciliation proves too brittle for sustained use
 - structured steering controls become necessary to maintain reliability
 
-## 19. Rollback Strategy
+## 18. Rollback Strategy
 
 No runtime architecture change is being finalized by this ADR revision yet.
 
@@ -963,13 +946,13 @@ Therefore, rollback is currently simple:
 - if later solution drafts are appended and rejected, they can be superseded by a later ADR revision or companion ADR
 - the current system remains the baseline until a chosen solution is explicitly adopted and implemented
 
-## 20. Governance Follow-up
+## 19. Governance Follow-up
 
 - The user will review this ADR and select one solution, request modifications, or request deeper explanation.
 - Once a solution is selected, this ADR will be extended with a final implementation-plan section rather than forcing a second analytical ADR unless scope expands materially.
 - If the selected solution materially alters the operating contract of ADR-0007’s guided review model, ADR-0007 should receive a cross-reference note or refinement linkage rather than being silently bypassed.
 
-## 21. Implementation Plan Placeholder
+## 20. Implementation Plan Placeholder
 
 Implementation planning is intentionally deferred.
 
@@ -986,7 +969,7 @@ The future implementation-plan section should include at minimum:
 - manual TUI verification plan
 - migration or compatibility notes for existing regenerate behavior
 
-## 22. Links & References
+## 21. Links & References
 
 - ADR-0007: Integrate Gum for Terminal-Native Git Hook TUI
 - Arc42 Documentation: https://docs.arc42.org/home/
@@ -1059,7 +1042,7 @@ The original analysis says "lightweight guidance interpretation" will produce "g
 
 #### Problem A.2: Three-lane prompt is cognitively heavy for the model
 
-Presenting Primary Candidates, Secondary Candidates, *and* Guidance-Aligned Alternatives in a single prompt gives the model three separate authority channels. LLMs are sensitive to prompt structure — adding a third lane makes the conflict *more* ambiguous, not less. The model must now navigate: "Which of these three lists takes precedence?" That is harder to govern than two.
+Presenting Primary Candidates, Secondary Candidates, _and_ Guidance-Aligned Alternatives in a single prompt gives the model three separate authority channels. LLMs are sensitive to prompt structure — adding a third lane makes the conflict _more_ ambiguous, not less. The model must now navigate: "Which of these three lists takes precedence?" That is harder to govern than two.
 
 #### Problem A.3: No defined override semantics
 
@@ -1114,7 +1097,7 @@ Even with structured fields, a policy is still needed for what happens when the 
 
 #### Problem D.1: Underspecified reconciliation policy
 
-The original analysis says "a reconciliation policy" but never defines what reconciliation actually means. Does it mean: (a) guidance always wins over ranking? (b) ranking wins unless guidance explicitly overrides? (c) a weighted merge? (d) hard vetoes remain inviolate? The reconciliation policy *is* the solution. Without it, Solution D is a design placeholder, not an actionable architecture.
+The original analysis says "a reconciliation policy" but never defines what reconciliation actually means. Does it mean: (a) guidance always wins over ranking? (b) ranking wins unless guidance explicitly overrides? (c) a weighted merge? (d) hard vetoes remain inviolate? The reconciliation policy _is_ the solution. Without it, Solution D is a design placeholder, not an actionable architecture.
 
 #### Problem D.2: "Small guidance hint parser" scope creep risk
 
@@ -1174,10 +1157,10 @@ The core insight: on first generation, the deterministic shortlist should have h
 1. **First-generation path**: unchanged. `build_system_prompt` produces the current ranked-candidate framing with strong shortlist authority.
 
 2. **Regeneration path**: `build_system_prompt` receives the guidance and produces a **structurally different system prompt** that:
-    - Still includes the deterministic shortlist (preserving the ranking's value as context)
-    - **Downgrades shortlist authority** from "select from these" to "these were the initial candidates based on diff analysis"
-    - **Elevates user guidance** to an explicit, governed override instruction within the system prompt itself (not as a trailing user message)
-    - Adds an explicit precedence rule: "The developer has reviewed the initial result and provided correction guidance. Their guidance takes precedence over the initial ranking for intent selection. However, the following hard constraints remain inviolate: \[hard-veto rules\]."
+   - Still includes the deterministic shortlist (preserving the ranking's value as context)
+   - **Downgrades shortlist authority** from "select from these" to "these were the initial candidates based on diff analysis"
+   - **Elevates user guidance** to an explicit, governed override instruction within the system prompt itself (not as a trailing user message)
+   - Adds an explicit precedence rule: "The developer has reviewed the initial result and provided correction guidance. Their guidance takes precedence over the initial ranking for intent selection. However, the following hard constraints remain inviolate: \[hard-veto rules\]."
 
 3. **Hard vetoes remain inviolate**: The reauthorization does not override hard vetoes. If the user says "this is a feature" on a docs-only diff, the system prompt explicitly states that `only_docs` hard-veto constraints still apply. This prevents degenerate outcomes.
 
@@ -1208,25 +1191,25 @@ flowchart TD
 
 #### 8.4 Strengths
 
-| Strength | Detail |
-| :--- | :--- |
-| Fixes the root cause | Addresses the inverted authority hierarchy directly, rather than working around it with candidate manipulation |
-| No hint parsing required | Guidance enters verbatim — no NLP, no keyword matching, no classification fragility |
-| Minimal ranker impact | The ranker is completely unchanged; its output is reused but presented differently |
-| Handles all guidance types | Works equally well for type corrections ("this is a feature"), framing corrections ("focus on user-facing behavior"), and style corrections ("keep it shorter") because it does not try to decompose guidance into structured fields |
-| Preserves hard vetoes | Explicit hard-veto preservation in the reauthorized prompt prevents degenerate outcomes |
-| Low prompt complexity | Two clearly distinct prompt templates (first-gen vs regenerate) rather than three candidate lanes or complex scoring |
-| Testable | Prompt template selection is deterministic (regeneration_guidance is present or absent). The prompt text itself can be golden-tested |
-| Fixes the dead-parameter bug | Requires `build_system_prompt` to actually consume `regeneration_guidance` |
+| Strength                     | Detail                                                                                                                                                                                                                               |
+| :--------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixes the root cause         | Addresses the inverted authority hierarchy directly, rather than working around it with candidate manipulation                                                                                                                       |
+| No hint parsing required     | Guidance enters verbatim — no NLP, no keyword matching, no classification fragility                                                                                                                                                  |
+| Minimal ranker impact        | The ranker is completely unchanged; its output is reused but presented differently                                                                                                                                                   |
+| Handles all guidance types   | Works equally well for type corrections ("this is a feature"), framing corrections ("focus on user-facing behavior"), and style corrections ("keep it shorter") because it does not try to decompose guidance into structured fields |
+| Preserves hard vetoes        | Explicit hard-veto preservation in the reauthorized prompt prevents degenerate outcomes                                                                                                                                              |
+| Low prompt complexity        | Two clearly distinct prompt templates (first-gen vs regenerate) rather than three candidate lanes or complex scoring                                                                                                                 |
+| Testable                     | Prompt template selection is deterministic (regeneration_guidance is present or absent). The prompt text itself can be golden-tested                                                                                                 |
+| Fixes the dead-parameter bug | Requires `build_system_prompt` to actually consume `regeneration_guidance`                                                                                                                                                           |
 
 #### 8.5 Weaknesses
 
-| Weakness | Detail |
-| :--- | :--- |
-| Model interpretation of guidance remains unconstrained | The model still decides how to apply guidance. Solution E governs authority structure but not interpretation |
-| Prompt design is sensitive | The reauthorized prompt template must be carefully written. Poor wording could cause the model to over-correct or ignore the shortlist entirely |
-| Not as deterministic as full structured steering (Solution C) | Free-text guidance is inherently less predictable than structured fields |
-| Requires maintaining two prompt templates | First-gen and regenerate prompt paths diverge, adding a maintenance surface |
+| Weakness                                                      | Detail                                                                                                                                          |
+| :------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model interpretation of guidance remains unconstrained        | The model still decides how to apply guidance. Solution E governs authority structure but not interpretation                                    |
+| Prompt design is sensitive                                    | The reauthorized prompt template must be carefully written. Poor wording could cause the model to over-correct or ignore the shortlist entirely |
+| Not as deterministic as full structured steering (Solution C) | Free-text guidance is inherently less predictable than structured fields                                                                        |
+| Requires maintaining two prompt templates                     | First-gen and regenerate prompt paths diverge, adding a maintenance surface                                                                     |
 
 #### 8.6 Unique Features
 
@@ -1236,16 +1219,16 @@ flowchart TD
 
 #### 8.7 Extensibility and Integration
 
-| Integration Surface | Impact |
-| :--- | :--- |
-| Current gum review UI | None — guidance entry is unchanged |
-| `ReviewState` | None — already stores `regeneration_guidance` |
-| `intent.py` ranking core | None — completely untouched |
-| `build_system_prompt` | Moderate — branches on presence of guidance to select prompt template |
-| `build_generation_messages` | Small — guidance no longer added as a trailing user message (or reduced to a brief reference) |
-| Test suite | Moderate — new golden tests for regenerate prompt template; existing tests unchanged |
-| Future structured steering | Excellent — Solution E can evolve to accept structured hints in addition to free-text guidance; the reauthorized prompt template can incorporate both |
-| Future split-commit logic | Good — the dual-template approach is orthogonal to split-commit orchestration |
+| Integration Surface         | Impact                                                                                                                                                |
+| :-------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current gum review UI       | None — guidance entry is unchanged                                                                                                                    |
+| `ReviewState`               | None — already stores `regeneration_guidance`                                                                                                         |
+| `intent.py` ranking core    | None — completely untouched                                                                                                                           |
+| `build_system_prompt`       | Moderate — branches on presence of guidance to select prompt template                                                                                 |
+| `build_generation_messages` | Small — guidance no longer added as a trailing user message (or reduced to a brief reference)                                                         |
+| Test suite                  | Moderate — new golden tests for regenerate prompt template; existing tests unchanged                                                                  |
+| Future structured steering  | Excellent — Solution E can evolve to accept structured hints in addition to free-text guidance; the reauthorized prompt template can incorporate both |
+| Future split-commit logic   | Good — the dual-template approach is orthogonal to split-commit orchestration                                                                         |
 
 ### 9. Why Solution E Is Missing from the Original Analysis
 
@@ -1259,54 +1242,54 @@ This section provides a revised version of the original Section 14 comparison ma
 
 #### 10.1 High-Level Comparison Matrix (Revised)
 
-| Dimension | A: Alt. Lane | B: Re-ranking | C: Structured Steering | D: Hybrid Reconciliation | E: Prompt Reauthorization |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| Preserves existing ranker | Strongly | Partially | Strongly | Strongly | Completely |
-| Lets guidance matter structurally | Moderately | Strongly | Strongly | Strongly | Very Strongly |
-| Prompt contradiction reduction | Moderate | Strong | Strong | Strong | Very Strong |
-| Engineering complexity | Low–Medium | Medium–High | Medium–High | Medium | Low–Medium |
-| UX simplicity | High | High | Medium–Low | Medium | High |
-| Determinism | Moderate | Strong | Very Strong | Strong | Moderate–Strong |
-| Testability | Moderate | Strong | Very Strong | Strong | Strong |
-| Extensibility | Moderate | Strong | Very Strong | Very Strong | Very Strong |
-| Release safety | Strong | Moderate | Moderate | Strong | Strong |
-| Long-term architectural cleanliness | Moderate | Strong | Strong | Very Strong | Strong |
-| Handles non-classification guidance | Weak | Weak | Moderate | Moderate | Strong |
-| Addresses prompt authority conflict | No | No | Partially | Partially | Yes |
+| Dimension                           | A: Alt. Lane | B: Re-ranking | C: Structured Steering | D: Hybrid Reconciliation | E: Prompt Reauthorization |
+| :---------------------------------- | :----------- | :------------ | :--------------------- | :----------------------- | :------------------------ |
+| Preserves existing ranker           | Strongly     | Partially     | Strongly               | Strongly                 | Completely                |
+| Lets guidance matter structurally   | Moderately   | Strongly      | Strongly               | Strongly                 | Very Strongly             |
+| Prompt contradiction reduction      | Moderate     | Strong        | Strong                 | Strong                   | Very Strong               |
+| Engineering complexity              | Low–Medium   | Medium–High   | Medium–High            | Medium                   | Low–Medium                |
+| UX simplicity                       | High         | High          | Medium–Low             | Medium                   | High                      |
+| Determinism                         | Moderate     | Strong        | Very Strong            | Strong                   | Moderate–Strong           |
+| Testability                         | Moderate     | Strong        | Very Strong            | Strong                   | Strong                    |
+| Extensibility                       | Moderate     | Strong        | Very Strong            | Very Strong              | Very Strong               |
+| Release safety                      | Strong       | Moderate      | Moderate               | Strong                   | Strong                    |
+| Long-term architectural cleanliness | Moderate     | Strong        | Strong                 | Very Strong              | Strong                    |
+| Handles non-classification guidance | Weak         | Weak          | Moderate               | Moderate                 | Strong                    |
+| Addresses prompt authority conflict | No           | No            | Partially              | Partially                | Yes                       |
 
 #### 10.2 Strengths and Weaknesses Summary (Revised)
 
-| Solution | Primary Strength | Primary Weakness | Unique Feature |
-| :--- | :--- | :--- | :--- |
-| A | Safest incremental change | Keeps two authority lanes alive; three-lane prompt is cognitively heavy for models | Explicit override lane without rewriting ranker |
-| B | Single coherent regenerate shortlist | Guidance-to-score mapping is itself a classification problem; can conflict with hard vetoes | Best pure ranking-level reconciliation |
-| C | Maximum determinism and explainability | Heaviest UX footprint; does not address framing/style guidance | Explicit steering contract instead of fuzzy text |
-| D | Best balance across safety, flexibility, and growth | Reconciliation policy is undefined; hint parser scope is ambiguous | Reconciles free text with structural policy |
-| E | Directly fixes the prompt authority inversion that causes the actual conflict | Model interpretation of guidance remains unconstrained | Reauthorized prompt template gives guidance structural dominance without modifying the ranker |
+| Solution | Primary Strength                                                              | Primary Weakness                                                                            | Unique Feature                                                                                |
+| :------- | :---------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------- |
+| A        | Safest incremental change                                                     | Keeps two authority lanes alive; three-lane prompt is cognitively heavy for models          | Explicit override lane without rewriting ranker                                               |
+| B        | Single coherent regenerate shortlist                                          | Guidance-to-score mapping is itself a classification problem; can conflict with hard vetoes | Best pure ranking-level reconciliation                                                        |
+| C        | Maximum determinism and explainability                                        | Heaviest UX footprint; does not address framing/style guidance                              | Explicit steering contract instead of fuzzy text                                              |
+| D        | Best balance across safety, flexibility, and growth                           | Reconciliation policy is undefined; hint parser scope is ambiguous                          | Reconciles free text with structural policy                                                   |
+| E        | Directly fixes the prompt authority inversion that causes the actual conflict | Model interpretation of guidance remains unconstrained                                      | Reauthorized prompt template gives guidance structural dominance without modifying the ranker |
 
 #### 10.3 Integration Surface Comparison (Revised)
 
-| Integration Surface | A | B | C | D | E |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| Current gum review UI | Minimal | Minimal | Significant | Moderate | None |
-| `ReviewState` | Small extension | Small–moderate | Moderate | Moderate | None |
-| `intent.py` ranking core | Minimal | Significant | Optional–significant | Moderate | None |
-| Prompt construction | Moderate | Moderate | Moderate | Moderate | Moderate |
-| Test suite | Moderate growth | Significant growth | Significant growth | Significant growth | Moderate growth |
-| Future split-commit logic | Adequate | Strong | Strong | Very Strong | Good |
-| Future scope steering | Adequate | Strong | Very Strong | Very Strong | Strong |
+| Integration Surface       | A               | B                  | C                    | D                  | E               |
+| :------------------------ | :-------------- | :----------------- | :------------------- | :----------------- | :-------------- |
+| Current gum review UI     | Minimal         | Minimal            | Significant          | Moderate           | None            |
+| `ReviewState`             | Small extension | Small–moderate     | Moderate             | Moderate           | None            |
+| `intent.py` ranking core  | Minimal         | Significant        | Optional–significant | Moderate           | None            |
+| Prompt construction       | Moderate        | Moderate           | Moderate             | Moderate           | Moderate        |
+| Test suite                | Moderate growth | Significant growth | Significant growth   | Significant growth | Moderate growth |
+| Future split-commit logic | Adequate        | Strong             | Strong               | Very Strong        | Good            |
+| Future scope steering     | Adequate        | Strong             | Very Strong          | Very Strong        | Strong          |
 
 #### 10.4 Which Solution Is Best at What (Revised)
 
-| Need | Best-Fit Solution |
-| :--- | :--- |
-| Safest short-term change | Solution A |
-| Strongest pure regenerate-time coherence | Solution B |
-| Strongest determinism and testability | Solution C |
-| Best balanced long-term direction | Solution D or E (depending on whether reconciliation policy definition or prompt authority is prioritized) |
-| Directly addresses the prompt authority inversion | Solution E |
-| Lowest engineering complexity with highest impact | Solution E |
-| Handles non-classification guidance (style, framing, emphasis) | Solution E |
+| Need                                                           | Best-Fit Solution                                                                                          |
+| :------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| Safest short-term change                                       | Solution A                                                                                                 |
+| Strongest pure regenerate-time coherence                       | Solution B                                                                                                 |
+| Strongest determinism and testability                          | Solution C                                                                                                 |
+| Best balanced long-term direction                              | Solution D or E (depending on whether reconciliation policy definition or prompt authority is prioritized) |
+| Directly addresses the prompt authority inversion              | Solution E                                                                                                 |
+| Lowest engineering complexity with highest impact              | Solution E                                                                                                 |
+| Handles non-classification guidance (style, framing, emphasis) | Solution E                                                                                                 |
 
 ### 11. Composability Note
 
@@ -1329,10 +1312,10 @@ The key insight is that **fixing the prompt authority structure (E) is a prerequ
 #### 12.2 For Solution Selection
 
 3. **Evaluate Solution E as the primary approach** because it:
-    - Has the lowest blast radius (no ranker changes, no UI changes, no new data models)
-    - Directly addresses the root cause (prompt authority inversion)
-    - Is compatible with layering B/C/D on top later
-    - Handles the full range of guidance types (not just classification corrections)
+   - Has the lowest blast radius (no ranker changes, no UI changes, no new data models)
+   - Directly addresses the root cause (prompt authority inversion)
+   - Is compatible with layering B/C/D on top later
+   - Handles the full range of guidance types (not just classification corrections)
 
 4. **If Solution E alone feels insufficient**, combine it with Solution D's reconciliation policy concept. Use E for prompt authority and D for the cases where guidance should also influence candidate ordering. But define the reconciliation policy concretely — do not defer it.
 
@@ -1368,43 +1351,48 @@ Following further analysis of the architectural boundaries of guided regeneratio
 ### 1. Solution F: Deterministic Regex-Directives with Menu Masking (Python-Driven Override)
 
 #### 1.1 Concept
+
 Instead of relying on the LLM to interpret that the user's free-text guidance should override the primary intent, or requiring complex score manipulation in the ranking layer, Solution F pre-processes the user's free-text guidance using high-confidence regular expressions to extract explicit intent overrides (e.g., `"this is a feature"`, `"make it a fix"`, `"docs only"`).
 
 If a directive is matched, the Python layer **masks (prunes) the candidate menu** before constructing the system prompt. It overrides the shortlisted Primary Candidates, pinning them directly to the user's requested intent.
 
 #### 1.2 How it works
+
 1. **Pre-processing**: The Python layer runs regular expressions against `regeneration_guidance` to extract intent overrides (e.g., `cc_type:feat`, `cc_type:fix`, `cc_type:docs`, etc.).
 2. **Veto Validation**: Before applying the override, the Python layer evaluates it against deterministic hard-veto rules. If the override contradicts a veto (e.g., forcing a feature on a docs-only diff), the system warns the user in the TUI ("Cannot override to feat on a docs-only change") or enforces the veto.
 3. **Menu Masking**: If validation passes, the system prompt's candidate menu is dynamically restricted (masked). The primary candidate slot is filled only with the user-selected intent family.
 4. **Style Pass-through**: Non-intent steering (e.g., "keep it shorter") is passed verbatim to the prompt.
 
 #### 1.3 Visual Aid: Regex-Directives and Menu Masking Pipeline
+
 ```mermaid
 flowchart TD
     DiffF["Diff"] --> SignalsF["DiffSignals"]
     GuidanceF["User Regeneration Guidance"] --> ParseF["Regex Directive Parser\n(e.g., '\\b(feat|feature)\\b')"]
     ParseF --> MatchF{"Match Found?"}
-    
+
     MatchF -- "Yes" --> VetoF{"Violates Hard Veto?"}
     MatchF -- "No" --> RankF["Standard Deterministic Ranking"]
-    
+
     VetoF -- "Yes" --> WarnF["TUI Warning / Hard Veto Enforcement"]
     VetoF -- "No" --> MaskF["Mask Candidate Menu\n(Pin Primary Candidates)"]
-    
+
     RankF --> PromptF["Construct System Prompt"]
     MaskF --> PromptF
-    
+
     PromptF --> LLM_F["LLM"]
     LLM_F --> PlanF["CommitPlan"]
 ```
 
 #### 1.4 Strengths
+
 - **Zero Prompt Contradiction**: The model cannot select a forbidden intent type because the menu is pruned before prompt assembly.
 - **Low Latency & Cost**: Uses local regex engines instead of upstream LLM classification.
 - **Frictionless UX**: The user continues to type free-text (avoiding Solution C's menu fatigue) but gains the determinism of structured steering.
 - **Safe Vetoes**: Vetoes are verified locally in Python, protecting codebase integrity.
 
 #### 1.5 Weaknesses
+
 - **Pattern Maintenance**: Requires maintaining regular expressions matching common user phrasing.
 - **Brittleness**: Fallbacks to Solution E's prompt reauthorization are needed if the user enters ambiguous phrasing.
 
@@ -1413,33 +1401,38 @@ flowchart TD
 ### 2. Solution G: Cumulative Steering Stack & Multi-turn Context Preservation
 
 #### 2.1 Concept
-Commit message refinement is often iterative. A user might regenerate, see the result, and add additional instructions (e.g., first "this is a refactor", then "keep it shorter"). In the current architecture, the `ReviewState` only stores a single guidance string, which is overwritten on each turn. 
+
+Commit message refinement is often iterative. A user might regenerate, see the result, and add additional instructions (e.g., first "this is a refactor", then "keep it shorter"). In the current architecture, the `ReviewState` only stores a single guidance string, which is overwritten on each turn.
 
 Solution G introduces a **Cumulative Steering Stack** inside `ReviewState`. The history of steering instructions is preserved, and the system prompt is injected with both the steering history and the previous `CommitPlan` to prevent generation "jitter."
 
 #### 2.2 How it works
+
 1. **Steering Stack**: `ReviewState` maintains a list of historical guidance strings (e.g., `["refactor the internal engine", "keep subject short"]`).
 2. **Context-Diffing**: The prompt includes the previous output: `"Here is the previous CommitPlan generated: [Previous Plan]. The developer has provided the following additional correction: [New Instruction]. Adjust the plan accordingly, but preserve other details to avoid jitter."`
 3. **Precedence rules**: Prompt template states: "Directives are ordered chronologically. The most recent instructions take precedence over earlier ones, and user instructions take precedence over initial deterministic rankings."
 
 #### 2.3 Visual Aid: Cumulative Steering Stack
+
 ```mermaid
 flowchart TD
     UserG["User Input"] --> StackG["Steering Stack\n(Chronological List)"]
     PrevG["Previous CommitPlan"] --> PromptG["System Prompt\n(Steering History + Previous Plan)"]
     StackG --> PromptG
     DiffG["Diff"] --> PromptG
-    
+
     PromptG --> LLM_G["LLM"]
     LLM_G --> PlanG["Stable CommitPlan"]
 ```
 
 #### 2.4 Strengths
+
 - **Eliminates Jitter**: Passing the previous `CommitPlan` ensures the model modifies only the requested parts (e.g., changing the type without rewriting a perfectly good body summary).
 - **Supports Iteration**: The developer does not need to re-type previous guidance instructions.
 - **Auditable History**: The complete steering trajectory is preserved in tracing tools (e.g., Opik).
 
 #### 2.5 Weaknesses
+
 - **Token Inflation**: Prompts grow larger on each regeneration iteration.
 - **Context Pollution**: Old, conflicting guidance in the stack can confuse the LLM if not carefully managed or cleared.
 
@@ -1451,34 +1444,34 @@ This section updates the comparison matrices to evaluate Solutions A-G.
 
 #### 3.1 High-Level Comparison Matrix (Revised)
 
-| Dimension | A | B | C | D | E | F | G |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Preserves existing ranker | Strongly | Partially | Strongly | Strongly | Completely | Completely | Completely |
-| Lets guidance matter | Moderately | Strongly | Strongly | Strongly | Very Strongly | Absolutely | Very Strongly |
-| Prompt contradiction reduction | Moderate | Strong | Strong | Strong | Very Strong | Complete | Very Strong |
-| Engineering complexity | Low–Med | Med–High | Med–High | Medium | Low–Med | Medium | Medium |
-| UX simplicity | High | High | Med–Low | Medium | High | High | High |
-| Determinism | Moderate | Strong | Very Strong | Strong | Med–Strong | Very Strong | Moderate |
-| Testability | Moderate | Strong | Very Strong | Strong | Strong | Very Strong | Moderate |
-| Extensibility | Moderate | Strong | Very Strong | Very Strong | Very Strong | Very Strong | Very Strong |
-| Release safety | Strong | Moderate | Moderate | Strong | Strong | Very Strong | Strong |
-| Long-term cleanliness | Moderate | Strong | Strong | Very Strong | Strong | Strong | Very Strong |
-| Handles non-classification | Weak | Weak | Moderate | Moderate | Strong | Weak | Strong |
-| Addresses authority conflict | No | No | Partially | Partially | Yes | Yes | Yes |
+| Dimension                      | A          | B         | C           | D           | E             | F           | G             |
+| :----------------------------- | :--------- | :-------- | :---------- | :---------- | :------------ | :---------- | :------------ |
+| Preserves existing ranker      | Strongly   | Partially | Strongly    | Strongly    | Completely    | Completely  | Completely    |
+| Lets guidance matter           | Moderately | Strongly  | Strongly    | Strongly    | Very Strongly | Absolutely  | Very Strongly |
+| Prompt contradiction reduction | Moderate   | Strong    | Strong      | Strong      | Very Strong   | Complete    | Very Strong   |
+| Engineering complexity         | Low–Med    | Med–High  | Med–High    | Medium      | Low–Med       | Medium      | Medium        |
+| UX simplicity                  | High       | High      | Med–Low     | Medium      | High          | High        | High          |
+| Determinism                    | Moderate   | Strong    | Very Strong | Strong      | Med–Strong    | Very Strong | Moderate      |
+| Testability                    | Moderate   | Strong    | Very Strong | Strong      | Strong        | Very Strong | Moderate      |
+| Extensibility                  | Moderate   | Strong    | Very Strong | Very Strong | Very Strong   | Very Strong | Very Strong   |
+| Release safety                 | Strong     | Moderate  | Moderate    | Strong      | Strong        | Very Strong | Strong        |
+| Long-term cleanliness          | Moderate   | Strong    | Strong      | Very Strong | Strong        | Strong      | Very Strong   |
+| Handles non-classification     | Weak       | Weak      | Moderate    | Moderate    | Strong        | Weak        | Strong        |
+| Addresses authority conflict   | No         | No        | Partially   | Partially   | Yes           | Yes         | Yes           |
 
-*Note on Solutions: A: Alternative Lane, B: Re-ranking, C: Structured Steering, D: Hybrid Reconciliation, E: Prompt Reauthorization, F: Regex-Directives with Masking, G: Cumulative Steering Stack.*
+_Note on Solutions: A: Alternative Lane, B: Re-ranking, C: Structured Steering, D: Hybrid Reconciliation, E: Prompt Reauthorization, F: Regex-Directives with Masking, G: Cumulative Steering Stack._
 
 #### 3.2 Strengths and Weaknesses Summary (Revised)
 
-| Solution | Primary Strength | Primary Weakness | Unique Feature |
-| :--- | :--- | :--- | :--- |
-| A | Safest incremental change | Keeps two authority lanes alive; cognitively heavy prompt | Override lane without ranker modification |
-| B | Single coherent regenerate shortlist | Score-to-guidance mapping is brittle; can conflict with vetoes | Best pure ranking rescoring |
-| C | Maximum determinism and explainability | Heavy UX footprint; menu fatigue | Explicit steering contract |
-| D | Best balance across safety and flexibility | Reconciliation policy is undefined; parser scope is ambiguous | Reconciles free text with structural policy |
-| E | Fixes the prompt authority inversion | LLM interpretation of guidance is unconstrained | Reauthorized prompt template |
-| F | Complete elimination of prompt conflict for intents | Brittle regex rules; needs fallback for styling guidance | Deterministic Python-driven menu masking |
-| G | Prevents description/body jitter across retries | Prompt grows larger with each turn; token inflation | Cumulative context diffing |
+| Solution | Primary Strength                                    | Primary Weakness                                               | Unique Feature                              |
+| :------- | :-------------------------------------------------- | :------------------------------------------------------------- | :------------------------------------------ |
+| A        | Safest incremental change                           | Keeps two authority lanes alive; cognitively heavy prompt      | Override lane without ranker modification   |
+| B        | Single coherent regenerate shortlist                | Score-to-guidance mapping is brittle; can conflict with vetoes | Best pure ranking rescoring                 |
+| C        | Maximum determinism and explainability              | Heavy UX footprint; menu fatigue                               | Explicit steering contract                  |
+| D        | Best balance across safety and flexibility          | Reconciliation policy is undefined; parser scope is ambiguous  | Reconciles free text with structural policy |
+| E        | Fixes the prompt authority inversion                | LLM interpretation of guidance is unconstrained                | Reauthorized prompt template                |
+| F        | Complete elimination of prompt conflict for intents | Brittle regex rules; needs fallback for styling guidance       | Deterministic Python-driven menu masking    |
+| G        | Prevents description/body jitter across retries     | Prompt grows larger with each turn; token inflation            | Cumulative context diffing                  |
 
 ---
 
@@ -1491,21 +1484,21 @@ flowchart TD
     Guidance["User Guidance"] --> ParseF["Regex Parser (F)"]
     ParseF -- "Intent Match" --> Mask["Python Menu Masking (F)"]
     ParseF -- "Style/Other" --> Stack["Steering Stack (G)"]
-    
+
     Mask --> Prompt["Reauthorized Prompt Template (E)"]
     Stack --> Prompt
-    
+
     Prompt --> LLM["LLM Generation"]
 ```
 
 #### Recommended Phase Implementation
+
 1. **Phase 1 (Immediate - Fix Dead Code)**: Fix the dead `regeneration_guidance` parameter in `build_system_prompt` and wire it up to allow prompt adjustments.
 2. **Phase 2 (Baseline Reauthorization - Solution E)**: Implement Solution E to ensure that during regeneration, the prompt template changes to subordinate the shortlist and elevate the user's text guidance.
 3. **Phase 3 (Deterministic Masking - Solution F)**: Add a local regex-based directive parser in Python. If a clear intent override is detected (e.g., "feat", "fix"), mask the menu and execute pre-flight veto checks in Python before calling the LLM.
 4. **Phase 4 (Anti-Jitter Stack - Solution G)**: Store previous `CommitPlan` responses in `ReviewState` and pass them during regeneration to ensure stable, incremental updates.
 
 ---
-
 
 ---
 
@@ -1517,9 +1510,9 @@ This update does not replace or rewrite any earlier analysis. Instead, it append
 
 The most important conclusion from this review is that the architectural problem is now best understood as **three distinct but coupled problems**, not one:
 
-* **Authority reconciliation**: Which source should dominate during regenerate — the deterministic shortlist, the user's steering text, or a governed combination?
-* **Semantic ownership**: Which parts of the final `CommitPlan` should be owned by Python and the SOP matrix, and which parts should remain model-generated?
-* **Regeneration stability**: How should repeated regenerate cycles avoid unnecessary jitter, semantic drift, and prompt-state pollution?
+- **Authority reconciliation**: Which source should dominate during regenerate — the deterministic shortlist, the user's steering text, or a governed combination?
+- **Semantic ownership**: Which parts of the final `CommitPlan` should be owned by Python and the SOP matrix, and which parts should remain model-generated?
+- **Regeneration stability**: How should repeated regenerate cycles avoid unnecessary jitter, semantic drift, and prompt-state pollution?
 
 Earlier sections identify parts of this well, especially around prompt authority inversion. However, the live codebase shows that the underlying contract is looser than the ADR currently assumes, and that looseness changes how the solution set should be evaluated.
 
@@ -1527,24 +1520,24 @@ Earlier sections identify parts of this well, especially around prompt authority
 
 This appended review was grounded in direct reading of the following project artifacts:
 
-* `docs/ADRs/0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md`
-* `docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md`
-* `src/git_cg/main.py`
-* `src/git_cg/intent.py`
-* `src/git_cg/interaction.py`
-* `src/git_cg/models.py`
-* `src/git_cg/sop.py`
-* `src/git_cg/release.py`
-* `src/git_cg/notifier.py`
-* `config/gitops_agent_sop.json`
-* `tests/test_main.py`
-* `tests/test_regeneration_guidance.py`
-* `tests/test_ranker.py`
-* `tests/test_intent.py`
-* `tests/test_sop.py`
-* `README.md`
-* `docs/index.md`
-* `usage.kdl`
+- `docs/ADRs/0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md`
+- `docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md`
+- `src/git_cg/main.py`
+- `src/git_cg/intent.py`
+- `src/git_cg/interaction.py`
+- `src/git_cg/models.py`
+- `src/git_cg/sop.py`
+- `src/git_cg/release.py`
+- `src/git_cg/notifier.py`
+- `config/gitops_agent_sop.json`
+- `tests/test_main.py`
+- `tests/test_regeneration_guidance.py`
+- `tests/test_ranker.py`
+- `tests/test_intent.py`
+- `tests/test_sop.py`
+- `README.md`
+- `docs/index.md`
+- `usage.kdl`
 
 The review remained read-only at analysis time and was focused on architectural behavior, semantic correctness, downstream safety, testability, and governance alignment rather than implementation cosmetics.
 
@@ -1552,8 +1545,8 @@ The review remained read-only at analysis time and was focused on architectural 
 
 The earlier refinements already captured two important defects:
 
-* the dead `regeneration_guidance` parameter in `build_system_prompt`
-* redundant regenerate-time prompt rebuilding that produces the same ranking frame on each retry
+- the dead `regeneration_guidance` parameter in `build_system_prompt`
+- redundant regenerate-time prompt rebuilding that produces the same ranking frame on each retry
 
 Those findings remain correct. The deeper review below extends them.
 
@@ -1563,14 +1556,14 @@ The current `CommitIntent.validate_and_correct_matrix` logic in `src/git_cg/mode
 
 What it currently does well:
 
-* canonicalizes `gitmoji`
-* coerces `cc_type` when it does not match the resolved matrix row
-* falls back to a default row when the intent is completely unknown
+- canonicalizes `gitmoji`
+- coerces `cc_type` when it does not match the resolved matrix row
+- falls back to a default row when the intent is completely unknown
 
 What it does **not** currently canonicalize for matched rows:
 
-* `semver_impact`
-* `changelog_group`
+- `semver_impact`
+- `changelog_group`
 
 That means the model can return a valid `intent_id` while still drifting on matrix-owned metadata that should be deterministic. This is not a minor issue. It affects one of the core promises of the application: that release classification and changelog grouping derive from the exact selected SOP rows rather than broad language-model approximations.
 
@@ -1584,9 +1577,9 @@ This is operationally convenient, but architecturally risky for a core operating
 
 Consequences include:
 
-* bad model behavior can appear successful in the review loop
-* regenerate strategies may look more reliable than they really are because Python silently normalizes the result into a generic chore/config path
-* commit history quality may degrade under the appearance of resilience
+- bad model behavior can appear successful in the review loop
+- regenerate strategies may look more reliable than they really are because Python silently normalizes the result into a generic chore/config path
+- commit history quality may degrade under the appearance of resilience
 
 A fail-soft fallback can be acceptable for non-critical metadata. It is much less acceptable when the fallback can change the apparent primary semantic meaning of the commit.
 
@@ -1606,15 +1599,15 @@ This means that several proposed solutions — especially those that rely on pro
 
 The regenerate loop currently passes:
 
-* the diff
-* the rebuilt system prompt
-* the optional current guidance string
+- the diff
+- the rebuilt system prompt
+- the optional current guidance string
 
 It does **not** pass:
 
-* the previous `CommitPlan`
-* the previous rendered commit message
-* an explicit delta or keep-stable instruction grounded in concrete prior state
+- the previous `CommitPlan`
+- the previous rendered commit message
+- an explicit delta or keep-stable instruction grounded in concrete prior state
 
 This means every regenerate attempt is effectively a fresh full re-synthesis, not an incremental correction. That is the real source of jitter.
 
@@ -1628,9 +1621,9 @@ However, deterministic enforcement remains weaker than the prose suggests.
 
 The schema currently does not strongly constrain:
 
-* primary description length
-* scope length
-* regenerate-time style or compression deltas
+- primary description length
+- scope length
+- regenerate-time style or compression deltas
 
 There is downstream validation via the commit gatekeeper, but that is not the same thing as strong upstream contract enforcement. This matters because several guidance examples in the ADR are about wording and brevity rather than intent selection.
 
@@ -1646,8 +1639,8 @@ That fallback is inherently less trustworthy because multiple SOP rows can share
 
 For example:
 
-* `feat` rows can imply `PATCH`, `MINOR`, or `MAJOR`
-* `refactor` rows can imply `PATCH`, `MINOR`, or `MAJOR`
+- `feat` rows can imply `PATCH`, `MINOR`, or `MAJOR`
+- `refactor` rows can imply `PATCH`, `MINOR`, or `MAJOR`
 
 So any regenerate solution that leaves semantic ownership too loose can create downstream release ambiguity, even if the review loop appears acceptable.
 
@@ -1657,9 +1650,9 @@ The `gitops_agent_sop.json` matrix contains a broad vocabulary of positive and n
 
 That creates a practical precision ceiling:
 
-* the matrix appears more expressive than the current ranker input actually is
-* some fine-grained distinctions exist on paper but not as consistently reachable ranking signals
-* guidance-aware rescoring options built on top of this layer inherit that ceiling unless the signal vocabulary is expanded or a new constraint model is introduced
+- the matrix appears more expressive than the current ranker input actually is
+- some fine-grained distinctions exist on paper but not as consistently reachable ranking signals
+- guidance-aware rescoring options built on top of this layer inherit that ceiling unless the signal vocabulary is expanded or a new constraint model is introduced
 
 This does not invalidate deterministic ranking. It does mean that several solution descriptions slightly overestimate how much semantic precision the current ranker can provide before regenerate-time reconciliation even begins.
 
@@ -1667,9 +1660,9 @@ This does not invalidate deterministic ranking. It does mean that several soluti
 
 The wider project review also found governance drift:
 
-* `README.md` documents the richer interactive review action set including issue references and regenerate guidance
-* `docs/index.md` still documents the older narrower action set
-* `usage.kdl` does not accurately reflect the current CLI surface
+- `README.md` documents the richer interactive review action set including issue references and regenerate guidance
+- `docs/index.md` still documents the older narrower action set
+- `usage.kdl` does not accurately reflect the current CLI surface
 
 This is not the root architectural bug, but it is evidence that the regeneration system now spans more surfaces than the ADR comparison currently acknowledges.
 
@@ -1705,22 +1698,22 @@ Some are prompt-layer interventions. Some are ranking interventions. Some are UI
 
 #### 4.1 A-G Reclassified by Primary Architectural Layer
 
-| Solution | Primary Layer | Best Contribution | Why It Is Not Sufficient Alone |
-| :--- | :--- | :--- | :--- |
-| A | Candidate presentation | Makes override lanes explicit | Leaves arbitration to the model and increases prompt complexity |
-| B | Ranking | Produces one regenerate-specific shortlist | Cannot naturally address style/framing guidance and depends on a hidden guidance classifier |
-| C | UI/control input | Makes explicit steering deterministic | Adds UX friction and still needs a deeper precedence policy |
-| D | Policy umbrella | Correctly senses that multiple mechanisms are needed | Too underspecified to be selected as written |
-| E | Prompt authority | Directly fixes the current inverted authority hierarchy | Does not by itself fix semantic ownership or regenerate stability |
-| F | Deterministic override extraction | Handles explicit semantic corrections with high confidence | Limited coverage and weak for framing/length guidance |
-| G | Iteration state | Recognizes that repeated regenerate cycles need memory | A raw cumulative stack is too noisy and too token-heavy |
+| Solution | Primary Layer                     | Best Contribution                                          | Why It Is Not Sufficient Alone                                                              |
+| :------- | :-------------------------------- | :--------------------------------------------------------- | :------------------------------------------------------------------------------------------ |
+| A        | Candidate presentation            | Makes override lanes explicit                              | Leaves arbitration to the model and increases prompt complexity                             |
+| B        | Ranking                           | Produces one regenerate-specific shortlist                 | Cannot naturally address style/framing guidance and depends on a hidden guidance classifier |
+| C        | UI/control input                  | Makes explicit steering deterministic                      | Adds UX friction and still needs a deeper precedence policy                                 |
+| D        | Policy umbrella                   | Correctly senses that multiple mechanisms are needed       | Too underspecified to be selected as written                                                |
+| E        | Prompt authority                  | Directly fixes the current inverted authority hierarchy    | Does not by itself fix semantic ownership or regenerate stability                           |
+| F        | Deterministic override extraction | Handles explicit semantic corrections with high confidence | Limited coverage and weak for framing/length guidance                                       |
+| G        | Iteration state                   | Recognizes that repeated regenerate cycles need memory     | A raw cumulative stack is too noisy and too token-heavy                                     |
 
 This reframing matters because it changes how the comparison should be read.
 
-* **E** is best understood as a **prerequisite authority correction layer**.
-* **F** is best understood as a **bounded deterministic directive accelerator**.
-* **G** is best understood as an **iteration-state concern**, not a complete architecture.
-* **D** should be rewritten as a real precedence policy if it is to remain a candidate.
+- **E** is best understood as a **prerequisite authority correction layer**.
+- **F** is best understood as a **bounded deterministic directive accelerator**.
+- **G** is best understood as an **iteration-state concern**, not a complete architecture.
+- **D** should be rewritten as a real precedence policy if it is to remain a candidate.
 
 #### 4.2 Focused Review of Solution A
 
@@ -1728,9 +1721,9 @@ Solution A remains a viable incremental stopgap, but it should no longer be posi
 
 Key concerns:
 
-* it increases the number of authority surfaces in the prompt
-* it still asks the model to decide whether conflict is clear enough to justify the alternate lane
-* it does very little for non-semantic guidance such as emphasis, brevity, or stability
+- it increases the number of authority surfaces in the prompt
+- it still asks the model to decide whether conflict is clear enough to justify the alternate lane
+- it does very little for non-semantic guidance such as emphasis, brevity, or stability
 
 If retained at all, Solution A should be explicitly framed as a transitional overlay and paired with E-style prompt reauthorization.
 
@@ -1740,10 +1733,10 @@ Solution B remains the strongest option among the original A-D if the only probl
 
 However, it is weaker than it first appears because:
 
-* free-text guidance must still be normalized into score changes somehow
-* those score changes are themselves a hidden classifier
-* style and framing guidance do not naturally belong in ranking
-* the current marker vocabulary already limits how expressive ranking can be
+- free-text guidance must still be normalized into score changes somehow
+- those score changes are themselves a hidden classifier
+- style and framing guidance do not naturally belong in ranking
+- the current marker vocabulary already limits how expressive ranking can be
 
 If B is pursued, it should be constrained to high-confidence structured or semi-structured directive inputs rather than broad free-text reinterpretation.
 
@@ -1753,16 +1746,16 @@ Solution C is still valuable, but mostly as an optional control-plane enhancemen
 
 It is best for:
 
-* explicit primary-type overrides
-* explicit discouraged types
-* scope preferences
-* future governance-heavy workflows
+- explicit primary-type overrides
+- explicit discouraged types
+- scope preferences
+- future governance-heavy workflows
 
 It is much less good for:
 
-* compact natural-language framing corrections
-* fast low-friction review-loop steering
-* minimizing UI surface area for common cases
+- compact natural-language framing corrections
+- fast low-friction review-loop steering
+- minimizing UI surface area for common cases
 
 The strongest role for C is likely later-stage optional augmentation, not first-line architecture.
 
@@ -1772,10 +1765,10 @@ Solution D correctly points toward composability, but as written it remains too 
 
 If D is kept in the ADR, it should be rewritten as an explicit policy definition that answers:
 
-* what wins first: hard constraint, user directive, or ranker?
-* which kinds of guidance are eligible for structural transformation?
-* when are alternatives used versus score adjustments?
-* what remains model-interpreted versus Python-resolved?
+- what wins first: hard constraint, user directive, or ranker?
+- which kinds of guidance are eligible for structural transformation?
+- when are alternatives used versus score adjustments?
+- what remains model-interpreted versus Python-resolved?
 
 Without those answers, D is more a category label than a solution.
 
@@ -1785,17 +1778,17 @@ Solution E is the strongest near-term improvement and should be treated as the m
 
 Why it is strong:
 
-* it fixes the current authority inversion directly
-* it has low blast radius
-* it preserves the existing ranker
-* it supports broad natural guidance better than rank-only strategies
+- it fixes the current authority inversion directly
+- it has low blast radius
+- it preserves the existing ranker
+- it supports broad natural guidance better than rank-only strategies
 
 Why it is still incomplete:
 
-* it does not separate semantic decisions from linguistic rewriting
-* it does not create a stable previous-plan anchor
-* it depends on the model to interpret guidance correctly
-* it assumes a stronger constraint model than the codebase currently has
+- it does not separate semantic decisions from linguistic rewriting
+- it does not create a stable previous-plan anchor
+- it depends on the model to interpret guidance correctly
+- it assumes a stronger constraint model than the codebase currently has
 
 The corrected way to position E is:
 
@@ -1807,15 +1800,15 @@ Solution F is useful, but only if it remains tightly bounded.
 
 It is strongest for phrases like:
 
-* `this is a feature`
-* `make it a fix`
-* `use scope tui`
+- `this is a feature`
+- `make it a fix`
+- `use scope tui`
 
 It becomes weak or brittle for phrases like:
 
-* `focus on user-facing behavior`
-* `keep the subject shorter`
-* `do not overemphasize internals`
+- `focus on user-facing behavior`
+- `keep the subject shorter`
+- `do not overemphasize internals`
 
 So F should not be described as a full elimination of prompt conflict. It is better described as deterministic pre-resolution for high-confidence semantic directives, with clean fallback to E-style prompt behavior when ambiguous.
 
@@ -1825,21 +1818,21 @@ Solution G is the most conceptually over-extended proposal in the current ADR.
 
 Its core observation is correct:
 
-* regenerate needs memory and stability
+- regenerate needs memory and stability
 
 But the proposed raw cumulative steering stack is not the best embodiment of that insight.
 
 Why the current G shape is risky:
 
-* prompts grow with each iteration
-* old steering text becomes stale but still consumes authority and context
-* history accumulation is not the same thing as active resolved state
+- prompts grow with each iteration
+- old steering text becomes stale but still consumes authority and context
+- history accumulation is not the same thing as active resolved state
 
 A better evolution of G would keep:
 
-* the previous `CommitPlan`
-* the active resolved steering state
-* the latest residual free-text note
+- the previous `CommitPlan`
+- the active resolved steering state
+- the latest residual free-text note
 
 and would **not** replay the full steering transcript by default.
 
@@ -1853,11 +1846,11 @@ That missing solution is documented here as **Solution H**.
 
 Instead of asking a single regenerate prompt to do all of the following at once:
 
-* reinterpret the diff
-* arbitrate between ranking and guidance
-* choose the semantic intent bundle
-* rewrite the description and body
-* preserve any useful earlier wording
+- reinterpret the diff
+- arbitrate between ranking and guidance
+- choose the semantic intent bundle
+- rewrite the description and body
+- preserve any useful earlier wording
 
 Solution H splits regenerate into two governed concerns:
 
@@ -1870,16 +1863,16 @@ Python becomes the owner of the semantic contract, while the model remains respo
 
 Under Solution H, the system should operate under the following rules.
 
-* The ranker still runs and still matters.
-* Prompt authority is still corrected using E-style reauthorization during regenerate.
-* High-confidence explicit directives may still be extracted using a bounded F-style parser.
-* Matrix-derived fields must be owned by Python once an `intent_id` is accepted.
-* Regenerate must distinguish between:
-    * semantic correction
-    * framing correction
-    * style/length correction
-* The previous accepted `CommitPlan` becomes the primary anchor for regenerate stability.
-* Hard constraints must become explicit constraint sets rather than merely score penalties if the system intends them to be inviolate.
+- The ranker still runs and still matters.
+- Prompt authority is still corrected using E-style reauthorization during regenerate.
+- High-confidence explicit directives may still be extracted using a bounded F-style parser.
+- Matrix-derived fields must be owned by Python once an `intent_id` is accepted.
+- Regenerate must distinguish between:
+  - semantic correction
+  - framing correction
+  - style/length correction
+- The previous accepted `CommitPlan` becomes the primary anchor for regenerate stability.
+- Hard constraints must become explicit constraint sets rather than merely score penalties if the system intends them to be inviolate.
 
 #### 5.3 Proposed Internal Model
 
@@ -1889,31 +1882,31 @@ A clean implementation shape for Solution H would introduce three internal state
 
 Contains deterministic context derived from the diff and SOP:
 
-* `diff_signals`
-* `ranked_intents`
-* `allowed_intents` / `disallowed_intents`
-* cached candidate summaries
+- `diff_signals`
+- `ranked_intents`
+- `allowed_intents` / `disallowed_intents`
+- cached candidate summaries
 
 ##### B. `RegenerationState`
 
 Contains review-loop steering state:
 
-* previous `CommitPlan`
-* active normalized directives
-* latest free-text residual note
-* optional scope preference
+- previous `CommitPlan`
+- active normalized directives
+- latest free-text residual note
+- optional scope preference
 
 ##### C. `ResolvedCommitContract`
 
 Contains the semantic contract for the next render:
 
-* primary `intent_id`
-* secondary `intent_id`s
-* canonicalized `gitmoji`
-* canonicalized `cc_type`
-* canonicalized `semver_impact`
-* canonicalized `changelog_group`
-* locked or mutable fields for scope/description/body depending on the regenerate request
+- primary `intent_id`
+- secondary `intent_id`s
+- canonicalized `gitmoji`
+- canonicalized `cc_type`
+- canonicalized `semver_impact`
+- canonicalized `changelog_group`
+- locked or mutable fields for scope/description/body depending on the regenerate request
 
 #### 5.4 Visual Aid: Solution H Pipeline
 
@@ -1969,47 +1962,47 @@ Solution H directly addresses the missing separation in the current ADR.
 
 It distinguishes:
 
-* **who decides meaning** from **who decides wording**
-* **what may change** from **what must remain stable**
-* **semantic override handling** from **stylistic refinement handling**
+- **who decides meaning** from **who decides wording**
+- **what may change** from **what must remain stable**
+- **semantic override handling** from **stylistic refinement handling**
 
 That makes it materially stronger for:
 
-* repeated regeneration stability
-* downstream release safety
-* deterministic tests
-* integrating E, F, and a refined G without collapsing them into one prompt hack
+- repeated regeneration stability
+- downstream release safety
+- deterministic tests
+- integrating E, F, and a refined G without collapsing them into one prompt hack
 
 #### 5.7 Strengths
 
-| Strength | Detail |
-| :--- | :--- |
-| Separates semantics from phrasing | Intent reconciliation no longer has to be solved inside the same prompt that rewrites prose |
-| Improves stability | Previous-plan anchoring and locked semantic contracts reduce regenerate jitter |
-| Improves release safety | Python can fully canonicalize matrix-owned metadata once intent IDs are resolved |
-| Composes with E and F | Prompt reauthorization and high-confidence directive extraction still remain useful layers |
-| Makes testing clearer | Contract resolution, delta rendering, and final validation can be tested separately |
-| Better matches guidance reality | Semantic corrections, framing instructions, and length requests no longer need to be forced through one mechanism |
+| Strength                          | Detail                                                                                                            |
+| :-------------------------------- | :---------------------------------------------------------------------------------------------------------------- |
+| Separates semantics from phrasing | Intent reconciliation no longer has to be solved inside the same prompt that rewrites prose                       |
+| Improves stability                | Previous-plan anchoring and locked semantic contracts reduce regenerate jitter                                    |
+| Improves release safety           | Python can fully canonicalize matrix-owned metadata once intent IDs are resolved                                  |
+| Composes with E and F             | Prompt reauthorization and high-confidence directive extraction still remain useful layers                        |
+| Makes testing clearer             | Contract resolution, delta rendering, and final validation can be tested separately                               |
+| Better matches guidance reality   | Semantic corrections, framing instructions, and length requests no longer need to be forced through one mechanism |
 
 #### 5.8 Weaknesses
 
-| Weakness | Detail |
-| :--- | :--- |
-| Higher engineering cost | Requires new internal state models and clearer phase separation |
-| Larger migration surface | Touches more of the core generation pipeline than E alone |
-| Possible extra LLM round | Some regenerate paths may benefit from or require an additional render-focused call |
-| Requires stricter contract design | Hard constraints and matrix ownership must be made explicit rather than implied |
+| Weakness                          | Detail                                                                              |
+| :-------------------------------- | :---------------------------------------------------------------------------------- |
+| Higher engineering cost           | Requires new internal state models and clearer phase separation                     |
+| Larger migration surface          | Touches more of the core generation pipeline than E alone                           |
+| Possible extra LLM round          | Some regenerate paths may benefit from or require an additional render-focused call |
+| Requires stricter contract design | Hard constraints and matrix ownership must be made explicit rather than implied     |
 
 #### 5.9 Integration Surface and Impact Radius
 
-| Component | Required Change | Effect |
-| :--- | :--- | :--- |
-| `src/git_cg/models.py` | Fully canonicalize matrix-owned metadata from resolved `intent_id`s | Eliminates semantic drift in release-critical fields |
-| `src/git_cg/main.py` | Split semantic resolution from delta rendering; add previous-plan anchoring | Makes regenerate incremental rather than fully stateless |
-| `src/git_cg/intent.py` | Optionally expose explicit allowed/disallowed constraint sets | Converts pseudo-vetoes into real architecture when desired |
-| `src/git_cg/interaction.py` | Continue collecting guidance, but later surface normalized directive state if adopted | Keeps TUI understandable while supporting richer steering |
-| `tests/` | Add contract-resolution, delta-render, and invariant tests | Expands confidence beyond prompt-only behavior |
-| `README.md` and docs | Explain semantic vs stylistic regenerate behavior once implemented | Prevents user confusion about what regenerate is allowed to change |
+| Component                   | Required Change                                                                       | Effect                                                             |
+| :-------------------------- | :------------------------------------------------------------------------------------ | :----------------------------------------------------------------- |
+| `src/git_cg/models.py`      | Fully canonicalize matrix-owned metadata from resolved `intent_id`s                   | Eliminates semantic drift in release-critical fields               |
+| `src/git_cg/main.py`        | Split semantic resolution from delta rendering; add previous-plan anchoring           | Makes regenerate incremental rather than fully stateless           |
+| `src/git_cg/intent.py`      | Optionally expose explicit allowed/disallowed constraint sets                         | Converts pseudo-vetoes into real architecture when desired         |
+| `src/git_cg/interaction.py` | Continue collecting guidance, but later surface normalized directive state if adopted | Keeps TUI understandable while supporting richer steering          |
+| `tests/`                    | Add contract-resolution, delta-render, and invariant tests                            | Expands confidence beyond prompt-only behavior                     |
+| `README.md` and docs        | Explain semantic vs stylistic regenerate behavior once implemented                    | Prevents user confusion about what regenerate is allowed to change |
 
 ### 6. Supplemental Comparative Evaluation of All Solutions (A-H)
 
@@ -2017,37 +2010,37 @@ This subsection is intended to improve the earlier comparison by adding missing 
 
 #### 6.1 Expanded Comparison Matrix
 
-| Dimension | A | B | C | D | E | F | G | H |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Fixes prompt authority inversion | Weak | Weak | Moderate | Moderate | Strong | Moderate | Weak | Strong |
-| Deterministic semantic override handling | Weak | Moderate | Strong | Moderate | Weak | Strong | Weak | Very Strong |
-| Handles framing and emphasis guidance | Weak | Weak | Moderate | Moderate | Strong | Weak | Moderate | Strong |
-| Handles style and length guidance | Weak | Weak | Moderate | Weak | Strong | Weak | Moderate | Strong |
-| Stability across repeated regenerate cycles | Weak | Moderate | Moderate | Moderate | Moderate | Moderate | Moderate | Very Strong |
-| Preserves existing ranker value | Strong | Partial | Strong | Strong | Complete | Complete | Complete | Strong |
-| Protects release metadata integrity | Weak | Moderate | Moderate | Moderate | Moderate | Moderate | Weak | Strong |
-| Testability as a governed system | Moderate | Strong | Very Strong | Moderate | Strong | Strong | Moderate | Very Strong |
-| Suitable as a final target architecture on its own | No | No | No | Not as written | No | No | No | Yes |
+| Dimension                                          | A        | B        | C           | D              | E        | F        | G        | H           |
+| :------------------------------------------------- | :------- | :------- | :---------- | :------------- | :------- | :------- | :------- | :---------- |
+| Fixes prompt authority inversion                   | Weak     | Weak     | Moderate    | Moderate       | Strong   | Moderate | Weak     | Strong      |
+| Deterministic semantic override handling           | Weak     | Moderate | Strong      | Moderate       | Weak     | Strong   | Weak     | Very Strong |
+| Handles framing and emphasis guidance              | Weak     | Weak     | Moderate    | Moderate       | Strong   | Weak     | Moderate | Strong      |
+| Handles style and length guidance                  | Weak     | Weak     | Moderate    | Weak           | Strong   | Weak     | Moderate | Strong      |
+| Stability across repeated regenerate cycles        | Weak     | Moderate | Moderate    | Moderate       | Moderate | Moderate | Moderate | Very Strong |
+| Preserves existing ranker value                    | Strong   | Partial  | Strong      | Strong         | Complete | Complete | Complete | Strong      |
+| Protects release metadata integrity                | Weak     | Moderate | Moderate    | Moderate       | Moderate | Moderate | Weak     | Strong      |
+| Testability as a governed system                   | Moderate | Strong   | Very Strong | Moderate       | Strong   | Strong   | Moderate | Very Strong |
+| Suitable as a final target architecture on its own | No       | No       | No          | Not as written | No       | No       | No       | Yes         |
 
 #### 6.2 Best-Fit Interpretation of the Solution Space
 
-| Need | Best Fit |
-| :--- | :--- |
-| Lowest-blast-radius immediate correction | E |
-| Deterministic handling of explicit type/scope phrases | F |
-| Optional explicit steering UI for power users | C |
-| Strongest regenerate-specific shortlist coherence | B |
-| Better multi-turn stability without semantic drift | H |
-| Best long-term target architecture | H |
+| Need                                                  | Best Fit |
+| :---------------------------------------------------- | :------- |
+| Lowest-blast-radius immediate correction              | E        |
+| Deterministic handling of explicit type/scope phrases | F        |
+| Optional explicit steering UI for power users         | C        |
+| Strongest regenerate-specific shortlist coherence     | B        |
+| Better multi-turn stability without semantic drift    | H        |
+| Best long-term target architecture                    | H        |
 
 #### 6.3 Corrected Reading of Composability
 
 The earlier ADR already moved in this direction, but the project review makes it clearer:
 
-* **E** should be treated as a prerequisite layer.
-* **F** should be treated as a bounded accelerator layer.
-* **G** should be refined into an active-state-and-previous-plan layer rather than a transcript stack.
-* **H** is the first solution that can realistically act as the long-term target architecture because it separates contract resolution from textual rendering.
+- **E** should be treated as a prerequisite layer.
+- **F** should be treated as a bounded accelerator layer.
+- **G** should be refined into an active-state-and-previous-plan layer rather than a transcript stack.
+- **H** is the first solution that can realistically act as the long-term target architecture because it separates contract resolution from textual rendering.
 
 ### 7. Recommended Decision Posture and Phased Path
 
@@ -2057,12 +2050,12 @@ No final implementation is being selected in this appended update. However, the 
 
 Before any solution is treated as complete, the system should address the following baseline defects:
 
-* fully wire up or remove the dead `regeneration_guidance` parameter
-* canonicalize all matrix-owned fields in Python once an `intent_id` is resolved
-* stop calling score penalties "hard vetoes" unless they become explicit constraints
-* add a previous-plan anchor to regenerate-time behavior
-* tighten subject/description invariants where the project claims deterministic governance
-* add tests that cover semantic stability and release metadata correctness, not just prompt shape
+- fully wire up or remove the dead `regeneration_guidance` parameter
+- canonicalize all matrix-owned fields in Python once an `intent_id` is resolved
+- stop calling score penalties "hard vetoes" unless they become explicit constraints
+- add a previous-plan anchor to regenerate-time behavior
+- tighten subject/description invariants where the project claims deterministic governance
+- add tests that cover semantic stability and release metadata correctness, not just prompt shape
 
 #### 7.2 Strongest near-term path
 
@@ -2078,7 +2071,7 @@ This path has the best ratio of safety to implementation effort.
 
 The strongest long-term path is:
 
-* move from E + bounded F + refined G toward **H**
+- move from E + bounded F + refined G toward **H**
 
 That is the point at which regenerate becomes a properly governed, multi-stage architectural behavior rather than a single increasingly burdened prompt.
 
@@ -2092,10 +2085,10 @@ The two most important changes are:
 
 Once an `intent_id` is selected, Python should own:
 
-* `gitmoji`
-* `cc_type`
-* `semver_impact`
-* `changelog_group`
+- `gitmoji`
+- `cc_type`
+- `semver_impact`
+- `changelog_group`
 
 The model should not remain the final authority for those fields.
 
@@ -2111,44 +2104,43 @@ A semantic correction such as `this is a feature` and a style correction such as
 
 The verification section in the ADR should be considered incomplete without the following additional expectations.
 
-* guidance that changes semantic type but should preserve most body content
-* guidance that changes scope only
-* guidance that changes emphasis only
-* guidance that changes wording length only
-* repeated regenerate cycles with evolving guidance but stable prior-plan preservation
-* docs-only/tests-only/dependency-only cases under explicit override attempts
-* matrix canonicalization tests that prove `semver_impact` and `changelog_group` cannot drift once `intent_id` is accepted
-* release-parser tests proving malformed or missing trailers do not silently reinterpret semantically distinct rows as equivalent broad `cc_type` classes
-* documentation-sync checks to keep README, docs, and CLI surface descriptions aligned
+- guidance that changes semantic type but should preserve most body content
+- guidance that changes scope only
+- guidance that changes emphasis only
+- guidance that changes wording length only
+- repeated regenerate cycles with evolving guidance but stable prior-plan preservation
+- docs-only/tests-only/dependency-only cases under explicit override attempts
+- matrix canonicalization tests that prove `semver_impact` and `changelog_group` cannot drift once `intent_id` is accepted
+- release-parser tests proving malformed or missing trailers do not silently reinterpret semantically distinct rows as equivalent broad `cc_type` classes
+- documentation-sync checks to keep README, docs, and CLI surface descriptions aligned
 
 ### 10. Governance Follow-up from the Review
 
 This deeper review creates several follow-up obligations for the ADR and broader project governance:
 
-* the comparative evaluation should stop framing A-G as strict peers
-* Solution D should be rewritten if it is to remain in the candidate set
-* Solution G should be narrowed from transcript accumulation to active-state anchoring
-* README, `docs/index.md`, and `usage.kdl` should be kept aligned with the actual review-loop behavior
-* any implementation that changes regenerate semantics should be explicitly tested against downstream release parsing, not only review-loop behavior
+- the comparative evaluation should stop framing A-G as strict peers
+- Solution D should be rewritten if it is to remain in the candidate set
+- Solution G should be narrowed from transcript accumulation to active-state anchoring
+- README, `docs/index.md`, and `usage.kdl` should be kept aligned with the actual review-loop behavior
+- any implementation that changes regenerate semantics should be explicitly tested against downstream release parsing, not only review-loop behavior
 
 ### 11. References Used for This Update
 
-* `docs/ADRs/0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md`
-* `docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md`
-* `src/git_cg/main.py`
-* `src/git_cg/intent.py`
-* `src/git_cg/models.py`
-* `src/git_cg/interaction.py`
-* `src/git_cg/release.py`
-* `config/gitops_agent_sop.json`
-* `tests/test_main.py`
-* `tests/test_regeneration_guidance.py`
-* `tests/test_ranker.py`
-* `tests/test_intent.py`
-* `README.md`
-* `docs/index.md`
-* `usage.kdl`
-
+- `docs/ADRs/0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md`
+- `docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md`
+- `src/git_cg/main.py`
+- `src/git_cg/intent.py`
+- `src/git_cg/models.py`
+- `src/git_cg/interaction.py`
+- `src/git_cg/release.py`
+- `config/gitops_agent_sop.json`
+- `tests/test_main.py`
+- `tests/test_regeneration_guidance.py`
+- `tests/test_ranker.py`
+- `tests/test_intent.py`
+- `README.md`
+- `docs/index.md`
+- `usage.kdl`
 
 ## V. Refinement 4: Structural Pass, Review Ingestion, Final Preferred Solution Selection, and Implementation Plan (v1.4.0)
 
@@ -2165,15 +2157,15 @@ This update advances ADR-0009 from an analytical comparison record to a selected
 
 The structural pass finds that ADR-0009 is acceptable and internally coherent under the project's append-only ADR style.
 
-| Area | Structural Finding | Action Taken |
-| :--- | :--- | :--- |
-| Header prompt and predicted asset link | Present and correctly placed at the top of the ADR | Preserved unchanged |
-| YAML metadata block | Complete and consistent with project ADR style | Updated only to reflect the newly selected preferred solution and current version |
-| Base section numbering | Sections 1-22 remain internally consistent | Preserved unchanged |
-| Append-only refinement headings | Sections II, III, IV are historically coherent and intentionally layered | Preserved unchanged |
-| Mixed numbering model | The ADR now uses a deliberate two-tier structure: original numbered body plus append-only Roman-numeral updates | Confirmed as acceptable; no retroactive renumbering performed |
-| Visual-aid coverage | Present in the base body and in solution-specific appendices | Preserved and extended |
-| Earlier decision-deferral language | Historically accurate for earlier versions of the ADR | Superseded by this update rather than rewritten |
+| Area                                   | Structural Finding                                                                                              | Action Taken                                                                      |
+| :------------------------------------- | :-------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| Header prompt and predicted asset link | Present and correctly placed at the top of the ADR                                                              | Preserved unchanged                                                               |
+| YAML metadata block                    | Complete and consistent with project ADR style                                                                  | Updated only to reflect the newly selected preferred solution and current version |
+| Base section numbering                 | Sections 1-22 remain internally consistent                                                                      | Preserved unchanged                                                               |
+| Append-only refinement headings        | Sections II, III, IV are historically coherent and intentionally layered                                        | Preserved unchanged                                                               |
+| Mixed numbering model                  | The ADR now uses a deliberate two-tier structure: original numbered body plus append-only Roman-numeral updates | Confirmed as acceptable; no retroactive renumbering performed                     |
+| Visual-aid coverage                    | Present in the base body and in solution-specific appendices                                                    | Preserved and extended                                                            |
+| Earlier decision-deferral language     | Historically accurate for earlier versions of the ADR                                                           | Superseded by this update rather than rewritten                                   |
 
 #### 1.2 Structural Pass Conclusion
 
@@ -2187,11 +2179,11 @@ This section ingests the cumulative review corpus now present inside ADR-0009 an
 
 The original body correctly established the following baseline facts:
 
-* deterministic ranking is one of the strongest architectural assets in the application
-* the current generation flow is not blank-slate prompting; it is a pre-framed, SOP-mediated decision system
-* regeneration guidance introduces a second authority into the generation path
-* the core unaddressed problem was the lack of a clear precedence model between deterministic shortlist authority and user-authored correction guidance
-* Solutions A-D were valuable first-stage explorations, but they were not yet sufficient to close the entire problem cleanly
+- deterministic ranking is one of the strongest architectural assets in the application
+- the current generation flow is not blank-slate prompting; it is a pre-framed, SOP-mediated decision system
+- regeneration guidance introduces a second authority into the generation path
+- the core unaddressed problem was the lack of a clear precedence model between deterministic shortlist authority and user-authored correction guidance
+- Solutions A-D were valuable first-stage explorations, but they were not yet sufficient to close the entire problem cleanly
 
 #### 2.2 Ingested Findings from Refinement 1 (Solution E Review)
 
@@ -2199,10 +2191,10 @@ Refinement 1 introduced the first major correction to the framing of the problem
 
 The most important findings ingested from Section II are:
 
-* the authority hierarchy was inverted during regenerate-time prompting
-* the model was receiving ranked system-level framing with stronger authority than the user correction that should dominate regenerate mode
-* Solution E correctly identified prompt reauthorization as a prerequisite layer
-* prompt authority correction is necessary, but not sufficient, because it fixes who should dominate but not what exactly should be locked, rewritten, or preserved
+- the authority hierarchy was inverted during regenerate-time prompting
+- the model was receiving ranked system-level framing with stronger authority than the user correction that should dominate regenerate mode
+- Solution E correctly identified prompt reauthorization as a prerequisite layer
+- prompt authority correction is necessary, but not sufficient, because it fixes who should dominate but not what exactly should be locked, rewritten, or preserved
 
 This review materially improved the ADR by establishing that candidate selection alone is not the whole problem.
 
@@ -2212,10 +2204,10 @@ Refinement 2 added two more useful but bounded ideas.
 
 The most important findings ingested from Section III are:
 
-* Solution F is valuable when the user guidance contains a high-confidence semantic directive that can be extracted deterministically in Python
-* Solution F is not broad enough to handle style, framing, or emphasis guidance on its own
-* Solution G correctly recognized that regenerate needs memory and state continuity
-* the strongest surviving part of G is not full transcript accumulation but rather active-state preservation and stable previous-plan anchoring
+- Solution F is valuable when the user guidance contains a high-confidence semantic directive that can be extracted deterministically in Python
+- Solution F is not broad enough to handle style, framing, or emphasis guidance on its own
+- Solution G correctly recognized that regenerate needs memory and state continuity
+- the strongest surviving part of G is not full transcript accumulation but rather active-state preservation and stable previous-plan anchoring
 
 This review materially improved the ADR by separating deterministic directive handling from open-ended free-text interpretation and by clarifying that regenerate stability requires remembered state.
 
@@ -2225,12 +2217,12 @@ Update 3 provided the decisive deep review of the live codebase and is the most 
 
 The most important findings ingested from Section IV are:
 
-* Python does not yet fully own all matrix-derived semantics once an `intent_id` is accepted
-* so-called hard vetoes are still implemented as score penalties rather than real explicit constraint sets
-* regenerate currently lacks a stable previous-plan anchor and therefore behaves like repeated full rewrites rather than controlled deltas
-* release parsing amplifies semantic drift when matrix-owned metadata is not fully canonicalized upstream
-* the current solution set before H still failed to cleanly separate semantic resolution from linguistic rendering
-* Solution H is the first solution that explicitly splits semantic contract resolution from selective natural-language delta rendering
+- Python does not yet fully own all matrix-derived semantics once an `intent_id` is accepted
+- so-called hard vetoes are still implemented as score penalties rather than real explicit constraint sets
+- regenerate currently lacks a stable previous-plan anchor and therefore behaves like repeated full rewrites rather than controlled deltas
+- release parsing amplifies semantic drift when matrix-owned metadata is not fully canonicalized upstream
+- the current solution set before H still failed to cleanly separate semantic resolution from linguistic rendering
+- Solution H is the first solution that explicitly splits semantic contract resolution from selective natural-language delta rendering
 
 This review materially changed the decision posture by demonstrating that the final target architecture must be stronger than prompt-only correction, stronger than shortlist-only manipulation, and stronger than transcript accumulation.
 
@@ -2238,12 +2230,12 @@ This review materially changed the decision posture by demonstrating that the fi
 
 After ingesting all preserved review layers, the following synthesized requirements are now non-negotiable:
 
-* prompt authority must be corrected during regeneration
-* Python must own SOP-derived semantics once semantic intent is resolved
-* explicit directive handling should be deterministic when high confidence exists
-* regenerate must preserve a stable previous-plan anchor
-* semantic corrections and stylistic corrections must not be treated as the same class of operation
-* release safety and downstream parser integrity must be protected by design, not left to prompt obedience alone
+- prompt authority must be corrected during regeneration
+- Python must own SOP-derived semantics once semantic intent is resolved
+- explicit directive handling should be deterministic when high confidence exists
+- regenerate must preserve a stable previous-plan anchor
+- semantic corrections and stylistic corrections must not be treated as the same class of operation
+- release safety and downstream parser integrity must be protected by design, not left to prompt obedience alone
 
 ### 3. Final Preferred Solution Selection
 
@@ -2267,36 +2259,36 @@ Solution H is preferred because it is the first solution in the ADR that simulta
 
 The earlier solutions each solve only part of the problem:
 
-* **A** improves candidate presentation but does not truly resolve authority or stability
-* **B** improves shortlist coherence but still overloads ranking with responsibilities that include style and framing
-* **C** improves determinism but at substantial UX cost and without fully addressing broad free-text steering
-* **D** correctly gestures toward composability but remains too underspecified to implement safely as written
-* **E** is a mandatory prerequisite because it corrects prompt authority, but by itself it does not create a semantic contract or previous-plan anchoring model
-* **F** is highly valuable for bounded deterministic semantic directives, but is too narrow to stand alone
-* **G** surfaced the need for regenerate memory, but transcript accumulation is not the correct final shape
+- **A** improves candidate presentation but does not truly resolve authority or stability
+- **B** improves shortlist coherence but still overloads ranking with responsibilities that include style and framing
+- **C** improves determinism but at substantial UX cost and without fully addressing broad free-text steering
+- **D** correctly gestures toward composability but remains too underspecified to implement safely as written
+- **E** is a mandatory prerequisite because it corrects prompt authority, but by itself it does not create a semantic contract or previous-plan anchoring model
+- **F** is highly valuable for bounded deterministic semantic directives, but is too narrow to stand alone
+- **G** surfaced the need for regenerate memory, but transcript accumulation is not the correct final shape
 
 Only **H**:
 
-* separates semantic contract resolution from wording regeneration
-* allows Python to own release-critical metadata deterministically
-* supports prompt reauthorization as a sublayer rather than the whole solution
-* allows bounded deterministic directives without forcing all guidance through rigid menus
-* turns regenerate into controlled delta production instead of full semantic re-synthesis on every retry
+- separates semantic contract resolution from wording regeneration
+- allows Python to own release-critical metadata deterministically
+- supports prompt reauthorization as a sublayer rather than the whole solution
+- allows bounded deterministic directives without forcing all guidance through rigid menus
+- turns regenerate into controlled delta production instead of full semantic re-synthesis on every retry
 
 #### 3.3 Decision Posture Toward Prior Solutions
 
 The selected architecture should now be interpreted as follows:
 
-| Prior Solution | Final Role After Selection |
-| :--- | :--- |
-| A | Historical exploration only; not selected |
-| B | Useful reference for future ranking refinements, but not the selected target architecture |
-| C | Optional future control-plane augmentation, not the primary path |
-| D | Superseded conceptually by the clearer composition model inside H |
-| E | Mandatory prerequisite sublayer inside H |
-| F | Bounded deterministic accelerator sublayer inside H |
-| G | Narrowed into active-state / previous-plan anchoring inside H |
-| H | Selected final preferred architecture |
+| Prior Solution | Final Role After Selection                                                                |
+| :------------- | :---------------------------------------------------------------------------------------- |
+| A              | Historical exploration only; not selected                                                 |
+| B              | Useful reference for future ranking refinements, but not the selected target architecture |
+| C              | Optional future control-plane augmentation, not the primary path                          |
+| D              | Superseded conceptually by the clearer composition model inside H                         |
+| E              | Mandatory prerequisite sublayer inside H                                                  |
+| F              | Bounded deterministic accelerator sublayer inside H                                       |
+| G              | Narrowed into active-state / previous-plan anchoring inside H                             |
+| H              | Selected final preferred architecture                                                     |
 
 ### 4. Selected Architecture Composition
 
@@ -2346,24 +2338,24 @@ This section intentionally converts the selected architecture into a concrete im
 
 The implementation must follow these principles:
 
-* preserve the current working generation path until the new path is fully verified
-* land prerequisite safety fixes before deeper regenerate changes
-* keep Python in charge of semantic ownership and contract enforcement
-* add new modules for reconciliation logic rather than burying all complexity in `main.py`
-* keep the TUI comprehensible; do not transform it into a chat system
-* phase rollout so each milestone is reversible
+- preserve the current working generation path until the new path is fully verified
+- land prerequisite safety fixes before deeper regenerate changes
+- keep Python in charge of semantic ownership and contract enforcement
+- add new modules for reconciliation logic rather than burying all complexity in `main.py`
+- keep the TUI comprehensible; do not transform it into a chat system
+- phase rollout so each milestone is reversible
 
 #### 5.2 Proposed Internal Types and Modules
 
 The selected implementation should introduce explicit internal types rather than letting regenerate semantics remain implicit.
 
-| Proposed Type / Module | Purpose |
-| :--- | :--- |
-| `GenerationContext` | Carries deterministic diff signals, ranked intents, and explicit allowed/disallowed constraints |
-| `RegenerationDirectives` | Stores bounded high-confidence directives extracted from guidance, such as preferred type or preferred scope when confidently detected |
-| `RegenerationState` | Stores previous `CommitPlan`, active directives, residual guidance, and review-loop stability state |
-| `ResolvedCommitContract` | Represents the Python-owned semantic contract for the next render, including locked intent ids and canonicalized matrix-derived metadata |
-| `src/git_cg/regeneration.py` | New module containing contract resolution, directive extraction, and delta-render request assembly |
+| Proposed Type / Module       | Purpose                                                                                                                                  |
+| :--------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| `GenerationContext`          | Carries deterministic diff signals, ranked intents, and explicit allowed/disallowed constraints                                          |
+| `RegenerationDirectives`     | Stores bounded high-confidence directives extracted from guidance, such as preferred type or preferred scope when confidently detected   |
+| `RegenerationState`          | Stores previous `CommitPlan`, active directives, residual guidance, and review-loop stability state                                      |
+| `ResolvedCommitContract`     | Represents the Python-owned semantic contract for the next render, including locked intent ids and canonicalized matrix-derived metadata |
+| `src/git_cg/regeneration.py` | New module containing contract resolution, directive extraction, and delta-render request assembly                                       |
 
 The implementation should keep `CommitPlan` as the model-facing schema but should stop using it as the only state artifact in regenerate mode.
 
@@ -2373,15 +2365,15 @@ The implementation should keep `CommitPlan` as the model-facing schema but shoul
 
 Planned changes:
 
-* fully canonicalize matrix-owned fields after `intent_id` resolution for matched rows:
-    * `gitmoji`
-    * `cc_type`
-    * `semver_impact`
-    * `changelog_group`
-* add stronger invariant enforcement for:
-    * primary description length
-    * optional scope length constraints if adopted
-* ensure the model cannot silently drift on release-critical metadata once Python accepts the semantic contract
+- fully canonicalize matrix-owned fields after `intent_id` resolution for matched rows:
+  - `gitmoji`
+  - `cc_type`
+  - `semver_impact`
+  - `changelog_group`
+- add stronger invariant enforcement for:
+  - primary description length
+  - optional scope length constraints if adopted
+- ensure the model cannot silently drift on release-critical metadata once Python accepts the semantic contract
 
 Reason:
 
@@ -2389,19 +2381,19 @@ This is required to make Solution H real. Without it, semantic ownership remains
 
 Rollback:
 
-* revert canonicalization expansion and keep current partial behavior
+- revert canonicalization expansion and keep current partial behavior
 
 ##### B. `src/git_cg/intent.py`
 
 Planned changes:
 
-* preserve existing ranking behavior as the baseline analysis engine
-* add an explicit constraint export layer, for example:
-    * `allowed_intent_ids`
-    * `disallowed_intent_ids`
-    * `constraint_reasons`
-* stop treating `only_docs`, `only_tests`, and `only_dependency_changes` purely as score penalties when the architecture intends them to be governing constraints in regenerate mode
-* keep scoring and constraint generation separate so tests can distinguish ranking hints from hard constraints
+- preserve existing ranking behavior as the baseline analysis engine
+- add an explicit constraint export layer, for example:
+  - `allowed_intent_ids`
+  - `disallowed_intent_ids`
+  - `constraint_reasons`
+- stop treating `only_docs`, `only_tests`, and `only_dependency_changes` purely as score penalties when the architecture intends them to be governing constraints in regenerate mode
+- keep scoring and constraint generation separate so tests can distinguish ranking hints from hard constraints
 
 Reason:
 
@@ -2409,20 +2401,20 @@ Solution H needs a real semantic contract boundary, not merely a ranked suggesti
 
 Rollback:
 
-* preserve ranking-only behavior and remove explicit constraint export
+- preserve ranking-only behavior and remove explicit constraint export
 
 ##### C. `src/git_cg/regeneration.py` (new)
 
 Planned changes:
 
-* introduce the new regenerate-specific orchestration layer in a dedicated module
-* implement:
-    * bounded deterministic directive extraction
-    * residual free-text separation
-    * previous-plan anchoring logic
-    * semantic contract resolution
-    * selective delta-render prompt assembly
-* keep this logic out of `main.py` as much as possible
+- introduce the new regenerate-specific orchestration layer in a dedicated module
+- implement:
+  - bounded deterministic directive extraction
+  - residual free-text separation
+  - previous-plan anchoring logic
+  - semantic contract resolution
+  - selective delta-render prompt assembly
+- keep this logic out of `main.py` as much as possible
 
 Reason:
 
@@ -2430,22 +2422,22 @@ This functionality is now significant enough to deserve first-class architectura
 
 Rollback:
 
-* remove the module and restore all regenerate orchestration to the prior `main.py` path
+- remove the module and restore all regenerate orchestration to the prior `main.py` path
 
 ##### D. `src/git_cg/main.py`
 
 Planned changes:
 
-* integrate the new `GenerationContext`, `RegenerationState`, and `ResolvedCommitContract` flow
-* replace the current regenerate path that behaves like repeated full re-synthesis
-* implement dual generation modes:
-    * initial full generation
-    * regenerate-time semantic resolution plus delta rendering
-* make prompt template selection explicit:
-    * first generation template
-    * regenerate template with authority reauthorization
-* route bounded deterministic directives into the semantic resolver before the LLM render call
-* remove dead or misleading regenerate plumbing once the new path is live
+- integrate the new `GenerationContext`, `RegenerationState`, and `ResolvedCommitContract` flow
+- replace the current regenerate path that behaves like repeated full re-synthesis
+- implement dual generation modes:
+  - initial full generation
+  - regenerate-time semantic resolution plus delta rendering
+- make prompt template selection explicit:
+  - first generation template
+  - regenerate template with authority reauthorization
+- route bounded deterministic directives into the semantic resolver before the LLM render call
+- remove dead or misleading regenerate plumbing once the new path is live
 
 Reason:
 
@@ -2453,19 +2445,19 @@ Reason:
 
 Rollback:
 
-* fall back to the E-only prompt path while leaving the new regeneration module disabled
+- fall back to the E-only prompt path while leaving the new regeneration module disabled
 
 ##### E. `src/git_cg/interaction.py`
 
 Planned changes:
 
-* preserve the existing guidance input path
-* add optional preview-state display for normalized active directives if and when that becomes useful
-* ensure the TUI remains explicit about:
-    * raw guidance
-    * current issue references
-    * whether guidance has been structurally normalized into active directives
-* avoid transcript-style UI expansion
+- preserve the existing guidance input path
+- add optional preview-state display for normalized active directives if and when that becomes useful
+- ensure the TUI remains explicit about:
+  - raw guidance
+  - current issue references
+  - whether guidance has been structurally normalized into active directives
+- avoid transcript-style UI expansion
 
 Reason:
 
@@ -2473,15 +2465,15 @@ The UI should remain lightweight but honest about what state is currently shapin
 
 Rollback:
 
-* keep only raw guidance display and remove any directive-state presentation
+- keep only raw guidance display and remove any directive-state presentation
 
 ##### F. `src/git_cg/release.py`
 
 Planned changes:
 
-* review release parser assumptions against the new canonicalized metadata guarantees
-* add regression tests proving that canonicalized `semver_impact` and `changelog_group` remain authoritative
-* ensure malformed or absent trailers cannot silently erase distinctions that Python now owns upstream
+- review release parser assumptions against the new canonicalized metadata guarantees
+- add regression tests proving that canonicalized `semver_impact` and `changelog_group` remain authoritative
+- ensure malformed or absent trailers cannot silently erase distinctions that Python now owns upstream
 
 Reason:
 
@@ -2489,24 +2481,24 @@ Solution H is partially justified by downstream release safety. That must be ver
 
 Rollback:
 
-* keep the existing release parser but retain new tests to expose ambiguity risks
+- keep the existing release parser but retain new tests to expose ambiguity risks
 
 ##### G. Tests
 
 Planned new or expanded test areas:
 
-* `tests/test_regeneration_guidance.py`
-    * active directive extraction and residual guidance separation
-* `tests/test_main.py`
-    * prompt template branching and regenerate orchestration
-* new `tests/test_regeneration_contract.py`
-    * semantic contract resolution and locked field behavior
-* new `tests/test_regeneration_delta_render.py`
-    * mutable vs locked field handling across repeated regenerate cycles
-* `tests/test_intent.py`
-    * explicit constraint export and pseudo-veto replacement behavior
-* `tests/test_release.py` or equivalent release-path tests
-    * release-safety regressions under canonicalized metadata
+- `tests/test_regeneration_guidance.py`
+  - active directive extraction and residual guidance separation
+- `tests/test_main.py`
+  - prompt template branching and regenerate orchestration
+- new `tests/test_regeneration_contract.py`
+  - semantic contract resolution and locked field behavior
+- new `tests/test_regeneration_delta_render.py`
+  - mutable vs locked field handling across repeated regenerate cycles
+- `tests/test_intent.py`
+  - explicit constraint export and pseudo-veto replacement behavior
+- `tests/test_release.py` or equivalent release-path tests
+  - release-safety regressions under canonicalized metadata
 
 Reason:
 
@@ -2516,16 +2508,16 @@ This is a core operating function and requires explicit test partitioning rather
 
 Planned changes:
 
-* `README.md`
-* `docs/index.md`
-* `usage.kdl`
-* possibly ADR-0007 cross-reference notes
+- `README.md`
+- `docs/index.md`
+- `usage.kdl`
+- possibly ADR-0007 cross-reference notes
 
 Documentation updates must explain:
 
-* semantic corrections vs stylistic corrections
-* why regenerate is no longer a full rewrite path
-* what remains user-visible in the TUI
+- semantic corrections vs stylistic corrections
+- why regenerate is no longer a full rewrite path
+- what remains user-visible in the TUI
 
 #### 5.4 Phased Execution Roadmap
 
@@ -2546,83 +2538,83 @@ Documentation Alignment and Release-Safety Verification"]
 
 Scope:
 
-* expand Python-side matrix canonicalization
-* add explicit constraint export in the ranking layer
-* stop relying on penalty language where constraints are intended to be hard
+- expand Python-side matrix canonicalization
+- add explicit constraint export in the ranking layer
+- stop relying on penalty language where constraints are intended to be hard
 
 Acceptance checkpoint:
 
-* Python owns all matrix-derived metadata once `intent_id` is resolved
-* ranking hints and hard constraints are clearly separated in code and tests
+- Python owns all matrix-derived metadata once `intent_id` is resolved
+- ranking hints and hard constraints are clearly separated in code and tests
 
 Rollback checkpoint:
 
-* revert to ranking-only interpretation while keeping new tests as documentation of expected future behavior
+- revert to ranking-only interpretation while keeping new tests as documentation of expected future behavior
 
 ##### Phase 2: Prompt Reauthorization and Bounded Directives
 
 Scope:
 
-* implement E-style regenerate-time prompt reauthorization
-* add bounded F-style directive extraction for high-confidence type/scope phrases
-* preserve fallback to residual free-text guidance when the directive parser is not confident
+- implement E-style regenerate-time prompt reauthorization
+- add bounded F-style directive extraction for high-confidence type/scope phrases
+- preserve fallback to residual free-text guidance when the directive parser is not confident
 
 Acceptance checkpoint:
 
-* regenerate no longer presents the user correction as subordinate to the deterministic shortlist
-* explicit type/scope corrections are handled deterministically when confidence is high
+- regenerate no longer presents the user correction as subordinate to the deterministic shortlist
+- explicit type/scope corrections are handled deterministically when confidence is high
 
 Rollback checkpoint:
 
-* disable directive extraction and keep only prompt reauthorization
+- disable directive extraction and keep only prompt reauthorization
 
 ##### Phase 3: Semantic Contract Resolver and Previous-Plan Anchor
 
 Scope:
 
-* introduce `GenerationContext`, `RegenerationState`, and `ResolvedCommitContract`
-* preserve previous-plan state across regenerate cycles
-* resolve what is locked vs mutable before the render call
+- introduce `GenerationContext`, `RegenerationState`, and `ResolvedCommitContract`
+- preserve previous-plan state across regenerate cycles
+- resolve what is locked vs mutable before the render call
 
 Acceptance checkpoint:
 
-* regenerate has a stable previous-plan anchor
-* semantic changes and style-only changes no longer force the same full rewrite behavior
+- regenerate has a stable previous-plan anchor
+- semantic changes and style-only changes no longer force the same full rewrite behavior
 
 Rollback checkpoint:
 
-* fall back to E-style prompt reauthorization with previous-plan anchoring disabled
+- fall back to E-style prompt reauthorization with previous-plan anchoring disabled
 
 ##### Phase 4: Selective Delta Rendering and Canonicalization Validation
 
 Scope:
 
-* implement the render-focused LLM call under the locked semantic contract
-* validate that mutable fields can change while locked fields remain invariant
-* validate canonicalized release metadata after render
+- implement the render-focused LLM call under the locked semantic contract
+- validate that mutable fields can change while locked fields remain invariant
+- validate canonicalized release metadata after render
 
 Acceptance checkpoint:
 
-* repeated regenerate cycles show materially reduced jitter
-* release-critical metadata cannot drift once contract resolution completes
+- repeated regenerate cycles show materially reduced jitter
+- release-critical metadata cannot drift once contract resolution completes
 
 Rollback checkpoint:
 
-* preserve contract resolution but route regenerate back to broader full-plan generation until delta rendering is stable
+- preserve contract resolution but route regenerate back to broader full-plan generation until delta rendering is stable
 
 ##### Phase 5: Documentation Alignment and Release-Safety Verification
 
 Scope:
 
-* align README, docs index, and CLI/help surfaces
-* add release-parser and trailer invariance tests
-* verify the selected architecture against the scenarios identified in the ADR reviews
+- align README, docs index, and CLI/help surfaces
+- add release-parser and trailer invariance tests
+- verify the selected architecture against the scenarios identified in the ADR reviews
 
 Acceptance checkpoint:
 
-* docs match behavior
-* release safety is demonstrated by explicit tests
-* TUI behavior is explainable to users and maintainers
+- docs match behavior
+- release safety is demonstrated by explicit tests
+- TUI behavior is explainable to users and maintainers
 
 #### 5.5 Verification Plan for the Selected Solution
 
@@ -2630,43 +2622,43 @@ The selected implementation must verify at least the following scenario families
 
 ##### Semantic correction scenarios
 
-* `this is a feature, not a test`
-* `make this a fix`
-* `use scope tui`
-* docs-only/tests-only/dependency-only diffs under explicit override attempts
+- `this is a feature, not a test`
+- `make this a fix`
+- `use scope tui`
+- docs-only/tests-only/dependency-only diffs under explicit override attempts
 
 ##### Stylistic correction scenarios
 
-* `keep the subject shorter`
-* `focus on user-facing behavior`
-* `do not overemphasize internals`
+- `keep the subject shorter`
+- `focus on user-facing behavior`
+- `do not overemphasize internals`
 
 ##### Stability scenarios
 
-* repeated regenerate cycles with no semantic change request
-* repeated regenerate cycles with evolving style requests
-* repeated regenerate cycles after a semantic correction has already been accepted
+- repeated regenerate cycles with no semantic change request
+- repeated regenerate cycles with evolving style requests
+- repeated regenerate cycles after a semantic correction has already been accepted
 
 ##### Release-safety scenarios
 
-* canonicalized `semver_impact` and `changelog_group` do not drift once the contract is resolved
-* malformed or missing trailers do not erase semantically distinct release behavior
+- canonicalized `semver_impact` and `changelog_group` do not drift once the contract is resolved
+- malformed or missing trailers do not erase semantically distinct release behavior
 
 ##### Documentation and UX scenarios
 
-* README and docs remain aligned with the actual TUI
-* guidance, issue references, and active directives coexist intelligibly in review state
+- README and docs remain aligned with the actual TUI
+- guidance, issue references, and active directives coexist intelligibly in review state
 
 #### 5.6 Rollback Strategy for the Selected Solution
 
 If the Solution H rollout proves unstable, rollback should occur by phase boundary rather than as one all-or-nothing event.
 
-| Rollback Level | Action |
-| :--- | :--- |
-| Level 1 | Disable selective delta rendering and keep contract resolution only |
-| Level 2 | Disable contract resolution and preserve only E-style prompt reauthorization |
-| Level 3 | Disable bounded directive extraction and fall back to raw guidance text only |
-| Level 4 | Revert regenerate to the current broad full-generation path while keeping canonicalization fixes |
+| Rollback Level | Action                                                                                           |
+| :------------- | :----------------------------------------------------------------------------------------------- |
+| Level 1        | Disable selective delta rendering and keep contract resolution only                              |
+| Level 2        | Disable contract resolution and preserve only E-style prompt reauthorization                     |
+| Level 3        | Disable bounded directive extraction and fall back to raw guidance text only                     |
+| Level 4        | Revert regenerate to the current broad full-generation path while keeping canonicalization fixes |
 
 This phased rollback design is important because the selected architecture has a larger blast radius than prompt-only changes.
 
@@ -2674,11 +2666,11 @@ This phased rollback design is important because the selected architecture has a
 
 The following governance actions now follow from the selection of Solution H.
 
-* ADR-0009 should now be treated as the governing architecture record for regenerate-time intent reconciliation and semantic ownership.
-* ADR-0007 should remain the governing record for gum review mechanics and review-state UX, but it should later receive a cross-reference note acknowledging that regenerate semantics are now governed primarily by ADR-0009.
-* Solution D should no longer be described in future project discussions as the likely best long-term direction; that role now belongs to H.
-* Solution E should be explicitly documented as a prerequisite layer inside H, not as the final target architecture.
-* Future enhancements such as richer steering controls should be evaluated as optional augmentations to H rather than as replacements for it.
+- ADR-0009 should now be treated as the governing architecture record for regenerate-time intent reconciliation and semantic ownership.
+- ADR-0007 should remain the governing record for gum review mechanics and review-state UX, but it should later receive a cross-reference note acknowledging that regenerate semantics are now governed primarily by ADR-0009.
+- Solution D should no longer be described in future project discussions as the likely best long-term direction; that role now belongs to H.
+- Solution E should be explicitly documented as a prerequisite layer inside H, not as the final target architecture.
+- Future enhancements such as richer steering controls should be evaluated as optional augmentations to H rather than as replacements for it.
 
 ### 7. Final Refinement 4 Decision Statement
 
@@ -2689,7 +2681,6 @@ The selected decision is:
 > `git-cg` will adopt **Solution H: Locked Semantic Contract with Selective Delta Regeneration** as the final preferred regenerate architecture. The implementation will preserve deterministic diff ranking as the baseline analytical layer, use prompt reauthorization during regenerate, apply bounded deterministic semantic directives when confidence is high, anchor regenerate against the previous accepted `CommitPlan`, and move semantic ownership of SOP-derived metadata decisively into Python before the LLM is asked to produce textual deltas.
 
 That is the correct architecture to adopt for a core operating function of the application.
-
 
 ## VI. Refinement 5: Document Normalization, Delivery Topology, Milestone Definition, and Direct Execution Plan (v1.5.0)
 
@@ -2705,12 +2696,12 @@ This refinement intentionally exercises the granted permission to alter prior do
 
 #### 1.1 Normalization Actions Applied
 
-| Area | Prior State | Normalized State |
-| :--- | :--- | :--- |
-| Appended section naming | Mixed use of `Refinement` and `Update` | All append-only layers now use `Refinement` consistently |
-| Solution headings in later refinements | Mixed use of `Proposed Solution X` and `Solution X` | All solution headings now use the normalized `Solution A-H` form |
-| Selected-solution phrasing | Mixed references to proposed and selected states | Solution H is now consistently readable as the selected architecture while prior analytical intent is preserved |
-| Changelog wording | Reflected prior mixed heading names | Updated to reflect the normalized heading set |
+| Area                                   | Prior State                                         | Normalized State                                                                                                |
+| :------------------------------------- | :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
+| Appended section naming                | Mixed use of `Refinement` and `Update`              | All append-only layers now use `Refinement` consistently                                                        |
+| Solution headings in later refinements | Mixed use of `Proposed Solution X` and `Solution X` | All solution headings now use the normalized `Solution A-H` form                                                |
+| Selected-solution phrasing             | Mixed references to proposed and selected states    | Solution H is now consistently readable as the selected architecture while prior analytical intent is preserved |
+| Changelog wording                      | Reflected prior mixed heading names                 | Updated to reflect the normalized heading set                                                                   |
 
 #### 1.2 Normalization Conclusion
 
@@ -2722,20 +2713,20 @@ The following work items were not fully captured in the earlier implementation a
 
 #### 2.1 Missing Delivery Items
 
-* explicit disposition of the current Issue #83 branch and prototype code path
-* creation of a new implementation umbrella issue and child issues for the selected architecture
-* branch and worktree strategy for a multi-PR rollout
-* explicit docs-synchronization work across:
-    * `README.md`
-    * `docs/index.md`
-    * `usage.kdl`
-* explicit release-parser and trailer-invariance test work for the selected semantic-ownership model
-* explicit cross-reference follow-up for ADR-0007 once Solution H implementation lands
-* explicit milestone definition covering issue closure, PR merge state, tag creation, and first release completion
-* explicit cleanup decision for unrelated working-tree items before implementation begins, including:
-    * `TODO.md`
-    * `test.txt`
-    * `vizvibe.mmd`
+- explicit disposition of the current Issue #83 branch and prototype code path
+- creation of a new implementation umbrella issue and child issues for the selected architecture
+- branch and worktree strategy for a multi-PR rollout
+- explicit docs-synchronization work across:
+  - `README.md`
+  - `docs/index.md`
+  - `usage.kdl`
+- explicit release-parser and trailer-invariance test work for the selected semantic-ownership model
+- explicit cross-reference follow-up for ADR-0007 once Solution H implementation lands
+- explicit milestone definition covering issue closure, PR merge state, tag creation, and first release completion
+- explicit cleanup decision for unrelated working-tree items before implementation begins, including:
+  - `TODO.md`
+  - `test.txt`
+  - `vizvibe.mmd`
 
 #### 2.2 Why These Items Matter
 
@@ -2749,15 +2740,15 @@ The Solution H implementation **should not continue as code work on the existing
 
 That branch and issue were appropriate for the earlier guided-regeneration feature and exploratory review-loop work. They are no longer the right scope boundary for the selected architecture because Solution H now includes:
 
-* prompt authority correction
-* deterministic semantic directive handling
-* semantic contract resolution
-* previous-plan anchoring
-* selective delta rendering
-* matrix canonicalization
-* release-safety validation
-* documentation synchronization
-* milestone and release closure work
+- prompt authority correction
+- deterministic semantic directive handling
+- semantic contract resolution
+- previous-plan anchoring
+- selective delta rendering
+- matrix canonicalization
+- release-safety validation
+- documentation synchronization
+- milestone and release closure work
 
 That is materially larger than the original Issue #83 scope.
 
@@ -2765,11 +2756,11 @@ That is materially larger than the original Issue #83 scope.
 
 The recommended delivery topology is:
 
-* keep Issue #83 as the originating guided-regeneration issue and include it in the milestone
-* create a **new umbrella implementation issue** for Solution H
-* create **child issues** or explicitly linked follow-up issues for each major implementation workstream
-* create a **new dedicated worktree** for the Solution H implementation program
-* create **one branch per workstream / PR** inside that worktree strategy
+- keep Issue #83 as the originating guided-regeneration issue and include it in the milestone
+- create a **new umbrella implementation issue** for Solution H
+- create **child issues** or explicitly linked follow-up issues for each major implementation workstream
+- create a **new dedicated worktree** for the Solution H implementation program
+- create **one branch per workstream / PR** inside that worktree strategy
 
 This is the safest and cleanest operating model.
 
@@ -2821,108 +2812,108 @@ This section tightens the earlier file-by-file appendix by converting it into ex
 
 Files:
 
-* `src/git_cg/models.py`
-* `src/git_cg/intent.py`
-* `tests/test_intent.py`
-* `tests/test_ranker.py`
-* new constraint-focused tests as needed
+- `src/git_cg/models.py`
+- `src/git_cg/intent.py`
+- `tests/test_intent.py`
+- `tests/test_ranker.py`
+- new constraint-focused tests as needed
 
 Objectives:
 
-* canonicalize all matrix-owned fields once `intent_id` is resolved
-* expose explicit allowed/disallowed constraint sets rather than relying only on score penalties
-* preserve current ranker behavior as baseline while separating hints from constraints
+- canonicalize all matrix-owned fields once `intent_id` is resolved
+- expose explicit allowed/disallowed constraint sets rather than relying only on score penalties
+- preserve current ranker behavior as baseline while separating hints from constraints
 
 #### 4.2 Work Package B: Prompt Authority and Bounded Directives
 
 Files:
 
-* `src/git_cg/main.py`
-* `src/git_cg/interaction.py`
-* `tests/test_main.py`
-* `tests/test_regeneration_guidance.py`
+- `src/git_cg/main.py`
+- `src/git_cg/interaction.py`
+- `tests/test_main.py`
+- `tests/test_regeneration_guidance.py`
 
 Objectives:
 
-* implement E-style regenerate prompt reauthorization
-* implement bounded F-style directive extraction for high-confidence type/scope steering
-* preserve residual free-text guidance when deterministic extraction is not confident
+- implement E-style regenerate prompt reauthorization
+- implement bounded F-style directive extraction for high-confidence type/scope steering
+- preserve residual free-text guidance when deterministic extraction is not confident
 
 #### 4.3 Work Package C: Semantic Contract Resolver and Previous-Plan Anchor
 
 Files:
 
-* new `src/git_cg/regeneration.py`
-* `src/git_cg/main.py`
-* new `tests/test_regeneration_contract.py`
-* new state-anchoring tests
+- new `src/git_cg/regeneration.py`
+- `src/git_cg/main.py`
+- new `tests/test_regeneration_contract.py`
+- new state-anchoring tests
 
 Objectives:
 
-* introduce `GenerationContext`, `RegenerationState`, and `ResolvedCommitContract`
-* preserve previous accepted `CommitPlan` as the regenerate-time anchor
-* define locked vs mutable fields prior to render-time prompting
+- introduce `GenerationContext`, `RegenerationState`, and `ResolvedCommitContract`
+- preserve previous accepted `CommitPlan` as the regenerate-time anchor
+- define locked vs mutable fields prior to render-time prompting
 
 #### 4.4 Work Package D: Selective Delta Rendering and Invariant Validation
 
 Files:
 
-* new `src/git_cg/regeneration.py`
-* `src/git_cg/main.py`
-* `src/git_cg/models.py`
-* new `tests/test_regeneration_delta_render.py`
+- new `src/git_cg/regeneration.py`
+- `src/git_cg/main.py`
+- `src/git_cg/models.py`
+- new `tests/test_regeneration_delta_render.py`
 
 Objectives:
 
-* replace broad full regenerate rewrites with selective delta rendering
-* enforce invariants after render
-* ensure locked semantic fields cannot drift during style-only rewrites
+- replace broad full regenerate rewrites with selective delta rendering
+- enforce invariants after render
+- ensure locked semantic fields cannot drift during style-only rewrites
 
 #### 4.5 Work Package E: Release Safety, Documentation, and Delivery Closure
 
 Files:
 
-* `src/git_cg/release.py`
-* `README.md`
-* `docs/index.md`
-* `usage.kdl`
-* `docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md`
-* release-path tests such as `tests/test_release.py` or equivalent
+- `src/git_cg/release.py`
+- `README.md`
+- `docs/index.md`
+- `usage.kdl`
+- `docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md`
+- release-path tests such as `tests/test_release.py` or equivalent
 
 Objectives:
 
-* validate downstream release behavior under canonicalized metadata
-* align all user-facing documentation surfaces with the selected architecture
-* add ADR cross-reference follow-up
-* prepare milestone and release closure artifacts
+- validate downstream release behavior under canonicalized metadata
+- align all user-facing documentation surfaces with the selected architecture
+- add ADR cross-reference follow-up
+- prepare milestone and release closure artifacts
 
 ### 5. Execution Checklist with Per-file Acceptance Criteria and Rollback Checkpoints
 
 #### 5.1 Checklist Table
 
-| Work Package | File / Surface | Planned Work | Acceptance Criteria | Rollback Checkpoint |
-| :--- | :--- | :--- | :--- | :--- |
-| A | `src/git_cg/models.py` | Canonicalize all matrix-owned fields from `intent_id` | `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` cannot drift after resolution | Revert to prior canonicalization while retaining tests documenting target behavior |
-| A | `src/git_cg/intent.py` | Export explicit constraints in addition to ranked scores | docs-only/tests-only/dependency-only invariants are available as real constraint outputs | Disable constraint export and preserve score-only ranking |
-| A | tests | Add canonicalization and constraint tests | failing cases are caught before regenerate integration | Remove only new tests if package must be partially rolled back |
-| B | `src/git_cg/main.py` | Add regenerate prompt reauthorization | regenerate prompt clearly elevates user correction above baseline shortlist where permitted | Disable reauthorized template and fall back to current regenerate path |
-| B | `src/git_cg/interaction.py` | Surface directive-aware guidance state if needed | UI remains understandable and does not become chat-like | Remove directive display and preserve raw guidance only |
-| B | tests | Add prompt-branching and directive tests | deterministic prompt branching is golden-testable | Revert prompt tests if reauthorization is disabled |
-| C | new `src/git_cg/regeneration.py` | Introduce resolver and state-anchor logic | resolver deterministically produces a `ResolvedCommitContract` and preserves previous-plan anchor | Remove module and fall back to `main.py` orchestration |
-| C | `src/git_cg/main.py` | Integrate previous-plan anchoring | repeated regenerate cycles preserve stable semantic anchors | Disable anchor path and revert to stateless regenerate |
-| D | regeneration render path | Implement selective delta rendering | style-only corrections do not rewrite locked semantic fields | Disable delta rendering and use full regenerate while keeping contract logic |
-| D | validation layer | Enforce post-render invariants | rendered output respects locked/mutable split | Drop delta validation and revert to full-plan validation only |
-| E | `src/git_cg/release.py` | Add release-safety regression coverage | canonicalized metadata remains authoritative downstream | Revert parser changes while keeping tests exposing gaps |
-| E | docs surfaces | Sync README, docs index, and CLI help | docs match actual runtime behavior | Revert doc surfaces independently if code lands first |
-| E | ADR follow-up | Add ADR-0007 cross-reference note | architecture governance remains coherent across ADRs | Remove note without affecting runtime code |
+| Work Package | File / Surface                   | Planned Work                                             | Acceptance Criteria                                                                               | Rollback Checkpoint                                                                |
+| :----------- | :------------------------------- | :------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------- |
+| A            | `src/git_cg/models.py`           | Canonicalize all matrix-owned fields from `intent_id`    | `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` cannot drift after resolution        | Revert to prior canonicalization while retaining tests documenting target behavior |
+| A            | `src/git_cg/intent.py`           | Export explicit constraints in addition to ranked scores | docs-only/tests-only/dependency-only invariants are available as real constraint outputs          | Disable constraint export and preserve score-only ranking                          |
+| A            | tests                            | Add canonicalization and constraint tests                | failing cases are caught before regenerate integration                                            | Remove only new tests if package must be partially rolled back                     |
+| B            | `src/git_cg/main.py`             | Add regenerate prompt reauthorization                    | regenerate prompt clearly elevates user correction above baseline shortlist where permitted       | Disable reauthorized template and fall back to current regenerate path             |
+| B            | `src/git_cg/interaction.py`      | Surface directive-aware guidance state if needed         | UI remains understandable and does not become chat-like                                           | Remove directive display and preserve raw guidance only                            |
+| B            | tests                            | Add prompt-branching and directive tests                 | deterministic prompt branching is golden-testable                                                 | Revert prompt tests if reauthorization is disabled                                 |
+| C            | new `src/git_cg/regeneration.py` | Introduce resolver and state-anchor logic                | resolver deterministically produces a `ResolvedCommitContract` and preserves previous-plan anchor | Remove module and fall back to `main.py` orchestration                             |
+| C            | `src/git_cg/main.py`             | Integrate previous-plan anchoring                        | repeated regenerate cycles preserve stable semantic anchors                                       | Disable anchor path and revert to stateless regenerate                             |
+| D            | regeneration render path         | Implement selective delta rendering                      | style-only corrections do not rewrite locked semantic fields                                      | Disable delta rendering and use full regenerate while keeping contract logic       |
+| D            | validation layer                 | Enforce post-render invariants                           | rendered output respects locked/mutable split                                                     | Drop delta validation and revert to full-plan validation only                      |
+| E            | `src/git_cg/release.py`          | Add release-safety regression coverage                   | canonicalized metadata remains authoritative downstream                                           | Revert parser changes while keeping tests exposing gaps                            |
+| E            | docs surfaces                    | Sync README, docs index, and CLI help                    | docs match actual runtime behavior                                                                | Revert doc surfaces independently if code lands first                              |
+| E            | ADR follow-up                    | Add ADR-0007 cross-reference note                        | architecture governance remains coherent across ADRs                                              | Remove note without affecting runtime code                                         |
 
 #### 5.2 Execution Rule
 
 A work package is not complete until:
 
-* acceptance criteria are met
-* rollback checkpoint is documented and still viable
-* tests for that package pass
+- acceptance criteria are met
+- rollback checkpoint is documented and still viable
+- tests for that package pass
 
 ### 6. Direct Translation of the ADR Appendix into the Code Execution Plan
 
@@ -2930,13 +2921,13 @@ This section converts the selected architecture into the exact recommended imple
 
 #### 6.1 Recommended PR Sequence
 
-| PR Sequence | Scope | Expected Outcome | Issue Mapping |
-| :--- | :--- | :--- | :--- |
-| PR-1 | Semantic ownership foundation | Python owns matrix-derived semantics and explicit constraint export exists | New child issue 1 |
-| PR-2 | Prompt reauthorization and bounded directives | Regenerate authority is corrected; explicit semantic directives handled deterministically when safe | New child issue 2 |
-| PR-3 | Contract resolver and previous-plan anchor | Regenerate gains stable semantic anchoring and contract resolution | New child issue 3 |
-| PR-4 | Selective delta rendering and invariant enforcement | Regenerate becomes delta-oriented rather than full-rewrite oriented | New child issue 4 |
-| PR-5 | Release safety, docs sync, ADR cross-reference, milestone closeout | Release parser is validated, docs match behavior, milestone can close cleanly | New child issue 5 |
+| PR Sequence | Scope                                                              | Expected Outcome                                                                                    | Issue Mapping     |
+| :---------- | :----------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------- | :---------------- |
+| PR-1        | Semantic ownership foundation                                      | Python owns matrix-derived semantics and explicit constraint export exists                          | New child issue 1 |
+| PR-2        | Prompt reauthorization and bounded directives                      | Regenerate authority is corrected; explicit semantic directives handled deterministically when safe | New child issue 2 |
+| PR-3        | Contract resolver and previous-plan anchor                         | Regenerate gains stable semantic anchoring and contract resolution                                  | New child issue 3 |
+| PR-4        | Selective delta rendering and invariant enforcement                | Regenerate becomes delta-oriented rather than full-rewrite oriented                                 | New child issue 4 |
+| PR-5        | Release safety, docs sync, ADR cross-reference, milestone closeout | Release parser is validated, docs match behavior, milestone can close cleanly                       | New child issue 5 |
 
 #### 6.2 Dependency Order
 
@@ -2955,11 +2946,11 @@ Release Safety + Docs Sync + Milestone Closeout"]
 
 #### 6.3 Why This Sequence Is Correct
 
-* PR-1 creates the semantic ownership foundation that every later regenerate path depends on
-* PR-2 fixes authority inversion and introduces bounded deterministic steering
-* PR-3 creates the new architectural state layer that makes regenerate stable
-* PR-4 turns the architecture into the selected delta-based runtime model
-* PR-5 closes the downstream release and documentation obligations required for milestone completion
+- PR-1 creates the semantic ownership foundation that every later regenerate path depends on
+- PR-2 fixes authority inversion and introduces bounded deterministic steering
+- PR-3 creates the new architectural state layer that makes regenerate stable
+- PR-4 turns the architecture into the selected delta-based runtime model
+- PR-5 closes the downstream release and documentation obligations required for milestone completion
 
 ### 7. Milestone Definition and Creation Guidance
 
@@ -2969,20 +2960,20 @@ Define a new GitHub milestone for this architecture program rather than relying 
 
 Recommended milestone title:
 
-* **First Release - Solution H Integration**
+- **First Release - Solution H Integration**
 
 Recommended milestone description:
 
-* Implements the selected Solution H regenerate architecture, closes the original guided-regeneration issue chain including Issue #83, merges all required PRs, validates release safety, creates the first project tag, and publishes the first release.
+- Implements the selected Solution H regenerate architecture, closes the original guided-regeneration issue chain including Issue #83, merges all required PRs, validates release safety, creates the first project tag, and publishes the first release.
 
 #### 7.2 Milestone Issue Topology
 
 The milestone should contain:
 
-* Issue #83
-* one new umbrella issue for Solution H implementation
-* child issues for each PR/work package
-* any follow-up doc or release-safety issues if split out separately
+- Issue #83
+- one new umbrella issue for Solution H implementation
+- child issues for each PR/work package
+- any follow-up doc or release-safety issues if split out separately
 
 #### 7.3 Milestone Creation Guidance
 
@@ -2991,7 +2982,7 @@ Recommended steps:
 1. create the milestone in GitHub with the title above
 2. add Issue #83 to the milestone
 3. create a new umbrella issue titled along the lines of:
-    * Implement Solution H regenerate architecture
+   - Implement Solution H regenerate architecture
 4. create child issues mapped to PR-1 through PR-5
 5. attach all related PRs to the milestone
 6. close the milestone only after all completion criteria are met
@@ -3000,11 +2991,11 @@ Recommended steps:
 
 The milestone should only be marked complete when all of the following are true:
 
-* all relevant PRs have been merged
-* all associated issues are resolved or explicitly closed
-* a Git tag has been created
-* the first project release has been published
-* Issue #83 is closed as part of the completed delivery chain
+- all relevant PRs have been merged
+- all associated issues are resolved or explicitly closed
+- a Git tag has been created
+- the first project release has been published
+- Issue #83 is closed as part of the completed delivery chain
 
 ### 8. Final Refinement 5 Delivery Decision Statement
 
@@ -3016,9 +3007,28 @@ That is the correct delivery topology for the selected architecture.
 
 ## CHANGELOG
 
+
+
 - v1.0.0 (2026-06-11 16:10:00): Created ADR-0009 as a solution-analysis ADR for deterministic intent ranking, prompt framing, and guided-regeneration reconciliation, with no final solution selected yet and with detailed current-state analysis, multi-option diagrams, and a comparative decision matrix.
 - v1.1.0 (2026-06-11 22:30:00): Appended Refinement 1 containing a full architectural review identifying two critical codebase findings (dead `regeneration_guidance` parameter in `build_system_prompt`, redundant system prompt reconstruction), structural problem analysis of all four proposed solutions, identification of the prompt authority hierarchy inversion as the root cause, Solution E (Prompt Geometry Reauthorization with Guidance-Conditioned System Prompt), revised Section 14 comparative evaluation matrices including Solution E, composability analysis, and recommended next steps.
 - v1.2.0 (2026-06-11 22:45:00): Appended Refinement 2 proposing Solution F (Deterministic Regex-Directives with Menu Masking) and Solution G (Cumulative Steering Stack & Multi-turn Context Preservation), with revised comparison matrices, composability flow, and structured recommendations.
 - v1.3.0 (2026-06-12 08:14:55): Appended Refinement 3 containing a deeper live-codebase architectural review, additional validated findings on incomplete SOP canonicalization, pseudo-veto constraints, regenerate instability, and release-safety implications, plus Solution H (Locked Semantic Contract with Selective Delta Regeneration), new supporting diagrams, and an expanded comparative evaluation across Solutions A-H.
 - v1.4.0 (2026-06-12 09:35:00): Appended Refinement 4 recording a structural pass of ADR-0009, ingesting the cumulative review corpus from Sections II-IV, selecting Solution H as the final preferred architecture, and adding a concrete append-only implementation-plan appendix that turns Solution H into a phased, file-by-file execution roadmap without rewriting prior history.
 - v1.5.0 (2026-06-12 10:20:00): Performed a document-wide stylistic normalization of append-only refinement headings and all Solution A-H references, preserved full prior history while aligning heading consistency, expanded the selected Solution H delivery topology to include branch/worktree guidance, added missing delivery work items, added a direct repository execution plan and per-file execution checklist, and defined the milestone model required to close the implementation program, Issue #83, the tag, and the first release.
+- v1.5.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Primary data shape or explanatory need**: ranked candidate flow, runtime contradiction, and multi-option architectural comparison.
+- **Chosen visual aids**: Mermaid flowcharts, sequence diagrams, and matrix comparison tables.
+- **Why these visual aids were chosen**: this problem is not just a single topology problem. It involves layered decision flow, runtime interaction, and tradeoff comparison across multiple architectural options.
+- **Alternative aids considered**: C4-style diagrams were considered but rejected because the decision boundary here is less about service containers and more about arbitration logic, prompt flow, and metadata reconciliation.
+
+### Supporting Visuals and Generated Artifacts
+
+- **Reference source**: `visualAidQuickReference.md`
+- **Chosen method**: Mermaid + Markdown comparison tables
+- **Generated artifact path(s)**: Embedded in this ADR in Sections 5, 6, 10, 11, 12, 13, and 14
+-->

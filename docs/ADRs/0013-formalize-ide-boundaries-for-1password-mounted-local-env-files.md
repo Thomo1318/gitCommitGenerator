@@ -1,10 +1,10 @@
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 A high-fidelity, highly detailed cyberpunk technical infographic. At the top center, a massive three-tier stylized heading reads 'ADR', 'IDE BOUNDARY', and '1PASSWORD ENV'. Each line uses a retro-tech multilayer neon font with distinct glows: 'ADR' in hot magenta, 'IDE BOUNDARY' in electric yellow, and '1PASSWORD ENV' in electric cyan. Below the heading, the scene is split into two architecture lanes. On the left, a glowing 1Password vault emits a mounted '.env' file represented as a luminous UNIX named pipe / FIFO conduit entering a project workspace root. Around it, file watchers, editor tabs, and extension-host circuitry pulse aggressively in red and orange to represent event-loop contention. On the right, a clean green lane labeled 'Python SDK Runtime' reads secrets directly from a cloud-connected 1Password channel, bypassing the mounted FIFO entirely. Between the lanes, a hard architectural firewall labeled 'STATIC TOOLING BOUNDARY' blocks IDE readers from touching the FIFO and reroutes them into a small inert file labeled '.vscode/python.env'. Include subtle references to Antigravity / VS Code style editor panes, CPU spike gauges, and concurrent-reader warning glyphs, but keep the image purely technical and abstract. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO battery icons, NO X buttons, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
 
-📋 Target Filename: adr-0013-ide-boundaries-for-1password-mounted-local-env-files.webp
+📋 Target Filename: adr-0013-ide-boundaries-for-1password-mounted-local-env-files.jpeg
 -->
 
-![Header Image](../assets/adr-0013-ide-boundaries-for-1password-mounted-local-env-files.webp)
+![Header Image](../assets/adr-0013-ide-boundaries-for-1password-mounted-local-env-files.jpeg)
 
 # ADR-0013: Formalize IDE Boundaries for 1Password-Mounted Local `.env` Files
 
@@ -12,7 +12,7 @@ A high-fidelity, highly detailed cyberpunk technical infographic. At the top cen
 adr_number: "0013"
 title: "Formalize IDE Boundaries for 1Password-Mounted Local .env Files"
 status: "Proposed"
-version: "v1.1.0"
+version: "v1.1.1"
 date: "2026-06-23"
 created: "2026-06-23 00:00:00"
 modified: "2026-06-23 08:35:48"
@@ -688,32 +688,7 @@ The correct long-term portability story remains aligned with ADR-0003:
 
 ADR-0013 does not solve that whole problem, but it does preserve space for that model without regressing into a 1Password-only worldview.
 
-## 8. Supporting Visual Aids
-
-### Visual Aid selection rationale
-
-- **Primary explanatory need**: This incident was fundamentally about a misclassified boundary between secret-delivery infrastructure and IDE tooling, plus a time-sequenced failure mode inside the editor.
-- **Chosen visual aids**: Mermaid flowchart and Mermaid sequence diagrams.
-- **Why these were chosen**: The flowchart cleanly separates the 1Password ecosystem, repository files, IDE/tooling boundary, and runtime paths. The sequence diagrams make it obvious how the failure occurred and how the proposed architecture prevents recurrence.
-- **Alternative aids considered**: A dense C4 model was considered but rejected because the critical concept here is not macro-service topology. It is the consumer sequence and boundary semantics of a mounted FIFO file.
-
-### Generated artifact path
-
-- Predicted header image asset path:
-
-```text
-../assets/adr-0013-ide-boundaries-for-1password-mounted-local-env-files.webp
-```
-
-### Supporting visual notes
-
-If a future revision of this ADR adds implementation screenshots, they should show:
-
-- the project-root `.env` as a FIFO,
-- the editor using `.vscode/python.env`,
-- and the difference between runtime secret access and IDE-only env configuration.
-
-## 9. Impact Radius
+## 8. Impact Radius
 
 The decision affects both explicit files and implicit workflows.
 
@@ -771,7 +746,7 @@ The decision affects both explicit files and implicit workflows.
 - **Change**: Future troubleshooting should explicitly inspect whether `.env` is a FIFO, whether the mount is from 1Password Environments, and whether IDE tooling is consuming it as a normal env file.
 - **Effect**: Reduces future time-to-diagnosis and avoids re-litigating already eliminated hypotheses.
 
-## 10. Consequences
+## 9. Consequences
 
 ### Positive consequences
 
@@ -798,7 +773,7 @@ The decision affects both explicit files and implicit workflows.
 3. **Terminal behavior** should remain intact because this ADR is about IDE env-file consumption, not about removing shell or runtime secret capability.
 4. **1Password Environments remains valid**. The problem is consumer compatibility, not product legitimacy.
 
-## 11. Verification Plan
+## 10. Verification Plan
 
 ### Automated / scriptable verification
 
@@ -844,7 +819,7 @@ file .vscode/python.env
 >
 > _Added: 2026-06-23 08:35:48 AEST_
 
-## 12. Review / Revisit Criteria
+## 11. Review / Revisit Criteria
 
 This ADR should be revisited if any of the following become true:
 
@@ -854,7 +829,7 @@ This ADR should be revisited if any of the following become true:
 - The contributor-portability model in ADR-0003 is superseded by a new organization-wide secrets standard.
 - A future ADR implements and validates the long-term relocation of the mounted env file outside the workspace and renders the interim root-path containment strategy obsolete.
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 If the IDE-boundary changes proposed by this ADR are implemented and need to be undone, the rollback path is straightforward.
 
@@ -868,7 +843,7 @@ Residual risk remains even after rollback, because rolling back to the old state
 
 For that reason, rollback should be considered a last resort rather than a preferred steady-state direction.
 
-## 14. Implementation Findings
+## 13. Implementation Findings
 
 ### Diagnostic findings / audit findings
 
@@ -916,7 +891,7 @@ During the investigation, the `.vscode/settings.json` mitigation (adding `python
 - Decide whether the long-term preferred state is merely editor isolation or full relocation of the mounted env file away from project-root `.env`.
 - If the `Illegal argument` popup persists independently, capture it under a separate issue or ADR rather than letting it muddy future env-boundary debugging.
 
-## 15. Governance Follow-up
+## 14. Governance Follow-up
 
 This ADR introduces or clarifies the following governance rule for the repository:
 
@@ -937,7 +912,7 @@ If this ADR is later implemented, the following should be considered for follow-
 - contributor notes explaining why `.vscode/python.env` is intentionally inert
 - any 1Password Environments setup notes that currently encourage mounting directly to project-root `.env` without caveats
 
-## 16. Links & References
+## 15. Links & References
 
 ### Repository ADR references
 
@@ -1096,5 +1071,34 @@ _Section appended: 2026-06-23 08:35:48 AEST_
 
 ## CHANGELOG
 
-- v1.1.0 (2026-06-23 08:35:48): Appended workspace-root path-resolution findings and controlled reproduction evidence showing that `/Users/admin/dev/activeProjects/.env` at the effective `${workspaceFolder}/.env` path was the decisive trigger when it was a FIFO. Clarified that the failure mechanism was workspace-root precedence plus FIFO file type, not merely the presence of nested `.env` files.
+
+
 - v1.0.0 (2026-06-23 00:00:00): Initial proposed ADR formalizing the architectural boundary between intentional 1Password-mounted local `.env` FIFOs and IDE/static-tooling consumers. Preserved ADR-0003 and ADR-0006 as authoritative context, documented the Antigravity / VS Code incident, recorded hypothesis eliminations, and established editor-isolation plus long-term mount-relocation strategy.
+- v1.1.0 (2026-06-23 08:35:48): Appended workspace-root path-resolution findings and controlled reproduction evidence showing that `/Users/admin/dev/activeProjects/.env` at the effective `${workspaceFolder}/.env` path was the decisive trigger when it was a FIFO. Clarified that the failure mechanism was workspace-root precedence plus FIFO file type, not merely the presence of nested `.env` files.
+- v1.1.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid selection rationale
+
+- **Primary explanatory need**: This incident was fundamentally about a misclassified boundary between secret-delivery infrastructure and IDE tooling, plus a time-sequenced failure mode inside the editor.
+- **Chosen visual aids**: Mermaid flowchart and Mermaid sequence diagrams.
+- **Why these were chosen**: The flowchart cleanly separates the 1Password ecosystem, repository files, IDE/tooling boundary, and runtime paths. The sequence diagrams make it obvious how the failure occurred and how the proposed architecture prevents recurrence.
+- **Alternative aids considered**: A dense C4 model was considered but rejected because the critical concept here is not macro-service topology. It is the consumer sequence and boundary semantics of a mounted FIFO file.
+
+### Generated artifact path
+
+- Predicted header image asset path:
+
+```text
+../assets/adr-0013-ide-boundaries-for-1password-mounted-local-env-files.jpeg
+```
+
+### Supporting visual notes
+
+If a future revision of this ADR adds implementation screenshots, they should show:
+
+- the project-root `.env` as a FIFO,
+- the editor using `.vscode/python.env`,
+- and the difference between runtime secret access and IDE-only env configuration.
+-->

@@ -1,4 +1,4 @@
-# 0010: Integrate Opik Ecosystem & Telemetry Pipeline
+# ADR-0010: Integrate Opik Ecosystem & Telemetry Pipeline
 
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 [Prompt Text: A sprawling technical diagram showing a centralized Opik observability dashboard connected to various nodes including prompt engineering interfaces, online evaluation engines, dataset storage, and local terminal git hooks.]
@@ -7,17 +7,29 @@
 -->
 ![Header Image](../assets/adr-0010-opik-ecosystem.png)
 
-## Metadata
-
-- **Status:** Draft
-- **Date:** 2026-06-14
-- **Modified:** 2026-06-15
-- **Version:** v1.1.0
-- **Deciders:** Admin, Antigravity
-- **Security Scope:** Low (Data sanitization required for secret leaking)
-- **Risk Level:** Medium
-- **Reversibility:** High
-- **Tags:** \[telemetry, opik, dataset, llm, evaluation, prompt-management\]
+```yaml
+adr_number: "0010"
+title: "Integrate Opik Ecosystem & Telemetry Pipeline"
+status: "Draft"
+version: "v1.2.1"
+date: "2026-06-14"
+created: "2026-06-14 00:00:00"
+modified: "2026-06-26 12:50:00"
+risk_level: "Medium"
+reversibility: "High"
+security_scope: "Low (Data sanitization required for secret leaking)"
+tags:
+  [
+    "telemetry",
+    "opik",
+    "dataset",
+    "llm",
+    "evaluation",
+    "prompt-management"
+  ]
+supersedes: []
+superseded_by: []
+```
 
 ## Catalyst
 
@@ -156,11 +168,7 @@ We initially attempted to use `instructor.Mode.MD_JSON` to instruct the model to
 
 **Resolution:** We migrated the `instructor` client from `MD_JSON` back to strict `instructor.Mode.JSON` to force a raw JSON response. To circumvent the Pydantic `<think>` block validation failure, we implemented a monkeypatch on the `openai_client.chat.completions.create` method. This patch intercepts the model's raw string output, automatically splits it at `</think>`, and strips the reasoning block entirely *before* Instructor attempts to parse the payload. This ensures a perfectly compliant JSON structure for local reasoning models like `mtplx` and `omlx`.
 
-## CHANGELOG
-- v1.1.0 (2026-06-15): Resolved UnboundLocalError and Instructor parsing fallback issues during initial telemetry pipeline deployment.
-- v1.2.0 (2026-06-16): Added LLMOps Stack Augmentation strategy (Opik + Promptfoo + OpenLLMetry).
 
----
 
 ## II. Update 2: LLMOps Stack Augmentation (Opik + Promptfoo + OpenLLMetry) (v1.2.0)
 
@@ -181,3 +189,13 @@ We decided to **keep Opik** as our incumbent unified dashboard. It provides exce
 ### 3. Application Crash Reporting (Sentry SDK)
 - **The Problem:** Opik and OpenLLMetry are focused on AI/LLM tracing (prompts, tokens, latency, generation quality). However, if the `git-cg` application itself crashes due to a standard Python exception (e.g., `UnboundLocalError`, `FileNotFoundError`), these traces may drop or fail to capture the underlying stack trace properly.
 - **The Solution:** We will integrate the **Sentry SDK** specifically for application-level crash reporting and error tracking. Sentry will catch unhandled exceptions in the CLI execution and provide deep stack traces, separating application bugs from LLM inference issues.
+
+## CHANGELOG
+
+
+
+- v1.1.0 (2026-06-15): Resolved UnboundLocalError and Instructor parsing fallback issues during initial telemetry pipeline deployment.
+- v1.2.0 (2026-06-16): Added LLMOps Stack Augmentation strategy (Opik + Promptfoo + OpenLLMetry).
+- v1.2.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids -->

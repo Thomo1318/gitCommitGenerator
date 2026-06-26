@@ -3,9 +3,7 @@ An awe-inspiring, hyper-realistic macro shot of a massive, two-tiered security s
 
 📋 Target Filename: adr-0002-adopt-gitleaks-and-trufflehog.jpeg
 -->
-<div align="center">
-<img src="../assets/adr-0002-adopt-gitleaks-and-trufflehog.jpeg" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
-</div>
+![Header Image](../assets/adr-0002-adopt-gitleaks-and-trufflehog.jpeg)
 
 # ADR-0002: Adopt Gitleaks and TruffleHog for Two-Tier Secret Scanning
 

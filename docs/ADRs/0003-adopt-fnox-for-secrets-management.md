@@ -4,9 +4,7 @@ A hyper-detailed, photorealistic macro-photography shot of a massive vault door 
 
 📋 Target Filename: adr-0003-adopt-fnox-for-secrets-management.jpeg
 -->
-<div align="center">
-<img src="../assets/adr-0003-adopt-fnox-for-secrets-management.jpeg" alt="Header Image" style="width: 100%; max-width: 1080px; border-radius: 8px;">
-</div>
+![Header Image](../assets/adr-0003-adopt-fnox-for-secrets-management.jpeg)
 
 # ADR-0003: Adopt fnox for Hybrid Secrets Management
 

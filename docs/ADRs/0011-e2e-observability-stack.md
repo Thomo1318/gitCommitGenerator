@@ -1,10 +1,10 @@
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 A highly detailed cyberpunk architectural schematic showing the git-cg local CLI communicating with three distinct observability pillars: Opik Observability Cloud (cyan), Promptfoo CI Red-Teaming on a local runner (neon green), and Sentry Crash Telemetry (crimson). Glowing digital nodes, wireframes, and data packets flowing through separate channels. Dark void background. Pure technical graphic, no UI elements, wide aspect ratio. Designed for high-fidelity technical documentation.
 
-📋 Target Filename: adr-0011-e2e-observability.webp
+📋 Target Filename: adr-0011-e2e-observability.png
 -->
 
-![Header Image](../assets/adr-0011-e2e-observability.jpeg)
+![Header Image](../assets/adr-0011-e2e-observability.png)
 
 # ADR-0011: E2E Observability and LLMOps Stack Augmentation
 
@@ -12,7 +12,7 @@ A highly detailed cyberpunk architectural schematic showing the git-cg local CLI
 adr_number: "0011"
 title: "E2E Observability and LLMOps Stack Augmentation"
 status: "Proposed"
-version: "v2.0.0"
+version: "v3.0.1"
 date: "2026-06-17"
 created: "2026-06-17 00:00:00"
 modified: "2026-06-17 00:50:00"
@@ -351,22 +351,7 @@ sequenceDiagram
 
 - **Trace Continuity**: The intermediate state file (`.git/GIT_CG_OPIK_STATE.json`) acts as the deterministic bridge between the `prepare-commit-msg` process and the `commit-msg` process, allowing Opik to stitch together the full user journey.
 
-## 8. Supporting Visual Aids
-
-### Visual Aid Selection Rationale
-
-- **Primary data shape or explanatory need**: Understanding the tripartite separation of concerns in the observability stack.
-- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
-- **Why this visual aid was chosen**: The flowchart clarifies that Sentry, Promptfoo, and Opik are not competing, but rather covering distinct failure domains (Crashes, CI Validation, and Semantic Tracing).
-- **Alternative aids considered**: A simple table was rejected because it fails to show the temporal continuity required across git hook boundaries.
-
-### Supporting Visuals and Generated Artifacts
-
-- **Reference source**: `visualAidQuickReference.md`
-- **Chosen method**: Mermaid
-- **Generated artifact path(s)**: Embedded above in Sections 5 and 6. Target header image: `../assets/adr-0011-e2e-observability.webp`
-
-## 9. Impact Radius (Cause, Change, Effect)
+## 8. Impact Radius (Cause, Change, Effect)
 
 ### Phase 2: Correctness and Continuity (Opik Phase A)
 
@@ -449,7 +434,7 @@ sequenceDiagram
 
 - This decision should be revisited in 60 days to evaluate if Sentry volume is noisy or if Promptfoo assertions are flaky. If Sentry quota is exhausted by irrelevant OS-level exceptions, we will tighten the `traces_sampler` filters.
 
-## 13. Rollback Strategy
+## 12. Rollback Strategy
 
 1. **Revert Opik SDK Tracing Boundaries**: Restore `@opik.track` strictly to `generate_commit_message()` and ignore the state file linkage.
 2. **Prune Promptfoo**: Remove `promptfoo` from `mise.toml` and delete `promptfooconfig.yaml`.
@@ -476,7 +461,7 @@ All work within this project must strictly adhere to the following governance an
    - `## Risks / things to watch`: Potential pitfalls or side effects.
    - `## References`: Links to relevant ADRs or external documentation.
 
-## 15. Implementation Findings: Technical Implementation Trace (-vvv)
+## 14. Implementation Findings: Technical Implementation Trace (-vvv)
 
 The following represents the exact implementation trace bound to Epic #124 (Milestone: `✨ Epic: Complete E2E Observability Stack`).
 
@@ -1312,20 +1297,39 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - [ ] Refactor `README.md` to be exclusively User-facing (installation, basic configuration).
 - [ ] Embed the system workflow infographic into `README.md`.
 
-## 17. Governance Follow-up
+## 15. Governance Follow-up
 
 - Ensure all PR implementations strictly reference the context mapped above. Code MUST NOT be merged unless the corresponding checklist items are functionally validated.
 
-## CHANGELOG
-
-- v1.0.0 (2026-06-17): Initial Draft
-- v2.0.0 (2026-06-17): Architectural Overhaul
-- v3.0.0 (2026-06-17): Added strict documentation governance standards and fully integrated the E2E milestone issue specifications as the implementation trace.
-
-## 18. Links & References
+## 16. Links & References
 
 - `opik-vs-openllmetry-review-2026-06-16.md`
 - `sentry-implementation-plan-working-2026-06-16.md`
 - `implementationPlanForIntegratingPromptfoo.md`
 - `opik-implementation-plan-working-2026-06-16.md`
 - `ADR_GENERATION_ECOSYSTEM_EXPLAINER.md`
+
+## CHANGELOG
+
+
+
+- v1.0.0 (2026-06-17): Initial Draft
+- v2.0.0 (2026-06-17): Architectural Overhaul
+- v3.0.0 (2026-06-17): Added strict documentation governance standards and fully integrated the E2E milestone issue specifications as the implementation trace.
+- v3.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+
+<!-- ## Supporting Visual Aids
+
+### Visual Aid Selection Rationale
+
+- **Primary data shape or explanatory need**: Understanding the tripartite separation of concerns in the observability stack.
+- **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
+- **Why this visual aid was chosen**: The flowchart clarifies that Sentry, Promptfoo, and Opik are not competing, but rather covering distinct failure domains (Crashes, CI Validation, and Semantic Tracing).
+- **Alternative aids considered**: A simple table was rejected because it fails to show the temporal continuity required across git hook boundaries.
+
+### Supporting Visuals and Generated Artifacts
+
+- **Reference source**: `visualAidQuickReference.md`
+- **Chosen method**: Mermaid
+- **Generated artifact path(s)**: Embedded above in Sections 5 and 6. Target header image: `../assets/adr-0011-e2e-observability.png`
+-->
