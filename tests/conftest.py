@@ -16,4 +16,9 @@ import types
 if "sentry_sdk" not in sys.modules:
     _sentry_stub = types.ModuleType("sentry_sdk")
     _sentry_stub.init = lambda *args, **kwargs: None
+    _sentry_stub.capture_exception = lambda *args, **kwargs: None
+    _sentry_stub.capture_message = lambda *args, **kwargs: None
+    _sentry_stub.flush = lambda *args, **kwargs: None
+    _sentry_stub.add_breadcrumb = lambda *args, **kwargs: None
+    _sentry_stub.new_scope = lambda *args, **kwargs: __import__("contextlib").nullcontext()
     sys.modules["sentry_sdk"] = _sentry_stub
