@@ -466,7 +466,7 @@ class TestMiseTomlEvalPromptfoo:
         assert "promptfoo_results.json" in run, "eval:promptfoo must pass promptfoo_results.json to the sync script"
 
     def test_eval_promptfoo_run_syncs_redteam_results_to_opik(self):
-        """The run script must also sync promptfoo_redteam_results.json to Opik."""
+        """Ensure the eval:promptfoo task syncs red team results to Opik."""
         task = _load_mise()["tasks"]["eval:promptfoo"]
         run = task["run"]
         assert "promptfoo_redteam_results.json" in run, (
