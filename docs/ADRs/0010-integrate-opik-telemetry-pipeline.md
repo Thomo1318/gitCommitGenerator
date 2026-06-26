@@ -10,11 +10,11 @@
 ```yaml
 adr_number: "0010"
 title: "Integrate Opik Ecosystem & Telemetry Pipeline"
-status: "Draft"
-version: "v1.2.1"
+status: "Implemented"
+version: "v1.3.0"
 date: "2026-06-14"
 created: "2026-06-14 00:00:00"
-modified: "2026-06-26 12:50:00"
+modified: "2026-06-26 14:15:00"
 risk_level: "Medium"
 reversibility: "High"
 security_scope: "Low (Data sanitization required for secret leaking)"
@@ -197,5 +197,6 @@ We decided to **keep Opik** as our incumbent unified dashboard. It provides exce
 - v1.1.0 (2026-06-15): Resolved UnboundLocalError and Instructor parsing fallback issues during initial telemetry pipeline deployment.
 - v1.2.0 (2026-06-16): Added LLMOps Stack Augmentation strategy (Opik + Promptfoo + OpenLLMetry).
 - v1.2.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+- v1.3.0 (2026-06-26): Marked status as Implemented following successful E2E Sentry and Opik integration.
 
 <!-- ## Supporting Visual Aids -->
