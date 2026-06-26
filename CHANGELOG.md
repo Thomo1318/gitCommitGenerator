@@ -85,64 +85,115 @@
 
 ### ✨ Features
 - ✨ feat(cli): implement plain text commit output and stabilise CLI interface (#96)
-- ✨ feat(regeneration): implement selective delta rendering and invariant contract enforcement (#95)
-- ✨ feat(regeneration): add prompt reauthorisation, bounded directives, and 1Password fixes (#92)
-- ✨ feat(tui): enable multiple issue references in review (#84)
-- ✨ feat(tui): add structured issue references to interactive review flow (#81)
-- ✨ feat(tui): Gum TUI integration, docs infrastructure, and commit refactor (#78)
-- ✨ feat(sop): add deterministic intent metadata to gitmoji matrix
+- ✨ feat(features): document Multi-Intent Split Detection and trailers
 - ✨ feat(hooks): add linting and commit hooks
+- ✨ feat(intent): Add diff normalization and metrics collection
+- ✨ feat(intent): add adds_public_api signal marker
+- ✨ feat(regeneration): add prompt reauthorisation, bounded directives, and 1Password fixes (#92)
+- ✨ feat(regeneration): implement selective delta rendering and invariant contract enforcement (#95)
+- ✨ feat(sop): add deterministic intent metadata to gitmoji matrix
+- ✨ feat(tui): Gum TUI integration, docs infrastructure, and commit refactor (#78)
+- ✨ feat(tui): add structured issue references to interactive review flow (#81)
+- ✨ feat(tui): enable multiple issue references in review (#84)
+- ✨ feat(workflow): migrate TODO tasks to GitHub Issues tracker
 - 🎉 feat: initial commit of gitCommitGenerator `git-cg`
+- 👔 feat(models): enhance CommitIntent canonicalisation for all fields
+- 📝 feat(docs): add interactive table sorting to Zensical site (#93)
 
 ### 🐛 Bug Fixes
 - 🐛 fix(core): address automated review findings and finalise release formatting (#97)
-- 🥅 fix(gitops): Add graceful fallback for invalid intents
 - 🐛 fix(secrets): resolve 'Vaults' object has no attribute 'list_all' in 1Password SDK
+- 🚑 fix(models): fix newline escaping in body summary
+- 🥅 fix(cli): fix exception handling syntax
+- 🥅 fix(core): add process polling and error recovery
+- 🥅 fix(docs): add error handling for missing Tablesort
+- 🥅 fix(gitops): Add graceful fallback for invalid intents
+- 🥅 fix(main): add exception handling for AI generation
+- 🥅 fix(main): add parallel_tool_calls config
 
 ### 🏗️ Refactoring
-- 🏗️ refactor(regeneration): add semantic contract resolution and plan anchoring (#94)
-- 🏗️ refactor(semantic): canonicalise SOP semantics and explicit constraints (#91)
-- 🏗️ refactor(core): implement deterministic diff signal extraction and intent ranking
-- 🚚 refactor(core): centralise SOP loading for portable global hook support
+- ♻️ refactor(intent): improve test path detection patterns
+- ♻️ refactor(main): extract secret resolution to dedicated module
 - ♻️ refactor(main): extract system prompt builder and add logging config
 - ♻️ refactor(main): restructure imports and load env early
-- 🏗️ refactor(release): implement multi-strategy version injection
 - ♻️ refactor(main): update main.py and add ranker tests
+- 🏗️ refactor(architecture): document Intent Ranker and SOP loader components
+- 🏗️ refactor(core): implement deterministic diff signal extraction and intent ranking
+- 🏗️ refactor(gitops): Improve candidate selection logic
+- 🏗️ refactor(regeneration): add semantic contract resolution and plan anchoring (#94)
+- 🏗️ refactor(release): extract changelog grouping logic and add tests
+- 🏗️ refactor(release): implement multi-strategy version injection
+- 🏗️ refactor(secrets): enforce allowlisting for 1Password environment exports
+- 🏗️ refactor(semantic): canonicalise SOP semantics and explicit constraints (#91)
+- 🔥 refactor(txt): delete temporary scratch file
+- 🚚 refactor(core): centralise SOP loading for portable global hook support
 
 ### 📝 Documentation
-- 📝 feat(docs): add interactive table sorting to Zensical site (#93)
-- 📝 docs(adr): fix unescaped brackets in ADR-0009 and update Zensical navigation
-- 📝 docs(readme): update README with new architecture and features
-- 📝 docs(readme): add badges and format tables in README
-- 📝 docs(project): document 1Password SDK migration and roadmap
-- 📝 docs(todo): add deferred architecture ideas and parametrise env script
-- 📝 docs(vizvibe): add project roadmap visualization
-- 📝 docs(readme): extract TODO list and update Python version
-- 📝 docs(adr): add Refinement 3 for multi-issue reference review
+- 🎨 style(docs): cleanup docstrings and CSS
+- 💄 style(docs): add table sort indicator styles
+- 💬 style(main): clarify interactive mode unavailable message
 - 📝 docs(adr): add ADR refinement 2 for issue reference metadata
-- 📝 docs(todo): add multi-turn workflow task
+- 📝 docs(adr): add Refinement 3 for multi-issue reference review
 - 📝 docs(adr): add initial architecture decision records
+- 📝 docs(adr): escape link reference brackets in ADR-0009 to fix build
+- 📝 docs(adr): fix unescaped brackets in ADR-0009 and update Zensical navigation
+- 📝 docs(nav): add ADR-0009 to Zensical sidebar navigation config
+- 📝 docs(project): document 1Password SDK migration and roadmap
+- 📝 docs(readme): add badges and format tables in README
+- 📝 docs(readme): correct typos and update COMMIT_EDITMSG path documentation
+- 📝 docs(readme): document configuration and secrets setup
+- 📝 docs(readme): document regeneration guidance actions
+- 📝 docs(readme): extract TODO list and update Python version
+- 📝 docs(readme): update README with new architecture and features
+- 📝 docs(todo): add deferred architecture ideas and parametrise env script
+- 📝 docs(todo): add multi-turn workflow task
+- 📝 docs(todo): clean up TODO.md formatting
+- 📝 docs(todo): cleanup completed TODO items
+- 📝 docs(todo): reorganize TODO into structured issue sections
+- 📝 docs(todo): update TODO with LLM evaluation system
+- 📝 docs(vizvibe): add project roadmap visualization
 
 ### 🔐 Security & Secrets
-- 🔐 chore(secrets)!: add 1Password secrets resolution
-- 🔐 chore(core): refactor secrets resolution with async caching
-- 🔐 chore(secrets): migrate to betterleaks secret scanner
 - 🔐 chore(config): Add fnox and age for secrets orchestration
+- 🔐 chore(core): refactor secrets resolution with async caching
+- 🔐 chore(secrets): configure gitleaks ignore rules
+- 🔐 chore(secrets): document fnox and age secrets orchestration
+- 🔐 chore(secrets): migrate to betterleaks secret scanner
+- 🔐 chore(setup): add installation script and environment configuration
 - 🔐 fix(security): add TruffleHog scanning and secrets protection
+- 🦺 fix(main): add tty availability checks
 
 ### 🔧 Chores & Internal
+- ✅ test(interaction): add regeneration guidance tests
+- ✅ test(ranker): add ranker preference test cases
+- ✅ test(regeneration): add tests for contract enforcement
+- ✅ test(scripts): add evaluation and test generation scripts
 - ✅ test(tests): add comprehensive test suite for intent, main, ranker, and sop modules
-- 🔧 chore(docs): update vizvibe and include missed docs fixes
-- 🔧 chore(mise): add logging env vars and secret scanner tools
-- 🔧 chore(hooks): update prepare-commit-msg hook for debugging
-- 🔧 chore(hk): migrate from pre-commit to hk for git hooks
+- ✅ test(tests): add tests for constraint derivation and canonicalisation
+- ➖ build(mise): remove unused mlx dependency
+- 👷 ci(config): Add hatchling build system configuration
+- 👷 ci(docs): add GitHub Pages deployment workflow
 - 🔊 chore(logging): set Opik console logging level to INFO
-- 🔐 chore(setup): add installation script and environment configuration
+- 🔧 chore(ci): use strict mode in docs build workflow
+- 🔧 chore(config): add pytest configuration with coverage
+- 🔧 chore(config): update .gitignore and Brewfile dependencies
+- 🔧 chore(deps): add git, mlx, and python-dotenv dependencies
+- 🔧 chore(docs): update vizvibe and include missed docs fixes
+- 🔧 chore(hk): migrate from pre-commit to hk for git hooks
+- 🔧 chore(hooks): update prepare-commit-msg hook for debugging
+- 🔧 chore(mise): add gum to toolchain and update gitignore
+- 🔧 chore(mise): add logging env vars and secret scanner tools
+- 🔧 chore(mise): remove git tool pinning from mise.toml
+- 🔨 chore(ci): add automated documentation hook to hk and justfile
+- 🔨 chore(install): add automated installation pipeline script
+- 🙈 chore(gitignore): add DEV_WORKFLOW.md to gitignore
+- 🙈 chore(gitignore): update ADR directory pattern
+- 🙈 chore: remove agentops.log from gitignore
 
 ### 💥 Breaking Changes
 - ♻️ refactor(models)!: replace flat Commit with hierarchical CommitPlan model
 - 💥 feat(api)!: change AI response schema to CommitPlan
-- 💥 feat(release)!: add machine-readable trailer parsing
 - 💥 feat(api)!: remove build_generation_messages directive parameters
 - 💥 feat(engine)!: change default engine to mtplx
+- 💥 feat(release)!: add machine-readable trailer parsing
 - 🔐 chore(secrets)!: add 1Password secrets resolution
