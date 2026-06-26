@@ -164,3 +164,81 @@ def test_populate_cache_prints_debug_message_on_failure(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "[Debug]" in captured.err
+
+
+# ---------------------------------------------------------------------------
+# ENV_EXPORT_ALLOWLIST – sentry keys added in this PR
+# ---------------------------------------------------------------------------
+
+
+def test_sentry_dsn_is_in_env_export_allowlist():
+    """SENTRY_DSN must be in the ENV_EXPORT_ALLOWLIST so 1Password can export it."""
+    from git_cg.secrets import ENV_EXPORT_ALLOWLIST
+
+    assert "SENTRY_DSN" in ENV_EXPORT_ALLOWLIST
+
+
+def test_sentry_environment_is_in_env_export_allowlist():
+    """SENTRY_ENVIRONMENT must be in the ENV_EXPORT_ALLOWLIST."""
+    from git_cg.secrets import ENV_EXPORT_ALLOWLIST
+
+    assert "SENTRY_ENVIRONMENT" in ENV_EXPORT_ALLOWLIST
+
+
+def test_sentry_release_is_in_env_export_allowlist():
+    """SENTRY_RELEASE must be in the ENV_EXPORT_ALLOWLIST."""
+    from git_cg.secrets import ENV_EXPORT_ALLOWLIST
+
+    assert "SENTRY_RELEASE" in ENV_EXPORT_ALLOWLIST
+
+
+def test_sentry_keys_are_all_present_in_allowlist():
+    """All three sentry keys must be present together, not just individually."""
+    from git_cg.secrets import ENV_EXPORT_ALLOWLIST
+
+    sentry_keys = {"SENTRY_DSN", "SENTRY_ENVIRONMENT", "SENTRY_RELEASE"}
+    assert sentry_keys.issubset(ENV_EXPORT_ALLOWLIST)
+
+
+# ---------------------------------------------------------------------------
+# resolve_secret – _op_cache is None guard (PR fix)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_secret_returns_default_when_cache_is_none_after_populate(monkeypatch):
+    """
+    If _populate_cache somehow leaves _op_cache as None (edge case), resolve_secret
+    must not raise TypeError and must return the default value instead.
+
+    This tests the defensive guard: `if _op_cache is not None and secret_key in _op_cache`.
+    """
+    import git_cg.secrets as secrets_module
+
+    monkeypatch.delenv("EDGE_CASE_KEY", raising=False)
+    monkeypatch.setattr(secrets_module, "_op_cache", None)
+
+    # Override _populate_cache to intentionally leave _op_cache as None
+    def populate_that_leaves_none():
+        pass  # deliberately does NOT set _op_cache
+
+    monkeypatch.setattr(secrets_module, "_populate_cache", populate_that_leaves_none)
+
+    # Must not raise TypeError; must return the default
+    result = secrets_module.resolve_secret("EDGE_CASE_KEY", "safe_default")
+    assert result == "safe_default"
+
+
+def test_resolve_secret_returns_empty_default_when_cache_is_none_after_populate(monkeypatch):
+    """The None guard must work with the default empty-string fallback as well."""
+    import git_cg.secrets as secrets_module
+
+    monkeypatch.delenv("EDGE_CASE_KEY_2", raising=False)
+    monkeypatch.setattr(secrets_module, "_op_cache", None)
+
+    def populate_that_leaves_none():
+        pass
+
+    monkeypatch.setattr(secrets_module, "_populate_cache", populate_that_leaves_none)
+
+    result = secrets_module.resolve_secret("EDGE_CASE_KEY_2")
+    assert result == ""
