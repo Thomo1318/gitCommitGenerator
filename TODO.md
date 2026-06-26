@@ -14,7 +14,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
     - **How it works:** We prompt the LLM: "Here is a list of modified files and the branch name. Group them into logical, deployable commits and suggest a short title for each. Return as JSON."
     - **The Workflow:** The tool presents these groups to you in the TUI:
 
-    ```
+    ```text
     🧠 git-cg has identified 3 logical commits:
     1. [Code] Sentry Integration (8 files)
     2. [Tooling] Promptfoo Sync Script (2 files)
@@ -94,7 +94,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 - [ ] Explore implementing either [Baseline](https://github.com/SecondSonConsulting/Baseline) or a similar function.
 - [ ] have a check run that identifies if there is a newer release of the users chosen LLM model, if there is ask them if they want to download it and use it. if the user selcts no then do not ask them again but inform them that a persistant message will be shown eachtime they run the tool with the command to download and use the newer version. This will be an unobtrusive message shown as an additional colour item in the start up message:
 
-  ```
+  ```text
   gitCommitGenerator  main 📦+3?14⇡3 🐍 v3.14.5 (gitcommitgenerator)
   ❯ git-cg -i -v
   [22:55:25] Starting git-cg...                                                                             main.py:851
@@ -124,7 +124,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
     - #### LaunchDarkly
       - Configure SDK - Add `LaunchDarklyIntegration` to your integrations list.
 
-        ```
+        ```python
         import sentry_sdk
         from sentry_sdk.integrations.launchdarkly import LaunchDarklyIntegration
         import ldclient
@@ -142,7 +142,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 
       - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
 
-        ```
+        ```python
         client = ldclient.get()
         client.variation("hello", Context.create("test-context"), False)  # Evaluate a flag with a default value.
         sentry_sdk.capture_exception(Exception("Something went wrong!"))
@@ -151,7 +151,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
     - #### OpenFeature:
       - Configure SDK - Add `OpenFeatureIntegration` to your integrations list.
 
-        ```
+        ```python
         import sentry_sdk
         from sentry_sdk.integrations.openfeature import OpenFeatureIntegration
         from openfeature import api
@@ -169,7 +169,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 
       - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
 
-        ```
+        ```python
         client = api.get_client()
         client.get_boolean_value("hello", default_value=False)  # Evaluate a flag with a default value.
         sentry_sdk.capture_exception(Exception("Something went wrong!"))
@@ -178,7 +178,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
     - #### Statsig:
       - Configure SDK - Add `StatsigIntegration` to your integrations list.
 
-        ```
+        ```python
         import sentry_sdk
         from sentry_sdk.integrations.statsig import StatsigIntegration
         from statsig.statsig_user import StatsigUser
@@ -199,7 +199,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 
       - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
 
-        ```
+        ```python
         while not statsig.is_initialized():
             time.sleep(0.2)
 
@@ -210,7 +210,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
     - #### Unleash:
       - Configure SDK - Add `UnleashIntegration` to your integrations list.
 
-        ```
+        ```python
         import sentry_sdk
         from sentry_sdk.integrations.unleash import UnleashIntegration
         from UnleashClient import UnleashClient
@@ -229,7 +229,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 
       - Verify - Test your setup by evaluating a flag, then capturing an exception. Check the Feature Flags table in Issue Details to confirm that your error event has recorded the flag and its result.
 
-        ```
+        ```python
         test_flag_enabled = unleash.is_enabled("test-flag")  # Evaluate a flag.
         sentry_sdk.capture_exception(Exception("Something went wrong!"))
         ```
@@ -575,7 +575,7 @@ Organise into a table.
 ---
 
 - [ ] [ML Algorithms](https://medium.com/@atharvjaiswal56/7-machine-learning-algorithms-every-python-developer-should-know-in-2026-51abe7921b12)
-  ```
+  ```text
   Your data has labels?
   ├── YES → Supervised Learning
   │   ├── Predicting a number → Linear Regression or XGBoost

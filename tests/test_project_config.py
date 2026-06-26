@@ -408,6 +408,7 @@ class TestPromptfooConfig:
             if assertion["type"] == "javascript" and ".test(" in assertion["value"]:
                 assert "trim()" in assertion["value"], "Regex assertion should call trim() before testing"
                 return
+        raise AssertionError("No regex-based JS assertion found")
 
     def test_at_least_two_javascript_assertions_in_first_test(self):
         """After this PR, the first test case must have at least two JS assertions."""

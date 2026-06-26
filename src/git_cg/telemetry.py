@@ -14,10 +14,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from git_cg.models import CommitPlan, CommitType
-from git_cg.sentry_config import init_sentry
 from git_cg.sop import get_gitmoji_matrix
-
-init_sentry()
 
 
 class Provenance(enum.StrEnum):
@@ -71,7 +68,7 @@ class GenerationTelemetry:
 def compute_prompt_hash(prompt: str) -> str:
     """
     Produce a version-tracking identifier for a prompt.
-    
+
     Returns:
         str: The first 16 hexadecimal characters of the prompt's SHA-256 hash.
     """
@@ -203,7 +200,7 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
 def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
     """
     Read the persisted commit telemetry state from the git directory.
-    
+
     Returns:
         The stored GenerationTelemetry instance, or None if the state file is missing or cannot be loaded.
     """
