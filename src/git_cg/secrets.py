@@ -21,6 +21,9 @@ ENV_EXPORT_ALLOWLIST = {
     "OMLX_BASE_URL",
     "MTPLX_API_KEY",
     "MTPLX_BASE_URL",
+    "SENTRY_DSN",
+    "SENTRY_ENVIRONMENT",
+    "SENTRY_RELEASE",
 }
 
 
@@ -111,7 +114,7 @@ def resolve_secret(secret_key: str, default_value: str = "") -> str:
     if _op_cache is None:
         _populate_cache()
 
-    if secret_key in _op_cache:
+    if _op_cache is not None and secret_key in _op_cache:
         return _op_cache[secret_key]
 
     return default_value

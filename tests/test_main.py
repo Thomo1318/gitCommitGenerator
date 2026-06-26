@@ -59,11 +59,16 @@ def test_build_generation_messages_omits_regeneration_guidance_when_absent():
     assert len(messages) == 2
 
 
-def test_review_state_regeneration_guidance_can_be_set_and_cleared():
+def test_review_state_regeneration_guidance_can_be_set():
     review_state = ReviewState(commit_plan=None, regeneration_guidance=None)  # type: ignore[arg-type]
 
     assert review_state.set_regeneration_guidance("This is a feature, not a fix.") is True
     assert review_state.regeneration_guidance == "This is a feature, not a fix."
+
+
+def test_review_state_regeneration_guidance_can_be_cleared():
+    review_state = ReviewState(commit_plan=None, regeneration_guidance="This is a feature, not a fix.")  # type: ignore[arg-type]
+
     assert review_state.clear_regeneration_guidance() is True
     assert review_state.regeneration_guidance is None
 
@@ -174,7 +179,7 @@ def test_build_system_prompt_guidance_instructs_not_to_use_as_commit_content():
 
 
 # ---------------------------------------------------------------------------
-# LAST_OPIK_TRACE_ID – global variable (added in this PR)
+# LAST_OPIK_TRACE_ID - global variable (added in this PR)
 # ---------------------------------------------------------------------------
 
 
