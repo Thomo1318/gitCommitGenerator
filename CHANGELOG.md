@@ -97,4 +97,8 @@
 
 ### 💥 Breaking Changes
 - ♻️ refactor(models)!: replace flat Commit with hierarchical CommitPlan model
+- 💥 feat(api)!: change AI response schema to CommitPlan
+- 💥 feat(release)!: add machine-readable trailer parsing
+- 💥 feat(api)!: remove build_generation_messages directive parameters
+- 💥 feat(engine)!: change default engine to mtplx
 - 🔐 chore(secrets)!: add 1Password secrets resolution
