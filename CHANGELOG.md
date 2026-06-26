@@ -28,6 +28,7 @@
 - 📝 docs: fix broken shields.io license badge
 
 ### 🔐 Security & Secrets
+- 🦺 docs(security): formalize IDE boundaries and 1Password `.env` mounting protocols (ADR-0013)
 - 🦺 fix(security): add path traversal prevention and input validation
 
 ### 🔧 Chores & Internal
