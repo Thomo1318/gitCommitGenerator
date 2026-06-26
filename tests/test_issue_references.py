@@ -403,8 +403,8 @@ def test_issue_reference_type_choices_contains_all_verbs_and_back():
     assert set(ISSUE_REFERENCE_TYPE_CHOICES) == expected
 
 
-def test_review_state_updates_same_issue_number_with_different_verb():
-    """Re-adding the same issue number with a different verb must update the existing reference."""
+def test_review_state_conflicts_same_issue_number_with_different_verb():
+    """Attempting to attach the same issue number with a different verb must return CONFLICT and preserve the original reference."""
     state = ReviewState(commit_plan=_make_commit_plan())
     existing_reference = IssueReference(kind=IssueReferenceKind.REFS, issue_number=80)
     new_reference = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=80)
@@ -456,7 +456,7 @@ def test_format_issue_reference_status_with_three_references():
 
 
 def test_review_state_mutation_result_has_exactly_three_members():
-    """ReviewStateMutationResult must have exactly ADDED, DUPLICATE, and UPDATED."""
+    """ReviewStateMutationResult must have exactly ADDED, DUPLICATE, and CONFLICT."""
     assert len(list(ReviewStateMutationResult)) == 3
 
 
@@ -491,7 +491,7 @@ def test_review_state_mutation_result_all_members_present():
     [(first, second) for first in IssueReferenceKind for second in IssueReferenceKind if first != second],
 )
 def test_review_state_update_all_verb_pairs(first_kind: IssueReferenceKind, second_kind: IssueReferenceKind):
-    """Any attempt to attach the same issue number with a different verb must return UPDATED."""
+    """Any attempt to attach the same issue number with a different verb must return CONFLICT."""
     state = ReviewState(commit_plan=_make_commit_plan())
     ref_first = IssueReference(kind=first_kind, issue_number=42)
     ref_updated = IssueReference(kind=second_kind, issue_number=42)
@@ -514,8 +514,8 @@ def test_review_state_add_third_distinct_reference():
     assert state.issue_references == [ref_a, ref_b, ref_c]
 
 
-def test_review_state_update_on_second_of_multiple_refs():
-    """An update must be applied correctly when the updated number matches the second of two stored refs."""
+def test_review_state_conflict_on_second_of_multiple_refs():
+    """A conflict must be detected and return CONFLICT when the new reference verb differs from the second of two stored refs."""
     state = ReviewState(commit_plan=_make_commit_plan())
     ref_a = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=10)
     ref_b = IssueReference(kind=IssueReferenceKind.REFS, issue_number=20)
@@ -529,8 +529,8 @@ def test_review_state_update_on_second_of_multiple_refs():
     assert state.issue_references == [ref_a, ref_b]
 
 
-def test_review_state_duplicate_after_update():
-    """After an update, re-adding the updated reference must return DUPLICATE."""
+def test_review_state_duplicate_after_conflict():
+    """Attempting to update an existing IssueReference must return CONFLICT, preserving the original reference, and re-adding the original must yield DUPLICATE."""
     state = ReviewState(commit_plan=_make_commit_plan())
     original = IssueReference(kind=IssueReferenceKind.REFS, issue_number=77)
     updated = IssueReference(kind=IssueReferenceKind.CLOSES, issue_number=77)
@@ -612,8 +612,8 @@ def test_insertion_order_preserved_after_duplicate_and_update_attempts():
     assert state.issue_references == [ref_a, ref_b, ref_c]
 
 
-def test_render_reflects_state_after_update():
-    """The rendered output must include the updated reference."""
+def test_render_preserves_state_after_conflict():
+    """The rendered output must ignore conflicting references and preserve the original."""
     state = ReviewState(commit_plan=_make_commit_plan())
     original = IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=99)
     state.add_issue_reference(original)
