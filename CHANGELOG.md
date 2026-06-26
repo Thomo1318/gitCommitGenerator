@@ -1,38 +1,38 @@
 ## v0.2.0
 
 ### ✨ Features
-- ✨ feat(eval): finalise promptfoo security, native release engine, and IDE boundaries (#136)
-- ✨ feat(eval): initialise promptfoo framework for local MTPLX proxy testing (#134)
-- ✨ feat(eval): transition to Opik-managed datasets and test suites (#133)
-- ✨ feat(eval): integrate deterministic Opik formatting metrics and evaluation expansion (#128)
-- ✨ feat(telemetry): add prompt tracking and feedback scores (#127)
+- ✨ feat(eval): finalise promptfoo security, native release engine, and IDE boundaries (#121, #123, #124, #136)
+- ✨ feat(eval): initialise promptfoo framework for local MTPLX proxy testing (#120, #134)
+- ✨ feat(eval): transition to Opik-managed datasets and test suites (#119, #133)
+- ✨ feat(eval): integrate deterministic Opik formatting metrics and evaluation expansion (#118, #124, #128)
+- ✨ feat(telemetry): add prompt tracking and feedback scores (#117, #124, #127)
 - ✨ feat(telemetry): implement comprehensive runtime tracing (Opik Phase B) (#126)
-- ✨ feat(telemetry): Phase 2 Correctness and Continuity (Opik Phase A) (#125)
-- 📈 feat(telemetry): implement two-point tracing and evaluation rules
+- ✨ feat(telemetry): Phase 2 Correctness and Continuity (Opik Phase A) (#115, #125)
+- 📈 feat(telemetry): implement two-point tracing and evaluation rules (#99)
 - ✨ feat(cli): add GUI editor support for commit messages
 - ✨ feat(main): add primary language detection to system prompt
 
 ### 🐛 Bug Fixes
-- 🐛 fix(eval): downgrade promptfoo failures and refine ADR history
-- 🐛 fix(detect): prioritize code files over docs in language detection
+- 🐛 fix(eval): downgrade promptfoo failures and refine ADR history (#125)
+- 🐛 fix(detect): prioritise code files over docs in language detection
 - 🥅 fix(sentry): add Sentry SDK for crash reporting
-- 🚑 fix(docs): escape brackets to fix zensical strict markdown parsing
+- 🚑 fix(docs): escape brackets to fix Zensical strict markdown parsing (#139)
 
 ### 📝 Documentation
 - 📝 docs(feature-flags): add Sentry feature flag provider analysis
-- 📝 docs(llmops_comparison): add LLMOps tooling comparison report
+- 📝 docs(llmops_comparison): add LLMOps tooling comparison report (#15)
 - 📝 docs(architecture): add Opik telemetry architecture docs
 - 📝 docs(todo): add research and library backlog to TODO
-- 📝 docs(readme): update readme architecture and gui editor docs
+- 📝 docs(readme): update readme architecture and GUI editor docs
 - 📝 docs(telemetry): add Opik telemetry architecture docs
-- docs: fix broken shields.io license badge
+- 📝 docs: fix broken shields.io license badge
 
 ### 🔐 Security & Secrets
 - 🦺 fix(security): add path traversal prevention and input validation
 
 ### 🔧 Chores & Internal
-- 🔊 chore(observability): add prompt sync error logging (#137)
-- 🔧 chore: append global telemetry tags and update backlog
+- 🔊 chore(observability): add prompt sync error logging (#124, #137)
+- 🔧 chore: append global telemetry tags and update backlog (#117)
 - 🍱 chore(docs): add git-cg tool screenshot
 - 🔧 chore(agents): add agents config and remove scratch docs
 
