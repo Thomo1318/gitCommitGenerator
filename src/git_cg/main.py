@@ -111,13 +111,13 @@ class ReviewState:
 
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
-        Add an issue reference to the review state.
-
+        Store an issue reference in the review state.
+        
         Parameters:
             issue_reference (IssueReference): The issue reference to store.
-
+        
         Returns:
-            ReviewStateMutationResult: `ADDED` if the reference was appended, `DUPLICATE` if an identical reference already exists, `UPDATED` if an existing reference for the same issue number was replaced.
+            ReviewStateMutationResult: `ADDED` if the reference was stored, `DUPLICATE` if an identical reference already exists, `UPDATED` if a reference for the same issue number was replaced.
         """
         existing_issue_reference = self.get_issue_reference_by_issue_number(issue_reference.issue_number)
         if existing_issue_reference is not None:
@@ -380,10 +380,10 @@ def build_generation_messages(
     diff_output: str,
 ) -> list[Any]:
     """
-    Construct the chat messages used to generate a commit message from a git diff.
-
+    Build the chat messages for commit message generation from a git diff.
+    
     Returns:
-        messages (list[Any]): Chat messages with the system prompt first and the diff wrapped in a fenced `diff` block as the user message.
+    	messages (list[Any]): The system prompt followed by a user message containing the diff in a fenced `diff` block.
     """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -403,22 +403,21 @@ def generate_commit_message(
     **kwargs,
 ) -> CommitPlan:
     """
-    Generate a commit plan from a git diff.
+    Generate a commit plan from the current diff.
     
-    Applies any locked regeneration directives to the generated plan.
+    Applies any locked directive values to the generated plan before returning it.
     
     Parameters:
-        diff_output (str): The git diff to include in the request.
-        model_name (str): The model to use.
+        diff_output (str): The git diff to send to the model.
+        model_name (str): The model to use for generation.
         system_prompt (str): The system instructions for generation.
-        active_directives (dict[str, str] | None): Locked directive values such as `preferred_type` and `preferred_scope`.
-        residual_guidance (str | None): Additional guidance to include with the request.
+        active_directives (dict[str, str] | None): Locked directive values to apply to the generated plan.
     
     Returns:
         CommitPlan: The generated commit plan.
     
     Raises:
-        RuntimeError: If no commit plan can be generated after the maximum retries.
+        RuntimeError: If a commit plan cannot be generated after the configured retries.
     """
     import time
 
@@ -460,13 +459,13 @@ def generate_commit_message(
 
 def detect_primary_language(diff_output: str) -> str | None:
     """
-    Identify the primary language represented in a diff.
+    Detect the primary programming language represented in a diff.
     
     Parameters:
         diff_output (str): Unified diff text to inspect.
     
     Returns:
-        str | None: The mapped language name for the most common file extension, or the upper-case extension when unmapped. `None` if no file extensions are found.
+        str | None: The mapped language name for the most common file extension, or the upper-case extension when no mapping is defined. `None` if no file extensions are found.
     """
     pattern = re.compile(r"^diff --git a/.*\.([a-zA-Z0-9]+) b/.*$", re.MULTILINE)
     extensions = pattern.findall(diff_output)
@@ -711,14 +710,14 @@ def _interactive_review(
     Display an interactive review prompt for a generated commit message.
     
     Parameters:
-        commit_msg_file (str): Path to the commit message file to update after review changes.
-        review_state (ReviewState): Current review state for the generated commit and attached issue references.
-        verbose (bool): Print extra status messages when interactive mode is unavailable or when review state changes.
-        strict (bool): Control how write failures are handled when the commit message file is updated.
-        gui_editor (bool): Use graphical editor environment variables when opening the message for editing.
+    	commit_msg_file (str): Path to the commit message file to update when review changes are saved.
+    	review_state (ReviewState): Current review state, including the generated message and any attached issue references.
+    	verbose (bool): Print status messages when interactive input is unavailable or when review state changes.
+    	strict (bool): Control how write failures are handled when updating the commit message file.
+    	gui_editor (bool): Use graphical editor environment variables when opening the message for editing.
     
     Returns:
-        str: The selected action.
+    	str: The selected action.
     """
     emit_terminal_bell()
 
@@ -882,7 +881,7 @@ def _run_commit_generation(
     gui_editor: bool = False,
 ) -> bool:
     """
-    Generate a commit message from the staged diff and manage review, regeneration, and telemetry.
+    Generate a commit message from the staged diff and handle review and telemetry.
     
     Parameters:
     	commit_msg_file (str): Path to the commit message file to write.
@@ -1409,13 +1408,13 @@ def record_telemetry(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> None:
     """
-    Record the final commit-message telemetry in Opik.
+    Record final commit telemetry in Opik.
     
-    Classifies how the generated message was edited, logs the result with the stored telemetry metadata, and clears the saved telemetry state afterwards.
+    Classifies how the generated commit message was changed, logs the stored telemetry metadata, and clears the saved telemetry state afterwards.
     
     Parameters:
-        commit_msg_file (str): Path to the final commit message file.
-        verbose (bool): Enables verbose output.
+    	commit_msg_file (str): Path to the final commit message file.
+    	verbose (bool): Enables verbose output.
     """
     import subprocess
 

@@ -161,6 +161,9 @@ class TestInitSentryVersion:
         captured = {}
 
         def fake_init(**kwargs):
+            """
+            Record keyword arguments passed to the Sentry init stub.
+            """
             captured.update(kwargs)
 
         def raise_not_found(name):
@@ -180,6 +183,9 @@ class TestInitSentryVersion:
         captured = {}
 
         def fake_init(**kwargs):
+            """
+            Record keyword arguments passed to the Sentry init stub.
+            """
             captured.update(kwargs)
 
         with patch("sentry_sdk.init", fake_init), patch("importlib.metadata.version", return_value="1.2.3"):
@@ -214,6 +220,9 @@ class TestInitSentryExceptionSuppression:
         monkeypatch.setenv("GIT_CG_DISABLE_SENTRY", "0")
 
         def broken_init(**kwargs):
+            """
+            Raise a ValueError for an invalid DSN.
+            """
             raise ValueError("bad dsn")
 
         with patch("sentry_sdk.init", broken_init):
@@ -236,6 +245,9 @@ class TestScrubData:
         captured = {}
 
         def fake_init(**kwargs):
+            """
+            Record keyword arguments passed to the Sentry init stub.
+            """
             captured.update(kwargs)
 
         with patch("sentry_sdk.init", fake_init):

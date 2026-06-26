@@ -219,6 +219,11 @@ def test_resolve_secret_returns_default_when_cache_is_none_after_populate(monkey
 
     # Override _populate_cache to intentionally leave _op_cache as None
     def populate_that_leaves_none():
+        """
+        Leaves the secret cache unset.
+        
+        This helper is used where cache population must be skipped.
+        """
         pass  # deliberately does NOT set _op_cache
 
     monkeypatch.setattr(secrets_module, "_populate_cache", populate_that_leaves_none)
