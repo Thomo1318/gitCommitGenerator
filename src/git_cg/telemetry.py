@@ -70,10 +70,10 @@ class GenerationTelemetry:
 
 def compute_prompt_hash(prompt: str) -> str:
     """
-    Compute a version-tracking hash of the prompt.
-
+    Produce a version-tracking identifier for a prompt.
+    
     Returns:
-        str: A version-tracking hash of the prompt
+        str: The first 16 hexadecimal characters of the prompt's SHA-256 hash.
     """
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 

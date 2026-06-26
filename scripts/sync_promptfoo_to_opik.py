@@ -10,12 +10,9 @@ import opik
 def parse_iso_timestamp(ts: str) -> datetime.datetime:
     """
     Parse an ISO 8601 timestamp string.
-
-    Parameters:
-        ts (str): The timestamp string to parse.
-
+    
     Returns:
-        datetime.datetime: The parsed datetime, or the current UTC time if parsing fails.
+    	datetime.datetime: The parsed datetime, or the current UTC time if parsing fails.
     """
     try:
         # handle Z and fractional seconds

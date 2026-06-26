@@ -100,9 +100,14 @@ def _populate_cache():
 
 def resolve_secret(secret_key: str, default_value: str = "") -> str:
     """
-    Resolve a secret value.
-    1. Checks the local os.environ.
-    2. Queries the 1Password SDK for the secret_key within the configured Environment ID.
+    Resolve a secret value from the environment or cached 1Password fields.
+    
+    Parameters:
+    	secret_key (str): The environment variable or field name to resolve.
+    	default_value (str): The value to return when no secret is found.
+    
+    Returns:
+    	str: The resolved secret value, or `default_value` when no matching value exists.
     """
     # 1. Local environment injection or override
     val = os.environ.get(secret_key)
