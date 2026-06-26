@@ -88,6 +88,18 @@ def sync_results(file_path: str):
                 end_time=end_time,
             )
 
+            # Ship raw completion latencies and errors to Sentry
+            sentry_sdk.add_breadcrumb(
+                category="promptfoo_latency",
+                message=f"Promptfoo evaluation latency: {latency_ms}ms",
+                level="info",
+                data={"latency_ms": latency_ms, "success": success},
+            )
+            if not success:
+                sentry_sdk.capture_message(
+                    f"Promptfoo evaluation failed: {result.get('error', 'Assertion failed')}", level="error"
+                )
+
             score = 1.0 if success else 0.0
             trace.log_feedback_score(name="feedback_score", value=score)
             trace.log_feedback_score(name="success", value=score)
