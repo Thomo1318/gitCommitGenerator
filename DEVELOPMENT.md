@@ -105,7 +105,7 @@ We enforce strict linting and formatting using `ruff` and type-checking via `pyr
 
 Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 
-- **`commit-msg`**: Strict validation of your commit message format. It runs `scripts/validate_commit.mjs` and enforces Gitmoji, Conventional Commits, Semantic Version trailers, and the 72-character limit.
+- **`commit-msg`**: Strict validation of your commit message format. It runs `scripts/validate_commit.mjs` and enforces Gitmoji, Conventional Commits, and the 72-character limit.
 - **`pre-commit`**: Automatically runs `gitleaks` and other pre-commit checks.
 
 > **Important Editor Warning**: If you use an interactive GUI editor (like VS Code or Cursor) for your git commits, you must ensure it runs in a blocking mode (e.g., `code --wait`). Otherwise, the editor will return instantly and cause the `hk` stash mechanisms to lock the git index unexpectedly. See the "Feature Spotlight" in the README for details.

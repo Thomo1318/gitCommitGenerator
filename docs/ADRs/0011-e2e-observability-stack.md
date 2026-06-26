@@ -773,9 +773,7 @@ Described in ADR 0011 Section 14 (Feedback and Prompt Enrichment). Review action
 
 ##### Deviations from Original Plan
 
-- **Deviation Overview:** The planned development of a dedicated `opik_prompts.py` module to dynamically sync local system prompt templates to the Opik Cloud Prompt Library, as well as the implementation of explicit global tagging to trace runs, was deferred.
-- **Detailed Context & Rationale:** During the implementation of Phase 4, the initial setup for Opik tracing feedback scores was completed successfully. However, before executing the prompt synchronization logic, the development team paused to confirm whether Phase 4 should be wrapped up prior to advancing to the Dataset logic in Phase 6. At this juncture, the user explicitly queried about the completion status of Phase 5. Immediately following this pivot, the project encountered several critical CI/CD pipeline blockers, including GitHub Actions limits, CodeRabbit static analysis findings, and Snyk vulnerability scanning issues. Because resolving these infrastructure and security gating issues was deemed a higher immediate priority, the remaining tasks for Phase 4 (opik_prompts.py and global tagging) were deferred. These items remain open/outstanding on the Phase 4 Execution Run Sheet checklist.
-- **Approval Status:** This was **NOT an explicitly agreed-upon architectural pivot or alternate solution**. It was a circumstantial omission caused by a sudden shift in development priorities toward fixing broken CI/CD pipelines.
+- **Deviation Overview:**
 
 > **Decision (2026-06-26 15:43 AEST):** Evaluated implementing `opik.Prompt()` inline during execution versus the originally planned standalone `scripts/sync_prompts_to_opik.py`. Confirmed that inline execution would introduce synchronous network API calls to Opik Cloud during the `prepare-commit-msg` git hook, violating the zero-latency runtime constraint. We will proceed with the original architectural plan: an asynchronous standalone script to sync templates offline, and tagging the trace with the local `prompt_hash` during runtime.
 
@@ -1294,10 +1292,10 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 ### Phase 10: Documentation Refactoring
 
-- [ ] Audit existing documentation.
-- [ ] Move all LLMOps, Sentry initialization instructions, Promptfoo local testing, and Opik setup instructions into `DEVELOPMENT.md`.
-- [ ] Refactor `README.md` to be exclusively User-facing (installation, basic configuration).
-- [ ] Embed the system workflow infographic into `README.md`.
+- [x] Audit existing documentation.
+- [x] Move all LLMOps, Sentry initialization instructions, Promptfoo local testing, and Opik setup instructions into `DEVELOPMENT.md`.
+- [x] Refactor `README.md` to be exclusively User-facing (installation, basic configuration).
+- [x] Embed the system workflow infographic into `README.md`.
 
 ## 15. Governance Follow-up
 
