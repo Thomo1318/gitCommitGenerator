@@ -25,12 +25,12 @@ USAGE_KDL_PATH = REPO_ROOT / "usage.kdl"
 def _read(path: Path) -> str:
     """
     Read a text file as UTF-8.
-    
+
     Parameters:
-    	path (Path): The file to read.
-    
+        path (Path): The file to read.
+
     Returns:
-    	str: The file contents.
+        str: The file contents.
     """
     return path.read_text(encoding="utf-8")
 
@@ -46,9 +46,7 @@ class TestGitignorePromptfooPattern:
     def test_pattern_present_in_gitignore(self):
         """The literal pattern line must exist in the .gitignore file."""
         lines = _read(GITIGNORE_PATH).splitlines()
-        assert "promptfoo_*.json" in lines, (
-            "Expected 'promptfoo_*.json' to be a line in .gitignore"
-        )
+        assert "promptfoo_*.json" in lines, "Expected 'promptfoo_*.json' to be a line in .gitignore"
 
     def test_pattern_matches_typical_promptfoo_output_file(self):
         """promptfoo_*.json should match a representative output filename."""
@@ -93,16 +91,14 @@ class TestGitignorePhaseArtifactsPattern:
     def test_pattern_present_in_gitignore(self):
         """The literal pattern line must exist in the .gitignore file."""
         lines = _read(GITIGNORE_PATH).splitlines()
-        assert "docs/phase_artifacts/" in lines, (
-            "Expected 'docs/phase_artifacts/' to be a line in .gitignore"
-        )
+        assert "docs/phase_artifacts/" in lines, "Expected 'docs/phase_artifacts/' to be a line in .gitignore"
 
     def test_pattern_is_directory_indicator(self):
         """The pattern must end with '/' to signal a directory match."""
         lines = _read(GITIGNORE_PATH).splitlines()
-        matching = [l for l in lines if "phase_artifacts" in l]
+        matching = [line for line in lines if "phase_artifacts" in line]
         assert matching, "No line containing 'phase_artifacts' found in .gitignore"
-        assert all(l.endswith("/") for l in matching), (
+        assert all(line.endswith("/") for line in matching), (
             "phase_artifacts gitignore pattern must end with '/' to mark it as a directory"
         )
 
@@ -154,34 +150,24 @@ class TestCompletionsPreReleaseFlag:
     def test_completions_release_contains_pre_release_flag(self):
         """The `release` command spec must include a `--pre-release` flag."""
         content = _read(COMPLETIONS_PATH)
-        assert "--pre-release" in content, (
-            "Expected '--pre-release' flag in completions/_git-cg release command spec"
-        )
+        assert "--pre-release" in content, "Expected '--pre-release' flag in completions/_git-cg release command spec"
 
     def test_completions_pre_release_has_identifier_argument(self):
         """The `--pre-release` flag must declare an `<IDENTIFIER>` argument."""
         content = _read(COMPLETIONS_PATH)
-        assert "<IDENTIFIER>" in content, (
-            "Expected '<IDENTIFIER>' argument for --pre-release in completions/_git-cg"
-        )
+        assert "<IDENTIFIER>" in content, "Expected '<IDENTIFIER>' argument for --pre-release in completions/_git-cg"
 
     def test_completions_pre_release_has_help_text(self):
         """The `--pre-release` flag must carry a help description."""
         content = _read(COMPLETIONS_PATH)
         # The help text mentions 'alpha' and 'rc' as examples
-        assert "alpha" in content, (
-            "Expected example 'alpha' in --pre-release help text"
-        )
-        assert "rc" in content, (
-            "Expected example 'rc' in --pre-release help text"
-        )
+        assert "alpha" in content, "Expected example 'alpha' in --pre-release help text"
+        assert "rc" in content, "Expected example 'rc' in --pre-release help text"
 
     def test_completions_release_help_text_mentions_semver_compliance(self):
         """The release command help must mention SemVer 2.0.0 compliance."""
         content = _read(COMPLETIONS_PATH)
-        assert "SemVer 2.0.0" in content, (
-            "Expected 'SemVer 2.0.0' in release command help text"
-        )
+        assert "SemVer 2.0.0" in content, "Expected 'SemVer 2.0.0' in release command help text"
 
     def test_completions_pre_release_flag_is_inside_release_cmd_block(self):
         """The --pre-release flag must appear after `cmd release`, not as a global flag."""
@@ -190,9 +176,7 @@ class TestCompletionsPreReleaseFlag:
         pre_release_idx = content.find("--pre-release")
         assert release_idx != -1, "cmd release not found"
         assert pre_release_idx != -1, "--pre-release not found"
-        assert pre_release_idx > release_idx, (
-            "--pre-release must appear after 'cmd release' in the spec"
-        )
+        assert pre_release_idx > release_idx, "--pre-release must appear after 'cmd release' in the spec"
 
     def test_completions_global_flags_are_preserved(self):
         """Existing global flags must not have been accidentally removed."""
@@ -240,16 +224,12 @@ class TestUsageKdlPreReleaseFlag:
     def test_usage_kdl_release_contains_pre_release_flag(self):
         """The release command in usage.kdl must declare the --pre-release flag."""
         content = _read(USAGE_KDL_PATH)
-        assert '"--pre-release"' in content, (
-            "Expected '\"--pre-release\"' flag inside release command in usage.kdl"
-        )
+        assert '"--pre-release"' in content, "Expected '\"--pre-release\"' flag inside release command in usage.kdl"
 
     def test_usage_kdl_pre_release_has_identifier_argument(self):
         """The --pre-release flag in usage.kdl must declare an <IDENTIFIER> argument."""
         content = _read(USAGE_KDL_PATH)
-        assert '"<IDENTIFIER>"' in content, (
-            "Expected '\"<IDENTIFIER>\"' argument in usage.kdl"
-        )
+        assert '"<IDENTIFIER>"' in content, "Expected '\"<IDENTIFIER>\"' argument in usage.kdl"
 
     def test_usage_kdl_pre_release_has_help_text(self):
         """The --pre-release flag in usage.kdl must include human-readable help."""
@@ -261,9 +241,7 @@ class TestUsageKdlPreReleaseFlag:
     def test_usage_kdl_release_help_mentions_semver_compliance(self):
         """The release command help in usage.kdl must mention SemVer 2.0.0 compliance."""
         content = _read(USAGE_KDL_PATH)
-        assert "SemVer 2.0.0" in content, (
-            "Expected 'SemVer 2.0.0' in release command help in usage.kdl"
-        )
+        assert "SemVer 2.0.0" in content, "Expected 'SemVer 2.0.0' in release command help in usage.kdl"
 
     def test_usage_kdl_pre_release_flag_inside_release_block(self):
         """The --pre-release flag must appear after the release cmd definition."""
@@ -272,9 +250,7 @@ class TestUsageKdlPreReleaseFlag:
         pre_release_idx = content.find('"--pre-release"')
         assert release_idx != -1, 'cmd "release" not found in usage.kdl'
         assert pre_release_idx != -1, '"--pre-release" not found in usage.kdl'
-        assert pre_release_idx > release_idx, (
-            '"--pre-release" must appear after \'cmd "release"\' in usage.kdl'
-        )
+        assert pre_release_idx > release_idx, '"--pre-release" must appear after \'cmd "release"\' in usage.kdl'
 
     def test_usage_kdl_spec_matches_completions_for_pre_release_help(self):
         """The help text for --pre-release must be identical in both source files."""
@@ -350,7 +326,7 @@ class TestSpecConsistency:
                 if fnmatch.fnmatch(filename, pattern):
                     # If a test file matches, it may be intentionally ignored —
                     # but we document this as a finding
-                    assert False, (
+                    raise AssertionError(
                         f"Test data file {json_file} matches the new promptfoo_*.json "
                         "gitignore pattern and may be accidentally excluded from tracking"
                     )

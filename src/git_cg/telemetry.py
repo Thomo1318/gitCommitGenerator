@@ -10,21 +10,14 @@ import contextlib
 import enum
 import hashlib
 import json
-import os
 from dataclasses import asdict, dataclass
-
-import sentry_sdk
-
-if os.environ.get("GIT_CG_DISABLE_SENTRY", "0") != "1":
-    sentry_sdk.init(
-        dsn="https://6188c2af95af5873af3d2f5acfcbde65@o4509950333550592.ingest.us.sentry.io/4509950397775872",
-        send_default_pii=True,
-    )
-
 from pathlib import Path
 
 from git_cg.models import CommitPlan, CommitType
+from git_cg.sentry_config import init_sentry
 from git_cg.sop import get_gitmoji_matrix
+
+init_sentry()
 
 
 class Provenance(enum.StrEnum):
@@ -78,9 +71,9 @@ class GenerationTelemetry:
 def compute_prompt_hash(prompt: str) -> str:
     """
     Compute a version-tracking hash of the prompt.
-    
+
     Returns:
-    	str: A version-tracking hash of the prompt
+        str: A version-tracking hash of the prompt
     """
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
@@ -210,7 +203,7 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
 def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
     """
     Reads the telemetry state written by prepare-commit-msg, backfilling missing fields for backwards compatibility.
-    
+
     Returns:
         The persisted GenerationTelemetry instance, or None if the state file does not exist or cannot be read.
     """
