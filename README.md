@@ -25,29 +25,7 @@
 
 ---
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [📚 Overview](#-overview)
-- [🧠 Core Philosophy & Architecture](#-core-philosophy--architecture)
-- [🏗 System Stack](#-system-stack)
-- [🛠 File Role Matrix](#-file-role-matrix)
-- [✨ Features](#-features)
-- [🚀 Installation & Provisioning](#-installation--provisioning)
-  - [Configuration & Secrets](#configuration--secrets)
-- [🛠 Usage](#-usage)
-  - [Default non-interactive mode](#default-non-interactive-mode)
-  - [Interactive review mode](#interactive-review-mode)
-  - [Hook-driven usage](#hook-driven-usage)
-  - [The Standard: Hybrid Commits](#the-standard-hybrid-commits)
-    - [Gitmoji Reference Matrix](#gitmoji-reference-matrix)
-- [✨ Feature Spotlight: Hook Safety & GUI Editors (`index.lock`)](#-feature-spotlight-hook-safety--gui-editors-indexlock)
-- [🤝 Contributing](#-contributing)
-- [🧑‍💻 Development](#-development)
-- [🏆 Acknowledgements & Open Source Licenses](#-acknowledgements--open-source-licenses)
-- [📄 License](#-license)
-
-<!-- END doctoc -->
 
 ## 📚 Overview
 
