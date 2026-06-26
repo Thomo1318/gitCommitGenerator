@@ -66,13 +66,13 @@ MTPLX_API_KEY="sk-your-mtplx-key"
 
 We use `pytest` for the Python test suite and `just` as our command runner.
 
-- **Run all tests**:
+- **Run integration smoke tests** (`just test` runs a temporary-repo commit dry run):
 
   ```bash
   just test
   ```
 
-- **Run tests manually via uv**:
+- **Run the Python test suite** (actual unit/integration tests):
 
   ```bash
   uv run pytest tests/
@@ -86,16 +86,17 @@ We use `pytest` for the Python test suite and `just` as our command runner.
 
 We enforce strict linting and formatting using `ruff` and type-checking via `pyright`.
 
-- **Run linting**:
+- **Run linting** (`ruff` and `pyright`):
 
   ```bash
-  just lint
+  uv run ruff check
+  uv run pyright
   ```
 
-- **Auto-format code**:
+- **Auto-format code** (`ruff`):
 
   ```bash
-  just format
+  uv run ruff format
   ```
 
 ---
