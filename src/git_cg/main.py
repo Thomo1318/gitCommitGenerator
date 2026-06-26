@@ -84,7 +84,7 @@ class ReviewStateMutationResult(enum.StrEnum):
 
     ADDED = "added"
     DUPLICATE = "duplicate"
-    UPDATED = "updated"
+    CONFLICT = "conflict"
 
 
 @dataclass
@@ -118,16 +118,14 @@ class ReviewState:
             issue_reference (IssueReference): The issue reference to store.
 
         Returns:
-            ReviewStateMutationResult: `ADDED` if the reference was stored, `DUPLICATE` if an identical reference already exists, `UPDATED` if a reference for the same issue number was replaced.
+            ReviewStateMutationResult: `ADDED` if the reference was stored, `DUPLICATE` if an identical reference already exists, `CONFLICT` if a reference for the same issue number exists but has a different verb.
         """
         existing_issue_reference = self.get_issue_reference_by_issue_number(issue_reference.issue_number)
         if existing_issue_reference is not None:
             if existing_issue_reference == issue_reference:
                 return ReviewStateMutationResult.DUPLICATE
 
-            idx = self.issue_references.index(existing_issue_reference)
-            self.issue_references[idx] = issue_reference
-            return ReviewStateMutationResult.UPDATED
+            return ReviewStateMutationResult.CONFLICT
 
         self.issue_references.append(issue_reference)
         return ReviewStateMutationResult.ADDED
@@ -749,10 +747,14 @@ def _interactive_review(
                 continue
 
             mutation_result = review_state.add_issue_reference(issue_reference)
-            if mutation_result in (ReviewStateMutationResult.ADDED, ReviewStateMutationResult.UPDATED):
+            if mutation_result == ReviewStateMutationResult.ADDED:
                 _write_commit_message(commit_msg_file, review_state.render(), strict=strict, verbose=verbose)
             elif mutation_result == ReviewStateMutationResult.DUPLICATE:
                 console.print(f"[yellow]{issue_reference} is already attached to this review state.[/yellow]")
+            elif mutation_result == ReviewStateMutationResult.CONFLICT:
+                console.print(
+                    f"[red]Conflict! An issue reference for #{issue_reference.issue_number} already exists with a different verb. Overwriting is not permitted.[/red]"
+                )
             continue
 
         if action == "Add regenerate guidance":
