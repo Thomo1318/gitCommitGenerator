@@ -48,6 +48,7 @@ def init_sentry():
                                 "commit_msg_file",
                                 "git_dir",
                                 "cwd",
+                                "file_path",
                             ]:
                                 if var_name in frame["vars"]:
                                     frame["vars"][var_name] = "[SCRUBBED]"
