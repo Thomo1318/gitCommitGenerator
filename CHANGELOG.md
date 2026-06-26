@@ -1,3 +1,41 @@
+## v0.2.0
+
+### ✨ Features
+- ✨ feat(eval): finalise promptfoo security, native release engine, and IDE boundaries (#136)
+- ✨ feat(eval): initialise promptfoo framework for local MTPLX proxy testing (#134)
+- ✨ feat(eval): transition to Opik-managed datasets and test suites (#133)
+- ✨ feat(eval): integrate deterministic Opik formatting metrics and evaluation expansion (#128)
+- ✨ feat(telemetry): add prompt tracking and feedback scores (#127)
+- ✨ feat(telemetry): implement comprehensive runtime tracing (Opik Phase B) (#126)
+- ✨ feat(telemetry): Phase 2 Correctness and Continuity (Opik Phase A) (#125)
+- 📈 feat(telemetry): implement two-point tracing and evaluation rules
+- ✨ feat(cli): add GUI editor support for commit messages
+- ✨ feat(main): add primary language detection to system prompt
+
+### 🐛 Bug Fixes
+- 🐛 fix(eval): downgrade promptfoo failures and refine ADR history
+- 🐛 fix(detect): prioritize code files over docs in language detection
+- 🥅 fix(sentry): add Sentry SDK for crash reporting
+- 🚑 fix(docs): escape brackets to fix zensical strict markdown parsing
+
+### 📝 Documentation
+- 📝 docs(feature-flags): add Sentry feature flag provider analysis
+- 📝 docs(llmops_comparison): add LLMOps tooling comparison report
+- 📝 docs(architecture): add Opik telemetry architecture docs
+- 📝 docs(todo): add research and library backlog to TODO
+- 📝 docs(readme): update readme architecture and gui editor docs
+- 📝 docs(telemetry): add Opik telemetry architecture docs
+- docs: fix broken shields.io license badge
+
+### 🔐 Security & Secrets
+- 🦺 fix(security): add path traversal prevention and input validation
+
+### 🔧 Chores & Internal
+- 🔊 chore(observability): add prompt sync error logging (#137)
+- 🔧 chore: append global telemetry tags and update backlog
+- 🍱 chore(docs): add git-cg tool screenshot
+- 🔧 chore(agents): add agents config and remove scratch docs
+
 ## v0.1.0
 
 ### ✨ Features
