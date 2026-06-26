@@ -3,16 +3,22 @@ import argparse
 import datetime
 import json
 import sys
+from pathlib import Path
+
+import sentry_sdk
 
 import opik
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from git_cg.sentry_config import init_sentry
 
 
 def parse_iso_timestamp(ts: str) -> datetime.datetime:
     """
     Convert an ISO 8601 timestamp string into a datetime value.
-    
+
     Returns:
-    	datetime.datetime: The parsed datetime value, or the current UTC time if parsing fails.
+        datetime.datetime: The parsed datetime value, or the current UTC time if parsing fails.
     """
     try:
         # handle Z and fractional seconds
@@ -34,10 +40,12 @@ def sync_results(file_path: str):
     try:
         with open(file_path) as f:
             data = json.load(f)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        sentry_sdk.capture_exception(exc)
         print(f"Error: Could not find {file_path}")
         sys.exit(1)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        sentry_sdk.capture_exception(exc)
         print(f"Error: {file_path} is not valid JSON")
         sys.exit(1)
 
@@ -95,6 +103,7 @@ def sync_results(file_path: str):
                         reason=comp.get("reason", ""),
                     )
         except Exception as exc:
+            sentry_sdk.capture_exception(exc)
             print(f"Warning: failed to sync one result to Opik: {exc}", file=sys.stderr)
             continue
 
@@ -102,7 +111,15 @@ def sync_results(file_path: str):
 
 
 if __name__ == "__main__":
+    init_sentry()
     parser = argparse.ArgumentParser(description="Sync Promptfoo evaluation results to Opik.")
     parser.add_argument("file", help="Path to promptfoo_results.json")
     args = parser.parse_args()
-    sync_results(args.file)
+
+    try:
+        sync_results(args.file)
+    except Exception as exc:
+        sentry_sdk.capture_exception(exc)
+        raise
+    finally:
+        sentry_sdk.flush(timeout=2.0)

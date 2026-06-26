@@ -575,6 +575,7 @@ Organise into a table.
 ---
 
 - [ ] [ML Algorithms](https://medium.com/@atharvjaiswal56/7-machine-learning-algorithms-every-python-developer-should-know-in-2026-51abe7921b12)
+
   ```text
   Your data has labels?
   ├── YES → Supervised Learning

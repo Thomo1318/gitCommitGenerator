@@ -40,15 +40,14 @@ except Exception as e:
     print(f"[Debug] Failed to load 1Password secrets: {e}", file=sys.stderr)
 
 import instructor  # noqa: E402
-import opik  # noqa: E402
 import typer  # noqa: E402
 from openai import OpenAI  # noqa: E402
-from opik import opik_context  # noqa: E402
 from opik.integrations.openai import track_openai  # noqa: E402
 from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
 
+import opik  # noqa: E402
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
 from git_cg.interaction import (  # noqa: E402
     can_open_tty,
@@ -63,6 +62,8 @@ from git_cg.interaction import (  # noqa: E402
 from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind  # noqa: E402
 from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
+from git_cg.telemetry import compute_prompt_hash  # noqa: E402
+from opik import opik_context  # noqa: E402
 
 app = typer.Typer(
     add_completion=False,
@@ -425,9 +426,9 @@ def generate_commit_message(
     import openai
 
     opik_args = kwargs.get("opik_args") or {}
-    opik_prompt = opik_args.get("prompt")
-    if opik_prompt:
-        opik_context.update_current_span(prompts=[opik_prompt])
+    tags = opik_args.get("trace", {}).get("tags", [])
+    if tags:
+        opik_context.update_current_span(tags=tags)
 
     max_retries = 10
     for attempt in range(max_retries):
@@ -1018,17 +1019,14 @@ def _run_commit_generation(
             previous_plan=review_state.commit_plan if review_state else None,
         )
 
-        # Register prompt version in Opik
-        try:
-            opik_client = opik.Opik()
-            opik_prompt = opik_client.create_prompt(
-                name="git_cg_system_prompt",
-                prompt=system_prompt,
-            )
-        except Exception as e:
-            if verbose:
-                console.print(f"[yellow]Failed to register prompt in Opik: {e}[/yellow]")
-            opik_prompt = None
+        # Offline prompt tracking (synced asynchronously via script)
+        system_prompt_hash = compute_prompt_hash(system_prompt)
+        opik_args = {
+            "trace": {
+                "thread_id": thread_id,
+                "tags": ["git-cg", f"engine:{engine}", f"repo:{repo_name}", f"prompt_hash:{system_prompt_hash}"],
+            }
+        }
 
         try:
             with console.status(
@@ -1042,7 +1040,7 @@ def _run_commit_generation(
                     system_prompt,
                     active_directives=active_directives,
                     residual_guidance=residual_guidance,
-                    opik_args={"trace": {"thread_id": thread_id}, "prompt": opik_prompt},
+                    opik_args=opik_args,
                 )
         except Exception as e:
             with sentry_sdk.new_scope() as scope:
@@ -1153,7 +1151,6 @@ def _run_commit_generation(
         from git_cg.telemetry import (
             GenerationTelemetry,
             compute_diff_hash,
-            compute_prompt_hash,
             run_deterministic_checks,
             write_telemetry_state,
         )

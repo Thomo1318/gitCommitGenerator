@@ -15,6 +15,7 @@ dependencies = [
     "opik>=2.0.52",
     "pydantic>=2.13.4",
     "python-dotenv>=1.0.1",
+    "reportlab>=5.0.0",
     "rich>=14.3.4",
     "semver>=3.0.4",
     "sentry-sdk>=2.61.0",
