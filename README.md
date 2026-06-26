@@ -322,7 +322,7 @@ git-cg --help
 All messages generated or validated by this engine follow the format:
 `<emoji> <cc_type>(<scope>): <subject>`
 
-_Note: This standard is immutably enforced by a native `commit-msg` git hook (`validateCommitHook.mjs`) which uses strict regex, trailer validation, and SOP alignment to reject any non-compliant commit message with a detailed `[AI_CORRECTION_REQUIRED]` prompt designed to steer agents into auto-correcting their format._
+_Note: This standard is immutably enforced by a native `commit-msg` git hook (`scripts/validate_commit.mjs`) which uses strict regex, trailer validation, and SOP alignment to reject any non-compliant commit message with a detailed `[AI_CORRECTION_REQUIRED]` prompt designed to steer agents into auto-correcting their format._
 
 **Example Output:**
 
