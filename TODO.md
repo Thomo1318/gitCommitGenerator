@@ -5,6 +5,43 @@
 
 Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
 
+- [ ] **[Feature] Intelligent / Automated AI Commit Grouping**
+  - **Problem**: When a user has a massive diff containing multiple logical features, extracting a single commit message is inaccurate and poor practice. The current plan of "manual staging" (`git-cg stage`) is useful but still places the cognitive burden of grouping on the user.
+  - **Proposed Solutions for Investigation**:
+    - **Method 1: Pre-Flight AI Grouping (Highly Recommended)**: Run a fast, cheap LLM call (e.g., Haiku or Qwen) using only the `git status` output and branch name. The LLM returns a JSON payload of logically grouped files and suggested commit titles. The TUI presents these to the user for one-click processing, keeping token costs near-zero.
+
+    Before extracting the massive, token-heavy `git diff`, we run a very cheap, high-speed LLM call (perhaps using a smaller/faster model) with just the output of `git status` and the current branch name.
+    - **How it works:** We prompt the LLM: "Here is a list of modified files and the branch name. Group them into logical, deployable commits and suggest a short title for each. Return as JSON."
+    - **The Workflow:** The tool presents these groups to you in the TUI:
+
+    ```
+    🧠 git-cg has identified 3 logical commits:
+    1. [Code] Sentry Integration (8 files)
+    2. [Tooling] Promptfoo Sync Script (2 files)
+    3. [Docs] VizVibe Context Map (1 file)
+
+    ❯ Process Group 1
+    Process All Sequentially
+    Manually adjust groups
+    ```
+
+    - **Why it's great:** It costs almost nothing in tokens because it only reads file paths, not the full code diffs, yet file names and branch context are usually enough to deduce logical groupings (exactly how I just did it for you).
+
+    - **Method 2: Heuristic / Path-Based Clustering (Deterministic Fallback)**: Cluster files natively in Python based on heuristics like file extension (e.g., all `.md` together) or directory proximity (`src/git_cg` and `tests/git_cg`). Fast and zero-inference.
+
+      If the user is offline or wants to avoid extra LLM calls, we can implement Python-native clustering logic.
+      - **How it works:** We group files based on heuristics like:
+        - **File Extension:** All `.md` files in one commit, all `.py` files in another.
+        - **Directory Proximity:** If changes are in `src/git_cg/` and `tests/`, group them by feature suffix.
+        - **Filename matching:** e.g., Grouping `telemetry.py` with `test_telemetry.py`.
+      - **Why it's great:** It's instantaneous and requires zero AI inference, fulfilling your TODO.md note about wanting to easily split code from documentation.
+
+    - **Method 3: Delta Context Chunking (Advanced)**: Use AST parsing or a tool like `difftastic` to identify files that actually share code dependencies, ensuring intermediate commits don't break the build.
+
+      If a user has a massive 50+ file monorepo update, even file paths might not be enough context.
+      - **How it works:** We use a tool like difftastic or AST parsing to identify which files actually share code dependencies (e.g., "File A imported the new function from File B, so they must be committed together to prevent breaking the build").
+      - **Why it's great:** It prevents "broken" intermediate commits where a test is committed without the code it tests.
+
 - [ ] **[Feature] PR Description Generation using CodeRabbit Walkthroughs**
   - **Problem**: Generating PR descriptions from raw code diffs is contextually heavy and often produces overly granular or poorly abstracted text.
   - **Solution**: Implement a new `git-cg --pr-desc` command that queries the GitHub API to fetch the most recent CodeRabbit automated review comment (specifically the Walkthrough and Changes table) for the current branch/PR.
