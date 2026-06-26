@@ -777,6 +777,8 @@ Described in ADR 0011 Section 14 (Feedback and Prompt Enrichment). Review action
 - **Detailed Context & Rationale:** During the implementation of Phase 4, the initial setup for Opik tracing feedback scores was completed successfully. However, before executing the prompt synchronization logic, the development team paused to confirm whether Phase 4 should be wrapped up prior to advancing to the Dataset logic in Phase 6. At this juncture, the user explicitly queried about the completion status of Phase 5. Immediately following this pivot, the project encountered several critical CI/CD pipeline blockers, including GitHub Actions limits, CodeRabbit static analysis findings, and Snyk vulnerability scanning issues. Because resolving these infrastructure and security gating issues was deemed a higher immediate priority, the remaining tasks for Phase 4 (opik_prompts.py and global tagging) were deferred. These items remain open/outstanding on the Phase 4 Execution Run Sheet checklist.
 - **Approval Status:** This was **NOT an explicitly agreed-upon architectural pivot or alternate solution**. It was a circumstantial omission caused by a sudden shift in development priorities toward fixing broken CI/CD pipelines.
 
+> **Decision (2026-06-26 15:43 AEST):** Evaluated implementing `opik.Prompt()` inline during execution versus the originally planned standalone `scripts/sync_prompts_to_opik.py`. Confirmed that inline execution would introduce synchronous network API calls to Opik Cloud during the `prepare-commit-msg` git hook, violating the zero-latency runtime constraint. We will proceed with the original architectural plan: an asynchronous standalone script to sync templates offline, and tagging the trace with the local `prompt_hash` during runtime.
+
 ---
 
 #### ✨ feat(eval): Phase 5 Evaluation Expansion (Opik Phase D)
@@ -1248,8 +1250,8 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 ### Phase 4: Feedback and Prompt Enrichment (Opik Phase C)
 
 - [x] Map user interactive outcomes (accept, edit, regenerate, cancel) to numeric Opik feedback scores.
-- [ ] Register and version system prompts into the Opik Prompt Library (create `opik_prompts.py`).
-- [ ] Link active prompt objects to runtime traces (global trace tagging).
+- [x] Register and version system prompts into the Opik Prompt Library (create `scripts/sync_prompts_to_opik.py`).
+- [x] Link active prompt objects to runtime traces (global trace tagging with `prompt_hash`).
 
 ### Phase 5: Evaluation Expansion (Opik Phase D)
 
@@ -1282,13 +1284,13 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 ### Phase 9: Sentry Architecture & Observability Expansion
 
-- [ ] Centralize `sentry_sdk.init()` in `sentry_config.py`.
-- [ ] Explicitly configure `environment` and `release`.
-- [ ] Configure `traces_sample_rate=0.0` to disable duplicate Sentry tracing.
-- [ ] Build a strict `before_send` hook to scrub PII, raw git diffs, file paths, and prompt text.
-- [ ] Wrap critical `try/except` boundaries (prior to `_abort()`) with `sentry_sdk.capture_exception()`.
-- [ ] Add explicit `sentry_sdk.flush(timeout=2.0)` calls before terminal exits.
-- [ ] Add manual `sentry_sdk.add_breadcrumb()` calls to track state transitions.
+- [x] Centralize `sentry_sdk.init()` in `sentry_config.py`.
+- [x] Explicitly configure `environment` and `release`.
+- [x] Configure `traces_sample_rate=0.0` to disable duplicate Sentry tracing.
+- [x] Build a strict `before_send` hook to scrub PII, raw git diffs, file paths, and prompt text.
+- [x] Wrap critical `try/except` boundaries (prior to `_abort()`) with `sentry_sdk.capture_exception()`.
+- [x] Add explicit `sentry_sdk.flush(timeout=2.0)` calls before terminal exits.
+- [x] Add manual `sentry_sdk.add_breadcrumb()` calls to track state transitions.
 
 ### Phase 10: Documentation Refactoring
 
@@ -1310,8 +1312,6 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - `ADR_GENERATION_ECOSYSTEM_EXPLAINER.md`
 
 ## CHANGELOG
-
-
 
 - v1.0.0 (2026-06-17): Initial Draft
 - v2.0.0 (2026-06-17): Architectural Overhaul
