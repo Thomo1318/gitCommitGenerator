@@ -96,8 +96,10 @@ def sync_results(file_path: str):
                 data={"latency_ms": latency_ms, "success": success},
             )
             if not success:
-                sentry_sdk.capture_message(
-                    f"Promptfoo evaluation failed: {result.get('error', 'Assertion failed')}", level="error"
+                sentry_sdk.add_breadcrumb(
+                    category="promptfoo_evaluation_failure",
+                    message=f"Promptfoo evaluation failed: {result.get('error', 'Assertion failed')}",
+                    level="warning",
                 )
 
             score = 1.0 if success else 0.0

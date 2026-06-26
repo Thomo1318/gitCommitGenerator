@@ -773,7 +773,9 @@ Described in ADR 0011 Section 14 (Feedback and Prompt Enrichment). Review action
 
 ##### Deviations from Original Plan
 
-- **Deviation Overview:**
+- **Deviation Overview:** The planned development of a dedicated `opik_prompts.py` module to dynamically sync local system prompt templates to the Opik Cloud Prompt Library, as well as the implementation of explicit global tagging to trace runs, was deferred.
+- **Detailed Context & Rationale:** During the implementation of Phase 4, the initial setup for Opik tracing feedback scores was completed successfully. However, before executing the prompt synchronization logic, the development team paused to confirm whether Phase 4 should be wrapped up prior to advancing to the Dataset logic in Phase 6. At this juncture, the user explicitly queried about the completion status of Phase 5. Immediately following this pivot, the project encountered several critical CI/CD pipeline blockers, including GitHub Actions limits, CodeRabbit static analysis findings, and Snyk vulnerability scanning issues. Because resolving these infrastructure and security gating issues was deemed a higher immediate priority, the remaining tasks for Phase 4 (opik_prompts.py and global tagging) were deferred. These items remain open/outstanding on the Phase 4 Execution Run Sheet checklist.
+- **Approval Status:** This was **NOT an explicitly agreed-upon architectural pivot or alternate solution**. It was a circumstantial omission caused by a sudden shift in development priorities toward fixing broken CI/CD pipelines.
 
 > **Decision (2026-06-26 15:43 AEST):** Evaluated implementing `opik.Prompt()` inline during execution versus the originally planned standalone `scripts/sync_prompts_to_opik.py`. Confirmed that inline execution would introduce synchronous network API calls to Opik Cloud during the `prepare-commit-msg` git hook, violating the zero-latency runtime constraint. We will proceed with the original architectural plan: an asynchronous standalone script to sync templates offline, and tagging the trace with the local `prompt_hash` during runtime.
 
@@ -1316,6 +1318,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - v3.0.0 (2026-06-17): Added strict documentation governance standards and fully integrated the E2E milestone issue specifications as the implementation trace.
 - v3.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
 - v3.1.0 (2026-06-26): Marked status as Implemented following successful integration of Sentry and Opik telemetry across git hooks.
+- v3.1.1 (2026-06-27): Refinement - Verified that deferred tasks from Phase 4 (`sync_prompts_to_opik.py` and global trace tagging) were successfully implemented post-deferral. Phase 10 documentation refactoring tasks were also completed in a separate PR. Note: The historical implementation status in the Run Sheet and Deviations sections has been left untouched to preserve the historical record of the original sprint.
 
 <!-- ## Supporting Visual Aids
 

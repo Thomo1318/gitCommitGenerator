@@ -23,7 +23,7 @@ The provisioning process is heavily automated, though some final manual actions 
    mise install
    ```
 
-   *This automatically installs and configures Python, `uv`, Node.js, `just`, `usage`, `hk`, `pkl`, `rtk`, and `gum` according to our `mise.toml`.*
+   _This automatically installs and configures Python, `uv`, Node.js, `just`, `usage`, `hk`, `pkl`, `rtk`, and `gum` according to our `mise.toml`._
 
 2. **Install Inference Engines**:
 
@@ -31,7 +31,7 @@ The provisioning process is heavily automated, though some final manual actions 
    brew bundle
    ```
 
-   *Installs `oMLX` and `MTPLX` for local, hardware-accelerated AI execution on Apple Silicon.*
+   _Installs `oMLX` and `MTPLX` for local, hardware-accelerated AI execution on Apple Silicon._
 
 3. **Install Git Hooks** (Manual Action Required):
 
@@ -39,16 +39,18 @@ The provisioning process is heavily automated, though some final manual actions 
    hk install
    ```
 
-   *Manually configure deterministic `pre-commit` and `prepare-commit-msg` hooks.*
+   _Manually configure deterministic `pre-commit` and `prepare-commit-msg` hooks._
 
 ---
 
 ## 🔐 Secrets Management & API Keys
 
-`git-cg` uses **fnox** in combination with 1Password to securely orchestrate secrets. 
-If you do not have access to the shared 1Password vault or are running without `fnox`, you must provide the necessary API keys manually.
+`git-cg` uses **fnox** in combination with 1Password to securely orchestrate secrets.
+If you do not have access to the shared 1Password vault or are running without `fnox`, you must provide the necessary API keys manually via exported environment variables or a separate secrets file (e.g., `.env.local` or `.secrets`).
 
-Create a `.env` file in the root of the project with the following (depending on your chosen engine):
+> **Warning for IDE Users**: Do **NOT** use the root `.env` file for non-secret IDE settings (like `PYTHONPATH`). When `fnox` is active, it mounts `.env` as a named pipe (FIFO) which can cause severe CPU spikes and lockups in editors like VS Code. For non-secret IDE configuration, place your environment variables in `.vscode/python.env` (which is already configured in our workspace settings).
+
+Example API key configuration (if running outside fnox):
 
 ```env
 OPENAI_API_KEY="sk-your-openai-key"
@@ -78,7 +80,7 @@ We use `pytest` for the Python test suite and `just` as our command runner.
   uv run pytest tests/
   ```
 
-*Tests must pass before any commit can be merged. The CI pipeline will automatically run these against multiple Python versions.*
+_Tests must pass before any commit can be merged. The CI pipeline will automatically run these against multiple Python versions._
 
 ---
 
