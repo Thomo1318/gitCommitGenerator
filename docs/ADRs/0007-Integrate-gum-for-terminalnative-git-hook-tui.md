@@ -133,7 +133,7 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | `src/git_cg/notifier.py` | Deleted / Deprecated | Removal of the brittle `vjeantet/alerter` subprocess logic. |
 | `src/git_cg/main.py` | Added `/dev/tty` check and `gum` invocation | Centralizes the user interaction loop natively within the orchestrator script. |
-| `mise.toml` | Added `gum = "latest"` | Guarantees the binary is present in the environment before the hook fires. |
+| `mise.toml` | Added `gum = "0.17.0"` | Guarantees the binary is present in the environment before the hook fires. |
 | Developer Workflow | Shifts from Mouse to Keyboard | Faster context-switching; terminal never loses focus when opening `$EDITOR`. |
 
 ## 9. Consequences
@@ -173,6 +173,7 @@ _(To be populated post-implementation)_
 
 - Update `usage.kdl` or internal project documentation to reflect the new dependency on `gum`.
 - Ensure `hk.pkl` logic correctly scopes terminal execution requirements.
+- Update documentation to reflect the guided regeneration semantics introduced in [ADR-0009](0009-reconcile-deterministic-intent-ranking-with-guided-regeneration.md).
 
 ## 15. Links & References
 

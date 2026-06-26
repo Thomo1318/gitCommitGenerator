@@ -112,10 +112,10 @@ class ReviewState:
     def add_issue_reference(self, issue_reference: IssueReference) -> ReviewStateMutationResult:
         """
         Store an issue reference in the review state.
-        
+
         Parameters:
             issue_reference (IssueReference): The issue reference to store.
-        
+
         Returns:
             ReviewStateMutationResult: `ADDED` if the reference was stored, `DUPLICATE` if an identical reference already exists, `UPDATED` if a reference for the same issue number was replaced.
         """
@@ -224,23 +224,24 @@ ENGINE_REGISTRY: dict[str, EngineConfig] = {
 LAST_OPIK_TRACE_ID: str | None = None
 
 
-def _abort(message: str, *, strict: bool, code: int = 1) -> NoReturn:
+def _abort(message: str, *, strict: bool, code: int = 1, report: bool = True) -> NoReturn:
     """
     Print an error message and terminate execution.
-    
+
     Parameters:
-    	message (str): The message to display before exiting.
-    	strict (bool): Whether to exit with the supplied code.
-    	code (int): The exit code to use when strict mode is enabled.
+        message (str): The message to display before exiting.
+        strict (bool): Whether to exit with the supplied code.
+        code (int): The exit code to use when strict mode is enabled.
     """
     import sys
 
     console.print(message)
-    if sys.exc_info()[0] is not None:
-        sentry_sdk.capture_exception()
-    else:
-        sentry_sdk.capture_message(message, level="error")
-    sentry_sdk.flush(timeout=2.0)
+    if report:
+        if sys.exc_info()[0] is not None:
+            sentry_sdk.capture_exception()
+        else:
+            sentry_sdk.capture_message(message, level="error")
+        sentry_sdk.flush(timeout=2.0)
     opik.flush_tracker()
     raise typer.Exit(code=code if strict else 0)
 
@@ -381,9 +382,9 @@ def build_generation_messages(
 ) -> list[Any]:
     """
     Build the chat messages for commit message generation from a git diff.
-    
+
     Returns:
-    	messages (list[Any]): The system prompt followed by a user message containing the diff in a fenced `diff` block.
+        messages (list[Any]): The system prompt followed by a user message containing the diff in a fenced `diff` block.
     """
     messages = [
         {"role": "system", "content": system_prompt},
@@ -404,18 +405,18 @@ def generate_commit_message(
 ) -> CommitPlan:
     """
     Generate a commit plan from the current diff.
-    
+
     Applies any locked directive values to the generated plan before returning it.
-    
+
     Parameters:
         diff_output (str): The git diff to send to the model.
         model_name (str): The model to use for generation.
         system_prompt (str): The system instructions for generation.
         active_directives (dict[str, str] | None): Locked directive values to apply to the generated plan.
-    
+
     Returns:
         CommitPlan: The generated commit plan.
-    
+
     Raises:
         RuntimeError: If a commit plan cannot be generated after the configured retries.
     """
@@ -460,10 +461,10 @@ def generate_commit_message(
 def detect_primary_language(diff_output: str) -> str | None:
     """
     Detect the primary programming language represented in a diff.
-    
+
     Parameters:
         diff_output (str): Unified diff text to inspect.
-    
+
     Returns:
         str | None: The mapped language name for the most common file extension, or the upper-case extension when no mapping is defined. `None` if no file extensions are found.
     """
@@ -708,16 +709,16 @@ def _interactive_review(
 ) -> str:
     """
     Display an interactive review prompt for a generated commit message.
-    
+
     Parameters:
-    	commit_msg_file (str): Path to the commit message file to update when review changes are saved.
-    	review_state (ReviewState): Current review state, including the generated message and any attached issue references.
-    	verbose (bool): Print status messages when interactive input is unavailable or when review state changes.
-    	strict (bool): Control how write failures are handled when updating the commit message file.
-    	gui_editor (bool): Use graphical editor environment variables when opening the message for editing.
-    
+        commit_msg_file (str): Path to the commit message file to update when review changes are saved.
+        review_state (ReviewState): Current review state, including the generated message and any attached issue references.
+        verbose (bool): Print status messages when interactive input is unavailable or when review state changes.
+        strict (bool): Control how write failures are handled when updating the commit message file.
+        gui_editor (bool): Use graphical editor environment variables when opening the message for editing.
+
     Returns:
-    	str: The selected action.
+        str: The selected action.
     """
     emit_terminal_bell()
 
@@ -882,21 +883,21 @@ def _run_commit_generation(
 ) -> bool:
     """
     Generate a commit message from the staged diff and handle review and telemetry.
-    
+
     Parameters:
-    	commit_msg_file (str): Path to the commit message file to write.
-    	commit_source (str | None): Source of the commit request, used to decide whether generation should be skipped.
-    	extra_args (list[str] | None): Additional CLI arguments preserved for compatibility.
-    	engine (str): AI engine key to use.
-    	dry_run (bool): Preview the generated message without applying it.
-    	verbose (bool): Enable detailed console output.
-    	amend_regenerate (bool): Allow regeneration when the commit source would otherwise be skipped.
-    	strict (bool): Use non-zero exit codes when aborting.
-    	interactive (bool): Present the interactive review flow when a TTY is available.
-    	gui_editor (bool): Use the GUI editor preference for edit actions.
-    
+        commit_msg_file (str): Path to the commit message file to write.
+        commit_source (str | None): Source of the commit request, used to decide whether generation should be skipped.
+        extra_args (list[str] | None): Additional CLI arguments preserved for compatibility.
+        engine (str): AI engine key to use.
+        dry_run (bool): Preview the generated message without applying it.
+        verbose (bool): Enable detailed console output.
+        amend_regenerate (bool): Allow regeneration when the commit source would otherwise be skipped.
+        strict (bool): Use non-zero exit codes when aborting.
+        interactive (bool): Present the interactive review flow when a TTY is available.
+        gui_editor (bool): Use the GUI editor preference for edit actions.
+
     Returns:
-    	bool: ``True`` when generation completes successfully.
+        bool: ``True`` when generation completes successfully.
     """
     if verbose:
         console.log("Starting git-cg...")
@@ -1079,6 +1080,7 @@ def _run_commit_generation(
                 _abort(
                     "[bold red]Policy is 'strict'. Aborting commit. Please split your changes.[/bold red]",
                     strict=strict,
+                    report=False,
                 )
             if mixed_policy == "warn":
                 console.print(msg)
@@ -1117,7 +1119,7 @@ def _run_commit_generation(
                     console.print("\n[yellow]Regenerating commit message...[/yellow]")
                     continue
                 if action == "Cancel":
-                    _abort("\n[bold red]Dry-run cancelled by user.[/bold red]", strict=strict)
+                    _abort("\n[bold red]Dry-run cancelled by user.[/bold red]", strict=strict, report=False)
             break
 
         _write_commit_message(commit_msg_file, result_string, strict=strict, verbose=verbose)
@@ -1140,7 +1142,7 @@ def _run_commit_generation(
                 console.print("\n[yellow]Regenerating commit message...[/yellow]")
                 continue
             if action == "Cancel":
-                _abort("\n[bold red]Commit aborted by user.[/bold red]", strict=strict)
+                _abort("\n[bold red]Commit aborted by user.[/bold red]", strict=strict, report=False)
             break
 
         break
@@ -1389,9 +1391,9 @@ def release(
 ) -> None:
     """
     Run the release workflow.
-    
+
     Parameters:
-    	pre_release (str | None): A pre-release identifier to add or bump, such as `alpha` or `rc`.
+        pre_release (str | None): A pre-release identifier to add or bump, such as `alpha` or `rc`.
     """
     try:
         from git_cg.release import execute_release
@@ -1409,12 +1411,12 @@ def record_telemetry(
 ) -> None:
     """
     Record final commit telemetry in Opik.
-    
+
     Classifies how the generated commit message was changed, logs the stored telemetry metadata, and clears the saved telemetry state afterwards.
-    
+
     Parameters:
-    	commit_msg_file (str): Path to the final commit message file.
-    	verbose (bool): Enables verbose output.
+        commit_msg_file (str): Path to the final commit message file.
+        verbose (bool): Enables verbose output.
     """
     import subprocess
 

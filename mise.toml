@@ -35,7 +35,7 @@ HK_LOG_FILE = "logs/hk.log"
 [tools]
 fnox = "latest"                       # Hybrid secrets orchestration
 age = "latest"                        # File encryption fallback for fnox
-gum = "latest"                        # Terminal-native TUI for interactive git-cg review
+gum = "0.17.0"                        # Terminal-native TUI for interactive git-cg review
 hk = "latest"                         # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/)
 pkl = "latest"                        # embeddable configuration language (https://pkl-lang.org)
 python = "3.14"                       # Python runtime (https://python.org)
