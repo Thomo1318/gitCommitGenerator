@@ -34,7 +34,7 @@ superseded_by: []
 ```
 
 > [!IMPORTANT]
-> This ADR intentionally does **not** record a final selected solution yet. It is an architectural analysis record for one of the most significant core operating behaviors in the application: how deterministic intent ranking, prompt framing, and user-authored regeneration guidance should be reconciled. The implementation-plan section is intentionally deferred until a solution is selected after review.
+> This ADR intentionally does **not** record a final selected solution yet. It is an architectural analysis record for one of the most significant core operating behaviours in the application: how deterministic intent ranking, prompt framing, and user-authored regeneration guidance should be reconciled. The implementation-plan section is intentionally deferred until a solution is selected after review.
 
 ## 1. Introduction and Goals
 
@@ -73,7 +73,7 @@ Any acceptable solution must satisfy the following constraints.
 - **User-authored regeneration guidance must matter**. The system must not pretend to accept guidance while leaving the deterministic shortlist effectively unchallengeable.
 - **The final commit output must remain machine-readable**. Human guidance must never leak into trailers or become hidden metadata in the final commit body.
 - **Interactive review must stay understandable**. The TUI must not become a chat interface or an opaque state machine that hides what is currently influencing regeneration.
-- **The architecture must remain testable**. The chosen approach must preserve or improve determinism and unit-test coverage rather than collapsing key decisions into untraceable prompt behavior.
+- **The architecture must remain testable**. The chosen approach must preserve or improve determinism and unit-test coverage rather than collapsing key decisions into untraceable prompt behaviour.
 - **Latency matters**. Commit generation occurs in a developer workflow. Any solution that significantly increases runtime or prompt complexity must justify that cost.
 - **The system must remain extensible**. The chosen solution will likely influence future work such as split-commit logic, stronger steering controls, scope overrides, and deeper prompt instrumentation.
 - **The solution must integrate cleanly with existing review metadata**. Issue references, guided regeneration, and future review-state enrichments must be able to coexist coherently.
@@ -112,7 +112,7 @@ At this stage, the correct move is **not** to prematurely select one option. The
 4. compare them rigorously
 5. defer the implementation-plan section until the user explicitly selects a direction
 
-That is appropriate here because this behavior sits at the core of the application's operating model. A casual or under-analysed solution would risk undermining the tool's strongest architectural feature: deterministic, governed commit classification.
+That is appropriate here because this behaviour sits at the core of the application's operating model. A casual or under-analysed solution would risk undermining the tool's strongest architectural feature: deterministic, governed commit classification.
 
 ## 5. Building Block View: Current-State Generation Pipeline
 
@@ -230,7 +230,7 @@ This decision will likely affect future work such as:
 
 ## 8. Current Logic Analysis
 
-This section records the current behavior precisely and forms the analytical baseline for all solution comparisons.
+This section records the current behaviour precisely and forms the analytical baseline for all solution comparisons.
 
 ### 9.1 Exactly how current ranking-and-prompting behaves
 
@@ -285,7 +285,7 @@ The `rank_commit_intents` function scores every row in the matrix using:
 - negative signal matches
 - hard-veto penalties
 
-Current scoring behavior:
+Current scoring behaviour:
 
 - base score:
   - priority multiplied by 0.4
@@ -589,7 +589,7 @@ This solution integrates very well with future work such as:
 - audit logging of why shortlist order changed
 - future ranker introspection in the TUI
 
-It also has a larger blast radius because it directly affects the ranking core and therefore touches more fundamental system behavior.
+It also has a larger blast radius because it directly affects the ranking core and therefore touches more fundamental system behaviour.
 
 ## 11. Solution C: Structured Steering Controls
 
@@ -655,7 +655,7 @@ flowchart TD
 
 ### 12.6 Unique Features
 
-- strongest explicit contract between user steering and system behavior
+- strongest explicit contract between user steering and system behaviour
 - easiest option to explain to future contributors and testers
 
 ### 12.7 Extensibility and Integration
@@ -865,7 +865,7 @@ Because no solution has been selected yet, the impact radius is described across
 | `src/git_cg/interaction.py`    | Additional TUI presentation, steering entry points, visibility of influence state   | Lightly affected by A and B; more affected by C and D                                                                                       |
 | `config/gitops_agent_sop.json` | Potential future support for richer intent metadata or steering categories          | Possibly unaffected initially, but more likely to evolve under B, C, and D                                                                  |
 | `tests/`                       | New deterministic tests around reconciliation and precedence                        | Affected by all solutions                                                                                                                   |
-| `README.md`                    | User-facing regenerate behavior and explanation of steering semantics               | Affected by all solutions                                                                                                                   |
+| `README.md`                    | User-facing regenerate behaviour and explanation of steering semantics               | Affected by all solutions                                                                                                                   |
 | ADR-0007                       | Cross-reference with gum review mechanics                                           | Contextual reference only; no immediate supersession required                                                                               |
 
 ## 15. Consequences
@@ -874,7 +874,7 @@ Because no solution is yet selected, this section records the consequences of th
 
 ### Positive Consequences of Deferral
 
-- prevents premature commitment on a core architectural behavior
+- prevents premature commitment on a core architectural behaviour
 - creates a durable comparison record for future review
 - forces solution quality to be explicit rather than implicit
 - reduces the risk of treating prompt edits as architecture when the real problem is precedence and reconciliation
@@ -938,7 +938,7 @@ This ADR must be revisited when one of the following occurs:
 
 ## 18. Rollback Strategy
 
-No runtime architecture change is being finalized by this ADR revision yet.
+No runtime architecture change is being finalised by this ADR revision yet.
 
 Therefore, rollback is currently simple:
 
@@ -967,7 +967,7 @@ The future implementation-plan section should include at minimum:
 - deterministic rollback strategy
 - validation plan
 - manual TUI verification plan
-- migration or compatibility notes for existing regenerate behavior
+- migration or compatibility notes for existing regenerate behaviour
 
 ## 21. Links & References
 
@@ -1196,7 +1196,7 @@ flowchart TD
 | Fixes the root cause         | Addresses the inverted authority hierarchy directly, rather than working around it with candidate manipulation                                                                                                                       |
 | No hint parsing required     | Guidance enters verbatim — no NLP, no keyword matching, no classification fragility                                                                                                                                                  |
 | Minimal ranker impact        | The ranker is completely unchanged; its output is reused but presented differently                                                                                                                                                   |
-| Handles all guidance types   | Works equally well for type corrections ("this is a feature"), framing corrections ("focus on user-facing behavior"), and style corrections ("keep it shorter") because it does not try to decompose guidance into structured fields |
+| Handles all guidance types   | Works equally well for type corrections ("this is a feature"), framing corrections ("focus on user-facing behaviour"), and style corrections ("keep it shorter") because it does not try to decompose guidance into structured fields |
 | Preserves hard vetoes        | Explicit hard-veto preservation in the reauthorized prompt prevents degenerate outcomes                                                                                                                                              |
 | Low prompt complexity        | Two clearly distinct prompt templates (first-gen vs regenerate) rather than three candidate lanes or complex scoring                                                                                                                 |
 | Testable                     | Prompt template selection is deterministic (regeneration_guidance is present or absent). The prompt text itself can be golden-tested                                                                                                 |
@@ -1539,7 +1539,7 @@ This appended review was grounded in direct reading of the following project art
 - `docs/index.md`
 - `usage.kdl`
 
-The review remained read-only at analysis time and was focused on architectural behavior, semantic correctness, downstream safety, testability, and governance alignment rather than implementation cosmetics.
+The review remained read-only at analysis time and was focused on architectural behaviour, semantic correctness, downstream safety, testability, and governance alignment rather than implementation cosmetics.
 
 ### 2. Additional Validated Findings from the Live Codebase
 
@@ -1577,7 +1577,7 @@ This is operationally convenient, but architecturally risky for a core operating
 
 Consequences include:
 
-- bad model behavior can appear successful in the review loop
+- bad model behaviour can appear successful in the review loop
 - regenerate strategies may look more reliable than they really are because Python silently normalizes the result into a generic chore/config path
 - commit history quality may degrade under the appearance of resilience
 
@@ -1810,7 +1810,7 @@ It becomes weak or brittle for phrases like:
 - `keep the subject shorter`
 - `do not overemphasize internals`
 
-So F should not be described as a full elimination of prompt conflict. It is better described as deterministic pre-resolution for high-confidence semantic directives, with clean fallback to E-style prompt behavior when ambiguous.
+So F should not be described as a full elimination of prompt conflict. It is better described as deterministic pre-resolution for high-confidence semantic directives, with clean fallback to E-style prompt behaviour when ambiguous.
 
 #### 4.8 Focused Review of Solution G
 
@@ -2001,8 +2001,8 @@ That makes it materially stronger for:
 | `src/git_cg/main.py`        | Split semantic resolution from delta rendering; add previous-plan anchoring           | Makes regenerate incremental rather than fully stateless           |
 | `src/git_cg/intent.py`      | Optionally expose explicit allowed/disallowed constraint sets                         | Converts pseudo-vetoes into real architecture when desired         |
 | `src/git_cg/interaction.py` | Continue collecting guidance, but later surface normalized directive state if adopted | Keeps TUI understandable while supporting richer steering          |
-| `tests/`                    | Add contract-resolution, delta-render, and invariant tests                            | Expands confidence beyond prompt-only behavior                     |
-| `README.md` and docs        | Explain semantic vs stylistic regenerate behavior once implemented                    | Prevents user confusion about what regenerate is allowed to change |
+| `tests/`                    | Add contract-resolution, delta-render, and invariant tests                            | Expands confidence beyond prompt-only behaviour                     |
+| `README.md` and docs        | Explain semantic vs stylistic regenerate behaviour once implemented                    | Prevents user confusion about what regenerate is allowed to change |
 
 ### 6. Supplemental Comparative Evaluation of All Solutions (A-H)
 
@@ -2053,7 +2053,7 @@ Before any solution is treated as complete, the system should address the follow
 - fully wire up or remove the dead `regeneration_guidance` parameter
 - canonicalize all matrix-owned fields in Python once an `intent_id` is resolved
 - stop calling score penalties "hard vetoes" unless they become explicit constraints
-- add a previous-plan anchor to regenerate-time behavior
+- add a previous-plan anchor to regenerate-time behaviour
 - tighten subject/description invariants where the project claims deterministic governance
 - add tests that cover semantic stability and release metadata correctness, not just prompt shape
 
@@ -2073,7 +2073,7 @@ The strongest long-term path is:
 
 - move from E + bounded F + refined G toward **H**
 
-That is the point at which regenerate becomes a properly governed, multi-stage architectural behavior rather than a single increasingly burdened prompt.
+That is the point at which regenerate becomes a properly governed, multi-stage architectural behaviour rather than a single increasingly burdened prompt.
 
 ### 8. Underlying System Changes Required
 
@@ -2121,8 +2121,8 @@ This deeper review creates several follow-up obligations for the ADR and broader
 - the comparative evaluation should stop framing A-G as strict peers
 - Solution D should be rewritten if it is to remain in the candidate set
 - Solution G should be narrowed from transcript accumulation to active-state anchoring
-- README, `docs/index.md`, and `usage.kdl` should be kept aligned with the actual review-loop behavior
-- any implementation that changes regenerate semantics should be explicitly tested against downstream release parsing, not only review-loop behavior
+- README, `docs/index.md`, and `usage.kdl` should be kept aligned with the actual review-loop behaviour
+- any implementation that changes regenerate semantics should be explicitly tested against downstream release parsing, not only review-loop behaviour
 
 ### 11. References Used for This Update
 
@@ -2381,13 +2381,13 @@ This is required to make Solution H real. Without it, semantic ownership remains
 
 Rollback:
 
-- revert canonicalization expansion and keep current partial behavior
+- revert canonicalization expansion and keep current partial behaviour
 
 ##### B. `src/git_cg/intent.py`
 
 Planned changes:
 
-- preserve existing ranking behavior as the baseline analysis engine
+- preserve existing ranking behaviour as the baseline analysis engine
 - add an explicit constraint export layer, for example:
   - `allowed_intent_ids`
   - `disallowed_intent_ids`
@@ -2401,7 +2401,7 @@ Solution H needs a real semantic contract boundary, not merely a ranked suggesti
 
 Rollback:
 
-- preserve ranking-only behavior and remove explicit constraint export
+- preserve ranking-only behaviour and remove explicit constraint export
 
 ##### C. `src/git_cg/regeneration.py` (new)
 
@@ -2492,11 +2492,11 @@ Planned new or expanded test areas:
 - `tests/test_main.py`
   - prompt template branching and regenerate orchestration
 - new `tests/test_regeneration_contract.py`
-  - semantic contract resolution and locked field behavior
+  - semantic contract resolution and locked field behaviour
 - new `tests/test_regeneration_delta_render.py`
   - mutable vs locked field handling across repeated regenerate cycles
 - `tests/test_intent.py`
-  - explicit constraint export and pseudo-veto replacement behavior
+  - explicit constraint export and pseudo-veto replacement behaviour
 - `tests/test_release.py` or equivalent release-path tests
   - release-safety regressions under canonicalized metadata
 
@@ -2549,7 +2549,7 @@ Acceptance checkpoint:
 
 Rollback checkpoint:
 
-- revert to ranking-only interpretation while keeping new tests as documentation of expected future behavior
+- revert to ranking-only interpretation while keeping new tests as documentation of expected future behaviour
 
 ##### Phase 2: Prompt Reauthorization and Bounded Directives
 
@@ -2579,7 +2579,7 @@ Scope:
 Acceptance checkpoint:
 
 - regenerate has a stable previous-plan anchor
-- semantic changes and style-only changes no longer force the same full rewrite behavior
+- semantic changes and style-only changes no longer force the same full rewrite behaviour
 
 Rollback checkpoint:
 
@@ -2612,9 +2612,9 @@ Scope:
 
 Acceptance checkpoint:
 
-- docs match behavior
+- docs match behaviour
 - release safety is demonstrated by explicit tests
-- TUI behavior is explainable to users and maintainers
+- TUI behaviour is explainable to users and maintainers
 
 #### 5.5 Verification Plan for the Selected Solution
 
@@ -2642,7 +2642,7 @@ The selected implementation must verify at least the following scenario families
 ##### Release-safety scenarios
 
 - canonicalized `semver_impact` and `changelog_group` do not drift once the contract is resolved
-- malformed or missing trailers do not erase semantically distinct release behavior
+- malformed or missing trailers do not erase semantically distinct release behaviour
 
 ##### Documentation and UX scenarios
 
@@ -2730,7 +2730,7 @@ The following work items were not fully captured in the earlier implementation a
 
 #### 2.2 Why These Items Matter
 
-These are not peripheral housekeeping items. They materially affect delivery safety, issue traceability, milestone closure, and release readiness. Because the selected architecture is now a core operating function, the delivery envelope must be governed as tightly as the runtime behavior itself.
+These are not peripheral housekeeping items. They materially affect delivery safety, issue traceability, milestone closure, and release readiness. Because the selected architecture is now a core operating function, the delivery envelope must be governed as tightly as the runtime behaviour itself.
 
 ### 3. Issue, Branch, and Worktree Strategy
 
@@ -2822,7 +2822,7 @@ Objectives:
 
 - canonicalize all matrix-owned fields once `intent_id` is resolved
 - expose explicit allowed/disallowed constraint sets rather than relying only on score penalties
-- preserve current ranker behavior as baseline while separating hints from constraints
+- preserve current ranker behaviour as baseline while separating hints from constraints
 
 #### 4.2 Work Package B: Prompt Authority and Bounded Directives
 
@@ -2882,7 +2882,7 @@ Files:
 
 Objectives:
 
-- validate downstream release behavior under canonicalized metadata
+- validate downstream release behaviour under canonicalized metadata
 - align all user-facing documentation surfaces with the selected architecture
 - add ADR cross-reference follow-up
 - prepare milestone and release closure artifacts
@@ -2893,7 +2893,7 @@ Objectives:
 
 | Work Package | File / Surface                   | Planned Work                                             | Acceptance Criteria                                                                               | Rollback Checkpoint                                                                |
 | :----------- | :------------------------------- | :------------------------------------------------------- | :------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------- |
-| A            | `src/git_cg/models.py`           | Canonicalize all matrix-owned fields from `intent_id`    | `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` cannot drift after resolution        | Revert to prior canonicalization while retaining tests documenting target behavior |
+| A            | `src/git_cg/models.py`           | Canonicalize all matrix-owned fields from `intent_id`    | `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` cannot drift after resolution        | Revert to prior canonicalization while retaining tests documenting target behaviour |
 | A            | `src/git_cg/intent.py`           | Export explicit constraints in addition to ranked scores | docs-only/tests-only/dependency-only invariants are available as real constraint outputs          | Disable constraint export and preserve score-only ranking                          |
 | A            | tests                            | Add canonicalization and constraint tests                | failing cases are caught before regenerate integration                                            | Remove only new tests if package must be partially rolled back                     |
 | B            | `src/git_cg/main.py`             | Add regenerate prompt reauthorization                    | regenerate prompt clearly elevates user correction above baseline shortlist where permitted       | Disable reauthorized template and fall back to current regenerate path             |
@@ -2904,7 +2904,7 @@ Objectives:
 | D            | regeneration render path         | Implement selective delta rendering                      | style-only corrections do not rewrite locked semantic fields                                      | Disable delta rendering and use full regenerate while keeping contract logic       |
 | D            | validation layer                 | Enforce post-render invariants                           | rendered output respects locked/mutable split                                                     | Drop delta validation and revert to full-plan validation only                      |
 | E            | `src/git_cg/release.py`          | Add release-safety regression coverage                   | canonicalized metadata remains authoritative downstream                                           | Revert parser changes while keeping tests exposing gaps                            |
-| E            | docs surfaces                    | Sync README, docs index, and CLI help                    | docs match actual runtime behavior                                                                | Revert doc surfaces independently if code lands first                              |
+| E            | docs surfaces                    | Sync README, docs index, and CLI help                    | docs match actual runtime behaviour                                                                | Revert doc surfaces independently if code lands first                              |
 | E            | ADR follow-up                    | Add ADR-0007 cross-reference note                        | architecture governance remains coherent across ADRs                                              | Remove note without affecting runtime code                                         |
 
 #### 5.2 Execution Rule
@@ -2927,7 +2927,7 @@ This section converts the selected architecture into the exact recommended imple
 | PR-2        | Prompt reauthorization and bounded directives                      | Regenerate authority is corrected; explicit semantic directives handled deterministically when safe | New child issue 2 |
 | PR-3        | Contract resolver and previous-plan anchor                         | Regenerate gains stable semantic anchoring and contract resolution                                  | New child issue 3 |
 | PR-4        | Selective delta rendering and invariant enforcement                | Regenerate becomes delta-oriented rather than full-rewrite oriented                                 | New child issue 4 |
-| PR-5        | Release safety, docs sync, ADR cross-reference, milestone closeout | Release parser is validated, docs match behavior, milestone can close cleanly                       | New child issue 5 |
+| PR-5        | Release safety, docs sync, ADR cross-reference, milestone closeout | Release parser is validated, docs match behaviour, milestone can close cleanly                       | New child issue 5 |
 
 #### 6.2 Dependency Order
 

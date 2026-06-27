@@ -1,11 +1,12 @@
 ## v0.2.0
 
 ### ✨ Features
+
 - ✨ feat(cli): add GUI editor support for commit messages
 - ✨ feat(eval): add `FormatMetric` and enforce Tier-1 deterministic format gating (#118, #128)
-- ✨ feat(eval): add opik test suite execution and triage scripts (#119, #133)
-- ✨ feat(eval): finalise promptfoo security, native release engine, and IDE boundaries (#121, #123, #124, #136)
-- ✨ feat(eval): initialise promptfoo framework for local MTPLX proxy testing (#120, #134)
+- ✨ feat(eval): add Opik test suite execution and triage scripts (#119, #133)
+- ✨ feat(eval): finalise `Promptfoo` security, native release engine, and IDE boundaries (#121, #123, #124, #136)
+- ✨ feat(eval): initialise `Promptfoo` framework for local `MTPLX` proxy testing (#120, #134)
 - ✨ feat(eval): integrate deterministic Opik formatting metrics and evaluation expansion (#118, #124, #128)
 - ✨ feat(eval): transition to Opik-managed datasets and test suites (#119, #133)
 - ✨ feat(main): add primary language detection to system prompt
@@ -17,6 +18,7 @@
 - 🔗 feat(telemetry): dynamically register and link system prompts to traces (#127)
 
 ### 🐛 Bug Fixes
+
 - 🐛 fix(detect): prioritise code files over docs in language detection
 - 🐛 fix(eval): downgrade promptfoo failures and refine ADR history (#125)
 - 🐛 fix(eval): harden mock patching logic and cache generations across evaluation tiers (#118, #128)
@@ -32,14 +34,16 @@
 - 🥅 fix(sentry): add Sentry SDK for crash reporting
 
 ### 🏗️ Refactoring
+
 - ♻️ refactor(eval): migrate dataset compiler to use Opik API directly (#119, #133)
 - ♻️ refactor(telemetry): update telemetry model and legacy state parsing (#125)
 - 🏷️ refactor(telemetry): isolate git diff extraction into tracked span (#126)
 - 🔥 refactor(test_data): delete static opik_dataset.jsonl (#119, #133)
 - 🚨 refactor(cli): resolve ruff B904 lint error for exception handling in main.py
-- 🚨 refactor(telemetry): resolve ruff SIM105 lint error by utilizing contextlib.suppress
+- 🚨 refactor(telemetry): resolve ruff SIM105 lint error by utilizing `contextlib.suppress`
 
 ### 📝 Documentation
+
 - 🍱 chore(docs): add git-cg tool screenshot
 - 📝 docs(TODO): append incremental generation and PR description features
 - 📝 docs(adr): add ADR 0012 (CodeRabbit/Qodo) and update ADRs 0002 and 0011 (#118, #128)
@@ -62,13 +66,15 @@
 - 📝 docs: fix broken shields.io license badge
 
 ### 🔐 Security & Secrets
+
 - ➖ remove(security): remove Snyk and adopt native CodeQL and Dependabot (#118, #128)
 - 🔐 chore(secrets): skip 1Password fetch if API key is set
-- 🦺 docs(security): formalize IDE boundaries and 1Password `.env` mounting protocols (ADR-0013)
+- 🦺 docs(security): formalise IDE boundaries and 1Password `.env` mounting protocols (ADR-0013)
 - 🦺 fix(security): add path traversal prevention and input validation
 - 🦺 fix(validation): add deterministic score card checks
 
 ### 🔧 Chores & Internal
+
 - ➕ build(deps): add sentry-sdk to project dependencies
 - 👷 ci(workflow): add CI workflow with tests and coverage upload
 - 💚 ci(codecov): integrate Codecov reporting and add workflow concurrency limits (#118, #128)
@@ -84,6 +90,7 @@
 ## v0.1.0
 
 ### ✨ Features
+
 - ✨ feat(cli): implement plain text commit output and stabilise CLI interface (#96)
 - ✨ feat(features): document Multi-Intent Split Detection and trailers
 - ✨ feat(hooks): add linting and commit hooks
@@ -101,6 +108,7 @@
 - 📝 feat(docs): add interactive table sorting to Zensical site (#93)
 
 ### 🐛 Bug Fixes
+
 - 🐛 fix(core): address automated review findings and finalise release formatting (#97)
 - 🐛 fix(secrets): resolve 'Vaults' object has no attribute 'list_all' in 1Password SDK
 - 🚑 fix(models): fix newline escaping in body summary
@@ -112,6 +120,7 @@
 - 🥅 fix(main): add parallel_tool_calls config
 
 ### 🏗️ Refactoring
+
 - ♻️ refactor(intent): improve test path detection patterns
 - ♻️ refactor(main): extract secret resolution to dedicated module
 - ♻️ refactor(main): extract system prompt builder and add logging config
@@ -129,6 +138,7 @@
 - 🚚 refactor(core): centralise SOP loading for portable global hook support
 
 ### 📝 Documentation
+
 - 🎨 style(docs): cleanup docstrings and CSS (#94)
 - 💄 style(docs): add table sort indicator styles (#93, #94)
 - 💬 style(main): clarify interactive mode unavailable message (#78)
@@ -140,7 +150,7 @@
 - 📝 docs(nav): add ADR-0009 to Zensical sidebar navigation config
 - 📝 docs(project): document 1Password SDK migration and roadmap
 - 📝 docs(readme): add badges and format tables in README
-- 📝 docs(readme): correct typos and update COMMIT_EDITMSG path documentation (#92)
+- 📝 docs(readme): correct typos and update `COMMIT_EDITMSG` path documentation (#92)
 - 📝 docs(readme): document configuration and secrets setup
 - 📝 docs(readme): document regeneration guidance actions (#92)
 - 📝 docs(readme): extract TODO list and update Python version
@@ -149,11 +159,12 @@
 - 📝 docs(todo): add multi-turn workflow task
 - 📝 docs(todo): clean up TODO.md formatting
 - 📝 docs(todo): cleanup completed TODO items
-- 📝 docs(todo): reorganize TODO into structured issue sections
+- 📝 docs(todo): reorganise TODO into structured issue sections
 - 📝 docs(todo): update TODO with LLM evaluation system
 - 📝 docs(vizvibe): add project roadmap visualization
 
 ### 🔐 Security & Secrets
+
 - 🔐 chore(config): Add fnox and age for secrets orchestration
 - 🔐 chore(core): refactor secrets resolution with async caching
 - 🔐 chore(secrets): configure gitleaks ignore rules
@@ -164,6 +175,7 @@
 - 🦺 fix(main): add tty availability checks (#78)
 
 ### 🔧 Chores & Internal
+
 - ✅ test(interaction): add regeneration guidance tests (#92)
 - ✅ test(ranker): add ranker preference test cases
 - ✅ test(regeneration): add tests for contract enforcement (#95)
@@ -191,6 +203,7 @@
 - 🙈 chore: remove agentops.log from gitignore
 
 ### 💥 Breaking Changes
+
 - ♻️ refactor(models)!: replace flat Commit with hierarchical CommitPlan model
 - 💥 feat(api)!: change AI response schema to CommitPlan
 - 💥 feat(api)!: remove build_generation_messages directive parameters

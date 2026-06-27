@@ -176,7 +176,7 @@ sequenceDiagram
 
 ### Development Workflow
 
-- **Configurability**: CodeRabbit's behavior is dictated by a `.coderabbit.yaml` file in the repository root. This allows us to tune the chattiness, disable certain review categories (like nitpicks), and set custom system instructions.
+- **Configurability**: CodeRabbit's behaviour is dictated by a `.coderabbit.yaml` file in the repository root. This allows us to tune the chattiness, disable certain review categories (like nitpicks), and set custom system instructions.
 
 ## 8. Impact Radius (Cause, Change, Effect)
 
@@ -219,7 +219,7 @@ sequenceDiagram
 
 ## 12. Rollback Strategy
 
-1. **Remove CodeRabbit**: Uninstall the CodeRabbit GitHub App from the organization/repository and delete `.coderabbit.yaml`.
+1. **Remove CodeRabbit**: Uninstall the CodeRabbit GitHub App from the organisation/repository and delete `.coderabbit.yaml`.
 2. **Remove Qodo**: Instruct developers to uninstall the Qodo IDE extension.
 
 ## 13. Implementation Findings

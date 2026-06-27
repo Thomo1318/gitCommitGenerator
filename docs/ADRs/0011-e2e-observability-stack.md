@@ -385,7 +385,7 @@ sequenceDiagram
 
 ### Phase 7: Stack Augmentation (Promptfoo Tooling)
 
-- **Cause**: Lack of a standardized, deterministic local-first evaluation engine tailored to prompt testing.
+- **Cause**: Lack of a standardised, deterministic local-first evaluation engine tailored to prompt testing.
 - **Change**: Adding `promptfoo` to `Brewfile` (instead of `mise.toml`) and configuring `promptfooconfig.yaml` to route to local MTPLX endpoints.
 - **Effect**: Environment parity for all contributors and a ready execution harness for red-teaming.
 
@@ -579,7 +579,7 @@ Defined in ADR 0011, Section 6.2 (Planned End-State Runtime Sequence). We will s
 - Add `trace_id: str | None`
 - Add `thread_id: str | None`
 
-##### Required behavior
+##### Required behaviour
 
 - The payload must be valid JSON and isolated inside the `.git` directory to prevent accidental commits.
 - Hook failures must not corrupt the state file.
@@ -662,7 +662,7 @@ Move the root `@opik.track` decorator to `_run_commit_generation()`, and nest su
 
 Opik spans map directly to Python function calls via decorators. We must use `ignore_arguments=["client"]` to prevent `PydanticSerializationError`.
 
-##### Required behavior
+##### Required behaviour
 
 - Total execution latency must be tracked.
 - Spans must logically nest in the Opik dashboard.
@@ -735,7 +735,7 @@ Described in ADR 0011 Section 14 (Feedback and Prompt Enrichment). Review action
 3. System logs `feedback_score = 0.6`.
 4. `commit-msg` updates the root trace with the final score.
 
-##### Required behavior
+##### Required behaviour
 
 - `accept` = 1.0
 - `minor edit` = 0.6

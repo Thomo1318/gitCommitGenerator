@@ -1,6 +1,6 @@
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
 [USE PROVIDED REFERENCE IMAGE FOR THE FNOX LOGO]
-A hyper-detailed, photorealistic macro-photography shot of a massive vault door styled with a dark slate blue (#2d3548) and metallic gold (#d4af37) color palette. Perfectly incorporate the provided fnox logo reference image (the dark navy blue dial with concentric rings and a red keyhole) as the central locking mechanism of the vault. Make the logo appear physically constructed into the door, with realistic metallic textures and a subtly glowing bright red keyhole. Emblazoned across the metal casing next to the dial in "Black Ops One" stencil-style typography is the word "fnox", glowing subtly with a soft metallic gold light. Cinematic lighting, extreme depth of field, volumetric dust particles. 8k, Unreal Engine 5 render style, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
+A hyper-detailed, photorealistic macro-photography shot of a massive vault door styled with a dark slate blue (#2d3548) and metallic gold (#d4af37) colour palette. Perfectly incorporate the provided fnox logo reference image (the dark navy blue dial with concentric rings and a red keyhole) as the central locking mechanism of the vault. Make the logo appear physically constructed into the door, with realistic metallic textures and a subtly glowing bright red keyhole. Emblazoned across the metal casing next to the dial in "Black Ops One" stencil-style typography is the word "fnox", glowing subtly with a soft metallic gold light. Cinematic lighting, extreme depth of field, volumetric dust particles. 8k, Unreal Engine 5 render style, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
 
 📋 Target Filename: adr-0003-adopt-fnox-for-secrets-management.jpeg
 -->
@@ -26,7 +26,7 @@ superseded_by: []
 
 ## 1. Introduction and Goals
 
-This Architectural Decision Record (ADR) formalizes the decision to adopt `fnox` as the primary secrets management and orchestration tool for the `gitCommitGenerator` project.
+This Architectural Decision Record (ADR) formalises the decision to adopt `fnox` as the primary secrets management and orchestration tool for the `gitCommitGenerator` project.
 
 While 1Password is currently used for local development, mandating a commercial subscription for open-source contributors is an unacceptable constraint. We need a solution that enables the primary developer to continue using 1Password seamlessly while providing a free, secure fallback for contributors.
 

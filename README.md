@@ -2,7 +2,7 @@
 
 ![GitOps Commit Generator](docs/GitOps-Commit-Generator.jpeg)
 
-> 🤖 **"The Brain in the Machine"** — A governed, SOP-driven engine for standardized Git history.
+> 🤖 **"The Brain in the Machine"** — A governed, SOP-driven engine for standardised Git history.
 
 <div align="center">
 
@@ -25,7 +25,30 @@
 
 ---
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
+- [📚 Overview](#-overview)
+- [🧠 Core Philosophy & Architecture](#-core-philosophy--architecture)
+- [🏗 System Stack](#-system-stack)
+- [🛠 File Role Matrix](#-file-role-matrix)
+- [✨ Features](#-features)
+- [🚀 Installation & Provisioning](#-installation--provisioning)
+  - [Configuration & Secrets](#configuration--secrets)
+  - [Font Configuration](#font-configuration)
+- [🛠 Usage](#-usage)
+  - [Default non-interactive mode](#default-non-interactive-mode)
+  - [Interactive review mode](#interactive-review-mode)
+  - [Hook-driven usage](#hook-driven-usage)
+  - [The Standard: Hybrid Commits](#the-standard-hybrid-commits)
+    - [Gitmoji Reference Matrix](#gitmoji-reference-matrix)
+- [✨ Feature Spotlight: Hook Safety & GUI Editors (`index.lock`)](#-feature-spotlight-hook-safety--gui-editors-indexlock)
+- [🤝 Contributing](#-contributing)
+- [🧑‍💻 Development](#-development)
+- [🏆 Acknowledgements & Open Source Licenses](#-acknowledgements--open-source-licenses)
+- [📄 License](#-license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## 📚 Overview
 
@@ -163,7 +186,7 @@ flowchart LR
 - **Dual-Mode Execution**: `git-cg` runs non-interactively by default for unattended and CI/CD-safe use, while `git-cg -i` enables opt-in terminal review.
 - **Terminal-Native Interactive Review**: Uses [gum](https://github.com/charmbracelet/gum) with `/dev/tty` for `Commit`, `Edit`, `Regenerate`, `Add issue reference`, `Add regenerate guidance`, `Clear regenerate guidance`, `Print plain text`, and `Cancel` actions without relying on desktop notifications.
 - **Self-Healing Automation**: [Instructor](https://python.useinstructor.com/)'s automatic retry loops catch hallucinations before they ever touch your Git tree.
-- **Ultra-low Latency**: Optimized for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution with Local LLMs depending on your hardware.
+- **Ultra-low Latency**: Optimised for sub-second inference using local [rtk](https://github.com/rtk-ai/rtk) token compression and [uv](https://docs.astral.sh/uv/) execution with Local LLMs depending on your hardware.
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
 - **Spec-Driven**: Uses the [usage](https://usage.jdx.dev/) standard for automated autocompletion and help generation.
 - **Safe Dry-Runs**: Validate AI output before modifying your git message file.
@@ -209,6 +232,17 @@ This project is completely declarative. Tools are managed by [mise](https://mise
 - **OpenAI / Custom API Keys**: Export `OPENAI_API_KEY`, `OMLX_API_KEY`, or `MTPLX_API_KEY` depending on your selected engine.
 - **Hugging Face Token**: If you are using local models via oMLX or MTPLX, you may need a Hugging Face token to download gated models without rate limits. You can generate one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and store it in your environment.
 - **Local Model Storage**: You can configure where local models are stored to save disk space on your primary drive by setting the standard caching environment variables for your engine (e.g., `HF_HOME`).
+
+### Font Configuration
+
+`git-cg` uses Gitmoji's to provide instant visual recognition of commit intents (e.g., 🐛, ✨, ♻️). For these to render correctly in your terminal and editor, you must use a font that supports them.
+
+**Standard Installation:**
+We highly recommend installing a [NerdFont](https://www.nerdfonts.com/). NerdFonts patch developer-targeted fonts with a high number of glyphs (icons).
+
+**Custom Ligatured Fonts:**
+For the best experience, we provide custom-patched `Ligatured-Hack` font suites as GitHub Release Assets on this repository. These bespoke suites combine the excellent Hack font with FiraCode or JetBrainsMono ligatures and full NerdFont glyph patching.
+Download your preferred `.zip` from the [Releases](https://github.com/Thomo1318/gitCommitGenerator/releases) page, extract, and install the `.ttf` files to your system font directory.
 
 ---
 
@@ -355,7 +389,7 @@ Changelog-Groups: Changed, Fixed, Miscellaneous
 |  💥   | `:boom:`                      | Introduce breaking changes                                   |   `feat`   |     MAJOR     | Changed         |
 |  ✨   | `:sparkles:`                  | Introduce new features                                       |   `feat`   |     MINOR     | Added           |
 |  📈   | `:chart_with_upwards_trend:`  | Add or update analytics or track code                        |   `feat`   |     MINOR     | Added           |
-|  🌐   | `:globe_with_meridians:`      | Internationalization and localization                        |   `feat`   |     MINOR     | Added           |
+|  🌐   | `:globe_with_meridians:`      | Internationalization and localisation                        |   `feat`   |     MINOR     | Added           |
 |  🚩   | `:triangular_flag_on_post:`   | Add, update, or remove feature flags                         |   `feat`   |     MINOR     | Added           |
 |  🛂   | `:passport_control:`          | Work on code related to authorization, roles and permissions |   `feat`   |     MINOR     | Security        |
 |  👔   | `:necktie:`                   | Add or update business logic                                 |   `feat`   |     MINOR     | Added           |
@@ -412,7 +446,7 @@ If your system's default `$VISUAL` editor is a GUI application (like VS Code, Cu
 If your repository uses deterministic `pre-commit` hooks (like **[hk](https://hk.jdx.dev)**) that safely stash your unstaged changes before running, they would crash head-first into this locked index! This safety feature of `hk`—stashing to prevent data loss—is exactly why it is superior to standard hooks, but it requires that editors block execution properly.
 
 **Customizing Your Editor:**
-`git-cg` explicitly overrides standard behavior to prefer terminal-bound blocking editors (via `$GIT_CG_EDITOR` or `$EDITOR`) to preserve this hook safety.
+`git-cg` explicitly overrides standard behaviour to prefer terminal-bound blocking editors (via `$GIT_CG_EDITOR` or `$EDITOR`) to preserve this hook safety.
 
 However, if you wish to use a GUI editor and have configured it to block (e.g. `code --wait`), you can simply pass the `-g` or `--gui` flag to `git-cg` to use your `$VISUAL` editor:
 
@@ -441,7 +475,7 @@ This project heavily leverages the following open-source tools. We extend our im
 | Tool                                                            | License             | Description                               |
 | :-------------------------------------------------------------- | :------------------ | :---------------------------------------- |
 | **[mise](https://mise.jdx.dev)**                                | MIT                 | Environment and Toolchain Manager         |
-| **[usage](https://usage.jdx.dev/)**                             | MIT                 | Standardized CLI Specifications           |
+| **[usage](https://usage.jdx.dev/)**                             | MIT                 | Standardised CLI Specifications           |
 | **[hk](https://hk.jdx.dev)**                                    | MIT                 | Deterministic Git Hook Management         |
 | **[Opik](https://comet.com/site/products/opik/)**               | Apache-2.0          | Open-source LLM Evaluation & Tracing      |
 | **[BetterLeaks](https://github.com/Thomo1318/betterleaks)**     | MIT                 | Secret Scanning & Prevention              |
