@@ -53,6 +53,9 @@ flowchart TD
     %% @sentry_phase9 [ai-task, closed, 2026-06-18, ai]
     sentry_phase9("Sentry Observability Phase 9<br/><sub>Centralize Sentry init, implement<br/>before_send PII scrubber, and target<br/>exception-swallowing boundaries.</sub>")
 
+    %% @en_au_localisation [ai-task, closed, 2026-06-27, ai]
+    en_au_localisation("en-AU Localisation<br/><sub>Standardise repository on en-AU.<br/>Added commit_language config to SOP<br/>and enforced via prompt injection.</sub>")
+
     %% === FUTURE WORK ===
     %% @second_agent_review [ai-task, opened, 2026-06-06, ai]
     second_agent_review("Second Agent Review<br/><sub>Trigger another comprehensive<br/>agentic review to check the codebase<br/>for architecture gaps, portability,<br/>and finalize public readiness</sub>")
@@ -86,6 +89,7 @@ flowchart TD
     release_v0_1_0 --> opik_datasets_phase6
     opik_datasets_phase6 --> promptfoo_phase7_8
     promptfoo_phase7_8 --> sentry_phase9
+    sentry_phase9 --> en_au_localisation
 
     second_agent_review -.-> ultimate_goal
     config_system -.-> ultimate_goal
@@ -94,7 +98,7 @@ flowchart TD
 
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        sentry_phase9
+        en_au_localisation
     end
 
     %% === STYLES ===
@@ -114,9 +118,10 @@ flowchart TD
     style opik_datasets_phase6 fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style promptfoo_phase7_8 fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style sentry_phase9 fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style en_au_localisation fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
 
     %% Recent node (highlighted purple)
-    style sentry_phase9 fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style en_au_localisation fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Recent subgraph (dashed border)
     style recent fill:transparent,stroke:#c084fc,color:#c084fc,stroke-width:2px,stroke-dasharray:5 5
