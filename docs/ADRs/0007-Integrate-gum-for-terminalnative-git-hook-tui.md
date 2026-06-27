@@ -5,6 +5,7 @@ A high-fidelity, photorealistic cyberpunk macro-photography shot of a sleek, glo
 
 📋 Target Filename: adr-0007-gum-terminal-native-tui.jpeg
 -->
+
 ![Header Image](../assets/adr-0007-gum-terminal-native-tui.png)
 
 ```yaml
@@ -129,12 +130,12 @@ sequenceDiagram
 
 ## 8. Impact Radius (Cause, Change, Effect)
 
-| Component | Change | Effect |
-| :--- | :--- | :--- |
-| `src/git_cg/notifier.py` | Deleted / Deprecated | Removal of the brittle `vjeantet/alerter` subprocess logic. |
-| `src/git_cg/main.py` | Added `/dev/tty` check and `gum` invocation | Centralizes the user interaction loop natively within the orchestrator script. |
-| `mise.toml` | Added `gum = "0.17.0"` | Guarantees the binary is present in the environment before the hook fires. |
-| Developer Workflow | Shifts from Mouse to Keyboard | Faster context-switching; terminal never loses focus when opening `$EDITOR`. |
+| Component                | Change                                      | Effect                                                                         |
+| :----------------------- | :------------------------------------------ | :----------------------------------------------------------------------------- |
+| `src/git_cg/notifier.py` | Deleted / Deprecated                        | Removal of the brittle `vjeantet/alerter` subprocess logic.                    |
+| `src/git_cg/main.py`     | Added `/dev/tty` check and `gum` invocation | Centralizes the user interaction loop natively within the orchestrator script. |
+| `mise.toml`              | Added `gum = "0.17.0"`                      | Guarantees the binary is present in the environment before the hook fires.     |
+| Developer Workflow       | Shifts from Mouse to Keyboard               | Faster context-switching; terminal never loses focus when opening `$EDITOR`.   |
 
 ## 9. Consequences
 
@@ -196,8 +197,8 @@ In practical terms, the architectural decision is now sharpened as follows:
 
 1. **`gum` remains the preferred TUI implementation technology.** The project should still use `gum` rather than direct Bubble Tea, because `gum` preserves the Python architecture, avoids introducing a Go build-and-release subsystem, and aligns cleanly with `mise`-managed binary provisioning.
 2. **The TUI is an opt-in interaction layer, not a mandatory gate.** The tool must remain fully usable in unattended, scripted, and CI/CD contexts.
-3. **The non-interactive path remains first-class.** The tool must be able to generate, write, and complete a commit without any user intervention when that behaviour is desired.
-4. **Interactive behaviour should be explicit.** A mode such as `git-cg -i` is both valid and desirable because it makes the presence of an interactive review step intentional instead of implicit.
+3. **The non-interactive path remains first-class.** The tool must be able to generate, write, and complete a commit without any user intervention when that behavior is desired.
+4. **Interactive behavior should be explicit.** A mode such as `git-cg -i` is both valid and desirable because it makes the presence of an interactive review step intentional instead of implicit.
 5. **The hook path must remain conservative and safe.** A `prepare-commit-msg` hook should not become dependent on a TUI in order to succeed.
 
 This refinement does not invalidate the original ADR. Rather, it clarifies the operational contract and prevents the project from accidentally replacing one brittle interaction assumption (`alerter`) with another overly broad one (always-open gum interaction).
@@ -218,7 +219,7 @@ If the architecture were to force the TUI into the primary execution path, it wo
 - missing TTY
 - hidden interactivity in automation
 - blocked pipelines
-- inconsistent behaviour between terminal and GUI contexts
+- inconsistent behavior between terminal and GUI contexts
 
 That is unacceptable.
 
@@ -232,7 +233,7 @@ The project will adopt a **dual-mode interaction architecture** with the followi
 
 This is the default path for automation safety and operational simplicity.
 
-Expected behaviour:
+Expected behavior:
 
 - the tool generates the commit message
 - writes the generated content to the appropriate commit message file
@@ -243,13 +244,13 @@ Expected behaviour:
   - GUI Git clients
   - ordinary "run it and finish" local workflows
 
-This mode supports the user's desired behaviour that if a user simply runs `git-cg`, the tool can complete its work and apply the commit without any additional prompt or UI requirement.
+This mode supports the user's desired behavior that if a user simply runs `git-cg`, the tool can complete its work and apply the commit without any additional prompt or UI requirement.
 
 #### Mode B: Interactive Terminal Mode
 
 This is the opt-in enhanced experience.
 
-Expected behaviour:
+Expected behavior:
 
 - invoked explicitly through an interaction flag such as `git-cg -i`
 - only engages the TUI if a real terminal can be accessed
@@ -270,7 +271,7 @@ It solves several design problems simultaneously:
 
 #### A. It separates **capability** from **assumption**
 
-Without an explicit interaction flag, the runtime has to guess whether the user wants review or unattended completion. That leads to ambiguous behaviour and fragile heuristics.
+Without an explicit interaction flag, the runtime has to guess whether the user wants review or unattended completion. That leads to ambiguous behavior and fragile heuristics.
 
 With `-i`, the user has declared intent.
 
@@ -278,7 +279,7 @@ With `-i`, the user has declared intent.
 
 An unattended environment should not be vulnerable to a TUI appearing because a TTY happened to be present. The default must remain non-interactive.
 
-#### C. It makes hook behaviour safer
+#### C. It makes hook behavior safer
 
 Git hooks are execution contexts with unusual I/O characteristics. By keeping interactivity explicit, the hook path remains predictable.
 
@@ -412,7 +413,7 @@ Writing the generated message before the interactive choice yields several archi
 
 - GUI clients already receive the generated message even when no terminal interaction is possible.
 - The commit message file remains the authoritative working draft.
-- Editing behaviour becomes simpler because `$EDITOR` works against an already-populated file.
+- Editing behavior becomes simpler because `$EDITOR` works against an already-populated file.
 - Non-interactive and interactive modes share the same write path rather than diverging unnecessarily.
 
 ### 8. Module Boundary Refinement
@@ -437,7 +438,7 @@ Responsibilities of that layer would include:
 This produces a better design because:
 
 - `main.py` stays focused on orchestration, not terminal UI plumbing
-- future changes to the UI layer remain localised
+- future changes to the UI layer remain localized
 - `alerter` can be retained as an optional passive notifier without tangling runtime logic
 - later migration to Textual or richer TUI patterns becomes easier if ever needed
 
@@ -445,7 +446,7 @@ This produces a better design because:
 
 The user's requirement that if the agent identifies a split-worthy situation it should complete the two commits sequentially is valid in principle, but it must be scoped with care.
 
-This capability should be recognized as a **future orchestration feature**, not silently assumed to be the default behaviour of the `prepare-commit-msg` hook.
+This capability should be recognized as a **future orchestration feature**, not silently assumed to be the default behavior of the `prepare-commit-msg` hook.
 
 #### Why the distinction matters
 
@@ -462,7 +463,7 @@ The ADR should therefore record:
 
 - sequential split commits are a desirable future feature
 - they are most appropriate for an **explicit `git-cg` command-mode orchestration path**
-- they should not be treated as invisible default hook behaviour without a separate implementation decision
+- they should not be treated as invisible default hook behavior without a separate implementation decision
 
 This still preserves the idea in the architectural record without prematurely hard-coding a high-risk automation step into the hook path.
 
@@ -470,14 +471,14 @@ This still preserves the idea in the architectural record without prematurely ha
 
 The refined decision changes the building-block responsibilities slightly.
 
-| Component | Refined Role | Architectural Effect |
-| :--- | :--- | :--- |
-| `src/git_cg/main.py` | Orchestrates mode selection, generation, write path, and action routing | Prevents terminal UI logic from overwhelming the orchestration layer |
-| `src/git_cg/interaction.py` or equivalent | Handles terminal interaction, `/dev/tty`, gum execution, and passive signaling | Encapsulates volatile I/O and TUI behaviour |
-| `src/git_cg/notifier.py` | Retained only if repurposed for optional passive desktop signaling | Removes GUI notifications from the critical path while preserving future utility |
-| `mise.toml` | Adds and provisions `gum` | Keeps TUI dependency declarative and reproducible |
-| hook path | Remains safe and non-interactive by default | Preserves compatibility with unattended and GUI-driven workflows |
-| explicit CLI path | Gains opt-in enhanced review mode | Enables premium UX without forcing it on all users |
+| Component                                 | Refined Role                                                                   | Architectural Effect                                                             |
+| :---------------------------------------- | :----------------------------------------------------------------------------- | :------------------------------------------------------------------------------- |
+| `src/git_cg/main.py`                      | Orchestrates mode selection, generation, write path, and action routing        | Prevents terminal UI logic from overwhelming the orchestration layer             |
+| `src/git_cg/interaction.py` or equivalent | Handles terminal interaction, `/dev/tty`, gum execution, and passive signaling | Encapsulates volatile I/O and TUI behavior                                       |
+| `src/git_cg/notifier.py`                  | Retained only if repurposed for optional passive desktop signaling             | Removes GUI notifications from the critical path while preserving future utility |
+| `mise.toml`                               | Adds and provisions `gum`                                                      | Keeps TUI dependency declarative and reproducible                                |
+| hook path                                 | Remains safe and non-interactive by default                                    | Preserves compatibility with unattended and GUI-driven workflows                 |
+| explicit CLI path                         | Gains opt-in enhanced review mode                                              | Enables premium UX without forcing it on all users                               |
 
 #### Updated Building Block View (Refined)
 
@@ -584,9 +585,9 @@ sequenceDiagram
 
 - Adds a dual-mode runtime model, which is conceptually more complex than a single-path design.
 - Requires more careful documentation so users understand the difference between default and interactive operation.
-- Defers the most ambitious split-into-multiple-real-commits behaviour rather than solving it immediately.
+- Defers the most ambitious split-into-multiple-real-commits behavior rather than solving it immediately.
 
-These tradeoffs are acceptable and preferable to overloading the hook path with too much invisible behaviour.
+These tradeoffs are acceptable and preferable to overloading the hook path with too much invisible behavior.
 
 ### 12. Refined Verification Expectations
 
@@ -598,7 +599,7 @@ The original verification plan should be understood as necessary but incomplete.
 - hook-driven usage remains safe in GUI clients.
 - passive bell signaling does not block completion.
 - `Edit` remains terminal-native and opens the editor against the already-written commit file.
-- optional future passive notifier behaviour does not reintroduce lifecycle coupling.
+- optional future passive notifier behavior does not reintroduce lifecycle coupling.
 
 ### 13. Refined Governance Follow-up
 
@@ -619,7 +620,6 @@ The refined decision is:
 
 That is the more correct, more durable, and more operationally safe form of the architecture.
 
-
 ---
 
 ## III. Refinement 2: Structured Issue Reference Review Metadata (v1.2.0)
@@ -627,8 +627,9 @@ That is the more correct, more durable, and more operationally safe form of the 
 Following the implementation of the dual-mode interaction strategy, a critical UX and data-integrity gap was identified regarding issue references (e.g., `Resolves #26`).
 
 Previously, users wishing to append issue references had to drop into the `$EDITOR` flow and manually type them into the generated message. This introduced several risks:
+
 - Friction for a very common operation.
-- Risk of users injecting text *below* the machine-readable trailers (`SemVer-Impact`, `Change-Types`, `Changelog-Groups`), breaking downstream parser determinism.
+- Risk of users injecting text _below_ the machine-readable trailers (`SemVer-Impact`, `Change-Types`, `Changelog-Groups`), breaking downstream parser determinism.
 
 This refinement establishes that **issue references must be handled as structured, Python-owned review metadata**, not as AI-generated schema elements, and not as unstructured manual edits.
 
@@ -650,6 +651,7 @@ The project will adopt the following structured metadata workflow for issue refe
 
 ```markdown
 Included changes:
+
 - 👷 ci(docs): add GitHub Pages deployment workflow
 - 🔧 chore(mise): add gum to toolchain and update gitignore
 
@@ -661,11 +663,11 @@ Changelog-Groups: Miscellaneous
 
 ### 3. Impact Radius (Cause, Change, Effect)
 
-| Component | Change | Effect |
-| :--- | :--- | :--- |
-| `src/git_cg/models.py` | Add `IssueReferenceKind` and `IssueReference` models. Update `CommitPlan.render()` signature. | Decouples metadata from the AI schema while ensuring deterministic trailer placement. |
-| `src/git_cg/interaction.py` | Add `prompt_issue_reference_type`, `prompt_issue_number`, and a state formatter. | Keeps the metadata ingestion terminal-native via `gum`. |
-| `src/git_cg/main.py` | Introduce `ReviewState` and a state-mutation review loop. | Orchestration becomes stateful; allows preview updates without spawning `$EDITOR`. |
+| Component                   | Change                                                                                        | Effect                                                                                |
+| :-------------------------- | :-------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| `src/git_cg/models.py`      | Add `IssueReferenceKind` and `IssueReference` models. Update `CommitPlan.render()` signature. | Decouples metadata from the AI schema while ensuring deterministic trailer placement. |
+| `src/git_cg/interaction.py` | Add `prompt_issue_reference_type`, `prompt_issue_number`, and a state formatter.              | Keeps the metadata ingestion terminal-native via `gum`.                               |
+| `src/git_cg/main.py`        | Introduce `ReviewState` and a state-mutation review loop.                                     | Orchestration becomes stateful; allows preview updates without spawning `$EDITOR`.    |
 
 ### 4. Implementation Constraints
 
@@ -673,16 +675,15 @@ Changelog-Groups: Miscellaneous
 - **Validation**: Issue numbers must be strictly validated as numeric inputs at the interaction boundary.
 - **Idempotency**: The review-state must be idempotent. Re-rendering the state or adding an identical reference must not duplicate data or mutate prior outputs.
 
-
 ---
 
 ## IV. Refinement 3: Multi-Issue Reference Review Expansion (v1.3.0)
 
-Following the successful introduction of structured issue-reference review metadata, the next architectural pressure point is no longer *whether* issue references belong in the interactive review loop. That question has already been resolved. The remaining question is how the interaction model should evolve now that the internal representation is intentionally list-backed while the phase-one TUI only exposes a single-add workflow.
+Following the successful introduction of structured issue-reference review metadata, the next architectural pressure point is no longer _whether_ issue references belong in the interactive review loop. That question has already been resolved. The remaining question is how the interaction model should evolve now that the internal representation is intentionally list-backed while the phase-one TUI only exposes a single-add workflow.
 
 That mismatch is now the catalyst for refinement.
 
-The current implementation intentionally stores issue references as structured Python-owned metadata in a list so that future expansion would not require a destructive redesign of the rendering model or orchestration layer. However, the terminal UX still enforces a phase-one restriction that allows only a single reference to be attached through the `gum` review loop. That was the correct initial decision for risk control, but it is no longer the ideal steady-state behaviour.
+The current implementation intentionally stores issue references as structured Python-owned metadata in a list so that future expansion would not require a destructive redesign of the rendering model or orchestration layer. However, the terminal UX still enforces a phase-one restriction that allows only a single reference to be attached through the `gum` review loop. That was the correct initial decision for risk control, but it is no longer the ideal steady-state behavior.
 
 There are legitimate commit scenarios in which multiple linked issues need to be carried together, for example:
 
@@ -721,6 +722,7 @@ This refinement establishes the following governing rules:
 
 ```markdown
 Included changes:
+
 - 📝 docs(readme): document multi-issue review flow
 - ✅ test(issue_references): add ordering and conflict coverage
 
@@ -749,12 +751,12 @@ This preserves tight scope discipline while still unlocking the most valuable ne
 
 ### 4. Impact Radius (Cause, Change, Effect)
 
-| Component | Change | Effect |
-| :--- | :--- | :--- |
-| `src/git_cg/main.py` | Remove the phase-one single-reference UI guard and expand review-state mutation handling. | Allows repeated structured issue-reference addition while preserving idempotency and rejecting conflicting re-adds. |
-| `src/git_cg/interaction.py` | Update preview-state formatting and user-facing interaction copy for plural issue-reference display. | Keeps the TUI concise and understandable as the number of attached references grows. |
-| `tests/test_issue_references.py` | Add multi-reference ordering, idempotency, and same-number conflict tests. | Protects the refinement contract and prevents regressions in state mutation behaviour. |
-| `README.md` | Document repeated add behaviour and clarify deferred remove/replace semantics. | Aligns user expectations with the actual TUI workflow. |
+| Component                        | Change                                                                                               | Effect                                                                                                              |
+| :------------------------------- | :--------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| `src/git_cg/main.py`             | Remove the phase-one single-reference UI guard and expand review-state mutation handling.            | Allows repeated structured issue-reference addition while preserving idempotency and rejecting conflicting re-adds. |
+| `src/git_cg/interaction.py`      | Update preview-state formatting and user-facing interaction copy for plural issue-reference display. | Keeps the TUI concise and understandable as the number of attached references grows.                                |
+| `tests/test_issue_references.py` | Add multi-reference ordering, idempotency, and same-number conflict tests.                           | Protects the refinement contract and prevents regressions in state mutation behavior.                               |
+| `README.md`                      | Document repeated add behavior and clarify deferred remove/replace semantics.                        | Aligns user expectations with the actual TUI workflow.                                                              |
 
 ### 5. Implementation Constraints
 
@@ -764,12 +766,11 @@ This preserves tight scope discipline while still unlocking the most valuable ne
 - **Trailer integrity remains absolute**: issue references must never be rendered below `SemVer-Impact`, `Change-Types`, or `Changelog-Groups`.
 - **Scope discipline remains important**: this refinement enables multi-add, but does not yet require full remove/edit/replace issue-reference management inside the TUI.
 
-
 ---
 
 ## V. Refinement 4: Guided Regeneration Feedback Loop (v1.4.0)
 
-Following the move to a stateful gum-based review loop and the subsequent expansion toward structured multi-issue references, a new usability gap has become clear: users can often identify *why* a generated commit message is unsatisfactory, but they currently have no lightweight, structured mechanism to steer the next regeneration without either accepting a blind retry or dropping all the way down into manual editing.
+Following the move to a stateful gum-based review loop and the subsequent expansion toward structured multi-issue references, a new usability gap has become clear: users can often identify _why_ a generated commit message is unsatisfactory, but they currently have no lightweight, structured mechanism to steer the next regeneration without either accepting a blind retry or dropping all the way down into manual editing.
 
 That gap is substantial enough to warrant its own refinement.
 
@@ -939,13 +940,13 @@ sequenceDiagram
 
 ### 5. Impact Radius (Cause, Change, Effect)
 
-| Component | Change | Effect |
-| :--- | :--- | :--- |
-| `src/git_cg/main.py` | Extend `ReviewState` to hold optional regeneration guidance and feed it into regeneration requests. | Introduces explicit human steering into the AI regeneration path without affecting final commit rendering. |
-| `src/git_cg/interaction.py` | Add gum input helpers and review-status formatting for guidance state. | Keeps guidance capture terminal-native and visible to the user. |
-| Prompt construction path | Accept optional user guidance when building the next regeneration request. | Improves regeneration precision when the first result is structurally valid but contextually wrong. |
-| `tests/` | Add review-state, prompt-injection, and clear/replace guidance tests. | Protects determinism and prevents hidden-state regressions. |
-| `README.md` | Document guided regeneration as an explicit review capability. | Clarifies the difference between regenerate, edit, and guided regenerate flows. |
+| Component                   | Change                                                                                              | Effect                                                                                                     |
+| :-------------------------- | :-------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `src/git_cg/main.py`        | Extend `ReviewState` to hold optional regeneration guidance and feed it into regeneration requests. | Introduces explicit human steering into the AI regeneration path without affecting final commit rendering. |
+| `src/git_cg/interaction.py` | Add gum input helpers and review-status formatting for guidance state.                              | Keeps guidance capture terminal-native and visible to the user.                                            |
+| Prompt construction path    | Accept optional user guidance when building the next regeneration request.                          | Improves regeneration precision when the first result is structurally valid but contextually wrong.        |
+| `tests/`                    | Add review-state, prompt-injection, and clear/replace guidance tests.                               | Protects determinism and prevents hidden-state regressions.                                                |
+| `README.md`                 | Document guided regeneration as an explicit review capability.                                      | Clarifies the difference between regenerate, edit, and guided regenerate flows.                            |
 
 ### 6. Implementation Constraints
 
@@ -1008,16 +1009,22 @@ The refined decision is:
 
 That is the correct architectural next step for controlled human steering of AI-generated commit messages.
 
+## V. Refinement 5: en-AU Normalisation Policy (v1.5.0)
+
+To maintain consistency across project documentation, all new prose and future refinements in this ADR (and the broader repository) must follow `en-AU` spelling standards.
+
+This is an append-only enforcement rule; historical text in this document retains its original American spelling to preserve the integrity of the initial record.
+
 ## CHANGELOG
 
-
-
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
-- v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behaviour.
+- v1.1.0 (2026-06-09 11:30:00): Added a refined dual-mode interaction strategy preserving non-interactive CI/CD-safe execution as the default path, redefining `gum` as an opt-in terminal-native review feature, retaining `alerter` only for possible future passive notification use, and scoping sequential split-commit orchestration as a future explicit command-mode capability rather than default hook behavior.
 - v1.1.1 (2026-06-09 11:45:00): Incorporated refined Building Block View and Runtime & Deployment View diagrams to the refinement section without replacing the original diagrams, preserving full ADR history while documenting the updated dual-mode architecture.
-- v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalising structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.\n- v1.3.0 (2026-06-11 10:15:00): Added Refinement 3 expanding the gum review flow to support multiple structured issue references with insertion-order-preserving rendering, idempotent duplicate handling, and conservative rejection of conflicting same-number verb changes while deferring remove/replace UX.
-- v1.4.0 (2026-06-11 14:30:00): Added Refinement 4 formalising a guided regeneration feedback loop with explicit user-authored steering text stored as review metadata, visible in TUI state, applied only to regeneration requests, and documented with updated refinement-specific diagrams reflecting the new state-aware interaction model.
+- v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.
+- v1.3.0 (2026-06-11 10:15:00): Added Refinement 3 expanding the gum review flow to support multiple structured issue references with insertion-order-preserving rendering, idempotent duplicate handling, and conservative rejection of conflicting same-number verb changes while deferring remove/replace UX.
+- v1.4.0 (2026-06-11 14:30:00): Added Refinement 4 formalizing a guided regeneration feedback loop with explicit user-authored steering text stored as review metadata, visible in TUI state, applied only to regeneration requests, and documented with updated refinement-specific diagrams reflecting the new state-aware interaction model.
 - v1.4.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+- v1.5.0 (2026-06-27): Added Refinement 5 documenting the en-AU normalisation policy.
 
 <!-- ## Supporting Visual Aids
 
