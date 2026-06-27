@@ -32,7 +32,10 @@ def _load_json(rel_path: str) -> object:
 
 
 def _load_yaml(rel_path: str) -> object:
-    return yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
+    data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
+    if isinstance(data, dict) and True in data:
+        data["on"] = data.pop(True)
+    return data
 
 
 def _gitignore_lines() -> list[str]:
@@ -97,19 +100,19 @@ class TestSchemaCommitLanguage:
     # uses the same subset of regex syntax as JSON Schema)
     # -----------------------------------------------------------------------
 
-    def test_pattern_accepts_en_AU(self):
+    def test_pattern_accepts_en_au(self):
         """Pattern must accept ``en-AU``."""
         assert _COMMIT_LANGUAGE_PATTERN.match("en-AU")
 
-    def test_pattern_accepts_en_US(self):
+    def test_pattern_accepts_en_us(self):
         """Pattern must accept ``en-US``."""
         assert _COMMIT_LANGUAGE_PATTERN.match("en-US")
 
-    def test_pattern_accepts_fr_FR(self):
+    def test_pattern_accepts_fr_fr(self):
         """Pattern must accept ``fr-FR``."""
         assert _COMMIT_LANGUAGE_PATTERN.match("fr-FR")
 
-    def test_pattern_accepts_zh_CN(self):
+    def test_pattern_accepts_zh_cn(self):
         """Pattern must accept ``zh-CN``."""
         assert _COMMIT_LANGUAGE_PATTERN.match("zh-CN")
 
@@ -218,9 +221,7 @@ class TestAgentSopCommitLanguage:
         matrix_pos = text.find('"gitmoji_reference_matrix"')
         assert lang_pos != -1, "commit_language not found in file"
         assert matrix_pos != -1, "gitmoji_reference_matrix not found in file"
-        assert lang_pos < matrix_pos, (
-            "commit_language should appear before gitmoji_reference_matrix in the file"
-        )
+        assert lang_pos < matrix_pos, "commit_language should appear before gitmoji_reference_matrix in the file"
 
 
 # ===========================================================================
@@ -266,9 +267,7 @@ class TestGitCgSopOverride:
         """The per-repo override must differ from the default SOP language (en-US vs en-AU)."""
         default = _load_json("config/gitops_agent_sop.json")["commit_language"]
         override = self._sop_override()["commit_language"]
-        assert override != default, (
-            "Per-repo override should differ from the default SOP commit_language"
-        )
+        assert override != default, "Per-repo override should differ from the default SOP commit_language"
 
     def test_file_has_no_unexpected_keys(self):
         """The override file should only contain expected keys for a minimal override."""
@@ -298,7 +297,7 @@ class TestVscodeSettingsSpellCheck:
         """``cSpell.language`` must still be present (pre-existing)."""
         assert "cSpell.language" in self._settings()
 
-    def test_cspell_language_includes_en_AU(self):
+    def test_cspell_language_includes_en_au(self):
         """``cSpell.language`` must include ``en-AU``."""
         lang = self._settings()["cSpell.language"]
         assert "en-AU" in lang
@@ -383,28 +382,28 @@ class TestVscodeSettingsSpellCheck:
             assert "filename" in override, f"Override missing 'filename': {override}"
             assert "language" in override, f"Override missing 'language': {override}"
 
-    def test_markdown_files_use_en_AU(self):
+    def test_markdown_files_use_en_au(self):
         """Markdown files (``**/*.md``) must use ``en-AU`` language."""
         overrides = self._settings()["cSpell.overrides"]
         md_override = next((o for o in overrides if "*.md" in o["filename"]), None)
         assert md_override is not None, "No override found for *.md files"
         assert md_override["language"] == "en-AU"
 
-    def test_python_files_use_en_US(self):
+    def test_python_files_use_en_us(self):
         """Python files (``**/*.py``) must use ``en-US`` language."""
         overrides = self._settings()["cSpell.overrides"]
         py_override = next((o for o in overrides if "*.py" in o["filename"]), None)
         assert py_override is not None, "No override found for *.py files"
         assert py_override["language"] == "en-US"
 
-    def test_toml_files_use_en_US(self):
+    def test_toml_files_use_en_us(self):
         """TOML files (``**/*.toml``) must use ``en-US`` language."""
         overrides = self._settings()["cSpell.overrides"]
         toml_override = next((o for o in overrides if "*.toml" in o["filename"]), None)
         assert toml_override is not None, "No override found for *.toml files"
         assert toml_override["language"] == "en-US"
 
-    def test_json_files_use_en_US(self):
+    def test_json_files_use_en_us(self):
         """JSON files (``**/*.json``) must use ``en-US`` language."""
         overrides = self._settings()["cSpell.overrides"]
         json_override = next((o for o in overrides if "*.json" in o["filename"]), None)
@@ -532,9 +531,7 @@ class TestVscodePrompts:
         date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}")
         entry = self._prompts()[0]
         for field in ("last_used", "created_at"):
-            assert date_pattern.match(str(entry[field])), (
-                f"{field} value {entry[field]!r} does not look like a date"
-            )
+            assert date_pattern.match(str(entry[field])), f"{field} value {entry[field]!r} does not look like a date"
 
 
 # ===========================================================================
@@ -593,7 +590,7 @@ class TestBugReportTemplate:
         """Template must include an ``## Expected behaviour`` section (en-AU spelling)."""
         assert "## Expected behaviour" in self._content()
 
-    def test_expected_behaviour_uses_en_AU_spelling(self):
+    def test_expected_behaviour_uses_en_au_spelling(self):
         """The template must use Australian English spelling for 'behaviour'."""
         content = self._content()
         assert "behaviour" in content.lower()
@@ -759,11 +756,9 @@ class TestPullRequestTemplate:
     def test_checklist_items_are_checkboxes(self):
         """All checklist items must use markdown checkbox format."""
         content = self._content()
-        checklist_section = content[content.index("# Checklist"):]
+        checklist_section = content[content.index("# Checklist") :]
         checkbox_count = checklist_section.count("- [ ]")
-        assert checkbox_count >= 5, (
-            f"Expected at least 5 checklist checkboxes, found {checkbox_count}"
-        )
+        assert checkbox_count >= 5, f"Expected at least 5 checklist checkboxes, found {checkbox_count}"
 
     def test_type_of_change_items_are_checkboxes(self):
         """Type of change options must use markdown checkbox format."""
@@ -773,9 +768,7 @@ class TestPullRequestTemplate:
         end = content.index("# Checklist")
         section = content[start:end]
         checkbox_count = section.count("- [ ]")
-        assert checkbox_count >= 3, (
-            f"Expected at least 3 type-of-change checkboxes, found {checkbox_count}"
-        )
+        assert checkbox_count >= 3, f"Expected at least 3 type-of-change checkboxes, found {checkbox_count}"
 
 
 # ===========================================================================
@@ -816,9 +809,7 @@ class TestReleaseWorkflow:
         """Workflow must be triggered on ``v*`` tags."""
         push_config = self._workflow()["on"]["push"]
         tags = push_config.get("tags", [])
-        assert any(t.startswith("v") for t in tags), (
-            "Workflow should trigger on tags matching 'v*'"
-        )
+        assert any(t.startswith("v") for t in tags), "Workflow should trigger on tags matching 'v*'"
 
     def test_workflow_has_release_job(self):
         """Workflow must define a ``release`` job."""
@@ -839,9 +830,7 @@ class TestReleaseWorkflow:
         """``release`` job must include a checkout step."""
         steps = self._workflow()["jobs"]["release"]["steps"]
         uses_list = [step.get("uses", "") for step in steps]
-        assert any("actions/checkout" in u for u in uses_list), (
-            "Release job must include an actions/checkout step"
-        )
+        assert any("actions/checkout" in u for u in uses_list), "Release job must include an actions/checkout step"
 
     def test_release_job_uses_softprops_action(self):
         """``release`` job must use ``softprops/action-gh-release``."""
@@ -856,9 +845,7 @@ class TestReleaseWorkflow:
         steps = self._workflow()["jobs"]["release"]["steps"]
         for step in steps:
             if "softprops/action-gh-release" in step.get("uses", ""):
-                assert step.get("with", {}).get("generate_release_notes") is True, (
-                    "generate_release_notes must be true"
-                )
+                assert step.get("with", {}).get("generate_release_notes") is True, "generate_release_notes must be true"
                 return
         raise AssertionError("softprops/action-gh-release step not found")
 
@@ -868,13 +855,9 @@ class TestReleaseWorkflow:
         for step in steps:
             uses = step.get("uses", "")
             if "actions/checkout" in uses:
-                assert "@v4" in uses or "@v" in uses, (
-                    f"actions/checkout should pin to v4 or later, got: {uses!r}"
-                )
+                assert "@v4" in uses or "@v" in uses, f"actions/checkout should pin to v4 or later, got: {uses!r}"
                 version_str = uses.split("@v")[-1]
-                assert int(version_str.split(".")[0]) >= 4, (
-                    "actions/checkout must be version 4 or later"
-                )
+                assert int(version_str.split(".")[0]) >= 4, "actions/checkout must be version 4 or later"
                 return
         raise AssertionError("actions/checkout step not found")
 
@@ -904,9 +887,7 @@ class TestGitignoreVscodeRules:
     def test_original_vscode_exclusion_is_now_commented(self):
         """The original `.vscode/` exclusion must now appear as a comment."""
         lines = _gitignore_lines()
-        found_comment = any(
-            line.strip().startswith("#") and ".vscode/" in line for line in lines
-        )
+        found_comment = any(line.strip().startswith("#") and ".vscode/" in line for line in lines)
         assert found_comment, "The old .vscode/ exclusion should be commented out"
 
     def test_gitignore_still_excludes_idea(self):
@@ -918,8 +899,7 @@ class TestGitignoreVscodeRules:
     def test_gitignore_still_excludes_env(self):
         """`.env` must still be excluded."""
         active_lines = [
-            line.strip() for line in _gitignore_lines()
-            if not line.strip().startswith("#") and line.strip()
+            line.strip() for line in _gitignore_lines() if not line.strip().startswith("#") and line.strip()
         ]
         assert ".env" in active_lines
 
