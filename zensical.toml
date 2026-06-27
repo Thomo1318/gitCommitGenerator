@@ -26,7 +26,7 @@ nav = [
         { "ADR-0010: Integrate Opik Telemetry Pipeline" = "ADRs/0010-integrate-opik-telemetry-pipeline.md" },
         { "ADR-0011: E2E Observability Stack" = "ADRs/0011-e2e-observability-stack.md" },
         { "ADR-0012: Adopt CodeRabbit and Qodo" = "ADRs/0012-adopt-coderabbit-and-qodo.md" },
-        { "ADR-0013: Formalize IDE Boundaries for Local Env" = "ADRs/0013-formalize-ide-boundaries-for-1password-mounted-local-env-files.md" },
+        { "ADR-0013: Formalise IDE Boundaries for Local Env" = "ADRs/0013-formalise-ide-boundaries-for-1password-mounted-local-env-files.md" },
     ] },
 ]
 

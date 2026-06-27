@@ -130,6 +130,10 @@
         "NONE": { "type": "string" }
       }
     },
+    "commit_language": {
+      "type": "string",
+      "description": "The language code to use for generated commit messages (e.g., 'en-AU', 'en-US')."
+    },
     "gitmoji_reference_matrix": {
       "type": "array",
       "description": "Reference matrix mapping gitmoji to Conventional Commit types, SemVer impacts, changelog groups, and deterministic intent-selection metadata.",
