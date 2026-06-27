@@ -2,10 +2,12 @@ name: Generate Release Notes
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Create Release
