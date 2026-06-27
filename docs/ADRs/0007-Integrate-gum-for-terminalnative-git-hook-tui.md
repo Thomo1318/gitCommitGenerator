@@ -1023,7 +1023,7 @@ This is an append-only enforcement rule; historical text in this document retain
 - v1.2.0 (2026-06-10 09:00:00): Added Refinement 2 formalizing structured issue-reference metadata in the gum review flow, with Python-owned issue linkage inserted deterministically above machine-readable trailers and backed by a future-ready internal list model.
 - v1.3.0 (2026-06-11 10:15:00): Added Refinement 3 expanding the gum review flow to support multiple structured issue references with insertion-order-preserving rendering, idempotent duplicate handling, and conservative rejection of conflicting same-number verb changes while deferring remove/replace UX.
 - v1.4.0 (2026-06-11 14:30:00): Added Refinement 4 formalizing a guided regeneration feedback loop with explicit user-authored steering text stored as review metadata, visible in TUI state, applied only to regeneration requests, and documented with updated refinement-specific diagrams reflecting the new state-aware interaction model.
-- v1.4.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
+- v1.4.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardisations.
 - v1.5.0 (2026-06-27): Added Refinement 5 documenting the en-AU normalisation policy.
 
 <!-- ## Supporting Visual Aids
