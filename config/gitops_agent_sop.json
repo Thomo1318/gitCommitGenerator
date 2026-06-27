@@ -98,7 +98,7 @@
     "PATCH": "Triggered by any selected primary or secondary intent row whose semver_impact is PATCH, unless a MAJOR or MINOR rule applies.",
     "NONE": "Applied only when all selected primary and secondary intent rows have semver_impact NONE."
   },
-  "commit_language": "en-AU",
+  "commit_language": "en-US",
   "gitmoji_reference_matrix":[
   {
     "emoji": "🎨",

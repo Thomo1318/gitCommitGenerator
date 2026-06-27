@@ -37,6 +37,15 @@ def _git_repo_root() -> Path | None:
         return None
 
 
+def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
+    """Recursively deep-merge a source dictionary into a target dictionary."""
+    for key, value in source.items():
+        if isinstance(value, dict) and key in target and isinstance(target[key], dict):
+            _deep_merge(target[key], value)
+        else:
+            target[key] = value
+
+
 @lru_cache(maxsize=1)
 def load_sop() -> dict[str, Any]:
     """Load and cache the SOP document. Returns ``{}`` if it cannot be found."""
@@ -52,22 +61,22 @@ def load_sop() -> dict[str, Any]:
         # 2. Local legacy config (used during development in git-cg's own repo)
         legacy = repo_root / "config" / _SOP_FILENAME
         if legacy.is_file():
-            with suppress(*_READ_ERRORS):
-                sop_data.update(json.loads(legacy.read_text(encoding="utf-8")))
+            with suppress(OSError):
+                _deep_merge(sop_data, json.loads(legacy.read_text(encoding="utf-8")))
 
         # 3. Per-repo override config
         override = repo_root / ".git-cg" / "sop.json"
         if override.is_file():
-            with suppress(*_READ_ERRORS):
-                sop_data.update(json.loads(override.read_text(encoding="utf-8")))
+            with suppress(OSError):
+                _deep_merge(sop_data, json.loads(override.read_text(encoding="utf-8")))
 
     # 4. Explicit environment override
     env_path = os.environ.get("GIT_CG_SOP_PATH")
     if env_path:
         candidate = Path(env_path).expanduser()
         if candidate.is_file():
-            with suppress(*_READ_ERRORS):
-                sop_data.update(json.loads(candidate.read_text(encoding="utf-8")))
+            with suppress(OSError):
+                _deep_merge(sop_data, json.loads(candidate.read_text(encoding="utf-8")))
 
     return sop_data
 
