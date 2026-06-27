@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from contextlib import suppress
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -36,50 +37,39 @@ def _git_repo_root() -> Path | None:
         return None
 
 
-def resolve_sop_path() -> Path | None:
-    """Locate the SOP file using a portable precedence chain (highest first).
+@lru_cache(maxsize=1)
+def load_sop() -> dict[str, Any]:
+    """Load and cache the SOP document. Returns ``{}`` if it cannot be found."""
+    sop_data = {}
 
-    1. ``GIT_CG_SOP_PATH`` explicit override.
-    2. ``<repo_root>/.git-cg/sop.json`` per-repo override.
-    3. ``<repo_root>/config/gitops_agent_sop.json`` (git-cg's own checkout).
+    # 1. Base Packaged wheel data (works in any repo when installed as a tool).
+    with suppress(*_PACKAGE_ERRORS):
+        text = resources.files(_PACKAGE).joinpath("data", _SOP_FILENAME).read_text(encoding="utf-8")
+        sop_data = json.loads(text)
 
-    Packaged wheel data is handled separately in :func:`load_sop` so it works
-    for both zip-safe and filesystem installs.
-    """
+    repo_root = _git_repo_root()
+    if repo_root:
+        # 2. Local legacy config (used during development in git-cg's own repo)
+        legacy = repo_root / "config" / _SOP_FILENAME
+        if legacy.is_file():
+            with suppress(*_READ_ERRORS):
+                sop_data.update(json.loads(legacy.read_text(encoding="utf-8")))
+
+        # 3. Per-repo override config
+        override = repo_root / ".git-cg" / "sop.json"
+        if override.is_file():
+            with suppress(*_READ_ERRORS):
+                sop_data.update(json.loads(override.read_text(encoding="utf-8")))
+
+    # 4. Explicit environment override
     env_path = os.environ.get("GIT_CG_SOP_PATH")
     if env_path:
         candidate = Path(env_path).expanduser()
         if candidate.is_file():
-            return candidate
+            with suppress(*_READ_ERRORS):
+                sop_data.update(json.loads(candidate.read_text(encoding="utf-8")))
 
-    repo_root = _git_repo_root()
-    if repo_root:
-        override = repo_root / ".git-cg" / "sop.json"
-        if override.is_file():
-            return override
-        legacy = repo_root / "config" / _SOP_FILENAME
-        if legacy.is_file():
-            return legacy
-
-    return None
-
-
-@lru_cache(maxsize=1)
-def load_sop() -> dict[str, Any]:
-    """Load and cache the SOP document. Returns ``{}`` if it cannot be found."""
-    path = resolve_sop_path()
-    if path is not None:
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except _READ_ERRORS:
-            pass
-
-    # Packaged wheel data (works in any repo when installed as a tool).
-    try:
-        text = resources.files(_PACKAGE).joinpath("data", _SOP_FILENAME).read_text(encoding="utf-8")
-        return json.loads(text)
-    except _PACKAGE_ERRORS:
-        return {}
+    return sop_data
 
 
 def get_gitmoji_matrix() -> list[dict[str, Any]]:
