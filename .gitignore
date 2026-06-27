@@ -8,7 +8,8 @@
 mise.local.toml
 
 # IDEs & Editors
-.vscode/
+# .vscode/
+# !.vscode/settings.json
 .idea/
 *.swp
 *.swo
@@ -86,3 +87,4 @@ agents.lock
 promptfoo_*.json
 docs/phase_artifacts/
 opik/
+!.vscode/

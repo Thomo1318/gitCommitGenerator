@@ -534,6 +534,7 @@ def build_system_prompt(
     specs = sop_data.get("specifications_and_standards", {})
     workflow = sop_data.get("agentic_commit_workflow", {})
     gitops_matrix = sop_data.get("gitmoji_reference_matrix", [])
+    commit_language = sop_data.get("commit_language", "en-US")
     if specs:
         context_parts.append("Specifications and Standards:\n" + json.dumps(specs, indent=2))
     if workflow:
@@ -616,7 +617,10 @@ def build_system_prompt(
 
     primary_lang = detect_primary_language(diff_output)
     if primary_lang:
-        system_prompt += f"CRITICAL: The primary language detected in this diff is {primary_lang}. Act as an expert in this language and use its specific terminology when describing changes. "
+        system_prompt += f"CRITICAL: The primary programming language detected in this diff is {primary_lang}. Act as an expert in this language and use its specific terminology when describing changes. "
+
+    if commit_language:
+        system_prompt += f"CRITICAL LOCALISATION: You MUST write the commit message and all descriptions strictly using the '{commit_language}' language locale. "
 
     system_prompt += f"{gitops_matrix_str}"
 
