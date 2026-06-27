@@ -41,7 +41,7 @@ The primary goals are:
 
 ## 2. Architecture Constraints
 
-- **Token Injection Requirements**: The SDK still requires the Service Account token (`OP_SERVICE_ACCOUNT_TOKEN`), but it is consumed directly by the `onepassword.Client` rather than globally mutating `op` CLI behavior.
+- **Token Injection Requirements**: The SDK still requires the Service Account token (`OP_SERVICE_ACCOUNT_TOKEN`), but it is consumed directly by the `onepassword.Client` rather than globally mutating `op` CLI behaviour.
 - **Fallback Scenarios**: Standard environment variables (`os.environ`) should continue to take precedence over the 1Password SDK, allowing CI/CD pipelines to function identically without needing 1Password Service Accounts if secrets are provided directly.
 
 ## 3. Context and Scope
@@ -104,7 +104,7 @@ sequenceDiagram
 ## 7. Cross-cutting Concepts
 
 - **State Isolation**: The Python script is now decoupled from the system `op` CLI context, ensuring standard desktop flows are unaffected.
-- **Error Safety**: The SDK failure cases (e.g., lack of token or network issues) gracefully fall back to missing values without crashing the tool, mimicking `os.environ.get()` behavior.
+- **Error Safety**: The SDK failure cases (e.g., lack of token or network issues) gracefully fall back to missing values without crashing the tool, mimicking `os.environ.get()` behaviour.
 
 ## 8. Impact Radius (Cause, Change, Effect)
 
@@ -123,7 +123,7 @@ sequenceDiagram
 ## 9. Consequences
 
 - **Pros**:
-  - Solves the `403 Forbidden` issues natively by preserving `op` CLI behavior for sub-processes.
+  - Solves the `403 Forbidden` issues natively by preserving `op` CLI behaviour for sub-processes.
   - Removes the dependency on `1Password-cli` "BETA VERSION" locally for developers.
   - Increases cross-platform robustness.
 - **Cons**:

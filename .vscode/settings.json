@@ -25,5 +25,42 @@
     ".yoyo": true
   },
   "cSpell.language": "en,en-AU",
-  "cSpell.dictionaries": ["en-au"]
+  "cSpell.dictionaries": ["en-au"],
+  "cSpell.ignoreRegExpList": [
+    "/`[^`]*`/g",
+    "/```[\\s\\S]*?```/g"
+  ],
+  "cSpell.words": [
+    "coderabbit",
+    "fnox",
+    "gitmoji",
+    "gitops",
+    "javascripts",
+    "lucide",
+    "opik",
+    "pymdownx",
+    "qodo",
+    "superfences",
+    "tablesort",
+    "terminalnative",
+    "twemoji"
+  ],
+  "cSpell.overrides": [
+    {
+      "filename": "**/*.md",
+      "language": "en-AU"
+    },
+    {
+      "filename": "**/*.py",
+      "language": "en-US"
+    },
+    {
+      "filename": "**/*.toml",
+      "language": "en-US"
+    },
+    {
+      "filename": "**/*.json",
+      "language": "en-US"
+    }
+  ]
 }

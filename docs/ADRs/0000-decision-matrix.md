@@ -32,7 +32,7 @@ The following items were analyzed during the project's migration to a GitHub Iss
 ### 5. Theme Support (Dark Mode)
 **Proposal:** Add dark mode / light mode toggles for the CLI output.
 **Decision:** Rejected.
-**Rationale:** Modern terminals handle their own color schemes natively (e.g., ANSI colors map to the user's terminal theme). Hardcoding themes in the CLI is an anti-pattern.
+**Rationale:** Modern terminals handle their own colour schemes natively (e.g., ANSI colours map to the user's terminal theme). Hardcoding themes in the CLI is an anti-pattern.
 
 ### 6. API Key Management / Secure Storage
 **Proposal:** Add a custom keystore or secure storage vault for API keys.

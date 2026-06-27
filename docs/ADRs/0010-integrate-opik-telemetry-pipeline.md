@@ -44,9 +44,9 @@ Our current Opik integration blindly logs the initial AI generation and stops. I
 ### The Solution: Multi-Stage Telemetry
 We will use Git's native hooks combined with Python's `difflib` to track the entire commit lifecycle.
 - **`prepare-commit-msg` Hook (Generation):** `git-cg` executes, triggering the existing `@opik.track` decorators. **We will not move this start-logging point**; it initiates immediately upon execution. We simply extract the active `trace_id` and write it alongside the `raw_diff` to an ephemeral state file.
-- **`commit-msg` Hook (Finalization & Editor Agnosticism):** A new `telemetry.py` script intercepts the final text as the user exits their editor. Because Git handles pausing for the editor (whether `micro`, `vim`, or a GUI), our script natively supports any configured `$EDITOR`. It simply reads the finalized `COMMIT_EDITMSG`.
+- **`commit-msg` Hook (Finalization & Editor Agnosticism):** A new `telemetry.py` script intercepts the final text as the user exits their editor. Because Git handles pausing for the editor (whether `micro`, `vim`, or a GUI), our script natively supports any configured `$EDITOR`. It simply reads the finalised `COMMIT_EDITMSG`.
   - If the commit is aborted, it logs a `cancelled` feedback score.
-  - If accepted, it calculates a similarity ratio to categorize the edit (`ai_accepted`, `ai_edited_minor`, `ai_edited_major`) and inserts the pair into the `git-cg-corpus` dataset.
+  - If accepted, it calculates a similarity ratio to categorise the edit (`ai_accepted`, `ai_edited_minor`, `ai_edited_major`) and inserts the pair into the `git-cg-corpus` dataset.
   - If the commit bypassed AI entirely (no state file), it tracks it as a `manual_commit`.
 
 ### The Git Worktree Safety Mechanism
@@ -66,7 +66,7 @@ Beyond basic data capture, we will systematically configure and integrate Opik's
 ### Development Phase
 - **Prompt Library:** Migrate our static system prompts and templates into Opik's Prompt Management Dashboard. `git-cg` will fetch the active prompt version via the Opik SDK at runtime, enabling seamless A/B testing.
 - **Agent Playground & Prompt Playground:** Test alternate models and prompt iterations natively within the Opik UI before deploying to `git-cg`.
-- **Optimization Runs:** Automatically iterate and refine our system prompts based on collected dataset metrics.
+- **Optimisation Runs:** Automatically iterate and refine our system prompts based on collected dataset metrics.
 
 ### Evaluation Phase
 - **Test Suites & Experiments:** Integrate Opik's Pytest evaluation framework into GitHub Actions. When generation logic changes, CI will run an Opik Experiment against our existing golden datasets to prevent regressions.
@@ -84,7 +84,7 @@ The data we harvest natively across all user interactions serves multiple vital 
 - **Agent Self-Improvement:** Providing the agent with historical context on *what the user usually edits*. 
 - **Model Benchmarking:** Comparing the success rate (`ratio == 1.0`) of `OMLX` vs `MTPLX` vs `GPT-4o` on our specific codebase.
 - **Framework Benchmarking:** Testing different chunking/diff-compression strategies (e.g., `rtk` vs standard diff) and observing which yields higher human acceptance.
-- **Prompt Optimization:** Using Opik's prompt optimizer to automatically refine our generation instructions based on the delta between `generated_commit` and `final_commit`.
+- **Prompt Optimisation:** Using Opik's prompt optimizer to automatically refine our generation instructions based on the delta between `generated_commit` and `final_commit`.
 
 ## 4. External Tool Utilization
 
@@ -125,7 +125,7 @@ During the architectural design phase, several alternatives were proposed and ex
 2. **Parsing `$EDITOR` or Writing Custom Editor-Detection Logic:**
    - *Proposal:* Because users edit commit messages in various editors (`micro`, `vim`, `nano`, VS Code), it was proposed to check `$EDITOR` to determine how to track final edits and cancellations.
    - *Decision:* **REJECTED.** Wrapping the editor creates brittle code that breaks with GUI editors. 
-   - *Chosen Solution:* Git natively handles pausing the terminal and launching whichever editor the user has configured. By hooking into the `commit-msg` git hook (which Git fires *after* the editor completes), our script is perfectly editor-agnostic. We simply read the finalized `.git/COMMIT_EDITMSG` file.
+   - *Chosen Solution:* Git natively handles pausing the terminal and launching whichever editor the user has configured. By hooking into the `commit-msg` git hook (which Git fires *after* the editor completes), our script is perfectly editor-agnostic. We simply read the finalised `.git/COMMIT_EDITMSG` file.
 
 3. **Moving the Opik `start-logging` Point:**
    - *Proposal:* It was suggested that we might need to move the Opik initialization point later in the script to tie it to the telemetry hook.
@@ -140,7 +140,7 @@ During the architectural design phase, several alternatives were proposed and ex
 5. **Immediate Agent Optimizer SDK Integration:**
    - *Proposal:* Integrate Opik's Prompt Optimizer SDK immediately to mathematically tune our prompts (DSPy style).
    - *Decision:* **REJECTED.** The optimizer requires a robust, human-verified dataset of inputs and perfect outputs. Implementing it before we have telemetry data is putting the cart before the horse.
-   - *Chosen Solution:* Gather telemetry via the Two-Point Trace first, then revisit optimization in V2.
+   - *Chosen Solution:* Gather telemetry via the Two-Point Trace first, then revisit optimisation in V2.
 
 6. **Purely Probabilistic (LLM-as-a-Judge) Telemetry:**
    - *Proposal:* Use GEval prompts to check if the generated message followed the conventional commits format.
@@ -159,7 +159,7 @@ During the architectural design phase, several alternatives were proposed and ex
 During the initial deployment of the Two-Point Telemetry Trace, we encountered and resolved the following integration edge cases:
 
 ### Python Variable Scoping (`UnboundLocalError`)
-Attempting to `import subprocess` deep inside the `_run_commit_generation` function caused Python to hoist the variable and shadow the global `subprocess` module. This triggered an `UnboundLocalError` when `subprocess.check_output` was called earlier in the same function block. This was resolved by removing the localized `import subprocess` in favor of the existing global import.
+Attempting to `import subprocess` deep inside the `_run_commit_generation` function caused Python to hoist the variable and shadow the global `subprocess` module. This triggered an `UnboundLocalError` when `subprocess.check_output` was called earlier in the same function block. This was resolved by removing the localised `import subprocess` in favor of the existing global import.
 
 ### Instructor Parsing Fallback on Local Models (Migrating from MD_JSON to JSON)
 The local `MTPLX` model successfully generated JSON adhering to the `CommitPlan` schema, but the inference backend initially fell back to emitting raw text due to parsing errors with native tool calls. Instructor, configured in standard `TOOLS` mode, failed to parse this fallback text and incorrectly threw an error indicating multiple tool calls. 

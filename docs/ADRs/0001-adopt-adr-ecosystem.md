@@ -25,7 +25,7 @@ superseded_by: []
 
 ## 1. Introduction and Goals
 
-This Architectural Decision Record (ADR) formalizes the decision to adopt the ADR tracking ecosystem from the `MacSetup` project to govern the `gitCommitGenerator` project's architecture and decisions.
+This Architectural Decision Record (ADR) formalises the decision to adopt the ADR tracking ecosystem from the `MacSetup` project to govern the `gitCommitGenerator` project's architecture and decisions.
 
 As the project scales and more tooling, integrations, and architectural patterns are established, there is a clear need for a disciplined, reviewable history of why technical choices were made.
 
@@ -64,7 +64,7 @@ We will adopt the full `MacSetup` ADR ecosystem.
 ## 5. Consequences
 
 - **Pros**:
-  - Standardized decision logging.
+  - Standardised decision logging.
   - Highly detailed historical context.
   - Consistent presentation through high-fidelity header images.
 - **Cons**:

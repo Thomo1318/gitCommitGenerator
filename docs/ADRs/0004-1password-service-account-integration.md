@@ -55,7 +55,7 @@ The problem stems from the environment variable `OP_SERVICE_ACCOUNT_TOKEN`. When
 1. **Beta CLI Requirement**: Ensure the `1Password-cli` "BETA VERSION" is used globally or injected locally, as the required development environment features rely on this version.
 2. **Environment UUID Isolation**: Target the specific `gitCommitGenerator` environment UUID (`ce3a5m2atri7cxq7mdvofergt4`) to restrict secret fetch access.
 3. **Environment Injection**: Introduce `OP_SERVICE_ACCOUNT_TOKEN` via `mise.toml` or `.env` execution wrappers (`scripts/with_1p_env.sh`) for headless scripts.
-4. **Plugin Alignment**: Standardize the configuration of 1Password CLI plugins (e.g. `gh.json`) to explicitly reference the `Dev` vault and the correct `item_id` accessible by the Service Account.
+4. **Plugin Alignment**: Standardise the configuration of 1Password CLI plugins (e.g. `gh.json`) to explicitly reference the `Dev` vault and the correct `item_id` accessible by the Service Account.
 5. **Troubleshooting Playbook**: Establish clear validation steps to rapidly diagnose `403` errors arising from shell overrides.
 
 ## 5. Building Block View
@@ -181,7 +181,7 @@ If CLI plugins (like `gh`) throw `403 Forbidden` errors during execution:
 
 ## 14. Governance Follow-up
 
-- **Antigravity rule assessment**: Ensure any new agents or tools operating on this repository are aware of the `OP_SERVICE_ACCOUNT_TOKEN` override behavior.
+- **Antigravity rule assessment**: Ensure any new agents or tools operating on this repository are aware of the `OP_SERVICE_ACCOUNT_TOKEN` override behaviour.
 - **Affected rule**: Authentication and Secret Injection Protocols.
 
 ## CHANGELOG

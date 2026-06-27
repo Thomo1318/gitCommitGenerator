@@ -1,7 +1,7 @@
 # ADR-0008: Zensical Documentation Integration
 
 <!-- 🎨 HEADER IMAGE PROMPT & FILENAME
-A hyper-detailed, architectural rendering of a futuristic, glowing digital library. In the center, a massive, suspended crystalline monolith containing thousands of perfectly organized, glowing data-slates. The word "Zensical" is heavily engraved directly into the obsidian floor of the library, glowing with intense cyan and indigo neon light. Intricate holographic projections of documentation structures float in the air around the monolith. Cinematic lighting, deep shadows with vibrant neon cyan and deep indigo accents, volumetric dust particles. 8k resolution, octane render, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
+A hyper-detailed, architectural rendering of a futuristic, glowing digital library. In the center, a massive, suspended crystalline monolith containing thousands of perfectly organised, glowing data-slates. The word "Zensical" is heavily engraved directly into the obsidian floor of the library, glowing with intense cyan and indigo neon light. Intricate holographic projections of documentation structures float in the air around the monolith. Cinematic lighting, deep shadows with vibrant neon cyan and deep indigo accents, volumetric dust particles. 8k resolution, octane render, architectural precision. PURE TECHNICAL GRAPHIC. NO mobile phone UI, NO status bars, NO device frames or bounding boxes. Wide aspect ratio, designed for high-fidelity technical documentation.
 
 📋 Target Filename: adr-0008-zensical-integration.png
 -->

@@ -25,7 +25,7 @@ superseded_by: []
 
 ## 1. Introduction and Goals
 
-This Architectural Decision Record (ADR) formalizes the decision to adopt a two-tier secret scanning strategy utilizing **Gitleaks** and **TruffleHog** for the `gitCommitGenerator` project.
+This Architectural Decision Record (ADR) formalises the decision to adopt a two-tier secret scanning strategy utilizing **Gitleaks** and **TruffleHog** for the `gitCommitGenerator` project.
 
 As this project is intended to be a public repository, preventing credential leakage is paramount. While commercial solutions like GitGuardian and Snyk are available, a hard constraint for this project is that all tooling must be free, open-source, and highly portable for other developers.
 
@@ -120,7 +120,7 @@ To streamline the secret scanning architecture, we plan to migrate from the two-
 
 ### Rationale
 - **Unified Tooling**: BetterLeaks would act as an all-in-one "next-gen secret scanner" that combines the fast, regex-based scanning capabilities needed for local pre-commit hooks with the active verification capabilities required in CI pipelines.
-- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration would reduce overhead, preventing the need to synchronize a `.gitleaksignore` file and TruffleHog's equivalent. 
+- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration would reduce overhead, preventing the need to synchronise a `.gitleaksignore` file and TruffleHog's equivalent. 
 - **Portability Maintained**: BetterLeaks would be seamlessly integrated into `mise.toml` and local pre-commit hooks (`hk.pkl`), retaining the original portability constraint of the project.
 
 ### References
