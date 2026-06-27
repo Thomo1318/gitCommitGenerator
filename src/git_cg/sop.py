@@ -25,7 +25,12 @@ _PACKAGE_ERRORS = (FileNotFoundError, ModuleNotFoundError, json.JSONDecodeError)
 
 
 def _git_repo_root() -> Path | None:
-    """Return the top level of the current git repo, or None if unavailable."""
+    """
+    Get the current git repository's top-level path.
+    
+    Returns:
+    	pathlib.Path | None: The repository root path, or None if git is unavailable or the current directory is not inside a repository.
+    """
     try:
         root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"],
@@ -38,7 +43,13 @@ def _git_repo_root() -> Path | None:
 
 
 def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
-    """Recursively deep-merge a source dictionary into a target dictionary."""
+    """
+    Recursively merges one dictionary into another.
+    
+    Parameters:
+    	target (dict[str, Any]): The dictionary to update.
+    	source (dict[str, Any]): The dictionary whose values are merged into target.
+    """
     for key, value in source.items():
         if isinstance(value, dict) and key in target and isinstance(target[key], dict):
             _deep_merge(target[key], value)
@@ -48,7 +59,14 @@ def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
 
 @lru_cache(maxsize=1)
 def load_sop() -> dict[str, Any]:
-    """Load and cache the SOP document. Returns ``{}`` if it cannot be found."""
+    """
+    Load the SOP document and cache the merged result.
+    
+    The document is assembled from packaged data and any available repository or environment overrides, with later sources taking precedence.
+    
+    Returns:
+    	sop_data (dict[str, Any]): The merged SOP document, or an empty dictionary if no source could be loaded.
+    """
     sop_data = {}
 
     # 1. Base Packaged wheel data (works in any repo when installed as a tool).
@@ -82,5 +100,10 @@ def load_sop() -> dict[str, Any]:
 
 
 def get_gitmoji_matrix() -> list[dict[str, Any]]:
-    """Convenience accessor for the gitmoji reference matrix."""
+    """
+    Return the gitmoji reference matrix from the loaded SOP document.
+    
+    Returns:
+    	gitmoji_reference_matrix (list[dict[str, Any]]): The gitmoji reference matrix, or an empty list if it is not present.
+    """
     return load_sop().get("gitmoji_reference_matrix", [])

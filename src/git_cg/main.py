@@ -513,17 +513,17 @@ def build_system_prompt(
     previous_plan: CommitPlan | None = None,
 ) -> str:
     """
-    Compose the system instruction prompt supplied to the AI for generating a structured Conventional Commit `CommitPlan`.
-
+    Compose the system prompt used to generate a structured Conventional Commit `CommitPlan`.
+    
     Parameters:
-        diff_output (str): Git diff content used to derive intent signals and contextualise candidate ranking.
-        verbose (bool): If True, include additional diagnostic context when constructing the prompt.
-        active_directives (dict[str, str] | None): Deterministic overrides (for example `preferred_type`, `preferred_scope`) that must be applied as locked semantics during regeneration; omitted when no locked directives exist.
-        residual_guidance (str | None): Free-text developer guidance that should influence intent selection and framing but is not a locked override.
-        previous_plan (CommitPlan | None): Previously generated commit plan to present when regenerating; instructs the model to treat generation as a structural delta update.
-
+    	diff_output (str): Git diff content used to derive intent signals and rank candidate commits.
+    	verbose (bool): Enables extra diagnostic output while building the prompt.
+    	active_directives (dict[str, str] | None): Locked regeneration overrides such as preferred type or scope.
+    	residual_guidance (str | None): Free-text regeneration guidance that should influence intent selection and wording.
+    	previous_plan (CommitPlan | None): Previously generated commit plan to include when regenerating.
+    
     Returns:
-        system_prompt (str): The complete system-level prompt text including SOP-derived context, ranked intent candidates (when available), and an explicit regeneration guidance section when `active_directives`, `residual_guidance` or `previous_plan` are provided.
+    	str: The complete system prompt, including SOP-derived context, ranked intent candidates when available, language-detection guidance, localisation requirements, and regeneration guidance when supplied.
     """
     sop_data = load_sop()
     if not sop_data and verbose:
