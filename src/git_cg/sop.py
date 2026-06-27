@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from contextlib import suppress
 from functools import lru_cache
@@ -95,6 +96,11 @@ def load_sop() -> dict[str, Any]:
         if candidate.is_file():
             with suppress(OSError):
                 _deep_merge(sop_data, json.loads(candidate.read_text(encoding="utf-8")))
+
+    commit_lang = sop_data.get("commit_language")
+    if commit_lang and not re.match(r"^[a-z]{2}-[A-Z]{2}$", commit_lang):
+        msg = f"Invalid commit_language '{commit_lang}' in SOP configuration."
+        raise ValueError(msg)
 
     return sop_data
 
