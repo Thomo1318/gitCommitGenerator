@@ -1,3 +1,60 @@
+## v0.3.0
+
+### 🌐 Features & UX
+
+- 💄 ux(assets): package custom Ligatured-Hack Nerd Font suites for flawless TUI rendering
+- ✨ feat(localisation): standardise repository documentation on en-AU
+- ✨ feat(sop): add commit_language en-AU configuration
+- 🌐 feat(prompts): inject en-AU rules into AI agent prompts
+- 🌐 feat(context): inject commit language setting into agent prompts
+
+### 🐛 Bug Fixes & Refactors
+
+- ♻️ refactor(sop): extract deep merge utility
+- 🏗️ refactor(sop): implement multi-tier SOP data merging
+- 🥅 fix(config): fix validation logic and YAML parsing
+- 🥅 fix(sop): validate commit language configuration
+- 🐛 fix(docs): remove doctoc TOC to fix zensical strict build
+- 🐛 fix(docs): revert Zensical configuration from formalize to formalise
+- 🐛 fix(docs): update zensical nav for ADR-0013 formalise spelling
+- 🐛 fix(docs): remove doctoc TOC from README.md
+- 🦺 fix(schema): enforce locale pattern
+
+### 📝 Documentation & Templates
+
+- 📝 docs(github): standardise issue and PR templates
+- 📝 docs(templates): add GitHub issue and PR templates
+- 📝 docs(adr): align ADR tables and add en-AU localisation rule
+- 📝 docs(localisation): standardise repository documentation on en-AU
+- 📝 docs(readme): fix release badge caching and targeting
+- 📝 docs(zensical): update site navigation and sync root documents
+- 📝 docs(adr): update ADR version history
+- 📝 docs(adr): rename and localise all architectural decision records
+- 📝 docs(readme): standardise spelling in README and CHANGELOG
+- 📝 docs(readme): switch shield to /v/tag with semver sorting and cache-busting logo param
+- 📝 docs(changelog): append PR and issue numbers to sub-intents
+- 📝 docs(changelog): flatten and group v0.1.0 release notes by type
+- 📝 docs(changelog): flatten and group v0.2.0 release notes by type
+- 📝 docs(changelog): expand v0.2.0 release notes with nested sub-intents
+- 📝 docs(changelog): expand v0.1.0 breaking changes from sub-intents
+- 📝 docs(changelog): add missing ADR-0013 security notes
+- 📝 docs(changelog): update v0.2.0 notes with issue refs
+- 📝 docs(tests): add unit tests for PR changes
+- 📝 docs(tests): add docstrings to localisation modules
+
+### 🔧 Chores & Internal
+
+- 🔧 chore(vscode): configure spelling and fix adr link
+- 🔧 chore(ci): add release workflow permissions
+- 🔧 build(ide): configure VSCode spellchecker with en-AU dictionary
+- 🔧 build(zensical): configure documentation validation for en-AU
+- 🔧 build(gitops): set repository commit language to en-AU
+- 👷 ci(release): configure automated release workflow
+- 🔧 build(ignore): exclude .vscode/ from tracked stash operations
+- 🔧 chore(vscode): add spell checker extensions to recommendations
+- 🔧 chore(vscode): configure cSpell for Australian English
+- 🔧 chore(deps): sync lockfile with v0.2.0 release bump
+
 ## v0.2.0
 
 ### ✨ Features
