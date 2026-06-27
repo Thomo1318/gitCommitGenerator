@@ -132,7 +132,8 @@
     },
     "commit_language": {
       "type": "string",
-      "description": "The language code to use for generated commit messages (e.g., 'en-AU', 'en-US')."
+      "description": "The language code to use for generated commit messages (e.g., 'en-AU', 'en-US').",
+      "pattern": "^[a-z]{2}-[A-Z]{2}$"
     },
     "gitmoji_reference_matrix": {
       "type": "array",

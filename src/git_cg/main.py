@@ -620,7 +620,7 @@ def build_system_prompt(
         system_prompt += f"CRITICAL: The primary programming language detected in this diff is {primary_lang}. Act as an expert in this language and use its specific terminology when describing changes. "
 
     if commit_language:
-        system_prompt += f"CRITICAL LOCALISATION: You MUST write the commit message and all descriptions strictly using the '{commit_language}' language locale. "
+        system_prompt += f"CRITICAL LOCALISATION: You MUST write the commit message natural-language prose strictly using the '{commit_language}' language locale. Explicitly preserve internal code identifiers, API names, CLI flags, filenames, and quoted strings in en-US. "
 
     system_prompt += f"{gitops_matrix_str}"
 
