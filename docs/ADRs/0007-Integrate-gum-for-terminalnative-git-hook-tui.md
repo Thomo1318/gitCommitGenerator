@@ -1025,6 +1025,7 @@ This is an append-only enforcement rule; historical text in this document retain
 - v1.4.0 (2026-06-11 14:30:00): Added Refinement 4 formalizing a guided regeneration feedback loop with explicit user-authored steering text stored as review metadata, visible in TUI state, applied only to regeneration requests, and documented with updated refinement-specific diagrams reflecting the new state-aware interaction model.
 - v1.4.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardisations.
 - v1.5.0 (2026-06-27): Added Refinement 5 documenting the en-AU normalisation policy.
+- v1.6.0 (2026-06-27): Added Refinement 6 to acknowledge that guided-regeneration behaviour is governed by ADR-0009, while retaining legacy refinement notes for historical context.
 
 <!-- ## Supporting Visual Aids
 

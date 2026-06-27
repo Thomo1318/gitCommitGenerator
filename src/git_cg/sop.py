@@ -28,9 +28,9 @@ _PACKAGE_ERRORS = (FileNotFoundError, ModuleNotFoundError, json.JSONDecodeError)
 def _git_repo_root() -> Path | None:
     """
     Get the current git repository's top-level path.
-    
+
     Returns:
-    	pathlib.Path | None: The repository root path, or None if git is unavailable or the current directory is not inside a repository.
+        pathlib.Path | None: The repository root path, or None if git is unavailable or the current directory is not inside a repository.
     """
     try:
         root = subprocess.check_output(
@@ -46,10 +46,10 @@ def _git_repo_root() -> Path | None:
 def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
     """
     Recursively merges one dictionary into another.
-    
+
     Parameters:
-    	target (dict[str, Any]): The dictionary to update.
-    	source (dict[str, Any]): The dictionary whose values are merged into target.
+        target (dict[str, Any]): The dictionary to update.
+        source (dict[str, Any]): The dictionary whose values are merged into target.
     """
     for key, value in source.items():
         if isinstance(value, dict) and key in target and isinstance(target[key], dict):
@@ -62,11 +62,11 @@ def _deep_merge(target: dict[str, Any], source: dict[str, Any]) -> None:
 def load_sop() -> dict[str, Any]:
     """
     Load the SOP document and cache the merged result.
-    
+
     The document is assembled from packaged data and any available repository or environment overrides, with later sources taking precedence.
-    
+
     Returns:
-    	sop_data (dict[str, Any]): The merged SOP document, or an empty dictionary if no source could be loaded.
+        sop_data (dict[str, Any]): The merged SOP document, or an empty dictionary if no source could be loaded.
     """
     sop_data = {}
 
@@ -98,7 +98,9 @@ def load_sop() -> dict[str, Any]:
                 _deep_merge(sop_data, json.loads(candidate.read_text(encoding="utf-8")))
 
     commit_lang = sop_data.get("commit_language")
-    if commit_lang and not re.match(r"^[a-z]{2}-[A-Z]{2}$", commit_lang):
+    if commit_lang is not None and (
+        not isinstance(commit_lang, str) or not re.fullmatch(r"^[a-z]{2}-[A-Z]{2}$", commit_lang)
+    ):
         msg = f"Invalid commit_language '{commit_lang}' in SOP configuration."
         raise ValueError(msg)
 
@@ -108,8 +110,8 @@ def load_sop() -> dict[str, Any]:
 def get_gitmoji_matrix() -> list[dict[str, Any]]:
     """
     Return the gitmoji reference matrix from the loaded SOP document.
-    
+
     Returns:
-    	gitmoji_reference_matrix (list[dict[str, Any]]): The gitmoji reference matrix, or an empty list if it is not present.
+        gitmoji_reference_matrix (list[dict[str, Any]]): The gitmoji reference matrix, or an empty list if it is not present.
     """
     return load_sop().get("gitmoji_reference_matrix", [])
