@@ -167,7 +167,7 @@ def test_populate_cache_prints_debug_message_on_failure(monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
-# ENV_EXPORT_ALLOWLIST – sentry keys added in this PR
+# ENV_EXPORT_ALLOWLIST - sentry keys added in this PR
 # ---------------------------------------------------------------------------
 
 
@@ -201,7 +201,7 @@ def test_sentry_keys_are_all_present_in_allowlist():
 
 
 # ---------------------------------------------------------------------------
-# resolve_secret – _op_cache is None guard (PR fix)
+# resolve_secret - _op_cache is None guard (PR fix)
 # ---------------------------------------------------------------------------
 
 
@@ -221,7 +221,7 @@ def test_resolve_secret_returns_default_when_cache_is_none_after_populate(monkey
     def populate_that_leaves_none():
         """
         Leaves the secret cache unset.
-        
+
         This helper is used where cache population must be skipped.
         """
         pass  # deliberately does NOT set _op_cache

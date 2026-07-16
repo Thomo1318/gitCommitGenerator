@@ -19,9 +19,8 @@ Covers:
 import importlib.metadata
 from unittest.mock import MagicMock, patch
 
-
 # ===========================================================================
-# init_sentry – early exit
+# init_sentry - early exit
 # ===========================================================================
 
 
@@ -78,7 +77,7 @@ class TestInitSentryEarlyExit:
 
 
 # ===========================================================================
-# init_sentry – sentry_sdk.init kwargs
+# init_sentry - sentry_sdk.init kwargs
 # ===========================================================================
 
 
@@ -106,9 +105,7 @@ class TestInitSentryKwargs:
 
     def test_dsn_is_read_from_env(self, monkeypatch):
         """init_sentry must pass SENTRY_DSN from env to sentry_sdk.init."""
-        kwargs = self._call_init_sentry_and_capture_kwargs(
-            monkeypatch, SENTRY_DSN="https://example@sentry.io/123"
-        )
+        kwargs = self._call_init_sentry_and_capture_kwargs(monkeypatch, SENTRY_DSN="https://example@sentry.io/123")
         assert kwargs.get("dsn") == "https://example@sentry.io/123"
 
     def test_dsn_is_none_when_env_absent(self, monkeypatch):
@@ -149,7 +146,7 @@ class TestInitSentryKwargs:
 
 
 # ===========================================================================
-# init_sentry – version resolution
+# init_sentry - version resolution
 # ===========================================================================
 
 
@@ -197,7 +194,7 @@ class TestInitSentryVersion:
 
 
 # ===========================================================================
-# init_sentry – exception suppression
+# init_sentry - exception suppression
 # ===========================================================================
 
 
@@ -232,7 +229,7 @@ class TestInitSentryExceptionSuppression:
 
 
 # ===========================================================================
-# scrub_data – the before_send hook
+# scrub_data - the before_send hook
 # ===========================================================================
 
 

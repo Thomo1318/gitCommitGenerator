@@ -1,7 +1,6 @@
 import os
 
 import opik
-
 from git_cg.main import ENGINE_REGISTRY, build_system_prompt, generate_commit_message, get_ai_client
 
 client = opik.Opik()
