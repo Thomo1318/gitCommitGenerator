@@ -1,8 +1,13 @@
 version = 1
 
 [trust]
-github_orgs = [ "getsentry" ]
+github_orgs = ["getsentry", "tirth8205", "mandarange"]
 
+github_repos = [
+  "upstash/context7",
+  "context7/skills",
+  "mandarange/MaraudersMapMD-skill"
+]
 
 [[skills]]
 name = "dotagents"
@@ -11,3 +16,105 @@ source = "getsentry/dotagents"
 [[skills]]
 name = "*"
 source = "getsentry/sentry-for-ai"
+exclude = [
+  "sentry-android-sdk",
+  "sentry-browser-sdk",
+  "sentry-cloudflare-sdk",
+  "sentry-cocoa-sdk",
+  "sentry-dotnet-sdk",
+  "sentry-elixir-sdk",
+  "sentry-flutter-sdk",
+  "sentry-nestjs-sdk",
+  "sentry-nextjs-sdk",
+  "sentry-php-sdk",
+  "sentry-react-native-sdk",
+  "sentry-react-router-framework-sdk",
+  "sentry-react-sdk",
+  "sentry-ruby-sdk",
+  "sentry-svelte-sdk",
+  "sentry-tanstack-start-sdk"
+]
+
+[[skills]]
+name = "*"
+source = "tirth8205/code-review-graph"
+
+[[skills]]
+name = "developing-with-streamlit"
+source = "path:.agents/skills/developing-with-streamlit"
+
+[[skills]]
+name = "developing-with-streamlit"
+source = "path:.agents/skills/developing-with-streamlit"
+
+[[skills]]
+name = "*"
+source = "upstash/context7"
+
+[[skills]]
+name = "maraudersmapmd-skill"
+source = "mandarange/MaraudersMapMD-skill"
+
+[[skills]]
+name = "marauders-factcheck-skill"
+source = "mandarange/Marauders_FactCheck_Skill"
+
+[[mcp]]
+name = "deepwiki"
+url = "https://mcp.deepwiki.com/mcp"
+env = ["-y"]
+
+[[mcp]]
+name = "code-review-graph"
+command = "uvx"
+args = ["serve", "code-review-graph"]
+
+[[mcp]]
+name = "context7"
+command = "npx"
+args = [
+  "-y",
+  "mcp-remote",
+  "https://mcp.context7.com/mcp",
+  "--header",
+  "CONTEXT7_API_KEY:${CONTEXT7_API_KEY}"
+]
+
+[[mcp]]
+name = "gitmcp-docs"
+command = "npx"
+args = ["-y", "mcp-remote", "https://gitmcp.io/docs"]
+
+[[mcp]]
+name = "github-mcp-server"
+command = "docker"
+args = [
+  "run",
+  "-i",
+  "--rm",
+  "-e",
+  "GITHUB_PERSONAL_ACCESS_TOKEN",
+  "ghcr.io/github/github-mcp-server"
+]
+# GH_TOKEN is provided by 1Password, map it to the expected variable
+env = ["GITHUB_PERSONAL_ACCESS_TOKEN=${GH_TOKEN}"]
+
+[[mcp]]
+name = "pitchfork"
+command = "pitchfork"
+args = ["mcp"]
+
+[[mcp]]
+name = "GitKraken"
+command = "/Users/admin/Library/Application Support/GitKrakenCLI/gk-alpha"
+args = ["mcp", "--host=antigravity", "--session=kepler"]
+
+[[mcp]]
+name = "opik-mcp"
+command = "npx"
+args = ["-y", "mcp-remote", "https://www.comet.com/opik/api/v1/mcp"]
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "~/.agents/hooks/enforce-tools.sh"
