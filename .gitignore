@@ -6,16 +6,19 @@
 *.key
 *.cer
 mise.local.toml
+.mcp.json
 
 # IDEs & Editors
 # .vscode/
-# !.vscode/settings.json
+.gemini/
+.claude/
+.agents/
 .idea/
 *.swp
 *.swo
 *~
 scratch.txt
-scratch/
+#scratch/
 
 # Local outputs
 outputs/
@@ -87,4 +90,18 @@ agents.lock
 promptfoo_*.json
 docs/phase_artifacts/
 opik/
+# !.vscode/
+# Added by code-review-graph
+.code-review-graph/
+gitCommitGenerator
+# Streamlit agent skills (environment-specific symlinks)
+.agents/skills/developing-with-streamlit/
+.claude/skills/developing-with-streamlit/
+
+# Unignore specific ADR scratch directory for Code Review Graph
+scratch/*
+!scratch/reviews/
+scratch/reviews/*
+!scratch/reviews/ADR-0005_Review/
+bom.json
 !.vscode/
