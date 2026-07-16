@@ -20,7 +20,7 @@ Action = Literal[
     "Print plain text",
     "Cancel",
 ]
-IssueReferenceTypeChoice = Literal["Resolves", "Refs", "Closes", "Fixes", "Back"]
+IssueReferenceTypeChoice = Literal["Resolves", "Refs", "Closes", "Fixes", "Null", "Back"]
 
 ACTIONS: tuple[Action, ...] = (
     "Commit",
@@ -32,7 +32,14 @@ ACTIONS: tuple[Action, ...] = (
     "Print plain text",
     "Cancel",
 )
-ISSUE_REFERENCE_TYPE_CHOICES: tuple[IssueReferenceTypeChoice, ...] = ("Resolves", "Refs", "Closes", "Fixes", "Back")
+ISSUE_REFERENCE_TYPE_CHOICES: tuple[IssueReferenceTypeChoice, ...] = (
+    "Resolves",
+    "Refs",
+    "Closes",
+    "Fixes",
+    "Null",
+    "Back",
+)
 
 
 def emit_terminal_bell() -> None:
@@ -185,7 +192,7 @@ def prompt_issue_number() -> int | None:
     The prompt repeats until the user enters a positive integer or cancels. Invalid inputs produce a brief TTY message and re-prompt.
 
     Returns:
-        int | None: The entered issue number (an integer greater than zero), or None if the prompt was cancelled or fails.
+        int | None: The entered issue number (an integer zero or greater), or None if the prompt was cancelled or fails.
     """
     while True:
         raw_value = _run_gum_command(
@@ -197,9 +204,9 @@ def prompt_issue_number() -> int | None:
             return None
         if raw_value.isdigit():
             issue_num = int(raw_value)
-            if issue_num > 0:
+            if issue_num >= 0:
                 return issue_num
-            _print_tty_message("Issue number must be greater than zero.")
+            _print_tty_message("Issue number must be zero or greater.")
             continue
         _print_tty_message("Issue number must contain digits only.")
 

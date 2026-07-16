@@ -202,8 +202,9 @@ def test_issue_reference_kind_string_values():
     assert IssueReferenceKind.FIXES.value == "Fixes"
 
 
-def test_issue_reference_kind_has_exactly_four_members():
-    assert len(list(IssueReferenceKind)) == 4
+def test_issue_reference_kind_has_exactly_five_members():
+    """The IssueReferenceKind enum should have exactly five members."""
+    assert len(list(IssueReferenceKind)) == 5
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +400,7 @@ def test_actions_tuple_contains_all_expected_actions():
 def test_issue_reference_type_choices_contains_all_verbs_and_back():
     from git_cg.interaction import ISSUE_REFERENCE_TYPE_CHOICES
 
-    expected = {"Resolves", "Refs", "Closes", "Fixes", "Back"}
+    expected = {"Resolves", "Refs", "Closes", "Fixes", "Null", "Back"}
     assert set(ISSUE_REFERENCE_TYPE_CHOICES) == expected
 
 

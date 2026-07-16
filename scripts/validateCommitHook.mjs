@@ -98,7 +98,7 @@ if (!changelogGroupsMatch) {
 }
 
 // Conditional Ref enforcement
-const refRegex = /^(Resolves|Refs|Closes|Fixes):\s*#\S+/m;
+const refRegex = /^(Resolves|Refs|Closes|Fixes|Null):\s*#\S+/m;
 const hasRef = refRegex.test(fullText);
 
 const strictRefTypes = ['feat', 'fix', 'perf', 'security', 'lock'];
