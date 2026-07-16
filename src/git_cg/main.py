@@ -217,6 +217,7 @@ class EngineConfig:
 ENGINE_REGISTRY: dict[str, EngineConfig] = {
     "omlx": EngineConfig(prefix="OMLX", default_base_url="http://127.0.0.1:8000/v1"),
     "mtplx": EngineConfig(prefix="MTPLX", default_base_url="http://127.0.0.1:8000/v1"),
+    "lmlx": EngineConfig(prefix="LMLX", default_base_url="http://127.0.0.1:8010/v1"),
     "openai": EngineConfig(prefix="OPENAI", default_base_url="https://api.openai.com/v1"),
 }
 
@@ -298,12 +299,19 @@ def get_ai_client(engine: str) -> instructor.Instructor:
 
             mtplx_path = shutil.which("mtplx") or "mtplx"
             omlxd_path = shutil.which("omlxd") or "omlxd"
+            lmlx_path = shutil.which("lightning-mlx") or "lightning-mlx"
 
-            cmd_args = (
-                shlex.split(f"{mtplx_path} quickstart --profile sustained --port {port}")
-                if engine_lower == "mtplx"
-                else shlex.split(f"{omlxd_path} --port {port}")
-            )
+            if engine_lower == "mtplx":
+                cmd_args = shlex.split(f"{mtplx_path} quickstart --profile sustained --port {port}")
+            elif engine_lower == "lmlx":
+                model_arg = (
+                    os.environ.get("LMLX_MODEL")
+                    or os.environ.get("OMLX_MODEL")
+                    or "Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed"
+                )
+                cmd_args = shlex.split(f"{lmlx_path} serve {model_arg} --port {port}")
+            else:
+                cmd_args = shlex.split(f"{omlxd_path} --port {port}")
 
             engine_safe = os.path.basename(engine_lower)
             log_path = f"/tmp/{engine_safe}_server.log"
@@ -354,7 +362,7 @@ def get_ai_client(engine: str) -> instructor.Instructor:
                 )
 
     openai_client = track_openai(OpenAI(base_url=base_url, api_key=api_key))
-    if engine_lower in ["mtplx", "omlx"]:
+    if engine_lower in ["mtplx", "omlx", "lmlx"]:
         # Monkeypatch create to strip <think> blocks before instructor parses it
         original_create = openai_client.chat.completions.create
 
@@ -514,16 +522,16 @@ def build_system_prompt(
 ) -> str:
     """
     Compose the system prompt used to generate a structured Conventional Commit `CommitPlan`.
-    
+
     Parameters:
-    	diff_output (str): Git diff content used to derive intent signals and rank candidate commits.
-    	verbose (bool): Enables extra diagnostic output while building the prompt.
-    	active_directives (dict[str, str] | None): Locked regeneration overrides such as preferred type or scope.
-    	residual_guidance (str | None): Free-text regeneration guidance that should influence intent selection and wording.
-    	previous_plan (CommitPlan | None): Previously generated commit plan to include when regenerating.
-    
+        diff_output (str): Git diff content used to derive intent signals and rank candidate commits.
+        verbose (bool): Enables extra diagnostic output while building the prompt.
+        active_directives (dict[str, str] | None): Locked regeneration overrides such as preferred type or scope.
+        residual_guidance (str | None): Free-text regeneration guidance that should influence intent selection and wording.
+        previous_plan (CommitPlan | None): Previously generated commit plan to include when regenerating.
+
     Returns:
-    	str: The complete system prompt, including SOP-derived context, ranked intent candidates when available, language-detection guidance, localisation requirements, and regeneration guidance when supplied.
+        str: The complete system prompt, including SOP-derived context, ranked intent candidates when available, language-detection guidance, localisation requirements, and regeneration guidance when supplied.
     """
     sop_data = load_sop()
     if not sop_data and verbose:
@@ -1535,6 +1543,38 @@ def record_telemetry(
     # Always clear state to prevent stale reads
     clear_telemetry_state(git_dir)
     raise typer.Exit(code=0)
+
+
+@app.command("evals", help="Manage and run the git-cg evals benchmarking suite")
+def evals(
+    install: bool = typer.Option(False, "--install", help="Install evaluation dependencies"),
+    dashboard: bool = typer.Option(False, "--dashboard", help="Start the Streamlit dashboard"),
+    run: bool = typer.Option(False, "--run", help="Run the evaluation benchmark"),
+    thinking: bool = typer.Option(False, "--thinking", help="Enable reasoning benchmarks"),
+    gen_img: bool = typer.Option(False, "--gen-img", help="Generate static PNGs"),
+) -> None:
+    """
+    Opt-in benchmarking and evaluation suite for git-cg.
+    """
+    try:
+        # Lazy import to prevent slowing down git-cg's core execution
+        from git_cg.evals.cli_handler import handle_evals
+
+        handle_evals(
+            install=install,
+            dashboard=dashboard,
+            run=run,
+            thinking=thinking,
+            gen_img=gen_img,
+        )
+    except ImportError:
+        if install:
+            console.print("[yellow]Starting installation of evals dependencies...[/yellow]")
+            # We'll implement the actual install logic shortly
+        else:
+            console.print("[bold red]⚠️ Evals system is not currently installed.[/bold red]")
+            console.print("Run [bold cyan]git-cg evals --install[/bold cyan] to download it.")
+            raise typer.Exit(code=1) from None
 
 
 if __name__ == "__main__":
