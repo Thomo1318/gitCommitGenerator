@@ -1,6 +1,9 @@
 import asyncio
+import json
 import os
 import sys
+import time
+from pathlib import Path
 
 # Fallback typing if onepassword SDK is not installed
 try:
@@ -42,6 +45,19 @@ def _populate_cache():
     op_token = os.environ.get("OP_SERVICE_ACCOUNT_TOKEN")
     if not op_token:
         return
+
+    # Check for a recent disk cache to prevent rate limits across hook invocations
+    cache_path = Path(".git/cg-op-cache.json")
+    if cache_path.exists() and time.time() - cache_path.stat().st_mtime < 300:
+        try:
+            with open(cache_path) as f:
+                _op_cache = json.load(f)
+            for key, val in _op_cache.items():
+                if key in ENV_EXPORT_ALLOWLIST:
+                    os.environ[key] = val
+            return
+        except Exception:
+            pass  # Fall back to fetching if cache read fails
 
     # Short-circuit to prevent 1Password rate-limiting (hammering) when invoked multiple times by hooks.
     # If the environment already has the necessary secrets (e.g. via .env), skip the O(N) vault fetch.
@@ -88,6 +104,14 @@ def _populate_cache():
                             continue
                 except Exception:
                     continue
+
+            if found_items and _op_cache:
+                try:
+                    if cache_path.parent.exists():
+                        with open(cache_path, "w") as f:
+                            json.dump(_op_cache, f)
+                except Exception:
+                    pass
 
             if not found_items:
                 print("[Debug] 1Password SDK: No items found in any accessible vault.", file=sys.stderr)

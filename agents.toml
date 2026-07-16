@@ -111,8 +111,8 @@ args = ["mcp", "--host=antigravity", "--session=kepler"]
 
 [[mcp]]
 name = "opik-mcp"
-command = "npx"
-args = ["-y", "mcp-remote", "https://www.comet.com/opik/api/v1/mcp"]
+command = "/Users/admin/.local/share/mise/shims/uvx"
+args = ["opik-mcp"]
 
 [[hooks]]
 event = "PreToolUse"

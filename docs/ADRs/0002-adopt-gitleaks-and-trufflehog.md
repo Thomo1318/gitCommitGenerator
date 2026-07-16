@@ -3,6 +3,7 @@ An awe-inspiring, hyper-realistic macro shot of a massive, two-tiered security s
 
 📋 Target Filename: adr-0002-adopt-gitleaks-and-trufflehog.jpeg
 -->
+
 ![Header Image](../assets/adr-0002-adopt-gitleaks-and-trufflehog.jpeg)
 
 # ADR-0002: Adopt Gitleaks and TruffleHog for Two-Tier Secret Scanning
@@ -11,14 +12,14 @@ An awe-inspiring, hyper-realistic macro shot of a massive, two-tiered security s
 adr_number: "0002"
 title: "Adopt Gitleaks and TruffleHog for Two-Tier Secret Scanning"
 status: "Accepted"
-version: "v1.2.0"
+version: "v1.3.0"
 date: "2026-06-07"
 created: "2026-06-07 12:00:00"
-modified: "2026-06-18 09:50:00"
+modified: "2026-07-02 20:47:00"
 risk_level: "High"
 reversibility: "Low"
 security_scope: "Project"
-tags: ["security", "secrets", "gitleaks", "trufflehog"]
+tags: ["security", "secrets", "gitleaks", "trufflehog", "cyclonedx", "sbom"]
 supersedes: []
 superseded_by: []
 ```
@@ -30,6 +31,7 @@ This Architectural Decision Record (ADR) formalises the decision to adopt a two-
 As this project is intended to be a public repository, preventing credential leakage is paramount. While commercial solutions like GitGuardian and Snyk are available, a hard constraint for this project is that all tooling must be free, open-source, and highly portable for other developers.
 
 ### Core Goals
+
 - Prevent accidental secret commits to the repository.
 - Ensure all security tooling is free, open-source, and does not require paid subscriptions.
 - Guarantee that any other developer can run the same security stack locally without excessive configuration overhead.
@@ -47,6 +49,7 @@ As this project is intended to be a public repository, preventing credential lea
 ## 3. Context and Scope
 
 We evaluated three major options: GitGuardian, Snyk, and a self-hosted/open-source approach (Gitleaks + TruffleHog).
+
 - **GitGuardian / Snyk**: Both provide excellent secret scanning but push heavily towards their paid/cloud SaaS tiers. While free tiers exist, they introduce friction and potential account requirements for external contributors.
 - **Gitleaks**: Exceptionally fast, regex-based scanner, perfect for pre-commit hooks.
 - **TruffleHog**: Deep active verification scanner. Slower but highly accurate, making it ideal for CI/CD pipelines.
@@ -58,11 +61,13 @@ We evaluated three major options: GitGuardian, Snyk, and a self-hosted/open-sour
 We are implementing a **Two-Tier Secret Scanning Strategy**:
 
 ### Tier 1: Local Prevention (Gitleaks)
+
 - **Tool**: Gitleaks
 - **Role**: Pre-commit hook.
 - **Reasoning**: Its regex-based engine is blazing fast, providing immediate feedback to the developer before a commit is even created.
 
 ### Tier 2: Deep Verification (TruffleHog)
+
 - **Tool**: TruffleHog
 - **Role**: CI/CD Pipeline step.
 - **Reasoning**: TruffleHog actively verifies found secrets against provider APIs (e.g., checking if an AWS key is actually active). This is slower but provides an ultimate safety net before code is merged into `main`.
@@ -73,12 +78,12 @@ Both tools are explicitly declared in the project's `mise.toml` to ensure they a
 
 ## 5. Consequences
 
-- **Pros**: 
+- **Pros**:
   - 100% free and open-source.
   - Zero vendor lock-in.
   - Highly portable local setup using `mise`.
   - Perfect balance of speed (Gitleaks locally) and thoroughness (TruffleHog in CI).
-- **Cons**: 
+- **Cons**:
   - Requires maintaining two separate tools.
   - May require tuning `.gitleaksignore` for false positives.
 
@@ -102,6 +107,7 @@ To address this, Snyk has been entirely removed from both the local `hk.pkl` hoo
 ### Addition of Codecov
 
 While configuring the CI pipeline, **Codecov** was also integrated to handle test coverage reporting. Codecov provides free, unmetered coverage analytics for public open-source repositories.
+
 - **Tokenless Support**: As verified by proof provided for this project, no token is needed for our public repositories to upload coverage metrics, drastically simplifying secrets management for external contributors while delivering robust visual coverage metrics directly on Pull Requests.
 
 ### References
@@ -114,13 +120,14 @@ While configuring the CI pipeline, **Codecov** was also integrated to handle tes
 
 ## III. Update 2: Proposed Consolidation of Secret Scanning to BetterLeaks (v1.2.0)
 
-As the project scales, maintaining two disparate tools for local prevention (Gitleaks) and CI verification (TruffleHog) could introduce configuration drift and duplicated efforts when tuning false positives. 
+As the project scales, maintaining two disparate tools for local prevention (Gitleaks) and CI verification (TruffleHog) could introduce configuration drift and duplicated efforts when tuning false positives.
 
-To streamline the secret scanning architecture, we plan to migrate from the two-tier Gitleaks/TruffleHog setup to **BetterLeaks**. 
+To streamline the secret scanning architecture, we plan to migrate from the two-tier Gitleaks/TruffleHog setup to **BetterLeaks**.
 
 ### Rationale
+
 - **Unified Tooling**: BetterLeaks would act as an all-in-one "next-gen secret scanner" that combines the fast, regex-based scanning capabilities needed for local pre-commit hooks with the active verification capabilities required in CI pipelines.
-- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration would reduce overhead, preventing the need to synchronise a `.gitleaksignore` file and TruffleHog's equivalent. 
+- **Simplified Configuration**: Relying on a single `betterleaks.toml` configuration would reduce overhead, preventing the need to synchronise a `.gitleaksignore` file and TruffleHog's equivalent.
 - **Portability Maintained**: BetterLeaks would be seamlessly integrated into `mise.toml` and local pre-commit hooks (`hk.pkl`), retaining the original portability constraint of the project.
 
 ### References
@@ -129,8 +136,30 @@ To streamline the secret scanning architecture, we plan to migrate from the two-
 
 ---
 
+## IV. Update 3: The Anchore Security Ecosystem (Syft, Grype, and Grant) (v1.3.0)
+
+As part of our holistic approach to supply chain security, we have transitioned our SBOM, vulnerability scanning, and license compliance pipeline to utilize the complete Anchore ecosystem: **Syft**, **Grype**, and **Grant**.
+
+### Rationale
+
+- **Multi-Language Support**: While our backend is Python (managed via `uv`), the interactive TUI layer relies on Go (`gum` / Charmbracelet). The previously adopted `cyclonedx-py` generator was blind to compiled Go binaries and `go.mod`.
+- **Zero-Friction Integration**: Syft seamlessly scans both Python lockfiles and compiled Go binaries without requiring complex build environments, simultaneously outputting both CycloneDX and Syft JSON formats.
+- **Vulnerability Scanning Integration**: Grype directly consumes the SBOMs generated by Syft, providing an instant, local, and CI-friendly vulnerability assessment.
+- **License Compliance Verification**: Grant perfectly rounds out the ecosystem by verifying the licenses of all detected dependencies directly against the Syft SBOM, ensuring open-source compliance without requiring an extra scanner.
+- **Proven CI Pipeline**: The complete trio has been proven to execute reliably in both GitHub Actions and local `act` environments using direct binary downloads, avoiding dependency on potentially unmaintained third-party GitHub Actions.
+- **SBOM Tool Comparison**: See the [SBOM Tool Comparison](../supportingDocumentation/sbomToolComparison.md) for the detailed technical breakdown between `syft`, `cdxgen`, and `sbom-tool` that led to this decision.
+
+### References
+
+- [Syft GitHub Repository](https://github.com/anchore/syft)
+- [Grype GitHub Repository](https://github.com/anchore/grype)
+- [Grant GitHub Repository](https://github.com/anchore/grant)
+
+---
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-07 12:00:00): Initial drafting and finalization of the two-tier secret scanning strategy using Gitleaks and TruffleHog.
 - v1.1.0 (2026-06-18): Replaced Snyk with GitHub CodeQL and Dependabot to resolve execution limits; documented the addition of tokenless Codecov for coverage metrics.
 - v1.2.0 (2026-06-18): Proposed the future migration from Gitleaks and TruffleHog to BetterLeaks for unified secret scanning and active verification.
+- v1.3.0 (2026-07-02 20:47:00): Added the Anchore Security Ecosystem (Syft, Grype, and Grant) for automated SBOM generation, vulnerability scanning, and license compliance within the CI pipeline.
