@@ -64,6 +64,19 @@ MTPLX_API_KEY="sk-your-mtplx-key"
 
 ---
 
+## 🧠 Local Inference Engine Binding (oMLX, lmlx, MTPLX)
+
+When developing or testing with local Apple Silicon inference engines, you must adhere to **Strict Model ID Binding**.
+
+> [!WARNING]
+> **Silent Misrouting & HTTP 404s**
+> These local servers act as drop-in OpenAI replacements, but they do **not** support generic model IDs (e.g., `"local"` or `"default"`). 
+> If the `"model"` parameter in your API JSON payload does not **exactly match** the absolute path or precise Hugging Face ID of the currently loaded model, the engine will either throw an opaque `HTTP 404: Not Found` error, or silently misroute the request to a different cached model (which can severely skew benchmarks and semantic tests). 
+> 
+> **Solution:** Always query `GET /v1/models` from the local server and use the exact `id` returned by the registry to explicitly bind your completions requests.
+
+---
+
 ## 🧪 Testing
 
 We use `pytest` for the Python test suite and `just` as our command runner.

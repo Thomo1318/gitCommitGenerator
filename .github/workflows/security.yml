@@ -24,3 +24,36 @@ jobs:
           base: ""
           head: ${{ github.ref_name }}
           extra_args: --only-verified
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    env:
+      ACT: "false"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Syft, Grype, & Grant
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/anchore/grant/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOMs (Syft)
+        run: |
+          syft . -o cyclonedx-json=bom.json
+          syft . -o syft-json=bom.syft.json
+
+      - name: Upload SBOM Artifact
+        if: ${{ !env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclone-dx-sbom
+          path: bom.json
+
+      - name: License Compliance (Grant)
+        run: grant check bom.syft.json --dry-run
+
+      - name: Vulnerability Scan (Grype)
+        run: grype sbom:bom.json --fail-on high

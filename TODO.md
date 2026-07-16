@@ -1,11 +1,181 @@
 # Roadmap & Tasks
 
+> [!TIP]
+>
+> ### Use **`GitHub Flavored Markdown (GFM) Alerts`** when reviewing this document.
+>
+> There are exactly 5 of these alert types available, and each renders with a distinct color and icon on platforms that support them (like GitHub, and modern markdown viewers).
+>
+> Both the codeblock and an example are provided for each of the 5 below. This is what the different markdown renderers (if supported) will display for each alert type:
+
+1. **`[!NOTE]`** (Blue)
+   Highlights information that users should take into account, even when skimming.
+
+   ```markdown
+   > [!NOTE]
+   > This is a note alert.
+   ```
+
+   > [!NOTE]
+   > This is a note alert.
+
+2. **`[!TIP]`** (Green)
+   Optional information to help a user be more successful (e.g., best practices, shortcuts).
+
+   ```markdown
+   > [!TIP]
+   > This is a tip alert.
+   ```
+
+   > [!TIP]
+   > This is a tip alert.
+
+3. **`[!IMPORTANT]`** (Purple)
+   Crucial information necessary for users to succeed or understand the context.
+
+   ```markdown
+   > [!IMPORTANT]
+   > This is an important alert.
+   ```
+
+   > [!IMPORTANT]
+   > This is an important alert.
+
+4. **`[!WARNING]`** (Yellow)
+   Critical content demanding immediate user attention due to potential risks.
+
+   ```markdown
+   > [!WARNING]
+   > This is a warning alert.
+   ```
+
+   > [!WARNING]
+   > This is a warning alert.
+
+5. **`[!CAUTION]`** (Red)
+   Negative potential consequences of an action (e.g., data loss, breaking changes).
+
+   ```markdown
+   > [!CAUTION]
+   > This is a caution alert.
+   ```
+
+   > [!CAUTION]
+   > This is a caution alert.
+
+   <blockquote>
+   <p>
+   This can also be used for notes, tips, warnings, cautions, important info, etc as well as what is listed above. It just renders different!
+   </p>
+   </blockquote>
+
+## All 5 together:
+
+> [!NOTE]
+> This is a note alert.
+
+> [!TIP]
+> This is a tip alert.
+
+> [!IMPORTANT]
+> This is an important alert.
+
+> [!WARNING]
+> This is a warning alert.
+
+> [!CAUTION]
+> This is a caution alert.
+
+---
+
 > [!NOTE]
 > The primary backlog has been formally migrated to [GitHub Issues](https://github.com/Thomo1318/gitCommitGenerator/issues) to provide better visibility, tracking, and collaboration. However, the migration is not yet fully complete, and some active implementation features may still be added and temporarily tracked in this file before being transitioned.
 
-Please use the issue tracker to view, claim, discuss, and track features, bugs, and enhancements.
+---
 
-- [ ] **[Feature] Intelligent / Automated AI Commit Grouping**
+TODO:
+
+- Determine a solution to integrate this action:
+  - on/off/custom (`if blast radius >x` or `if review identifies risk >x`, etc.), ? Other scenarios?
+  - If `git-cg` is running in `hook-mode` and it is identified that the action requires user interaction (determine use cases) alert the user (? Use `alerter` so the user can interact by clicking yes/no/other) that then pops open the TUI for the user to act, scenarios like confirming a split commit, acknowledging a high risk item or blast radius, etc.
+
+TODO:
+
+- With the planned config integration make the majority of the app's functions be able to toggle on/off
+- Identify possible functions that we should consider integrating with this feature
+- Your own push:
+
+self-hosted ntfy, or Pushover
+
+? Integrate to alert user when actions have completed e.g. PR review, commit generation, user intervention required, etc.
+In the Secure Enclave:
+
+Your API keys sit in the hardware-backed iOS keychain and are sent only to the service that needs them.
+? Use KeyChain for auth in `gitCommitGenerator`
+
+---
+
+- Determine the best solution regarding [ThermalForge](https://github.com/ProducerGuy/ThermalForge). We need to look at all issues and PRs from other users and determine if we should fork the official version and then update the forked version to include the fixes proposed by other devs. We should also check if there is an ETA on when the official tool will be updated and if it would be worth the wait. This should be done and documented in a new issue. This could also be the place where we decide to abandon our forked version and just use the official tool, or move to a different tool (which is not an ideal solution as MTPLX uses it within its code to monitor temps and alter fan speeds depending on live chip temperatures). The reason I raise this point is that the official [ThermalForge](https://github.com/ProducerGuy/ThermalForge) has not been updated since `20 April 2026` and there are several issues and PRs that have been opened since then that have not been addressed. Document the findings in `scratch/reviews/ADR-0005_Review/Review/thermalforge_update_assessment.md`.
+
+---
+
+- Determine if we should integrate [wrkflw](https://github.com/bahdotsh/wrkflw) or an alternate tool (identify any others, or possibly some we already have locally or are using, for example does `hk` have this capability?) to test our GitHub Actions workflows locally before pushing to GitHub.
+
+---
+
+- Determine if tools like [apfel GitHub](https://github.com/Arthur-Ficial/apfel) [apfel Official Site](https://apfel.franzai.com/), [afm-Server](https://github.com/Techopolis/afm-Server), [apple-intelligence-cli](https://github.com/onmyway133/apple-intelligence-cli), [iClaw](https://github.com/lastByteLLC/iclaw/) (check this ones routing and determine if it could be used in our tool, this applies to all proposed tools). Additionally, we need to review this [Apple Intelligence - Foundation Models Documentation](https://developer.apple.com/documentation/foundationmodels) and determine if we could integrate `Apple Intelligence` (our custom integration rather than using one of the listed tools) into our app which could run along-side of our primary LLM solution (`MTPLX`) rather than either running a second instance of `MTPLX`, an `oMLX` instance or agent swaps in `MTPLX`. If they are light enough they may possibly be used for `_cheap_llm_call` or other lightweight tasks. This would need to be `opt-in`/`opt-out` for users not on an `Apple` device or on an `Apple` device that is not compatible with `Apple Intelligence` (this would include the macOS version, `M Series Chip` and `apple Intelligence` compatible and installed).
+
+- Check the following for potential integration along with any additional apple tools (Confirmed to exist on Apple's Developer site):
+  - Apple Intelligence tools:
+    - [Apple Intelligence and Machine Learning](https://developer.apple.com/documentation/technologyoverviews/ai-machine-learning)
+      - **[AI & Machine Learning Resources](https://developer.apple.com/machine-learning/resources/) Review this in detail!**
+      - **[Generative Models](https://developer.apple.com/documentation/technologyoverviews/generative-models) Review this in detail!**
+      - [Built-in Intelligence](https://developer.apple.com/documentation/technologyoverviews/built-in-intelligence)
+      - [Apple Intelligence](https://developer.apple.com/documentation/technologyoverviews/apple-intelligence)
+    - [AppIntents](https://developer.apple.com/documentation/AppIntents)
+    - [App Intents Testing (Beta)](https://developer.apple.com/documentation/AppIntentsTesting)
+    - [Core AI](https://developer.apple.com/documentation/CoreAI)
+    - [Evaluations](https://developer.apple.com/documentation/Evaluations)
+    - [Foundation Models](https://developer.apple.com/documentation/FoundationModels)
+    - [Visual Intelligence](https://developer.apple.com/documentation/VisualIntelligence)
+    - [Media Intelligence](https://developer.apple.com/documentation/MediaIntelligence)
+  - Other Apple Frameworks and tools:
+    - [Core Foundation](https://developer.apple.com/documentation/CoreFoundation)
+    - [Apple silicon](https://developer.apple.com/documentation/apple-silicon)
+    - [Background Tasks](https://developer.apple.com/documentation/BackgroundTasks)
+    - [Latent Semantic Mapping](https://developer.apple.com/documentation/LatentSemanticMapping)
+    - [ML Compute](https://developer.apple.com/documentation/MLCompute)
+      > [!IMPORTANT]
+      > ML Compute is deprecated. Instead, use BNNS for CPU tasks, Metal Performance Shaders for GPU work, and Core ML for tensor APIs.
+      - [BNNS](https://developer.apple.com/documentation/Accelerate/BNNS)
+      - [Metal Performance Shaders](https://developer.apple.com/documentation/MetalPerformanceShaders)
+      - [Core ML](https://developer.apple.com/documentation/CoreML)
+    - [Uniform Type Identifiers](https://developer.apple.com/documentation/UniformTypeIdentifiers)
+    - [Accelerate Framework](https://developer.apple.com/documentation/Accelerate)
+    -
+  - Not confirmed if real as they were an AI generated list and not verified on Apple's developer site.
+    - [ML Compute](https://developer.apple.com/documentation/mlcompute)
+    - [Model ContextKit](https://developer.apple.com/documentation/modelcontextkit)
+    - [Model Evaluation](https://developer.apple.com/documentation/modelevaluation)
+    - [Model Utilities](https://developer.apple.com/documentation/modelutilities)
+    - [ModelBuilder](https://developer.apple.com/documentation/ModelBuilder)
+    - [ModelIO](https://developer.apple.com/documentation/ModelIO)
+    - [NaturalLanguage](https://developer.apple.com/documentation/naturallanguage)
+    - [PerformanceMetrics](https://developer.apple.com/documentation/performancemetrics)
+    - [QuickLook](https://developer.apple.com/documentation/quicklook)
+    - [Realms (Swift)](https://developer.apple.com/documentation/realms)
+    - [TextKit 2](https://developer.apple.com/documentation/textkit2)
+    - [Vision](https://developer.apple.com/documentation/vision)
+  - Apple Tech Notes Page:
+    - [Technotes](https://developer.apple.com/documentation/Technotes)
+
+- Determine if [Metrickit](https://developer.apple.com/documentation/MetricKit) could be used to gather metrics for our `git-cg` and if so, determine what metrics we should track and how we should use them to improve the tool (and if we need to). Additionally, we should review [Mozilla Telemetry](https://github.com/mozilla/telemetry) for any other ideas or tools we could use to gather metrics for our `git-cg`.
+
+- Consider integrating [CVE Bin Tool](https://github.com/ossf/cve-bin-tool) to complete a scan of the binary if we decide to compile this into a binary for release.
+
+- We need to carefully consider if we need to track **any** metrics at all, should we really be tracking this information for open source software, doesn't this violate some kind of privacy principle, even if we aggregate it and anonymize it... what is the risk of PII being leaked... or do we remove the tracking from the prod app and only collect metrics from either my local development or another developer who opts in?
+
+- [ ] **Feature Intelligent / Automated AI Commit Grouping**
   - **Problem**: When a user has a massive diff containing multiple logical features, extracting a single commit message is inaccurate and poor practice. The current plan of "manual staging" (`git-cg stage`) is useful but still places the cognitive burden of grouping on the user.
   - **Proposed Solutions for Investigation**:
     - **Method 1: Pre-Flight AI Grouping (Highly Recommended)**: Run a fast, cheap LLM call (e.g., Haiku or Qwen) using only the `git status` output and branch name. The LLM returns a JSON payload of logically grouped files and suggested commit titles. The TUI presents these to the user for one-click processing, keeping token costs near-zero.
@@ -42,13 +212,13 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
       - **How it works:** We use a tool like difftastic or AST parsing to identify which files actually share code dependencies (e.g., "File A imported the new function from File B, so they must be committed together to prevent breaking the build").
       - **Why it's great:** It prevents "broken" intermediate commits where a test is committed without the code it tests.
 
-- [ ] **[Feature] PR Description Generation using CodeRabbit Walkthroughs**
+- [ ] **Feature: PR Description Generation using CodeRabbit Walkthroughs**
   - **Problem**: Generating PR descriptions from raw code diffs is contextually heavy and often produces overly granular or poorly abstracted text.
   - **Solution**: Implement a new `git-cg --pr-desc` command that queries the GitHub API to fetch the most recent CodeRabbit automated review comment (specifically the Walkthrough and Changes table) for the current branch/PR.
   - **Implementation**: Feed the CodeRabbit high-level summary (alongside the issue tracker requirements) into the LLM as context. Instruct the LLM to synthesize this pre-abstracted human-readable summary into a standard PR Description (Summary, Problem, Changes, Impact, Testing).
   - **Benefits**: Yields significantly higher quality PR descriptions with minimal token usage by leveraging the architectural abstractions already generated by CodeRabbit.
 
-- [ ] **[Feature] Eliminate Node.js Dependency from the Project**
+- [ ] **Feature: Eliminate Node.js Dependency from the Project**
   - **Problem**: The project relies on Node.js and a `package.json` file exclusively for running `scripts/validateCommitHook.mjs` during the `commit-msg` git hook phase, and generating Markdown Table of Contents via `doctoc`.
   - **Solution**: Replace both of these dependencies with Python-native equivalents to fully consolidate the repository into a pure Python/uv ecosystem.
   - **Implementation**:
@@ -59,7 +229,7 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
 
 - [ ] Can we somehow allocate a higher priority/system resources to `git-cg` when it is running? i.e. allocate more CPU / GPU / RAM to it? or `nice` it? So that it runs faster and more efficiently? I'm not sure if this is possible, but it's worth investigating.
 
-- [ ] **[Feature] Incremental Commit Generation with Delta Diffs and Caching**
+- [ ] **Feature: Incremental Commit Generation with Delta Diffs and Caching**
   - **Problem**: When a user aborts a generation, makes a minor fix (like `ruff format`), and regenerates, the tool discards the highly valuable draft commit message and costs extra tokens to re-analyze the entire diff from scratch.
   - **Solution**: Pass the previously generated draft commit message alongside the "delta diff" (changed lines since last generation) to the LLM.
   - **Implementation**: The prompt becomes: _"Here is your previously generated draft commit message. The user has made the following minor tweaks since then (Delta Diff). Please update the draft message to incorporate these minor changes."_
@@ -110,10 +280,10 @@ Please use the issue tracker to view, claim, discuss, and track features, bugs, 
              Analyzing diff signals and ranking intents...                                                  main.py:532
   ```
 
-- [ ] **[Umbrella]** Epic: LLMOps Stack Augmentation (Opik + Promptfoo + OpenLLMetry + Sentry)
-- [ ] **[Integrate OpenLLMetry]** Integrate OpenLLMetry for vendor-neutral OTel tracing
-- [ ] **[Integrate Promptfoo]** Integrate Promptfoo for automated CI evaluation and red-teaming
-- [ ] **[Integrate Sentry]** Integrate Sentry SDK for application crash reporting and error tracking
+- [ ] **Umbrella** Epic: LLMOps Stack Augmentation (Opik + Promptfoo + OpenLLMetry + Sentry)
+- [ ] **Integrate OpenLLMetry** Integrate OpenLLMetry for vendor-neutral OTel tracing
+- [ ] **Integrate Promptfoo** Integrate Promptfoo for automated CI evaluation and red-teaming
+- [ ] **Integrate Sentry** Integrate Sentry SDK for application crash reporting and error tracking
   - [ ] Explore `Feature Flag` SDKs from the listed solutions or alternate better options if available. I would prefer to stick with the listed options as they are the ones recomended by Sentry. We need to identify which solution proivides us with the best features on free, freemium or 'free self-hosted' options. Listed `Feature Flag` SDKs:
     - [ ] LaunchDarkly
     - [ ] OpenFeature
@@ -630,3 +800,5 @@ Organise into a table.
 - [ ] [Vector Observability](https://github.com/vectordotdev/vector)
 
 ---
+
+- [ ] Benchmark `dspark` models and explore attaching/integrating them with our existing local inference engines (`MTPLX` / `oMLX`). Evaluate their performance, token efficiency, and compatibility for commit generation workloads.
