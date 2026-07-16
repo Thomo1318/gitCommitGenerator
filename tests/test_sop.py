@@ -43,9 +43,7 @@ def test_load_sop_invalid_path(monkeypatch):
 def test_load_sop_contains_commit_language():
     """``load_sop()`` must include the ``commit_language`` key from the config."""
     sop_data = load_sop()
-    assert "commit_language" in sop_data, (
-        "commit_language must be present in the loaded SOP document"
-    )
+    assert "commit_language" in sop_data, "commit_language must be present in the loaded SOP document"
 
 
 def test_load_sop_commit_language_is_string():
@@ -81,16 +79,12 @@ def test_load_sop_per_repo_override_wins(monkeypatch, tmp_path):
     }
     config_dir = fake_root / "config"
     config_dir.mkdir()
-    (config_dir / "gitops_agent_sop.json").write_text(
-        json.dumps(base_sop), encoding="utf-8"
-    )
+    (config_dir / "gitops_agent_sop.json").write_text(json.dumps(base_sop), encoding="utf-8")
 
     # Write an override to .git-cg/sop.json with a different language
     git_cg_dir = fake_root / ".git-cg"
     git_cg_dir.mkdir()
-    (git_cg_dir / "sop.json").write_text(
-        json.dumps({"commit_language": "en-AU"}), encoding="utf-8"
-    )
+    (git_cg_dir / "sop.json").write_text(json.dumps({"commit_language": "en-AU"}), encoding="utf-8")
 
     # Patch the repo-root resolution to point at our fake root
     monkeypatch.setattr(sop_module, "_git_repo_root", lambda: fake_root)
@@ -119,9 +113,7 @@ def test_load_sop_env_var_override_wins(monkeypatch, tmp_path):
     sop_module.load_sop.cache_clear()
     try:
         result = sop_module.load_sop()
-        assert result["commit_language"] == "fr-FR", (
-            "GIT_CG_SOP_PATH override should set commit_language to fr-FR"
-        )
+        assert result["commit_language"] == "fr-FR", "GIT_CG_SOP_PATH override should set commit_language to fr-FR"
     finally:
         sop_module.load_sop.cache_clear()
 
