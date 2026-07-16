@@ -40,6 +40,7 @@ class IssueReferenceKind(enum.StrEnum):
     REFS = "Refs"
     CLOSES = "Closes"
     FIXES = "Fixes"
+    NULL = "Null"
 
 
 @dataclass(frozen=True)
@@ -52,8 +53,8 @@ class IssueReference:
     def __post_init__(self) -> None:
         if not isinstance(self.issue_number, int):
             raise TypeError("issue_number must be an integer")
-        if self.issue_number <= 0:
-            raise ValueError("issue_number must be greater than zero")
+        if self.issue_number < 0:
+            raise ValueError("issue_number must be zero or greater")
 
     def __str__(self) -> str:
         """
