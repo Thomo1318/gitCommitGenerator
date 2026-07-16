@@ -8,19 +8,19 @@
 # ============================================================================ #
 
 [settings]
-experimental = true                 # Required for advanced uv features
-jobs = 8                            # Parallel job count for faster installs
-env_cache = true                    # Cache environment evaluations for speed
-not_found_auto_install = true       # Auto-install tools when entering directory
-plugin_autoupdate_last_check_duration = "1d" # Check for plugin updates daily
+experimental = true                   # Required for advanced uv features
+jobs = 8                              # Parallel job count for faster installs
+env_cache = true                      # Cache environment evaluations for speed
+not_found_auto_install = true         # Auto-install tools when entering directory
+plugin_autoupdate_last_check_duration = "1d"  # Check for plugin updates daily
 
 idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go", "java", "yarn", "terraform", "packer"]  # Read .nvmrc, .python-version, etc.
 
 [settings.python]
-uv_venv_auto = true                 # Auto-activate .venv directories created by uv
+uv_venv_auto = true                   # Auto-activate .venv directories created by uv
 
 [settings.pipx]
-uvx = true                          # Use uvx instead of pipx
+uvx = true                            # Use uvx instead of pipx
 
 [env]
 PYTHONPATH = "src"
@@ -43,12 +43,14 @@ usage = "latest"                      # Usage is a spec and CLI for defining CLI
 uv = "latest"                         # Fast Python package and environment manager (https://uv.astral.sh)
 rtk = "latest"                        # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
 node = "latest"                       # JS runtime for validation hook (https://nodejs.org)
-#"npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
+# "npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
 just = "latest"                       # Task runner for project automation (https://just.systems)
 betterleaks = "latest"                # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
+syft = "latest"                       # Multi-language SBOM generator for CycloneDX format (https://github.com/anchore/syft)
+grype = "latest"                      # Vulnerability scanner for SBOMs (https://github.com/anchore/grype)
+"ubi:anchore/grant" = "latest"        # License compliance checker for SBOMs (https://github.com/anchore/grant)
 # 1password-cli is omitted here to fall back to the Homebrew-managed `1password-cli@beta` global installation, which is required for `op environment`.
 # 1password-cli = "latest"
-
 
 # ============================================================================ #
 # TASKS                                                                        #
