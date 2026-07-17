@@ -1,5 +1,17 @@
+from unittest.mock import patch
+
+import pytest
+import typer
+
 import git_cg.main as main_module
-from git_cg.main import ReviewState, build_generation_messages, build_system_prompt
+from git_cg.main import (
+    ReviewState,
+    _detect_branch_issue_reference,
+    _validate_commit_source,
+    build_generation_messages,
+    build_system_prompt,
+)
+from git_cg.models import IssueReferenceKind
 
 
 def test_build_system_prompt_contains_diff():
@@ -278,3 +290,33 @@ def test_opik_args_empty_string_thread_id_treated_as_falsy():
     """An empty string thread_id must be treated as absent (falsy), returning None."""
     result = _build_opik_args(trace_id=None, thread_id="")
     assert result is None
+
+
+def test_validate_commit_source_merge_abort():
+    with pytest.raises(typer.Exit) as excinfo:
+        _validate_commit_source("merge", "COMMIT_EDITMSG", False, False)
+    assert excinfo.value.exit_code == 0
+
+
+def test_validate_commit_source_amend_proceed():
+    assert _validate_commit_source("commit", "COMMIT_EDITMSG", True, False) == "commit"
+
+
+def test_validate_commit_source_none():
+    assert _validate_commit_source(None, "COMMIT_EDITMSG", False, False) is None
+
+
+@patch("subprocess.check_output")
+def test_detect_branch_issue_reference_found(mock_check_output):
+    mock_check_output.return_value = "feat/123-some-feature\n"
+    refs = _detect_branch_issue_reference(verbose=False)
+    assert len(refs) == 1
+    assert refs[0].issue_number == 123
+    assert refs[0].kind == IssueReferenceKind.REFS
+
+
+@patch("subprocess.check_output")
+def test_detect_branch_issue_reference_not_found(mock_check_output):
+    mock_check_output.return_value = "main\n"
+    refs = _detect_branch_issue_reference(verbose=False)
+    assert len(refs) == 0

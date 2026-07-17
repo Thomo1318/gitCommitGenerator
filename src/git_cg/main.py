@@ -882,6 +882,106 @@ def extract_git_diff(verbose: bool, strict: bool) -> str:
     return diff_output
 
 
+def _validate_commit_source(
+    commit_source: str | None,
+    commit_msg_file: str,
+    amend_regenerate: bool,
+    verbose: bool,
+) -> str | None:
+    if commit_source and (commit_source == commit_msg_file or commit_source.endswith("COMMIT_EDITMSG")):
+        commit_source = None
+
+    if commit_source not in GENERATING_SOURCES:
+        if amend_regenerate and commit_source == "commit":
+            if verbose:
+                console.log("Amend regeneration explicitly enabled; proceeding.")
+        else:
+            if verbose:
+                console.log(
+                    f"Commit source '{commit_source}' indicates an existing message (merge/squash/amend/-m). Skipping generation."
+                )
+            raise typer.Exit(code=0)
+    return commit_source
+
+
+def _detect_branch_issue_reference(verbose: bool) -> list[IssueReference]:
+    issue_references: list[IssueReference] = []
+    try:
+        branch_name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
+        match = re.search(r"(?:/|^)(\d+)-", branch_name)
+        if match:
+            issue_number = int(match.group(1))
+            issue_references.append(IssueReference(kind=IssueReferenceKind.REFS, issue_number=issue_number))
+            if verbose:
+                console.log(f"Auto-detected issue #{issue_number} from branch '{branch_name}'.")
+    except Exception:
+        pass
+    return issue_references
+
+
+def _build_generation_context(diff_output: str):
+    from git_cg.intent import derive_intent_selection_constraints
+
+    signals = extract_diff_signals(diff_output)
+    gitops_matrix = load_sop().get("gitmoji_reference_matrix", [])
+    ranked_candidates = rank_commit_intents(signals, gitops_matrix) if gitops_matrix else []
+    constraints = derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else None
+
+    if constraints:
+        from git_cg.regeneration import GenerationContext
+
+        return GenerationContext(diff_signals=signals, ranked_intents=ranked_candidates, constraints=constraints)
+    return None
+
+
+def _write_telemetry_state_safe(
+    review_state,
+    diff_output: str,
+    engine: str,
+    model_name: str,
+    system_prompt: str,
+    repo_name: str,
+    thread_id: str,
+    verbose: bool,
+) -> None:
+    try:
+        import dataclasses
+
+        from git_cg.telemetry import (
+            GenerationTelemetry,
+            compute_diff_hash,
+            run_deterministic_checks,
+            write_telemetry_state,
+        )
+
+        score_card = run_deterministic_checks(review_state.commit_plan)
+
+        telemetry = GenerationTelemetry(
+            trace_id=LAST_OPIK_TRACE_ID,
+            diff_hash=compute_diff_hash(diff_output),
+            diff_output=diff_output,
+            repo_name=repo_name,
+            engine=engine,
+            model_name=model_name,
+            system_prompt_hash=compute_prompt_hash(system_prompt),
+            generated_message=review_state.render(),
+            commit_plan_json=review_state.commit_plan.model_dump(),
+            score_card=dataclasses.asdict(score_card),
+            thread_id=thread_id,
+        )
+        try:
+            git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
+            write_telemetry_state(git_dir, telemetry)
+            if verbose:
+                console.log(f"Opik telemetry state written to {git_dir}/GIT_CG_OPIK_STATE.json")
+        except Exception as inner_e:
+            if verbose:
+                console.log(f"[yellow]Failed to resolve git dir or write state: {inner_e}[/yellow]")
+    except Exception as e:
+        if verbose:
+            console.log(f"[yellow]Failed to write telemetry state: {e}[/yellow]")
+
+
 @opik.track(project_name="gitCommitGenerator")
 def _run_commit_generation(
     commit_msg_file: str,
@@ -923,19 +1023,7 @@ def _run_commit_generation(
 
     sentry_sdk.add_breadcrumb(category="lifecycle", message="Starting git-cg execution")
 
-    if commit_source and (commit_source == commit_msg_file or commit_source.endswith("COMMIT_EDITMSG")):
-        commit_source = None
-
-    if commit_source not in GENERATING_SOURCES:
-        if amend_regenerate and commit_source == "commit":
-            if verbose:
-                console.log("Amend regeneration explicitly enabled; proceeding.")
-        else:
-            if verbose:
-                console.log(
-                    f"Commit source '{commit_source}' indicates an existing message (merge/squash/amend/-m). Skipping generation."
-                )
-            raise typer.Exit(code=0)
+    commit_source = _validate_commit_source(commit_source, commit_msg_file, amend_regenerate, verbose)
 
     try:
         repo_name = os.path.basename(
@@ -982,18 +1070,7 @@ def _run_commit_generation(
     if verbose:
         console.log(f"Using model: {model_name}")
 
-    issue_references: list[IssueReference] = []
-    try:
-        branch_name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
-        # Match common branch patterns like feat/121-description or 121-description
-        match = re.search(r"(?:/|^)(\d+)-", branch_name)
-        if match:
-            issue_number = int(match.group(1))
-            issue_references.append(IssueReference(kind=IssueReferenceKind.REFS, issue_number=issue_number))
-            if verbose:
-                console.log(f"Auto-detected issue #{issue_number} from branch '{branch_name}'.")
-    except Exception:
-        pass
+    issue_references = _detect_branch_issue_reference(verbose)
     regeneration_guidance: str | None = None
 
     try:
@@ -1008,21 +1085,9 @@ def _run_commit_generation(
     residual_guidance: str | None = None
     review_state: ReviewState | None = None
 
-    from git_cg.intent import derive_intent_selection_constraints
+    gen_context = _build_generation_context(diff_output)
 
-    signals = extract_diff_signals(diff_output)
-    gitops_matrix = load_sop().get("gitmoji_reference_matrix", [])
-    ranked_candidates = rank_commit_intents(signals, gitops_matrix) if gitops_matrix else []
-    constraints = derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else None
-
-    # Pre-compute GenerationContext once per run
-    from git_cg.regeneration import GenerationContext, RegenerationState, resolve_semantic_contract
-
-    gen_context = (
-        GenerationContext(diff_signals=signals, ranked_intents=ranked_candidates, constraints=constraints)
-        if constraints
-        else None
-    )
+    from git_cg.regeneration import RegenerationState, resolve_semantic_contract
 
     while True:
         system_prompt = build_system_prompt(
@@ -1159,42 +1224,16 @@ def _run_commit_generation(
 
         break
 
-    try:
-        import dataclasses
-
-        from git_cg.telemetry import (
-            GenerationTelemetry,
-            compute_diff_hash,
-            run_deterministic_checks,
-            write_telemetry_state,
-        )
-
-        score_card = run_deterministic_checks(review_state.commit_plan)
-
-        telemetry = GenerationTelemetry(
-            trace_id=LAST_OPIK_TRACE_ID,
-            diff_hash=compute_diff_hash(diff_output),
-            diff_output=diff_output,
-            repo_name=repo_name,
-            engine=engine,
-            model_name=model_name,
-            system_prompt_hash=compute_prompt_hash(system_prompt),
-            generated_message=review_state.render(),
-            commit_plan_json=review_state.commit_plan.model_dump(),
-            score_card=dataclasses.asdict(score_card),
-            thread_id=thread_id,
-        )
-        try:
-            git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
-            write_telemetry_state(git_dir, telemetry)
-            if verbose:
-                console.log(f"Opik telemetry state written to {git_dir}/GIT_CG_OPIK_STATE.json")
-        except Exception as inner_e:
-            if verbose:
-                console.log(f"[yellow]Failed to resolve git dir or write state: {inner_e}[/yellow]")
-    except Exception as e:
-        if verbose:
-            console.log(f"[yellow]Failed to write telemetry state: {e}[/yellow]")
+    _write_telemetry_state_safe(
+        review_state=review_state,
+        diff_output=diff_output,
+        engine=engine,
+        model_name=model_name,
+        system_prompt=system_prompt,
+        repo_name=repo_name,
+        thread_id=thread_id,
+        verbose=verbose,
+    )
 
     opik.flush_tracker()
     sentry_sdk.flush(timeout=2.0)
