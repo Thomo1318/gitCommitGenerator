@@ -304,3 +304,216 @@ def test_read_returns_none_for_json_with_missing_required_field(tmp_path):
 
     result = read_telemetry_state(str(tmp_path))
     assert result is None
+
+
+def test_redact_payload_no_payload():
+    from git_cg.telemetry import redact_payload
+
+    assert redact_payload("") == ""
+
+
+def test_redact_payload_success(monkeypatch):
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        # Simulate betterleaks output
+        findings = [{"Secret": "super_secret_key"}]
+        return MockProcess(stdout=json.dumps(findings))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "Here is my super_secret_key that should be hidden."
+    result = redact_payload(payload)
+    assert result == "Here is my [REDACTED] that should be hidden."
+
+
+def test_redact_payload_fail_safe(monkeypatch):
+    import subprocess
+
+    from git_cg.telemetry import redact_payload
+
+    def mock_run(*args, **kwargs):
+        raise FileNotFoundError("betterleaks not found")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "Here is my super_secret_key that should be hidden."
+    result = redact_payload(payload)
+    assert result == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+def test_redact_payload_null_output(monkeypatch):
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        return MockProcess(stdout="null")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    payload = "No secrets here"
+    assert redact_payload(payload) == payload
+
+
+def test_scorecard_properties():
+    from git_cg.telemetry import DeterministicScoreCard
+
+    card = DeterministicScoreCard(
+        header_length_ok=True,
+        description_length_ok=True,
+        type_valid=True,
+        emoji_matrix_aligned=True,
+        semver_consistent=True,
+        breaking_change_complete=True,
+    )
+    assert card.all_pass is True
+    assert card.failed_checks == []
+
+    card.header_length_ok = False
+    assert card.all_pass is False
+    assert card.failed_checks == ["header_length_ok"]
+
+
+def test_compute_hashes():
+    from git_cg.telemetry import compute_diff_hash, compute_prompt_hash
+
+    p_hash = compute_prompt_hash("test prompt")
+    d_hash = compute_diff_hash("test diff")
+    assert len(p_hash) == 16
+    assert len(d_hash) == 16
+    assert isinstance(p_hash, str)
+    assert isinstance(d_hash, str)
+
+
+def test_levenshtein_ratio():
+    from git_cg.telemetry import _levenshtein_ratio
+
+    assert _levenshtein_ratio("kitten", "kitten") == 1.0
+    assert _levenshtein_ratio("kitten", "sitting") < 1.0
+    assert _levenshtein_ratio("", "") == 1.0
+    assert _levenshtein_ratio("a", "") == 0.0
+
+
+def test_strip_trailers():
+    from git_cg.telemetry import _strip_trailers
+
+    text = "Fix bug\n\nRefs: #123\nSigned-off-by: me"
+    assert _strip_trailers(text) == "Fix bug"
+
+
+def test_classify_edit():
+    from git_cg.telemetry import Provenance, classify_edit
+
+    assert classify_edit("test", "test") == Provenance.AI_ACCEPTED
+    assert classify_edit("test", "test\nRefs: #1") == Provenance.AI_ACCEPTED_REFS_ONLY
+    assert classify_edit("test this", "test thin") == Provenance.AI_EDITED_MINOR
+    assert classify_edit("hello world", "completely different") == Provenance.AI_EDITED_SUBSTANTIVE
+
+
+def test_run_deterministic_checks():
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.telemetry import run_deterministic_checks
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="feat",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            scope="core",
+            description="add new feature",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Features",
+        ),
+        rationale="test rationale",
+        breaking_change=False,
+        breaking_change_description="",
+    )
+
+    card = run_deterministic_checks(plan)
+    assert card.all_pass is True
+
+    # Test failure mode
+    plan.primary_intent.description = "x" * 60  # > 50 chars
+    plan.breaking_change = True
+    plan.breaking_change_description = ""  # Missing description
+    card2 = run_deterministic_checks(plan)
+    assert card2.all_pass is False
+    assert "description_length_ok" in card2.failed_checks
+    assert "breaking_change_complete" in card2.failed_checks
+
+
+def test_run_deterministic_checks_no_matrix(monkeypatch):
+    import git_cg.telemetry
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.telemetry import run_deterministic_checks
+
+    monkeypatch.setattr(git_cg.telemetry, "get_gitmoji_matrix", lambda: None)
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="unknown_intent",
+            gitmoji="🐛",
+            cc_type=CommitType.FIX,
+            scope="core",
+            description="fix bug",
+            semver_impact=SemVerImpact.PATCH,
+            changelog_group="Bug Fixes",
+        ),
+        rationale="test rationale",
+        breaking_change=False,
+        breaking_change_description="",
+    )
+    card = run_deterministic_checks(plan)
+    assert card.emoji_matrix_aligned is True
+    assert card.semver_consistent is True
+
+
+def test_run_deterministic_checks_matrix_entry_missing(monkeypatch):
+    import git_cg.telemetry
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.telemetry import run_deterministic_checks
+
+    # Mock matrix with a different intent so "unknown_intent" is not found
+    monkeypatch.setattr(git_cg.telemetry, "get_gitmoji_matrix", lambda: [{"intent_id": "feat", "emoji": "✨"}])
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="unknown_intent",
+            gitmoji="🐛",
+            cc_type=CommitType.FIX,
+            scope="core",
+            description="fix bug",
+            semver_impact=SemVerImpact.PATCH,
+            changelog_group="Bug Fixes",
+        ),
+        rationale="test rationale",
+        breaking_change=False,
+        breaking_change_description="",
+    )
+    card = run_deterministic_checks(plan)
+    assert card.emoji_matrix_aligned is False
+    assert card.semver_consistent is True
+
+
+def test_clear_telemetry_state(tmp_path):
+    from git_cg.telemetry import clear_telemetry_state, get_state_file_path
+
+    state_file = get_state_file_path(str(tmp_path))
+    state_file.write_text("{}", encoding="utf-8")
+    assert state_file.exists()
+
+    clear_telemetry_state(str(tmp_path))
+    assert not state_file.exists()
