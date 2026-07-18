@@ -10,6 +10,7 @@ import contextlib
 import enum
 import hashlib
 import json
+import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -186,12 +187,51 @@ def classify_edit(original: str, edited: str) -> Provenance:
     return Provenance.AI_EDITED_SUBSTANTIVE
 
 
+def redact_payload(payload: str) -> str:
+    """
+    Scrub PII and secrets from strings using betterleaks.
+    Acts as a mandatory gateway interceptor before telemetry is enabled.
+    """
+    if not payload:
+        return payload
+
+    try:
+        process = subprocess.run(
+            ["betterleaks", "stdin", "-f", "json", "-r", "-", "--no-banner", "-l", "fatal"],
+            input=payload,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        output = process.stdout.strip()
+        if not output or output == "null":
+            return payload
+
+        findings = json.loads(output)
+        redacted = payload
+        for finding in findings:
+            secret = finding.get("Secret")
+            if secret and secret in redacted:
+                redacted = redacted.replace(secret, "[REDACTED]")
+        return redacted
+    except Exception:
+        # Fail safe if betterleaks is missing or fails to execute
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
 def get_state_file_path(git_dir: str) -> Path:
     return Path(git_dir) / "GIT_CG_OPIK_STATE.json"
 
 
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     """Write the current telemetry state to the .git directory for the commit-msg hook."""
+    telemetry.diff_output = redact_payload(telemetry.diff_output)
+    telemetry.generated_message = redact_payload(telemetry.generated_message)
+
+    plan_str = json.dumps(telemetry.commit_plan_json)
+    telemetry.commit_plan_json = json.loads(redact_payload(plan_str))
+
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
         json.dump(asdict(telemetry), f, indent=2)

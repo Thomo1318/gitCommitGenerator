@@ -142,7 +142,7 @@ def test_shadow_workspace_source_dir_is_resolved_to_abspath(mock_repo, monkeypat
     relative_source = os.path.basename(mock_repo)
 
     with shadow_workspace(relative_source) as workspace:
-        assert workspace.source_dir == os.path.abspath(mock_repo)
+        assert workspace.source_dir == os.path.realpath(mock_repo)
 
 
 def test_shadow_workspace_default_source_dir_uses_cwd(mock_repo, monkeypatch):
@@ -150,7 +150,7 @@ def test_shadow_workspace_default_source_dir_uses_cwd(mock_repo, monkeypatch):
     monkeypatch.chdir(mock_repo)
 
     with shadow_workspace() as workspace:
-        assert workspace.source_dir == os.path.abspath(mock_repo)
+        assert workspace.source_dir == os.path.realpath(mock_repo)
         staged_diff = workspace.run(["git", "diff", "--cached"], capture_output=True).stdout
         assert "Staged change" in staged_diff
 
@@ -320,9 +320,8 @@ def test_run_allows_overriding_default_kwargs(monkeypatch):
 
 def test_shadow_workspace_run_raises_on_failing_command_by_default(mock_repo):
     """run() must raise CalledProcessError for a failing command since check=True by default."""
-    with shadow_workspace(mock_repo) as workspace:
-        with pytest.raises(subprocess.CalledProcessError):
-            workspace.run(["git", "this-is-not-a-git-command"], capture_output=True)
+    with shadow_workspace(mock_repo) as workspace, pytest.raises(subprocess.CalledProcessError):
+        workspace.run(["git", "this-is-not-a-git-command"], capture_output=True)
 
 
 def test_shadow_workspace_run_does_not_raise_when_check_disabled(mock_repo):
