@@ -935,7 +935,7 @@ def _build_generation_context(diff_output: str):
 
 
 def _write_telemetry_state_safe(
-    review_state,
+    review_state: ReviewState,
     diff_output: str,
     engine: str,
     model_name: str,

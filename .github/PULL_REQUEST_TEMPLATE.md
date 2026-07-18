@@ -32,7 +32,7 @@
 
 <!-- Select the appropriate semantic versioning impact of this PR. -->
 
-- [ ] **PATCH** - Bug fixes or internal refactoring with no behavioral changes.
+- [ ] **PATCH** - Bug fixes or internal refactoring with no behavioural changes.
 - [ ] **MINOR** - New features added in a backwards-compatible manner.
 - [ ] **MAJOR** - Breaking changes that alter existing CLI or API behavior.
 

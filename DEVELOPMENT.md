@@ -179,7 +179,7 @@ A detailed guide for contributors explaining the _Why_, _What_, and _Non-negotia
 - **Why we use it**: To define the step-by-step user or system flow.
 - **What it should contain**: A numbered list of sequential steps.
 
-### ✅ Expected Behavior / Acceptance criteria
+### ✅ Expected Behaviour / Acceptance criteria
 
 - **Why we use it**: To strictly define when the issue can be considered "done".
 - **What it should contain**: A clear bulleted list of passing conditions.
