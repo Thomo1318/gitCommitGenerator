@@ -18,6 +18,6 @@ assignees: ""
 
 <!-- Describe how you envision this feature working. -->
 
-## ✅ Expected Behavior
+## ✅ Expected Behaviour
 
 <!-- Outline what the user experience should look like. -->

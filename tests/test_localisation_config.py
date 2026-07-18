@@ -649,9 +649,9 @@ class TestFeatureRequestTemplate:
         """Template must include a ``## 🛠️ Proposed Solution`` section."""
         assert "## 🛠️ Proposed Solution" in self._content()
 
-    def test_has_expected_behavior_section(self):
-        """Template must include a ``## ✅ Expected Behavior`` section."""
-        assert "## ✅ Expected Behavior" in self._content()
+    def test_has_expected_behaviour_section(self):
+        """Template must include a ``## ✅ Expected Behaviour`` section."""
+        assert "## ✅ Expected Behaviour" in self._content()
 
 
 class TestPullRequestTemplate:
