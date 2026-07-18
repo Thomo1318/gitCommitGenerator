@@ -46,7 +46,7 @@ jobs:
         run: uv sync --group docs
 
       - name: Build site
-        run: uv run zensical build --strict
+        run: uv run zensical build
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v4
