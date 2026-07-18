@@ -630,6 +630,7 @@ source = { editable = "." }
 dependencies = [
     { name = "code-review-graph" },
     { name = "hf-transfer" },
+    { name = "httpx" },
     { name = "instructor" },
     { name = "mlx-lm" },
     { name = "onepassword-sdk" },
@@ -641,6 +642,7 @@ dependencies = [
     { name = "rich" },
     { name = "semver" },
     { name = "sentry-sdk" },
+    { name = "tenacity" },
     { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
     { name = "typer" },
@@ -662,6 +664,7 @@ docs = [
 requires-dist = [
     { name = "code-review-graph", specifier = ">=2.3.0" },
     { name = "hf-transfer", specifier = ">=0.1.9" },
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "instructor", specifier = ">=1.15.1" },
     { name = "mlx-lm", specifier = ">=0.31.3" },
     { name = "onepassword-sdk", specifier = ">=0.1.2" },
@@ -673,6 +676,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14.3.4" },
     { name = "semver", specifier = ">=3.0.4" },
     { name = "sentry-sdk", specifier = ">=2.61.0" },
+    { name = "tenacity", specifier = ">=9.1.2" },
     { name = "tree-sitter", specifier = ">=0.22.0" },
     { name = "tree-sitter-language-pack", specifier = ">=0.1.0" },
     { name = "typer", specifier = ">=0.26.3" },
