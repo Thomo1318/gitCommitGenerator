@@ -1,0 +1,80 @@
+import os
+import subprocess
+import tempfile
+from contextlib import contextmanager
+
+
+class ShadowWorkspace:
+    """
+    A temporary, isolated clone of a Git repository.
+
+    This provides a safe sandbox for speculative Git operations (like generating and applying
+    commits) without risking the user's actual working directory.
+    """
+
+    def __init__(self, source_dir: str):
+        self.source_dir = os.path.abspath(source_dir)
+        self.temp_dir_obj = tempfile.TemporaryDirectory(prefix="git-cg-shadow-")
+        self.path = os.path.join(self.temp_dir_obj.name, "repo")
+
+    def __enter__(self):
+        self._clone_and_sync()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.temp_dir_obj.cleanup()
+
+    def _clone_and_sync(self):
+        """
+        Clones the repository and synchronizes the index (staged changes) and working tree (unstaged changes)
+        using git patch applications.
+        """
+        # 1. Fast local clone (uses hardlinks on POSIX, checks out HEAD)
+        subprocess.run(["git", "clone", "--local", self.source_dir, self.path], check=True, capture_output=True)
+
+        # 2. Sync staged changes
+        staged_patch = self._get_patch(self.source_dir, ["git", "diff", "--cached", "--binary", "HEAD"])
+        if staged_patch.strip():
+            self._apply_patch(staged_patch, ["git", "apply", "--index"])
+
+        # 3. Sync unstaged changes
+        unstaged_patch = self._get_patch(self.source_dir, ["git", "diff", "--binary"])
+        if unstaged_patch.strip():
+            self._apply_patch(unstaged_patch, ["git", "apply"])
+
+    def _get_patch(self, cwd: str, cmd: list[str]) -> bytes:
+        """Runs a diff command and returns the patch bytes."""
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, check=True)
+        return result.stdout
+
+    def _apply_patch(self, patch_data: bytes, cmd: list[str]):
+        """Applies a patch in the shadow workspace."""
+        # Using subprocess.run with input=patch_data allows us to pipe the patch securely
+        subprocess.run(cmd, cwd=self.path, input=patch_data, check=True, capture_output=True)
+
+    def run(self, cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
+        """
+        Runs a command (e.g., 'git') inside the shadow workspace.
+
+        Args:
+            cmd: The command list to run.
+            **kwargs: Extra arguments for subprocess.run.
+
+        Returns:
+            subprocess.CompletedProcess
+        """
+        kwargs.setdefault("cwd", self.path)
+        kwargs.setdefault("text", True)
+        return subprocess.run(cmd, **kwargs)
+
+
+@contextmanager
+def shadow_workspace(source_dir: str = "."):
+    """
+    Context manager that duplicates the current git repository into a temporary directory.
+
+    Yields:
+        ShadowWorkspace: The isolated workspace object.
+    """
+    with ShadowWorkspace(source_dir) as workspace:
+        yield workspace
