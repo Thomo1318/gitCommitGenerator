@@ -595,7 +595,7 @@ class TestBugReportTemplate:
         content = self._content()
         assert "behaviour" in content.lower()
         # Ensure US spelling is NOT used in this section title
-        assert "Expected behavior" not in content
+        assert "## ✅ Expected behavior" not in content
 
     def test_has_environment_details_section(self):
         """Template must include a ``## 💻 Environment Details`` section."""
@@ -604,7 +604,10 @@ class TestBugReportTemplate:
     def test_reproduce_steps_are_numbered(self):
         """The reproduction steps must be a numbered list."""
         content = self._content()
-        assert "1." in content
+        parts = content.split("## 🔄 To Reproduce")
+        assert len(parts) > 1, "To Reproduce section not found"
+        reproduce_section = parts[1].split("## ")[0]
+        assert "1." in reproduce_section
 
 
 class TestFeatureRequestTemplate:
