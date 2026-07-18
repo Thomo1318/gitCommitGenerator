@@ -9,6 +9,7 @@
   },
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.autoImportCompletions": true,
+  "npm.packageManager": "npm",
   "files.exclude": {
     "**/.git": true,
     "**/.svn": true,
