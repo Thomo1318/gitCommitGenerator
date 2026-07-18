@@ -365,7 +365,63 @@ def test_redact_payload_null_output(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", mock_run)
     payload = "No secrets here"
-    assert redact_payload(payload) == payload
+    assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+def test_redact_payload_timeout(monkeypatch):
+    import subprocess
+
+    from git_cg.telemetry import redact_payload
+
+    def mock_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="betterleaks", timeout=5)
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    payload = "No secrets here"
+    assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+def test_redact_payload_non_zero_exit(monkeypatch):
+    import subprocess
+
+    from git_cg.telemetry import redact_payload
+
+    def mock_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(returncode=1, cmd="betterleaks")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    payload = "No secrets here"
+    assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+def test_write_telemetry_state_redact_failure(tmp_path, monkeypatch):
+    import git_cg.telemetry
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    def mock_redact_payload(payload):
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    monkeypatch.setattr(git_cg.telemetry, "redact_payload", mock_redact_payload)
+
+    telemetry = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+
+    write_telemetry_state(str(tmp_path), telemetry)
+
+    result = read_telemetry_state(str(tmp_path))
+    assert result.commit_plan_json == {"_redaction": "failed"}
+    assert result.diff_output == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
 
 def test_scorecard_properties():
