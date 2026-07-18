@@ -201,14 +201,15 @@ def redact_payload(payload: str) -> str:
             input=payload,
             capture_output=True,
             text=True,
-            check=False,
+            check=True,
+            timeout=5,
         )
 
         output = process.stdout.strip()
-        if not output or output == "null":
-            return payload
-
         findings = json.loads(output)
+        if not isinstance(findings, list):
+            raise ValueError("Expected JSON list from betterleaks")
+
         redacted = payload
         for finding in findings:
             secret = finding.get("Secret")
@@ -230,7 +231,12 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     telemetry.generated_message = redact_payload(telemetry.generated_message)
 
     plan_str = json.dumps(telemetry.commit_plan_json)
-    telemetry.commit_plan_json = json.loads(redact_payload(plan_str))
+    redacted_plan_str = redact_payload(plan_str)
+
+    if redacted_plan_str == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+        telemetry.commit_plan_json = {"_redaction": "failed"}
+    else:
+        telemetry.commit_plan_json = json.loads(redacted_plan_str)
 
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
