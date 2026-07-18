@@ -18,7 +18,11 @@ class ShadowWorkspace:
         self.path = os.path.join(self.temp_dir_obj.name, "repo")
 
     def __enter__(self):
-        self._clone_and_sync()
+        try:
+            self._clone_and_sync()
+        except Exception:
+            self.temp_dir_obj.cleanup()
+            raise
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -33,7 +37,7 @@ class ShadowWorkspace:
         subprocess.run(["git", "clone", "--local", self.source_dir, self.path], check=True, capture_output=True)
 
         # 2. Sync staged changes
-        staged_patch = self._get_patch(self.source_dir, ["git", "diff", "--cached", "--binary", "HEAD"])
+        staged_patch = self._get_patch(self.source_dir, ["git", "diff", "--cached", "--binary"])
         if staged_patch.strip():
             self._apply_patch(staged_patch, ["git", "apply", "--index"])
 
@@ -65,6 +69,7 @@ class ShadowWorkspace:
         """
         kwargs.setdefault("cwd", self.path)
         kwargs.setdefault("text", True)
+        kwargs.setdefault("check", True)
         return subprocess.run(cmd, **kwargs)
 
 
