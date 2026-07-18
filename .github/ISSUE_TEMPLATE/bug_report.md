@@ -6,41 +6,26 @@ labels: bug
 assignees: ""
 ---
 
-## Summary
+## 🎯 Summary
 
-A clear and concise description of what the bug is.
+<!-- A clear and concise description of what the bug is. -->
 
-## Why this matters
+## 💡 Why this matters
 
-Explain the problem being solved, why it's important, and the value it brings to the project.
+<!-- Explain why fixing this is important for the system or user experience. -->
 
-## Architectural direction
+## 🔄 To Reproduce
 
-Outline the technical approach, key components, or system design required.
+1.
+2.
+3.
 
-## To Reproduce
+## ✅ Expected behaviour
 
-Steps to reproduce the behavior:
+<!-- A clear description of what you expected to happen. -->
 
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## 💻 Environment Details
 
-## Expected behaviour
-
-A clear and concise description of what you expected to happen.
-
-## Screenshots
-
-If applicable, add screenshots to help explain your problem.
-
-## Desktop (please complete the following information):
-
-- OS: [e.g. macOS]
-- Terminal [e.g. iTerm2, macOS Terminal]
-- Version [e.g. 22]
-
-## Additional context
-
-Add any other context about the problem here.
+- **OS**: [e.g. macOS]
+- **Engine**: [e.g. oMLX, MTPLX]
+- **Terminal**: [e.g. iTerm2]
