@@ -70,9 +70,9 @@ When developing or testing with local Apple Silicon inference engines, you must 
 
 > [!WARNING]
 > **Silent Misrouting & HTTP 404s**
-> These local servers act as drop-in OpenAI replacements, but they do **not** support generic model IDs (e.g., `"local"` or `"default"`). 
-> If the `"model"` parameter in your API JSON payload does not **exactly match** the absolute path or precise Hugging Face ID of the currently loaded model, the engine will either throw an opaque `HTTP 404: Not Found` error, or silently misroute the request to a different cached model (which can severely skew benchmarks and semantic tests). 
-> 
+> These local servers act as drop-in OpenAI replacements, but they do **not** support generic model IDs (e.g., `"local"` or `"default"`).
+> If the `"model"` parameter in your API JSON payload does not **exactly match** the absolute path or precise Hugging Face ID of the currently loaded model, the engine will either throw an opaque `HTTP 404: Not Found` error, or silently misroute the request to a different cached model (which can severely skew benchmarks and semantic tests).
+>
 > **Solution:** Always query `GET /v1/models` from the local server and use the exact `id` returned by the registry to explicitly bind your completions requests.
 
 ---
@@ -134,3 +134,127 @@ Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 3. Commit using `git-cg` or ensure your manual commits adhere strictly to our Hybrid Commit Matrix (found in `config/gitops_agent_sop.json`).
 4. Ensure `just test` and `just lint` both pass locally.
 5. Push and open a Pull Request.
+
+---
+
+## 📝 Issue & Pull Request Standards
+
+To maintain high visibility into architectural changes and semantic impact, all Issues and Pull Requests must adhere to the **Gold-Standard Templates**.
+
+<details>
+<summary><b>📚 Heading Breakdown Dictionary</b></summary>
+
+A detailed guide for contributors explaining the _Why_, _What_, and _Non-negotiables_ of every heading used in our templates:
+
+### 🎯 Summary
+
+- **Why we use it**: To provide a rapid, high-level overview of the feature or bug.
+- **What it should contain**: 1-2 sentences strictly defining the goal.
+- **Non-negotiable**: Must be present in every issue type.
+
+### 💡 Why this matters
+
+- **Why we use it**: To justify the existence of the issue and explain the value it brings to the project.
+- **What it should contain**: The problem being solved and the impact on the user or system.
+
+### 📐 Architectural direction
+
+- **Why we use it**: To define the technical approach or system design required for major epics.
+- **What it should contain**: Key components, patterns, or architecture decisions.
+- **Non-negotiable**: Must be present in all Architectural Tasks.
+
+### ⚖️ Core decision
+
+- **Why we use it**: To permanently record technical choices that impact the system's architecture.
+- **What it should contain**: Definitive rules (e.g. "We will use pure functions for X").
+- **Non-negotiable**: Must be present in all Architectural Tasks.
+
+### 🛠️ Proposed Implementation Details / Proposed Solution
+
+- **Why we use it**: To describe how the feature will actually work under the hood.
+- **What it should contain**: Specific technical details, algorithms, or execution steps.
+
+### 🔄 Expected workflow
+
+- **Why we use it**: To define the step-by-step user or system flow.
+- **What it should contain**: A numbered list of sequential steps.
+
+### ✅ Expected Behavior / Acceptance criteria
+
+- **Why we use it**: To strictly define when the issue can be considered "done".
+- **What it should contain**: A clear bulleted list of passing conditions.
+
+### 📦 In scope / 🚫 Out of scope
+
+- **Why we use it**: To prevent feature creep.
+- **What it should contain**: Bullet points explicitly defining boundaries.
+
+### 🔗 Milestone relation
+
+- **Why we use it**: To track strategic architectural decisions.
+- **What it should contain**: Direct links to related ADRs or Epics (e.g. Related to ADR-0005).
+
+### 🧪 Suggested test scenarios
+
+- **Why we use it**: To ensure features are verifiable before merge.
+- **What it should contain**: Unit, integration, or manual testing strategies.
+
+### ⚠️ Risks / things to watch
+
+- **Why we use it**: To proactively identify regressions or security flaws.
+- **What it should contain**: Potential performance impacts, security considerations, or backward-compatibility issues.
+
+### 📂 File plan
+
+- **Why we use it**: To outline the scope of file modifications.
+- **What it should contain**: The expected file paths and descriptions of changes.
+</details>
+
+<details>
+<summary><b>🌟 Gold-Standard Examples</b></summary>
+
+When creating issues or pull requests, refer to these pristine examples of our standards in action:
+
+- **Architectural Task**: [Issue #146](https://github.com/Thomo1318/gitCommitGenerator/issues/146)
+- **Implementation Task**: [Issue #141](https://github.com/Thomo1318/gitCommitGenerator/issues/141)
+- **Pull Request**: [PR #140](https://github.com/Thomo1318/gitCommitGenerator/pull/140) (and #147 once merged)
+
+**Pull Request Requirements:**
+
+1. **Summary & Changes**: A clear explanation of _why_ the change matters and _what_ was technically modified.
+2. **Included Changes**: A comprehensive aggregation of the primary commit headers **and** the items listed under their "Included changes" sections (e.g. `♻️ refactor(core): ...` and `✅ test(core): ...`), perfectly mirroring the `git-cg` output format.
+3. **Breaking Changes**: If applicable, heavily emphasize any breaking changes and migration paths.
+4. **SemVer Impact**: Explicit declaration of the change's impact (PATCH, MINOR, MAJOR) and its corresponding Gitmoji metadata.
+</details>
+
+<details>
+<summary><b>🏷️ Repository Labels Table</b></summary>
+
+| Category      | Label                  | Description                                               |
+| :------------ | :--------------------- | :-------------------------------------------------------- |
+| **Component** | `component: core`      | AI commit generation and payload structure                |
+| **Component** | `component: docs`      | Improvements or additions to documentation                |
+| **Component** | `component: tui`       | `gum` interactive flow                                    |
+| **Priority**  | `priority: high`       | Critical urgency, drop everything and address immediately |
+| **Priority**  | `priority: low`        | Low urgency; handle when time permits                     |
+| **Priority**  | `priority: medium`     | Standard urgency; handle in normal workflow               |
+| **Status**    | `status: blocked`      | Waiting on upstream or an external dependency             |
+| **Status**    | `status: completed`    | Work on the issue has been completed                      |
+| **Status**    | `status: deferred`     | Postponed for a future milestone or release               |
+| **Status**    | `status: in progress`  | Work is currently actively happening                      |
+| **Status**    | `status: needs triage` | Needs prioritization or categorization                    |
+| **Type**      | `type: bug`            | Something isn't working                                   |
+| **Type**      | `type: chore`          | Maintenance, dependencies, tooling                        |
+| **Type**      | `type: ci`             | GitHub Actions, release pipelines                         |
+| **Type**      | `type: enhancement`    | New feature or request                                    |
+| **Type**      | `type: refactor`       | Code structure changes                                    |
+| **Type**      | `type: test`           | Unit or integration testing                               |
+| **General**   | `duplicate`            | This issue or pull request already exists                 |
+| **General**   | `good first issue`     | Good for newcomers                                        |
+| **General**   | `help wanted`          | Extra attention is needed                                 |
+| **General**   | `invalid`              | This doesn't seem right                                   |
+| **General**   | `question`             | Further information is requested                          |
+| **General**   | `security`             | Vulnerabilities or secrets management                     |
+| **General**   | `wontfix`              | This will not be worked on                                |
+
+</details>
