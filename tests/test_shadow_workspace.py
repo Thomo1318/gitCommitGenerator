@@ -48,8 +48,10 @@ def test_shadow_workspace_isolation(mock_repo):
 
     with shadow_workspace(mock_repo) as workspace:
         # Make a commit inside the shadow workspace
-        workspace.run(["git", "commit", "-m", "Shadow commit"])
-        shadow_head = workspace.run(["git", "rev-parse", "HEAD"], capture_output=True).stdout.strip()
+        workspace.run(["git", "config", "user.name", "Test User"], check=True)
+        workspace.run(["git", "config", "user.email", "test@example.com"], check=True)
+        workspace.run(["git", "commit", "-m", "Shadow commit"], check=True)
+        shadow_head = workspace.run(["git", "rev-parse", "HEAD"], capture_output=True, check=True).stdout.strip()
 
         assert shadow_head != original_head
 
