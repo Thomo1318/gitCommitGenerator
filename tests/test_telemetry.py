@@ -573,3 +573,296 @@ def test_clear_telemetry_state(tmp_path):
 
     clear_telemetry_state(str(tmp_path))
     assert not state_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# redact_payload - subprocess invocation contract
+# ---------------------------------------------------------------------------
+
+
+def test_redact_payload_invokes_betterleaks_with_expected_args(monkeypatch):
+    """redact_payload must shell out to betterleaks with the documented CLI flags."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    captured = {}
+
+    def mock_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return MockProcess(stdout=json.dumps([]))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "nothing secret here"
+    result = redact_payload(payload)
+
+    assert result == payload
+    assert captured["cmd"] == ["betterleaks", "stdin", "-f", "json", "-r", "-", "--no-banner", "-l", "fatal"]
+    assert captured["kwargs"]["input"] == payload
+    assert captured["kwargs"]["text"] is True
+    assert captured["kwargs"]["check"] is True
+    assert captured["kwargs"]["timeout"] == 5
+
+
+# ---------------------------------------------------------------------------
+# redact_payload - finding-handling edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_redact_payload_multiple_secrets(monkeypatch):
+    """All secrets reported by betterleaks must be replaced, not just the first."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        findings = [{"Secret": "aaa111"}, {"Secret": "bbb222"}]
+        return MockProcess(stdout=json.dumps(findings))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "key1=aaa111 key2=bbb222"
+    result = redact_payload(payload)
+    assert result == "key1=[REDACTED] key2=[REDACTED]"
+
+
+def test_redact_payload_finding_missing_secret_key(monkeypatch):
+    """A finding without a 'Secret' key must be skipped without raising."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        findings = [{"RuleID": "generic-api-key"}]
+        return MockProcess(stdout=json.dumps(findings))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "no secret field on this finding"
+    result = redact_payload(payload)
+    assert result == payload
+
+
+def test_redact_payload_secret_not_present_in_payload(monkeypatch):
+    """A reported secret that doesn't literally appear in the payload must not alter the string."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        findings = [{"Secret": "not_in_the_text"}]
+        return MockProcess(stdout=json.dumps(findings))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "this string does not contain the flagged value"
+    result = redact_payload(payload)
+    assert result == payload
+
+
+def test_redact_payload_empty_findings_list_returns_unmodified_payload(monkeypatch):
+    """An empty findings list (no secrets detected) must return the payload untouched."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        return MockProcess(stdout=json.dumps([]))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "perfectly clean payload"
+    assert redact_payload(payload) == payload
+
+
+def test_redact_payload_malformed_json_output(monkeypatch):
+    """Non-JSON stdout from betterleaks must trigger the fail-safe path, not raise."""
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        return MockProcess(stdout="this is not valid json {{{")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "sensitive payload"
+    assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+def test_redact_payload_findings_not_a_list(monkeypatch):
+    """A JSON object (dict) instead of a list from betterleaks must be treated as a failure."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(*args, **kwargs):
+        return MockProcess(stdout=json.dumps({"unexpected": "shape"}))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    payload = "sensitive payload"
+    assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+# ---------------------------------------------------------------------------
+# write_telemetry_state - redaction integration (happy path)
+# ---------------------------------------------------------------------------
+
+
+def test_write_telemetry_state_redacts_diff_output_and_message(tmp_path, monkeypatch):
+    """diff_output and generated_message must be passed through redaction before being persisted."""
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(cmd, input=None, **kwargs):
+        secret = "sk-live-abcdef"
+        findings = [{"Secret": secret}] if secret in input else []
+        return MockProcess(stdout=json.dumps(findings))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    telemetry = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff --git a/x.py b/x.py\n+API_KEY=sk-live-abcdef",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="feat: rotate sk-live-abcdef credential",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+
+    write_telemetry_state(str(tmp_path), telemetry)
+    result = read_telemetry_state(str(tmp_path))
+
+    assert "sk-live-abcdef" not in result.diff_output
+    assert "[REDACTED]" in result.diff_output
+    assert "sk-live-abcdef" not in result.generated_message
+    assert "[REDACTED]" in result.generated_message
+
+
+def test_write_telemetry_state_redacts_secrets_inside_commit_plan_json(tmp_path, monkeypatch):
+    """Secrets embedded inside commit_plan_json must be redacted via the serialize/redact/deserialize path."""
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+
+    def mock_run(cmd, input=None, **kwargs):
+        secret = "ghp_supersecrettoken"
+        findings = [{"Secret": secret}] if secret in input else []
+        return MockProcess(stdout=json.dumps(findings))
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    telemetry = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff --git a/x.py b/x.py",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="chore: cleanup",
+        commit_plan_json={"rationale": "found ghp_supersecrettoken in config"},
+        score_card={},
+    )
+
+    write_telemetry_state(str(tmp_path), telemetry)
+    result = read_telemetry_state(str(tmp_path))
+
+    assert result.commit_plan_json == {"rationale": "found [REDACTED] in config"}
+
+
+def test_write_telemetry_state_calls_redact_payload_for_each_field(tmp_path, monkeypatch):
+    """write_telemetry_state must route diff_output, generated_message, and the serialized
+    commit_plan_json through redact_payload exactly once each."""
+    import git_cg.telemetry
+    from git_cg.telemetry import GenerationTelemetry, write_telemetry_state
+
+    seen_payloads = []
+
+    def fake_redact_payload(payload):
+        seen_payloads.append(payload)
+        return payload
+
+    monkeypatch.setattr(git_cg.telemetry, "redact_payload", fake_redact_payload)
+
+    telemetry = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="the-diff-output",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="the-generated-message",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+
+    write_telemetry_state(str(tmp_path), telemetry)
+
+    assert seen_payloads[0] == "the-diff-output"
+    assert seen_payloads[1] == "the-generated-message"
+    assert seen_payloads[2] == json.dumps({"intent": "feat"})
+    assert len(seen_payloads) == 3

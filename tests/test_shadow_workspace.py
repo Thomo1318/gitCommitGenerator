@@ -331,6 +331,18 @@ def test_shadow_workspace_run_does_not_raise_when_check_disabled(mock_repo):
         assert result.returncode != 0
 
 
+def test_shadow_workspace_run_failure_still_cleans_up_temp_dir(mock_repo):
+    """Even when a failing command raises inside the combined `with ..., pytest.raises(...)`
+    form, the temp directory must still be removed on context exit."""
+    workspace_path = None
+    with shadow_workspace(mock_repo) as workspace, pytest.raises(subprocess.CalledProcessError):
+        workspace_path = workspace.path
+        workspace.run(["git", "this-is-not-a-git-command"], capture_output=True)
+
+    assert workspace_path is not None
+    assert not os.path.exists(workspace_path)
+
+
 # ---------------------------------------------------------------------------
 # ShadowWorkspace._clone_and_sync - patch application is conditional on diff content
 # ---------------------------------------------------------------------------
