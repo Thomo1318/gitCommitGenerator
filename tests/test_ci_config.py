@@ -21,6 +21,15 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def _load_yaml(rel_path: str) -> dict:
+    """
+    Load and parse a YAML file relative to the repository root.
+    
+    Parameters:
+    	rel_path (str): Relative path to the YAML file.
+    
+    Returns:
+    	dict: Parsed YAML content with a bare `on` key preserved as a string.
+    """
     data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
     # PyYAML (1.1 resolver) parses the bare `on:` key as the boolean True.
     if isinstance(data, dict) and True in data:
@@ -29,11 +38,22 @@ def _load_yaml(rel_path: str) -> dict:
 
 
 def _load_pyproject() -> dict:
+    """
+    Load and parse the repository's pyproject.toml configuration.
+    
+    Returns:
+    	dict: The parsed project configuration.
+    """
     with open(REPO_ROOT / "pyproject.toml", "rb") as f:
         return tomllib.load(f)
 
 
 def _load_uv_lock() -> dict:
+    """Load and parse the repository's uv.lock file.
+    
+    Returns:
+        dict: The parsed uv.lock configuration.
+    """
     with open(REPO_ROOT / "uv.lock", "rb") as f:
         return tomllib.load(f)
 
@@ -47,9 +67,19 @@ class TestCiWorkflowCodecovStep:
     """Tests for the `Upload coverage to Codecov` step of ci.yml."""
 
     def _workflow(self) -> dict:
+        """Load the CI workflow configuration."""
         return _load_yaml(".github/workflows/ci.yml")
 
     def _codecov_step(self) -> dict:
+        """
+        Finds the Codecov upload step in the CI workflow.
+        
+        Returns:
+        	dict: The configuration for the Codecov upload step.
+        
+        Raises:
+        	AssertionError: If the Codecov upload step is not present.
+        """
         steps = self._workflow()["jobs"]["test-and-coverage"]["steps"]
         for step in steps:
             if step.get("name") == "Upload coverage to Codecov":
@@ -61,12 +91,14 @@ class TestCiWorkflowCodecovStep:
         assert isinstance(self._workflow(), dict)
 
     def test_codecov_action_pinned_to_v4(self):
-        """The codecov-action must be pinned to v4 (downgraded from v7)."""
+        """
+        Verify that the Codecov upload step uses version 4 of the Codecov action.
+        """
         step = self._codecov_step()
         assert step["uses"] == "codecov/codecov-action@v4"
 
     def test_codecov_action_not_v7(self):
-        """Regression guard: the action must not regress back to the broken v7 pin."""
+        """Ensure the Codecov upload step uses a supported action version."""
         step = self._codecov_step()
         assert step["uses"] != "codecov/codecov-action@v7"
 
@@ -105,9 +137,19 @@ class TestDocsWorkflowBuildStep:
     """Tests for the `Build site` step of docs.yml."""
 
     def _workflow(self) -> dict:
+        """Load the documentation workflow configuration."""
         return _load_yaml(".github/workflows/docs.yml")
 
     def _build_step(self) -> dict:
+        """
+        Find the documentation workflow step responsible for building the site.
+        
+        Returns:
+        	dict: The configuration for the "Build site" step.
+        
+        Raises:
+        	AssertionError: If the "Build site" step is not present.
+        """
         steps = self._workflow()["jobs"]["deploy"]["steps"]
         for step in steps:
             if step.get("name") == "Build site":
