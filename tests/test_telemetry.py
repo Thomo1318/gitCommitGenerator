@@ -866,3 +866,96 @@ def test_write_telemetry_state_calls_redact_payload_for_each_field(tmp_path, mon
     assert seen_payloads[1] == "the-generated-message"
     assert seen_payloads[2] == json.dumps({"intent": "feat"})
     assert len(seen_payloads) == 3
+
+
+def test_generation_telemetry_graph_schema_version_defaults_to_unknown():
+    """graph_schema_version is a newly added field that defaults to unknown."""
+    from git_cg.telemetry import GenerationTelemetry
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+    assert tel.graph_schema_version == "unknown"
+
+
+def test_generation_telemetry_graph_schema_version_accepts_string():
+    """graph_schema_version must accept a string value."""
+    from git_cg.telemetry import GenerationTelemetry
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+        graph_schema_version="1.2.0",
+    )
+    assert tel.graph_schema_version == "1.2.0"
+
+
+def test_reverse_parse_commit_message_full_structure():
+    from git_cg.telemetry import reverse_parse_commit_message
+
+    text = (
+        "✨ feat(core)!: implement new telemetry pipeline\n"
+        "\n"
+        "This completely replaces the old telemetry system with a new\n"
+        "structured approach.\n"
+        "\n"
+        "Included changes:\n"
+        "- 🐛 fix(telemetry): resolve missing metadata in traces\n"
+        "- ♻️ refactor: simplify opik context injection\n"
+        "\n"
+        "BREAKING CHANGE: The `record_telemetry` signature has changed.\n"
+        "\n"
+        "Refs: #123\n"
+        "SemVer-Impact: MAJOR\n"
+        "Changelog-Groups: core"
+    )
+
+    plan = reverse_parse_commit_message(text)
+
+    assert plan["primary_intent"]["gitmoji"] == "✨"
+    assert plan["primary_intent"]["cc_type"] == "feat"
+    assert plan["primary_intent"]["scope"] == "core"
+    assert plan["primary_intent"]["description"] == "implement new telemetry pipeline"
+    assert plan["primary_intent"]["semver_impact"] == "MAJOR"
+
+    assert plan["breaking_change"] is True
+    assert plan["breaking_change_description"] == "The `record_telemetry` signature has changed."
+
+    assert len(plan["secondary_intents"]) == 2
+    assert plan["secondary_intents"][0]["cc_type"] == "fix"
+    assert plan["secondary_intents"][0]["scope"] == "telemetry"
+    assert plan["secondary_intents"][0]["gitmoji"] == "🐛"
+    assert plan["secondary_intents"][1]["cc_type"] == "refactor"
+
+
+def test_reverse_parse_commit_message_simple():
+    from git_cg.telemetry import reverse_parse_commit_message
+
+    text = "fix: typos in docs\n\nFixed some typos."
+    plan = reverse_parse_commit_message(text)
+
+    assert plan["primary_intent"]["gitmoji"] == ""
+    assert plan["primary_intent"]["cc_type"] == "fix"
+    assert plan["primary_intent"]["scope"] is None
+    assert plan["primary_intent"]["description"] == "typos in docs"
+    assert plan["breaking_change"] is False
+    assert len(plan["secondary_intents"]) == 0
