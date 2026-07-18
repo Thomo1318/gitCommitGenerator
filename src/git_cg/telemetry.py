@@ -64,6 +64,7 @@ class GenerationTelemetry:
     commit_plan_json: dict
     score_card: dict  # Dict representation of DeterministicScoreCard
     thread_id: str | None = None
+    graph_schema_version: str = "unknown"
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -185,6 +186,124 @@ def classify_edit(original: str, edited: str) -> Provenance:
     if ratio >= 0.85:
         return Provenance.AI_EDITED_MINOR
     return Provenance.AI_EDITED_SUBSTANTIVE
+
+
+def reverse_parse_commit_message(text: str) -> dict:
+    """
+    Reverse-parse a finalized commit message text back into a structured CommitPlan dict.
+    This extracts components matching the deterministic format from `CommitPlan.render()`.
+
+    Returns:
+        dict: The structured plan containing primary_intent, body_summary, secondary_intents, etc.
+    """
+    import re
+
+    lines = [line.strip() for line in text.splitlines()]
+    if not lines:
+        return {}
+
+    plan = {
+        "primary_intent": {
+            "intent_id": "unknown",
+            "cc_type": "chore",
+            "scope": None,
+            "description": "",
+            "gitmoji": "🔧",
+            "semver_impact": "NONE",
+            "changelog_group": "other",
+        },
+        "secondary_intents": [],
+        "body_summary": "",
+        "breaking_change": False,
+        "breaking_change_description": None,
+    }
+
+    # 1. Parse header
+    header = lines[0]
+    # Regex handles optional gitmoji and standard conventional commit syntax
+    # e.g., "✨ feat(auth)!: add login" or "fix: typo"
+    header_match = re.match(r"^(?:(.*?)\s+)?([a-z]+)(?:\(([^)]+)\))?(!)?:\s+(.*)$", header)
+    if header_match:
+        emoji, cc_type, scope, breaking, description = header_match.groups()
+        plan["primary_intent"]["gitmoji"] = emoji or ""
+        plan["primary_intent"]["cc_type"] = cc_type
+        plan["primary_intent"]["scope"] = scope
+        plan["primary_intent"]["description"] = description
+        if breaking:
+            plan["breaking_change"] = True
+    else:
+        # Fallback if it doesn't match standard conventional commit structure
+        plan["primary_intent"]["description"] = header
+
+    # 2. Extract body, included changes, trailers, and footer
+    body_lines = []
+    in_secondary = False
+    in_trailers = False
+    trailers = {}
+
+    i = 1
+    while i < len(lines):
+        line = lines[i]
+
+        if line == "":
+            i += 1
+            continue
+
+        if line == "Included changes:":
+            in_secondary = True
+            i += 1
+            continue
+
+        if line.startswith("BREAKING CHANGE:"):
+            plan["breaking_change"] = True
+            plan["breaking_change_description"] = line.replace("BREAKING CHANGE:", "").strip()
+            i += 1
+            continue
+
+        if (
+            line.startswith("SemVer-Impact:")
+            or line.startswith("Change-Types:")
+            or line.startswith("Changelog-Groups:")
+        ):
+            in_trailers = True
+            in_secondary = False
+
+        if in_trailers:
+            if ":" in line:
+                key, val = line.split(":", 1)
+                trailers[key.strip()] = val.strip()
+        elif in_secondary:
+            if line.startswith("- "):
+                sec_match = re.match(r"^- (?:(.*?)\s+)?([a-z]+)(?:\(([^)]+)\))?:\s+(.*)$", line)
+                if sec_match:
+                    emoji, cc_type, scope, description = sec_match.groups()
+                    plan["secondary_intents"].append(
+                        {
+                            "intent_id": "unknown",
+                            "cc_type": cc_type,
+                            "scope": scope,
+                            "description": description,
+                            "gitmoji": emoji or "",
+                            "semver_impact": "NONE",
+                            "changelog_group": "other",
+                        }
+                    )
+            else:
+                # If it's not a list item, maybe we left the included changes section
+                in_secondary = False
+                body_lines.append(line)
+        else:
+            body_lines.append(line)
+
+        i += 1
+
+    plan["body_summary"] = "\\n".join(body_lines)
+
+    # Enrich primary intent from trailers if possible
+    if "SemVer-Impact" in trailers:
+        plan["primary_intent"]["semver_impact"] = trailers["SemVer-Impact"]
+
+    return plan
 
 
 def redact_payload(payload: str) -> str:

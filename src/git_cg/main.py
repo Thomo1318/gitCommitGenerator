@@ -60,6 +60,7 @@ from git_cg.interaction import (  # noqa: E402
     prompt_with_gum,
 )
 from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind  # noqa: E402
+from git_cg.retries import llm_retry  # noqa: E402
 from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
 from git_cg.telemetry import compute_prompt_hash  # noqa: E402
@@ -400,6 +401,7 @@ def build_generation_messages(
     return messages
 
 
+@llm_retry
 @opik.track(project_name="gitCommitGenerator", ignore_arguments=["client"])
 def generate_commit_message(
     client: instructor.Instructor,
@@ -414,55 +416,45 @@ def generate_commit_message(
     Generate a commit plan from the current diff.
 
     Applies any locked directive values to the generated plan before returning it.
+    Transient LLM errors (connection, timeout, rate-limit) are retried
+    automatically via the ``@llm_retry`` decorator.
 
     Parameters:
+        client (instructor.Instructor): The instructor-patched OpenAI client.
         diff_output (str): The git diff to send to the model.
         model_name (str): The model to use for generation.
         system_prompt (str): The system instructions for generation.
         active_directives (dict[str, str] | None): Locked directive values to apply to the generated plan.
+        residual_guidance (str | None): Optional guidance text from a previous generation attempt.
 
     Returns:
         CommitPlan: The generated commit plan.
 
     Raises:
-        RuntimeError: If a commit plan cannot be generated after the configured retries.
+        openai.APIConnectionError: If all retry attempts are exhausted for connection errors.
+        openai.APITimeoutError: If all retry attempts are exhausted for timeout errors.
+        openai.RateLimitError: If all retry attempts are exhausted for rate-limit errors.
     """
-    import time
-
-    import openai
-
     opik_args = kwargs.get("opik_args") or {}
     tags = opik_args.get("trace", {}).get("tags", [])
     if tags:
         opik_context.update_current_span(tags=tags)
 
-    max_retries = 10
-    for attempt in range(max_retries):
-        try:
-            commit_result: CommitPlan = client.chat.completions.create(
-                model=model_name,
-                response_model=CommitPlan,
-                messages=build_generation_messages(system_prompt, diff_output),
-                max_retries=2,
-                parallel_tool_calls=False,
-            )
-            if active_directives:
-                from git_cg.models import CommitType
+    commit_result: CommitPlan = client.chat.completions.create(
+        model=model_name,
+        response_model=CommitPlan,
+        messages=build_generation_messages(system_prompt, diff_output),
+        max_retries=2,
+        parallel_tool_calls=False,
+    )
+    if active_directives:
+        from git_cg.models import CommitType
 
-                if "preferred_type" in active_directives:
-                    commit_result.primary_intent.cc_type = CommitType(active_directives["preferred_type"])
-                if "preferred_scope" in active_directives:
-                    commit_result.primary_intent.scope = active_directives["preferred_scope"]
-            return commit_result
-        except openai.APIConnectionError:
-            if attempt == max_retries - 1:
-                break
-            console.print(
-                f"[yellow]Waiting for local AI server to load model weights (attempt {attempt + 1}/{max_retries})...[/yellow]"
-            )
-            time.sleep(10)
-
-    raise RuntimeError("Failed to generate commit message after maximum retries.")
+        if "preferred_type" in active_directives:
+            commit_result.primary_intent.cc_type = CommitType(active_directives["preferred_type"])
+        if "preferred_scope" in active_directives:
+            commit_result.primary_intent.scope = active_directives["preferred_scope"]
+    return commit_result
 
 
 def detect_primary_language(diff_output: str) -> str | None:
@@ -943,6 +935,7 @@ def _write_telemetry_state_safe(
     repo_name: str,
     thread_id: str,
     verbose: bool,
+    graph_schema_version: str = "unknown",
 ) -> None:
     try:
         import dataclasses
@@ -968,6 +961,7 @@ def _write_telemetry_state_safe(
             commit_plan_json=review_state.commit_plan.model_dump(),
             score_card=dataclasses.asdict(score_card),
             thread_id=thread_id,
+            graph_schema_version=graph_schema_version,
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1026,11 +1020,23 @@ def _run_commit_generation(
     commit_source = _validate_commit_source(commit_source, commit_msg_file, amend_regenerate, verbose)
 
     try:
-        repo_name = os.path.basename(
-            subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
-        )
+        repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
+        repo_name = os.path.basename(repo_root)
     except Exception:
+        repo_root = "."
         repo_name = "unknown"
+
+    # Phase 14: Tag Sentry events with the code-review-graph schema version
+    # so signal regressions can be correlated with CRG upgrades.
+    crg_schema_version = "unavailable"
+    try:
+        from code_review_graph.tools import list_graph_stats
+
+        crg_stats = list_graph_stats(repo_root=repo_root)
+        crg_schema_version = str(crg_stats.get("schema_version", "unknown"))
+        sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
+    except Exception:
+        pass  # CRG graph may not be built yet for this repo
 
     opik_context.update_current_trace(
         tags=["interactive" if interactive else "non-interactive", engine],
@@ -1233,6 +1239,7 @@ def _run_commit_generation(
         repo_name=repo_name,
         thread_id=thread_id,
         verbose=verbose,
+        graph_schema_version=crg_schema_version,
     )
 
     opik.flush_tracker()
@@ -1474,6 +1481,7 @@ def record_telemetry(
         classify_edit,
         clear_telemetry_state,
         read_telemetry_state,
+        reverse_parse_commit_message,
     )
 
     try:
@@ -1535,6 +1543,10 @@ def record_telemetry(
             }
             feedback_score = score_mapping.get(provenance, 0.0)
 
+            # Phase 14: Reverse-parse the final message into structured fields
+            # for DPO training pairs: (original_plan, final_plan, edit_classification)
+            final_plan_json = reverse_parse_commit_message(final_commit_message)
+
             opik_context.update_current_trace(
                 tags=[
                     provenance,
@@ -1551,6 +1563,8 @@ def record_telemetry(
                     "system_prompt_hash": telemetry_state.get("system_prompt_hash"),
                     "score_card": telemetry_state.get("score_card"),
                     "commit_plan": telemetry_state.get("commit_plan_json"),
+                    "final_commit_plan": final_plan_json,
+                    "graph_schema_version": telemetry_state.get("graph_schema_version"),
                 },
                 feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
                 thread_id=thread_id,
