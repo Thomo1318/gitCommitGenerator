@@ -575,48 +575,36 @@ class TestBugReportTemplate:
         assert "fix(scope)" in content
 
     def test_has_summary_section(self):
-        """Template must include a ``## Summary`` section."""
-        assert "## Summary" in self._content()
+        """Template must include a ``## 🎯 Summary`` section."""
+        assert "## 🎯 Summary" in self._content()
 
     def test_has_why_this_matters_section(self):
-        """Template must include a ``## Why this matters`` section."""
-        assert "## Why this matters" in self._content()
+        """Template must include a ``## 💡 Why this matters`` section."""
+        assert "## 💡 Why this matters" in self._content()
 
     def test_has_to_reproduce_section(self):
-        """Template must include a ``## To Reproduce`` section."""
-        assert "## To Reproduce" in self._content()
+        """Template must include a ``## 🔄 To Reproduce`` section."""
+        assert "## 🔄 To Reproduce" in self._content()
 
     def test_has_expected_behaviour_section(self):
-        """Template must include an ``## Expected behaviour`` section (en-AU spelling)."""
-        assert "## Expected behaviour" in self._content()
+        """Template must include an ``## ✅ Expected behaviour`` section (en-AU spelling)."""
+        assert "## ✅ Expected behaviour" in self._content()
 
     def test_expected_behaviour_uses_en_au_spelling(self):
         """The template must use Australian English spelling for 'behaviour'."""
         content = self._content()
         assert "behaviour" in content.lower()
         # Ensure US spelling is NOT used in this section title
-        assert "## Expected behavior" not in content
+        assert "Expected behavior" not in content
 
-    def test_has_screenshots_section(self):
-        """Template must include a ``## Screenshots`` section."""
-        assert "## Screenshots" in self._content()
-
-    def test_has_desktop_section(self):
-        """Template must include a ``## Desktop`` section."""
-        assert "## Desktop" in self._content()
-
-    def test_has_additional_context_section(self):
-        """Template must include a ``## Additional context`` section."""
-        assert "## Additional context" in self._content()
-
-    def test_has_architectural_direction_section(self):
-        """Template must include the ``## Architectural direction`` section."""
-        assert "## Architectural direction" in self._content()
+    def test_has_environment_details_section(self):
+        """Template must include a ``## 💻 Environment Details`` section."""
+        assert "## 💻 Environment Details" in self._content()
 
     def test_reproduce_steps_are_numbered(self):
         """The reproduction steps must be a numbered list."""
         content = self._content()
-        assert "1. Go to" in content
+        assert "1." in content
 
 
 class TestFeatureRequestTemplate:
@@ -650,60 +638,20 @@ class TestFeatureRequestTemplate:
         assert "feat(scope)" in self._content()
 
     def test_has_summary_section(self):
-        """Template must include a ``## Summary`` section."""
-        assert "## Summary" in self._content()
+        """Template must include a ``## 🎯 Summary`` section."""
+        assert "## 🎯 Summary" in self._content()
 
     def test_has_why_this_matters_section(self):
-        """Template must include a ``## Why this matters`` section."""
-        assert "## Why this matters" in self._content()
+        """Template must include a ``## 💡 Why this matters`` section."""
+        assert "## 💡 Why this matters" in self._content()
 
-    def test_has_architectural_direction_section(self):
-        """Template must include a ``## Architectural direction`` section."""
-        assert "## Architectural direction" in self._content()
+    def test_has_proposed_solution_section(self):
+        """Template must include a ``## 🛠️ Proposed Solution`` section."""
+        assert "## 🛠️ Proposed Solution" in self._content()
 
-    def test_has_core_decision_section(self):
-        """Template must include a ``## Core decision`` section."""
-        assert "## Core decision" in self._content()
-
-    def test_has_data_model_expectations_section(self):
-        """Template must include a ``## Data model expectations`` section."""
-        assert "## Data model expectations" in self._content()
-
-    def test_has_in_scope_section(self):
-        """Template must include a ``## In scope`` section."""
-        assert "## In scope" in self._content()
-
-    def test_has_out_of_scope_section(self):
-        """Template must include a ``## Out of scope`` section."""
-        assert "## Out of scope" in self._content()
-
-    def test_has_acceptance_criteria_section(self):
-        """Template must include an ``## Acceptance criteria`` section."""
-        assert "## Acceptance criteria" in self._content()
-
-    def test_has_suggested_test_scenarios_section(self):
-        """Template must include a ``## Suggested test scenarios`` section."""
-        assert "## Suggested test scenarios" in self._content()
-
-    def test_has_risks_section(self):
-        """Template must include a ``## Risks / things to watch`` section."""
-        assert "## Risks / things to watch" in self._content()
-
-    def test_has_file_plan_section(self):
-        """Template must include a ``## File plan`` section."""
-        assert "## File plan" in self._content()
-
-    def test_has_references_section(self):
-        """Template must include a ``## References`` section."""
-        assert "## References" in self._content()
-
-    def test_in_scope_has_checkboxes(self):
-        """The ``## In scope`` section must use markdown checkbox items."""
-        assert "- [ ]" in self._content()
-
-    def test_has_expected_workflow_section(self):
-        """Template must include an ``## Expected workflow`` section."""
-        assert "## Expected workflow" in self._content()
+    def test_has_expected_behavior_section(self):
+        """Template must include a ``## ✅ Expected Behavior`` section."""
+        assert "## ✅ Expected Behavior" in self._content()
 
 
 class TestPullRequestTemplate:
@@ -716,59 +664,58 @@ class TestPullRequestTemplate:
         """PR template must exist."""
         assert (REPO_ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md").exists()
 
-    def test_has_description_section(self):
-        """Template must include a ``# Description`` section."""
-        assert "# Description" in self._content()
+    def test_has_summary_section(self):
+        """Template must include a ``## Summary`` section."""
+        assert "## Summary" in self._content()
 
-    def test_has_type_of_change_section(self):
-        """Template must include a ``# Type of change`` section."""
-        assert "# Type of change" in self._content()
+    def test_has_semver_impact_section(self):
+        """Template must include a ``## SemVer Impact`` section."""
+        assert "## SemVer Impact" in self._content()
 
-    def test_has_checklist_section(self):
-        """Template must include a ``# Checklist`` section."""
-        assert "# Checklist" in self._content()
+    def test_has_verification_section(self):
+        """Template must include a ``## Verification`` section."""
+        assert "## Verification" in self._content()
 
-    def test_references_fixes_issue(self):
-        """Template must include the ``Fixes # (issue)`` reference convention."""
-        assert "Fixes # (issue)" in self._content()
+    def test_references_related_issues(self):
+        """Template must include the ``## Related Issues`` section."""
+        assert "## Related Issues" in self._content()
 
-    def test_type_of_change_includes_bug_fix(self):
-        """Type of change section must list bug fix as an option."""
-        assert "Bug fix" in self._content()
+    def test_semver_includes_patch_minor_major(self):
+        """SemVer Impact section must list PATCH, MINOR, and MAJOR as options."""
+        content = self._content()
+        assert "PATCH" in content
+        assert "MINOR" in content
+        assert "MAJOR" in content
 
-    def test_type_of_change_includes_new_feature(self):
-        """Type of change section must list new feature as an option."""
-        assert "New feature" in self._content()
+    def test_has_breaking_change_section(self):
+        """Template must include a breaking change heading."""
+        assert "## 💥 BREAKING CHANGE 💥" in self._content()
 
-    def test_type_of_change_includes_breaking_change(self):
-        """Type of change section must list breaking change as an option."""
-        assert "Breaking change" in self._content()
-
-    def test_checklist_includes_tests_item(self):
-        """Checklist must include a tests item."""
+    def test_verification_includes_tests_item(self):
+        """Verification checklist must include a tests item."""
         content = self._content()
         assert "tests" in content.lower()
 
-    def test_checklist_has_self_review_item(self):
-        """Checklist must include a self-review item."""
-        assert "self-review" in self._content()
+    def test_verification_includes_linting_item(self):
+        """Verification checklist must include a linting item."""
+        assert "linting" in self._content().lower()
 
-    def test_checklist_items_are_checkboxes(self):
-        """All checklist items must use markdown checkbox format."""
+    def test_verification_items_are_checkboxes(self):
+        """All verification items must use markdown checkbox format."""
         content = self._content()
-        checklist_section = content[content.index("# Checklist") :]
+        checklist_section = content[content.index("## Verification") :]
         checkbox_count = checklist_section.count("- [ ]")
-        assert checkbox_count >= 5, f"Expected at least 5 checklist checkboxes, found {checkbox_count}"
+        assert checkbox_count >= 4, f"Expected at least 4 verification checkboxes, found {checkbox_count}"
 
-    def test_type_of_change_items_are_checkboxes(self):
-        """Type of change options must use markdown checkbox format."""
+    def test_semver_impact_items_are_checkboxes(self):
+        """SemVer impact options must use markdown checkbox format."""
         content = self._content()
-        # Find the Type of change section
-        start = content.index("# Type of change")
-        end = content.index("# Checklist")
+        # Find the SemVer Impact section
+        start = content.index("## SemVer Impact")
+        end = content.index("## Verification")
         section = content[start:end]
         checkbox_count = section.count("- [ ]")
-        assert checkbox_count >= 3, f"Expected at least 3 type-of-change checkboxes, found {checkbox_count}"
+        assert checkbox_count >= 3, f"Expected at least 3 semver-impact checkboxes, found {checkbox_count}"
 
 
 # ===========================================================================

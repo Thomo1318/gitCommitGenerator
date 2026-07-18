@@ -1,68 +1,23 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: '✨ feat(scope): '
+about: Suggest an idea or new feature
+title: "✨ feat(scope): "
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
-## Summary
+## 🎯 Summary
 
-<!-- Provide a high-level overview of the distinct goals for this issue. -->
+<!-- Provide a high-level overview of the feature you are requesting. -->
 
-## Why this matters
+## 💡 Why this matters
 
-<!-- Explain the problem being solved, why it's important, and the value it brings to the project. -->
+<!-- Explain the problem being solved and the value it brings to the project. -->
 
-## Architectural direction
+## 🛠️ Proposed Solution
 
-<!-- Outline the technical approach, key components, or system design required. -->
+<!-- Describe how you envision this feature working. -->
 
-## Core decision
+## ✅ Expected Behavior
 
-<!-- List the definitive choices and rules that govern this implementation. -->
-
-## Data model expectations
-
-<!-- Describe any required data model changes, schema updates, or state representations. -->
-
-## Required behavior
-
-<!-- Detail the expected system behaviors, error states, and edge cases. -->
-
-## In scope
-
-- [ ] <!-- Task 1 -->
-- [ ] <!-- Task 2 -->
-
-## Out of scope
-
-- <!-- What specifically should NOT be done as part of this issue? -->
-
-## Expected workflow
-
-1. <!-- Step 1 -->
-2. <!-- Step 2 -->
-
-## Acceptance criteria
-
-- <!-- Criteria 1 -->
-- <!-- Criteria 2 -->
-
-## Suggested test scenarios
-
-<!-- Outline how this feature should be tested, including unit, integration, and manual scenarios. -->
-
-## Risks / things to watch
-
-<!-- Identify potential regressions, performance impacts, or security considerations. -->
-
-## File plan
-
-### `path/to/file`
-
-- <!-- What changes need to be made? -->
-
-## References
-
-<!-- Link to related issues, documentation, ADRs, or external resources. -->
+<!-- Outline what the user experience should look like. -->

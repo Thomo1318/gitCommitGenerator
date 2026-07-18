@@ -1,24 +1,51 @@
-# Description
+## Summary
 
-Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context.
+<!-- Provide a high-level description of what this PR accomplishes and why it is being implemented. -->
 
-Fixes # (issue)
+## Changes Made
 
-# Type of change
+<!-- Detail the specific technical changes made in this PR. -->
 
-Please delete options that are not relevant.
+-
+-
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
+<!-- DELETE THIS SECTION IF NOT APPLICABLE -->
 
-# Checklist:
+## 💥 BREAKING CHANGE 💥
 
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
+<!-- Describe the breaking change and the migration path for users -->
+
+## Included Changes
+
+<!-- List the main commit headers AND the items from their "Included changes" sections (Matches git-cg output) -->
+
+-
+
+## Related Issues
+
+<!-- Link to the issues this PR addresses. -->
+
+- Closes #
+- Resolves #
+
+## SemVer Impact
+
+<!-- Select the appropriate semantic versioning impact of this PR. -->
+
+- [ ] **PATCH** - Bug fixes or internal refactoring with no behavioral changes.
+- [ ] **MINOR** - New features added in a backwards-compatible manner.
+- [ ] **MAJOR** - Breaking changes that alter existing CLI or API behavior.
+
+**Metadata:**
+
+- **Change Types**: <!-- e.g., feat, fix, docs, refactor, test -->
+- **Changelog Groups**: <!-- e.g., Added, Changed, Fixed, Removed -->
+
+## Verification
+
+<!-- Ensure the following checks have been completed before requesting a review. -->
+
+- [ ] Verified `hk` git hooks execute successfully and pass upon committing.
+- [ ] New and existing unit tests pass locally (`uv run pytest`).
+- [ ] No new linting warnings or typing errors (`uv run ruff check .` / `uv run pyright`).
+- [ ] Manual testing performed: <!-- Briefly describe how you tested this locally -->
