@@ -1,10 +1,18 @@
-## Summary
+## 🎯 Summary
 
-<!-- Provide a high-level description of what this PR accomplishes and why it is being implemented. -->
+<!-- Provide a high-level description of what this PR accomplishes and why it is being implemented. Link primary issue/ADR. Call out feature flags / compatibility boundaries. -->
 
-## Changes Made
+## 🗺️ Architecture / Flow
 
-<!-- Detail the specific technical changes made in this PR. -->
+<!-- Optional. Include one small Mermaid diagram when this PR introduces or changes
+     a multi-step flow, feature-flagged path, or external boundary.
+     Delete this entire section if N/A.
+     Prefer graph TD, a short legend, and clear shapes:
+     module/path, decision, external, state store. -->
+
+## 🛠️ Changes Made
+
+<!-- Detail the specific technical changes made in this PR. Group by subsystem/module. Prefer bullets over commit essays. -->
 
 -
 -
@@ -13,22 +21,21 @@
 
 ## 💥 BREAKING CHANGE 💥
 
-<!-- Describe the breaking change and the migration path for users -->
+<!-- Delete if N/A. Describe the breaking change and the migration path -->
 
-## Included Changes
+## 📦 Included Changes
 
 <!-- List the main commit headers AND the items from their "Included changes" sections (Matches git-cg output) -->
 
 -
 
-## Related Issues
-
-<!-- Link to the issues this PR addresses. -->
+## 🔗 Related Issues
 
 - Closes #
 - Resolves #
+- <!-- Parent epic / milestone / deferred follow-ups -->
 
-## SemVer Impact
+## 📊 SemVer Impact
 
 <!-- Select the appropriate semantic versioning impact of this PR. -->
 
@@ -41,7 +48,11 @@
 - **Change Types**: <!-- e.g., feat, fix, docs, refactor, test -->
 - **Changelog Groups**: <!-- e.g., Added, Changed, Fixed, Removed -->
 
-## Verification
+## ⚠️ Risks / Things to Watch
+
+<!-- Optional but recommended for core/security/telemetry PRs. -->
+
+## ✅ Verification
 
 <!-- Ensure the following checks have been completed before requesting a review. -->
 

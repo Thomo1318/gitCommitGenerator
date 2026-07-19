@@ -669,19 +669,19 @@ class TestPullRequestTemplate:
 
     def test_has_summary_section(self):
         """Template must include a ``## Summary`` section."""
-        assert "## Summary" in self._content()
+        assert "## 🎯 Summary" in self._content()
 
     def test_has_semver_impact_section(self):
         """Template must include a ``## SemVer Impact`` section."""
-        assert "## SemVer Impact" in self._content()
+        assert "## 📊 SemVer Impact" in self._content()
 
     def test_has_verification_section(self):
         """Template must include a ``## Verification`` section."""
-        assert "## Verification" in self._content()
+        assert "## ✅ Verification" in self._content()
 
     def test_references_related_issues(self):
         """Template must include the ``## Related Issues`` section."""
-        assert "## Related Issues" in self._content()
+        assert "## 🔗 Related Issues" in self._content()
 
     def test_semver_includes_patch_minor_major(self):
         """SemVer Impact section must list PATCH, MINOR, and MAJOR as options."""
@@ -706,7 +706,7 @@ class TestPullRequestTemplate:
     def test_verification_items_are_checkboxes(self):
         """All verification items must use markdown checkbox format."""
         content = self._content()
-        checklist_section = content[content.index("## Verification") :]
+        checklist_section = content[content.index("## ✅ Verification") :]
         checkbox_count = checklist_section.count("- [ ]")
         assert checkbox_count >= 4, f"Expected at least 4 verification checkboxes, found {checkbox_count}"
 
@@ -714,8 +714,8 @@ class TestPullRequestTemplate:
         """SemVer impact options must use markdown checkbox format."""
         content = self._content()
         # Find the SemVer Impact section
-        start = content.index("## SemVer Impact")
-        end = content.index("## Verification")
+        start = content.index("## 📊 SemVer Impact")
+        end = content.index("## ✅ Verification")
         section = content[start:end]
         checkbox_count = section.count("- [ ]")
         assert checkbox_count >= 3, f"Expected at least 3 semver-impact checkboxes, found {checkbox_count}"
