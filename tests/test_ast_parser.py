@@ -1,6 +1,7 @@
 """Tests for Phase 1 tree-sitter registry and parse pipeline."""
 
 from git_cg.ast_parser import (
+    ParseStatus,
     empty_parser_metrics,
     get_parser_for,
     is_probably_binary,
@@ -25,7 +26,7 @@ def test_get_parser_for_python_cached():
 def test_parse_source_success_python():
     src = b"def foo(x):\n    return x + 1\n"
     result = parse_source("pkg/mod.py", src)
-    assert result.status == "success"
+    assert result.status == ParseStatus.SUCCESS
     assert result.language == "python"
     assert result.root_type == "module"
     assert result.error is None
@@ -35,14 +36,14 @@ def test_parse_source_success_python():
 
 def test_parse_source_unsupported_extension():
     result = parse_source("notes.notalang", b"hello world\n")
-    assert result.status == "unsupported"
+    assert result.status == ParseStatus.UNSUPPORTED
     assert result.language is None
     assert result.error
 
 
 def test_parse_source_binary_nul_bytes():
     result = parse_source("blob.bin", b"\x00\x01\x02\x03" + b"abc")
-    assert result.status == "binary"
+    assert result.status == ParseStatus.BINARY
 
 
 def test_is_probably_binary_image_mime():
@@ -82,7 +83,7 @@ def test_parse_files_never_raises_on_bad_language(monkeypatch):
 
     monkeypatch.setattr(ast_parser, "get_parser_for", boom)
     batch = parse_files({"x.py": b"def x():\n    pass\n"})
-    assert batch.results[0].status == "failed"
+    assert batch.results[0].status == ParseStatus.FAILED
     assert batch.metrics.semantic_files_failed == 1
     assert batch.metrics.semantic_files_parsed == 0
 
@@ -92,3 +93,16 @@ def test_empty_parser_metrics_disabled():
     assert metrics["semantic_parser_enabled"] is False
     assert metrics["semantic_parser_mode"] == "disabled"
     assert metrics["semantic_files_total"] == 0
+
+
+def test_parse_status_enum_values():
+    assert ParseStatus.SUCCESS == "success"
+    assert ParseStatus.UNSUPPORTED == "unsupported"
+    assert ParseStatus.BINARY == "binary"
+    assert ParseStatus.FAILED == "failed"
+    assert set(ParseStatus) == {
+        ParseStatus.SUCCESS,
+        ParseStatus.UNSUPPORTED,
+        ParseStatus.BINARY,
+        ParseStatus.FAILED,
+    }

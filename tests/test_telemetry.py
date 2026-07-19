@@ -1037,3 +1037,65 @@ def test_generation_telemetry_phase1_fields_persist(tmp_path, monkeypatch):
     assert loaded.graph_query_latency_ms == 3.75
     assert loaded.semantic_parser_metrics is not None
     assert loaded.semantic_parser_metrics["semantic_files_parsed"] == 2
+
+
+def test_read_legacy_json_backfills_phase1_fields(tmp_path):
+    """Pre-Phase-1 state files must deserialize with semantic defaults."""
+    from git_cg.telemetry import get_state_file_path, read_telemetry_state
+
+    payload = {
+        "diff_hash": "dh",
+        "diff_output": "diff",
+        "repo_name": "legacy-repo",
+        "engine": "mlx",
+        "model_name": "m",
+        "system_prompt_hash": "ph",
+        "generated_message": "msg",
+        "commit_plan_json": {"intent": "feat"},
+        "score_card": {},
+    }
+    state_file = get_state_file_path(str(tmp_path))
+    state_file.write_text(__import__("json").dumps(payload), encoding="utf-8")
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.semantic_enabled is False
+    assert loaded.parser_latency_ms == 0.0
+    assert loaded.graph_build_latency_ms == 0.0
+    assert loaded.graph_query_latency_ms == 0.0
+    assert loaded.semantic_parser_metrics is None
+    assert loaded.graph_schema_version == "unknown"
+
+
+def test_write_telemetry_state_redacts_semantic_fallback_reasons(tmp_path, monkeypatch):
+    """Path/error-bearing semantic_fallback_reasons must pass through betterleaks."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    def fake_redact(payload: str) -> str:
+        return payload.replace("secret-path.py", "[REDACTED]").replace("TOKEN123", "[REDACTED]")
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", fake_redact)
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+        semantic_enabled=True,
+        semantic_parser_metrics={
+            "semantic_parser_mode": "tree-sitter",
+            "semantic_fallback_reasons": ["failed:secret-path.py:TOKEN123"],
+        },
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.semantic_parser_metrics is not None
+    reasons = loaded.semantic_parser_metrics["semantic_fallback_reasons"]
+    assert reasons == ["failed:[REDACTED]:[REDACTED]"]
