@@ -946,6 +946,17 @@ def test_reverse_parse_commit_message_full_structure():
     assert plan["secondary_intents"][0]["gitmoji"] == "🐛"
     assert plan["secondary_intents"][1]["cc_type"] == "refactor"
 
+    # Body reconstruction uses real newlines and excludes trailer metadata.
+    assert plan["body_summary"] == (
+        "This completely replaces the old telemetry system with a new\nstructured approach."
+    )
+    assert "Refs:" not in plan["body_summary"]
+    assert "SemVer-Impact" not in plan["body_summary"]
+    assert "\\n" not in plan["body_summary"]
+    assert plan["split_recommended"] is False
+    assert plan["rationale"] == ""
+    assert plan["_partial"] is True
+
 
 def test_reverse_parse_commit_message_simple():
     from git_cg.telemetry import reverse_parse_commit_message
@@ -959,3 +970,7 @@ def test_reverse_parse_commit_message_simple():
     assert plan["primary_intent"]["description"] == "typos in docs"
     assert plan["breaking_change"] is False
     assert len(plan["secondary_intents"]) == 0
+    assert plan["body_summary"] == "Fixed some typos."
+    assert plan["split_recommended"] is False
+    assert plan["rationale"] == ""
+    assert plan["_partial"] is True

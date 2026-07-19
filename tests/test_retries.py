@@ -3,6 +3,7 @@
 import httpx
 import openai
 import pytest
+from tenacity import wait_none
 
 from git_cg.retries import llm_retry
 
@@ -25,6 +26,10 @@ class MockClient:
 @llm_retry
 def flaky_function(client):
     return client.call()
+
+
+# Unit tests must not sleep on exponential backoff.
+flaky_function = flaky_function.retry_with(wait=wait_none())
 
 
 def test_llm_retry_success_first_try():
@@ -70,3 +75,38 @@ def test_llm_retry_unhandled_exception():
         flaky_function(client)
 
     assert client.attempts == 1
+
+
+def test_graph_retry_retries_only_transient_errors():
+    import sqlite3
+
+    from git_cg.retries import graph_retry
+
+    attempts = {"n": 0}
+
+    @graph_retry
+    def flaky_graph():
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            raise sqlite3.OperationalError("database is locked")
+        return "ok"
+
+    flaky_graph = flaky_graph.retry_with(wait=wait_none())
+    assert flaky_graph() == "ok"
+    assert attempts["n"] == 2
+
+
+def test_graph_retry_does_not_retry_value_error():
+    from git_cg.retries import graph_retry
+
+    attempts = {"n": 0}
+
+    @graph_retry
+    def bad_graph():
+        attempts["n"] += 1
+        raise ValueError("deterministic")
+
+    bad_graph = bad_graph.retry_with(wait=wait_none())
+    with pytest.raises(ValueError):
+        bad_graph()
+    assert attempts["n"] == 1
