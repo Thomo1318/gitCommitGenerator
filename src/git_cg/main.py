@@ -401,8 +401,11 @@ def build_generation_messages(
     return messages
 
 
+@opik.track(
+    project_name="gitCommitGenerator",
+    ignore_arguments=["client", "diff_output", "system_prompt", "residual_guidance"],
+)
 @llm_retry
-@opik.track(project_name="gitCommitGenerator", ignore_arguments=["client"])
 def generate_commit_message(
     client: instructor.Instructor,
     diff_output: str,
@@ -1028,15 +1031,16 @@ def _run_commit_generation(
 
     # Phase 14: Tag Sentry events with the code-review-graph schema version
     # so signal regressions can be correlated with CRG upgrades.
-    crg_schema_version = "unavailable"
+    crg_schema_version = "unknown"
     try:
         from code_review_graph.tools import list_graph_stats
 
         crg_stats = list_graph_stats(repo_root=repo_root)
         crg_schema_version = str(crg_stats.get("schema_version", "unknown"))
-        sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
     except Exception:
-        pass  # CRG graph may not be built yet for this repo
+        # CRG graph may not be built yet for this repo; keep fallback.
+        crg_schema_version = "unknown"
+    sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
 
     opik_context.update_current_trace(
         tags=["interactive" if interactive else "non-interactive", engine],
@@ -1481,6 +1485,7 @@ def record_telemetry(
         classify_edit,
         clear_telemetry_state,
         read_telemetry_state,
+        redact_payload,
         reverse_parse_commit_message,
     )
 
@@ -1511,7 +1516,10 @@ def record_telemetry(
     # Log the final trace data to Opik
     try:
 
-        @opik.track(project_name="gitCommitGenerator")
+        @opik.track(
+            project_name="gitCommitGenerator",
+            ignore_arguments=["final_commit_message", "telemetry_state"],
+        )
         def log_final_commit_telemetry(
             final_commit_message: str,
             provenance: str,
@@ -1544,8 +1552,17 @@ def record_telemetry(
             feedback_score = score_mapping.get(provenance, 0.0)
 
             # Phase 14: Reverse-parse the final message into structured fields
-            # for DPO training pairs: (original_plan, final_plan, edit_classification)
-            final_plan_json = reverse_parse_commit_message(final_commit_message)
+            # for DPO training pairs: (original_plan, final_plan, edit_classification).
+            # Always redact before parse/transmit — betterleaks gateway is mandatory.
+            redacted_final_message = redact_payload(final_commit_message)
+            final_plan_json = reverse_parse_commit_message(redacted_final_message)
+
+            plan_str = json.dumps(final_plan_json)
+            redacted_plan_str = redact_payload(plan_str)
+            if redacted_plan_str == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+                final_plan_json = {"_redaction": "failed", "_partial": True}
+            else:
+                final_plan_json = json.loads(redacted_plan_str)
 
             opik_context.update_current_trace(
                 tags=[
@@ -1563,7 +1580,9 @@ def record_telemetry(
                     "system_prompt_hash": telemetry_state.get("system_prompt_hash"),
                     "score_card": telemetry_state.get("score_card"),
                     "commit_plan": telemetry_state.get("commit_plan_json"),
+                    # Partial reverse-parse of the rendered message (not a full CommitPlan).
                     "final_commit_plan": final_plan_json,
+                    "final_commit_plan_schema": "commit_plan_partial_v1",
                     "graph_schema_version": telemetry_state.get("graph_schema_version"),
                 },
                 feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
