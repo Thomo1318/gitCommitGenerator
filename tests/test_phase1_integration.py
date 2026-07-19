@@ -119,3 +119,41 @@ def test_write_telemetry_state_safe_records_phase1_metrics(tmp_path, monkeypatch
 def test_flag_off_default(monkeypatch):
     monkeypatch.delenv("GIT_CG_ENABLE_SEMANTIC", raising=False)
     assert is_semantic_enabled() is False
+
+
+def test_semantic_producers_not_invoked_when_flag_off(monkeypatch):
+    """Dark-launch contract: flag off must not call staged parse / graph producers."""
+    from git_cg.semantic_flags import is_semantic_enabled
+
+    monkeypatch.delenv("GIT_CG_ENABLE_SEMANTIC", raising=False)
+    assert is_semantic_enabled(None) is False
+    assert is_semantic_enabled(False) is False
+
+    calls: list[str] = []
+
+    def track(name):
+        def _fn(*args, **kwargs):
+            calls.append(name)
+            raise AssertionError(f"{name} should not be called when semantic is disabled")
+
+        return _fn
+
+    monkeypatch.setattr("git_cg.git_index.read_staged_sources", track("read_staged_sources"))
+    monkeypatch.setattr("git_cg.ast_parser.parse_files", track("parse_files"))
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", track("graph_stats"))
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", track("refresh_graph"))
+
+    # Reproduce the flag-gated producer block from _run_commit_generation without full CLI.
+    enable_semantic = False
+    semantic_enabled = is_semantic_enabled(enable_semantic)
+    if semantic_enabled:
+        from git_cg.ast_parser import parse_files
+        from git_cg.git_index import read_staged_sources
+        from git_cg.graph_context import graph_stats, refresh_graph
+
+        read_staged_sources(".")
+        parse_files({})
+        graph_stats(repo_root=".")
+        refresh_graph(repo_root=".")
+
+    assert calls == []

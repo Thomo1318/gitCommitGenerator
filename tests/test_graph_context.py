@@ -7,6 +7,7 @@ from tenacity import wait_none
 from git_cg import graph_context
 from git_cg.graph_context import (
     GraphOperationResult,
+    GraphOutcome,
     collect_graph_telemetry,
     detect_changes,
     graph_stats,
@@ -105,3 +106,13 @@ def test_graph_retry_used_on_transient_errors(monkeypatch):
     result = graph_stats(repo_root=".")
     assert result.ok is True
     assert calls["n"] == 2
+
+
+def test_graph_outcome_enum_and_result_payload():
+    ok = GraphOperationResult(ok=True, operation="x", outcome=GraphOutcome.OK, data={"a": 1})
+    bad = GraphOperationResult(
+        ok=False, operation="y", outcome=GraphOutcome.UNAVAILABLE, error="e", error_type="RuntimeError"
+    )
+    assert ok.to_dict()["outcome"] == "ok"
+    assert bad.to_dict()["outcome"] == "unavailable"
+    assert set(GraphOutcome) == {GraphOutcome.OK, GraphOutcome.UNAVAILABLE, GraphOutcome.ERROR}
