@@ -167,7 +167,7 @@ def _strip_trailers(text: str) -> str:
         in_trailers = False
         valid_lines.insert(0, line)
 
-    return "\\n".join(valid_lines).strip()
+    return "\n".join(valid_lines).strip()
 
 
 def classify_edit(original: str, edited: str) -> Provenance:
@@ -190,11 +190,14 @@ def classify_edit(original: str, edited: str) -> Provenance:
 
 def reverse_parse_commit_message(text: str) -> dict:
     """
-    Reverse-parse a finalized commit message text back into a structured CommitPlan dict.
-    This extracts components matching the deterministic format from `CommitPlan.render()`.
+    Reverse-parse a finalized commit message text into a CommitPlan-compatible dict.
+
+    Extracts components matching the deterministic format from `CommitPlan.render()`.
+    Fields that cannot be recovered from rendered text (`split_recommended`, `rationale`)
+    are filled with explicit placeholders and `_partial` is set to True.
 
     Returns:
-        dict: The structured plan containing primary_intent, body_summary, secondary_intents, etc.
+        dict: Partial plan with primary_intent, body_summary, secondary_intents, and placeholders.
     """
     import re
 
@@ -213,9 +216,13 @@ def reverse_parse_commit_message(text: str) -> dict:
             "changelog_group": "other",
         },
         "secondary_intents": [],
+        # Unrecoverable CommitPlan fields — placeholders for schema compatibility.
+        "split_recommended": False,
+        "rationale": "",
         "body_summary": "",
         "breaking_change": False,
         "breaking_change_description": None,
+        "_partial": True,
     }
 
     # 1. Parse header
@@ -260,10 +267,19 @@ def reverse_parse_commit_message(text: str) -> dict:
             i += 1
             continue
 
-        if (
-            line.startswith("SemVer-Impact:")
-            or line.startswith("Change-Types:")
-            or line.startswith("Changelog-Groups:")
+        if line.startswith(
+            (
+                "Refs:",
+                "Resolves:",
+                "Closes:",
+                "Fixes:",
+                "Null:",
+                "Co-authored-by:",
+                "Signed-off-by:",
+                "SemVer-Impact:",
+                "Change-Types:",
+                "Changelog-Groups:",
+            )
         ):
             in_trailers = True
             in_secondary = False
@@ -297,7 +313,7 @@ def reverse_parse_commit_message(text: str) -> dict:
 
         i += 1
 
-    plan["body_summary"] = "\\n".join(body_lines)
+    plan["body_summary"] = "\n".join(body_lines)
 
     # Enrich primary intent from trailers if possible
     if "SemVer-Impact" in trailers:

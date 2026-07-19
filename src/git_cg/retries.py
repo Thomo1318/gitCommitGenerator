@@ -10,6 +10,7 @@ Phase 14.5 — ADR-0005
 """
 
 import logging
+import sqlite3
 import subprocess
 
 import httpx
@@ -59,12 +60,21 @@ llm_retry = retry(
 and timeout errors — deterministic failures (``ValueError``,
 ``JSONDecodeError``) propagate immediately."""
 
+GRAPH_TRANSIENT_ERRORS = (
+    sqlite3.OperationalError,
+    OSError,
+    TimeoutError,
+)
+"""Transient failure types for local code-review-graph / SQLite access."""
+
 graph_retry = retry(
     stop=stop_after_attempt(2),
     wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type(GRAPH_TRANSIENT_ERRORS),
     reraise=True,
 )
 """Retry decorator for code-review-graph operations.
+Retries only transient graph/SQLite I/O failures — not programming errors.
 Exported for future ``graph_context.py``."""
 
 git_retry = retry(
