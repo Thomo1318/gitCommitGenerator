@@ -75,7 +75,7 @@ graph_retry = retry(
 )
 """Retry decorator for code-review-graph operations.
 Retries only transient graph/SQLite I/O failures — not programming errors.
-Exported for future ``graph_context.py``."""
+Used by ``graph_context.py`` for CRG adapter calls."""
 
 git_retry = retry(
     stop=stop_after_attempt(3),
@@ -84,4 +84,4 @@ git_retry = retry(
     reraise=True,
 )
 """Retry decorator for ``subprocess`` git commands.
-Exported for future ``semantic_diff.py``."""
+Used by ``git_index.py`` staged blob reads; available for semantic_diff."""

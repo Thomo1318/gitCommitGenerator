@@ -939,6 +939,12 @@ def _write_telemetry_state_safe(
     thread_id: str,
     verbose: bool,
     graph_schema_version: str = "unknown",
+    *,
+    semantic_enabled: bool = False,
+    parser_latency_ms: float = 0.0,
+    graph_build_latency_ms: float = 0.0,
+    graph_query_latency_ms: float = 0.0,
+    semantic_parser_metrics: dict | None = None,
 ) -> None:
     try:
         import dataclasses
@@ -965,6 +971,11 @@ def _write_telemetry_state_safe(
             score_card=dataclasses.asdict(score_card),
             thread_id=thread_id,
             graph_schema_version=graph_schema_version,
+            semantic_enabled=semantic_enabled,
+            parser_latency_ms=parser_latency_ms,
+            graph_build_latency_ms=graph_build_latency_ms,
+            graph_query_latency_ms=graph_query_latency_ms,
+            semantic_parser_metrics=semantic_parser_metrics,
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -992,6 +1003,7 @@ def _run_commit_generation(
     strict: bool,
     interactive: bool,
     gui_editor: bool = False,
+    enable_semantic: bool | None = None,
 ) -> bool:
     """
     Generate a commit message from the staged diff and handle review and telemetry.
@@ -1042,12 +1054,107 @@ def _run_commit_generation(
         crg_schema_version = "unknown"
     sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
 
+    # Phase 1: dark-launched semantic producers (parser + graph adapter metrics only).
+    # Does not alter ranking/prompt behaviour yet — facts are recorded for telemetry.
+    from git_cg.semantic_flags import is_semantic_enabled
+
+    semantic_enabled = is_semantic_enabled(enable_semantic)
+    parser_latency_ms = 0.0
+    graph_build_latency_ms = 0.0
+    graph_query_latency_ms = 0.0
+    semantic_parser_metrics: dict | None = None
+    if semantic_enabled:
+        try:
+            from git_cg.ast_parser import empty_parser_metrics, parse_files
+            from git_cg.git_index import read_staged_sources, should_refresh_graph
+            from git_cg.graph_context import (
+                collect_graph_telemetry,
+                graph_stats,
+                refresh_graph,
+            )
+
+            # 1) Parse staged index blobs (not worktree).
+            staged = read_staged_sources(repo_root)
+            if staged.files:
+                batch = parse_files(staged.files)
+                semantic_parser_metrics = batch.metrics.to_dict()
+                parser_latency_ms = float(semantic_parser_metrics.get("parser_latency_ms") or 0.0)
+                if staged.skipped:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                        f"staged_skip:{s}" for s in staged.skipped[:50]
+                    )
+                if staged.errors:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                        f"staged_error:{e}" for e in staged.errors[:50]
+                    )
+            else:
+                semantic_parser_metrics = empty_parser_metrics(enabled=True)
+                if staged.errors and verbose:
+                    console.log(f"[yellow]Staged blob read issues: {staged.errors[:3]}[/yellow]")
+
+            # 2) Graph metrics: stats are queries; rebuild only when explicitly opted in.
+            build_result = None
+            if should_refresh_graph():
+                build_result = refresh_graph(repo_root=repo_root, full_rebuild=False, postprocess="minimal")
+                if (not build_result.ok) and verbose:
+                    console.log(
+                        f"[yellow]Semantic refresh_graph unavailable: "
+                        f"{build_result.error_type}: {build_result.error}[/yellow]"
+                    )
+
+            stats_result = graph_stats(repo_root=repo_root)
+            graph_meta = collect_graph_telemetry(
+                build_result=build_result,
+                query_results=[stats_result],
+            )
+            graph_build_latency_ms = float(graph_meta.get("graph_build_latency_ms") or 0.0)
+            graph_query_latency_ms = float(graph_meta.get("graph_query_latency_ms") or 0.0)
+            if stats_result.ok:
+                maybe_schema = stats_result.data.get("schema_version") or stats_result.data.get("graph_schema_version")
+                if maybe_schema is not None:
+                    crg_schema_version = str(maybe_schema)
+                    sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
+            elif verbose:
+                console.log(
+                    f"[yellow]Semantic graph_stats unavailable: "
+                    f"{stats_result.error_type}: {stats_result.error}[/yellow]"
+                )
+        except Exception as semantic_exc:
+            if verbose:
+                console.log(f"[yellow]Semantic Phase 1 producers failed: {semantic_exc}[/yellow]")
+            from git_cg.ast_parser import empty_parser_metrics
+
+            semantic_parser_metrics = empty_parser_metrics(enabled=False)
+
+    opik_metadata = {
+        "repo_name": repo_name,
+        "commit_source": commit_source,
+        "semantic_enabled": semantic_enabled,
+        "parser_latency_ms": parser_latency_ms,
+        "graph_build_latency_ms": graph_build_latency_ms,
+        "graph_query_latency_ms": graph_query_latency_ms,
+    }
+    if semantic_parser_metrics:
+        # Flatten non-content parser metrics into the trace metadata.
+        for key in (
+            "semantic_parser_enabled",
+            "semantic_parser_mode",
+            "semantic_languages_requested",
+            "semantic_languages_parsed",
+            "semantic_files_total",
+            "semantic_files_parsed",
+            "semantic_files_failed",
+            "semantic_fallback_reasons",
+            "semantic_summary_hash",
+            "semantic_summary_chars",
+        ):
+            if key in semantic_parser_metrics:
+                opik_metadata[key] = semantic_parser_metrics[key]
+        opik_metadata["parser_latency_ms"] = semantic_parser_metrics.get("parser_latency_ms", parser_latency_ms)
+
     opik_context.update_current_trace(
         tags=["interactive" if interactive else "non-interactive", engine],
-        metadata={
-            "repo_name": repo_name,
-            "commit_source": commit_source,
-        },
+        metadata=opik_metadata,
     )
 
     global LAST_OPIK_TRACE_ID
@@ -1244,6 +1351,11 @@ def _run_commit_generation(
         thread_id=thread_id,
         verbose=verbose,
         graph_schema_version=crg_schema_version,
+        semantic_enabled=semantic_enabled,
+        parser_latency_ms=parser_latency_ms,
+        graph_build_latency_ms=graph_build_latency_ms,
+        graph_query_latency_ms=graph_query_latency_ms,
+        semantic_parser_metrics=semantic_parser_metrics,
     )
 
     opik.flush_tracker()
@@ -1281,6 +1393,11 @@ def main_callback(
     ),
     gui_editor: bool = typer.Option(
         False, "--gui", "-g", help="Use GUI Editor ($VISUAL) when editing commit messages."
+    ),
+    enable_semantic: bool | None = typer.Option(
+        None,
+        "--enable-semantic/--no-enable-semantic",
+        help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).",
     ),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx",
@@ -1346,6 +1463,7 @@ def main_callback(
         strict=strict,
         interactive=interactive,
         gui_editor=gui_editor,
+        enable_semantic=enable_semantic,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -1386,6 +1504,11 @@ def commit(
     gui_editor: bool = typer.Option(
         False, "--gui", "-g", help="Use GUI Editor ($VISUAL) when editing commit messages."
     ),
+    enable_semantic: bool | None = typer.Option(
+        None,
+        "--enable-semantic/--no-enable-semantic",
+        help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).",
+    ),
 ) -> None:
     """Generate an AI commit message based on staged changes."""
     _run_commit_generation(
@@ -1399,6 +1522,7 @@ def commit(
         strict=strict,
         interactive=interactive,
         gui_editor=gui_editor,
+        enable_semantic=enable_semantic,
     )
 
 
