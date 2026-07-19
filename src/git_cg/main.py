@@ -1062,10 +1062,12 @@ def _run_commit_generation(
     parser_latency_ms = 0.0
     graph_build_latency_ms = 0.0
     graph_query_latency_ms = 0.0
-    semantic_parser_metrics: dict | None = None
+    from git_cg.ast_parser import empty_parser_metrics
+
+    semantic_parser_metrics: dict | None = empty_parser_metrics(enabled=False)
     if semantic_enabled:
         try:
-            from git_cg.ast_parser import empty_parser_metrics, parse_files
+            from git_cg.ast_parser import parse_files
             from git_cg.git_index import read_staged_sources, should_refresh_graph
             from git_cg.graph_context import (
                 collect_graph_telemetry,
@@ -1122,8 +1124,6 @@ def _run_commit_generation(
         except Exception as semantic_exc:
             if verbose:
                 console.log(f"[yellow]Semantic Phase 1 producers failed: {semantic_exc}[/yellow]")
-            from git_cg.ast_parser import empty_parser_metrics
-
             semantic_parser_metrics = empty_parser_metrics(enabled=False)
 
     opik_metadata = {
@@ -1708,6 +1708,12 @@ def record_telemetry(
                     "final_commit_plan": final_plan_json,
                     "final_commit_plan_schema": "commit_plan_partial_v1",
                     "graph_schema_version": telemetry_state.get("graph_schema_version"),
+                    # Phase 1 semantic producer metrics (from prepare-commit-msg state).
+                    "semantic_enabled": telemetry_state.get("semantic_enabled", False),
+                    "parser_latency_ms": telemetry_state.get("parser_latency_ms", 0.0),
+                    "graph_build_latency_ms": telemetry_state.get("graph_build_latency_ms", 0.0),
+                    "graph_query_latency_ms": telemetry_state.get("graph_query_latency_ms", 0.0),
+                    "semantic_parser_metrics": telemetry_state.get("semantic_parser_metrics"),
                 },
                 feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
                 thread_id=thread_id,
