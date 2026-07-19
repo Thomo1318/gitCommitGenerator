@@ -25,25 +25,37 @@ def _no_wait(fn: Any) -> Any:
     return wrapped
 
 
-def test_graph_stats_returns_structured_result():
+def test_graph_stats_returns_structured_result(monkeypatch):
+    """Offline: structured GraphOperationResult shape without real CRG I/O."""
+
+    def fake_stats(**kwargs):
+        return {"total_nodes": 3, "summary": "ok"}
+
+    monkeypatch.setattr(graph_context, "_list_graph_stats_raw", lambda **kwargs: fake_stats(**kwargs))
     result = graph_stats(repo_root=".")
     assert isinstance(result, GraphOperationResult)
     assert result.operation == "graph_stats"
+    assert result.ok is True
+    assert result.outcome == GraphOutcome.OK
     assert result.latency_ms >= 0.0
-    # In this repo the graph exists; still accept typed failure shape.
-    if result.ok:
-        assert isinstance(result.data, dict)
-        assert "total_nodes" in result.data or "summary" in result.data
-    else:
-        assert result.error_type
-        assert result.error
+    assert result.data["total_nodes"] == 3
 
 
-def test_refresh_graph_minimal_does_not_raise():
-    # May be slower; still must return structured result without raising.
+def test_refresh_graph_minimal_does_not_raise(monkeypatch):
+    """Offline: refresh_graph returns structured result and never mutates real graph state."""
+    calls: list[dict[str, Any]] = []
+
+    def fake_build(**kwargs):
+        calls.append(kwargs)
+        return {"status": "ok", "schema_version": "test"}
+
+    monkeypatch.setattr(graph_context, "_build_or_update_graph_raw", lambda **kwargs: fake_build(**kwargs))
     result = refresh_graph(repo_root=".", full_rebuild=False, postprocess="minimal")
     assert result.operation == "refresh_graph"
+    assert result.ok is True
     assert isinstance(result.to_dict(), dict)
+    assert calls and calls[0]["postprocess"] == "minimal"
+    assert calls[0]["full_rebuild"] is False
 
 
 def test_detect_changes_and_impact_radius_shapes(monkeypatch):
@@ -71,8 +83,20 @@ def test_query_graph_nodes_failure_is_typed(monkeypatch):
     monkeypatch.setattr(graph_context, "_query_graph_raw", boom)
     result = query_graph_nodes("callers_of", "nope", repo_root=".")
     assert result.ok is False
+    assert result.outcome == GraphOutcome.UNAVAILABLE
     assert result.error_type == "RuntimeError"
     assert "unavailable" in (result.error or "")
+
+
+def test_timed_call_classifies_programming_errors_as_error(monkeypatch):
+    def boom(**kwargs):
+        raise TypeError("bad kwargs")
+
+    monkeypatch.setattr(graph_context, "_list_graph_stats_raw", boom)
+    result = graph_stats(repo_root=".")
+    assert result.ok is False
+    assert result.outcome == GraphOutcome.ERROR
+    assert result.error_type == "TypeError"
 
 
 def test_collect_graph_telemetry_aggregates_latencies():
@@ -97,12 +121,11 @@ def test_graph_retry_used_on_transient_errors(monkeypatch):
             raise sqlite3.OperationalError("database is locked")
         return {"total_nodes": 1}
 
-    # Patch the underlying tools import path used inside raw helper.
     import code_review_graph.tools as tools
 
     monkeypatch.setattr(tools, "list_graph_stats", flaky)
-    # raw helper is decorated; disable wait
-    graph_context._list_graph_stats_raw = _no_wait(graph_context._list_graph_stats_raw)
+    # Disable wait via monkeypatch so the original decorator is restored after the test.
+    monkeypatch.setattr(graph_context, "_list_graph_stats_raw", _no_wait(graph_context._list_graph_stats_raw))
     result = graph_stats(repo_root=".")
     assert result.ok is True
     assert calls["n"] == 2
@@ -116,3 +139,17 @@ def test_graph_outcome_enum_and_result_payload():
     assert ok.to_dict()["outcome"] == "ok"
     assert bad.to_dict()["outcome"] == "unavailable"
     assert set(GraphOutcome) == {GraphOutcome.OK, GraphOutcome.UNAVAILABLE, GraphOutcome.ERROR}
+
+
+def test_review_context_pack_defaults_include_source_false(monkeypatch):
+    seen: dict[str, Any] = {}
+
+    def fake(**kwargs):
+        seen.update(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(graph_context, "_review_context_raw", lambda **kwargs: fake(**kwargs))
+    from git_cg.graph_context import review_context_pack
+
+    review_context_pack(repo_root=".", changed_files=["a.py"])
+    assert seen.get("include_source") is False

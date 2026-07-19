@@ -83,3 +83,12 @@ def test_should_refresh_graph_env(monkeypatch):
     assert should_refresh_graph() is False
     monkeypatch.setenv("GIT_CG_SEMANTIC_REFRESH_GRAPH", "1")
     assert should_refresh_graph() is True
+
+
+def test_path_excluded_fnmatch_middle_star():
+    from git_cg.git_index import _path_excluded
+
+    assert _path_excluded("pkg/foo-lock.json", ("*-lock.json",)) is True
+    assert _path_excluded("pkg/foo.lockb", ("*.lockb",)) is True
+    assert _path_excluded("src/auxly_helper.py", ("*auxly*",)) is True
+    assert _path_excluded("src/main.py", ("*.lock",)) is False
