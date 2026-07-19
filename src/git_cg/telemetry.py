@@ -13,6 +13,7 @@ import json
 import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from git_cg.models import CommitPlan, CommitType
 from git_cg.sop import get_gitmoji_matrix
@@ -65,6 +66,12 @@ class GenerationTelemetry:
     score_card: dict  # Dict representation of DeterministicScoreCard
     thread_id: str | None = None
     graph_schema_version: str = "unknown"
+    # Phase 1 semantic producer metrics (non-content; safe defaults when disabled)
+    semantic_enabled: bool = False
+    parser_latency_ms: float = 0.0
+    graph_build_latency_ms: float = 0.0
+    graph_query_latency_ms: float = 0.0
+    semantic_parser_metrics: dict | None = None
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -188,7 +195,7 @@ def classify_edit(original: str, edited: str) -> Provenance:
     return Provenance.AI_EDITED_SUBSTANTIVE
 
 
-def reverse_parse_commit_message(text: str) -> dict:
+def reverse_parse_commit_message(text: str) -> dict[str, Any]:
     """
     Reverse-parse a finalized commit message text into a CommitPlan-compatible dict.
 
@@ -205,7 +212,7 @@ def reverse_parse_commit_message(text: str) -> dict:
     if not lines:
         return {}
 
-    plan = {
+    plan: dict[str, Any] = {
         "primary_intent": {
             "intent_id": "unknown",
             "cc_type": "chore",
@@ -224,6 +231,7 @@ def reverse_parse_commit_message(text: str) -> dict:
         "breaking_change_description": None,
         "_partial": True,
     }
+    primary_intent: dict[str, Any] = plan["primary_intent"]
 
     # 1. Parse header
     header = lines[0]
@@ -232,15 +240,15 @@ def reverse_parse_commit_message(text: str) -> dict:
     header_match = re.match(r"^(?:(.*?)\s+)?([a-z]+)(?:\(([^)]+)\))?(!)?:\s+(.*)$", header)
     if header_match:
         emoji, cc_type, scope, breaking, description = header_match.groups()
-        plan["primary_intent"]["gitmoji"] = emoji or ""
-        plan["primary_intent"]["cc_type"] = cc_type
-        plan["primary_intent"]["scope"] = scope
-        plan["primary_intent"]["description"] = description
+        primary_intent["gitmoji"] = emoji or ""
+        primary_intent["cc_type"] = cc_type
+        primary_intent["scope"] = scope
+        primary_intent["description"] = description
         if breaking:
             plan["breaking_change"] = True
     else:
         # Fallback if it doesn't match standard conventional commit structure
-        plan["primary_intent"]["description"] = header
+        primary_intent["description"] = header
 
     # 2. Extract body, included changes, trailers, and footer
     body_lines = []
@@ -317,7 +325,7 @@ def reverse_parse_commit_message(text: str) -> dict:
 
     # Enrich primary intent from trailers if possible
     if "SemVer-Impact" in trailers:
-        plan["primary_intent"]["semver_impact"] = trailers["SemVer-Impact"]
+        primary_intent["semver_impact"] = trailers["SemVer-Impact"]
 
     return plan
 
