@@ -420,6 +420,7 @@ def test_write_telemetry_state_redact_failure(tmp_path, monkeypatch):
     write_telemetry_state(str(tmp_path), telemetry)
 
     result = read_telemetry_state(str(tmp_path))
+    assert result is not None
     assert result.commit_plan_json == {"_redaction": "failed"}
     assert result.diff_output == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
@@ -435,11 +436,11 @@ def test_scorecard_properties():
         semver_consistent=True,
         breaking_change_complete=True,
     )
-    assert card.all_pass is True
+    assert card.all_pass
     assert card.failed_checks == []
 
     card.header_length_ok = False
-    assert card.all_pass is False
+    assert not card.all_pass
     assert card.failed_checks == ["header_length_ok"]
 
 
@@ -499,14 +500,14 @@ def test_run_deterministic_checks():
     )
 
     card = run_deterministic_checks(plan)
-    assert card.all_pass is True
+    assert card.all_pass
 
     # Test failure mode
     plan.primary_intent.description = "x" * 60  # > 50 chars
     plan.breaking_change = True
     plan.breaking_change_description = ""  # Missing description
     card2 = run_deterministic_checks(plan)
-    assert card2.all_pass is False
+    assert not card2.all_pass
     assert "description_length_ok" in card2.failed_checks
     assert "breaking_change_complete" in card2.failed_checks
 
@@ -766,7 +767,7 @@ def test_write_telemetry_state_redacts_diff_output_and_message(tmp_path, monkeyp
 
     def mock_run(cmd, input=None, **kwargs):
         secret = "sk-live-abcdef"
-        findings = [{"Secret": secret}] if secret in input else []
+        findings = [{"Secret": secret}] if input is not None and secret in input else []
         return MockProcess(stdout=json.dumps(findings))
 
     monkeypatch.setattr(subprocess, "run", mock_run)
@@ -787,6 +788,7 @@ def test_write_telemetry_state_redacts_diff_output_and_message(tmp_path, monkeyp
 
     write_telemetry_state(str(tmp_path), telemetry)
     result = read_telemetry_state(str(tmp_path))
+    assert result is not None
 
     assert "sk-live-abcdef" not in result.diff_output
     assert "[REDACTED]" in result.diff_output
@@ -807,7 +809,7 @@ def test_write_telemetry_state_redacts_secrets_inside_commit_plan_json(tmp_path,
 
     def mock_run(cmd, input=None, **kwargs):
         secret = "ghp_supersecrettoken"
-        findings = [{"Secret": secret}] if secret in input else []
+        findings = [{"Secret": secret}] if input is not None and secret in input else []
         return MockProcess(stdout=json.dumps(findings))
 
     monkeypatch.setattr(subprocess, "run", mock_run)
@@ -828,6 +830,7 @@ def test_write_telemetry_state_redacts_secrets_inside_commit_plan_json(tmp_path,
 
     write_telemetry_state(str(tmp_path), telemetry)
     result = read_telemetry_state(str(tmp_path))
+    assert result is not None
 
     assert result.commit_plan_json == {"rationale": "found [REDACTED] in config"}
 
@@ -974,3 +977,63 @@ def test_reverse_parse_commit_message_simple():
     assert plan["split_recommended"] is False
     assert plan["rationale"] == ""
     assert plan["_partial"] is True
+
+
+def test_generation_telemetry_phase1_fields_default():
+    """Phase 1 semantic metrics default to disabled/zero when omitted."""
+    from git_cg.telemetry import GenerationTelemetry
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+    assert tel.semantic_enabled is False
+    assert tel.parser_latency_ms == 0.0
+    assert tel.graph_build_latency_ms == 0.0
+    assert tel.graph_query_latency_ms == 0.0
+    assert tel.semantic_parser_metrics is None
+
+
+def test_generation_telemetry_phase1_fields_persist(tmp_path, monkeypatch):
+    """Phase 1 fields round-trip through write/read telemetry state."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+        semantic_enabled=True,
+        parser_latency_ms=1.25,
+        graph_build_latency_ms=2.5,
+        graph_query_latency_ms=3.75,
+        semantic_parser_metrics={"semantic_parser_mode": "tree-sitter", "semantic_files_parsed": 2},
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.semantic_enabled is True
+    assert loaded.parser_latency_ms == 1.25
+    assert loaded.graph_build_latency_ms == 2.5
+    assert loaded.graph_query_latency_ms == 3.75
+    assert loaded.semantic_parser_metrics is not None
+    assert loaded.semantic_parser_metrics["semantic_files_parsed"] == 2

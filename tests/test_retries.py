@@ -1,11 +1,18 @@
 """Tests for LLM retry logic."""
 
+from typing import Any, cast
+
 import httpx
 import openai
 import pytest
 from tenacity import wait_none
 
 from git_cg.retries import llm_retry
+
+
+def _with_no_wait(fn: Any) -> Any:
+    """Tenacity-wrapped callables expose retry_with at runtime; keep type-checkers calm."""
+    return cast(Any, fn).retry_with(wait=wait_none())
 
 
 class MockClient:
@@ -29,7 +36,7 @@ def flaky_function(client):
 
 
 # Unit tests must not sleep on exponential backoff.
-flaky_function = flaky_function.retry_with(wait=wait_none())
+flaky_function = _with_no_wait(flaky_function)
 
 
 def test_llm_retry_success_first_try():
@@ -91,7 +98,7 @@ def test_graph_retry_retries_only_transient_errors():
             raise sqlite3.OperationalError("database is locked")
         return "ok"
 
-    flaky_graph = flaky_graph.retry_with(wait=wait_none())
+    flaky_graph = _with_no_wait(flaky_graph)
     assert flaky_graph() == "ok"
     assert attempts["n"] == 2
 
@@ -106,7 +113,7 @@ def test_graph_retry_does_not_retry_value_error():
         attempts["n"] += 1
         raise ValueError("deterministic")
 
-    bad_graph = bad_graph.retry_with(wait=wait_none())
+    bad_graph = _with_no_wait(bad_graph)
     with pytest.raises(ValueError):
         bad_graph()
     assert attempts["n"] == 1
