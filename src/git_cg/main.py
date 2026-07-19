@@ -1136,6 +1136,23 @@ def _run_commit_generation(
     }
     if semantic_parser_metrics:
         # Flatten non-content parser metrics into the trace metadata.
+        # Redact path/error-bearing fallback reasons before Opik (same gateway as state write).
+        from git_cg.telemetry import redact_payload
+
+        metrics_for_opik = dict(semantic_parser_metrics)
+        reasons = metrics_for_opik.get("semantic_fallback_reasons")
+        if isinstance(reasons, list):
+            redacted_reasons: list[str] = []
+            for reason in reasons:
+                if not isinstance(reason, str):
+                    continue
+                redacted = redact_payload(reason)
+                if redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+                    redacted_reasons.append("[REDACTED]")
+                else:
+                    redacted_reasons.append(redacted)
+            metrics_for_opik["semantic_fallback_reasons"] = redacted_reasons
+
         for key in (
             "semantic_parser_enabled",
             "semantic_parser_mode",
@@ -1148,9 +1165,9 @@ def _run_commit_generation(
             "semantic_summary_hash",
             "semantic_summary_chars",
         ):
-            if key in semantic_parser_metrics:
-                opik_metadata[key] = semantic_parser_metrics[key]
-        opik_metadata["parser_latency_ms"] = semantic_parser_metrics.get("parser_latency_ms", parser_latency_ms)
+            if key in metrics_for_opik:
+                opik_metadata[key] = metrics_for_opik[key]
+        opik_metadata["parser_latency_ms"] = metrics_for_opik.get("parser_latency_ms", parser_latency_ms)
 
     opik_context.update_current_trace(
         tags=["interactive" if interactive else "non-interactive", engine],

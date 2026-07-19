@@ -41,6 +41,17 @@ class GraphOperationResult:
         return payload
 
 
+def _classify_graph_exception(exc: BaseException) -> GraphOutcome:
+    """Map caught exceptions to GraphOutcome.
+
+    Programming/adapter mistakes -> ERROR.
+    I/O, missing graph, timeouts, and similar runtime gaps -> UNAVAILABLE.
+    """
+    if isinstance(exc, (TypeError, ValueError, AttributeError, KeyError, ImportError, AssertionError)):
+        return GraphOutcome.ERROR
+    return GraphOutcome.UNAVAILABLE
+
+
 def _timed_call(operation: str, fn, *args, **kwargs) -> GraphOperationResult:
     started = time.perf_counter()
     try:
@@ -58,7 +69,7 @@ def _timed_call(operation: str, fn, *args, **kwargs) -> GraphOperationResult:
         return GraphOperationResult(
             ok=False,
             operation=operation,
-            outcome=GraphOutcome.UNAVAILABLE,
+            outcome=_classify_graph_exception(exc),
             latency_ms=round((time.perf_counter() - started) * 1000.0, 3),
             error=str(exc),
             error_type=type(exc).__name__,
@@ -284,7 +295,7 @@ def review_context_pack(
     *,
     changed_files: list[str] | None = None,
     max_depth: int = 2,
-    include_source: bool = True,
+    include_source: bool = False,
     max_lines_per_file: int = 200,
     base: str = "HEAD",
     detail_level: str = "standard",

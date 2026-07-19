@@ -10,6 +10,7 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from git_cg.retries import git_retry
@@ -32,7 +33,11 @@ DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 
 @dataclass
 class StagedReadResult:
-    """Outcome of reading staged blobs for semantic parsing."""
+    """Outcome of reading staged blobs for semantic parsing.
+
+    ``ok`` means "usable payload available" (at least one file), not
+    "error-free". Callers must still inspect ``errors`` / ``skipped``.
+    """
 
     files: dict[str, bytes] = field(default_factory=dict)
     skipped: list[str] = field(default_factory=list)  # path:reason
@@ -54,23 +59,9 @@ def _run_git(args: list[str], *, cwd: str | None, check: bool = True) -> subproc
 
 
 def _path_excluded(path: str, excludes: tuple[str, ...]) -> bool:
+    """Return True when path or basename matches any exclude glob."""
     name = Path(path).name
-    full = path
-    for pattern in excludes:
-        # Minimal fnmatch-like handling for our fixed patterns.
-        if pattern.startswith("*") and pattern.endswith("*"):
-            token = pattern.strip("*")
-            if token and (token in name or token in full):
-                return True
-        elif pattern.startswith("*"):
-            if name.endswith(pattern[1:]) or full.endswith(pattern[1:]):
-                return True
-        elif pattern.endswith("*"):
-            if name.startswith(pattern[:-1]) or full.startswith(pattern[:-1]):
-                return True
-        elif name == pattern or full == pattern:
-            return True
-    return False
+    return any(fnmatchcase(name, pattern) or fnmatchcase(path, pattern) for pattern in excludes)
 
 
 def list_staged_paths(
@@ -116,9 +107,106 @@ def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
         subprocess.CalledProcessError: when git cannot resolve the path in the index.
     """
     cwd = repo_root or "."
-    # Prefer literal pathspec after -- to avoid option injection.
     proc = _run_git(["show", f":{path}"], cwd=cwd)
     return proc.stdout
+
+
+def _read_staged_blobs_batch(
+    paths: list[str],
+    *,
+    repo_root: str | None,
+    max_file_bytes: int,
+) -> StagedReadResult:
+    """
+    Read many staged blobs via one ``git cat-file --batch`` process.
+
+    Input lines are ``:<path>`` (index stage 0). Output records are:
+    ``<oid> <type> <size>\\n<content>\\n`` or ``<requested> missing\\n``.
+    """
+    result = StagedReadResult()
+    if not paths:
+        return result
+
+    cwd = repo_root or "."
+    # Filter unsafe paths first (same guards as the single-path loop).
+    safe_paths: list[str] = []
+    for path in paths:
+        if path.startswith("/") or path.startswith("\\") or ".." in Path(path).parts:
+            result.skipped.append(f"{path}:unsafe_path")
+            continue
+        safe_paths.append(path)
+
+    if not safe_paths:
+        return result
+
+    try:
+        proc = subprocess.run(
+            ["git", "cat-file", "--batch"],
+            cwd=cwd,
+            input=b"".join(f":{p}\n".encode("utf-8", errors="surrogateescape") for p in safe_paths),
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        for path in safe_paths:
+            result.errors.append(f"{path}:{type(exc).__name__}:{exc}")
+        return result
+
+    data = proc.stdout
+    offset = 0
+    path_idx = 0
+
+    while path_idx < len(safe_paths) and offset < len(data):
+        path = safe_paths[path_idx]
+        path_idx += 1
+
+        nl = data.find(b"\n", offset)
+        if nl < 0:
+            result.errors.append(f"{path}:batch_parse_error:truncated_header")
+            break
+        header = data[offset:nl].decode("utf-8", errors="replace")
+        offset = nl + 1
+
+        if header.endswith(" missing"):
+            result.errors.append(f"{path}:missing")
+            continue
+
+        parts = header.rsplit(" ", 2)
+        if len(parts) != 3:
+            result.errors.append(f"{path}:batch_parse_error:{header}")
+            continue
+        _oid, _kind, size_s = parts
+        try:
+            size = int(size_s)
+        except ValueError:
+            result.errors.append(f"{path}:batch_parse_error:bad_size:{size_s}")
+            continue
+
+        content = data[offset : offset + size]
+        offset += size
+        # cat-file --batch emits a trailing newline after content
+        if offset < len(data) and data[offset : offset + 1] == b"\n":
+            offset += 1
+
+        if len(content) != size:
+            result.errors.append(f"{path}:batch_parse_error:truncated_content")
+            continue
+        if size > max_file_bytes:
+            result.skipped.append(f"{path}:oversize:{size}")
+            continue
+        result.files[path] = content
+
+    # Paths with no corresponding batch record (truncated stream / early exit).
+    while path_idx < len(safe_paths):
+        path = safe_paths[path_idx]
+        path_idx += 1
+        result.errors.append(f"{path}:batch_parse_error:no_record")
+
+    if proc.returncode not in (0, None) and not result.files and not result.errors:
+        stderr = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        result.errors.append(f"batch:CalledProcessError:{stderr or proc.returncode}")
+
+    return result
 
 
 def read_staged_sources(
@@ -131,31 +219,12 @@ def read_staged_sources(
     """
     Load staged file contents as ``path -> bytes`` for the semantic parser.
 
+    Uses a single ``git cat-file --batch`` process for the staged set.
     Skips oversize blobs and records typed skip/error reasons without raising.
     """
-    result = StagedReadResult()
     cwd = repo_root or "."
     staged_paths = paths if paths is not None else list_staged_paths(cwd, excludes=excludes)
-
-    for path in staged_paths:
-        try:
-            # Guard against absolute / escape paths.
-            if path.startswith("/") or path.startswith("\\") or ".." in Path(path).parts:
-                result.skipped.append(f"{path}:unsafe_path")
-                continue
-
-            data = read_staged_blob(path, repo_root=cwd)
-            if len(data) > max_file_bytes:
-                result.skipped.append(f"{path}:oversize:{len(data)}")
-                continue
-            result.files[path] = data
-        except subprocess.CalledProcessError as exc:
-            stderr = (exc.stderr or b"").decode("utf-8", errors="replace").strip()
-            result.errors.append(f"{path}:CalledProcessError:{stderr or exc.returncode}")
-        except OSError as exc:
-            result.errors.append(f"{path}:{type(exc).__name__}:{exc}")
-
-    return result
+    return _read_staged_blobs_batch(staged_paths, repo_root=cwd, max_file_bytes=max_file_bytes)
 
 
 def should_refresh_graph() -> bool:
