@@ -381,6 +381,23 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     else:
         telemetry.commit_plan_json = json.loads(redacted_plan_str)
 
+    # Phase 1: redact path/error-bearing fallback reasons inside parser metrics.
+    if isinstance(telemetry.semantic_parser_metrics, dict):
+        metrics = dict(telemetry.semantic_parser_metrics)
+        reasons = metrics.get("semantic_fallback_reasons")
+        if isinstance(reasons, list):
+            redacted_reasons: list[str] = []
+            for reason in reasons:
+                if not isinstance(reason, str):
+                    continue
+                redacted = redact_payload(reason)
+                if redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+                    redacted_reasons.append("[REDACTED]")
+                else:
+                    redacted_reasons.append(redacted)
+            metrics["semantic_fallback_reasons"] = redacted_reasons
+        telemetry.semantic_parser_metrics = metrics
+
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
         json.dump(asdict(telemetry), f, indent=2)
@@ -403,6 +420,13 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["trace_id"] = None
             if "thread_id" not in data:
                 data["thread_id"] = None
+            # Phase 1 backward-compat defaults for pre-semantic state files.
+            data.setdefault("semantic_enabled", False)
+            data.setdefault("parser_latency_ms", 0.0)
+            data.setdefault("graph_build_latency_ms", 0.0)
+            data.setdefault("graph_query_latency_ms", 0.0)
+            data.setdefault("semantic_parser_metrics", None)
+            data.setdefault("graph_schema_version", "unknown")
             return GenerationTelemetry(**data)
     except Exception:
         return None

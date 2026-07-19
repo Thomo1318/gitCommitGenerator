@@ -9,9 +9,18 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from typing import Any
 
 from git_cg.retries import graph_retry
+
+
+class GraphOutcome(StrEnum):
+    """Deterministic graph adapter outcome."""
+
+    OK = "ok"
+    UNAVAILABLE = "unavailable"
+    ERROR = "error"
 
 
 @dataclass
@@ -20,13 +29,16 @@ class GraphOperationResult:
 
     ok: bool
     operation: str
+    outcome: GraphOutcome = GraphOutcome.OK
     latency_ms: float = 0.0
     data: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     error_type: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["outcome"] = str(self.outcome)
+        return payload
 
 
 def _timed_call(operation: str, fn, *args, **kwargs) -> GraphOperationResult:
@@ -38,6 +50,7 @@ def _timed_call(operation: str, fn, *args, **kwargs) -> GraphOperationResult:
         return GraphOperationResult(
             ok=True,
             operation=operation,
+            outcome=GraphOutcome.OK,
             latency_ms=round((time.perf_counter() - started) * 1000.0, 3),
             data=data,
         )
@@ -45,6 +58,7 @@ def _timed_call(operation: str, fn, *args, **kwargs) -> GraphOperationResult:
         return GraphOperationResult(
             ok=False,
             operation=operation,
+            outcome=GraphOutcome.UNAVAILABLE,
             latency_ms=round((time.perf_counter() - started) * 1000.0, 3),
             error=str(exc),
             error_type=type(exc).__name__,

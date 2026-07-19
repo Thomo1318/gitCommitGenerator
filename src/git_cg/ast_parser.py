@@ -11,6 +11,7 @@ import hashlib
 import mimetypes
 import time
 from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
@@ -59,20 +60,31 @@ _LANGUAGE_BY_EXT: dict[str, str] = {
 }
 
 
+class ParseStatus(StrEnum):
+    """Per-file tree-sitter parse outcome."""
+
+    SUCCESS = "success"
+    UNSUPPORTED = "unsupported"
+    BINARY = "binary"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class ParseResult:
     """Outcome of attempting to parse a single file/blob."""
 
     path: str
     language: str | None
-    status: str  # success | unsupported | binary | failed
+    status: ParseStatus
     root_type: str | None = None
     error: str | None = None
     latency_ms: float = 0.0
     source_sha16: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["status"] = str(self.status)
+        return payload
 
 
 @dataclass
@@ -185,7 +197,7 @@ def parse_source(
         return ParseResult(
             path=path,
             language=None,
-            status="binary",
+            status=ParseStatus.BINARY,
             latency_ms=(time.perf_counter() - started) * 1000.0,
         )
 
@@ -194,7 +206,7 @@ def parse_source(
         return ParseResult(
             path=path,
             language=None,
-            status="unsupported",
+            status=ParseStatus.UNSUPPORTED,
             error="no language mapping for extension",
             latency_ms=(time.perf_counter() - started) * 1000.0,
             source_sha16=_source_sha16(source),
@@ -209,7 +221,7 @@ def parse_source(
             return ParseResult(
                 path=path,
                 language=lang,
-                status="failed",
+                status=ParseStatus.FAILED,
                 root_type=getattr(root, "type", None),
                 error="parse tree contains errors",
                 latency_ms=(time.perf_counter() - started) * 1000.0,
@@ -218,7 +230,7 @@ def parse_source(
         return ParseResult(
             path=path,
             language=lang,
-            status="success",
+            status=ParseStatus.SUCCESS,
             root_type=getattr(root, "type", None),
             latency_ms=(time.perf_counter() - started) * 1000.0,
             source_sha16=_source_sha16(source),
@@ -227,7 +239,7 @@ def parse_source(
         return ParseResult(
             path=path,
             language=lang,
-            status="failed",
+            status=ParseStatus.FAILED,
             error=f"{type(exc).__name__}: {exc}",
             latency_ms=(time.perf_counter() - started) * 1000.0,
             source_sha16=_source_sha16(source),
@@ -258,17 +270,17 @@ def parse_files(files: dict[str, bytes]) -> ParseBatch:
         if result.language:
             requested.add(result.language)
 
-        if result.status == "success":
+        if result.status == ParseStatus.SUCCESS:
             metrics.semantic_files_parsed += 1
             if result.language:
                 parsed.add(result.language)
             summary_parts.append(f"{path}:{result.language}:{result.root_type}:{result.source_sha16}")
-        elif result.status == "unsupported":
+        elif result.status == ParseStatus.UNSUPPORTED:
             metrics.semantic_files_unsupported += 1
             reason = f"unsupported:{path}"
             fallback_reasons.append(reason)
             summary_parts.append(f"{path}:unsupported")
-        elif result.status == "binary":
+        elif result.status == ParseStatus.BINARY:
             metrics.semantic_files_binary += 1
             fallback_reasons.append(f"binary:{path}")
             summary_parts.append(f"{path}:binary")
