@@ -1,7 +1,8 @@
 """
-Staged-index blob readers for semantic producers (ADR-0005 Phase 1).
+Index and HEAD blob readers for semantic producers (ADR-0005 Phase 1-2).
 
-Reads **index** content only (not the dirty worktree). Never mutates git state.
+Reads **index** and **HEAD** content only (not the dirty worktree).
+Never mutates git state.
 """
 
 from __future__ import annotations
@@ -123,23 +124,28 @@ def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
     return proc.stdout
 
 
-def _encode_batch_requests(paths: list[str]) -> bytes:
-    """Encode index-stage-0 path requests for git cat-file --batch*."""
-    return b"".join((f":{p}".encode("utf-8", errors="surrogateescape") + bytes([10])) for p in paths)
+def _encode_batch_requests(paths: list[str], *, prefix: str = ":") -> bytes:
+    """Encode path requests for git cat-file --batch*.
+
+    Args:
+        paths: Repo-relative paths.
+        prefix: Object prefix. ``":"`` = index stage 0; ``"HEAD:"`` = HEAD tree.
+    """
+    return b"".join((f"{prefix}{p}".encode("utf-8", errors="surrogateescape") + bytes([10])) for p in paths)
 
 
-def _parse_batch_check_header(header: str) -> tuple[str, int] | tuple[None, None]:
+def _parse_batch_check_header(header: str) -> tuple[str, int] | None:
     """Parse a --batch-check header into (oid_or_marker, size)."""
     if header.endswith(" missing"):
         return "missing", 0
     parts = header.rsplit(" ", 2)
     if len(parts) != 3:
-        return None, None
+        return None
     _oid, _kind, size_s = parts
     try:
         return _oid, int(size_s)
     except ValueError:
-        return None, None
+        return None
 
 
 def _is_unsafe_staged_path(path: str) -> bool:
@@ -153,21 +159,23 @@ def _is_unsafe_staged_path(path: str) -> bool:
     )
 
 
-def _read_staged_blobs_batch(
+def _read_blobs_batch(
     paths: list[str],
     *,
     repo_root: str | None,
     max_file_bytes: int,
+    prefix: str = ":",
 ) -> StagedReadResult:
     """
-    Read many staged blobs via git cat-file batch protocols.
+    Read many blobs via git cat-file batch protocols.
 
     1. --batch-check preflight obtains sizes without materialising content.
     2. Oversized / missing / unsafe paths are skipped or errored immediately.
     3. Eligible blobs are fetched with one --batch call so peak memory is
-       bounded by max_file_bytes rather than the full staged set.
+       bounded by max_file_bytes rather than the full path set.
 
-    Input lines are :<path> (index stage 0). Output records are:
+    Input lines are ``{prefix}{path}`` (e.g. index stage 0 ``:path`` or
+    ``HEAD:path``). Output records are:
     <oid> <type> <size> then newline (check), or the same header plus
     content and trailing newline (batch), or <requested> missing.
     """
@@ -189,7 +197,7 @@ def _read_staged_blobs_batch(
     if not safe_paths:
         return result
 
-    request = _encode_batch_requests(safe_paths)
+    request = _encode_batch_requests(safe_paths, prefix=prefix)
     try:
         check_proc = _run_git(
             ["cat-file", "--batch-check"],
@@ -217,10 +225,11 @@ def _read_staged_blobs_batch(
 
         header = check_data[offset:nl].decode("utf-8", errors="replace")
         offset = nl + 1
-        marker, size = _parse_batch_check_header(header)
-        if marker is None:
+        parsed = _parse_batch_check_header(header)
+        if parsed is None:
             result.errors.append(f"{path}:batch_parse_error:{header}")
             continue
+        marker, size = parsed
         if marker == "missing":
             result.errors.append(f"{path}:missing")
             continue
@@ -242,7 +251,7 @@ def _read_staged_blobs_batch(
             ["cat-file", "--batch"],
             cwd=cwd,
             check=False,
-            input_data=_encode_batch_requests(eligible),
+            input_data=_encode_batch_requests(eligible, prefix=prefix),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         for path in eligible:
@@ -311,6 +320,26 @@ def _read_staged_blobs_batch(
     return result
 
 
+def _read_staged_blobs_batch(
+    paths: list[str],
+    *,
+    repo_root: str | None,
+    max_file_bytes: int,
+) -> StagedReadResult:
+    """Read index stage-0 blobs for ``paths``."""
+    return _read_blobs_batch(paths, repo_root=repo_root, max_file_bytes=max_file_bytes, prefix=":")
+
+
+def _read_head_blobs_batch(
+    paths: list[str],
+    *,
+    repo_root: str | None,
+    max_file_bytes: int,
+) -> StagedReadResult:
+    """Read HEAD-tree blobs for ``paths``."""
+    return _read_blobs_batch(paths, repo_root=repo_root, max_file_bytes=max_file_bytes, prefix="HEAD:")
+
+
 def read_staged_sources(
     repo_root: str | None = None,
     *,
@@ -327,6 +356,36 @@ def read_staged_sources(
     cwd = repo_root or "."
     staged_paths = paths if paths is not None else list_staged_paths(cwd, excludes=excludes)
     return _read_staged_blobs_batch(staged_paths, repo_root=cwd, max_file_bytes=max_file_bytes)
+
+
+def read_head_blob(path: str, *, repo_root: str | None = None) -> bytes:
+    """
+    Read a single blob from HEAD via ``git show HEAD:path``.
+
+    Raises:
+        subprocess.CalledProcessError: when git cannot resolve the path at HEAD.
+    """
+    cwd = repo_root or "."
+    proc = _run_git(["show", f"HEAD:{path}"], cwd=cwd)
+    return proc.stdout
+
+
+def read_head_sources(
+    repo_root: str | None = None,
+    *,
+    max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
+    paths: list[str] | None = None,
+) -> StagedReadResult:
+    """
+    Load HEAD-tree file contents as path -> bytes for fingerprint baselines.
+
+    When ``paths`` is None, returns an empty result (callers should pass the
+    staged path set they intend to pair). Missing HEAD paths are recorded as
+    errors (typically add-only staged files).
+    """
+    cwd = repo_root or "."
+    head_paths = list(paths or [])
+    return _read_head_blobs_batch(head_paths, repo_root=cwd, max_file_bytes=max_file_bytes)
 
 
 def should_refresh_graph() -> bool:
