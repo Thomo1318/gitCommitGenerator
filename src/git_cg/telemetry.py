@@ -72,6 +72,14 @@ class GenerationTelemetry:
     graph_build_latency_ms: float = 0.0
     graph_query_latency_ms: float = 0.0
     semantic_parser_metrics: dict | None = None
+    # Phase 2 fingerprint algebra metrics (Issue #160)
+    body_similarity_min: float | None = None
+    body_similarity_avg: float | None = None
+    fingerprint_files_compared: int = 0
+    fingerprint_latency_ms: float = 0.0
+    fingerprint_class_counts: dict | None = None
+    fingerprint_grammar_version: str = "unknown"
+    fingerprint_markers: list | None = None
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -427,6 +435,14 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("graph_query_latency_ms", 0.0)
             data.setdefault("semantic_parser_metrics", None)
             data.setdefault("graph_schema_version", "unknown")
+            # Phase 2 fingerprint algebra defaults (Issue #160).
+            data.setdefault("body_similarity_min", None)
+            data.setdefault("body_similarity_avg", None)
+            data.setdefault("fingerprint_files_compared", 0)
+            data.setdefault("fingerprint_latency_ms", 0.0)
+            data.setdefault("fingerprint_class_counts", None)
+            data.setdefault("fingerprint_grammar_version", "unknown")
+            data.setdefault("fingerprint_markers", None)
             return GenerationTelemetry(**data)
     except Exception:
         return None

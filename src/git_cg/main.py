@@ -1011,6 +1011,13 @@ def _write_telemetry_state_safe(
     graph_build_latency_ms: float = 0.0,
     graph_query_latency_ms: float = 0.0,
     semantic_parser_metrics: dict | None = None,
+    body_similarity_min: float | None = None,
+    body_similarity_avg: float | None = None,
+    fingerprint_files_compared: int = 0,
+    fingerprint_latency_ms: float = 0.0,
+    fingerprint_class_counts: dict | None = None,
+    fingerprint_grammar_version: str = "unknown",
+    fingerprint_markers: list | None = None,
 ) -> None:
     try:
         import dataclasses
@@ -1042,6 +1049,13 @@ def _write_telemetry_state_safe(
             graph_build_latency_ms=graph_build_latency_ms,
             graph_query_latency_ms=graph_query_latency_ms,
             semantic_parser_metrics=semantic_parser_metrics,
+            body_similarity_min=body_similarity_min,
+            body_similarity_avg=body_similarity_avg,
+            fingerprint_files_compared=fingerprint_files_compared,
+            fingerprint_latency_ms=fingerprint_latency_ms,
+            fingerprint_class_counts=fingerprint_class_counts,
+            fingerprint_grammar_version=fingerprint_grammar_version,
+            fingerprint_markers=fingerprint_markers,
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1131,10 +1145,18 @@ def _run_commit_generation(
     from git_cg.ast_parser import empty_parser_metrics
 
     semantic_parser_metrics: dict | None = empty_parser_metrics(enabled=False)
+    body_similarity_min: float | None = None
+    body_similarity_avg: float | None = None
+    fingerprint_files_compared = 0
+    fingerprint_latency_ms = 0.0
+    fingerprint_class_counts: dict | None = None
+    fingerprint_grammar_version = "unknown"
+    fingerprint_markers: list | None = None
     if semantic_enabled:
         try:
             from git_cg.ast_parser import parse_files
-            from git_cg.git_index import read_staged_sources, should_refresh_graph
+            from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
+            from git_cg.git_index import read_head_sources, read_staged_sources, should_refresh_graph
             from git_cg.graph_context import (
                 collect_graph_telemetry,
                 graph_stats,
@@ -1155,8 +1177,38 @@ def _run_commit_generation(
                     semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
                         f"staged_error:{e}" for e in staged.errors[:50]
                     )
+
+                # 1b) Phase 2: HEAD vs index three-fingerprint algebra (telemetry only).
+                head = read_head_sources(repo_root, paths=list(staged.files.keys()))
+                # Include HEAD-only paths that failed staged read? Not needed for ACMR staged set.
+                # Pair staged files with whatever HEAD returned; missing HEAD => add_only.
+                fp_batch = compare_fingerprint_sets(
+                    baseline_files=head.files,
+                    staged_files=staged.files,
+                )
+                fp_metrics = fp_batch.metrics.to_dict()
+                body_similarity_min = fp_metrics.get("body_similarity_min")
+                body_similarity_avg = fp_metrics.get("body_similarity_avg")
+                fingerprint_files_compared = int(fp_metrics.get("fingerprint_files_compared") or 0)
+                fingerprint_latency_ms = float(fp_metrics.get("fingerprint_latency_ms") or 0.0)
+                fingerprint_class_counts = fp_metrics.get("class_counts") or {}
+                fingerprint_grammar_version = str(fp_metrics.get("grammar_version") or "unknown")
+                fingerprint_markers = list(fp_metrics.get("markers") or [])
+                # Fold non-content fingerprint skip reasons into parser fallback list (redacted later).
+                for reason in (fp_metrics.get("reasons") or [])[:50]:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).append(f"fingerprint:{reason}")
+                if head.errors:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                        f"head_error:{e}" for e in head.errors[:50]
+                    )
+                if head.skipped:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                        f"head_skip:{s}" for s in head.skipped[:50]
+                    )
             else:
                 semantic_parser_metrics = empty_parser_metrics(enabled=True)
+                fp_empty = empty_fingerprint_metrics()
+                fingerprint_grammar_version = str(fp_empty.get("grammar_version") or "unknown")
                 if staged.errors and verbose:
                     console.log(f"[yellow]Staged blob read issues: {staged.errors[:3]}[/yellow]")
 
@@ -1189,8 +1241,15 @@ def _run_commit_generation(
                 )
         except Exception as semantic_exc:
             if verbose:
-                console.log(f"[yellow]Semantic Phase 1 producers failed: {semantic_exc}[/yellow]")
+                console.log(f"[yellow]Semantic producers failed: {semantic_exc}[/yellow]")
             semantic_parser_metrics = empty_parser_metrics(enabled=False)
+            body_similarity_min = None
+            body_similarity_avg = None
+            fingerprint_files_compared = 0
+            fingerprint_latency_ms = 0.0
+            fingerprint_class_counts = None
+            fingerprint_grammar_version = "unknown"
+            fingerprint_markers = None
 
     opik_metadata = {
         "repo_name": repo_name,
@@ -1199,6 +1258,13 @@ def _run_commit_generation(
         "parser_latency_ms": parser_latency_ms,
         "graph_build_latency_ms": graph_build_latency_ms,
         "graph_query_latency_ms": graph_query_latency_ms,
+        "body_similarity_min": body_similarity_min,
+        "body_similarity_avg": body_similarity_avg,
+        "fingerprint_files_compared": fingerprint_files_compared,
+        "fingerprint_latency_ms": fingerprint_latency_ms,
+        "fingerprint_class_counts": fingerprint_class_counts,
+        "fingerprint_grammar_version": fingerprint_grammar_version,
+        "fingerprint_markers": fingerprint_markers,
     }
     if semantic_parser_metrics:
         # Flatten non-content parser metrics into the trace metadata.
@@ -1434,6 +1500,13 @@ def _run_commit_generation(
         graph_build_latency_ms=graph_build_latency_ms,
         graph_query_latency_ms=graph_query_latency_ms,
         semantic_parser_metrics=semantic_parser_metrics,
+        body_similarity_min=body_similarity_min,
+        body_similarity_avg=body_similarity_avg,
+        fingerprint_files_compared=fingerprint_files_compared,
+        fingerprint_latency_ms=fingerprint_latency_ms,
+        fingerprint_class_counts=fingerprint_class_counts,
+        fingerprint_grammar_version=fingerprint_grammar_version,
+        fingerprint_markers=fingerprint_markers,
     )
 
     opik.flush_tracker()
@@ -1792,6 +1865,14 @@ def record_telemetry(
                     "graph_build_latency_ms": telemetry_state.get("graph_build_latency_ms", 0.0),
                     "graph_query_latency_ms": telemetry_state.get("graph_query_latency_ms", 0.0),
                     "semantic_parser_metrics": telemetry_state.get("semantic_parser_metrics"),
+                    # Phase 2 fingerprint algebra metrics (Issue #160).
+                    "body_similarity_min": telemetry_state.get("body_similarity_min"),
+                    "body_similarity_avg": telemetry_state.get("body_similarity_avg"),
+                    "fingerprint_files_compared": telemetry_state.get("fingerprint_files_compared", 0),
+                    "fingerprint_latency_ms": telemetry_state.get("fingerprint_latency_ms", 0.0),
+                    "fingerprint_class_counts": telemetry_state.get("fingerprint_class_counts"),
+                    "fingerprint_grammar_version": telemetry_state.get("fingerprint_grammar_version", "unknown"),
+                    "fingerprint_markers": telemetry_state.get("fingerprint_markers"),
                 },
                 feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
                 thread_id=thread_id,

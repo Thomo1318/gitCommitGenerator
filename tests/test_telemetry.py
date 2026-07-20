@@ -1099,3 +1099,99 @@ def test_write_telemetry_state_redacts_semantic_fallback_reasons(tmp_path, monke
     assert loaded.semantic_parser_metrics is not None
     reasons = loaded.semantic_parser_metrics["semantic_fallback_reasons"]
     assert reasons == ["failed:[REDACTED]:[REDACTED]"]
+
+
+def test_generation_telemetry_phase2_fields_default():
+    """Phase 2 fingerprint metrics default to empty/unknown when omitted."""
+    from git_cg.telemetry import GenerationTelemetry
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+    assert tel.body_similarity_min is None
+    assert tel.body_similarity_avg is None
+    assert tel.fingerprint_files_compared == 0
+    assert tel.fingerprint_latency_ms == 0.0
+    assert tel.fingerprint_class_counts is None
+    assert tel.fingerprint_grammar_version == "unknown"
+    assert tel.fingerprint_markers is None
+
+
+def test_generation_telemetry_phase2_fields_persist(tmp_path, monkeypatch):
+    """Phase 2 fields round-trip through write/read telemetry state."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+        body_similarity_min=0.81,
+        body_similarity_avg=0.9,
+        fingerprint_files_compared=3,
+        fingerprint_latency_ms=4.5,
+        fingerprint_class_counts={"comments_only": 1, "structural": 2},
+        fingerprint_grammar_version="tree-sitter-language-pack==test",
+        fingerprint_markers=["comments_only"],
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.body_similarity_min == 0.81
+    assert loaded.body_similarity_avg == 0.9
+    assert loaded.fingerprint_files_compared == 3
+    assert loaded.fingerprint_latency_ms == 4.5
+    assert loaded.fingerprint_class_counts == {"comments_only": 1, "structural": 2}
+    assert loaded.fingerprint_grammar_version == "tree-sitter-language-pack==test"
+    assert loaded.fingerprint_markers == ["comments_only"]
+
+
+def test_read_legacy_json_backfills_phase2_fields(tmp_path):
+    """Pre-Phase-2 state files must deserialize with fingerprint defaults."""
+    import json
+
+    from git_cg.telemetry import get_state_file_path, read_telemetry_state
+
+    payload = {
+        "diff_hash": "dh",
+        "diff_output": "diff",
+        "repo_name": "legacy-repo",
+        "engine": "mlx",
+        "model_name": "m",
+        "system_prompt_hash": "ph",
+        "generated_message": "msg",
+        "commit_plan_json": {"intent": "feat"},
+        "score_card": {},
+        "semantic_enabled": False,
+    }
+    state_file = get_state_file_path(str(tmp_path))
+    state_file.write_text(json.dumps(payload), encoding="utf-8")
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.body_similarity_min is None
+    assert loaded.body_similarity_avg is None
+    assert loaded.fingerprint_files_compared == 0
+    assert loaded.fingerprint_latency_ms == 0.0
+    assert loaded.fingerprint_class_counts is None
+    assert loaded.fingerprint_grammar_version == "unknown"
+    assert loaded.fingerprint_markers is None
