@@ -1194,12 +1194,19 @@ def _run_commit_generation(
     engine_config = ENGINE_REGISTRY.get(engine.lower())
     prefix = engine_config.prefix if engine_config else "OMLX"
     model_name = os.environ.get(f"{prefix}_MODEL", os.environ.get("OMLX_MODEL", ""))
+
+    try:
+        models = client.models.list()
+        if models.data:
+            available_models = [m.id for m in models.data]
+            # If the env var model isn't loaded, use whatever is actually available
+            if model_name not in available_models:
+                model_name = available_models[0]
+    except Exception:
+        pass
+
     if not model_name:
-        try:
-            models = client.models.list()
-            model_name = models.data[0].id if models.data else "default"
-        except Exception:
-            model_name = "default"
+        model_name = "default"
 
     if verbose:
         console.log(f"Using model: {model_name}")
