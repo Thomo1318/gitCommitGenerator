@@ -39,7 +39,9 @@ except Exception as e:
 
     print(f"[Debug] Failed to load 1Password secrets: {e}", file=sys.stderr)
 
+import httpx  # noqa: E402
 import instructor  # noqa: E402
+import openai  # noqa: E402
 import typer  # noqa: E402
 from openai import OpenAI  # noqa: E402
 from opik.integrations.openai import track_openai  # noqa: E402
@@ -245,6 +247,70 @@ def _abort(message: str, *, strict: bool, code: int = 1, report: bool = True) ->
         sentry_sdk.flush(timeout=2.0)
     opik.flush_tracker()
     raise typer.Exit(code=code if strict else 0)
+
+
+def resolve_model_name(
+    client: Any,
+    *,
+    preferred: str,
+    verbose: bool = False,
+) -> str:
+    """
+    Resolve a concrete model id from env preference and server inventory.
+
+    Preference order:
+    1. Preferred id when inventory is unavailable (keep user config).
+    2. Preferred id when present in inventory.
+    3. First available inventory id when preferred is empty or missing.
+    4. Preferred string if inventory is empty but preferred was set.
+    5. ``"default"`` as last resort.
+    """
+    preferred = (preferred or "").strip()
+
+    available: list[str] = []
+    inventory_ok = False
+    try:
+        # Instructor wrappers may expose the raw OpenAI client as ``.client``.
+        listing_client = getattr(client, "client", client)
+        models_api = getattr(listing_client, "models", None)
+        if models_api is None:
+            models_api = getattr(client, "models", None)
+        if models_api is None:
+            raise AttributeError("client has no models API")
+
+        listed = models_api.list()
+        data = getattr(listed, "data", None) or []
+        available = [m.id for m in data if getattr(m, "id", None)]
+        inventory_ok = True
+    except (openai.APIError, httpx.HTTPError, OSError, AttributeError, TypeError, ValueError) as exc:
+        if verbose:
+            console.log(
+                f"[yellow]Model inventory unavailable ({type(exc).__name__}: {exc}); using preferred/default.[/yellow]"
+            )
+        return preferred or "default"
+    except Exception as exc:  # pragma: no cover - unexpected SDK shapes
+        if verbose:
+            console.log(
+                f"[yellow]Unexpected model listing error ({type(exc).__name__}: {exc}); "
+                f"using preferred/default.[/yellow]"
+            )
+        return preferred or "default"
+
+    if preferred and (not inventory_ok or preferred in available):
+        return preferred
+
+    if available:
+        chosen = available[0]
+        if preferred and preferred != chosen:
+            console.print(f"[yellow]Configured model {preferred!r} is not loaded; falling back to {chosen!r}.[/yellow]")
+        elif verbose and not preferred:
+            console.log(f"No model configured; using first available model {chosen!r}.")
+        return chosen
+
+    if preferred:
+        return preferred
+
+    return "default"
 
 
 def get_ai_client(engine: str) -> instructor.Instructor:
@@ -1193,20 +1259,8 @@ def _run_commit_generation(
 
     engine_config = ENGINE_REGISTRY.get(engine.lower())
     prefix = engine_config.prefix if engine_config else "OMLX"
-    model_name = os.environ.get(f"{prefix}_MODEL", os.environ.get("OMLX_MODEL", ""))
-
-    try:
-        models = client.models.list()
-        if models.data:
-            available_models = [m.id for m in models.data]
-            # If the env var model isn't loaded, use whatever is actually available
-            if model_name not in available_models:
-                model_name = available_models[0]
-    except Exception:
-        pass
-
-    if not model_name:
-        model_name = "default"
+    preferred_model = os.environ.get(f"{prefix}_MODEL", os.environ.get("OMLX_MODEL", ""))
+    model_name = resolve_model_name(client, preferred=preferred_model, verbose=verbose)
 
     if verbose:
         console.log(f"Using model: {model_name}")
