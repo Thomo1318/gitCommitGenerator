@@ -8,6 +8,8 @@ import pytest
 
 from git_cg.git_index import (
     list_staged_paths,
+    read_head_blob,
+    read_head_sources,
     read_staged_blob,
     read_staged_sources,
     should_refresh_graph,
@@ -115,3 +117,19 @@ def test_read_staged_sources_skips_newline_paths(staged_repo):
     assert "evil\rpath.py" not in result.files
     assert any(s.endswith(":unsafe_path") and "evil\npath.py" in s for s in result.skipped)
     assert any(s.endswith(":unsafe_path") and "evil\rpath.py" in s for s in result.skipped)
+
+
+def test_read_head_blob_returns_committed_content(staged_repo):
+    data = read_head_blob("tracked.py", repo_root=staged_repo)
+    assert b"def old()" in data
+    assert b"def new()" not in data
+
+
+def test_read_head_sources_pairs_with_staged_paths(staged_repo):
+    staged = read_staged_sources(staged_repo)
+    head = read_head_sources(staged_repo, paths=list(staged.files.keys()))
+    # tracked.py exists at HEAD; fresh.py is add-only (missing at HEAD)
+    assert "tracked.py" in head.files
+    assert b"def old()" in head.files["tracked.py"]
+    assert "fresh.py" not in head.files
+    assert any("fresh.py" in e and "missing" in e for e in head.errors)
