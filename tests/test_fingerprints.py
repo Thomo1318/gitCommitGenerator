@@ -135,3 +135,21 @@ def test_empty_fingerprint_metrics():
     assert metrics["fingerprint_files_compared"] == 0
     assert metrics["body_similarity_min"] is None
     assert metrics["grammar_version"]
+
+
+def test_node_overflow_skips_hash_equality():
+    """Oversized trees must not classify via content-independent overflow hashes."""
+    src_a = _py("def a():\n    return 1\n")
+    src_b = _py("def b():\n    return 2\n")
+    # Force overflow on both sides with a tiny node budget.
+    result = compare_file_fingerprints(
+        "m.py",
+        baseline_source=src_a,
+        staged_source=src_b,
+        max_nodes=1,
+    )
+    assert result.classification == FingerprintClass.SKIPPED
+    assert result.reason == "node_overflow"
+    assert result.baseline_fps is not None and result.staged_fps is not None
+    assert result.baseline_fps.overflowed is True
+    assert result.staged_fps.overflowed is True

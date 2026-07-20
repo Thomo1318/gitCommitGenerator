@@ -80,10 +80,13 @@ class ParseResult:
     error: str | None = None
     latency_ms: float = 0.0
     source_sha16: str | None = None
+    # In-memory only: not serialised (tree-sitter objects are not JSON-safe).
+    tree: Any | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["status"] = str(self.status)
+        payload.pop("tree", None)
         return payload
 
 
@@ -234,6 +237,7 @@ def parse_source(
             root_type=getattr(root, "type", None),
             latency_ms=(time.perf_counter() - started) * 1000.0,
             source_sha16=_source_sha16(source),
+            tree=tree,
         )
     except Exception as exc:
         return ParseResult(

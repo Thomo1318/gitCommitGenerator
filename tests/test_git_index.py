@@ -133,3 +133,19 @@ def test_read_head_sources_pairs_with_staged_paths(staged_repo):
     assert b"def old()" in head.files["tracked.py"]
     assert "fresh.py" not in head.files
     assert any("fresh.py" in e and "missing" in e for e in head.errors)
+
+
+def test_read_staged_blob_rejects_unsafe_path(staged_repo):
+    import pytest
+
+    with pytest.raises(ValueError, match="unsafe"):
+        read_staged_blob("../evil.py", repo_root=staged_repo)
+    with pytest.raises(ValueError, match="unsafe"):
+        read_staged_blob("evil\npath.py", repo_root=staged_repo)
+
+
+def test_read_head_blob_rejects_unsafe_path(staged_repo):
+    import pytest
+
+    with pytest.raises(ValueError, match="unsafe"):
+        read_head_blob("/abs/evil.py", repo_root=staged_repo)
