@@ -147,7 +147,12 @@ class FingerprintBatch:
 
 
 def grammar_version() -> str:
-    """Return a stable-ish grammar pack identity for metrics/cache invalidation."""
+    """
+    Identify the installed tree-sitter language pack version or module location.
+    
+    Returns:
+    	str: A grammar pack identity suitable for metrics and cache invalidation.
+    """
     version = getattr(tslp, "__version__", None) or getattr(tslp, "VERSION", None)
     if version:
         return f"tree-sitter-language-pack=={version}"
@@ -234,18 +239,19 @@ def collect_fingerprints_from_source(
     max_nodes: int = DEFAULT_MAX_NODES,
 ) -> tuple[FingerprintTriple | None, str | None, str | None]:
     """
-    Parse source code and collect its syntax-tree fingerprints.
+    Parse source code and produce its syntax-tree fingerprints.
     
     Parameters:
-        path (str): Source file path used to determine the language.
+        path (str): Source file path used for language detection.
         source (bytes): Source code to parse.
         language (str | None): Optional language override.
-        max_nodes (int): Maximum number of syntax-tree nodes to traverse.
+        max_nodes (int): Maximum number of syntax-tree nodes to visit.
     
     Returns:
         tuple[FingerprintTriple | None, str | None, str | None]:
-            The fingerprints, detected language, and error message. Fingerprints
-            are ``None`` when parsing or fingerprint collection fails.
+            A tuple containing the fingerprints, detected language, and an error
+            message. Fingerprints are ``None`` when parsing fails or the parse tree
+            contains errors.
     """
     parsed = parse_source(path, source, language=language)
     if parsed.status != ParseStatus.SUCCESS:
@@ -325,17 +331,18 @@ def compare_file_fingerprints(
     max_nodes: int = DEFAULT_MAX_NODES,
     compute_similarity: bool = True,
 ) -> FileFingerprintResult:
-    """Compare baseline and staged sources for a path and classify their differences.
+    """
+    Compare baseline and staged file contents and classify their differences.
     
     Parameters:
-    	path (str): The file path being compared.
-    	baseline_source (bytes | None): The baseline file contents, or `None` if absent.
-    	staged_source (bytes | None): The staged file contents, or `None` if absent.
+    	path (str): The path of the file being compared.
+    	baseline_source (bytes | None): Baseline contents, or `None` when the file is absent.
+    	staged_source (bytes | None): Staged contents, or `None` when the file is absent.
     	max_nodes (int): Maximum number of syntax-tree nodes to process.
     	compute_similarity (bool): Whether to calculate body similarity for changed files.
     
     Returns:
-    	FileFingerprintResult: The classification, fingerprints, similarity, and relevant metadata for the comparison.
+    	FileFingerprintResult: The comparison classification, fingerprints, similarity, and related metadata.
     """
     if baseline_source is None and staged_source is None:
         return FileFingerprintResult(

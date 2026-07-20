@@ -413,10 +413,13 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
 
 def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
     """
-    Read the persisted commit telemetry state from the git directory.
-
+    Read persisted commit telemetry from the git directory.
+    
+    Parameters:
+    	git_dir (str): Path to the git directory containing the telemetry state file.
+    
     Returns:
-        The stored GenerationTelemetry instance, or None if the state file is missing or cannot be loaded.
+    	GenerationTelemetry | None: The stored telemetry, or `None` if the state file is missing or cannot be loaded.
     """
     state_file = get_state_file_path(git_dir)
     if not state_file.exists():

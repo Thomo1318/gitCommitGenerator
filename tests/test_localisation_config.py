@@ -494,10 +494,14 @@ class TestVscodePrompts:
     """Tests for the new `.vscode/prompts.json` file."""
 
     def _prompts(self) -> list[Any]:
-        """Load and validate the prompts configuration.
+        """
+        Load the prompts configuration from `.vscode/prompts.json`.
         
         Returns:
-        	list[Any]: The prompts defined in `.vscode/prompts.json`.
+        	list[Any]: The configured prompts.
+        
+        Raises:
+        	TypeError: If the configuration is not a JSON array.
         """
         data = _load_json(".vscode/prompts.json")
         if not isinstance(data, list):
