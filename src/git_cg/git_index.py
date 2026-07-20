@@ -125,17 +125,29 @@ def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
 
 
 def _encode_batch_requests(paths: list[str], *, prefix: str = ":") -> bytes:
-    """Encode path requests for git cat-file --batch*.
-
-    Args:
-        paths: Repo-relative paths.
-        prefix: Object prefix. ``":"`` = index stage 0; ``"HEAD:"`` = HEAD tree.
+    """
+    Encode repository-relative paths as newline-delimited Git batch requests.
+    
+    Parameters:
+        paths (list[str]): Repository-relative paths to encode.
+        prefix (str): Object prefix, such as ":" for the index or "HEAD:" for the HEAD tree.
+    
+    Returns:
+        bytes: UTF-8 encoded batch requests.
     """
     return b"".join((f"{prefix}{p}".encode("utf-8", errors="surrogateescape") + bytes([10])) for p in paths)
 
 
 def _parse_batch_check_header(header: str) -> tuple[str, int] | None:
-    """Parse a --batch-check header into (oid_or_marker, size)."""
+    """Parse a Git ``--batch-check`` header.
+    
+    Parameters:
+        header (str): Header line produced by ``git cat-file --batch-check``.
+    
+    Returns:
+        tuple[str, int] | None: The object identifier or ``"missing"`` marker and
+            object size, or ``None`` for an unrecognised header.
+    """
     if header.endswith(" missing"):
         return "missing", 0
     parts = header.rsplit(" ", 2)
@@ -149,7 +161,15 @@ def _parse_batch_check_header(header: str) -> tuple[str, int] | None:
 
 
 def _is_unsafe_staged_path(path: str) -> bool:
-    """Reject absolute, traversal, and newline-bearing paths for batch input."""
+    """
+    Determine whether a path contains forms that are unsafe for batch input.
+    
+    Parameters:
+    	path (str): Path to check.
+    
+    Returns:
+    	bool: `True` if the path is absolute, contains traversal segments, or includes a newline or carriage return; `False` otherwise.
+    """
     return (
         path.startswith("/")
         or path.startswith(chr(92))
@@ -167,17 +187,16 @@ def _read_blobs_batch(
     prefix: str = ":",
 ) -> StagedReadResult:
     """
-    Read many blobs via git cat-file batch protocols.
-
-    1. --batch-check preflight obtains sizes without materialising content.
-    2. Oversized / missing / unsafe paths are skipped or errored immediately.
-    3. Eligible blobs are fetched with one --batch call so peak memory is
-       bounded by max_file_bytes rather than the full path set.
-
-    Input lines are ``{prefix}{path}`` (e.g. index stage 0 ``:path`` or
-    ``HEAD:path``). Output records are:
-    <oid> <type> <size> then newline (check), or the same header plus
-    content and trailing newline (batch), or <requested> missing.
+    Read multiple index or HEAD blobs and record successful, skipped, and failed paths.
+    
+    Parameters:
+        paths (list[str]): Paths whose blobs should be read.
+        repo_root (str | None): Repository working directory, or the current directory when omitted.
+        max_file_bytes (int): Maximum permitted size for an individual blob.
+        prefix (str): Git object prefix used to resolve each path.
+    
+    Returns:
+        StagedReadResult: Blob contents and per-path skip or error records.
     """
     result = StagedReadResult()
     if not paths:
@@ -348,10 +367,15 @@ def read_staged_sources(
     paths: list[str] | None = None,
 ) -> StagedReadResult:
     """
-    Load staged file contents as path -> bytes for the semantic parser.
-
-    Uses git cat-file --batch-check then --batch for the staged set.
-    Skips oversize blobs and records typed skip/error reasons without raising.
+    Load staged file contents for semantic parsing.
+    
+    Parameters:
+        max_file_bytes (int): Maximum content size in bytes for each file.
+        excludes (tuple[str, ...]): Glob patterns for staged paths to skip when paths are not provided.
+        paths (list[str] | None): Paths to read; when omitted, reads eligible staged paths from the index.
+    
+    Returns:
+        StagedReadResult: Loaded file contents and records of skipped paths or read errors.
     """
     cwd = repo_root or "."
     staged_paths = paths if paths is not None else list_staged_paths(cwd, excludes=excludes)
@@ -377,11 +401,14 @@ def read_head_sources(
     paths: list[str] | None = None,
 ) -> StagedReadResult:
     """
-    Load HEAD-tree file contents as path -> bytes for fingerprint baselines.
-
-    When ``paths`` is None, returns an empty result (callers should pass the
-    staged path set they intend to pair). Missing HEAD paths are recorded as
-    errors (typically add-only staged files).
+    Load HEAD-tree file contents for the specified paths.
+    
+    Parameters:
+        paths (list[str] | None): Paths to read from HEAD. If omitted, no paths are read.
+        max_file_bytes (int): Maximum content size for each file.
+    
+    Returns:
+        StagedReadResult: Loaded path-to-content mappings, skipped paths, and read errors.
     """
     cwd = repo_root or "."
     head_paths = list(paths or [])
@@ -389,6 +416,11 @@ def read_head_sources(
 
 
 def should_refresh_graph() -> bool:
-    """Opt-in graph rebuild on the semantic path (default off)."""
+    """
+    Determines whether semantic graph refresh is enabled by configuration.
+    
+    Returns:
+        bool: `True` when the configuration enables graph refresh, `False` otherwise.
+    """
     raw = os.environ.get("GIT_CG_SEMANTIC_REFRESH_GRAPH", "").strip().lower()
     return raw in {"1", "true", "yes", "on"}

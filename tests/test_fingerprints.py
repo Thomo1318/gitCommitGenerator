@@ -11,6 +11,14 @@ from git_cg.fingerprints import (
 
 
 def _py(src: str) -> bytes:
+    """Encode Python source text as UTF-8 bytes.
+    
+    Parameters:
+    	src (str): Python source text to encode.
+    
+    Returns:
+    	bytes: The UTF-8 encoded source text.
+    """
     return src.encode("utf-8")
 
 

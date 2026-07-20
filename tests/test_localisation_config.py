@@ -29,12 +29,28 @@ _COMMIT_LANGUAGE_PATTERN = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
 
 
 def _load_json(rel_path: str) -> Any:
-    """Load a JSON file relative to the repo root."""
+    """
+    Load and parse a JSON file relative to the repository root.
+    
+    Parameters:
+    	rel_path (str): Relative path to the JSON file.
+    
+    Returns:
+    	Any: Parsed JSON content.
+    """
     return json.loads((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
 
 
 def _load_yaml(rel_path: str) -> Any:
-    """Load a YAML file relative to the repo root."""
+    """
+    Load and parse a YAML file relative to the repository root.
+    
+    Parameters:
+        rel_path (str): Path to the YAML file relative to the repository root.
+    
+    Returns:
+        Any: Parsed YAML data, with a top-level boolean `True` key normalised to `"on"`.
+    """
     data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
     if isinstance(data, dict) and True in data:
         # PyYAML may parse the unquoted key `on` as boolean True.
@@ -55,6 +71,14 @@ class TestSchemaCommitLanguage:
     """Tests for the newly-added ``commit_language`` property in the JSON Schema."""
 
     def _schema(self) -> dict[str, Any]:
+        """Load and validate the GitOps SOP JSON Schema.
+        
+        Returns:
+            dict[str, Any]: The parsed schema object.
+        
+        Raises:
+            TypeError: If the schema is not a JSON object.
+        """
         data = _load_json("config/gitops_sop.schema.json")
         if not isinstance(data, dict):
             raise TypeError("schema must be a JSON object")
@@ -179,6 +203,11 @@ class TestAgentSopCommitLanguage:
     """Tests for the ``commit_language`` field added to gitops_agent_sop.json."""
 
     def _sop(self) -> dict[str, Any]:
+        """Load and validate the agent SOP configuration.
+        
+        Returns:
+        	dict[str, Any]: The agent SOP configuration.
+        """
         data = _load_json("config/gitops_agent_sop.json")
         if not isinstance(data, dict):
             raise TypeError("agent SOP must be a JSON object")
@@ -243,6 +272,14 @@ class TestGitCgSopOverride:
     """Tests for the new `.git-cg/sop.json` per-repo override file."""
 
     def _sop_override(self) -> dict[str, Any]:
+        """Load the repository SOP override configuration.
+        
+        Returns:
+        	dict[str, Any]: The parsed SOP override configuration.
+        
+        Raises:
+        	TypeError: If the configuration is not a JSON object.
+        """
         data = _load_json(".git-cg/sop.json")
         if not isinstance(data, dict):
             raise TypeError("sop override must be a JSON object")
@@ -299,6 +336,11 @@ class TestVscodeSettingsSpellCheck:
     """Tests for the new cSpell configuration entries in .vscode/settings.json."""
 
     def _settings(self) -> dict[str, Any]:
+        """Load the VS Code settings as a mapping.
+        
+        Returns:
+        	dict[str, Any]: The parsed VS Code settings.
+        """
         data = _load_json(".vscode/settings.json")
         if not isinstance(data, dict):
             raise TypeError("settings must be a JSON object")
@@ -452,6 +494,11 @@ class TestVscodePrompts:
     """Tests for the new `.vscode/prompts.json` file."""
 
     def _prompts(self) -> list[Any]:
+        """Load and validate the prompts configuration.
+        
+        Returns:
+        	list[Any]: The prompts defined in `.vscode/prompts.json`.
+        """
         data = _load_json(".vscode/prompts.json")
         if not isinstance(data, list):
             raise TypeError("prompts.json must be a JSON array")
@@ -749,6 +796,14 @@ class TestReleaseWorkflow:
     """Tests for the new `.github/release.yml` GitHub Actions workflow."""
 
     def _workflow(self) -> dict[str, Any]:
+        """Load the release workflow configuration.
+        
+        Returns:
+        	dict[str, Any]: The parsed release workflow mapping.
+        
+        Raises:
+        	TypeError: If the workflow does not contain a YAML mapping.
+        """
         data = _load_yaml(".github/release.yml")
         if not isinstance(data, dict):
             raise TypeError("release workflow must be a YAML mapping")
