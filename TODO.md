@@ -95,6 +95,8 @@
 
 TODO:
 
+- Consider creating a [Gradio](https://gradio.app/) integration
+
 - Determine a solution to integrate this action:
   - on/off/custom (`if blast radius >x` or `if review identifies risk >x`, etc.), ? Other scenarios?
   - If `git-cg` is running in `hook-mode` and it is identified that the action requires user interaction (determine use cases) alert the user (? Use `alerter` so the user can interact by clicking yes/no/other) that then pops open the TUI for the user to act, scenarios like confirming a split commit, acknowledging a high risk item or blast radius, etc.
