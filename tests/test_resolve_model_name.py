@@ -46,9 +46,10 @@ def test_preferred_hit_returns_preferred():
 def test_preferred_miss_falls_back_to_first_available(capsys):
     chosen = resolve_model_name(_Client(["a", "b"]), preferred="missing")
     assert chosen == "a"
-    err = capsys.readouterr().out + capsys.readouterr().err
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
     # rich prints to stdout typically
-    assert "missing" in err or chosen == "a"
+    assert "missing" in output
 
 
 def test_empty_preferred_uses_first_available():
