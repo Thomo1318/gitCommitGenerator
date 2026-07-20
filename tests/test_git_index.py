@@ -92,3 +92,26 @@ def test_path_excluded_fnmatch_middle_star():
     assert _path_excluded("pkg/foo.lockb", ("*.lockb",)) is True
     assert _path_excluded("src/auxly_helper.py", ("*auxly*",)) is True
     assert _path_excluded("src/main.py", ("*.lock",)) is False
+
+
+def test_read_staged_sources_skips_newline_paths(staged_repo):
+    """Newline/CR in paths must not enter cat-file --batch input lines."""
+    from git_cg.git_index import _read_staged_blobs_batch
+
+    result = _read_staged_blobs_batch(
+        [
+            "tracked.py",
+            "evil\npath.py",
+            "evil\rpath.py",
+            "fresh.py",
+        ],
+        repo_root=staged_repo,
+        max_file_bytes=2 * 1024 * 1024,
+    )
+
+    assert "tracked.py" in result.files
+    assert "fresh.py" in result.files
+    assert "evil\npath.py" not in result.files
+    assert "evil\rpath.py" not in result.files
+    assert any(s.endswith(":unsafe_path") and "evil\npath.py" in s for s in result.skipped)
+    assert any(s.endswith(":unsafe_path") and "evil\rpath.py" in s for s in result.skipped)

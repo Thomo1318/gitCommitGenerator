@@ -129,9 +129,11 @@ def _read_staged_blobs_batch(
 
     cwd = repo_root or "."
     # Filter unsafe paths first (same guards as the single-path loop).
+    # Also reject newlines: batch input is newline-delimited (`:<path>\n`), so a
+    # newline in the path would split one request into multiple cat-file lines.
     safe_paths: list[str] = []
     for path in paths:
-        if path.startswith("/") or path.startswith("\\") or ".." in Path(path).parts:
+        if path.startswith("/") or path.startswith("\\") or ".." in Path(path).parts or "\n" in path or "\r" in path:
             result.skipped.append(f"{path}:unsafe_path")
             continue
         safe_paths.append(path)
