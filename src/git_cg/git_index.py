@@ -30,13 +30,16 @@ _DEFAULT_EXCLUDES: tuple[str, ...] = (
 # Per-file cap so huge staged blobs cannot blow memory on the commit path.
 DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024
 
+# Bound stalled git subprocesses on the semantic staged-read path.
+DEFAULT_GIT_TIMEOUT_SECONDS = 30.0
+
 
 @dataclass
 class StagedReadResult:
     """Outcome of reading staged blobs for semantic parsing.
 
-    ``ok`` means "usable payload available" (at least one file), not
-    "error-free". Callers must still inspect ``errors`` / ``skipped``.
+    ok means "usable payload available" (at least one file), not
+    "error-free". Callers must still inspect errors / skipped.
     """
 
     files: dict[str, bytes] = field(default_factory=dict)
@@ -49,12 +52,21 @@ class StagedReadResult:
 
 
 @git_retry
-def _run_git(args: list[str], *, cwd: str | None, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+def _run_git(
+    args: list[str],
+    *,
+    cwd: str | None,
+    check: bool = True,
+    input_data: bytes | None = None,
+    timeout: float | None = DEFAULT_GIT_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
+        input=input_data,
         capture_output=True,
         check=check,
+        timeout=timeout,
     )
 
 
@@ -72,7 +84,7 @@ def list_staged_paths(
     """
     Return repo-relative paths of staged files (ACMR), excluding deletes and noise.
 
-    Uses ``git diff --cached --name-only --diff-filter=ACMR -z``.
+    Uses git diff --cached --name-only --diff-filter=ACMR -z.
     """
     cwd = repo_root or "."
     try:
@@ -84,7 +96,7 @@ def list_staged_paths(
         log.debug("list_staged_paths failed: %s", exc)
         return []
 
-    raw = proc.stdout.split(b"\x00")
+    raw = proc.stdout.split(bytes([0]))
     paths: list[str] = []
     for chunk in raw:
         if not chunk:
@@ -101,7 +113,7 @@ def list_staged_paths(
 
 def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
     """
-    Read a single staged blob via ``git show :path`` (index stage 0).
+    Read a single staged blob via git show :path (index stage 0).
 
     Raises:
         subprocess.CalledProcessError: when git cannot resolve the path in the index.
@@ -111,6 +123,36 @@ def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
     return proc.stdout
 
 
+def _encode_batch_requests(paths: list[str]) -> bytes:
+    """Encode index-stage-0 path requests for git cat-file --batch*."""
+    return b"".join((f":{p}".encode("utf-8", errors="surrogateescape") + bytes([10])) for p in paths)
+
+
+def _parse_batch_check_header(header: str) -> tuple[str, int] | tuple[None, None]:
+    """Parse a --batch-check header into (oid_or_marker, size)."""
+    if header.endswith(" missing"):
+        return "missing", 0
+    parts = header.rsplit(" ", 2)
+    if len(parts) != 3:
+        return None, None
+    _oid, _kind, size_s = parts
+    try:
+        return _oid, int(size_s)
+    except ValueError:
+        return None, None
+
+
+def _is_unsafe_staged_path(path: str) -> bool:
+    """Reject absolute, traversal, and newline-bearing paths for batch input."""
+    return (
+        path.startswith("/")
+        or path.startswith(chr(92))
+        or ".." in Path(path).parts
+        or chr(10) in path
+        or chr(13) in path
+    )
+
+
 def _read_staged_blobs_batch(
     paths: list[str],
     *,
@@ -118,10 +160,16 @@ def _read_staged_blobs_batch(
     max_file_bytes: int,
 ) -> StagedReadResult:
     """
-    Read many staged blobs via one ``git cat-file --batch`` process.
+    Read many staged blobs via git cat-file batch protocols.
 
-    Input lines are ``:<path>`` (index stage 0). Output records are:
-    ``<oid> <type> <size>\\n<content>\\n`` or ``<requested> missing\\n``.
+    1. --batch-check preflight obtains sizes without materialising content.
+    2. Oversized / missing / unsafe paths are skipped or errored immediately.
+    3. Eligible blobs are fetched with one --batch call so peak memory is
+       bounded by max_file_bytes rather than the full staged set.
+
+    Input lines are :<path> (index stage 0). Output records are:
+    <oid> <type> <size> then newline (check), or the same header plus
+    content and trailing newline (batch), or <requested> missing.
     """
     result = StagedReadResult()
     if not paths:
@@ -129,11 +177,11 @@ def _read_staged_blobs_batch(
 
     cwd = repo_root or "."
     # Filter unsafe paths first (same guards as the single-path loop).
-    # Also reject newlines: batch input is newline-delimited (`:<path>\n`), so a
+    # Also reject newlines: batch input is newline-delimited ( + LF), so a
     # newline in the path would split one request into multiple cat-file lines.
     safe_paths: list[str] = []
     for path in paths:
-        if path.startswith("/") or path.startswith("\\") or ".." in Path(path).parts or "\n" in path or "\r" in path:
+        if _is_unsafe_staged_path(path):
             result.skipped.append(f"{path}:unsafe_path")
             continue
         safe_paths.append(path)
@@ -141,16 +189,63 @@ def _read_staged_blobs_batch(
     if not safe_paths:
         return result
 
+    request = _encode_batch_requests(safe_paths)
     try:
-        proc = subprocess.run(
-            ["git", "cat-file", "--batch"],
+        check_proc = _run_git(
+            ["cat-file", "--batch-check"],
             cwd=cwd,
-            input=b"".join(f":{p}\n".encode("utf-8", errors="surrogateescape") for p in safe_paths),
-            capture_output=True,
             check=False,
+            input_data=request,
         )
-    except OSError as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         for path in safe_paths:
+            result.errors.append(f"{path}:{type(exc).__name__}:{exc}")
+        return result
+
+    check_data = check_proc.stdout
+    offset = 0
+    eligible: list[str] = []
+    newline = bytes([10])
+
+    for idx, path in enumerate(safe_paths):
+        nl = check_data.find(newline, offset)
+        if nl < 0:
+            result.errors.append(f"{path}:batch_parse_error:truncated_header")
+            for missing_path in safe_paths[idx + 1 :]:
+                result.errors.append(f"{missing_path}:batch_parse_error:no_record")
+            return result
+
+        header = check_data[offset:nl].decode("utf-8", errors="replace")
+        offset = nl + 1
+        marker, size = _parse_batch_check_header(header)
+        if marker is None:
+            result.errors.append(f"{path}:batch_parse_error:{header}")
+            continue
+        if marker == "missing":
+            result.errors.append(f"{path}:missing")
+            continue
+        if size > max_file_bytes:
+            result.skipped.append(f"{path}:oversize:{size}")
+            continue
+        eligible.append(path)
+
+    if check_proc.returncode not in (0, None) and not eligible and not result.errors and not result.skipped:
+        stderr = (check_proc.stderr or b"").decode("utf-8", errors="replace").strip()
+        result.errors.append(f"batch_check:CalledProcessError:{stderr or check_proc.returncode}")
+        return result
+
+    if not eligible:
+        return result
+
+    try:
+        proc = _run_git(
+            ["cat-file", "--batch"],
+            cwd=cwd,
+            check=False,
+            input_data=_encode_batch_requests(eligible),
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        for path in eligible:
             result.errors.append(f"{path}:{type(exc).__name__}:{exc}")
         return result
 
@@ -158,11 +253,11 @@ def _read_staged_blobs_batch(
     offset = 0
     path_idx = 0
 
-    while path_idx < len(safe_paths) and offset < len(data):
-        path = safe_paths[path_idx]
+    while path_idx < len(eligible) and offset < len(data):
+        path = eligible[path_idx]
         path_idx += 1
 
-        nl = data.find(b"\n", offset)
+        nl = data.find(newline, offset)
         if nl < 0:
             result.errors.append(f"{path}:batch_parse_error:truncated_header")
             break
@@ -184,23 +279,28 @@ def _read_staged_blobs_batch(
             result.errors.append(f"{path}:batch_parse_error:bad_size:{size_s}")
             continue
 
+        # Defence in depth: never retain oversize content even if check raced.
+        if size > max_file_bytes:
+            result.skipped.append(f"{path}:oversize:{size}")
+            offset += size
+            if offset < len(data) and data[offset : offset + 1] == newline:
+                offset += 1
+            continue
+
         content = data[offset : offset + size]
         offset += size
         # cat-file --batch emits a trailing newline after content
-        if offset < len(data) and data[offset : offset + 1] == b"\n":
+        if offset < len(data) and data[offset : offset + 1] == newline:
             offset += 1
 
         if len(content) != size:
             result.errors.append(f"{path}:batch_parse_error:truncated_content")
             continue
-        if size > max_file_bytes:
-            result.skipped.append(f"{path}:oversize:{size}")
-            continue
         result.files[path] = content
 
     # Paths with no corresponding batch record (truncated stream / early exit).
-    while path_idx < len(safe_paths):
-        path = safe_paths[path_idx]
+    while path_idx < len(eligible):
+        path = eligible[path_idx]
         path_idx += 1
         result.errors.append(f"{path}:batch_parse_error:no_record")
 
@@ -219,9 +319,9 @@ def read_staged_sources(
     paths: list[str] | None = None,
 ) -> StagedReadResult:
     """
-    Load staged file contents as ``path -> bytes`` for the semantic parser.
+    Load staged file contents as path -> bytes for the semantic parser.
 
-    Uses a single ``git cat-file --batch`` process for the staged set.
+    Uses git cat-file --batch-check then --batch for the staged set.
     Skips oversize blobs and records typed skip/error reasons without raising.
     """
     cwd = repo_root or "."
