@@ -23,7 +23,7 @@ from typing import Any
 import tree_sitter
 import tree_sitter_language_pack as tslp
 
-from git_cg.ast_parser import ParseStatus, get_parser_for, language_for_path, parse_source
+from git_cg.ast_parser import ParseStatus, language_for_path, parse_source
 from git_cg.similarity import FORMATTING_BODY_SIMILARITY_THRESHOLD, body_similarity
 
 # Leaf kinds whose text participates in code_fp / text_fp.
@@ -77,6 +77,7 @@ class FingerprintTriple:
     shape_fp: str
     code_fp: str
     text_fp: str
+    overflowed: bool = False
 
 
 @dataclass(frozen=True)
@@ -199,12 +200,14 @@ def collect_fingerprints(
         node = stack.pop()
         nodes_seen += 1
         if nodes_seen > max_nodes:
-            # Deterministic overflow marker rather than partial silent hashes.
+            # Explicit overflow: do not emit content-independent hashes that can
+            # spuriously compare equal across different oversized trees.
             overflow = f"overflow:{max_nodes}"
             return FingerprintTriple(
                 shape_fp=_sha16([overflow, "shape"]),
                 code_fp=_sha16([overflow, "code"]),
                 text_fp=_sha16([overflow, "text"]),
+                overflowed=True,
             )
 
         node_type = node.type
@@ -239,7 +242,7 @@ def collect_fingerprints_from_source(
     max_nodes: int = DEFAULT_MAX_NODES,
 ) -> tuple[FingerprintTriple | None, str | None, str | None]:
     """
-    Parse source code and produce its syntax-tree fingerprints.
+    Parse ``source`` once and collect fingerprints from the resulting tree.
     
     Parameters:
         path (str): Source file path used for language detection.
@@ -261,9 +264,11 @@ def collect_fingerprints_from_source(
     if not lang:
         return None, None, "no language"
 
+    tree = parsed.tree
+    if tree is None:
+        return None, lang, "parse tree unavailable"
+
     try:
-        parser = get_parser_for(lang)
-        tree = parser.parse(source)
         root = tree.root_node
         if getattr(root, "has_error", False):
             return None, lang, "parse tree contains errors"
@@ -381,6 +386,17 @@ def compare_file_fingerprints(
             path=path,
             classification=FingerprintClass.UNPARSED,
             reason=";".join(reason_parts) or "unparsed",
+            language=language,
+        )
+
+    # Overflowed trees must not participate in hash equality (markers are content-independent).
+    if base_fp.overflowed or staged_fp.overflowed:
+        return FileFingerprintResult(
+            path=path,
+            classification=FingerprintClass.SKIPPED,
+            reason="node_overflow",
+            baseline_fps=base_fp,
+            staged_fps=staged_fp,
             language=language,
         )
 

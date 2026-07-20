@@ -117,8 +117,11 @@ def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
     Read a single staged blob via git show :path (index stage 0).
 
     Raises:
+        ValueError: when ``path`` fails the shared unsafe-path guards.
         subprocess.CalledProcessError: when git cannot resolve the path in the index.
     """
+    if _is_unsafe_staged_path(path):
+        raise ValueError(f"unsafe staged path: {path!r}")
     cwd = repo_root or "."
     proc = _run_git(["show", f":{path}"], cwd=cwd)
     return proc.stdout
@@ -387,8 +390,11 @@ def read_head_blob(path: str, *, repo_root: str | None = None) -> bytes:
     Read a single blob from HEAD via ``git show HEAD:path``.
 
     Raises:
+        ValueError: when ``path`` fails the shared unsafe-path guards.
         subprocess.CalledProcessError: when git cannot resolve the path at HEAD.
     """
+    if _is_unsafe_staged_path(path):
+        raise ValueError(f"unsafe head path: {path!r}")
     cwd = repo_root or "."
     proc = _run_git(["show", f"HEAD:{path}"], cwd=cwd)
     return proc.stdout
