@@ -93,6 +93,12 @@ class FileFingerprintResult:
     language: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the file fingerprint result to a serialisable dictionary.
+        
+        Returns:
+        	dict[str, Any]: A dictionary containing the result fields, with the classification represented as a string and available fingerprints represented as dictionaries.
+        """
         payload = asdict(self)
         payload["classification"] = str(self.classification)
         if self.baseline_fps is not None:
@@ -116,6 +122,7 @@ class FingerprintBatchMetrics:
     reasons: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """Convert the batch metrics to a dictionary."""
         return asdict(self)
 
 
@@ -127,6 +134,12 @@ class FingerprintBatch:
     metrics: FingerprintBatchMetrics = field(default_factory=FingerprintBatchMetrics)
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the fingerprint batch to a serialisable dictionary.
+        
+        Returns:
+        	dict[str, Any]: A dictionary containing the serialised results and aggregated metrics.
+        """
         return {
             "results": [r.to_dict() for r in self.results],
             "metrics": self.metrics.to_dict(),
@@ -142,6 +155,15 @@ def grammar_version() -> str:
 
 
 def _sha16(parts: list[str]) -> str:
+    """
+    Create a stable 16-character hexadecimal SHA-256 fingerprint from text parts.
+    
+    Parameters:
+    	parts (list[str]): Text components to join and hash.
+    
+    Returns:
+    	str: The first 16 hexadecimal characters of the SHA-256 digest.
+    """
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
 
@@ -152,11 +174,15 @@ def collect_fingerprints(
     max_nodes: int = DEFAULT_MAX_NODES,
 ) -> FingerprintTriple:
     """
-    Compute shape_fp, code_fp, text_fp for a syntax tree.
-
-    shape_fp: node-type tuple only, comments dropped.        -> structure
-    code_fp : shape_fp + leaf text for identifiers/literals. -> identifier-sensitive
-    text_fp : code_fp + comment node text.                   -> full text-sensitive
+    Compute shape, code, and text fingerprints for a syntax tree.
+    
+    Parameters:
+    	root (tree_sitter.Node): Root node of the syntax tree.
+    	source (bytes): Source bytes used to extract leaf and comment text.
+    	max_nodes (int): Maximum number of nodes to visit before returning overflow fingerprints.
+    
+    Returns:
+    	FingerprintTriple: Hashes representing the tree structure, selected leaf text, and comment text.
     """
     shape: list[str] = []
     code: list[str] = []
@@ -208,10 +234,18 @@ def collect_fingerprints_from_source(
     max_nodes: int = DEFAULT_MAX_NODES,
 ) -> tuple[FingerprintTriple | None, str | None, str | None]:
     """
-    Parse ``source`` and collect fingerprints.
-
+    Parse source code and collect its syntax-tree fingerprints.
+    
+    Parameters:
+        path (str): Source file path used to determine the language.
+        source (bytes): Source code to parse.
+        language (str | None): Optional language override.
+        max_nodes (int): Maximum number of syntax-tree nodes to traverse.
+    
     Returns:
-        (triple_or_none, language_or_none, error_or_none)
+        tuple[FingerprintTriple | None, str | None, str | None]:
+            The fingerprints, detected language, and error message. Fingerprints
+            are ``None`` when parsing or fingerprint collection fails.
     """
     parsed = parse_source(path, source, language=language)
     if parsed.status != ParseStatus.SUCCESS:
@@ -241,9 +275,17 @@ def classify_fingerprint_equality(
     formatting_threshold: float = FORMATTING_BODY_SIMILARITY_THRESHOLD,
 ) -> tuple[FingerprintClass, tuple[str, ...]]:
     """
-    Map an equality triple (+ optional body similarity) to class + markers.
-
-    Complete truth table including anomaly cells.
+    Classify fingerprint equality and provide markers describing the comparison.
+    
+    Parameters:
+        shape_eq (bool): Whether the baseline and staged shape fingerprints match.
+        code_eq (bool): Whether the baseline and staged code fingerprints match.
+        text_eq (bool): Whether the baseline and staged text fingerprints match.
+        similarity (float | None): Optional body similarity used to distinguish formatting changes from identifier or literal changes.
+        formatting_threshold (float): Similarity above which a change is classified as formatting-only.
+    
+    Returns:
+        tuple[FingerprintClass, tuple[str, ...]]: The classification and associated markers.
     """
     if shape_eq and code_eq and text_eq:
         return FingerprintClass.NOOP, ()
@@ -283,7 +325,18 @@ def compare_file_fingerprints(
     max_nodes: int = DEFAULT_MAX_NODES,
     compute_similarity: bool = True,
 ) -> FileFingerprintResult:
-    """Compare one path's HEAD vs index sources and classify the change."""
+    """Compare baseline and staged sources for a path and classify their differences.
+    
+    Parameters:
+    	path (str): The file path being compared.
+    	baseline_source (bytes | None): The baseline file contents, or `None` if absent.
+    	staged_source (bytes | None): The staged file contents, or `None` if absent.
+    	max_nodes (int): Maximum number of syntax-tree nodes to process.
+    	compute_similarity (bool): Whether to calculate body similarity for changed files.
+    
+    Returns:
+    	FileFingerprintResult: The classification, fingerprints, similarity, and relevant metadata for the comparison.
+    """
     if baseline_source is None and staged_source is None:
         return FileFingerprintResult(
             path=path,
@@ -369,10 +422,17 @@ def compare_fingerprint_sets(
     compute_similarity: bool = True,
 ) -> FingerprintBatch:
     """
-    Pair HEAD/index path sets and classify each path.
-
-    Paths only in staged => add_only; only in baseline => delete_only;
-    in both => fingerprint compare. Never raises for individual failures.
+    Compare baseline and staged file sets and classify each path.
+    
+    Parameters:
+        baseline_files (dict[str, bytes]): Files from the baseline revision.
+        staged_files (dict[str, bytes]): Files from the staged revision.
+        max_nodes (int): Maximum syntax-tree nodes to traverse per file.
+        compute_similarity (bool): Whether to calculate body similarity for changed files.
+    
+    Returns:
+        FingerprintBatch: Per-path comparison results and aggregated classification,
+            similarity, marker, reason, grammar, and latency metrics.
     """
     started = time.perf_counter()
     batch = FingerprintBatch()

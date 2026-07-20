@@ -1019,6 +1019,32 @@ def _write_telemetry_state_safe(
     fingerprint_grammar_version: str = "unknown",
     fingerprint_markers: list | None = None,
 ) -> None:
+    """
+    Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
+    
+    Parameters:
+    	review_state (ReviewState): Review state containing the generated commit plan and final message.
+    	diff_output (str): Staged diff used for generation.
+    	engine (str): AI engine used for generation.
+    	model_name (str): Model used for generation.
+    	system_prompt (str): System prompt used for generation.
+    	repo_name (str): Repository name associated with the generation.
+    	thread_id (str): Telemetry thread identifier.
+    	verbose (bool): Whether to log telemetry write failures and success details.
+    	graph_schema_version (str): Semantic graph schema version.
+    	semantic_enabled (bool): Whether semantic processing was enabled.
+    	parser_latency_ms (float): Semantic parser latency in milliseconds.
+    	graph_build_latency_ms (float): Semantic graph build latency in milliseconds.
+    	graph_query_latency_ms (float): Semantic graph query latency in milliseconds.
+    	semantic_parser_metrics (dict | None): Metrics collected during semantic parsing.
+    	body_similarity_min (float | None): Minimum body similarity measured during fingerprint comparison.
+    	body_similarity_avg (float | None): Average body similarity measured during fingerprint comparison.
+    	fingerprint_files_compared (int): Number of files included in fingerprint comparison.
+    	fingerprint_latency_ms (float): Fingerprint comparison latency in milliseconds.
+    	fingerprint_class_counts (dict | None): Counts of fingerprint comparison classes.
+    	fingerprint_grammar_version (str): Fingerprint grammar version used for comparison.
+    	fingerprint_markers (list | None): Markers produced during fingerprint comparison.
+    """
     try:
         import dataclasses
 
@@ -1086,22 +1112,23 @@ def _run_commit_generation(
     enable_semantic: bool | None = None,
 ) -> bool:
     """
-    Generate a commit message from the staged diff and handle review and telemetry.
-
+    Generate a commit message from the staged diff, optionally review it, and record telemetry.
+    
     Parameters:
         commit_msg_file (str): Path to the commit message file to write.
-        commit_source (str | None): Source of the commit request, used to decide whether generation should be skipped.
-        extra_args (list[str] | None): Additional CLI arguments preserved for compatibility.
+        commit_source (str | None): Source of the commit request, used to determine whether generation should proceed.
+        extra_args (list[str] | None): Additional command-line arguments preserved for compatibility.
         engine (str): AI engine key to use.
         dry_run (bool): Preview the generated message without applying it.
         verbose (bool): Enable detailed console output.
-        amend_regenerate (bool): Allow regeneration when the commit source would otherwise be skipped.
+        amend_regenerate (bool): Allow regeneration for an otherwise skipped commit source.
         strict (bool): Use non-zero exit codes when aborting.
         interactive (bool): Present the interactive review flow when a TTY is available.
-        gui_editor (bool): Use the GUI editor preference for edit actions.
-
+        gui_editor (bool): Prefer the GUI editor for edit actions.
+        enable_semantic (bool | None): Enable or disable semantic processing, or use its configured default.
+    
     Returns:
-        bool: ``True`` when generation completes successfully.
+        bool: `True` when generation completes successfully.
     """
     if verbose:
         console.log("Starting git-cg...")
@@ -1803,14 +1830,15 @@ def record_telemetry(
         ):
             # The decorator automatically logs inputs/outputs
             """
-            Record telemetry metadata and commit acceptance score to Opik.
-
+            Record final commit telemetry and the corresponding user-acceptance score in Opik.
+            
             Parameters:
-                provenance (str): Classification of how the commit message was modified (one of ai_accepted, ai_accepted_refs_only, ai_edited_minor, ai_edited_substantive, human_authored, cancelled).
-                telemetry_state (dict): Dictionary containing telemetry metadata (diff_hash, repo_name, engine, model_name, system_prompt_hash, score_card, commit_plan_json).
-
+                final_commit_message (str): The final commit message to classify and record.
+                provenance (str): Classification of how the message was modified.
+                telemetry_state (dict): Telemetry metadata associated with the generated commit message.
+            
             Returns:
-                dict: Dictionary with "status" set to "recorded" and "provenance" echoing the input provenance classification.
+                dict: A result containing `"status": "recorded"` and the supplied provenance classification.
             """
             opik_args = kwargs.get("opik_args") or {}
             thread_id = opik_args.get("trace", {}).get("thread_id")
