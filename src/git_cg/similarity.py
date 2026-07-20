@@ -19,7 +19,7 @@ def body_similarity(baseline_text: bytes | str, staged_text: bytes | str) -> flo
     
     Parameters:
         baseline_text (bytes | str): Original body text.
-        staged_text (bytes | str): Updated body text. Byte values are decoded as UTF-8, replacing invalid sequences.
+        staged_text (bytes | str): Updated body text.
     
     Returns:
         float: Similarity score from 0.0 to 1.0, where higher values indicate more similar token content.
