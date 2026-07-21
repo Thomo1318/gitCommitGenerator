@@ -320,9 +320,9 @@ class TestCiWorkflowHardening:
 
     def _workflow(self) -> dict:
         """Load the CI workflow configuration from its repository YAML file.
-        
+
         Returns:
-        	dict: The parsed CI workflow configuration.
+                dict: The parsed CI workflow configuration.
         """
         return _load_yaml(".github/workflows/ci.yml")
 
@@ -424,6 +424,18 @@ class TestCiWorkflowHardening:
         checkout = next(s for s in self._lint_steps() if s.get("name") == "Checkout repository")
         assert checkout["with"]["fetch-depth"] == 0
 
+    def test_lint_fetches_pr_base_branch(self):
+        steps = self._lint_steps()
+        step = next(s for s in steps if s.get("name") == "Fetch PR base branch for hk --pr")
+        assert step.get("if") == "github.event_name == 'pull_request'"
+        run = step["run"]
+        assert "git fetch" in run
+        assert "github.base_ref" in str(step) or "${base_ref}" in run or "base_ref" in run
+        assert "refs/remotes/origin/" in run
+        # Must run before hk check PR step
+        names = [s.get("name") for s in steps]
+        assert names.index("Fetch PR base branch for hk --pr") < names.index("hk check (pull_request)")
+
     def test_no_prepare_commit_msg_in_ci(self):
         """Ensure the CI workflow does not configure commit-message preparation hooks."""
         raw = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -485,6 +497,7 @@ class TestCiWorkflowHardening:
         names = [s.get("name") for s in self._lint_steps()]
         expected_order = [
             "Checkout repository",
+            "Fetch PR base branch for hk --pr",
             "Install mise tools",
             "Install uv",
             "Set up Python",

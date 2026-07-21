@@ -29,6 +29,26 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      # hk check --pr diffs DEFAULT_BRANCH..HEAD; ensure origin/<base> exists under
+      # persist-credentials: false (checkout does not keep a token for later fetches).
+      - name: Fetch PR base branch for hk --pr
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          base_ref="${{ github.base_ref }}"
+          # checkout has persist-credentials: false — use the job token for this fetch only.
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git fetch --no-tags --depth=1 origin "refs/heads/${base_ref}:refs/remotes/origin/${base_ref}"
+          git remote set-url origin "https://github.com/${{ github.repository }}.git"
+          # hk --pr resolves DEFAULT_BRANCH (often bare "main"); create a local ref.
+          if ! git show-ref --verify --quiet "refs/heads/${base_ref}"; then
+            git branch --force "${base_ref}" "origin/${base_ref}"
+          fi
+          git rev-parse --verify "origin/${base_ref}"
+          git rev-parse --verify "${base_ref}"
+
       - name: Install mise tools
         # jdx/mise-action@v4.2.1 — exact hk pin from mise.toml
         uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
