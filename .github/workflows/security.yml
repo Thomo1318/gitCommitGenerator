@@ -7,47 +7,95 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# Cancel superseded runs for the same PR/ref while keeping unique run_id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   trufflehog:
     name: TruffleHog Deep Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          # Full history so PR/push base SHAs resolve for ranged scans.
           fetch-depth: 0
 
       - name: TruffleHog OSS
-        uses: trufflesecurity/trufflehog@main
+        # trufflesecurity/trufflehog@v3.95.9 (action SHA + scanner version pin)
+        uses: trufflesecurity/trufflehog@27b0417c16317ca9a472a9a8092acce143b49c55
         with:
           path: ./
-          base: ""
-          head: ${{ github.ref_name }}
+          # Per-event ranges:
+          # - pull_request: base.sha .. head.sha
+          # - push: before .. sha (empty base on all-zero initial push)
+          # - workflow_dispatch: empty base, head = github.sha (full-history checkout)
+          base: >-
+            ${{
+              github.event_name == 'pull_request'
+              && github.event.pull_request.base.sha
+              || (
+                github.event_name == 'push'
+                && github.event.before != '0000000000000000000000000000000000000000'
+                && github.event.before
+                || ''
+              )
+            }}
+          head: >-
+            ${{
+              github.event_name == 'pull_request'
+              && github.event.pull_request.head.sha
+              || github.sha
+            }}
+          version: "3.95.9"
           extra_args: --only-verified
 
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
-    env:
-      ACT: "false"
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Install Syft, Grype, & Grant
+      - name: Install mise tools
+        # jdx/mise-action@v4.2.1 — installs exact syft/grype/grant from mise.toml
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
+        with:
+          install: true
+          cache: true
+
+      - name: Verify SBOM tool versions
         run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-          curl -sSfL https://raw.githubusercontent.com/anchore/grant/main/install.sh | sh -s -- -b /usr/local/bin
+          set -euo pipefail
+          echo "syft: $(syft version 2>/dev/null || syft --version)"
+          echo "grype: $(grype version 2>/dev/null || grype --version)"
+          echo "grant: $(grant version 2>/dev/null || grant --version)"
+          (syft version 2>/dev/null || syft --version) | grep -F "1.48.0"
+          (grype version 2>/dev/null || grype --version) | grep -F "0.116.0"
+          (grant version 2>/dev/null || grant --version) | grep -F "0.6.8"
 
       - name: Generate SBOMs (Syft)
         run: |
+          set -euo pipefail
           syft . -o cyclonedx-json=bom.json
           syft . -o syft-json=bom.syft.json
 
       - name: Upload SBOM Artifact
-        if: ${{ !env.ACT }}
-        uses: actions/upload-artifact@v4
+        # Only skip when running under nektos/act (ACT=true). Do not set ACT=false.
+        if: ${{ env.ACT != 'true' }}
+        # actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: cyclone-dx-sbom
           path: bom.json
