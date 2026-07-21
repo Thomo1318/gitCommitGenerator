@@ -498,6 +498,31 @@ class TestMiseQualityPinsAndTasks:
         tools = _load_mise()["tools"]
         assert tools["hk"] == "1.51.0"
 
+    def test_tools_have_no_floating_latest(self):
+        """Security-relevant and DX tools must not float on latest in mise.toml [tools]."""
+        text = (REPO_ROOT / "mise.toml").read_text(encoding="utf-8")
+        # Only consider active (non-comment) assignment lines under [tools]
+        in_tools = False
+        for line in text.splitlines():
+            s = line.strip()
+            if s.startswith("[") and s.endswith("]"):
+                in_tools = s == "[tools]"
+                continue
+            if not in_tools or not s or s.startswith("#"):
+                continue
+            assert "latest" not in s, f"floating latest not allowed: {line}"
+
+    def test_betterleaks_and_trufflehog_pinned(self):
+        text = (REPO_ROOT / "mise.toml").read_text(encoding="utf-8")
+        assert 'betterleaks = "1.4.1"' in text
+        assert 'trufflehog = "3.95.9"' in text
+
+    def test_uv_venv_auto_not_legacy_bool_true(self):
+        text = (REPO_ROOT / "mise.toml").read_text(encoding="utf-8")
+        assert "uv_venv_auto" in text
+        assert "uv_venv_auto = true" not in text
+        assert 'uv_venv_auto = "create|source"' in text or 'uv_venv_auto = "source"' in text
+
     def test_syft_grype_grant_pinned_exact(self):
         tools = _load_mise()["tools"]
         assert tools["syft"] == "1.48.0"

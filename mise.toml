@@ -26,7 +26,7 @@ idiomatic_version_file_enable_tools = [
 ]                                        # Read .nvmrc, .python-version, etc.
 
 [settings.python]
-uv_venv_auto = true  # Auto-activate .venv directories created by uv
+uv_venv_auto = "create|source"  # create .venv if missing, then source (legacy true deprecated)
 
 [settings.pipx]
 uvx = true  # Use uvx instead of pipx
@@ -42,19 +42,20 @@ HK_LOG_FILE = "logs/hk.log"
 # ============================================================================ #
 
 [tools]
-fnox = "latest"                # Hybrid secrets orchestration
-age = "latest"                 # File encryption fallback for fnox
+fnox = "1.25.0"                # Hybrid secrets orchestration
+age = "1.3.1"                  # File encryption fallback for fnox
 gum = "0.17.0"                 # Terminal-native TUI for interactive git-cg review
 hk = "1.51.0"                  # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/) — exact pin aligned with hk.pkl amend
-pkl = "latest"                 # embeddable configuration language (https://pkl-lang.org)
+pkl = "0.31.1"                 # embeddable configuration language (https://pkl-lang.org)
 python = "3.14"                # Python runtime (https://python.org)
-usage = "latest"               # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
-uv = "latest"                  # Fast Python package and environment manager (https://uv.astral.sh)
-rtk = "latest"                 # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
-node = "latest"                # JS runtime for validation hook (https://nodejs.org)
+usage = "3.3.0"                # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
+uv = "0.11.26"                 # Fast Python package and environment manager (https://uv.astral.sh)
+rtk = "0.43.0"                 # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
+node = "24.15.0"               # JS runtime for validation hook (https://nodejs.org)
 # "npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
-just = "latest"                # Task runner for project automation (https://just.systems)
-betterleaks = "latest"         # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
+just = "1.51.0"                # Task runner for project automation (https://just.systems)
+betterleaks = "1.4.1"          # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
+trufflehog = "3.95.9"          # Local deep secret scan CLI (matches CI TruffleHog scanner version)
 syft = "1.48.0"                # Multi-language SBOM generator for CycloneDX format (https://github.com/anchore/syft)
 grype = "0.116.0"              # Vulnerability scanner for SBOMs (https://github.com/anchore/grype)
 "ubi:anchore/grant" = "0.6.8"  # License compliance checker for SBOMs (https://github.com/anchore/grant)
