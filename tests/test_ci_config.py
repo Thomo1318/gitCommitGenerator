@@ -113,12 +113,21 @@ class TestCiWorkflowCodecovStep:
         step = self._codecov_step()
         assert step["with"]["files"] == "./coverage.xml"
 
-    def test_token_and_error_handling(self):
-        """Token and failure-handling settings must be configured correctly."""
+    def test_oidc_upload_and_error_handling(self):
+        """Same-repo uploads use OIDC (no token) with hard-fail on upload errors."""
         step = self._codecov_step()
-        assert step["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
+        assert step["with"].get("use_oidc") is True
+        assert "token" not in step.get("with", {}), "OIDC path must not set token input"
         assert step["with"]["fail_ci_if_error"] is True
         assert "continue-on-error" not in step
+
+    def test_codecov_upload_skips_fork_prs(self):
+        """Fork PRs must skip Codecov upload (tests still run in earlier steps)."""
+        step = self._codecov_step()
+        cond = step.get("if", "")
+        assert "pull_request" in cond
+        assert "head.repo.full_name" in cond
+        assert "github.repository" in cond
 
     def test_codecov_step_runs_after_test_step(self):
         """The Codecov upload step must remain the final step, after running tests."""
@@ -299,3 +308,133 @@ class TestUvLockRequiresPython:
         assert "package" in data
         assert isinstance(data["package"], list)
         assert len(data["package"]) > 0
+
+
+# ===========================================================================
+# .github/workflows/ci.yml - concurrency, permissions, hk lint job
+# ===========================================================================
+
+
+class TestCiWorkflowHardening:
+    """Issue #170 residual CI contracts: concurrency, OIDC scope, hk parity."""
+
+    def _workflow(self) -> dict:
+        return _load_yaml(".github/workflows/ci.yml")
+
+    def test_workflow_concurrency_group(self):
+        wf = self._workflow()
+        assert "concurrency" in wf
+        group = wf["concurrency"]["group"]
+        assert "github.workflow" in group
+        assert "pull_request.number" in group
+        assert "github.ref" in group or "github.run_id" in group
+        assert wf["concurrency"].get("cancel-in-progress") is True
+
+    def test_top_level_permissions_contents_read(self):
+        wf = self._workflow()
+        assert wf["permissions"]["contents"] == "read"
+
+    def test_id_token_write_only_on_coverage_job(self):
+        wf = self._workflow()
+        cov_perms = wf["jobs"]["test-and-coverage"]["permissions"]
+        assert cov_perms.get("id-token") == "write"
+        lint_job = wf["jobs"]["lint"]
+        lint_perms = lint_job.get("permissions", {})
+        assert lint_perms.get("id-token") != "write"
+        # Top-level must not grant id-token write
+        assert wf["permissions"].get("id-token") != "write"
+
+    def test_checkout_and_setup_uv_pinned_to_sha(self):
+        wf = self._workflow()
+        for job_name in ("lint", "test-and-coverage"):
+            for step in wf["jobs"][job_name]["steps"]:
+                uses = step.get("uses", "")
+                if uses.startswith("actions/checkout@") or uses.startswith("astral-sh/setup-uv@"):
+                    ref = uses.split("@", 1)[1]
+                    assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), (
+                        f"{job_name}: {uses} must be full commit SHA"
+                    )
+
+    def test_lint_job_exists(self):
+        assert "lint" in self._workflow()["jobs"]
+
+    def _lint_steps(self) -> list:
+        return self._workflow()["jobs"]["lint"]["steps"]
+
+    def test_lint_runs_hk_validate(self):
+        names = [s.get("name") for s in self._lint_steps()]
+        assert "hk validate" in names
+
+    def test_lint_pr_check_is_read_only_with_exact_skips(self):
+        step = next(s for s in self._lint_steps() if s.get("name") == "hk check (pull_request)")
+        run = step["run"]
+        assert "--check" in run
+        assert "--no-stage" in run
+        assert "--pr" in run
+        assert "--fail-fast" in run
+        assert "--no-progress" in run
+        assert step["env"]["HK_SKIP_STEPS"] == "pytest-cov,betterleaks,gen-docs,gen-toc"
+        assert step.get("if") == "github.event_name == 'pull_request'"
+
+    def test_lint_push_check_not_pr_only(self):
+        step = next(s for s in self._lint_steps() if s.get("name") == "hk check (push / workflow_dispatch)")
+        run = step["run"]
+        assert "--check" in run
+        assert "--no-stage" in run
+        assert "--all" in run
+        assert "--pr" not in run
+        assert step["env"]["HK_SKIP_STEPS"] == "pytest-cov,betterleaks,gen-docs,gen-toc"
+        assert "pull_request" in step.get("if", "")
+
+    def test_lint_fetch_depth_zero(self):
+        checkout = next(s for s in self._lint_steps() if s.get("name") == "Checkout repository")
+        assert checkout["with"]["fetch-depth"] == 0
+
+    def test_no_prepare_commit_msg_in_ci(self):
+        raw = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        assert "prepare-commit-msg" not in raw
+        assert "commit-msg" not in raw or "validate-commit" not in raw
+
+
+# ===========================================================================
+# codecov.yml residual locks (component map must not churn)
+# ===========================================================================
+
+
+class TestCodecovYmlContracts:
+    """Lock landed #169 Codecov semantics without brittle full-file snapshots."""
+
+    def _cfg(self) -> dict:
+        return _load_yaml("codecov.yml")
+
+    def test_hide_project_coverage_and_require_head(self):
+        comment = self._cfg()["comment"]
+        assert comment.get("hide_project_coverage") is True
+        assert comment.get("require_head") is True
+        assert comment.get("require_changes") is True
+
+    def test_annotations_enabled(self):
+        assert self._cfg()["github_checks"]["annotations"] is True
+
+    def test_component_ids_stable(self):
+        comps = self._cfg()["component_management"]["individual_components"]
+        ids = {c["component_id"] for c in comps}
+        assert ids == {"semantic_core", "telemetry", "cli_main", "intent_ranker"}
+
+    def test_semantic_core_paths_stable(self):
+        comps = {c["component_id"]: c for c in self._cfg()["component_management"]["individual_components"]}
+        paths = set(comps["semantic_core"]["paths"])
+        assert paths == {
+            "src/git_cg/ast_parser.py",
+            "src/git_cg/fingerprints.py",
+            "src/git_cg/similarity.py",
+            "src/git_cg/git_index.py",
+            "src/git_cg/graph_context.py",
+            "src/git_cg/semantic_flags.py",
+        }
+
+    def test_root_patch_has_no_paths_or_flags(self):
+        patch_default = self._cfg()["coverage"]["status"]["patch"]["default"]
+        assert "paths" not in patch_default
+        assert "flags" not in patch_default
+        assert patch_default.get("target") == "80%"
