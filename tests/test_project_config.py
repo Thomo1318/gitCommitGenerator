@@ -536,6 +536,7 @@ class TestMiseQualityPinsAndTasks:
         assert 'uv_venv_auto = "create|source"' in text or 'uv_venv_auto = "source"' in text
 
     def test_syft_grype_grant_pinned_exact(self):
+        """Verify that Syft, Grype and Grant use the required exact versions."""
         tools = _load_mise()["tools"]
         assert tools["syft"] == "1.48.0"
         assert tools["grype"] == "0.116.0"

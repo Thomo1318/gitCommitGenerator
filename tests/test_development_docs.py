@@ -123,6 +123,7 @@ class TestDevelopmentMdContributionWorkflowUpdated:
         return DEVELOPMENT_MD.read_text(encoding="utf-8")
 
     def test_contribution_step_references_mise_run_lint_and_test(self):
+        """Verify that the contribution workflow documents the canonical lint and test commands."""
         content = self._content()
         assert "Ensure `mise run lint` and `mise run test` pass locally" in content
 
@@ -179,6 +180,7 @@ class TestAdr0002Update4Section:
         assert "Floating `@main` / tool `latest` is rejected" in content
 
     def test_update_4_references_issue_170_and_hk_docs(self):
+        """Verify that the ADR Update 4 section references Issue #170 and the relevant hk and TruffleHog documentation."""
         content = self._content()
         section = content.split("## V. Update 4")[1]
         assert "Issue #170" in section
@@ -205,11 +207,12 @@ class TestAdr0002Update4Section:
         )
 
     def test_update_4_section_appears_after_update_3(self):
+        """Verify that the ADR's Update 4 section appears after Update 3."""
         content = self._content()
         assert content.index("## IV. Update 3") < content.index("## V. Update 4")
 
     def test_frontmatter_version_is_v1_4_0(self):
-        """Update 4 bumped ADR-0002 frontmatter metadata to v1.4.0 (with matching changelog)."""
+        """Verify that ADR-0002 frontmatter declares version v1.4.0 instead of v1.3.0."""
         content = self._content()
         frontmatter = content.split("```yaml")[1].split("```")[0]
         assert 'version: "v1.4.0"' in frontmatter
