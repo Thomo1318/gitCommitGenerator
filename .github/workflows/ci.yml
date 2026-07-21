@@ -7,6 +7,12 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  # Needed for Codecov GitHub Checks annotations on PRs when the app posts checks.
+  checks: write
+  pull-requests: write
+
 jobs:
   test-and-coverage:
     name: Run Tests & Upload Coverage
@@ -27,15 +33,27 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
+      - name: Validate codecov.yml
+        run: |
+          set -euo pipefail
+          # Codecov YAML validator (non-secret). Fail the job on invalid config.
+          response="$(curl -sS -X POST --data-binary @codecov.yml https://codecov.io/validate)"
+          printf '%s\n' "${response}"
+          printf '%s\n' "${response}" | rg -qi 'Valid!'
+
       - name: Run Tests with Coverage
-        run: uv run pytest --cov --cov-branch --cov-report=xml
+        run: >
+          uv run pytest
+          --cov=src/git_cg
+          --cov-branch
+          --cov-report=xml
+          --cov-report=term-missing:skip-covered
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        continue-on-error: true
         with:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-
-
+          name: pytest
+          fail_ci_if_error: true
+          verbose: true

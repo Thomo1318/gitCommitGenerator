@@ -55,7 +55,7 @@ packages = ["src/git_cg"]
 extraPaths = ["src", "scripts"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=src/git_cg --cov-report=term-missing"
+addopts = "--cov=src/git_cg --cov-branch --cov-report=term-missing:skip-covered"
 python_files = "test_*.py"
 pythonpath = ["src"]
 testpaths = ["tests"]
@@ -87,3 +87,19 @@ combine-as-imports = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15
+
+[tool.coverage.run]
+branch = true
+source = ["src/git_cg"]
+omit = [
+  "src/git_cg/evals/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
