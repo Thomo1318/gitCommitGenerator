@@ -486,3 +486,64 @@ class TestMiseTomlEvalPromptfoo:
         """promptfoo_*.json output files must be listed in .gitignore."""
         gitignore = (REPO_ROOT / ".gitignore").read_text()
         assert "promptfoo_*.json" in gitignore, "promptfoo_*.json must be excluded via .gitignore"
+
+
+# ===========================================================================
+# Issue #170 — mise exact pins + canonical quality tasks (do not redefine just)
+# ===========================================================================
+
+
+class TestMiseQualityPinsAndTasks:
+    def test_hk_pinned_exact_not_latest(self):
+        tools = _load_mise()["tools"]
+        assert tools["hk"] == "1.51.0"
+
+    def test_syft_grype_grant_pinned_exact(self):
+        tools = _load_mise()["tools"]
+        assert tools["syft"] == "1.48.0"
+        assert tools["grype"] == "0.116.0"
+        assert tools["ubi:anchore/grant"] == "0.6.8"
+
+    def test_lint_task_is_readonly_hk(self):
+        task = _load_mise()["tasks"]["lint"]
+        run = task["run"]
+        assert "hk validate" in run
+        assert "hk check" in run
+        assert "--check" in run
+        assert "--no-stage" in run
+        assert "pytest-cov,betterleaks,gen-docs,gen-toc" in run
+
+    def test_test_task_is_pytest(self):
+        task = _load_mise()["tasks"]["test"]
+        assert "uv run pytest" in task["run"]
+
+    def test_cov_task_exists(self):
+        task = _load_mise()["tasks"]["cov"]
+        assert "--cov=src/git_cg" in task["run"]
+
+    def test_security_task_optional_present(self):
+        task = _load_mise()["tasks"]["security"]
+        run = task["run"]
+        assert "syft" in run and "grype" in run and "grant" in run
+
+    def test_just_lint_still_zsh_syntax_only(self):
+        """Canonical mise lint must not redefine legacy just lint."""
+        just = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        # Extract lint recipe body until next top-level recipe
+        import re
+
+        m = re.search(r"^lint:\n((?:[ \t]+.*\n)+)", just, re.M)
+        assert m, "just lint recipe missing"
+        body = m.group(1)
+        assert "zsh -n" in body
+        assert "hk check" not in body
+
+    def test_just_test_still_temp_repo_smoke(self):
+        just = (REPO_ROOT / "justfile").read_text(encoding="utf-8")
+        import re
+
+        m = re.search(r"^test:\n((?:[ \t]+.*\n)+)", just, re.M)
+        assert m, "just test recipe missing"
+        body = m.group(1)
+        assert "setup_test_scenario.zsh" in body or ".test_repo" in body
+        assert "uv run pytest" not in body
