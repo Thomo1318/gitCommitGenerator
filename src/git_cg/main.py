@@ -1131,17 +1131,21 @@ def _collect_semantic_producer_metrics(
     if not semantic_enabled:
         return result
 
-    try:
-        from git_cg.ast_parser import parse_files
-        from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
-        from git_cg.git_index import read_head_sources, read_staged_sources, should_refresh_graph
-        from git_cg.graph_context import (
-            collect_graph_telemetry,
-            graph_stats,
-            refresh_graph,
-        )
+    from git_cg.ast_parser import parse_files
+    from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
+    from git_cg.git_index import read_head_sources, read_staged_sources, should_refresh_graph
+    from git_cg.graph_context import (
+        collect_graph_telemetry,
+        graph_stats,
+        refresh_graph,
+    )
 
+    # Parser stage — isolated so later producer failures keep parse metrics.
+    semantic_parser_metrics: dict | None = None
+    staged_files: dict = {}
+    try:
         staged = read_staged_sources(repo_root)
+        staged_files = dict(staged.files)
         if staged.files:
             batch = parse_files(staged.files)
             semantic_parser_metrics = batch.metrics.to_dict()
@@ -1154,11 +1158,27 @@ def _collect_semantic_producer_metrics(
                 semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
                     f"staged_error:{e}" for e in staged.errors[:50]
                 )
+            result["semantic_parser_metrics"] = semantic_parser_metrics
+        else:
+            semantic_parser_metrics = empty_parser_metrics(enabled=True)
+            result["semantic_parser_metrics"] = semantic_parser_metrics
+            if staged.errors and verbose:
+                console.log(f"[yellow]Staged blob read issues: {staged.errors[:3]}[/yellow]")
+    except Exception as parser_exc:
+        if verbose:
+            console.log(f"[yellow]Semantic parser producers failed: {parser_exc}[/yellow]")
+        result["semantic_parser_metrics"] = empty_parser_metrics(enabled=False)
+        result["parser_latency_ms"] = 0.0
+        semantic_parser_metrics = None
+        staged_files = {}
 
-            head = read_head_sources(repo_root, paths=list(staged.files.keys()))
+    # Fingerprint stage — isolated from parser success and graph failures.
+    try:
+        if staged_files:
+            head = read_head_sources(repo_root, paths=list(staged_files.keys()))
             fp_batch = compare_fingerprint_sets(
                 baseline_files=head.files,
-                staged_files=staged.files,
+                staged_files=staged_files,
             )
             fp_metrics = fp_batch.metrics.to_dict()
             result["body_similarity_min"] = fp_metrics.get("body_similarity_min")
@@ -1168,25 +1188,35 @@ def _collect_semantic_producer_metrics(
             result["fingerprint_class_counts"] = fp_metrics.get("class_counts") or {}
             result["fingerprint_grammar_version"] = str(fp_metrics.get("grammar_version") or "unknown")
             result["fingerprint_markers"] = list(fp_metrics.get("markers") or [])
-            for reason in (fp_metrics.get("reasons") or [])[:50]:
-                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).append(f"fingerprint:{reason}")
-            if head.errors:
-                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
-                    f"head_error:{e}" for e in head.errors[:50]
-                )
-            if head.skipped:
-                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
-                    f"head_skip:{s}" for s in head.skipped[:50]
-                )
-            result["semantic_parser_metrics"] = semantic_parser_metrics
+            if semantic_parser_metrics is not None:
+                for reason in (fp_metrics.get("reasons") or [])[:50]:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).append(f"fingerprint:{reason}")
+                if head.errors:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                        f"head_error:{e}" for e in head.errors[:50]
+                    )
+                if head.skipped:
+                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                        f"head_skip:{s}" for s in head.skipped[:50]
+                    )
+                result["semantic_parser_metrics"] = semantic_parser_metrics
         else:
-            semantic_parser_metrics = empty_parser_metrics(enabled=True)
             fp_empty = empty_fingerprint_metrics()
             result["fingerprint_grammar_version"] = str(fp_empty.get("grammar_version") or "unknown")
-            result["semantic_parser_metrics"] = semantic_parser_metrics
-            if staged.errors and verbose:
-                console.log(f"[yellow]Staged blob read issues: {staged.errors[:3]}[/yellow]")
+    except Exception as fp_exc:
+        if verbose:
+            console.log(f"[yellow]Fingerprint compare failed: {fp_exc}[/yellow]")
+        result["body_similarity_min"] = None
+        result["body_similarity_avg"] = None
+        result["fingerprint_files_compared"] = 0
+        result["fingerprint_latency_ms"] = 0.0
+        result["fingerprint_class_counts"] = None
+        result["fingerprint_grammar_version"] = "unknown"
+        result["fingerprint_markers"] = None
+        # Keep parser metrics already populated.
 
+    # Graph stage — failures only clear graph-related fields.
+    try:
         build_result = None
         if should_refresh_graph():
             build_result = refresh_graph(repo_root=repo_root, full_rebuild=False, postprocess="minimal")
@@ -1211,17 +1241,12 @@ def _collect_semantic_producer_metrics(
             console.log(
                 f"[yellow]Semantic graph_stats unavailable: {stats_result.error_type}: {stats_result.error}[/yellow]"
             )
-    except Exception as semantic_exc:
+    except Exception as graph_exc:
         if verbose:
-            console.log(f"[yellow]Semantic producers failed: {semantic_exc}[/yellow]")
-        result["semantic_parser_metrics"] = empty_parser_metrics(enabled=False)
-        result["body_similarity_min"] = None
-        result["body_similarity_avg"] = None
-        result["fingerprint_files_compared"] = 0
-        result["fingerprint_latency_ms"] = 0.0
-        result["fingerprint_class_counts"] = None
-        result["fingerprint_grammar_version"] = "unknown"
-        result["fingerprint_markers"] = None
+            console.log(f"[yellow]Semantic graph producers failed: {graph_exc}[/yellow]")
+        result["graph_build_latency_ms"] = 0.0
+        result["graph_query_latency_ms"] = 0.0
+        result["crg_schema_version"] = None
     return result
 
 
