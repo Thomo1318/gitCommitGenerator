@@ -1021,29 +1021,29 @@ def _write_telemetry_state_safe(
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
-    
+
     Parameters:
-    	review_state (ReviewState): Review state containing the generated commit plan and final message.
-    	diff_output (str): Staged diff used for generation.
-    	engine (str): AI engine used for generation.
-    	model_name (str): Model used for generation.
-    	system_prompt (str): System prompt used for generation.
-    	repo_name (str): Repository name associated with the generation.
-    	thread_id (str): Telemetry thread identifier.
-    	verbose (bool): Whether to log telemetry write failures and success details.
-    	graph_schema_version (str): Semantic graph schema version.
-    	semantic_enabled (bool): Whether semantic processing was enabled.
-    	parser_latency_ms (float): Semantic parser latency in milliseconds.
-    	graph_build_latency_ms (float): Semantic graph build latency in milliseconds.
-    	graph_query_latency_ms (float): Semantic graph query latency in milliseconds.
-    	semantic_parser_metrics (dict | None): Metrics collected during semantic parsing.
-    	body_similarity_min (float | None): Minimum body similarity measured during fingerprint comparison.
-    	body_similarity_avg (float | None): Average body similarity measured during fingerprint comparison.
-    	fingerprint_files_compared (int): Number of files included in fingerprint comparison.
-    	fingerprint_latency_ms (float): Fingerprint comparison latency in milliseconds.
-    	fingerprint_class_counts (dict | None): Counts of fingerprint comparison classes.
-    	fingerprint_grammar_version (str): Fingerprint grammar version used for comparison.
-    	fingerprint_markers (list | None): Markers produced during fingerprint comparison.
+        review_state (ReviewState): Review state containing the generated commit plan and final message.
+        diff_output (str): Staged diff used for generation.
+        engine (str): AI engine used for generation.
+        model_name (str): Model used for generation.
+        system_prompt (str): System prompt used for generation.
+        repo_name (str): Repository name associated with the generation.
+        thread_id (str): Telemetry thread identifier.
+        verbose (bool): Whether to log telemetry write failures and success details.
+        graph_schema_version (str): Semantic graph schema version.
+        semantic_enabled (bool): Whether semantic processing was enabled.
+        parser_latency_ms (float): Semantic parser latency in milliseconds.
+        graph_build_latency_ms (float): Semantic graph build latency in milliseconds.
+        graph_query_latency_ms (float): Semantic graph query latency in milliseconds.
+        semantic_parser_metrics (dict | None): Metrics collected during semantic parsing.
+        body_similarity_min (float | None): Minimum body similarity measured during fingerprint comparison.
+        body_similarity_avg (float | None): Average body similarity measured during fingerprint comparison.
+        fingerprint_files_compared (int): Number of files included in fingerprint comparison.
+        fingerprint_latency_ms (float): Fingerprint comparison latency in milliseconds.
+        fingerprint_class_counts (dict | None): Counts of fingerprint comparison classes.
+        fingerprint_grammar_version (str): Fingerprint grammar version used for comparison.
+        fingerprint_markers (list | None): Markers produced during fingerprint comparison.
     """
     try:
         import dataclasses
@@ -1096,6 +1096,135 @@ def _write_telemetry_state_safe(
             console.log(f"[yellow]Failed to write telemetry state: {e}[/yellow]")
 
 
+def _collect_semantic_producer_metrics(
+    repo_root: str,
+    *,
+    enable_semantic: bool | None,
+    verbose: bool = False,
+) -> dict:
+    """
+    Run dark-launched Phase 1/2 semantic producers and return telemetry fields.
+
+    Flag-off returns zero-safe defaults without touching git/graph/parser I/O.
+    Flag-on collects staged parse metrics, HEAD/index fingerprint aggregates, and
+    optional graph latencies. Never raises; failures degrade to empty metrics.
+    """
+    from git_cg.ast_parser import empty_parser_metrics
+    from git_cg.semantic_flags import is_semantic_enabled
+
+    semantic_enabled = is_semantic_enabled(enable_semantic)
+    result: dict = {
+        "semantic_enabled": semantic_enabled,
+        "parser_latency_ms": 0.0,
+        "graph_build_latency_ms": 0.0,
+        "graph_query_latency_ms": 0.0,
+        "semantic_parser_metrics": empty_parser_metrics(enabled=False),
+        "body_similarity_min": None,
+        "body_similarity_avg": None,
+        "fingerprint_files_compared": 0,
+        "fingerprint_latency_ms": 0.0,
+        "fingerprint_class_counts": None,
+        "fingerprint_grammar_version": "unknown",
+        "fingerprint_markers": None,
+        "crg_schema_version": None,
+    }
+    if not semantic_enabled:
+        return result
+
+    try:
+        from git_cg.ast_parser import parse_files
+        from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
+        from git_cg.git_index import read_head_sources, read_staged_sources, should_refresh_graph
+        from git_cg.graph_context import (
+            collect_graph_telemetry,
+            graph_stats,
+            refresh_graph,
+        )
+
+        staged = read_staged_sources(repo_root)
+        if staged.files:
+            batch = parse_files(staged.files)
+            semantic_parser_metrics = batch.metrics.to_dict()
+            result["parser_latency_ms"] = float(semantic_parser_metrics.get("parser_latency_ms") or 0.0)
+            if staged.skipped:
+                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                    f"staged_skip:{s}" for s in staged.skipped[:50]
+                )
+            if staged.errors:
+                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                    f"staged_error:{e}" for e in staged.errors[:50]
+                )
+
+            head = read_head_sources(repo_root, paths=list(staged.files.keys()))
+            fp_batch = compare_fingerprint_sets(
+                baseline_files=head.files,
+                staged_files=staged.files,
+            )
+            fp_metrics = fp_batch.metrics.to_dict()
+            result["body_similarity_min"] = fp_metrics.get("body_similarity_min")
+            result["body_similarity_avg"] = fp_metrics.get("body_similarity_avg")
+            result["fingerprint_files_compared"] = int(fp_metrics.get("fingerprint_files_compared") or 0)
+            result["fingerprint_latency_ms"] = float(fp_metrics.get("fingerprint_latency_ms") or 0.0)
+            result["fingerprint_class_counts"] = fp_metrics.get("class_counts") or {}
+            result["fingerprint_grammar_version"] = str(fp_metrics.get("grammar_version") or "unknown")
+            result["fingerprint_markers"] = list(fp_metrics.get("markers") or [])
+            for reason in (fp_metrics.get("reasons") or [])[:50]:
+                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).append(f"fingerprint:{reason}")
+            if head.errors:
+                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                    f"head_error:{e}" for e in head.errors[:50]
+                )
+            if head.skipped:
+                semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
+                    f"head_skip:{s}" for s in head.skipped[:50]
+                )
+            result["semantic_parser_metrics"] = semantic_parser_metrics
+        else:
+            semantic_parser_metrics = empty_parser_metrics(enabled=True)
+            fp_empty = empty_fingerprint_metrics()
+            result["fingerprint_grammar_version"] = str(fp_empty.get("grammar_version") or "unknown")
+            result["semantic_parser_metrics"] = semantic_parser_metrics
+            if staged.errors and verbose:
+                console.log(f"[yellow]Staged blob read issues: {staged.errors[:3]}[/yellow]")
+
+        build_result = None
+        if should_refresh_graph():
+            build_result = refresh_graph(repo_root=repo_root, full_rebuild=False, postprocess="minimal")
+            if (not build_result.ok) and verbose:
+                console.log(
+                    f"[yellow]Semantic refresh_graph unavailable: "
+                    f"{build_result.error_type}: {build_result.error}[/yellow]"
+                )
+
+        stats_result = graph_stats(repo_root=repo_root)
+        graph_meta = collect_graph_telemetry(
+            build_result=build_result,
+            query_results=[stats_result],
+        )
+        result["graph_build_latency_ms"] = float(graph_meta.get("graph_build_latency_ms") or 0.0)
+        result["graph_query_latency_ms"] = float(graph_meta.get("graph_query_latency_ms") or 0.0)
+        if stats_result.ok:
+            maybe_schema = stats_result.data.get("schema_version") or stats_result.data.get("graph_schema_version")
+            if maybe_schema is not None:
+                result["crg_schema_version"] = str(maybe_schema)
+        elif verbose:
+            console.log(
+                f"[yellow]Semantic graph_stats unavailable: {stats_result.error_type}: {stats_result.error}[/yellow]"
+            )
+    except Exception as semantic_exc:
+        if verbose:
+            console.log(f"[yellow]Semantic producers failed: {semantic_exc}[/yellow]")
+        result["semantic_parser_metrics"] = empty_parser_metrics(enabled=False)
+        result["body_similarity_min"] = None
+        result["body_similarity_avg"] = None
+        result["fingerprint_files_compared"] = 0
+        result["fingerprint_latency_ms"] = 0.0
+        result["fingerprint_class_counts"] = None
+        result["fingerprint_grammar_version"] = "unknown"
+        result["fingerprint_markers"] = None
+    return result
+
+
 @opik.track(project_name="gitCommitGenerator")
 def _run_commit_generation(
     commit_msg_file: str,
@@ -1113,7 +1242,7 @@ def _run_commit_generation(
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
-    
+
     Parameters:
         commit_msg_file (str): Path to the commit message file to write.
         commit_source (str | None): Source of the commit request, used to determine whether generation should proceed.
@@ -1126,7 +1255,7 @@ def _run_commit_generation(
         interactive (bool): Present the interactive review flow when a TTY is available.
         gui_editor (bool): Prefer the GUI editor for edit actions.
         enable_semantic (bool | None): Enable or disable semantic processing, or use its configured default.
-    
+
     Returns:
         bool: `True` when generation completes successfully.
     """
@@ -1161,122 +1290,28 @@ def _run_commit_generation(
         crg_schema_version = "unknown"
     sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
 
-    # Phase 1: dark-launched semantic producers (parser + graph adapter metrics only).
+    # Phase 1/2: dark-launched semantic producers (parser, fingerprints, graph metrics).
     # Does not alter ranking/prompt behaviour yet — facts are recorded for telemetry.
-    from git_cg.semantic_flags import is_semantic_enabled
-
-    semantic_enabled = is_semantic_enabled(enable_semantic)
-    parser_latency_ms = 0.0
-    graph_build_latency_ms = 0.0
-    graph_query_latency_ms = 0.0
-    from git_cg.ast_parser import empty_parser_metrics
-
-    semantic_parser_metrics: dict | None = empty_parser_metrics(enabled=False)
-    body_similarity_min: float | None = None
-    body_similarity_avg: float | None = None
-    fingerprint_files_compared = 0
-    fingerprint_latency_ms = 0.0
-    fingerprint_class_counts: dict | None = None
-    fingerprint_grammar_version = "unknown"
-    fingerprint_markers: list | None = None
-    if semantic_enabled:
-        try:
-            from git_cg.ast_parser import parse_files
-            from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
-            from git_cg.git_index import read_head_sources, read_staged_sources, should_refresh_graph
-            from git_cg.graph_context import (
-                collect_graph_telemetry,
-                graph_stats,
-                refresh_graph,
-            )
-
-            # 1) Parse staged index blobs (not worktree).
-            staged = read_staged_sources(repo_root)
-            if staged.files:
-                batch = parse_files(staged.files)
-                semantic_parser_metrics = batch.metrics.to_dict()
-                parser_latency_ms = float(semantic_parser_metrics.get("parser_latency_ms") or 0.0)
-                if staged.skipped:
-                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
-                        f"staged_skip:{s}" for s in staged.skipped[:50]
-                    )
-                if staged.errors:
-                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
-                        f"staged_error:{e}" for e in staged.errors[:50]
-                    )
-
-                # 1b) Phase 2: HEAD vs index three-fingerprint algebra (telemetry only).
-                head = read_head_sources(repo_root, paths=list(staged.files.keys()))
-                # Include HEAD-only paths that failed staged read? Not needed for ACMR staged set.
-                # Pair staged files with whatever HEAD returned; missing HEAD => add_only.
-                fp_batch = compare_fingerprint_sets(
-                    baseline_files=head.files,
-                    staged_files=staged.files,
-                )
-                fp_metrics = fp_batch.metrics.to_dict()
-                body_similarity_min = fp_metrics.get("body_similarity_min")
-                body_similarity_avg = fp_metrics.get("body_similarity_avg")
-                fingerprint_files_compared = int(fp_metrics.get("fingerprint_files_compared") or 0)
-                fingerprint_latency_ms = float(fp_metrics.get("fingerprint_latency_ms") or 0.0)
-                fingerprint_class_counts = fp_metrics.get("class_counts") or {}
-                fingerprint_grammar_version = str(fp_metrics.get("grammar_version") or "unknown")
-                fingerprint_markers = list(fp_metrics.get("markers") or [])
-                # Fold non-content fingerprint skip reasons into parser fallback list (redacted later).
-                for reason in (fp_metrics.get("reasons") or [])[:50]:
-                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).append(f"fingerprint:{reason}")
-                if head.errors:
-                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
-                        f"head_error:{e}" for e in head.errors[:50]
-                    )
-                if head.skipped:
-                    semantic_parser_metrics.setdefault("semantic_fallback_reasons", []).extend(
-                        f"head_skip:{s}" for s in head.skipped[:50]
-                    )
-            else:
-                semantic_parser_metrics = empty_parser_metrics(enabled=True)
-                fp_empty = empty_fingerprint_metrics()
-                fingerprint_grammar_version = str(fp_empty.get("grammar_version") or "unknown")
-                if staged.errors and verbose:
-                    console.log(f"[yellow]Staged blob read issues: {staged.errors[:3]}[/yellow]")
-
-            # 2) Graph metrics: stats are queries; rebuild only when explicitly opted in.
-            build_result = None
-            if should_refresh_graph():
-                build_result = refresh_graph(repo_root=repo_root, full_rebuild=False, postprocess="minimal")
-                if (not build_result.ok) and verbose:
-                    console.log(
-                        f"[yellow]Semantic refresh_graph unavailable: "
-                        f"{build_result.error_type}: {build_result.error}[/yellow]"
-                    )
-
-            stats_result = graph_stats(repo_root=repo_root)
-            graph_meta = collect_graph_telemetry(
-                build_result=build_result,
-                query_results=[stats_result],
-            )
-            graph_build_latency_ms = float(graph_meta.get("graph_build_latency_ms") or 0.0)
-            graph_query_latency_ms = float(graph_meta.get("graph_query_latency_ms") or 0.0)
-            if stats_result.ok:
-                maybe_schema = stats_result.data.get("schema_version") or stats_result.data.get("graph_schema_version")
-                if maybe_schema is not None:
-                    crg_schema_version = str(maybe_schema)
-                    sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
-            elif verbose:
-                console.log(
-                    f"[yellow]Semantic graph_stats unavailable: "
-                    f"{stats_result.error_type}: {stats_result.error}[/yellow]"
-                )
-        except Exception as semantic_exc:
-            if verbose:
-                console.log(f"[yellow]Semantic producers failed: {semantic_exc}[/yellow]")
-            semantic_parser_metrics = empty_parser_metrics(enabled=False)
-            body_similarity_min = None
-            body_similarity_avg = None
-            fingerprint_files_compared = 0
-            fingerprint_latency_ms = 0.0
-            fingerprint_class_counts = None
-            fingerprint_grammar_version = "unknown"
-            fingerprint_markers = None
+    semantic_metrics = _collect_semantic_producer_metrics(
+        repo_root,
+        enable_semantic=enable_semantic,
+        verbose=verbose,
+    )
+    semantic_enabled = bool(semantic_metrics["semantic_enabled"])
+    parser_latency_ms = float(semantic_metrics["parser_latency_ms"] or 0.0)
+    graph_build_latency_ms = float(semantic_metrics["graph_build_latency_ms"] or 0.0)
+    graph_query_latency_ms = float(semantic_metrics["graph_query_latency_ms"] or 0.0)
+    semantic_parser_metrics = semantic_metrics["semantic_parser_metrics"]
+    body_similarity_min = semantic_metrics["body_similarity_min"]
+    body_similarity_avg = semantic_metrics["body_similarity_avg"]
+    fingerprint_files_compared = int(semantic_metrics["fingerprint_files_compared"] or 0)
+    fingerprint_latency_ms = float(semantic_metrics["fingerprint_latency_ms"] or 0.0)
+    fingerprint_class_counts = semantic_metrics["fingerprint_class_counts"]
+    fingerprint_grammar_version = str(semantic_metrics["fingerprint_grammar_version"] or "unknown")
+    fingerprint_markers = semantic_metrics["fingerprint_markers"]
+    if semantic_metrics.get("crg_schema_version"):
+        crg_schema_version = str(semantic_metrics["crg_schema_version"])
+        sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
 
     opik_metadata = {
         "repo_name": repo_name,
@@ -1831,12 +1866,12 @@ def record_telemetry(
             # The decorator automatically logs inputs/outputs
             """
             Record final commit telemetry and the corresponding user-acceptance score in Opik.
-            
+
             Parameters:
                 final_commit_message (str): The final commit message to classify and record.
                 provenance (str): Classification of how the message was modified.
                 telemetry_state (dict): Telemetry metadata associated with the generated commit message.
-            
+
             Returns:
                 dict: A result containing `"status": "recorded"` and the supplied provenance classification.
             """
