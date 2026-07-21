@@ -9,9 +9,8 @@ on:
 
 permissions:
   contents: read
-  # Needed for Codecov GitHub Checks annotations on PRs when the app posts checks.
-  checks: write
-  pull-requests: write
+  # Codecov action v4 OIDC token exchange (no long-lived upload token required for auth path).
+  id-token: write
 
 jobs:
   test-and-coverage:
@@ -37,7 +36,14 @@ jobs:
         run: |
           set -euo pipefail
           # Codecov YAML validator (non-secret). Fail the job on invalid config.
-          response="$(curl -sS -X POST --data-binary @codecov.yml https://codecov.io/validate)"
+          response="$(
+            curl -sS \
+              --connect-timeout 10 \
+              --max-time 30 \
+              -X POST \
+              --data-binary @codecov.yml \
+              https://codecov.io/validate
+          )"
           printf '%s\n' "${response}"
           printf '%s\n' "${response}" | rg -qi 'Valid!'
 

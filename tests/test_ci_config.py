@@ -127,6 +127,37 @@ class TestCiWorkflowCodecovStep:
         assert names.index("Upload coverage to Codecov") == len(names) - 1
         assert names.index("Run Tests with Coverage") < names.index("Upload coverage to Codecov")
 
+    def _validate_codecov_step(self) -> dict:
+        """
+        Finds the Validate codecov.yml step in the CI workflow.
+
+        Returns:
+            dict: The configuration for the validate step.
+
+        Raises:
+            AssertionError: If the validate step is not present.
+        """
+        steps = self._workflow()["jobs"]["test-and-coverage"]["steps"]
+        for step in steps:
+            if step.get("name") == "Validate codecov.yml":
+                return step
+        raise AssertionError("Validate codecov.yml step not found in ci.yml")
+
+    def test_validate_codecov_step_exists(self):
+        """The workflow must validate codecov.yml before running coverage tests."""
+        step = self._validate_codecov_step()
+        assert "run" in step
+        assert "codecov.io/validate" in step["run"]
+        assert "--connect-timeout" in step["run"]
+        assert "--max-time" in step["run"]
+
+    def test_validate_codecov_step_runs_before_tests(self):
+        """Validate codecov.yml must precede Run Tests with Coverage."""
+        steps = self._workflow()["jobs"]["test-and-coverage"]["steps"]
+        names = [s.get("name") for s in steps]
+        assert "Validate codecov.yml" in names
+        assert names.index("Validate codecov.yml") < names.index("Run Tests with Coverage")
+
 
 # ===========================================================================
 # .github/workflows/docs.yml - Build site step
