@@ -83,6 +83,17 @@ class TestSecurityWorkflow:
         assert 'version: "latest"' not in raw
         assert "version: latest" not in raw
 
+    def test_checkout_disables_persist_credentials(self):
+        wf = self._workflow()
+        for job_name, job in wf["jobs"].items():
+            for step in job.get("steps", []):
+                uses = step.get("uses", "")
+                if uses.startswith("actions/checkout@"):
+                    with_block = step.get("with") or {}
+                    assert with_block.get("persist-credentials") is False, (
+                        f"{job_name}: checkout must set persist-credentials: false"
+                    )
+
     def test_all_uses_are_full_shas(self):
         """Verify that every referenced GitHub Action is pinned to a full commit SHA."""
         wf = self._workflow()
