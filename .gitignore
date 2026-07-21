@@ -107,3 +107,6 @@ bom.json
 .rigour/
 Backup.codeatlas/
 .vscode/mcp.json
+
+# TEMPORARY IGNORE ITEMS
+src/evals
