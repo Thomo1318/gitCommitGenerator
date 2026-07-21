@@ -9,13 +9,15 @@ on:
 
 permissions:
   contents: read
-  # Codecov action v4 OIDC token exchange (no long-lived upload token required for auth path).
-  id-token: write
 
 jobs:
   test-and-coverage:
     name: Run Tests & Upload Coverage
     runs-on: ubuntu-latest
+    # Codecov action v4 OIDC token exchange (scoped to the job that uploads coverage).
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -45,7 +47,7 @@ jobs:
               https://codecov.io/validate
           )"
           printf '%s\n' "${response}"
-          printf '%s\n' "${response}" | rg -qi 'Valid!'
+          printf '%s\n' "${response}" | grep -qi 'Valid!'
 
       - name: Run Tests with Coverage
         run: >

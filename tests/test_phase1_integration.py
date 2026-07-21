@@ -89,7 +89,7 @@ def test_write_telemetry_state_safe_records_phase1_metrics(tmp_path, monkeypatch
         return "." if kwargs.get("text") else b"."
 
     monkeypatch.setattr(main_mod.subprocess, "check_output", fake_check_output)
-    main_mod.LAST_OPIK_TRACE_ID = "trace-phase1"
+    monkeypatch.setattr(main_mod, "LAST_OPIK_TRACE_ID", "trace-phase1")
 
     main_mod._write_telemetry_state_safe(
         review_state=review_state,
