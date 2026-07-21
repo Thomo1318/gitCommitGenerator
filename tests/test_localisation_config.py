@@ -31,12 +31,12 @@ _COMMIT_LANGUAGE_PATTERN = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
 def _load_json(rel_path: str) -> Any:
     """
     Load and parse a JSON file relative to the repository root.
-    
+
     Parameters:
-    	rel_path (str): Relative path to the JSON file.
-    
+        rel_path (str): Relative path to the JSON file.
+
     Returns:
-    	Any: Parsed JSON content.
+        Any: Parsed JSON content.
     """
     return json.loads((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
 
@@ -44,10 +44,10 @@ def _load_json(rel_path: str) -> Any:
 def _load_yaml(rel_path: str) -> Any:
     """
     Load and parse a YAML file relative to the repository root.
-    
+
     Parameters:
         rel_path (str): Path to the YAML file relative to the repository root.
-    
+
     Returns:
         Any: Parsed YAML data, with a top-level boolean `True` key normalised to `"on"`.
     """
@@ -72,10 +72,10 @@ class TestSchemaCommitLanguage:
 
     def _schema(self) -> dict[str, Any]:
         """Load and validate the GitOps SOP JSON Schema.
-        
+
         Returns:
             dict[str, Any]: The parsed schema object.
-        
+
         Raises:
             TypeError: If the schema is not a JSON object.
         """
@@ -204,9 +204,9 @@ class TestAgentSopCommitLanguage:
 
     def _sop(self) -> dict[str, Any]:
         """Load and validate the agent SOP configuration.
-        
+
         Returns:
-        	dict[str, Any]: The agent SOP configuration.
+            dict[str, Any]: The agent SOP configuration.
         """
         data = _load_json("config/gitops_agent_sop.json")
         if not isinstance(data, dict):
@@ -273,12 +273,12 @@ class TestGitCgSopOverride:
 
     def _sop_override(self) -> dict[str, Any]:
         """Load the repository SOP override configuration.
-        
+
         Returns:
-        	dict[str, Any]: The parsed SOP override configuration.
-        
+            dict[str, Any]: The parsed SOP override configuration.
+
         Raises:
-        	TypeError: If the configuration is not a JSON object.
+            TypeError: If the configuration is not a JSON object.
         """
         data = _load_json(".git-cg/sop.json")
         if not isinstance(data, dict):
@@ -337,9 +337,9 @@ class TestVscodeSettingsSpellCheck:
 
     def _settings(self) -> dict[str, Any]:
         """Load the VS Code settings as a mapping.
-        
+
         Returns:
-        	dict[str, Any]: The parsed VS Code settings.
+            dict[str, Any]: The parsed VS Code settings.
         """
         data = _load_json(".vscode/settings.json")
         if not isinstance(data, dict):
@@ -496,12 +496,12 @@ class TestVscodePrompts:
     def _prompts(self) -> list[Any]:
         """
         Load the prompts configuration from `.vscode/prompts.json`.
-        
+
         Returns:
-        	list[Any]: The configured prompts.
-        
+            list[Any]: The configured prompts.
+
         Raises:
-        	TypeError: If the configuration is not a JSON array.
+            TypeError: If the configuration is not a JSON array.
         """
         data = _load_json(".vscode/prompts.json")
         if not isinstance(data, list):
@@ -801,12 +801,12 @@ class TestReleaseWorkflow:
 
     def _workflow(self) -> dict[str, Any]:
         """Load the release workflow configuration.
-        
+
         Returns:
-        	dict[str, Any]: The parsed release workflow mapping.
-        
+            dict[str, Any]: The parsed release workflow mapping.
+
         Raises:
-        	TypeError: If the workflow does not contain a YAML mapping.
+            TypeError: If the workflow does not contain a YAML mapping.
         """
         data = _load_yaml(".github/release.yml")
         if not isinstance(data, dict):

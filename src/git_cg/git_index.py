@@ -130,11 +130,11 @@ def read_staged_blob(path: str, *, repo_root: str | None = None) -> bytes:
 def _encode_batch_requests(paths: list[str], *, prefix: str = ":") -> bytes:
     """
     Encode repository-relative paths as newline-delimited Git batch requests.
-    
+
     Parameters:
         paths (list[str]): Repository-relative paths to encode.
         prefix (str): Object prefix, such as ":" for the index or "HEAD:" for the HEAD tree.
-    
+
     Returns:
         bytes: UTF-8 encoded batch requests.
     """
@@ -143,10 +143,10 @@ def _encode_batch_requests(paths: list[str], *, prefix: str = ":") -> bytes:
 
 def _parse_batch_check_header(header: str) -> tuple[str, int] | None:
     """Parse a Git ``--batch-check`` header.
-    
+
     Parameters:
         header (str): Header line produced by ``git cat-file --batch-check``.
-    
+
     Returns:
         tuple[str, int] | None: The object identifier or ``"missing"`` marker and
             object size, or ``None`` for an unrecognised header.
@@ -166,12 +166,12 @@ def _parse_batch_check_header(header: str) -> tuple[str, int] | None:
 def _is_unsafe_staged_path(path: str) -> bool:
     """
     Determine whether a path contains forms that are unsafe for batch input.
-    
+
     Parameters:
-    	path (str): Path to check.
-    
+        path (str): Path to check.
+
     Returns:
-    	bool: `True` if the path is absolute, contains traversal segments, or includes a newline or carriage return; `False` otherwise.
+        bool: `True` if the path is absolute, contains traversal segments, or includes a newline or carriage return; `False` otherwise.
     """
     return (
         path.startswith("/")
@@ -191,13 +191,13 @@ def _read_blobs_batch(
 ) -> StagedReadResult:
     """
     Read multiple index or HEAD blobs and record successful, skipped, and failed paths.
-    
+
     Parameters:
         paths (list[str]): Paths whose blobs should be read.
         repo_root (str | None): Repository working directory, or the current directory when omitted.
         max_file_bytes (int): Maximum permitted size for an individual blob.
         prefix (str): Git object prefix used to resolve each path.
-    
+
     Returns:
         StagedReadResult: Blob contents and per-path skip or error records.
     """
@@ -371,12 +371,12 @@ def read_staged_sources(
 ) -> StagedReadResult:
     """
     Load staged file contents for semantic parsing.
-    
+
     Parameters:
         max_file_bytes (int): Maximum content size in bytes for each file.
         excludes (tuple[str, ...]): Glob patterns for staged paths to skip when paths are not provided.
         paths (list[str] | None): Paths to read; when omitted, reads eligible staged paths from the index.
-    
+
     Returns:
         StagedReadResult: Loaded file contents and records of skipped paths or read errors.
     """
@@ -408,11 +408,11 @@ def read_head_sources(
 ) -> StagedReadResult:
     """
     Load HEAD-tree file contents for the specified paths.
-    
+
     Parameters:
         paths (list[str] | None): Paths to read from HEAD. If omitted, no paths are read.
         max_file_bytes (int): Maximum content size for each file.
-    
+
     Returns:
         StagedReadResult: Loaded path-to-content mappings, skipped paths, and read errors.
     """
@@ -424,7 +424,7 @@ def read_head_sources(
 def should_refresh_graph() -> bool:
     """
     Determines whether semantic graph refresh is enabled by configuration.
-    
+
     Returns:
         bool: `True` when the configuration enables graph refresh, `False` otherwise.
     """
