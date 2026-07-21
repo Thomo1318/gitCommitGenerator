@@ -8,19 +8,28 @@
 # ============================================================================ #
 
 [settings]
-experimental = true                   # Required for advanced uv features
-jobs = 8                              # Parallel job count for faster installs
-env_cache = true                      # Cache environment evaluations for speed
-not_found_auto_install = true         # Auto-install tools when entering directory
+experimental = true                           # Required for advanced uv features
+jobs = 8                                      # Parallel job count for faster installs
+env_cache = true                              # Cache environment evaluations for speed
+not_found_auto_install = true                 # Auto-install tools when entering directory
 plugin_autoupdate_last_check_duration = "1d"  # Check for plugin updates daily
 
-idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go", "java", "yarn", "terraform", "packer"]  # Read .nvmrc, .python-version, etc.
+idiomatic_version_file_enable_tools = [
+  "node",
+  "python",
+  "ruby",
+  "go",
+  "java",
+  "yarn",
+  "terraform",
+  "packer"
+]                                        # Read .nvmrc, .python-version, etc.
 
 [settings.python]
-uv_venv_auto = true                   # Auto-activate .venv directories created by uv
+uv_venv_auto = true  # Auto-activate .venv directories created by uv
 
 [settings.pipx]
-uvx = true                            # Use uvx instead of pipx
+uvx = true  # Use uvx instead of pipx
 
 [env]
 PYTHONPATH = "src"
@@ -33,28 +42,61 @@ HK_LOG_FILE = "logs/hk.log"
 # ============================================================================ #
 
 [tools]
-fnox = "latest"                       # Hybrid secrets orchestration
-age = "latest"                        # File encryption fallback for fnox
-gum = "0.17.0"                        # Terminal-native TUI for interactive git-cg review
-hk = "latest"                         # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/)
-pkl = "latest"                        # embeddable configuration language (https://pkl-lang.org)
-python = "3.14"                       # Python runtime (https://python.org)
-usage = "latest"                      # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
-uv = "latest"                         # Fast Python package and environment manager (https://uv.astral.sh)
-rtk = "latest"                        # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
-node = "latest"                       # JS runtime for validation hook (https://nodejs.org)
+fnox = "latest"                # Hybrid secrets orchestration
+age = "latest"                 # File encryption fallback for fnox
+gum = "0.17.0"                 # Terminal-native TUI for interactive git-cg review
+hk = "1.51.0"                  # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/) — exact pin aligned with hk.pkl amend
+pkl = "latest"                 # embeddable configuration language (https://pkl-lang.org)
+python = "3.14"                # Python runtime (https://python.org)
+usage = "latest"               # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
+uv = "latest"                  # Fast Python package and environment manager (https://uv.astral.sh)
+rtk = "latest"                 # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
+node = "latest"                # JS runtime for validation hook (https://nodejs.org)
 # "npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
-just = "latest"                       # Task runner for project automation (https://just.systems)
-betterleaks = "latest"                # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
-syft = "latest"                       # Multi-language SBOM generator for CycloneDX format (https://github.com/anchore/syft)
-grype = "latest"                      # Vulnerability scanner for SBOMs (https://github.com/anchore/grype)
-"ubi:anchore/grant" = "latest"        # License compliance checker for SBOMs (https://github.com/anchore/grant)
+just = "latest"                # Task runner for project automation (https://just.systems)
+betterleaks = "latest"         # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
+syft = "1.48.0"                # Multi-language SBOM generator for CycloneDX format (https://github.com/anchore/syft)
+grype = "0.116.0"              # Vulnerability scanner for SBOMs (https://github.com/anchore/grype)
+"ubi:anchore/grant" = "0.6.8"  # License compliance checker for SBOMs (https://github.com/anchore/grant)
 # 1password-cli is omitted here to fall back to the Homebrew-managed `1password-cli@beta` global installation, which is required for `op environment`.
 # 1password-cli = "latest"
 
 # ============================================================================ #
 # TASKS                                                                        #
 # ============================================================================ #
+
+[tasks.lint]
+description = "Read-only fast lint (CI-shaped hk check; skips slow cov, secrets, doc gens)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+export HK_SKIP_STEPS="${HK_SKIP_STEPS:-pytest-cov,betterleaks,gen-docs,gen-toc}"
+hk validate
+hk check --check --no-stage --all --fail-fast --no-progress
+"""
+
+[tasks.test]
+description = "Canonical full project pytest suite (does not replace `just test` smoke)"
+run = "uv run pytest"
+
+[tasks.cov]
+description = "Slow coverage verification (pytest-cov / hk --slow profile)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+uv run pytest --cov=src/git_cg --cov-branch --cov-report=xml --cov-report=term-missing:skip-covered
+"""
+
+[tasks.security]
+description = "Optional local SBOM + license + vulnerability verification"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+syft . -o cyclonedx-json=bom.json
+syft . -o syft-json=bom.syft.json
+grant check bom.syft.json --dry-run
+grype sbom:bom.json --fail-on high
+"""
 
 [tasks."test:cli"]
 description = "Test the git-cg CLI scaffolding (Zero-Plaintext via 1Password SDK)"
