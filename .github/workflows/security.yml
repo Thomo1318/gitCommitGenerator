@@ -26,6 +26,7 @@ jobs:
         # actions/checkout@v4.2.2
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          persist-credentials: false
           # Full history so PR/push base SHAs resolve for ranged scans.
           fetch-depth: 0
 
@@ -67,6 +68,8 @@ jobs:
       - name: Checkout code
         # actions/checkout@v4.2.2
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
 
       - name: Install mise tools
         # jdx/mise-action@v4.2.1 — installs exact syft/grype/grant from mise.toml

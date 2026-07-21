@@ -351,6 +351,7 @@ class TestCiWorkflowHardening:
         assert wf["permissions"].get("id-token") != "write"
 
     def test_checkout_and_setup_uv_pinned_to_sha(self):
+        """Retain explicit checkout/setup-uv pin checks (subset of all-uses SHA lock)."""
         wf = self._workflow()
         for job_name in ("lint", "test-and-coverage"):
             for step in wf["jobs"][job_name]["steps"]:
@@ -359,6 +360,31 @@ class TestCiWorkflowHardening:
                     ref = uses.split("@", 1)[1]
                     assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), (
                         f"{job_name}: {uses} must be full commit SHA"
+                    )
+
+    def test_all_uses_are_full_shas(self):
+        """Every third-party action in ci.yml must be full 40-char commit SHA-pinned."""
+        wf = self._workflow()
+        for job_name, job in wf["jobs"].items():
+            for step in job.get("steps", []):
+                uses = step.get("uses")
+                if not uses:
+                    continue
+                assert "@" in uses, f"{job_name}: {uses}"
+                ref = uses.split("@", 1)[1]
+                assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), (
+                    f"{job_name}: action not SHA-pinned: {uses}"
+                )
+
+    def test_checkout_disables_persist_credentials(self):
+        wf = self._workflow()
+        for job_name, job in wf["jobs"].items():
+            for step in job.get("steps", []):
+                uses = step.get("uses", "")
+                if uses.startswith("actions/checkout@"):
+                    with_block = step.get("with") or {}
+                    assert with_block.get("persist-credentials") is False, (
+                        f"{job_name}: checkout must set persist-credentials: false"
                     )
 
     def test_lint_job_exists(self):
@@ -402,7 +428,8 @@ class TestCiWorkflowHardening:
         """Ensure the CI workflow does not configure commit-message preparation hooks."""
         raw = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         assert "prepare-commit-msg" not in raw
-        assert "commit-msg" not in raw or "validate-commit" not in raw
+        assert "commit-msg" not in raw
+        assert "validate-commit" not in raw
 
     def test_concurrency_group_formula_exact(self):
         """The concurrency group formula must exactly match the documented contract."""

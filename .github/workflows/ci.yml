@@ -26,6 +26,7 @@ jobs:
         # actions/checkout@v4.2.2 — full history for --pr base resolution
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Install mise tools
@@ -89,6 +90,8 @@ jobs:
       - name: Checkout repository
         # actions/checkout@v4.2.2
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
 
       - name: Install uv
         # astral-sh/setup-uv@v7.6.0
