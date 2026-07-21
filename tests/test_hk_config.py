@@ -13,12 +13,22 @@ HK_PKL = REPO_ROOT / "hk.pkl"
 
 class TestHkPklContract:
     def _text(self) -> str:
+        """
+        Read and return the hk.pkl file contents.
+        
+        Returns:
+        	str: The UTF-8 text read from the hk.pkl file.
+        """
         return HK_PKL.read_text(encoding="utf-8")
 
     def test_file_exists(self):
         assert HK_PKL.is_file()
 
     def test_min_hk_version(self):
+        """Verify that the configuration specifies the minimum supported hk version.
+        
+        The configuration must declare hk version 1.45.0 as the minimum supported version.
+        """
         text = self._text()
         assert 'min_hk_version = "1.45.0"' in text
 
@@ -84,7 +94,9 @@ class TestHkPklContract:
         assert text.index("min_hk_version") < text.index("local linters")
 
     def test_no_stray_codecov_references_outside_comments(self):
-        """Only the renamed pytest-cov step comment references coverage; no leftover `codecov` step."""
+        """
+        Ensure the configuration contains no stray `codecov` step references.
+        """
         text = self._text()
         assert 'Step {\n    ["codecov"]' not in text
         assert text.count('["codecov"]') == 0

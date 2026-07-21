@@ -22,6 +22,15 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _load_yaml(rel_path: str) -> dict:
+    """
+    Load a YAML file relative to the repository root.
+    
+    Parameters:
+    	rel_path (str): Path to the YAML file relative to the repository root.
+    
+    Returns:
+    	dict: The parsed YAML content, with a boolean `True` key normalised to `"on"` when present.
+    """
     data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
     if isinstance(data, dict) and True in data:
         data["on"] = data.pop(True)
@@ -30,9 +39,15 @@ def _load_yaml(rel_path: str) -> dict:
 
 class TestSecurityWorkflow:
     def _workflow(self) -> dict:
+        """Load and return the security workflow configuration."""
         return _load_yaml(".github/workflows/security.yml")
 
     def _raw(self) -> str:
+        """Read the security workflow file as UTF-8 text.
+        
+        Returns:
+        	str: The raw contents of the security workflow file.
+        """
         return (REPO_ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")
 
     def test_file_is_valid_yaml(self):
@@ -69,6 +84,7 @@ class TestSecurityWorkflow:
         assert "version: latest" not in raw
 
     def test_all_uses_are_full_shas(self):
+        """Verify that every referenced GitHub Action is pinned to a full commit SHA."""
         wf = self._workflow()
         for job in wf["jobs"].values():
             for step in job.get("steps", []):
@@ -100,6 +116,7 @@ class TestSecurityWorkflow:
         assert "head.sha" in head or "github.sha" in head
 
     def test_trufflehog_checkout_fetch_depth_zero(self):
+        """Verify that the TruffleHog checkout fetches the complete repository history."""
         checkout = next(s for s in self._workflow()["jobs"]["trufflehog"]["steps"] if "Checkout" in s.get("name", ""))
         assert checkout["with"]["fetch-depth"] == 0
 
@@ -133,6 +150,7 @@ class TestSecurityWorkflow:
         assert "grype sbom:bom.json --fail-on high" in raw
 
     def test_jobs_do_not_elevate_permissions(self):
+        """Ensure workflow jobs retain read-only contents permissions and do not grant write access."""
         wf = self._workflow()
         for name, job in wf["jobs"].items():
             perms = job.get("permissions", {"contents": "read"})
