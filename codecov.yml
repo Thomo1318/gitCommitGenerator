@@ -1,24 +1,75 @@
+# Codecov configuration for gitCommitGenerator
+# Goals: patch-focused PR comments, component breakdown, GitHub Checks annotations,
+# and less whole-repo noise. Keep top-level patch status free of paths/flags so
+# annotations remain enabled (Codecov GitHub Checks docs).
+
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
 coverage:
   status:
     project:
       default:
-        # Ensure overall project coverage doesn't drop by more than 1%
         target: auto
-        threshold: 1%
+        threshold: 2%
+        if_ci_failed: error
     patch:
       default:
-        # Ensure new code in PRs is reasonably tested
-        target: auto
-        threshold: 1%
+        # New/changed lines bar. No paths/flags here — preserves annotations.
+        target: 80%
+        threshold: 0%
+        if_ci_failed: error
 
 ignore:
-  - "tests/*"
-  - "docs/*"
+  - "tests(/.*)?"
+  - "docs(/.*)?"
+  - "src/evals(/.*)?"
+  - "scripts(/.*)?"
 
 comment:
-  layout: "header, reach, diff, flags, files"
+  # Official condensed layout + components/diff for actionable PR feedback.
+  layout: "condensed_header, components, diff, condensed_files, condensed_footer"
   behavior: default
-  require_changes: false  # Always post a comment, even if coverage doesn't change
+  require_changes: true
+  require_base: false
+  require_head: true
+  hide_project_coverage: true
+  show_carryforward_flags: false
 
-codecov:
-  require_ci_to_pass: yes
+github_checks:
+  annotations: true
+
+component_management:
+  individual_components:
+    - component_id: semantic_core
+      name: semantic-core
+      paths:
+        - src/git_cg/ast_parser.py
+        - src/git_cg/fingerprints.py
+        - src/git_cg/similarity.py
+        - src/git_cg/git_index.py
+        - src/git_cg/graph_context.py
+        - src/git_cg/semantic_flags.py
+    - component_id: telemetry
+      name: telemetry
+      paths:
+        - src/git_cg/telemetry.py
+        - src/git_cg/sentry_config.py
+    - component_id: cli_main
+      name: cli-main
+      paths:
+        - src/git_cg/main.py
+    - component_id: intent_ranker
+      name: intent-ranker
+      paths:
+        - src/git_cg/intent.py
+        - src/git_cg/regeneration.py
+        - src/git_cg/models.py
+        - src/git_cg/sop.py
+
+# Flags reserved for a future CI split (unit vs integration). Single upload today.
+flag_management:
+  default_rules:
+    carryforward: true

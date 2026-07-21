@@ -113,12 +113,12 @@ class TestCiWorkflowCodecovStep:
         step = self._codecov_step()
         assert step["with"]["files"] == "./coverage.xml"
 
-    def test_token_and_error_handling_preserved(self):
-        """Token and failure-handling settings must be unaffected by the version bump."""
+    def test_token_and_error_handling(self):
+        """Token and failure-handling settings must be configured correctly."""
         step = self._codecov_step()
         assert step["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
-        assert step["with"]["fail_ci_if_error"] is False
-        assert step.get("continue-on-error") is True
+        assert step["with"]["fail_ci_if_error"] is True
+        assert "continue-on-error" not in step
 
     def test_codecov_step_runs_after_test_step(self):
         """The Codecov upload step must remain the final step, after running tests."""
