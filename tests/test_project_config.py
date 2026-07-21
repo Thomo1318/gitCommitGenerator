@@ -498,6 +498,14 @@ class TestMiseQualityPinsAndTasks:
         tools = _load_mise()["tools"]
         assert tools["hk"] == "1.51.0"
 
+    def test_security_floor_constraints(self):
+        """Grype high findings floors for transitive deps must stay declared."""
+        text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        assert "constraint-dependencies" in text
+        assert "pillow>=12.3.0" in text
+        assert "aiohttp>=3.14.1" in text
+        assert "pydantic-settings>=2.14.2" in text
+
     def test_tools_have_no_floating_latest(self):
         """Security-relevant and DX tools must not float on latest in mise.toml [tools]."""
         text = (REPO_ROOT / "mise.toml").read_text(encoding="utf-8")
