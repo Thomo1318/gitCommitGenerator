@@ -22,6 +22,15 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _load_yaml(rel_path: str) -> dict:
+    """
+    Load a YAML file relative to the repository root.
+    
+    Parameters:
+    	rel_path (str): Relative path to the YAML file.
+    
+    Returns:
+    	dict: Parsed YAML content, with a boolean `on` key normalised to the string `"on"`.
+    """
     data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
     if isinstance(data, dict) and True in data:
         data["on"] = data.pop(True)
@@ -30,9 +39,15 @@ def _load_yaml(rel_path: str) -> dict:
 
 class TestSecurityWorkflow:
     def _workflow(self) -> dict:
+        """Load the security workflow configuration from YAML.
+        
+        Returns:
+        	dict: The parsed security workflow configuration.
+        """
         return _load_yaml(".github/workflows/security.yml")
 
     def _raw(self) -> str:
+        """Read the security workflow file as text."""
         return (REPO_ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")
 
     def test_file_is_valid_yaml(self):
@@ -57,6 +72,9 @@ class TestSecurityWorkflow:
         assert "trufflesecurity/trufflehog@master" not in raw
 
     def test_no_curl_pipe_sh_installers(self):
+        """
+        Ensure the security workflow does not use shell-piped curl installers.
+        """
         raw = self._raw()
         assert "curl" not in raw or "| sh" not in raw
         assert "install.sh | sh" not in raw
@@ -64,6 +82,7 @@ class TestSecurityWorkflow:
 
     def test_no_latest_scanner_tags_in_workflow(self):
         # workflow must not install tools at floating latest; pins live in mise.toml
+        """Ensure the workflow does not install scanner tools using floating `latest` versions."""
         raw = self._raw()
         assert 'version: "latest"' not in raw
         assert "version: latest" not in raw
@@ -126,6 +145,7 @@ class TestSecurityWorkflow:
         assert upload["if"] == "${{ env.ACT != 'true' }}"
 
     def test_sbom_outputs_and_scans_preserved(self):
+        """Verify that SBOM generation outputs and security scan commands remain present in the workflow."""
         raw = self._raw()
         assert "bom.json" in raw
         assert "bom.syft.json" in raw
@@ -133,6 +153,7 @@ class TestSecurityWorkflow:
         assert "grype sbom:bom.json --fail-on high" in raw
 
     def test_jobs_do_not_elevate_permissions(self):
+        """Verify that each workflow job uses read-only contents permissions without write access."""
         wf = self._workflow()
         for name, job in wf["jobs"].items():
             perms = job.get("permissions", {"contents": "read"})
