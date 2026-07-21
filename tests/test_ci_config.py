@@ -319,6 +319,11 @@ class TestCiWorkflowHardening:
     """Issue #170 residual CI contracts: concurrency, OIDC scope, hk parity."""
 
     def _workflow(self) -> dict:
+        """Load the CI workflow configuration from its repository YAML file.
+        
+        Returns:
+        	dict: The parsed CI workflow configuration.
+        """
         return _load_yaml(".github/workflows/ci.yml")
 
     def test_workflow_concurrency_group(self):
@@ -331,6 +336,7 @@ class TestCiWorkflowHardening:
         assert wf["concurrency"].get("cancel-in-progress") is True
 
     def test_top_level_permissions_contents_read(self):
+        """Ensure the workflow grants top-level read access to repository contents."""
         wf = self._workflow()
         assert wf["permissions"]["contents"] == "read"
 
@@ -359,6 +365,7 @@ class TestCiWorkflowHardening:
         assert "lint" in self._workflow()["jobs"]
 
     def _lint_steps(self) -> list:
+        """Return the steps configured for the lint job."""
         return self._workflow()["jobs"]["lint"]["steps"]
 
     def test_lint_runs_hk_validate(self):
@@ -387,10 +394,12 @@ class TestCiWorkflowHardening:
         assert "pull_request" in step.get("if", "")
 
     def test_lint_fetch_depth_zero(self):
+        """Verify that the lint job checks out the repository with full history."""
         checkout = next(s for s in self._lint_steps() if s.get("name") == "Checkout repository")
         assert checkout["with"]["fetch-depth"] == 0
 
     def test_no_prepare_commit_msg_in_ci(self):
+        """Ensure the CI workflow does not configure commit-message preparation hooks."""
         raw = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         assert "prepare-commit-msg" not in raw
         assert "commit-msg" not in raw or "validate-commit" not in raw
@@ -413,7 +422,9 @@ class TestCiWorkflowHardening:
         assert set(wf["permissions"].keys()) == {"contents"}
 
     def test_lint_job_permissions_only_contents(self):
-        """The lint job must not inherit or request any elevated permissions."""
+        """
+        Verify that the lint job grants only read access to repository contents.
+        """
         wf = self._workflow()
         lint_perms = wf["jobs"]["lint"].get("permissions", {})
         assert set(lint_perms.keys()) == {"contents"}
@@ -474,6 +485,7 @@ class TestCodecovYmlContracts:
     """Lock landed #169 Codecov semantics without brittle full-file snapshots."""
 
     def _cfg(self) -> dict:
+        """Load the Codecov configuration as a dictionary."""
         return _load_yaml("codecov.yml")
 
     def test_hide_project_coverage_and_require_head(self):

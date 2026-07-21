@@ -20,6 +20,7 @@ class TestDevelopmentMdCanonicalQualitySection:
     """Tests for the new '📏 Canonical quality commands' section."""
 
     def _content(self) -> str:
+        """Read and return the contents of the development documentation file."""
         return DEVELOPMENT_MD.read_text(encoding="utf-8")
 
     def test_file_exists(self):
@@ -95,6 +96,7 @@ class TestDevelopmentMdGitHooksSectionUpdated:
     """The pre-commit hook description must reflect the fast/slow profile split."""
 
     def _content(self) -> str:
+        """Read and return the contents of the development documentation file."""
         return DEVELOPMENT_MD.read_text(encoding="utf-8")
 
     def test_pre_commit_description_mentions_fast_local_path(self):
@@ -117,6 +119,7 @@ class TestDevelopmentMdContributionWorkflowUpdated:
     """The contribution workflow must reference the new canonical mise tasks."""
 
     def _content(self) -> str:
+        """Read and return the contents of the development documentation file."""
         return DEVELOPMENT_MD.read_text(encoding="utf-8")
 
     def test_contribution_step_references_mise_run_lint_and_test(self):
@@ -137,6 +140,11 @@ class TestAdr0002Update4Section:
     """Tests for 'Update 4: betterleaks-local / TruffleHog-CI pin posture (v1.4.0)'."""
 
     def _content(self) -> str:
+        """Read and return the ADR content as UTF-8 text.
+        
+        Returns:
+        	str: The contents of the ADR document.
+        """
         return ADR_0002.read_text(encoding="utf-8")
 
     def test_file_exists(self):
