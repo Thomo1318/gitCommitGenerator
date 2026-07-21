@@ -331,6 +331,7 @@ class TestCiWorkflowHardening:
         assert wf["concurrency"].get("cancel-in-progress") is True
 
     def test_top_level_permissions_contents_read(self):
+        """Ensure the workflow grants top-level read access to repository contents."""
         wf = self._workflow()
         assert wf["permissions"]["contents"] == "read"
 
@@ -387,6 +388,7 @@ class TestCiWorkflowHardening:
         assert "pull_request" in step.get("if", "")
 
     def test_lint_fetch_depth_zero(self):
+        """Verify that the lint job checks out the repository with full history."""
         checkout = next(s for s in self._lint_steps() if s.get("name") == "Checkout repository")
         assert checkout["with"]["fetch-depth"] == 0
 
@@ -405,6 +407,7 @@ class TestCodecovYmlContracts:
     """Lock landed #169 Codecov semantics without brittle full-file snapshots."""
 
     def _cfg(self) -> dict:
+        """Load and return the parsed Codecov configuration."""
         return _load_yaml("codecov.yml")
 
     def test_hide_project_coverage_and_require_head(self):
