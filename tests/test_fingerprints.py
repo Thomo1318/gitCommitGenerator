@@ -12,12 +12,12 @@ from git_cg.fingerprints import (
 
 def _py(src: str) -> bytes:
     """Encode Python source text as UTF-8 bytes.
-    
+
     Parameters:
-    	src (str): Python source text to encode.
-    
+        src (str): Python source text to encode.
+
     Returns:
-    	bytes: The UTF-8 encoded source text.
+        bytes: The UTF-8 encoded source text.
     """
     return src.encode("utf-8")
 
@@ -153,3 +153,62 @@ def test_node_overflow_skips_hash_equality():
     assert result.baseline_fps is not None and result.staged_fps is not None
     assert result.baseline_fps.overflowed is True
     assert result.staged_fps.overflowed is True
+
+
+def test_file_fingerprint_result_to_dict_includes_nested_fps():
+    src = _py("def foo():\n    return 1\n")
+    result = compare_file_fingerprints("m.py", baseline_source=src, staged_source=src)
+    payload = result.to_dict()
+    assert payload["classification"] == "noop"
+    assert payload["baseline_fps"] is not None
+    assert "shape_fp" in payload["baseline_fps"]
+    assert payload["baseline_fps"].get("overflowed") is False
+
+
+def test_batch_to_dict_and_empty_metrics():
+    batch = compare_fingerprint_sets(baseline_files={}, staged_files={})
+    payload = batch.to_dict()
+    assert "results" in payload and "metrics" in payload
+    empty = empty_fingerprint_metrics()
+    assert empty["fingerprint_files_compared"] == 0
+    assert empty["body_similarity_min"] is None
+
+
+def test_both_missing_skipped():
+    result = compare_file_fingerprints("x.py", baseline_source=None, staged_source=None)
+    assert result.classification == FingerprintClass.SKIPPED
+    assert result.reason == "both_missing"
+
+
+def test_identifier_only_without_similarity_metric():
+    classification, markers = classify_fingerprint_equality(
+        shape_eq=True, code_eq=False, text_eq=False, similarity=None
+    )
+    assert classification == FingerprintClass.IDENTIFIER_OR_LITERAL_ONLY
+    assert "identifier_or_literal_only" in markers
+
+
+def test_inconsistent_shape_ne_code_eq():
+    classification, markers = classify_fingerprint_equality(shape_eq=False, code_eq=True, text_eq=False, similarity=0.1)
+    assert classification == FingerprintClass.INCONSISTENT
+    assert "fingerprint_inconsistent" in markers
+
+
+def test_collect_fingerprints_from_source_tree_unavailable(monkeypatch):
+    from git_cg import fingerprints as fp_mod
+    from git_cg.ast_parser import ParseResult, ParseStatus
+
+    def fake_parse(path, source, language=None):
+        return ParseResult(
+            path=path,
+            language="python",
+            status=ParseStatus.SUCCESS,
+            root_type="module",
+            tree=None,
+        )
+
+    monkeypatch.setattr(fp_mod, "parse_source", fake_parse)
+    triple, lang, err = fp_mod.collect_fingerprints_from_source("m.py", b"def x():\n    return 1\n")
+    assert triple is None
+    assert lang == "python"
+    assert err == "parse tree unavailable"
