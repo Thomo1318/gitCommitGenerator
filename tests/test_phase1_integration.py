@@ -272,7 +272,7 @@ def test_write_telemetry_state_safe_records_phase2_fingerprint_fields(tmp_path, 
         return "." if kwargs.get("text") else b"."
 
     monkeypatch.setattr(main_mod.subprocess, "check_output", fake_check_output)
-    main_mod.LAST_OPIK_TRACE_ID = "trace-phase2"
+    monkeypatch.setattr(main_mod, "LAST_OPIK_TRACE_ID", "trace-phase2")
 
     main_mod._write_telemetry_state_safe(
         review_state=review_state,
