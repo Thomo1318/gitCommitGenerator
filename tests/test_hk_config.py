@@ -12,10 +12,18 @@ HK_PKL = REPO_ROOT / "hk.pkl"
 
 
 def _step_block(text: str, step_name: str) -> str:
-    """Return the body of a `["name"] { ... }` block using brace matching.
-
-    Nested braces (hooks embedding further mappings) cannot terminate the match
-    early. The returned body excludes the outer braces.
+    """
+    Extract the body of a named step block using brace matching.
+    
+    Parameters:
+        text (str): Text containing the step block.
+        step_name (str): Name of the step block to extract.
+    
+    Returns:
+        str: Contents of the block excluding its outer braces.
+    
+    Raises:
+        AssertionError: If the block or its matching braces cannot be found.
     """
     needle = f'["{step_name}"]'
     start = text.find(needle)
@@ -37,7 +45,16 @@ def _step_block(text: str, step_name: str) -> str:
 
 
 def _hook_maps_to_linters(text: str, hook_name: str) -> bool:
-    """True when hooks["name"] assigns steps = linters (brace-aware; ignores // comments)."""
+    """
+    Determine whether a hook assigns the shared linters steps.
+    
+    Parameters:
+        text (str): The configuration text containing the hook definition.
+        hook_name (str): The name of the hook to inspect.
+    
+    Returns:
+        bool: `True` if the hook assigns `steps = linters`, `False` otherwise.
+    """
     body = _step_block(text, hook_name)
     for line in body.splitlines():
         code = line.split("//", 1)[0].strip()
@@ -67,6 +84,7 @@ class TestHkPklContract:
         assert 'min_hk_version = "1.45.0"' in text
 
     def test_amends_exact_package_aligned_with_mise_pin(self):
+        """Verify that the hk package reference matches the pinned version and excludes the older version."""
         text = self._text()
         # Exact Pkl package version must match mise.toml hk pin (1.51.0).
         assert "hk/releases/download/v1.51.0/hk@1.51.0" in text
