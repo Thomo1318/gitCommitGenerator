@@ -7,10 +7,77 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# Cancel superseded runs for the same PR/ref while keeping unique run_id fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
+  lint:
+    name: hk validate & check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        # actions/checkout@v4.2.2 — full history for --pr base resolution
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Install mise tools
+        # jdx/mise-action@v4.2.1 — exact hk pin from mise.toml
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
+        with:
+          install: true
+          cache: true
+
+      - name: Install uv
+        # astral-sh/setup-uv@v7.6.0
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        # ruff comes from the project env (used by hk steps).
+        run: uv sync --all-extras --dev
+
+      - name: hk validate
+        run: hk validate
+
+      - name: hk check (pull_request)
+        if: github.event_name == 'pull_request'
+        env:
+          # Defence in depth: never run slow cov, secrets scanner, or mutating doc gens in CI lint.
+          HK_SKIP_STEPS: pytest-cov,betterleaks,gen-docs,gen-toc
+        run: >-
+          hk check
+          --check
+          --no-stage
+          --pr
+          --fail-fast
+          --no-progress
+
+      - name: hk check (push / workflow_dispatch)
+        if: github.event_name != 'pull_request'
+        env:
+          HK_SKIP_STEPS: pytest-cov,betterleaks,gen-docs,gen-toc
+        # Do not use --pr alone on push/dispatch (can become a no-op delta).
+        run: >-
+          hk check
+          --check
+          --no-stage
+          --all
+          --fail-fast
+          --no-progress
+
   test-and-coverage:
     name: Run Tests & Upload Coverage
     runs-on: ubuntu-latest
@@ -20,10 +87,12 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        # actions/checkout@v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        # astral-sh/setup-uv@v7.6.0
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -58,10 +127,15 @@ jobs:
           --cov-report=term-missing:skip-covered
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        # Same-repo only. Fork PRs skip upload so tests stay green without a pending required check.
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        # codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238
         with:
           files: ./coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           name: pytest
           fail_ci_if_error: true
           verbose: true

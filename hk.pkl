@@ -1,5 +1,9 @@
-amends "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v1.45.0/hk@1.45.0#/Builtins.pkl"
+amends "package://github.com/jdx/hk/releases/download/v1.51.0/hk@1.51.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.51.0/hk@1.51.0#/Builtins.pkl"
+
+// Minimum hk binary version. Keep intentionally aligned with the Pkl package amend
+// and the exact `hk` pin in mise.toml.
+min_hk_version = "1.45.0"
 
 local linters = new Mapping<String, Step> {
     ["ruff"] = Builtins.ruff
@@ -22,7 +26,10 @@ local linters = new Mapping<String, Step> {
         fix = "npx doctoc {{ files }} --notitle"
     }
 
-    ["codecov"] {
+    // Slow-only coverage verification. Default pre-commit stays fast.
+    // Enable with: hk check --slow   or   HK_PROFILE=slow
+    ["pytest-cov"] {
+        profiles = List("slow")
         // Align with CI / pyproject: scope to package, branch coverage, XML for Codecov.
         check = "uv run pytest --cov=src/git_cg --cov-branch --cov-report=xml --cov-report=term-missing:skip-covered"
     }
