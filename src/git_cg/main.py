@@ -1131,19 +1131,13 @@ def _collect_semantic_producer_metrics(
     if not semantic_enabled:
         return result
 
-    from git_cg.ast_parser import parse_files
-    from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
-    from git_cg.git_index import read_head_sources, read_staged_sources, should_refresh_graph
-    from git_cg.graph_context import (
-        collect_graph_telemetry,
-        graph_stats,
-        refresh_graph,
-    )
-
     # Parser stage — isolated so later producer failures keep parse metrics.
     semantic_parser_metrics: dict | None = None
     staged_files: dict = {}
     try:
+        from git_cg.ast_parser import parse_files
+        from git_cg.git_index import read_staged_sources
+
         staged = read_staged_sources(repo_root)
         staged_files = dict(staged.files)
         if staged.files:
@@ -1174,6 +1168,9 @@ def _collect_semantic_producer_metrics(
 
     # Fingerprint stage — isolated from parser success and graph failures.
     try:
+        from git_cg.fingerprints import compare_fingerprint_sets, empty_fingerprint_metrics
+        from git_cg.git_index import read_head_sources
+
         if staged_files:
             head = read_head_sources(repo_root, paths=list(staged_files.keys()))
             fp_batch = compare_fingerprint_sets(
@@ -1217,6 +1214,13 @@ def _collect_semantic_producer_metrics(
 
     # Graph stage — failures only clear graph-related fields.
     try:
+        from git_cg.git_index import should_refresh_graph
+        from git_cg.graph_context import (
+            collect_graph_telemetry,
+            graph_stats,
+            refresh_graph,
+        )
+
         build_result = None
         if should_refresh_graph():
             build_result = refresh_graph(repo_root=repo_root, full_rebuild=False, postprocess="minimal")
