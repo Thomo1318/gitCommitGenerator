@@ -164,13 +164,20 @@ def _sha16(parts: list[str]) -> str:
     """
     Create a stable 16-character hexadecimal SHA-256 fingerprint from text parts.
 
+    Each part is length-prefixed before hashing so boundaries stay unambiguous
+    even when a part contains the former "|" separator character.
+
     Parameters:
         parts (list[str]): Text components to join and hash.
 
     Returns:
         str: The first 16 hexadecimal characters of the SHA-256 digest.
     """
-    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+    # length-prefix each UTF-8 part: "<byte_len>:<bytes>" joined without ambiguity
+    encoded = b"".join(
+        f"{len(part_bytes)}:".encode("ascii") + part_bytes for part_bytes in (part.encode("utf-8") for part in parts)
+    )
+    return hashlib.sha256(encoded).hexdigest()[:16]
 
 
 def collect_fingerprints(
