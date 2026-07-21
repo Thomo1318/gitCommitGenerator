@@ -12,10 +12,10 @@ An awe-inspiring, hyper-realistic macro shot of a massive, two-tiered security s
 adr_number: "0002"
 title: "Adopt Gitleaks and TruffleHog for Two-Tier Secret Scanning"
 status: "Accepted"
-version: "v1.3.0"
+version: "v1.4.0"
 date: "2026-06-07"
 created: "2026-06-07 12:00:00"
-modified: "2026-07-02 20:47:00"
+modified: "2026-07-21 19:01:45"
 risk_level: "High"
 reversibility: "Low"
 security_scope: "Project"
@@ -165,12 +165,31 @@ As part of our holistic approach to supply chain security, we have transitioned 
 
 ### Current posture
 
-| Layer                   | Tool                              | Notes                                                                                 |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------- |
-| Local pre-commit (fast) | **betterleaks** via `hk.pkl`      | Staged-path secrets scan; not a substitute for CI deep scan                           |
-| CI secrets (deep)       | **TruffleHog** GitHub Action      | Action commit **SHA-pinned** + scanner **version** pinned; per-event base/head ranges |
-| SBOM / vuln / license   | **Syft / Grype / Grant** via mise | Exact versions in `mise.toml`; no `curl \| sh` installers in CI                       |
-| Coverage upload         | **Codecov** OIDC                  | Same-repo `use_oidc: true`; fork PRs skip upload                                      |
+| Layer                   | Tool                                    | Notes                                                                                 |
+| ----------------------- | --------------------------------------- | ------------------------------------------------------------------------------------- |
+| Local pre-commit (fast) | **betterleaks** via `hk.pkl` + mise pin | Staged-path secrets scan; not a substitute for deep verification                      |
+| Local deep scan (opt.)  | **TruffleHog CLI** via mise             | Same OSS engine as CI; free/portable; no cloud account; see invocation below          |
+| CI secrets (deep)       | **TruffleHog** GitHub Action            | Action commit **SHA-pinned** + scanner **version** pinned; per-event base/head ranges |
+| SBOM / vuln / license   | **Syft / Grype / Grant** via mise       | Exact versions in `mise.toml`; no `curl \| sh` installers in CI                       |
+| Coverage upload         | **Codecov** OIDC                        | Same-repo `use_oidc: true`; fork PRs skip upload                                      |
+
+### Local TruffleHog CLI (portability)
+
+CI remains the authoritative deep scan (GitHub Action). Contributors can reproduce the same **open-source** TruffleHog engine locally without cloud accounts or paid subscriptions:
+
+```bash
+# Project pin lives in mise.toml (trufflehog = "3.95.9"); install with the toolchain:
+mise install
+
+# Repo-local deep scan (verified findings only; mirrors CI extra_args posture)
+trufflehog git file://"$PWD" --only-verified
+```
+
+Notes:
+
+- Local CLI and CI Action both run **TruffleHog OSS**; CI pins Action SHA + `version: "3.95.9"`.
+- Prefer matching the CI scanner version (`3.95.9`) when installing the CLI so local/CI findings stay comparable.
+- `betterleaks` stays the **fast pre-commit** gate; TruffleHog remains the **deep** verifier (CI always; local optional).
 
 ### Pin bar
 
@@ -188,7 +207,7 @@ As part of our holistic approach to supply chain security, we have transitioned 
 
 ## CHANGELOG
 
-- v1.4.0 (2026-07-21): Documented betterleaks-local / TruffleHog-CI dual posture, Action+payload pin bar, mise-pinned Anchore tools, and Codecov same-repo OIDC (Issue #170).
+- v1.4.0 (2026-07-21): Documented betterleaks-local / TruffleHog-CI dual posture, local mise-managed TruffleHog CLI portability path, Action+payload pin bar, mise-pinned Anchore tools, and Codecov same-repo OIDC (Issue #170).
 - v1.0.0 (2026-06-07 12:00:00): Initial drafting and finalization of the two-tier secret scanning strategy using Gitleaks and TruffleHog.
 - v1.1.0 (2026-06-18): Replaced Snyk with GitHub CodeQL and Dependabot to resolve execution limits; documented the addition of tokenless Codecov for coverage metrics.
 - v1.2.0 (2026-06-18): Proposed the future migration from Gitleaks and TruffleHog to BetterLeaks for unified secret scanning and active verification.
