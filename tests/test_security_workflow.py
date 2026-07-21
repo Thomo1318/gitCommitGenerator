@@ -24,12 +24,12 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 def _load_yaml(rel_path: str) -> dict:
     """
     Load a YAML file relative to the repository root.
-    
+
     Parameters:
-    	rel_path (str): Path to the YAML file relative to the repository root.
-    
+        rel_path (str): Path to the YAML file relative to the repository root.
+
     Returns:
-    	dict: The parsed YAML content, with a boolean `True` key normalised to `"on"` when present.
+        dict: The parsed YAML content, with a boolean `True` key normalised to `"on"` when present.
     """
     data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
     if isinstance(data, dict) and True in data:
@@ -44,16 +44,13 @@ class TestSecurityWorkflow:
 
     def _raw(self) -> str:
         """Read the security workflow file as UTF-8 text.
-        
+
         Returns:
-        	str: The raw contents of the security workflow file.
+            str: The raw contents of the security workflow file.
         """
         return (REPO_ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")
 
     def test_file_is_valid_yaml(self):
-        """
-        Verify that the security workflow parses as a dictionary.
-        """
         assert isinstance(self._workflow(), dict)
 
     def test_concurrency_group_formula(self):
@@ -65,13 +62,11 @@ class TestSecurityWorkflow:
         assert wf["concurrency"].get("cancel-in-progress") is True
 
     def test_top_level_permissions_contents_read_only(self):
-        """Verify that the workflow grants only read access to repository contents at the top level."""
         perms = self._workflow()["permissions"]
         assert perms.get("contents") == "read"
         assert set(perms.keys()) == {"contents"}
 
     def test_no_mutable_trufflehog_main(self):
-        """Ensure the workflow does not use mutable TruffleHog branch references."""
         raw = self._raw()
         assert "trufflesecurity/trufflehog@main" not in raw
         assert "trufflesecurity/trufflehog@master" not in raw
@@ -89,7 +84,6 @@ class TestSecurityWorkflow:
         assert "version: latest" not in raw
 
     def test_checkout_disables_persist_credentials(self):
-        """Verify that every checkout action disables credential persistence."""
         wf = self._workflow()
         for job_name, job in wf["jobs"].items():
             for step in job.get("steps", []):
@@ -113,9 +107,6 @@ class TestSecurityWorkflow:
                 assert SHA40.match(ref), f"Action not SHA-pinned: {uses}"
 
     def test_trufflehog_version_pinned(self):
-        """
-        Verify that the TruffleHog action uses version 3.95.9 and a full commit SHA.
-        """
         step = None
         for s in self._workflow()["jobs"]["trufflehog"]["steps"]:
             if s.get("name") == "TruffleHog OSS":
@@ -194,9 +185,7 @@ class TestSecurityWorkflow:
 
     def test_sbom_mise_action_installs_and_caches(self):
         """The sbom job's mise-action step must enable install and cache."""
-        step = next(
-            s for s in self._workflow()["jobs"]["sbom"]["steps"] if s.get("name") == "Install mise tools"
-        )
+        step = next(s for s in self._workflow()["jobs"]["sbom"]["steps"] if s.get("name") == "Install mise tools")
         assert step["uses"].startswith("jdx/mise-action@")
         assert step["with"]["install"] is True
         assert step["with"]["cache"] is True
@@ -231,9 +220,7 @@ class TestSecurityWorkflow:
     def test_trufflehog_checkout_and_sbom_checkout_use_pinned_checkout(self):
         """Both jobs must checkout via the same SHA-pinned actions/checkout ref."""
         wf = self._workflow()
-        trufflehog_checkout = next(
-            s for s in wf["jobs"]["trufflehog"]["steps"] if s.get("name") == "Checkout code"
-        )
+        trufflehog_checkout = next(s for s in wf["jobs"]["trufflehog"]["steps"] if s.get("name") == "Checkout code")
         sbom_checkout = next(s for s in wf["jobs"]["sbom"]["steps"] if s.get("name") == "Checkout code")
         assert trufflehog_checkout["uses"] == sbom_checkout["uses"]
         assert trufflehog_checkout["uses"].startswith("actions/checkout@")

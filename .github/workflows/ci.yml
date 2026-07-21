@@ -35,19 +35,21 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.base_ref }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          base_ref="${{ github.base_ref }}"
           # checkout has persist-credentials: false — use the job token for this fetch only.
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-          git fetch --no-tags --depth=1 origin "refs/heads/${base_ref}:refs/remotes/origin/${base_ref}"
-          git remote set-url origin "https://github.com/${{ github.repository }}.git"
+          # github.* expressions are injected via env (not embedded in the shell script body).
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git remote set-url origin "https://github.com/${REPO}.git"
           # hk --pr resolves DEFAULT_BRANCH (often bare "main"); create a local ref.
-          if ! git show-ref --verify --quiet "refs/heads/${base_ref}"; then
-            git branch --force "${base_ref}" "origin/${base_ref}"
+          if ! git show-ref --verify --quiet "refs/heads/${BASE_REF}"; then
+            git branch --force "${BASE_REF}" "origin/${BASE_REF}"
           fi
-          git rev-parse --verify "origin/${base_ref}"
-          git rev-parse --verify "${base_ref}"
+          git rev-parse --verify "origin/${BASE_REF}"
+          git rev-parse --verify "${BASE_REF}"
 
       - name: Install mise tools
         # jdx/mise-action@v4.2.1 — exact hk pin from mise.toml

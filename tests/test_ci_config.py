@@ -327,7 +327,6 @@ class TestCiWorkflowHardening:
         return _load_yaml(".github/workflows/ci.yml")
 
     def test_workflow_concurrency_group(self):
-        """Verify that the CI workflow defines a cancellable concurrency group using workflow and event identifiers."""
         wf = self._workflow()
         assert "concurrency" in wf
         group = wf["concurrency"]["group"]
@@ -342,7 +341,6 @@ class TestCiWorkflowHardening:
         assert wf["permissions"]["contents"] == "read"
 
     def test_id_token_write_only_on_coverage_job(self):
-        """Verify that OIDC token write permission is limited to the coverage job."""
         wf = self._workflow()
         cov_perms = wf["jobs"]["test-and-coverage"]["permissions"]
         assert cov_perms.get("id-token") == "write"
@@ -379,7 +377,6 @@ class TestCiWorkflowHardening:
                 )
 
     def test_checkout_disables_persist_credentials(self):
-        """Verify that every checkout action disables credential persistence."""
         wf = self._workflow()
         for job_name, job in wf["jobs"].items():
             for step in job.get("steps", []):
@@ -391,7 +388,6 @@ class TestCiWorkflowHardening:
                     )
 
     def test_lint_job_exists(self):
-        """Verify that the CI workflow defines a lint job."""
         assert "lint" in self._workflow()["jobs"]
 
     def _lint_steps(self) -> list:
@@ -432,10 +428,18 @@ class TestCiWorkflowHardening:
         steps = self._lint_steps()
         step = next(s for s in steps if s.get("name") == "Fetch PR base branch for hk --pr")
         assert step.get("if") == "github.event_name == 'pull_request'"
+        env = step.get("env") or {}
+        # GitHub expressions must live in env, not interpolated inside run.
+        assert env.get("BASE_REF") is not None or "BASE_REF" in env
+        assert "REPO" in env
+        assert "GH_TOKEN" in env
+        assert "BASE_REF" in env
         run = step["run"]
         assert "git fetch" in run
-        assert "github.base_ref" in str(step) or "${base_ref}" in run or "base_ref" in run
         assert "refs/remotes/origin/" in run
+        assert "${BASE_REF}" in run
+        assert "${REPO}" in run
+        assert "${{ github." not in run
         # Must run before hk check PR step
         names = [s.get("name") for s in steps]
         assert names.index("Fetch PR base branch for hk --pr") < names.index("hk check (pull_request)")
@@ -533,7 +537,6 @@ class TestCodecovYmlContracts:
         return _load_yaml("codecov.yml")
 
     def test_hide_project_coverage_and_require_head(self):
-        """Verify that Codecov hides project coverage and requires head and change data."""
         comment = self._cfg()["comment"]
         assert comment.get("hide_project_coverage") is True
         assert comment.get("require_head") is True
@@ -560,9 +563,6 @@ class TestCodecovYmlContracts:
         }
 
     def test_root_patch_has_no_paths_or_flags(self):
-        """
-        Verify that the root patch coverage configuration specifies an 80% target without paths or flags.
-        """
         patch_default = self._cfg()["coverage"]["status"]["patch"]["default"]
         assert "paths" not in patch_default
         assert "flags" not in patch_default
