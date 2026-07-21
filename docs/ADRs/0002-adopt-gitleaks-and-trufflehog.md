@@ -157,8 +157,38 @@ As part of our holistic approach to supply chain security, we have transitioned 
 
 ---
 
+---
+
+## V. Update 4: betterleaks-local / TruffleHog-CI pin posture (v1.4.0)
+
+> Append-only clarification for Issue #170. Historical gitleaks text above is preserved.
+
+### Current posture
+
+| Layer                   | Tool                              | Notes                                                                                 |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------- |
+| Local pre-commit (fast) | **betterleaks** via `hk.pkl`      | Staged-path secrets scan; not a substitute for CI deep scan                           |
+| CI secrets (deep)       | **TruffleHog** GitHub Action      | Action commit **SHA-pinned** + scanner **version** pinned; per-event base/head ranges |
+| SBOM / vuln / license   | **Syft / Grype / Grant** via mise | Exact versions in `mise.toml`; no `curl \| sh` installers in CI                       |
+| Coverage upload         | **Codecov** OIDC                  | Same-repo `use_oidc: true`; fork PRs skip upload                                      |
+
+### Pin bar
+
+- Third-party Actions touched by security/CI workflows use **full commit SHAs**
+- Scanner **payload** versions are pinned independently of Action tags (TruffleHog `version:` input)
+- Floating `@main` / tool `latest` is rejected for TruffleHog and the Anchore trio in CI
+
+### References
+
+- Issue #170 — Codecov PR signal, hk CI parity, and pipeline hardening
+- [hk configuration](https://hk.jdx.dev/configuration.html)
+- [TruffleHog GitHub Action](https://github.com/trufflesecurity/trufflehog)
+
+---
+
 ## CHANGELOG
 
+- v1.4.0 (2026-07-21): Documented betterleaks-local / TruffleHog-CI dual posture, Action+payload pin bar, mise-pinned Anchore tools, and Codecov same-repo OIDC (Issue #170).
 - v1.0.0 (2026-06-07 12:00:00): Initial drafting and finalization of the two-tier secret scanning strategy using Gitleaks and TruffleHog.
 - v1.1.0 (2026-06-18): Replaced Snyk with GitHub CodeQL and Dependabot to resolve execution limits; documented the addition of tokenless Codecov for coverage metrics.
 - v1.2.0 (2026-06-18): Proposed the future migration from Gitleaks and TruffleHog to BetterLeaks for unified secret scanning and active verification.

@@ -121,18 +121,72 @@ We enforce strict linting and formatting using `ruff` and type-checking via `pyr
 Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 
 - **`commit-msg`**: Strict validation of your commit message format. It runs `scripts/validate_commit.mjs` and enforces Gitmoji, Conventional Commits, and the 72-character limit.
-- **`pre-commit`**: Automatically runs `gitleaks` and other pre-commit checks.
+- **`pre-commit`**: Fast local path — `ruff`, `ruff-format`, `betterleaks` (local secrets), and doc generators. Full pytest coverage is **slow-profile only** (`hk check --slow` / `mise run cov`), not default pre-commit.
 
 > **Important Editor Warning**: If you use an interactive GUI editor (like VS Code or Cursor) for your git commits, you must ensure it runs in a blocking mode (e.g., `code --wait`). Otherwise, the editor will return instantly and cause the `hk` stash mechanisms to lock the git index unexpectedly. See the "Feature Spotlight" in the README for details.
 
 ---
+
+
+---
+
+## 📏 Canonical quality commands (`mise` vs `just`)
+
+> **Do not redefine** `just lint` / `just test`. Their historical meanings stay:
+>
+> | Command | Meaning (unchanged) |
+> | --- | --- |
+> | `just lint` | Zsh syntax check of legacy scripts |
+> | `just test` | Temporary-repo `git-cg` smoke dry-run |
+>
+> Canonical CI/DX commands live in **`mise`**:
+
+| Command | Meaning |
+| --- | --- |
+| `mise run lint` | Read-only fast lint (CI-shaped): `hk validate` + `hk check --check --no-stage --all` with `HK_SKIP_STEPS=pytest-cov,betterleaks,gen-docs,gen-toc` |
+| `mise run test` | Full project `pytest` suite |
+| `mise run cov` | Slow coverage verification (`--cov=src/git_cg --cov-branch`) |
+| `mise run security` | Optional local SBOM + Grant + Grype |
+
+### `hk` profiles
+
+* **Fast (default pre-commit):** ruff, ruff-format, betterleaks, gen-docs, gen-toc
+* **Slow:** `pytest-cov` only when `hk check --slow` / `HK_PROFILE=slow`
+* **CI lint:** always read-only (`--check --no-stage`); never mutates the index
+* **PR CI:** `hk check --check --no-stage --pr ...` with valid base (`fetch-depth: 0`)
+* **Push / `workflow_dispatch` CI:** `--all` (or verified delta) — **never** `--pr` alone
+* **Version contract:** `min_hk_version = "1.45.0"`; exact `hk` pin in `mise.toml` aligned with the Pkl package amend
+
+### Codecov upload policy
+
+* **Same-repository** uploads only, authenticated with **OIDC** (`use_oidc: true`)
+* `id-token: write` is scoped **only** to the coverage upload job
+* **Fork PRs skip upload**; tests/coverage generation still run and must pass
+* Eligible uploads use `fail_ci_if_error: true` (no blanket `continue-on-error`)
+* Branch protection must **not** require the Codecov upload check on fork PRs (it is intentionally skipped)
+* Downloaded Codecov CLI from `codecov-action` is an accepted pin exception unless a future hermetic CLI pin is added
+
+### Security / SBOM
+
+* TruffleHog Action is **SHA-pinned** and the scanner **version** is pinned (action SHA ≠ payload pin alone)
+* Syft / Grype / Grant install via **mise exact versions** — no `curl \| sh`, no `latest` for those tools
+* SBOM artifact upload uses `if: ${{ env.ACT != 'true' }}` (never `ACT: "false"` + `!env.ACT`)
+
+### Evidence expectations (Issue #170 close-out)
+
+Before closing pipeline hardening work, record:
+
+1. Same-repo PR with successful OIDC Codecov upload and visible `semantic-core` / `cli-main` component signal
+2. Fork PR with upload skipped and CI green
+3. Security workflow success with SBOM artifact + Grype threshold
+
 
 ## 🤝 Contribution Workflow
 
 1. Branch off `main` for your feature or fix (e.g., `feat/my-new-feature`).
 2. Write tests for any new logic.
 3. Commit using `git-cg` or ensure your manual commits adhere strictly to our Hybrid Commit Matrix (found in `config/gitops_agent_sop.json`).
-4. Ensure `just test` and `just lint` both pass locally.
+4. Ensure `mise run lint` and `mise run test` pass locally (and keep `just lint` / `just test` green if you touch those surfaces).
 5. Push and open a Pull Request.
 
 ---
