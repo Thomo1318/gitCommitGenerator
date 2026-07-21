@@ -103,3 +103,13 @@ exclude_lines = [
   "if TYPE_CHECKING:",
   "raise NotImplementedError",
 ]
+
+# Security / SBOM floor pins for transitive deps (Grype --fail-on high).
+# pillow via reportlab; aiohttp via instructor/litellm; pydantic-settings via opik/mcp.
+[tool.uv]
+constraint-dependencies = [
+  "pillow>=12.3.0",
+  "aiohttp>=3.14.1",
+  "pydantic-settings>=2.14.2",
+]
+
