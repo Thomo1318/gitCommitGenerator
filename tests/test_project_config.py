@@ -547,3 +547,75 @@ class TestMiseQualityPinsAndTasks:
         body = m.group(1)
         assert "setup_test_scenario.zsh" in body or ".test_repo" in body
         assert "uv run pytest" not in body
+
+    def test_lint_task_runs_validate_before_check(self):
+        """`mise run lint` must validate the hk config before running checks."""
+        task = _load_mise()["tasks"]["lint"]
+        run = task["run"]
+        assert run.index("hk validate") < run.index("hk check")
+
+    def test_lint_task_is_read_only_and_scoped_to_all(self):
+        """`mise run lint` must be the CI-shaped, non-mutating, full-repo variant."""
+        task = _load_mise()["tasks"]["lint"]
+        run = task["run"]
+        assert "--all" in run
+        assert "--fail-fast" in run
+        assert "--no-progress" in run
+        assert "--pr" not in run
+
+    def test_lint_task_uses_strict_shell(self):
+        """`mise run lint` must fail fast on any pipeline error."""
+        task = _load_mise()["tasks"]["lint"]
+        assert "set -euo pipefail" in task["run"]
+
+    def test_lint_task_skip_default_is_overridable(self):
+        """HK_SKIP_STEPS must default via bash parameter expansion, allowing overrides."""
+        task = _load_mise()["tasks"]["lint"]
+        assert '"${HK_SKIP_STEPS:-pytest-cov,betterleaks,gen-docs,gen-toc}"' in task["run"]
+
+    def test_cov_task_uses_strict_shell(self):
+        """`mise run cov` must fail fast on any pipeline error."""
+        task = _load_mise()["tasks"]["cov"]
+        assert "set -euo pipefail" in task["run"]
+
+    def test_security_task_uses_strict_shell(self):
+        """`mise run security` must fail fast on any pipeline error."""
+        task = _load_mise()["tasks"]["security"]
+        assert "set -euo pipefail" in task["run"]
+
+    def test_security_task_generates_sbom_before_scanning(self):
+        """SBOM generation must precede the grant/grype scans that consume it."""
+        task = _load_mise()["tasks"]["security"]
+        run = task["run"]
+        assert run.index("syft . -o cyclonedx-json=bom.json") < run.index("grant check bom.syft.json")
+        assert run.index("syft . -o syft-json=bom.syft.json") < run.index("grype sbom:bom.json")
+
+    def test_security_task_grype_fails_on_high_severity(self):
+        """`mise run security` must enforce a high-severity failure threshold."""
+        task = _load_mise()["tasks"]["security"]
+        assert "--fail-on high" in task["run"]
+
+    def test_all_new_quality_tasks_have_descriptions(self):
+        """lint/test/cov/security tasks must each carry a non-empty description."""
+        tasks = _load_mise()["tasks"]
+        for name in ("lint", "test", "cov", "security"):
+            assert "description" in tasks[name], name
+            assert tasks[name]["description"].strip() != "", name
+
+    def test_hk_pin_matches_hk_pkl_amend_version(self):
+        """The exact hk pin in mise.toml must match the Pkl package amend in hk.pkl."""
+        mise_hk_version = _load_mise()["tools"]["hk"]
+        hk_pkl_text = (REPO_ROOT / "hk.pkl").read_text(encoding="utf-8")
+        assert f"hk/releases/download/v{mise_hk_version}/hk@{mise_hk_version}" in hk_pkl_text
+
+    def test_hk_not_pinned_to_latest(self):
+        """hk must never regress to a floating `latest` pin (Issue #170 hardening)."""
+        tools = _load_mise()["tools"]
+        assert tools["hk"] != "latest"
+
+    def test_syft_grype_grant_not_pinned_to_latest(self):
+        """Anchore trio must never regress to floating `latest` pins."""
+        tools = _load_mise()["tools"]
+        assert tools["syft"] != "latest"
+        assert tools["grype"] != "latest"
+        assert tools["ubi:anchore/grant"] != "latest"

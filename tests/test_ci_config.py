@@ -331,7 +331,6 @@ class TestCiWorkflowHardening:
         assert wf["concurrency"].get("cancel-in-progress") is True
 
     def test_top_level_permissions_contents_read(self):
-        """Ensure the workflow grants top-level read access to repository contents."""
         wf = self._workflow()
         assert wf["permissions"]["contents"] == "read"
 
@@ -388,7 +387,6 @@ class TestCiWorkflowHardening:
         assert "pull_request" in step.get("if", "")
 
     def test_lint_fetch_depth_zero(self):
-        """Verify that the lint job checks out the repository with full history."""
         checkout = next(s for s in self._lint_steps() if s.get("name") == "Checkout repository")
         assert checkout["with"]["fetch-depth"] == 0
 
@@ -396,6 +394,75 @@ class TestCiWorkflowHardening:
         raw = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         assert "prepare-commit-msg" not in raw
         assert "commit-msg" not in raw or "validate-commit" not in raw
+
+    def test_concurrency_group_formula_exact(self):
+        """The concurrency group formula must exactly match the documented contract."""
+        wf = self._workflow()
+        assert wf["concurrency"]["group"] == (
+            "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}"
+        )
+
+    def test_only_lint_and_coverage_jobs_present(self):
+        """No unexpected jobs must have been introduced alongside `lint`/`test-and-coverage`."""
+        wf = self._workflow()
+        assert set(wf["jobs"].keys()) == {"lint", "test-and-coverage"}
+
+    def test_top_level_permissions_only_contents(self):
+        """Top-level permissions must be scoped to `contents: read` only (no extra keys)."""
+        wf = self._workflow()
+        assert set(wf["permissions"].keys()) == {"contents"}
+
+    def test_lint_job_permissions_only_contents(self):
+        """The lint job must not inherit or request any elevated permissions."""
+        wf = self._workflow()
+        lint_perms = wf["jobs"]["lint"].get("permissions", {})
+        assert set(lint_perms.keys()) == {"contents"}
+        assert lint_perms["contents"] == "read"
+
+    def test_mise_action_pinned_and_configured_in_lint_job(self):
+        """The `Install mise tools` step must be SHA-pinned with install/cache enabled."""
+        step = next(s for s in self._lint_steps() if s.get("name") == "Install mise tools")
+        uses = step["uses"]
+        assert uses.startswith("jdx/mise-action@")
+        ref = uses.split("@", 1)[1]
+        assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), (
+            f"Install mise tools must be pinned to a full commit SHA, got {uses!r}"
+        )
+        assert step["with"]["install"] is True
+        assert step["with"]["cache"] is True
+
+    def test_install_dependencies_step_uses_uv_sync_all_extras(self):
+        """The lint job must install the full dev/extras dependency set for hk steps."""
+        step = next(s for s in self._lint_steps() if s.get("name") == "Install dependencies")
+        assert step["run"] == "uv sync --all-extras --dev"
+
+    def test_hk_validate_step_runs_unconditionally(self):
+        """`hk validate` must run on every trigger (no `if` gate)."""
+        step = next(s for s in self._lint_steps() if s.get("name") == "hk validate")
+        assert step["run"] == "hk validate"
+        assert "if" not in step
+
+    def test_lint_step_order(self):
+        """Lint job steps must run in the documented dependency order."""
+        names = [s.get("name") for s in self._lint_steps()]
+        expected_order = [
+            "Checkout repository",
+            "Install mise tools",
+            "Install uv",
+            "Set up Python",
+            "Install dependencies",
+            "hk validate",
+            "hk check (pull_request)",
+            "hk check (push / workflow_dispatch)",
+        ]
+        assert names == expected_order
+
+    def test_lint_pr_and_push_checks_are_mutually_exclusive_conditions(self):
+        """The pull_request and push/dispatch hk check steps must use complementary `if` guards."""
+        pr_step = next(s for s in self._lint_steps() if s.get("name") == "hk check (pull_request)")
+        push_step = next(s for s in self._lint_steps() if s.get("name") == "hk check (push / workflow_dispatch)")
+        assert pr_step["if"] == "github.event_name == 'pull_request'"
+        assert push_step["if"] == "github.event_name != 'pull_request'"
 
 
 # ===========================================================================
@@ -407,7 +474,6 @@ class TestCodecovYmlContracts:
     """Lock landed #169 Codecov semantics without brittle full-file snapshots."""
 
     def _cfg(self) -> dict:
-        """Load and return the parsed Codecov configuration."""
         return _load_yaml("codecov.yml")
 
     def test_hide_project_coverage_and_require_head(self):

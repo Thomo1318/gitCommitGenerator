@@ -22,15 +22,6 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _load_yaml(rel_path: str) -> dict:
-    """
-    Load a YAML file relative to the repository root.
-    
-    Parameters:
-    	rel_path (str): Relative path to the YAML file.
-    
-    Returns:
-    	dict: Parsed YAML content, with a boolean `on` key normalised to the string `"on"`.
-    """
     data = yaml.safe_load((REPO_ROOT / rel_path).read_text(encoding="utf-8"))
     if isinstance(data, dict) and True in data:
         data["on"] = data.pop(True)
@@ -39,15 +30,9 @@ def _load_yaml(rel_path: str) -> dict:
 
 class TestSecurityWorkflow:
     def _workflow(self) -> dict:
-        """Load the security workflow configuration from YAML.
-        
-        Returns:
-        	dict: The parsed security workflow configuration.
-        """
         return _load_yaml(".github/workflows/security.yml")
 
     def _raw(self) -> str:
-        """Read the security workflow file as text."""
         return (REPO_ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")
 
     def test_file_is_valid_yaml(self):
@@ -72,9 +57,6 @@ class TestSecurityWorkflow:
         assert "trufflesecurity/trufflehog@master" not in raw
 
     def test_no_curl_pipe_sh_installers(self):
-        """
-        Ensure the security workflow does not use shell-piped curl installers.
-        """
         raw = self._raw()
         assert "curl" not in raw or "| sh" not in raw
         assert "install.sh | sh" not in raw
@@ -82,7 +64,6 @@ class TestSecurityWorkflow:
 
     def test_no_latest_scanner_tags_in_workflow(self):
         # workflow must not install tools at floating latest; pins live in mise.toml
-        """Ensure the workflow does not install scanner tools using floating `latest` versions."""
         raw = self._raw()
         assert 'version: "latest"' not in raw
         assert "version: latest" not in raw
@@ -145,7 +126,6 @@ class TestSecurityWorkflow:
         assert upload["if"] == "${{ env.ACT != 'true' }}"
 
     def test_sbom_outputs_and_scans_preserved(self):
-        """Verify that SBOM generation outputs and security scan commands remain present in the workflow."""
         raw = self._raw()
         assert "bom.json" in raw
         assert "bom.syft.json" in raw
@@ -153,9 +133,69 @@ class TestSecurityWorkflow:
         assert "grype sbom:bom.json --fail-on high" in raw
 
     def test_jobs_do_not_elevate_permissions(self):
-        """Verify that each workflow job uses read-only contents permissions without write access."""
         wf = self._workflow()
         for name, job in wf["jobs"].items():
             perms = job.get("permissions", {"contents": "read"})
             assert perms.get("contents") == "read", name
             assert "write" not in str(perms.values())
+
+    def test_trufflehog_scans_full_repo_path(self):
+        """TruffleHog must scan the full checked-out repository root."""
+        step = next(s for s in self._workflow()["jobs"]["trufflehog"]["steps"] if s.get("name") == "TruffleHog OSS")
+        assert step["with"]["path"] == "./"
+
+    def test_trufflehog_only_verified_flag_preserved(self):
+        """`--only-verified` must remain set to avoid noisy unverified findings."""
+        step = next(s for s in self._workflow()["jobs"]["trufflehog"]["steps"] if s.get("name") == "TruffleHog OSS")
+        assert step["with"]["extra_args"] == "--only-verified"
+
+    def test_trufflehog_job_step_order(self):
+        """The trufflehog job must checkout before running the TruffleHog action."""
+        names = [s.get("name") for s in self._workflow()["jobs"]["trufflehog"]["steps"]]
+        assert names == ["Checkout code", "TruffleHog OSS"]
+
+    def test_sbom_mise_action_installs_and_caches(self):
+        """The sbom job's mise-action step must enable install and cache."""
+        step = next(
+            s for s in self._workflow()["jobs"]["sbom"]["steps"] if s.get("name") == "Install mise tools"
+        )
+        assert step["uses"].startswith("jdx/mise-action@")
+        assert step["with"]["install"] is True
+        assert step["with"]["cache"] is True
+
+    def test_sbom_job_step_order(self):
+        """SBOM job steps must run in the documented dependency order."""
+        names = [s.get("name") for s in self._workflow()["jobs"]["sbom"]["steps"]]
+        expected_order = [
+            "Checkout code",
+            "Install mise tools",
+            "Verify SBOM tool versions",
+            "Generate SBOMs (Syft)",
+            "Upload SBOM Artifact",
+            "License Compliance (Grant)",
+            "Vulnerability Scan (Grype)",
+        ]
+        assert names == expected_order
+
+    def test_sbom_grant_and_grype_run_after_generation(self):
+        """Grant and Grype must run after the SBOM has been generated, not before."""
+        names = [s.get("name") for s in self._workflow()["jobs"]["sbom"]["steps"]]
+        assert names.index("Generate SBOMs (Syft)") < names.index("License Compliance (Grant)")
+        assert names.index("Generate SBOMs (Syft)") < names.index("Vulnerability Scan (Grype)")
+
+    def test_verify_sbom_tool_versions_uses_strict_shell(self):
+        """The version-verification step must fail fast on any pipeline error."""
+        step = next(
+            s for s in self._workflow()["jobs"]["sbom"]["steps"] if s.get("name") == "Verify SBOM tool versions"
+        )
+        assert "set -euo pipefail" in step["run"]
+
+    def test_trufflehog_checkout_and_sbom_checkout_use_pinned_checkout(self):
+        """Both jobs must checkout via the same SHA-pinned actions/checkout ref."""
+        wf = self._workflow()
+        trufflehog_checkout = next(
+            s for s in wf["jobs"]["trufflehog"]["steps"] if s.get("name") == "Checkout code"
+        )
+        sbom_checkout = next(s for s in wf["jobs"]["sbom"]["steps"] if s.get("name") == "Checkout code")
+        assert trufflehog_checkout["uses"] == sbom_checkout["uses"]
+        assert trufflehog_checkout["uses"].startswith("actions/checkout@")
