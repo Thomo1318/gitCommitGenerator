@@ -141,9 +141,9 @@ class TestAdr0002Update4Section:
 
     def _content(self) -> str:
         """Read and return the ADR content as UTF-8 text.
-        
+
         Returns:
-        	str: The contents of the ADR document.
+            str: The contents of the ADR document.
         """
         return ADR_0002.read_text(encoding="utf-8")
 
@@ -197,16 +197,20 @@ class TestAdr0002Update4Section:
         content = self._content()
         changelog = content.split("## CHANGELOG")[1]
         assert changelog.index("v1.4.0") < changelog.index("v1.0.0")
-        assert changelog.index("v1.0.0") < changelog.index("v1.1.0") < changelog.index("v1.2.0") < changelog.index(
-            "v1.3.0"
+        assert (
+            changelog.index("v1.0.0")
+            < changelog.index("v1.1.0")
+            < changelog.index("v1.2.0")
+            < changelog.index("v1.3.0")
         )
 
     def test_update_4_section_appears_after_update_3(self):
         content = self._content()
         assert content.index("## IV. Update 3") < content.index("## V. Update 4")
 
-    def test_frontmatter_version_not_bumped_by_append_only_update(self):
-        """The append-only Update 4 section intentionally leaves the YAML frontmatter version untouched."""
+    def test_frontmatter_version_is_v1_4_0(self):
+        """Update 4 bumped ADR-0002 frontmatter metadata to v1.4.0 (with matching changelog)."""
         content = self._content()
         frontmatter = content.split("```yaml")[1].split("```")[0]
-        assert 'version: "v1.3.0"' in frontmatter
+        assert 'version: "v1.4.0"' in frontmatter
+        assert 'version: "v1.3.0"' not in frontmatter

@@ -11,13 +11,47 @@ REPO_ROOT = Path(__file__).parent.parent
 HK_PKL = REPO_ROOT / "hk.pkl"
 
 
+def _step_block(text: str, step_name: str) -> str:
+    """Return the body of a `["name"] { ... }` block using brace matching.
+
+    Nested braces (hooks embedding further mappings) cannot terminate the match
+    early. The returned body excludes the outer braces.
+    """
+    needle = f'["{step_name}"]'
+    start = text.find(needle)
+    if start < 0:
+        raise AssertionError(f"{step_name} step block not found")
+    brace = text.find("{", start)
+    if brace < 0:
+        raise AssertionError(f"{step_name} opening brace not found")
+    depth = 0
+    for i in range(brace, len(text)):
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[brace + 1 : i]
+    raise AssertionError(f"{step_name} block was not closed")
+
+
+def _hook_maps_to_linters(text: str, hook_name: str) -> bool:
+    """True when hooks["name"] assigns steps = linters (brace-aware; ignores // comments)."""
+    body = _step_block(text, hook_name)
+    for line in body.splitlines():
+        code = line.split("//", 1)[0].strip()
+        if re.fullmatch(r"steps\s*=\s*linters", code):
+            return True
+    return False
+
+
 class TestHkPklContract:
     def _text(self) -> str:
-        """
-        Read and return the hk.pkl file contents.
-        
+        """Read and return the hk.pkl file contents.
+
         Returns:
-        	str: The UTF-8 text read from the hk.pkl file.
+            str: The UTF-8 text read from the hk.pkl file.
         """
         return HK_PKL.read_text(encoding="utf-8")
 
@@ -26,7 +60,7 @@ class TestHkPklContract:
 
     def test_min_hk_version(self):
         """Verify that the configuration specifies the minimum supported hk version.
-        
+
         The configuration must declare hk version 1.45.0 as the minimum supported version.
         """
         text = self._text()
@@ -44,11 +78,7 @@ class TestHkPklContract:
         assert '["codecov"]' not in text
 
     def test_pytest_cov_is_slow_profile_only(self):
-        text = self._text()
-        # Extract the pytest-cov block roughly
-        m = re.search(r'\["pytest-cov"\]\s*\{(.*?)\n    \}', text, re.S)
-        assert m, "pytest-cov step block not found"
-        block = m.group(1)
+        block = _step_block(self._text(), "pytest-cov")
         assert 'profiles = List("slow")' in block
         assert "uv run pytest --cov=src/git_cg" in block
 
@@ -66,25 +96,19 @@ class TestHkPklContract:
 
     def test_pytest_cov_has_no_fix_command(self):
         """pytest-cov is check-only; it must not define a `fix` action."""
-        text = self._text()
-        m = re.search(r'\["pytest-cov"\]\s*\{(.*?)\n    \}', text, re.S)
-        assert m, "pytest-cov step block not found"
-        block = m.group(1)
+        block = _step_block(self._text(), "pytest-cov")
         assert "fix = " not in block
 
     def test_pre_commit_fix_and_check_hooks_reference_linters_mapping(self):
         """The pre-commit/fix/check hooks must still be wired to the shared `linters` mapping."""
         text = self._text()
-        assert re.search(r'\["pre-commit"\]\s*\{[^}]*steps = linters', text, re.S)
-        assert re.search(r'\["fix"\]\s*\{[^}]*steps = linters', text, re.S)
-        assert re.search(r'\["check"\]\s*\{[^}]*steps = linters', text, re.S)
+        assert _hook_maps_to_linters(text, "pre-commit")
+        assert _hook_maps_to_linters(text, "fix")
+        assert _hook_maps_to_linters(text, "check")
 
     def test_pre_commit_hook_still_stashes_and_fixes(self):
         """pre-commit hook must keep `fix = true` and the git stash mechanism."""
-        text = self._text()
-        m = re.search(r'\["pre-commit"\]\s*\{(.*?)\n    \}', text, re.S)
-        assert m, "pre-commit hook block not found"
-        block = m.group(1)
+        block = _step_block(self._text(), "pre-commit")
         assert "fix = true" in block
         assert 'stash = "git"' in block
 
@@ -94,9 +118,6 @@ class TestHkPklContract:
         assert text.index("min_hk_version") < text.index("local linters")
 
     def test_no_stray_codecov_references_outside_comments(self):
-        """
-        Ensure the configuration contains no stray `codecov` step references.
-        """
+        """Ensure the configuration contains no stray `codecov` step references."""
         text = self._text()
-        assert 'Step {\n    ["codecov"]' not in text
-        assert text.count('["codecov"]') == 0
+        assert '["codecov"]' not in text

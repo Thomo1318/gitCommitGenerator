@@ -518,7 +518,11 @@ class TestMiseQualityPinsAndTasks:
                 continue
             if not in_tools or not s or s.startswith("#"):
                 continue
-            assert "latest" not in s, f"floating latest not allowed: {line}"
+            # Ignore trailing inline comments (e.g. `# note about latest policy`)
+            code = s.split("#", 1)[0].rstrip()
+            if not code:
+                continue
+            assert "latest" not in code, f"floating latest not allowed: {line}"
 
     def test_betterleaks_and_trufflehog_pinned(self):
         text = (REPO_ROOT / "mise.toml").read_text(encoding="utf-8")
