@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import mimetypes
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -84,9 +84,9 @@ class ParseResult:
     tree: Any | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
+        # Exclude non-serialisable tree-sitter objects before asdict deep-copy.
+        payload = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "tree"}
         payload["status"] = str(self.status)
-        payload.pop("tree", None)
         return payload
 
 
