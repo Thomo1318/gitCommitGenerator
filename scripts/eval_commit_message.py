@@ -1,11 +1,11 @@
 import json
 import os
 
+import opik
 from opik.evaluation import evaluate
 from opik.evaluation.metrics import GEval
 from opik_metrics import FormatMetric
 
-import opik
 from git_cg.main import ENGINE_REGISTRY, build_system_prompt, generate_commit_message, get_ai_client
 
 # Create a GEval metric to evaluate the commit messages using an LLM judge

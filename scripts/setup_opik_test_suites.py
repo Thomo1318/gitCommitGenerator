@@ -4,9 +4,8 @@ import os
 import sys
 from typing import Any
 
-from opik.evaluation import evaluate
-
 import opik
+from opik.evaluation import evaluate
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

@@ -5,9 +5,8 @@ import json
 import sys
 from pathlib import Path
 
-import sentry_sdk
-
 import opik
+import sentry_sdk
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from git_cg.sentry_config import init_sentry

@@ -42,14 +42,15 @@ except Exception as e:
 import httpx  # noqa: E402
 import instructor  # noqa: E402
 import openai  # noqa: E402
+import opik  # noqa: E402
 import typer  # noqa: E402
 from openai import OpenAI  # noqa: E402
+from opik import opik_context  # noqa: E402
 from opik.integrations.openai import track_openai  # noqa: E402
 from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
 
-import opik  # noqa: E402
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
 from git_cg.interaction import (  # noqa: E402
     can_open_tty,
@@ -66,7 +67,6 @@ from git_cg.retries import llm_retry  # noqa: E402
 from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
 from git_cg.telemetry import compute_prompt_hash  # noqa: E402
-from opik import opik_context  # noqa: E402
 
 app = typer.Typer(
     add_completion=False,
