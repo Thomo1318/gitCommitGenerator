@@ -103,6 +103,8 @@ TODO:
 
 TODO:
 
+- Review [fitinprogress](https://open-vsx.org/vscode/item?itemName=YusukeAbe.gitinprogress) to identify features to include in `git-cg`
+
 - With the planned config integration make the majority of the app's functions be able to toggle on/off
 - Identify possible functions that we should consider integrating with this feature
 - Your own push:

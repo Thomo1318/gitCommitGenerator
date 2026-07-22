@@ -242,7 +242,7 @@ We highly recommend installing a [NerdFont](https://www.nerdfonts.com/). NerdFon
 
 **Custom Ligatured Fonts:**
 For the best experience, we provide custom-patched `Ligatured-Hack` font suites as GitHub Release Assets on this repository. These bespoke suites combine the excellent Hack font with FiraCode or JetBrainsMono ligatures and full NerdFont glyph patching.
-Download your preferred `.zip` from the [Releases](https://github.com/Thomo1318/gitCommitGenerator/releases) page, extract, and install the `.ttf` files to your system font directory.
+Download your preferred `.zip` from the [v0.3.0 Release](https://github.com/Thomo1318/gitCommitGenerator/releases/tag/v0.3.0) page, extract, and install the `.ttf` files to your system font directory.
 
 ---
 
