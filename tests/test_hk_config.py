@@ -14,14 +14,14 @@ HK_PKL = REPO_ROOT / "hk.pkl"
 def _step_block(text: str, step_name: str) -> str:
     """
     Extract the body of a named step block using brace matching.
-    
+
     Parameters:
         text (str): Text containing the step block.
         step_name (str): Name of the step block to extract.
-    
+
     Returns:
         str: Contents of the block excluding its outer braces.
-    
+
     Raises:
         AssertionError: If the block or its matching braces cannot be found.
     """
@@ -47,11 +47,11 @@ def _step_block(text: str, step_name: str) -> str:
 def _hook_maps_to_linters(text: str, hook_name: str) -> bool:
     """
     Determine whether a hook assigns the shared linters steps.
-    
+
     Parameters:
         text (str): The configuration text containing the hook definition.
         hook_name (str): The name of the hook to inspect.
-    
+
     Returns:
         bool: `True` if the hook assigns `steps = linters`, `False` otherwise.
     """
