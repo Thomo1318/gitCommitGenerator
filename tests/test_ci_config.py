@@ -64,15 +64,21 @@ def _load_uv_lock() -> dict:
 
 
 class TestCiWorkflowCodecovStep:
-    """Tests for the `Upload coverage to Codecov` step of ci.yml."""
+    """Tests for the dedicated Codecov OIDC upload job of ci.yml."""
 
     def _workflow(self) -> dict:
         """Load the CI workflow configuration."""
         return _load_yaml(".github/workflows/ci.yml")
 
+    def _upload_job(self) -> dict:
+        """Return the dedicated same-repo Codecov upload job."""
+        jobs = self._workflow()["jobs"]
+        assert "upload-coverage" in jobs, "upload-coverage job not found in ci.yml"
+        return jobs["upload-coverage"]
+
     def _codecov_step(self) -> dict:
         """
-        Finds the Codecov upload step in the CI workflow.
+        Finds the Codecov upload step in the dedicated upload job.
 
         Returns:
                 dict: The configuration for the Codecov upload step.
@@ -80,11 +86,11 @@ class TestCiWorkflowCodecovStep:
         Raises:
                 AssertionError: If the Codecov upload step is not present.
         """
-        steps = self._workflow()["jobs"]["test-and-coverage"]["steps"]
+        steps = self._upload_job()["steps"]
         for step in steps:
             if step.get("name") == "Upload coverage to Codecov":
                 return step
-        raise AssertionError("Codecov upload step not found in ci.yml")
+        raise AssertionError("Codecov upload step not found in upload-coverage job")
 
     def test_file_is_valid_yaml(self):
         """ci.yml must parse as valid YAML."""
@@ -122,19 +128,53 @@ class TestCiWorkflowCodecovStep:
         assert "continue-on-error" not in step
 
     def test_codecov_upload_skips_fork_prs(self):
-        """Fork PRs must skip Codecov upload (tests still run in earlier steps)."""
-        step = self._codecov_step()
-        cond = step.get("if", "")
+        """Fork PRs must skip the dedicated Codecov upload job entirely."""
+        job = self._upload_job()
+        cond = job.get("if", "")
         assert "pull_request" in cond
         assert "head.repo.full_name" in cond
         assert "github.repository" in cond
+        # Gate is job-level so fork PR code never receives id-token: write.
+        assert "if" not in self._codecov_step()
 
-    def test_codecov_step_runs_after_test_step(self):
-        """The Codecov upload step must remain the final step, after running tests."""
+    def test_upload_job_depends_on_test_and_coverage(self):
+        """Coverage upload must wait for the test job that produces coverage.xml."""
+        job = self._upload_job()
+        needs = job.get("needs")
+        if isinstance(needs, str):
+            needs = [needs]
+        assert needs == ["test-and-coverage"]
+
+    def test_test_job_uploads_coverage_artifact(self):
+        """test-and-coverage must publish coverage.xml for the OIDC upload job."""
         steps = self._workflow()["jobs"]["test-and-coverage"]["steps"]
         names = [s.get("name") for s in steps]
-        assert names.index("Upload coverage to Codecov") == len(names) - 1
-        assert names.index("Run Tests with Coverage") < names.index("Upload coverage to Codecov")
+        assert "Upload coverage artifact" in names
+        assert names.index("Run Tests with Coverage") < names.index("Upload coverage artifact")
+        artifact_step = next(s for s in steps if s.get("name") == "Upload coverage artifact")
+        assert artifact_step["uses"].startswith("actions/upload-artifact@")
+        assert artifact_step["with"]["name"] == "coverage-xml"
+        assert artifact_step["with"]["path"] == "./coverage.xml"
+        assert artifact_step["with"]["if-no-files-found"] == "error"
+        # Upload must not remain in the test job (OIDC stays on upload-coverage only).
+        assert "Upload coverage to Codecov" not in names
+
+    def test_upload_job_downloads_coverage_artifact(self):
+        """upload-coverage must restore coverage.xml before invoking Codecov."""
+        steps = self._upload_job()["steps"]
+        names = [s.get("name") for s in steps]
+        assert names.index("Download coverage artifact") < names.index("Upload coverage to Codecov")
+        download = next(s for s in steps if s.get("name") == "Download coverage artifact")
+        assert download["uses"].startswith("actions/download-artifact@")
+        assert download["with"]["name"] == "coverage-xml"
+
+    def test_codecov_step_runs_after_test_step(self):
+        """Codecov upload is a dependent job after tests produce coverage.xml."""
+        wf = self._workflow()
+        test_names = [s.get("name") for s in wf["jobs"]["test-and-coverage"]["steps"]]
+        upload_names = [s.get("name") for s in self._upload_job()["steps"]]
+        assert "Run Tests with Coverage" in test_names
+        assert upload_names.index("Upload coverage to Codecov") == len(upload_names) - 1
 
     def _validate_codecov_step(self) -> dict:
         """
@@ -341,9 +381,12 @@ class TestCiWorkflowHardening:
         assert wf["permissions"]["contents"] == "read"
 
     def test_id_token_write_only_on_coverage_job(self):
+        """id-token: write must be confined to the dedicated Codecov upload job."""
         wf = self._workflow()
-        cov_perms = wf["jobs"]["test-and-coverage"]["permissions"]
-        assert cov_perms.get("id-token") == "write"
+        upload_perms = wf["jobs"]["upload-coverage"]["permissions"]
+        assert upload_perms.get("id-token") == "write"
+        test_perms = wf["jobs"]["test-and-coverage"]["permissions"]
+        assert test_perms.get("id-token") != "write"
         lint_job = wf["jobs"]["lint"]
         lint_perms = lint_job.get("permissions", {})
         assert lint_perms.get("id-token") != "write"
@@ -353,7 +396,7 @@ class TestCiWorkflowHardening:
     def test_checkout_and_setup_uv_pinned_to_sha(self):
         """Retain explicit checkout/setup-uv pin checks (subset of all-uses SHA lock)."""
         wf = self._workflow()
-        for job_name in ("lint", "test-and-coverage"):
+        for job_name in ("lint", "test-and-coverage", "upload-coverage"):
             for step in wf["jobs"][job_name]["steps"]:
                 uses = step.get("uses", "")
                 if uses.startswith("actions/checkout@") or uses.startswith("astral-sh/setup-uv@"):
@@ -430,15 +473,15 @@ class TestCiWorkflowHardening:
         assert step.get("if") == "github.event_name == 'pull_request'"
         env = step.get("env") or {}
         # GitHub expressions must live in env, not interpolated inside run.
-        assert env.get("BASE_REF") is not None or "BASE_REF" in env
-        assert "REPO" in env
-        assert "GH_TOKEN" in env
-        assert "BASE_REF" in env
+        assert env.get("BASE_REF") == "${{ github.base_ref }}"
+        assert env.get("REPO") == "${{ github.repository }}"
+        assert env.get("GH_TOKEN") == "${{ github.token }}"
         run = step["run"]
         assert "git fetch" in run
         assert "refs/remotes/origin/" in run
         assert "${BASE_REF}" in run
         assert "${REPO}" in run
+        assert "${GH_TOKEN}" in run
         assert "${{ github." not in run
         # Must run before hk check PR step
         names = [s.get("name") for s in steps]
@@ -459,9 +502,9 @@ class TestCiWorkflowHardening:
         )
 
     def test_only_lint_and_coverage_jobs_present(self):
-        """No unexpected jobs must have been introduced alongside `lint`/`test-and-coverage`."""
+        """CI must only define lint, tests, and the dedicated Codecov upload job."""
         wf = self._workflow()
-        assert set(wf["jobs"].keys()) == {"lint", "test-and-coverage"}
+        assert set(wf["jobs"].keys()) == {"lint", "test-and-coverage", "upload-coverage"}
 
     def test_top_level_permissions_only_contents(self):
         """Top-level permissions must be scoped to `contents: read` only (no extra keys)."""
