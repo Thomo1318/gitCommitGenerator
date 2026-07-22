@@ -102,12 +102,11 @@ jobs:
           --no-progress
 
   test-and-coverage:
-    name: Run Tests & Upload Coverage
+    name: Run Tests
     runs-on: ubuntu-latest
-    # Codecov action v4 OIDC token exchange (scoped to the job that uploads coverage).
+    # Tests only — no OIDC. Fork PR code never receives id-token: write.
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout repository
         # actions/checkout@v4.2.2
@@ -151,11 +150,40 @@ jobs:
           --cov-report=xml
           --cov-report=term-missing:skip-covered
 
+      - name: Upload coverage artifact
+        # actions/upload-artifact@v4.6.2 — hand coverage.xml to the OIDC upload job.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coverage-xml
+          path: ./coverage.xml
+          if-no-files-found: error
+
+  upload-coverage:
+    name: Upload Coverage to Codecov
+    needs: test-and-coverage
+    runs-on: ubuntu-latest
+    # Same-repo only. Fork PRs skip this job entirely (no OIDC token issuance).
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    # Codecov action v4 OIDC token exchange — scoped to this upload job only.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        # actions/checkout@v4.2.2 — commit metadata for Codecov report association
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Download coverage artifact
+        # actions/download-artifact@v4.2.1
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        with:
+          name: coverage-xml
+
       - name: Upload coverage to Codecov
-        # Same-repo only. Fork PRs skip upload so tests stay green without a pending required check.
-        if: >-
-          github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository
         # codecov/codecov-action@v4
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238
         with:
