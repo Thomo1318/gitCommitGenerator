@@ -130,10 +130,10 @@ class TestCiWorkflowCodecovStep:
     def test_codecov_upload_skips_fork_prs(self):
         """Fork PRs must skip the dedicated Codecov upload job entirely."""
         job = self._upload_job()
-        cond = job.get("if", "")
-        assert "pull_request" in cond
-        assert "head.repo.full_name" in cond
-        assert "github.repository" in cond
+        # Exact same-repo eligibility gate (excludes fork PRs).
+        assert job.get("if") == (
+            "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository"
+        )
         # Gate is job-level so fork PR code never receives id-token: write.
         assert "if" not in self._codecov_step()
 
