@@ -166,9 +166,10 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    # Codecov action v4 OIDC token exchange — scoped to this upload job only.
     permissions:
       contents: read
+      # Codecov action v4 OIDC token exchange — elevated permission scoped to this
+      # same-repo upload job only (fork PRs never reach this job).
       id-token: write
     steps:
       - name: Checkout repository
