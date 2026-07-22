@@ -16,11 +16,11 @@ FORMATTING_BODY_SIMILARITY_THRESHOLD = 0.9
 def body_similarity(baseline_text: bytes | str, staged_text: bytes | str) -> float:
     """
     Determine the similarity between two source bodies based on their token content.
-    
+
     Parameters:
         baseline_text (bytes | str): Original body text.
         staged_text (bytes | str): Updated body text.
-    
+
     Returns:
         float: Similarity score from 0.0 to 1.0, where higher values indicate more similar token content.
     """
