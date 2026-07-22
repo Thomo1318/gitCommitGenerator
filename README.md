@@ -503,3 +503,5 @@ This project heavily leverages the following open-source tools. We extend our im
 ## 📄 License
 
 MIT © 2026
+
+<!-- fork-evidence #170: Codecov upload must skip on fork PRs -->
