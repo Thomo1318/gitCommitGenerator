@@ -144,6 +144,69 @@ class TestDevelopmentMdContributionWorkflowUpdated:
         assert "main.py" in content or "cli-main" in content
 
 
+class TestDevelopmentMdCodecovCliPinExceptionDetailed:
+    """Detailed tests for the Codecov CLI pin exception bullet (Issue #170 nice-to-have)."""
+
+    def _content(self) -> str:
+        """Read and return the contents of the development documentation file."""
+        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+
+    def test_accepted_pin_exception_exact_text(self):
+        content = self._content()
+        assert (
+            "Downloaded Codecov CLI from `codecov-action` is an **accepted pin exception** "
+            "(action SHA is pinned; CLI binary tracks the action release channel)."
+        ) in content
+
+    def test_hermetic_pin_described_as_optional_future_work(self):
+        content = self._content()
+        assert (
+            "A hermetic CLI version pin is optional future work only if supply-chain policy tightens further."
+            in content
+        )
+
+    def test_old_unconditional_hermetic_wording_removed(self):
+        """The old text framing a future hermetic pin as an unconditional addition must be gone."""
+        content = self._content()
+        assert "unless a future hermetic CLI pin is added" not in content
+
+
+class TestDevelopmentMdPatchBurnInNote:
+    """Detailed tests for the new 'Patch 80% burn-in note' bullet (Issue #170 nice-to-have)."""
+
+    def _content(self) -> str:
+        """Read and return the contents of the development documentation file."""
+        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+
+    def test_patch_burn_in_note_label_and_target_exact_text(self):
+        content = self._content()
+        assert "**Patch 80% burn-in note:** root patch target stays `80%` with no `paths`/`flags`." in content
+
+    def test_patch_burn_in_note_mentions_main_py_and_component(self):
+        content = self._content()
+        assert "Huge diffs concentrated in `src/git_cg/main.py` (`cli-main` component)" in content
+
+    def test_patch_burn_in_note_mentions_mitigation_guidance(self):
+        content = self._content()
+        assert "prefer splitting product changes or accepting a deliberate patch miss" in content
+        assert "weakening the global target / component map" in content
+
+    def test_pin_exception_bullet_precedes_patch_burn_in_bullet(self):
+        content = self._content()
+        assert content.index("accepted pin exception") < content.index("Patch 80% burn-in note")
+
+    def test_both_bullets_within_codecov_upload_policy_section(self):
+        """Both new bullets must live inside '### Codecov upload policy', before '### Security / SBOM'."""
+        content = self._content()
+        section = content.split("### Codecov upload policy", 1)[1].split("### Security / SBOM", 1)[0]
+        assert "accepted pin exception" in section
+        assert "Patch 80% burn-in note" in section
+
+    def test_security_sbom_section_still_follows_codecov_policy_section(self):
+        content = self._content()
+        assert content.index("### Codecov upload policy") < content.index("### Security / SBOM")
+
+
 class TestAdr0002Update4Section:
     """Tests for 'Update 4: betterleaks-local / TruffleHog-CI pin posture (v1.4.0)'."""
 
