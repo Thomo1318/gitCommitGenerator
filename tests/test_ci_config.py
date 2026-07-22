@@ -605,6 +605,47 @@ class TestCodecovYmlContracts:
             "src/git_cg/semantic_flags.py",
         }
 
+    def test_all_component_paths_and_names_stable(self):
+        """Full component taxonomy lock beyond IDs (Issue #170 nice-to-have)."""
+        comps = {c["component_id"]: c for c in self._cfg()["component_management"]["individual_components"]}
+        expected = {
+            "semantic_core": {
+                "name": "semantic-core",
+                "paths": {
+                    "src/git_cg/ast_parser.py",
+                    "src/git_cg/fingerprints.py",
+                    "src/git_cg/similarity.py",
+                    "src/git_cg/git_index.py",
+                    "src/git_cg/graph_context.py",
+                    "src/git_cg/semantic_flags.py",
+                },
+            },
+            "telemetry": {
+                "name": "telemetry",
+                "paths": {
+                    "src/git_cg/telemetry.py",
+                    "src/git_cg/sentry_config.py",
+                },
+            },
+            "cli_main": {
+                "name": "cli-main",
+                "paths": {"src/git_cg/main.py"},
+            },
+            "intent_ranker": {
+                "name": "intent-ranker",
+                "paths": {
+                    "src/git_cg/intent.py",
+                    "src/git_cg/regeneration.py",
+                    "src/git_cg/models.py",
+                    "src/git_cg/sop.py",
+                },
+            },
+        }
+        assert set(comps) == set(expected)
+        for cid, exp in expected.items():
+            assert comps[cid]["name"] == exp["name"]
+            assert set(comps[cid]["paths"]) == exp["paths"]
+
     def test_root_patch_has_no_paths_or_flags(self):
         patch_default = self._cfg()["coverage"]["status"]["patch"]["default"]
         assert "paths" not in patch_default
