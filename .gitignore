@@ -101,6 +101,7 @@ gitCommitGenerator
 # Unignore specific ADR scratch directory for Code Review Graph
 scratch/*
 bom.json
+bom.syft.json
 !.vscode/
 
 # Tool Caches and Backups

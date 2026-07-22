@@ -164,7 +164,9 @@ Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 * **Fork PRs skip upload**; tests/coverage generation still run and must pass
 * Eligible uploads use `fail_ci_if_error: true` (no blanket `continue-on-error`)
 * Branch protection must **not** require the Codecov upload check on fork PRs (it is intentionally skipped)
-* Downloaded Codecov CLI from `codecov-action` is an accepted pin exception unless a future hermetic CLI pin is added
+* Downloaded Codecov CLI from `codecov-action` is an **accepted pin exception** (action SHA is pinned; CLI binary tracks the action release channel). A hermetic CLI version pin is optional future work only if supply-chain policy tightens further.
+* **Patch 80% burn-in note:** root patch target stays `80%` with no `paths`/`flags`. Huge diffs concentrated in `src/git_cg/main.py` (`cli-main` component) can temporarily pressure patch status; prefer splitting product changes or accepting a deliberate patch miss over weakening the global target / component map.
+
 
 ### Security / SBOM
 

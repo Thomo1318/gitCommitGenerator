@@ -131,10 +131,17 @@ class TestDevelopmentMdContributionWorkflowUpdated:
         content = self._content()
         assert "keep `just lint` / `just test` green if you touch those surfaces" in content
 
+    # ===========================================================================
+    # docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md
+    # ===========================================================================
 
-# ===========================================================================
-# docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md
-# ===========================================================================
+    def test_codecov_cli_pin_exception_and_patch_burn_in_note(self):
+        """Issue #170 nice-to-have: document Codecov CLI pin exception and main.py patch burn-in."""
+        content = self._content()
+        assert "Codecov CLI" in content
+        assert "pin exception" in content
+        assert "80%" in content
+        assert "main.py" in content or "cli-main" in content
 
 
 class TestAdr0002Update4Section:
