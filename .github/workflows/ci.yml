@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Checkout repository
         # actions/checkout@v4.2.2 — full history for --pr base resolution
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -60,7 +60,7 @@ jobs:
 
       - name: Install uv
         # astral-sh/setup-uv@v7.6.0
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -110,13 +110,13 @@ jobs:
     steps:
       - name: Checkout repository
         # actions/checkout@v4.2.2
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
       - name: Install uv
         # astral-sh/setup-uv@v7.6.0
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -152,7 +152,7 @@ jobs:
 
       - name: Upload coverage artifact
         # actions/upload-artifact@v4.6.2 — hand coverage.xml to the OIDC upload job.
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: coverage-xml
           path: ./coverage.xml
@@ -174,19 +174,19 @@ jobs:
     steps:
       - name: Checkout repository
         # actions/checkout@v4.2.2 — commit metadata for Codecov report association
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
       - name: Download coverage artifact
         # actions/download-artifact@v4.2.1
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: coverage-xml
 
       - name: Upload coverage to Codecov
         # codecov/codecov-action@v4
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
         with:
           files: ./coverage.xml
           use_oidc: true
