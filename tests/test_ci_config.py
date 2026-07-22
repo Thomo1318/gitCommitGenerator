@@ -4,8 +4,11 @@ Tests for CI/CD and packaging configuration changes in this PR:
   - .github/workflows/docs.yml  (removed `--strict` from `zensical build`)
   - pyproject.toml              (requires-python gained an upper bound `<4.0`)
   - uv.lock                     (requires-python mirrors pyproject.toml)
+  - .gitignore                  (new `bom.syft.json` ignore pattern, Issue #170 nice-to-have)
 """
 
+import fnmatch
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -136,6 +139,35 @@ class TestCiWorkflowCodecovStep:
         )
         # Gate is job-level so fork PR code never receives id-token: write.
         assert "if" not in self._codecov_step()
+
+    def test_upload_job_permissions_exact_keys(self):
+        """upload-coverage must grant exactly `contents: read` and `id-token: write` (no extra scopes)."""
+        job = self._upload_job()
+        perms = job["permissions"]
+        assert set(perms.keys()) == {"contents", "id-token"}
+        assert perms["contents"] == "read"
+        assert perms["id-token"] == "write"
+
+    def test_oidc_comment_relocated_inline_above_id_token(self):
+        """
+        The OIDC token-exchange rationale comment moved from a standalone line above
+        `permissions:` to an inline comment directly above `id-token: write` (Issue #170).
+        """
+        raw = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        job_block = raw.split("upload-coverage:", 1)[1]
+
+        # The old standalone comment (above `permissions:`) must be gone.
+        assert "# Codecov action v4 OIDC token exchange — scoped to this upload job only." not in job_block
+
+        # The new inline comment text must be present.
+        assert "elevated permission scoped to this" in job_block
+        assert "same-repo upload job only (fork PRs never reach this job)." in job_block
+
+        # Ordering: contents: read -> comment -> id-token: write, all within `permissions:`.
+        contents_idx = job_block.index("contents: read")
+        comment_idx = job_block.index("elevated permission scoped to this")
+        id_token_idx = job_block.index("id-token: write")
+        assert contents_idx < comment_idx < id_token_idx
 
     def test_upload_job_depends_on_test_and_coverage(self):
         """Coverage upload must wait for the test job that produces coverage.xml."""
@@ -565,6 +597,56 @@ class TestCiWorkflowHardening:
         push_step = next(s for s in self._lint_steps() if s.get("name") == "hk check (push / workflow_dispatch)")
         assert pr_step["if"] == "github.event_name == 'pull_request'"
         assert push_step["if"] == "github.event_name != 'pull_request'"
+
+
+# ===========================================================================
+# .gitignore - bom.syft.json pattern (Issue #170 nice-to-have)
+# ===========================================================================
+
+
+class TestGitignoreBomSyftPattern:
+    """Tests for the new `bom.syft.json` ignore pattern added alongside `bom.json`."""
+
+    def _lines(self) -> list:
+        """Return the lines of the repository's .gitignore file."""
+        return (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+    def test_bom_syft_json_pattern_present(self):
+        """The literal `bom.syft.json` pattern must exist as its own line in .gitignore."""
+        assert "bom.syft.json" in self._lines()
+
+    def test_bom_json_pattern_still_present(self):
+        """The pre-existing `bom.json` entry must not have been removed by this change."""
+        assert "bom.json" in self._lines()
+
+    def test_bom_syft_json_immediately_follows_bom_json(self):
+        """The new pattern was added directly below the existing `bom.json` line."""
+        lines = self._lines()
+        idx = lines.index("bom.json")
+        assert lines[idx + 1] == "bom.syft.json"
+
+    def test_bom_patterns_precede_vscode_unignore_rule(self):
+        """Both bom patterns must remain above the trailing `!.vscode/` unignore rule."""
+        lines = self._lines()
+        assert lines.index("bom.syft.json") < lines.index("!.vscode/")
+
+    def test_bom_syft_json_matches_generated_sbom_filename(self):
+        """The pattern must match the exact filename produced by `syft . -o syft-json=bom.syft.json`."""
+        assert fnmatch.fnmatch("bom.syft.json", "bom.syft.json")
+
+    def test_bom_syft_json_pattern_is_distinct_from_bom_json(self):
+        """`bom.syft.json` and `bom.json` are distinct, non-overlapping literal patterns."""
+        assert not fnmatch.fnmatch("bom.json", "bom.syft.json")
+        assert not fnmatch.fnmatch("bom.syft.json", "bom.json")
+
+    def test_git_check_ignore_reports_bom_syft_json_as_ignored(self):
+        """Functional check: `git check-ignore` must classify `bom.syft.json` as ignored."""
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "bom.syft.json"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+        )
+        assert result.returncode == 0, "bom.syft.json should be reported as ignored by git"
 
 
 # ===========================================================================
