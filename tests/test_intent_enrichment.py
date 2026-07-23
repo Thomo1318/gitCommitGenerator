@@ -23,9 +23,9 @@ from git_cg.sop import load_sop
 def sop_matrix() -> list[dict]:
     """
     Load the Gitmoji reference matrix from the SOP data.
-    
+
     Returns:
-    	list[dict]: The Gitmoji reference matrix, or an empty list when unavailable.
+        list[dict]: The Gitmoji reference matrix, or an empty list when unavailable.
     """
     data = load_sop()
     return data.get("gitmoji_reference_matrix", [])
@@ -35,12 +35,12 @@ def sop_matrix() -> list[dict]:
 def matrix_vocab(sop_matrix: list[dict]) -> frozenset[str]:
     """
     Build the allowed signal vocabulary from the SOP matrix.
-    
+
     Parameters:
-    	sop_matrix (list[dict]): SOP matrix entries used to derive signal names.
-    
+        sop_matrix (list[dict]): SOP matrix entries used to derive signal names.
+
     Returns:
-    	frozenset[str]: Signal names defined by the SOP matrix.
+        frozenset[str]: Signal names defined by the SOP matrix.
     """
     return matrix_signal_vocabulary(sop_matrix)
 

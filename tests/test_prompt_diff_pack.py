@@ -9,13 +9,13 @@ from git_cg.sop import load_sop
 
 def _file_section(path: str, body: str) -> str:
     """Construct a unified diff section for a single file.
-    
+
     Parameters:
-    	path (str): The file path included in the diff headers.
-    	body (str): The file's diff content.
-    
+        path (str): The file path included in the diff headers.
+        body (str): The file's diff content.
+
     Returns:
-    	str: A unified diff section containing the file headers and body.
+        str: A unified diff section containing the file headers and body.
     """
     return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1,1 +1,1 @@\n{body}\n"
 

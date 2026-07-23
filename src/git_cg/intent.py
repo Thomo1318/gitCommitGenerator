@@ -674,12 +674,12 @@ CLOSED_ENRICHMENT_MARKERS: frozenset[str] = frozenset(
 def matrix_signal_vocabulary(matrix: list[dict]) -> frozenset[str]:
     """
     Collect the marker vocabulary declared by the positive and negative signals in SOP matrix rows.
-    
+
     Parameters:
-    	matrix (list[dict]): SOP matrix rows containing optional signal lists.
-    
+        matrix (list[dict]): SOP matrix rows containing optional signal lists.
+
     Returns:
-    	frozenset[str]: Unique positive and negative signal markers.
+        frozenset[str]: Unique positive and negative signal markers.
     """
     vocab: set[str] = set()
     for row in matrix:
@@ -703,12 +703,12 @@ def _filter_enrichment_markers(
 def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
     """
     Map successful structural graph facts to closed-vocabulary enrichment markers.
-    
+
     Parameters:
-    	facts (GraphEnrichmentFacts | None): Structural graph facts to interpret.
-    
+        facts (GraphEnrichmentFacts | None): Structural graph facts to interpret.
+
     Returns:
-    	set[str]: Markers derived from the impacted-item count, or an empty set when facts are unavailable, unsuccessful, or contain no applicable count.
+        set[str]: Markers derived from the impacted-item count, or an empty set when facts are unavailable, unsuccessful, or contain no applicable count.
     """
     if facts is None or facts.outcome != "ok":
         return set()
@@ -728,12 +728,12 @@ def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
 def _enrich_markers_from_fingerprints(facts: FingerprintEnrichmentFacts | None) -> set[str]:
     """
     Extracts supported markers from fingerprint enrichment facts.
-    
+
     Parameters:
-    	facts (FingerprintEnrichmentFacts | None): Fingerprint aggregates and optional marker candidates.
-    
+        facts (FingerprintEnrichmentFacts | None): Fingerprint aggregates and optional marker candidates.
+
     Returns:
-    	set[str]: Closed-vocabulary markers identified in the facts.
+        set[str]: Closed-vocabulary markers identified in the facts.
     """
     if facts is None:
         return set()
@@ -765,13 +765,13 @@ def enrich_markers_from_facts(
 ) -> set[str]:
     """
     Derive enrichment markers from optional semantic facts.
-    
+
     Parameters:
-    	facts (SemanticEnrichmentFacts | None): Semantic facts from which to derive markers.
-    	matrix_vocab (frozenset[str] | None): Optional matrix-defined vocabulary that further restricts the markers.
-    
+        facts (SemanticEnrichmentFacts | None): Semantic facts from which to derive markers.
+        matrix_vocab (frozenset[str] | None): Optional matrix-defined vocabulary that further restricts the markers.
+
     Returns:
-    	set[str]: Markers allowed by the enrichment vocabulary and, when provided, the matrix vocabulary.
+        set[str]: Markers allowed by the enrichment vocabulary and, when provided, the matrix vocabulary.
     """
     if facts is None:
         return set()
@@ -790,14 +790,14 @@ def collect_active_markers(
 ) -> set[str]:
     """
     Build the active marker set from diff signals and optional semantic enrichment.
-    
+
     Parameters:
-    	enrichment (SemanticEnrichmentFacts | None): Optional semantic facts used when semantic mode is enabled.
-    	enable_semantic (bool | None): Controls whether semantic enrichment is included.
-    	matrix_vocab (frozenset[str] | None): Optional marker vocabulary restricting enrichment markers.
-    
+        enrichment (SemanticEnrichmentFacts | None): Optional semantic facts used when semantic mode is enabled.
+        enable_semantic (bool | None): Controls whether semantic enrichment is included.
+        matrix_vocab (frozenset[str] | None): Optional marker vocabulary restricting enrichment markers.
+
     Returns:
-    	set[str]: The additive markers derived from the signals and, when enabled, filtered enrichment facts.
+        set[str]: The additive markers derived from the signals and, when enabled, filtered enrichment facts.
     """
     markers = set(_generate_signal_markers(signals))
     if not is_semantic_enabled(enable_semantic):

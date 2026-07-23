@@ -84,11 +84,11 @@ class CommitIntent(BaseModel):
     def validate_and_correct_matrix(self) -> CommitIntent:
         """
         Align the intent with the canonical SOP matrix or apply a safe fallback.
-        
+
         If the matrix is unavailable, the intent is returned unchanged. Otherwise, matching or fallback matrix values replace its matrix-owned fields.
-        
+
         Returns:
-        	CommitIntent: The canonicalised or fallback-adjusted intent.
+                CommitIntent: The canonicalised or fallback-adjusted intent.
         """
         from git_cg.sop import get_gitmoji_matrix
 
@@ -160,12 +160,12 @@ class ModelCommitIntent(BaseModel):
     def reject_unknown_matrix_intent(self) -> ModelCommitIntent:
         """
         Validate that the intent identifier exists in the live SOP matrix.
-        
+
         Returns:
-        	ModelCommitIntent: This model when its intent identifier is present or the SOP matrix is unavailable.
-        
+                ModelCommitIntent: This model when its intent identifier is present or the SOP matrix is unavailable.
+
         Raises:
-        	ValueError: If the intent identifier is absent from the available SOP matrix.
+                ValueError: If the intent identifier is absent from the available SOP matrix.
         """
         from git_cg.sop import get_gitmoji_matrix
 
@@ -195,9 +195,9 @@ class ModelCommitIntent(BaseModel):
     def to_commit_intent(self) -> CommitIntent:
         """
         Convert the model-facing intent into an internal commit intent.
-        
+
         Returns:
-        	CommitIntent: The corresponding internal intent, with matrix canonicalisation applied when applicable.
+                CommitIntent: The corresponding internal intent, with matrix canonicalisation applied when applicable.
         """
         return CommitIntent(
             intent_id=self.intent_id,
@@ -360,12 +360,12 @@ class ModelCommitPlan(BaseModel):
     def validate_breaking_change(self) -> ModelCommitPlan:
         """
         Validate that a breaking-change description is provided when required.
-        
+
         Returns:
-        	ModelCommitPlan: This model after validation.
-        
+                ModelCommitPlan: This model after validation.
+
         Raises:
-        	ValueError: If `breaking_change` is true and no description is provided.
+                ValueError: If `breaking_change` is true and no description is provided.
         """
         if self.breaking_change and not self.breaking_change_description:
             raise ValueError("breaking_change_description must be provided if breaking_change is true")
