@@ -184,17 +184,50 @@ def test_typescript_not_classified_binary_by_mime():
     assert result.language == "typescript"
 
 
-def test_is_probably_binary_known_extension_still_detects_nul_bytes():
-    """Known-language extensions must still short-circuit to a NUL-byte scan."""
-    assert is_probably_binary("x.py", b"abc\x00def") is True
-    assert is_probably_binary("x.ts", b"const x = 1;\x00") is True
+def test_language_map_has_no_legacy_c_sharp_id():
+    """Guard against regressing `.cs` back to the old `c_sharp` language id."""
+    from git_cg.ast_parser import _LANGUAGE_BY_EXT
+
+    assert "c_sharp" not in _LANGUAGE_BY_EXT.values()
+    assert _LANGUAGE_BY_EXT[".cs"] == "csharp"
 
 
-def test_is_probably_binary_known_extension_without_source_is_not_binary():
-    """No source bytes means the NUL-byte scan cannot run; must not be flagged binary."""
-    assert is_probably_binary("x.py") is False
-    assert is_probably_binary("x.py", None) is False
+def test_is_probably_binary_known_extension_without_source_is_false():
+    """A recognised extension with no content supplied must not be treated as binary."""
+    assert is_probably_binary("app.py") is False
+    assert is_probably_binary("app.py", None) is False
 
 
-def test_is_probably_binary_known_extension_clean_text_is_not_binary():
-    assert is_probably_binary("x.cs", b"class A { void M() {} }\n") is False
+def test_is_probably_binary_known_extension_with_nul_bytes_is_true():
+    """A recognised extension whose content contains NUL bytes must still be flagged binary."""
+    assert is_probably_binary("app.py", b"\x00\x01binary garbage") is True
+
+
+def test_is_probably_binary_known_extension_skips_mimetypes_guess():
+    """
+    Extension-registry hit must short-circuit mimetypes entirely, not just for `.ts`.
+
+    `.css`/`.json`/etc. are already text-ish under mimetypes, but this asserts the
+    registry-first branch is taken (no NUL bytes => never binary) even though
+    mimetypes would also agree, keeping the two code paths in sync going forward.
+    """
+    assert is_probably_binary("styles.css", b"a { color: red }\n") is False
+    assert is_probably_binary("data.json", b'{"a": 1}\n') is False
+
+
+def test_is_probably_binary_unknown_extension_with_nul_bytes_is_true():
+    """Unrecognised extensions fall back to the NUL-byte heuristic."""
+    assert is_probably_binary("blob.unknownext", b"\x00\x00\x00garbage") is True
+
+
+def test_is_probably_binary_unknown_extension_without_nul_bytes_is_false():
+    """Unrecognised extensions with plain text content must not be flagged binary."""
+    assert is_probably_binary("notes.unknownext", b"just plain text\n") is False
+
+
+def test_cs_source_parses_without_error():
+    """`.cs` sources must parse successfully under the `csharp` grammar id."""
+    result = parse_source("Program.cs", b"class Program { static void Main() {} }\n")
+    assert result.status == ParseStatus.SUCCESS
+    assert result.language == "csharp"
+    assert result.error is None

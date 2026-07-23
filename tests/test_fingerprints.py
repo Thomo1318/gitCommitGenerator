@@ -222,65 +222,6 @@ def test_grammar_version_uses_package_metadata():
     assert "@" not in value.split("==", 1)[-1]
 
 
-def test_grammar_version_prefers_module_dunder_version_over_metadata_lookup(monkeypatch):
-    """When `tslp.__version__` is set, importlib.metadata must not be consulted."""
-    import importlib.metadata
-    from types import SimpleNamespace
-
-    from git_cg import fingerprints as fp_mod
-
-    def boom(_name: str) -> str:
-        raise AssertionError("importlib.metadata.version should not be called")
-
-    monkeypatch.setattr(fp_mod, "tslp", SimpleNamespace(__version__="9.9.9", __file__="ignored"))
-    monkeypatch.setattr(importlib.metadata, "version", boom)
-    assert fp_mod.grammar_version() == "tree-sitter-language-pack==9.9.9"
-
-
-def test_grammar_version_falls_back_to_importlib_metadata(monkeypatch):
-    """When module attrs are absent, fall back to installed package metadata."""
-    import importlib.metadata
-    from types import SimpleNamespace
-
-    from git_cg import fingerprints as fp_mod
-
-    monkeypatch.setattr(fp_mod, "tslp", SimpleNamespace(__file__="/pkg/tslp/__init__.py"))
-    monkeypatch.setattr(importlib.metadata, "version", lambda _name: "1.2.3")
-    assert fp_mod.grammar_version() == "tree-sitter-language-pack==1.2.3"
-
-
-def test_grammar_version_falls_back_to_module_path_when_metadata_missing(monkeypatch):
-    """When neither module attrs nor package metadata are available, use the module path."""
-    import importlib.metadata
-    from types import SimpleNamespace
-
-    from git_cg import fingerprints as fp_mod
-
-    monkeypatch.setattr(fp_mod, "tslp", SimpleNamespace(__file__="/pkg/tslp/__init__.py"))
-
-    def not_found(name: str) -> str:
-        raise importlib.metadata.PackageNotFoundError(name)
-
-    monkeypatch.setattr(importlib.metadata, "version", not_found)
-    assert fp_mod.grammar_version() == "tree-sitter-language-pack@/pkg/tslp/__init__.py"
-
-
-def test_grammar_version_falls_back_when_metadata_lookup_raises_unexpected_error(monkeypatch):
-    """Any unexpected metadata lookup error must degrade gracefully to the path fallback."""
-    import importlib.metadata
-    from types import SimpleNamespace
-
-    from git_cg import fingerprints as fp_mod
-
-    monkeypatch.setattr(fp_mod, "tslp", SimpleNamespace(__file__="/pkg/tslp/__init__.py"))
-
-    def raise_unexpected(_name: str) -> str:
-        raise RuntimeError("metadata backend unavailable")
-
-    monkeypatch.setattr(importlib.metadata, "version", raise_unexpected)
-    assert fp_mod.grammar_version() == "tree-sitter-language-pack@/pkg/tslp/__init__.py"
-
-
 def test_fingerprint_relational_invariants_multi_language():
     """Relational fingerprint invariants hold across a small multi-language set."""
     cases = {
@@ -314,3 +255,62 @@ def test_fingerprint_relational_invariants_multi_language():
             assert result.classification in set(FingerprintClass)
             assert result.baseline_fps.shape_fp
             assert result.staged_fps.shape_fp
+
+
+def test_grammar_version_prefers_dunder_version_attribute(monkeypatch):
+    """When `__version__` is set, it must be used directly without touching importlib.metadata."""
+    from git_cg import fingerprints as fp_mod
+
+    monkeypatch.setattr(fp_mod.tslp, "__version__", "9.9.9", raising=False)
+
+    def boom(_name: str) -> str:
+        raise AssertionError("importlib.metadata.version must not be called when __version__ is set")
+
+    monkeypatch.setattr("importlib.metadata.version", boom)
+
+    assert fp_mod.grammar_version() == "tree-sitter-language-pack==9.9.9"
+
+
+def test_grammar_version_falls_back_to_importlib_metadata(monkeypatch):
+    """Without `__version__`/`VERSION`, the package metadata version must be used."""
+    from git_cg import fingerprints as fp_mod
+
+    monkeypatch.setattr(fp_mod.tslp, "__version__", None, raising=False)
+    monkeypatch.setattr(fp_mod.tslp, "VERSION", None, raising=False)
+    monkeypatch.setattr("importlib.metadata.version", lambda name: "0.13.5")
+
+    assert fp_mod.grammar_version() == "tree-sitter-language-pack==0.13.5"
+
+
+def test_grammar_version_falls_back_to_file_path_when_metadata_missing(monkeypatch):
+    """If package metadata is unavailable, fall back to the module `__file__` identity."""
+    from importlib.metadata import PackageNotFoundError
+
+    from git_cg import fingerprints as fp_mod
+
+    monkeypatch.setattr(fp_mod.tslp, "__version__", None, raising=False)
+    monkeypatch.setattr(fp_mod.tslp, "VERSION", None, raising=False)
+    monkeypatch.setattr(fp_mod.tslp, "__file__", "/fake/path/tslp/__init__.py", raising=False)
+
+    def not_found(_name: str) -> str:
+        raise PackageNotFoundError("tree-sitter-language-pack")
+
+    monkeypatch.setattr("importlib.metadata.version", not_found)
+
+    assert fp_mod.grammar_version() == "tree-sitter-language-pack@/fake/path/tslp/__init__.py"
+
+
+def test_grammar_version_falls_back_to_file_path_on_unexpected_metadata_error(monkeypatch):
+    """Any other importlib.metadata error must also degrade to the file-path fallback, not raise."""
+    from git_cg import fingerprints as fp_mod
+
+    monkeypatch.setattr(fp_mod.tslp, "__version__", None, raising=False)
+    monkeypatch.setattr(fp_mod.tslp, "VERSION", None, raising=False)
+    monkeypatch.setattr(fp_mod.tslp, "__file__", "/fake/path/tslp/__init__.py", raising=False)
+
+    def boom(_name: str) -> str:
+        raise RuntimeError("unexpected metadata backend failure")
+
+    monkeypatch.setattr("importlib.metadata.version", boom)
+
+    assert fp_mod.grammar_version() == "tree-sitter-language-pack@/fake/path/tslp/__init__.py"

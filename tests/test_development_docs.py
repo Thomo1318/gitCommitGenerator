@@ -473,14 +473,84 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
         assert "instructor" in content
         assert "tree-sitter-language-pack" in content
 
+    def test_wp0_baseline_table_lists_all_ci_workflow_runs(self):
+        """Every workflow run link recorded at the #177 baseline must be present."""
+        content = self._content()
+        section = _section_after_heading(content, "### Evidence expectations (Issue #177 WP0 baseline)")
+        for run_id in ("29995846892", "29995847178", "29995846842", "29995846813"):
+            assert run_id in section, run_id
+        for workflow in ("ci.yml", "security.yml", "docs.yml", "codeql.yml"):
+            assert f"CI `{workflow}`" in section, workflow
+
+    def test_wp0_baseline_table_records_branch_and_local_evidence(self):
+        content = self._content()
+        section = _section_after_heading(content, "### Evidence expectations (Issue #177 WP0 baseline)")
+        assert "`main` and `CI/177-deps-actions-and-python-upgrades`" in section
+        assert "**1006 passed**" in section
+        assert "Python 3.14.5" in section
+
+    def test_wp0_baseline_table_records_deferred_leftovers_and_epic_link(self):
+        content = self._content()
+        section = _section_after_heading(content, "### Evidence expectations (Issue #177 WP0 baseline)")
+        assert "Deferred Phase 3 leftovers" in section
+        assert "**none** for this baseline" in section
+        assert "Parent epic link" in section
+        assert "[#158]" in section
+
+    def test_wp1_dependency_floor_table_rows_have_rationale(self):
+        """Each WP1 floor row must document its floor/bound and rationale, not just the name."""
+        content = self._content()
+        section = _section_after_heading(content, "### Dependency floors (Issue #177 WP1)")
+        assert "| `pytest` | `>=9` |" in section
+        assert "| `pytest-cov` | `>=7` |" in section
+        assert "| `tree-sitter-language-pack` | `>=0.13,<1` |" in section
+        assert "| `tree-sitter` | `>=0.26,<0.27` |" in section
+        assert "| `rich` | `>=14.3.4,<16` |" in section
+        assert "| `code-review-graph` | `>=2.3.7` |" in section
+        assert "tests/test_project_config.py" in section
+
+    def test_wp1_dependency_floor_table_explains_ceilings(self):
+        content = self._content()
+        section = _section_after_heading(content, "### Dependency floors (Issue #177 WP1)")
+        assert "CRG `<1` cap" in section
+        assert "instructor` 1.15.x requires `rich<15`" in section
+        assert "no silent rich 15 / tslp 1.x beyond the CRG `<1` cap" in section
+
+    def test_wp6_deferred_pin_bumps_lists_each_bullet(self):
+        content = self._content()
+        section = _section_after_heading(content, "### Deferred pin bumps (Issue #177 WP6)")
+        assert "**`ruff`** and **`hk`**" in section
+        assert "`mise.toml` exact `hk` pin" in section
+        assert "`hk.pkl` / `min_hk_version`" in section
+        assert "tests/test_hk_config.py` unchanged" in section
+        assert "**`rich` 15.x**" in section
+        assert "**`tree-sitter-language-pack` 1.x**" in section
+        assert "**Dependabot `github-actions` grouping**" in section
+        assert '`patterns: ["*"]`' in section
+
+    def test_issue_177_sections_appear_in_documented_order(self):
+        """WP0 baseline, WP1 floors, and WP6 deferrals must appear in ascending WP order."""
+        content = self._content()
+        assert (
+            content.index("### Evidence expectations (Issue #177 WP0 baseline)")
+            < content.index("### Dependency floors (Issue #177 WP1)")
+            < content.index("### Deferred pin bumps (Issue #177 WP6)")
+        )
+
+    def test_issue_177_sections_precede_contribution_workflow(self):
+        content = self._content()
+        assert content.index("### Deferred pin bumps (Issue #177 WP6)") < content.index(
+            "## 🤝 Contribution Workflow"
+        )
+
 
 # ===========================================================================
-# CHANGELOG.md
+# CHANGELOG.md — Issue #177 Unreleased entries
 # ===========================================================================
 
 
-class TestChangelogUnreleasedSection:
-    """Issue #177 WP6: the `Unreleased` section documenting the deps/Actions programme."""
+class TestChangelogUnreleasedIssue177Entries:
+    """Tests for the new '## Unreleased' section documenting the #177 dependency/Actions work."""
 
     def _content(self) -> str:
         return _read_changelog_md()
@@ -488,43 +558,51 @@ class TestChangelogUnreleasedSection:
     def test_file_exists(self):
         assert CHANGELOG_MD.is_file()
 
-    def test_unreleased_heading_is_first_section(self):
+    def test_unreleased_is_the_first_heading(self):
         content = self._content()
         assert content.lstrip().startswith("## Unreleased")
 
-    def test_unreleased_precedes_previous_release_heading(self):
+    def test_unreleased_precedes_v0_5_0(self):
         content = self._content()
         assert content.index("## Unreleased") < content.index("## v0.5.0")
 
-    def test_unreleased_has_security_dependencies_subsection(self):
+    def test_security_dependencies_subheading_present(self):
         content = self._content()
         section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
         assert "### 🔒️ Security / Dependencies" in section
 
-    def test_unreleased_entries_reference_issue_and_epic(self):
+    def test_all_expected_bullet_entries_present(self):
         content = self._content()
         section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        bullet_lines = [line for line in section.splitlines() if line.startswith("- ")]
-        assert bullet_lines, "expected at least one changelog bullet under Unreleased"
+        expected_bullets = [
+            "📝 docs(dev-guide): record #177 WP6 ruff/hk and upstream blocker deferrals (#177) (#158)",
+            "⬆️ build(deps): bump tree-sitter 0.25.2 → 0.26.0; keep language-pack 0.13 under CRG `<1` cap (#177) (#158)",
+            "⬆️ build(deps): bump pytest 9.0.3 → 9.1.1 (#177) (#158)",
+            "⬆️ build(deps): bump code-review-graph 2.3.6 → 2.3.7 (#177) (#158)",
+            "👷 ci(deps): stage GitHub Actions majors with full SHA pins (#177) (#158)",
+            "🔒️ fix(deps): raise pytest/tree-sitter/rich floors toward lock (#177) (#158)",
+        ]
+        for bullet in expected_bullets:
+            assert bullet in section, bullet
+
+    def test_unreleased_section_has_exactly_six_bullets(self):
+        content = self._content()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
+        assert len(bullet_lines) == 6
+
+    def test_every_bullet_references_issue_177_and_epic_158(self):
+        content = self._content()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
+        assert bullet_lines
         for line in bullet_lines:
             assert "(#177)" in line, line
             assert "(#158)" in line, line
 
-    def test_unreleased_mentions_key_dependency_bumps(self):
+    def test_v0_5_0_section_still_follows_with_features_heading(self):
+        """The pre-existing v0.5.0 release section must be preserved unchanged below Unreleased."""
         content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        assert "tree-sitter 0.25.2 \u2192 0.26.0" in section
-        assert "pytest 9.0.3 \u2192 9.1.1" in section
-        assert "code-review-graph 2.3.6 \u2192 2.3.7" in section
-
-    def test_unreleased_mentions_github_actions_sha_pins(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        assert "GitHub Actions" in section
-        assert "full SHA pins" in section
-
-    def test_v0_5_0_section_still_intact_after_unreleased(self):
-        """Ensure the pre-existing v0.5.0 release notes were not clobbered."""
-        content = self._content()
-        assert "### \u2728 Features" in content
-        assert "feat(main): wire fingerprint enrichment into shared rank pass (#161)" in content
+        assert "## v0.5.0" in content
+        v0_5_0_section = content.split("## v0.5.0", 1)[1]
+        assert "### ✨ Features" in v0_5_0_section
