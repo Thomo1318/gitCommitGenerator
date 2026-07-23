@@ -42,15 +42,14 @@ except Exception as e:
 import httpx  # noqa: E402
 import instructor  # noqa: E402
 import openai  # noqa: E402
-import opik  # noqa: E402
 import typer  # noqa: E402
 from openai import OpenAI  # noqa: E402
-from opik import opik_context  # noqa: E402
 from opik.integrations.openai import track_openai  # noqa: E402
 from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
 
+import opik  # noqa: E402
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
 from git_cg.interaction import (  # noqa: E402
     can_open_tty,
@@ -62,11 +61,12 @@ from git_cg.interaction import (  # noqa: E402
     prompt_regeneration_guidance,
     prompt_with_gum,
 )
-from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind  # noqa: E402
+from git_cg.models import CommitPlan, IssueReference, IssueReferenceKind, ModelCommitPlan  # noqa: E402
 from git_cg.retries import llm_retry  # noqa: E402
 from git_cg.secrets import resolve_secret  # noqa: E402
 from git_cg.sop import load_sop  # noqa: E402
 from git_cg.telemetry import compute_prompt_hash  # noqa: E402
+from opik import opik_context  # noqa: E402
 
 app = typer.Typer(
     add_completion=False,
@@ -509,13 +509,14 @@ def generate_commit_message(
     if tags:
         opik_context.update_current_span(tags=tags)
 
-    commit_result: CommitPlan = client.chat.completions.create(
+    model_result: ModelCommitPlan = client.chat.completions.create(
         model=model_name,
-        response_model=CommitPlan,
+        response_model=ModelCommitPlan,
         messages=build_generation_messages(system_prompt, diff_output),
         max_retries=2,
         parallel_tool_calls=False,
     )
+    commit_result = model_result.to_commit_plan()
     if active_directives:
         from git_cg.models import CommitType
 
@@ -580,16 +581,21 @@ def build_system_prompt(
     active_directives: dict[str, str] | None = None,
     residual_guidance: str | None = None,
     previous_plan: CommitPlan | None = None,
+    ranked_candidates: list | None = None,
+    contract=None,
 ) -> str:
     """
     Compose the system prompt used to generate a structured Conventional Commit `CommitPlan`.
 
     Parameters:
-        diff_output (str): Git diff content used to derive intent signals and rank candidate commits.
+        diff_output (str): Git diff content used for language detection and optional legacy ranking.
         verbose (bool): Enables extra diagnostic output while building the prompt.
         active_directives (dict[str, str] | None): Locked regeneration overrides such as preferred type or scope.
         residual_guidance (str | None): Free-text regeneration guidance that should influence intent selection and wording.
         previous_plan (CommitPlan | None): Previously generated commit plan to include when regenerating.
+        ranked_candidates: Optional precomputed rank list (single shared pass). When provided, the
+            prompt does not re-rank the diff.
+        contract: Optional resolved semantic contract to lock in the system prompt before generation.
 
     Returns:
         str: The complete system prompt, including SOP-derived context, ranked intent candidates when available, language-detection guidance, localisation requirements, and regeneration guidance when supplied.
@@ -610,11 +616,13 @@ def build_system_prompt(
         context_parts.append("Agentic Commit Workflow:\n" + json.dumps(workflow, indent=2))
 
     if gitops_matrix:
-        if verbose:
-            console.log("Analyzing diff signals and ranking intents...")
-
-        signals = extract_diff_signals(diff_output)
-        ranked_candidates = rank_commit_intents(signals, gitops_matrix)
+        if ranked_candidates is None:
+            if verbose:
+                console.log("Analyzing diff signals and ranking intents...")
+            signals = extract_diff_signals(diff_output)
+            ranked_candidates = rank_commit_intents(signals, gitops_matrix)
+        elif verbose:
+            console.log("Using shared ranked intent candidates...")
 
         primary_candidates = ranked_candidates[:3]
         secondary_candidates = []
@@ -671,6 +679,20 @@ def build_system_prompt(
 
         context_parts.append(candidates_str.strip())
 
+    if contract is not None:
+        contract_str = (
+            "DETERMINISTIC SEMANTIC CONTRACT (LOCKED BEFORE GENERATION):\n"
+            f"- primary_intent_id: {contract.primary_intent_id}\n"
+            f"- gitmoji: {contract.gitmoji}\n"
+            f"- cc_type: {contract.cc_type}\n"
+            f"- semver_impact: {contract.semver_impact}\n"
+            f"- changelog_group: {contract.changelog_group}\n"
+            "CRITICAL: primary_intent.intent_id, gitmoji, cc_type, semver_impact, and changelog_group "
+            "MUST match this contract exactly. Do not invent intent ids. "
+            "You may only choose wording (description/body) and optional secondary intents from the matrix vocabulary."
+        )
+        context_parts.append(contract_str)
+
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
 
@@ -682,6 +704,7 @@ def build_system_prompt(
         "CRITICAL: The primary description MUST NOT exceed 50 characters so the full header stays under 72 characters. "
         "CRITICAL: You must invoke the CommitPlan tool EXACTLY ONCE. Do not output multiple tool calls. Put all secondary intents inside the secondary_intents array. "
         "CRITICAL: Do not output reasoning, XML, pseudo-tool-call tags, or explanatory prose outside the single CommitPlan response. "
+        "CRITICAL: intent_id values MUST exist in the SOP matrix / ranked candidates. Unknown intent ids are invalid. "
     )
 
     primary_lang = detect_primary_language(diff_output)
@@ -981,18 +1004,21 @@ def _detect_branch_issue_reference(verbose: bool) -> list[IssueReference]:
 
 
 def _build_generation_context(diff_output: str):
-    from git_cg.intent import derive_intent_selection_constraints
+    """Build deterministic generation context with a single shared rank pass."""
+    from git_cg.intent import IntentSelectionConstraints, derive_intent_selection_constraints
+    from git_cg.regeneration import GenerationContext
 
     signals = extract_diff_signals(diff_output)
     gitops_matrix = load_sop().get("gitmoji_reference_matrix", [])
     ranked_candidates = rank_commit_intents(signals, gitops_matrix) if gitops_matrix else []
-    constraints = derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else None
-
-    if constraints:
-        from git_cg.regeneration import GenerationContext
-
-        return GenerationContext(diff_signals=signals, ranked_intents=ranked_candidates, constraints=constraints)
-    return None
+    constraints = (
+        derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else IntentSelectionConstraints()
+    )
+    return GenerationContext(
+        diff_signals=signals,
+        ranked_intents=ranked_candidates,
+        constraints=constraints,
+    )
 
 
 def _write_telemetry_state_safe(
@@ -1439,15 +1465,24 @@ def _run_commit_generation(
 
     gen_context = _build_generation_context(diff_output)
 
-    from git_cg.regeneration import RegenerationState, resolve_semantic_contract
+    from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
 
     while True:
+        regen_state = RegenerationState(
+            previous_plan=review_state.commit_plan if review_state else None,
+            active_directives=active_directives,
+            residual_guidance=residual_guidance,
+        )
+        contract = resolve_semantic_contract(gen_context, regen_state)
+
         system_prompt = build_system_prompt(
             diff_output,
             verbose,
             active_directives=active_directives,
             residual_guidance=residual_guidance,
             previous_plan=review_state.commit_plan if review_state else None,
+            ranked_candidates=gen_context.ranked_intents,
+            contract=contract,
         )
 
         # Offline prompt tracking (synced asynchronously via script)
@@ -1480,23 +1515,10 @@ def _run_commit_generation(
                 scope.set_context("git_cg", {"diff_size": len(diff_output)})
                 _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
-        if review_state is not None and gen_context:
-            # We are in regenerate mode. Resolve semantic contract to lock semantics.
-            regen_state = RegenerationState(
-                previous_plan=review_state.commit_plan,
-                active_directives=active_directives,
-                residual_guidance=residual_guidance,
-            )
-            contract = resolve_semantic_contract(gen_context, regen_state)
-
-            from git_cg.regeneration import enforce_semantic_contract
-
-            commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
-
-            if verbose:
-                console.log(
-                    f"Resolved and Enforced Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})"
-                )
+        # Always enforce the pre-resolved SOP contract after model render.
+        commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
+        if verbose:
+            console.log(f"Resolved and Enforced Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})")
 
         mixed_policy = os.environ.get("GIT_CG_MIXED_POLICY", "composite").lower()
         if commit_plan.split_recommended:

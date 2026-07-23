@@ -320,3 +320,44 @@ def test_detect_branch_issue_reference_not_found(mock_check_output):
     mock_check_output.return_value = "main\n"
     refs = _detect_branch_issue_reference(verbose=False)
     assert len(refs) == 0
+
+
+def test_build_system_prompt_includes_locked_contract_when_provided():
+    from types import SimpleNamespace
+
+    from git_cg.intent import RankedIntent
+    from git_cg.main import build_system_prompt
+
+    ranked = [
+        RankedIntent(
+            intent_id="bug_fix",
+            emoji="🐛",
+            code=":bug:",
+            cc_type="fix",
+            description="Fix a bug",
+            semver_impact="PATCH",
+            changelog_group="Fixed",
+            intent_group="bugfix",
+            score=80.0,
+            priority=80,
+            specificity=50,
+            split_weight=50,
+            evidence=["Matched positive signal: x"],
+        )
+    ]
+    contract = SimpleNamespace(
+        primary_intent_id="bug_fix",
+        gitmoji="🐛",
+        cc_type="fix",
+        semver_impact="PATCH",
+        changelog_group="Fixed",
+    )
+    prompt = build_system_prompt(
+        "diff --git a/x b/x\n",
+        ranked_candidates=ranked,
+        contract=contract,
+    )
+    assert "DETERMINISTIC SEMANTIC CONTRACT (LOCKED BEFORE GENERATION)" in prompt
+    assert "primary_intent_id: bug_fix" in prompt
+    assert "Unknown intent ids are invalid" in prompt
+    assert "bug_fix" in prompt
