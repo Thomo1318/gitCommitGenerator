@@ -14,11 +14,17 @@ REPO_ROOT = Path(__file__).parent.parent
 DEVELOPMENT_MD = REPO_ROOT / "DEVELOPMENT.md"
 ADR_0002 = REPO_ROOT / "docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md"
 README_MD = REPO_ROOT / "README.md"
+CHANGELOG_MD = REPO_ROOT / "CHANGELOG.md"
 
 
 def _read_development_md() -> str:
     """Return UTF-8 contents of DEVELOPMENT.md (module-level shared reader)."""
     return DEVELOPMENT_MD.read_text(encoding="utf-8")
+
+
+def _read_changelog_md() -> str:
+    """Return UTF-8 contents of CHANGELOG.md (module-level shared reader)."""
+    return CHANGELOG_MD.read_text(encoding="utf-8")
 
 
 def _read_readme_md() -> str:
@@ -466,3 +472,59 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
         assert "hk" in content
         assert "instructor" in content
         assert "tree-sitter-language-pack" in content
+
+
+# ===========================================================================
+# CHANGELOG.md
+# ===========================================================================
+
+
+class TestChangelogUnreleasedSection:
+    """Issue #177 WP6: the `Unreleased` section documenting the deps/Actions programme."""
+
+    def _content(self) -> str:
+        return _read_changelog_md()
+
+    def test_file_exists(self):
+        assert CHANGELOG_MD.is_file()
+
+    def test_unreleased_heading_is_first_section(self):
+        content = self._content()
+        assert content.lstrip().startswith("## Unreleased")
+
+    def test_unreleased_precedes_previous_release_heading(self):
+        content = self._content()
+        assert content.index("## Unreleased") < content.index("## v0.5.0")
+
+    def test_unreleased_has_security_dependencies_subsection(self):
+        content = self._content()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        assert "### 🔒️ Security / Dependencies" in section
+
+    def test_unreleased_entries_reference_issue_and_epic(self):
+        content = self._content()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        bullet_lines = [line for line in section.splitlines() if line.startswith("- ")]
+        assert bullet_lines, "expected at least one changelog bullet under Unreleased"
+        for line in bullet_lines:
+            assert "(#177)" in line, line
+            assert "(#158)" in line, line
+
+    def test_unreleased_mentions_key_dependency_bumps(self):
+        content = self._content()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        assert "tree-sitter 0.25.2 \u2192 0.26.0" in section
+        assert "pytest 9.0.3 \u2192 9.1.1" in section
+        assert "code-review-graph 2.3.6 \u2192 2.3.7" in section
+
+    def test_unreleased_mentions_github_actions_sha_pins(self):
+        content = self._content()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        assert "GitHub Actions" in section
+        assert "full SHA pins" in section
+
+    def test_v0_5_0_section_still_intact_after_unreleased(self):
+        """Ensure the pre-existing v0.5.0 release notes were not clobbered."""
+        content = self._content()
+        assert "### \u2728 Features" in content
+        assert "feat(main): wire fingerprint enrichment into shared rank pass (#161)" in content
