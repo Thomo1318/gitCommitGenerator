@@ -988,15 +988,21 @@ def pack_prompt_diff(
         else:
             omitted_paths.append(path or "<unknown-path>")
 
-    if not omitted_paths:
-        # Pathological: first section alone exceeds budget — keep file-header-safe prefix.
+    # If the first kept payload is empty because every section exceeded the budget,
+    # retain a file-header-safe prefix of the first section so the prompt is not blank.
+    kept_body = "".join(kept_parts).strip()
+    if not kept_body and sections:
         first_path, first_body = sections[0]
         kept = (prefix + first_body)[: max(0, max_chars - 160)].rstrip()
         note = (
             "\n\n... [PROMPT DIFF TRUNCATED at file boundary budget; "
             "single large file partially omitted from prompt only] ...\n"
         )
-        return kept + note, [first_path or "<unknown-path>"]
+        omitted = omitted_paths or [first_path or "<unknown-path>"]
+        return kept + note, omitted
+
+    if not omitted_paths:
+        return analysis_diff if len(analysis_diff) <= max_chars else "".join(kept_parts), []
 
     inventory_lines = ", ".join(omitted_paths[:40])
     more = "" if len(omitted_paths) <= 40 else f" (+{len(omitted_paths) - 40} more)"
@@ -1092,14 +1098,34 @@ def _detect_branch_issue_reference(verbose: bool) -> list[IssueReference]:
     return issue_references
 
 
-def _build_generation_context(diff_output: str):
-    """Build deterministic generation context with a single shared rank pass."""
+def _build_generation_context(
+    diff_output: str,
+    *,
+    enable_semantic: bool | None = None,
+    enrichment_facts=None,
+):
+    """Build deterministic generation context with a single shared rank pass.
+
+    When semantic mode is enabled, optional ``enrichment_facts`` (Phase 1/2) are
+    passed into the ranker as closed-vocabulary marker inputs only.
+    """
     from git_cg.intent import IntentSelectionConstraints, derive_intent_selection_constraints
     from git_cg.regeneration import GenerationContext
+    from git_cg.semantic_flags import is_semantic_enabled
 
     signals = extract_diff_signals(diff_output)
     gitops_matrix = load_sop().get("gitmoji_reference_matrix", [])
-    ranked_candidates = rank_commit_intents(signals, gitops_matrix) if gitops_matrix else []
+    semantic_on = is_semantic_enabled(enable_semantic)
+    ranked_candidates = (
+        rank_commit_intents(
+            signals,
+            gitops_matrix,
+            enrichment=enrichment_facts if semantic_on else None,
+            enable_semantic=semantic_on,
+        )
+        if gitops_matrix
+        else []
+    )
     constraints = (
         derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else IntentSelectionConstraints()
     )
@@ -1107,6 +1133,39 @@ def _build_generation_context(diff_output: str):
         diff_signals=signals,
         ranked_intents=ranked_candidates,
         constraints=constraints,
+    )
+
+
+def _build_semantic_enrichment_facts(
+    *,
+    semantic_enabled: bool,
+    fingerprint_class_counts: dict | None,
+    body_similarity_min: float | None,
+    body_similarity_avg: float | None,
+    fingerprint_markers: list | None,
+):
+    """Assemble optional ranker enrichment facts from already-collected producers.
+
+    Fail-open: returns None when semantic mode is off or no usable facts exist.
+    Does not perform graph I/O (keeps intent ranker free of CRG imports).
+    """
+    if not semantic_enabled:
+        return None
+
+    from git_cg.intent import FingerprintEnrichmentFacts, SemanticEnrichmentFacts
+
+    has_fp = bool(fingerprint_class_counts) or bool(fingerprint_markers)
+    has_sim = body_similarity_min is not None or body_similarity_avg is not None
+    if not has_fp and not has_sim:
+        return None
+
+    return SemanticEnrichmentFacts(
+        fingerprints=FingerprintEnrichmentFacts(
+            class_counts=dict(fingerprint_class_counts) if fingerprint_class_counts else None,
+            body_similarity_min=body_similarity_min,
+            body_similarity_avg=body_similarity_avg,
+            markers=list(fingerprint_markers) if fingerprint_markers else None,
+        )
     )
 
 
@@ -1571,7 +1630,18 @@ def _run_commit_generation(
     residual_guidance: str | None = None
     review_state: ReviewState | None = None
 
-    gen_context = _build_generation_context(analysis_diff)
+    enrichment_facts = _build_semantic_enrichment_facts(
+        semantic_enabled=semantic_enabled,
+        fingerprint_class_counts=fingerprint_class_counts if isinstance(fingerprint_class_counts, dict) else None,
+        body_similarity_min=body_similarity_min,
+        body_similarity_avg=body_similarity_avg,
+        fingerprint_markers=fingerprint_markers if isinstance(fingerprint_markers, list) else None,
+    )
+    gen_context = _build_generation_context(
+        analysis_diff,
+        enable_semantic=semantic_enabled,
+        enrichment_facts=enrichment_facts,
+    )
 
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
 
