@@ -15,18 +15,22 @@
 ```yaml
 adr_number: "0006"
 title: "1Password Python SDK Migration"
-status: "Implemented"
-version: "v1.0.1"
+status: "Superseded"
+version: "v1.0.2"
 date: "2026-06-08"
 created: "2026-06-08T16:55:00"
-modified: "2026-06-08T16:55:00"
+modified: "2026-07-23 15:07:58"
 risk_level: "Low"
 reversibility: "High"
 security_scope: "Authentication"
 tags: ["1password", "sdk", "python", "secrets"]
 supersedes: ["0004"]
-superseded_by: []
+superseded_by: ["0014-fnox-canonical-secrets-demote-1password-sdk-and-fifo-dotenv"]
 ```
+
+> [!IMPORTANT]
+> **Superseded by [ADR-0014](./0014-fnox-canonical-secrets-demote-1password-sdk-and-fifo-dotenv.md)** (2026-07-23 15:07:58).
+> The historical SDK migration narrative below is retained for audit. **Do not** treat the 1Password Python SDK as the canonical `git-cg` runtime secrets path. Canonical path is **fnox-orchestrated process environment** + env-first `resolve_secret()`.
 
 ## 1. Introduction and Goals
 
@@ -155,6 +159,8 @@ Revisit if 1Password introduces a more stable way to inject environments into is
 - **Antigravity rule assessment**: The `1Password SDK` is now the canonical method for extracting secrets in Python tools within this ecosystem.
 
 ## CHANGELOG
+
+- v1.0.2 (2026-07-23 15:07:58): Status set to **Superseded** by ADR-0014 (fnox-canonical secrets; demote SDK/FIFO dotenv). Body retained as historical record.
 
 
 

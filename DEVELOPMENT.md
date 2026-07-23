@@ -45,12 +45,20 @@ The provisioning process is heavily automated, though some final manual actions 
 
 ## 🔐 Secrets Management & API Keys
 
-`git-cg` uses **fnox** in combination with 1Password to securely orchestrate secrets.
-If you do not have access to the shared 1Password vault or are running without `fnox`, you must provide the necessary API keys manually via exported environment variables or a separate secrets file (e.g., `.env.local` or `.secrets`).
+Canonical policy: **[ADR-0014](ADRs/0014-fnox-canonical-secrets-demote-1password-sdk-and-fifo-dotenv.md)** (Accepted) — implements [ADR-0003](ADRs/0003-adopt-fnox-for-secrets-management.md) fnox orchestration; supersedes [ADR-0006](ADRs/0006-1password-python-sdk-migration.md) SDK-as-canonical runtime; companion IDE/FIFO boundary [ADR-0013](ADRs/0013-formalise-ide-boundaries-for-1password-mounted-local-env-files.md).
 
-> **Warning for IDE Users**: Do **NOT** use the root `.env` file for non-secret IDE settings (like `PYTHONPATH`). When `fnox` is active, it mounts `.env` as a named pipe (FIFO) which can cause severe CPU spikes and lockups in editors like VS Code. For non-secret IDE configuration, place your environment variables in `.vscode/python.env` (which is already configured in our workspace settings).
+**Runtime contract (target / normative):**
 
-Example API key configuration (if running outside fnox):
+1. Inject secrets into the **process environment** via `fnox exec -- <command>` (maintainer may use 1Password *as a fnox backend*; contributors use **age**).
+2. CI injects GitHub Actions secrets directly into env — **no** 1Password required.
+3. `git-cg` resolves secrets **env-first** (`resolve_secret()`); it must **not** depend on import-time 1Password SDK vault crawls or automatic reads of a workspace-root FIFO `.env`.
+4. Interactive shells must **not** export `OP_SERVICE_ACCOUNT_TOKEN` (breaks `gh` / desktop `op` — see ADR-0004).
+
+Until the ADR-0014 implementation PR lands, legacy SDK/dotenv code paths may still exist in the tree — treat them as deprecated.
+
+> **Warning for IDE Users**: Do **NOT** point the Python extension (or other tooling) at a root `.env` that is a 1Password Environments **FIFO / named pipe**. Concurrent readers lock up VS Code / Antigravity Extension Hosts. For non-secret IDE settings (e.g. `PYTHONPATH`), use `.vscode/python.env` (regular file only).
+
+Example API key configuration (if running outside fnox, e.g. CI-equivalent local export):
 
 ```env
 OPENAI_API_KEY="sk-your-openai-key"

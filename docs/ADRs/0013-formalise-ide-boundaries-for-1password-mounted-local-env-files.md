@@ -11,11 +11,11 @@ A high-fidelity, highly detailed cyberpunk technical infographic. At the top cen
 ```yaml
 adr_number: "0013"
 title: "Formalise IDE Boundaries for 1Password-Mounted Local .env Files"
-status: "Proposed"
-version: "v1.1.1"
+status: "Accepted"
+version: "v1.1.2"
 date: "2026-06-23"
 created: "2026-06-23 00:00:00"
-modified: "2026-06-23 08:35:48"
+modified: "2026-07-23 15:07:58"
 risk_level: "Medium"
 reversibility: "High"
 security_scope: "Authentication & Local Development Tooling"
@@ -36,6 +36,10 @@ tags:
 supersedes: []
 superseded_by: []
 ```
+
+> [!NOTE]
+> **Accepted** 2026-07-23 15:07:58 as companion policy to [ADR-0014](./0014-fnox-canonical-secrets-demote-1password-sdk-and-fifo-dotenv.md).
+> FIFO `.env` mounts remain forbidden as IDE/app dotenv sources. Runtime secrets follow fnox → process env, not SDK crawl of vaults via import-time bootstrap.
 
 ## 1. Introduction and Goals
 
@@ -1070,6 +1074,8 @@ That is slightly sharper than the earlier draft, which emphasized repository-roo
 _Section appended: 2026-06-23 08:35:48 AEST_
 
 ## CHANGELOG
+
+- v1.1.2 (2026-07-23 15:07:58): Status advanced **Proposed → Accepted** alongside ADR-0014 acceptance (IDE/FIFO boundary companion).
 
 - v1.0.0 (2026-06-23 00:00:00): Initial proposed ADR formalizing the architectural boundary between intentional 1Password-mounted local `.env` FIFOs and IDE/static-tooling consumers. Preserved ADR-0003 and ADR-0006 as authoritative context, documented the Antigravity / VS Code incident, recorded hypothesis eliminations, and established editor-isolation plus long-term mount-relocation strategy.
 - v1.1.0 (2026-06-23 08:35:48): Appended workspace-root path-resolution findings and controlled reproduction evidence showing that `/Users/admin/dev/activeProjects/.env` at the effective `${workspaceFolder}/.env` path was the decisive trigger when it was a FIFO. Clarified that the failure mechanism was workspace-root precedence plus FIFO file type, not merely the presence of nested `.env` files.
