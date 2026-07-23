@@ -914,45 +914,134 @@ def _interactive_review_dry_run(
                 os.unlink(temp_path)
 
 
+# Interim prompt ceiling until Phase 11 PromptBudget (Issue #161 Slice 4).
+# Analysis/rank must never share a hard mid-string slice of this budget.
+PROMPT_DIFF_MAX_CHARS = 50_000
+_DIFF_FILE_HEADER_RE = re.compile(r"(?m)^diff --git ")
+
+
+def _staged_diff_command(*, use_rtk: bool) -> list[str]:
+    """Build the staged-diff argv, optionally via rtk token compression."""
+    excludes = [
+        ":(exclude)*.lock",
+        ":(exclude)*-lock.json",
+        ":(exclude)*-lock.yaml",
+        ":(exclude)*.lockb",
+        ":(exclude)*zensical*",
+        ":(exclude)*auxly*",
+    ]
+    if use_rtk:
+        return ["rtk", "git", "diff", "--cached", "--", ".", *excludes]
+    return ["git", "diff", "--cached", "--", ".", *excludes]
+
+
+def pack_prompt_diff(
+    analysis_diff: str,
+    *,
+    max_chars: int = PROMPT_DIFF_MAX_CHARS,
+) -> tuple[str, list[str]]:
+    """Pack a prompt-bound diff without mid-file hard slices.
+
+    Keeps whole ``diff --git`` file sections while under ``max_chars``. When the
+    budget is exceeded, omitted paths are listed in an inventory footer instead of
+    chopping mid-hunk. Analysis/rank callers must use the full ``analysis_diff``.
+
+    Returns:
+        prompt_diff: Budgeted diff text for the LLM user message only.
+        omitted_paths: Paths dropped from the prompt payload (may be empty).
+    """
+    if max_chars <= 0:
+        raise ValueError("max_chars must be positive")
+
+    if len(analysis_diff) <= max_chars:
+        return analysis_diff, []
+
+    matches = list(_DIFF_FILE_HEADER_RE.finditer(analysis_diff))
+    if not matches:
+        # No file headers — keep a conservative prefix with an explicit note.
+        kept = analysis_diff[: max(0, max_chars - 120)].rstrip()
+        note = "\n\n... [PROMPT DIFF TRUNCATED — no file boundaries found; analysis/rank used full staged diff] ...\n"
+        return kept + note, ["<unbounded-diff>"]
+
+    sections: list[tuple[str | None, str]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(analysis_diff)
+        header_line = analysis_diff[start : analysis_diff.find("\n", start)]
+        path = None
+        parts = header_line.split()
+        if len(parts) >= 4 and parts[2].startswith("a/") and parts[3].startswith("b/"):
+            path = parts[3][2:]
+        sections.append((path, analysis_diff[start:end]))
+
+    prefix = analysis_diff[: matches[0].start()]
+    kept_parts: list[str] = [prefix] if prefix else []
+    used = len(prefix)
+    omitted_paths: list[str] = []
+
+    for path, body in sections:
+        # Reserve room for a short omission footer if we drop anything later.
+        footer_reserve = 180
+        if used + len(body) + footer_reserve <= max_chars:
+            kept_parts.append(body)
+            used += len(body)
+        else:
+            omitted_paths.append(path or "<unknown-path>")
+
+    if not omitted_paths:
+        # Pathological: first section alone exceeds budget — keep file-header-safe prefix.
+        first_path, first_body = sections[0]
+        kept = (prefix + first_body)[: max(0, max_chars - 160)].rstrip()
+        note = (
+            "\n\n... [PROMPT DIFF TRUNCATED at file boundary budget; "
+            "single large file partially omitted from prompt only] ...\n"
+        )
+        return kept + note, [first_path or "<unknown-path>"]
+
+    inventory_lines = ", ".join(omitted_paths[:40])
+    more = "" if len(omitted_paths) <= 40 else f" (+{len(omitted_paths) - 40} more)"
+    footer = (
+        "\n\n... [PROMPT DIFF OMISSION INVENTORY — analysis/rank used full staged diff] ...\n"
+        f"Omitted from prompt ({len(omitted_paths)} path(s)): {inventory_lines}{more}\n"
+    )
+    packed = "".join(kept_parts).rstrip() + footer
+    if len(packed) > max_chars:
+        packed = packed[:max_chars].rstrip() + "\n"
+    return packed, omitted_paths
+
+
 @opik.track(project_name="gitCommitGenerator")
 def extract_git_diff(verbose: bool, strict: bool) -> str:
-    """
-    Extract the staged git diff to use for commit message generation.
+    """Extract the full staged git diff for analysis/ranking (no hard char-slice).
+
+    Prompt packing is separate via ``pack_prompt_diff`` so deterministic ranking
+    never consumes a mid-diff ``[:50000]`` chop (Issue #161 Slice 4).
     """
     try:
         has_rtk = shutil.which("rtk") is not None
-        diff_cmd_standard = [
-            "git",
-            "diff",
-            "--cached",
-            "--",
-            ".",
-            ":(exclude)*.lock",
-            ":(exclude)*-lock.json",
-            ":(exclude)*-lock.yaml",
-            ":(exclude)*.lockb",
-            ":(exclude)*zensical*",
-            ":(exclude)*auxly*",
-        ]
-        max_chars = 50000
-
         if has_rtk:
             if verbose:
                 console.log("Using rtk for token compression...")
             try:
-                diff_cmd_rtk = ["rtk", "git", "diff", "--cached", "--", ".", *diff_cmd_standard[5:]]
-                diff_output = subprocess.check_output(diff_cmd_rtk, stderr=subprocess.STDOUT, text=True)
+                diff_output = subprocess.check_output(
+                    _staged_diff_command(use_rtk=True),
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
             except subprocess.CalledProcessError as e:
                 if verbose:
                     console.log(f"rtk failed ({e}). Falling back to standard diff.")
-                diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
+                diff_output = subprocess.check_output(
+                    _staged_diff_command(use_rtk=False),
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
         else:
-            diff_output = subprocess.check_output(diff_cmd_standard, stderr=subprocess.STDOUT, text=True)
-
-        if len(diff_output) > max_chars:
-            diff_output = diff_output[:max_chars] + "\n\n... [DIFF TRUNCATED DUE TO LENGTH] ..."
-            if verbose:
-                console.log(f"Diff truncated to {max_chars} chars.")
+            diff_output = subprocess.check_output(
+                _staged_diff_command(use_rtk=False),
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
     except subprocess.CalledProcessError as e:
         _abort(f"[bold red]Error getting git diff:[/bold red] {e.output}", strict=strict)
 
@@ -961,7 +1050,7 @@ def extract_git_diff(verbose: bool, strict: bool) -> str:
         raise typer.Exit(code=0)
 
     if verbose:
-        console.log(f"Extracted git diff ({len(diff_output)} characters).")
+        console.log(f"Extracted analysis git diff ({len(diff_output)} characters).")
 
     return diff_output
 
@@ -1440,7 +1529,13 @@ def _run_commit_generation(
     trace_data = opik_context.get_current_trace_data()
     LAST_OPIK_TRACE_ID = trace_data.id if trace_data else None
 
-    diff_output = extract_git_diff(verbose=verbose, strict=strict)
+    analysis_diff = extract_git_diff(verbose=verbose, strict=strict)
+    prompt_diff, omitted_prompt_paths = pack_prompt_diff(analysis_diff)
+    if omitted_prompt_paths and verbose:
+        console.log(
+            f"Prompt diff packed: omitted {len(omitted_prompt_paths)} path(s) from LLM payload "
+            f"(analysis/rank still uses full staged diff; Phase 11 owns product packing)."
+        )
     sentry_sdk.add_breadcrumb(category="lifecycle", message="Extracted git diff successfully")
 
     try:
@@ -1476,7 +1571,7 @@ def _run_commit_generation(
     residual_guidance: str | None = None
     review_state: ReviewState | None = None
 
-    gen_context = _build_generation_context(diff_output)
+    gen_context = _build_generation_context(analysis_diff)
 
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
 
@@ -1489,7 +1584,7 @@ def _run_commit_generation(
         contract = resolve_semantic_contract(gen_context, regen_state)
 
         system_prompt = build_system_prompt(
-            diff_output,
+            analysis_diff,
             verbose,
             active_directives=active_directives,
             residual_guidance=residual_guidance,
@@ -1514,7 +1609,7 @@ def _run_commit_generation(
             ):
                 commit_plan = generate_commit_message(
                     client,
-                    diff_output,
+                    prompt_diff,
                     model_name,
                     system_prompt,
                     active_directives=active_directives,
@@ -1525,7 +1620,14 @@ def _run_commit_generation(
             with sentry_sdk.new_scope() as scope:
                 scope.set_tag("engine", engine)
                 scope.set_tag("model_name", model_name)
-                scope.set_context("git_cg", {"diff_size": len(diff_output)})
+                scope.set_context(
+                    "git_cg",
+                    {
+                        "diff_size": len(analysis_diff),
+                        "prompt_diff_size": len(prompt_diff),
+                        "prompt_omitted_path_count": len(omitted_prompt_paths),
+                    },
+                )
                 _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
         # Always enforce the pre-resolved SOP contract after model render.
@@ -1613,7 +1715,7 @@ def _run_commit_generation(
 
     _write_telemetry_state_safe(
         review_state=review_state,
-        diff_output=diff_output,
+        diff_output=analysis_diff,
         engine=engine,
         model_name=model_name,
         system_prompt=system_prompt,
