@@ -250,6 +250,9 @@ Download your preferred `.zip` from the [v0.3.0 Release](https://github.com/Thom
 
 You can use `git-cg` in two modes.
 
+> [!TIP]
+> **Issue Auto-Detection:** If your branch name contains an issue number separated by a hyphen (e.g., `feat/123-new-badge`), `git-cg` will automatically detect it and append `Resolves: #123` to your generated commit messages!
+
 ### Default non-interactive mode
 
 Run:
