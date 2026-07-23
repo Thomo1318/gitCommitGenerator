@@ -158,3 +158,93 @@ def test_resolve_semantic_contract_respects_allowed_constraints_when_directive_p
     # Therefore, it will fall through to the stable anchor (previous plan), which is "bug_fix".
     assert contract.primary_intent_id == "bug_fix"
     assert contract.cc_type == "fix"
+
+
+def test_resolve_semantic_contract_first_pass_locks_top_ranked_intent():
+    """Without previous_plan, contract locks to the top ranked SOP intent."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="bug_fix",
+                emoji="🐛",
+                code=":bug:",
+                cc_type="fix",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+                intent_group="bugfix",
+                score=10.0,
+                priority=50,
+                specificity=50,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "feature_addition"
+    assert contract.cc_type == "feat"
+    assert contract.gitmoji == "✨"
+    assert contract.semver_impact == "MINOR"
+    assert contract.secondary_intent_ids == []
+
+
+def test_resolve_semantic_contract_first_pass_respects_allowed_constraints():
+    context = GenerationContext(
+        diff_signals=DiffSignals(only_docs=True),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="documentation_update",
+                emoji="📝",
+                code=":memo:",
+                cc_type="docs",
+                description="",
+                semver_impact="NONE",
+                changelog_group="Documentation",
+                intent_group="docs",
+                score=40.0,
+                priority=40,
+                specificity=40,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(allowed_intent_ids=["documentation_update"]),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "documentation_update"
+    assert contract.cc_type == "docs"
