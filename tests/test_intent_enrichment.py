@@ -21,12 +21,26 @@ from git_cg.sop import load_sop
 
 @pytest.fixture
 def sop_matrix() -> list[dict]:
+    """
+    Load the Gitmoji reference matrix from the SOP data.
+    
+    Returns:
+    	list[dict]: The Gitmoji reference matrix, or an empty list when it is absent.
+    """
     data = load_sop()
     return data.get("gitmoji_reference_matrix", [])
 
 
 @pytest.fixture
 def matrix_vocab(sop_matrix: list[dict]) -> frozenset[str]:
+    """Return the set of signal markers defined in the SOP matrix.
+    
+    Parameters:
+    	sop_matrix (list[dict]): SOP matrix entries from which to derive the marker vocabulary.
+    
+    Returns:
+    	frozenset[str]: The SOP-defined signal marker vocabulary.
+    """
     return matrix_signal_vocabulary(sop_matrix)
 
 

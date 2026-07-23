@@ -16,6 +16,14 @@ from git_cg.models import (
 
 @pytest.fixture(autouse=True)
 def mock_matrix(monkeypatch):
+    """Provide a fixed gitmoji intent matrix for tests.
+    
+    Parameters:
+    	monkeypatch: Pytest monkeypatch fixture used to replace the matrix provider.
+    
+    Returns:
+    	list: The configured intent matrix.
+    """
     matrix = [
         {
             "intent_id": "feature_addition",

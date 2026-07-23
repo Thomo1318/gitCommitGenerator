@@ -158,7 +158,15 @@ class ModelCommitIntent(BaseModel):
 
     @model_validator(mode="after")
     def reject_unknown_matrix_intent(self) -> ModelCommitIntent:
-        """Reject intent ids that are not present on the live SOP matrix."""
+        """
+        Validate that the intent identifier exists in the live SOP matrix.
+        
+        Returns:
+        	ModelCommitIntent: This model when its intent identifier is present or the SOP matrix is unavailable.
+        
+        Raises:
+        	ValueError: If the intent identifier is absent from the available SOP matrix.
+        """
         from git_cg.sop import get_gitmoji_matrix
 
         matrix = get_gitmoji_matrix()
@@ -345,6 +353,15 @@ class ModelCommitPlan(BaseModel):
 
     @model_validator(mode="after")
     def validate_breaking_change(self) -> ModelCommitPlan:
+        """
+        Validate that a breaking-change description is provided when required.
+        
+        Returns:
+        	ModelCommitPlan: This model after validation.
+        
+        Raises:
+        	ValueError: If `breaking_change` is true and no description is provided.
+        """
         if self.breaking_change and not self.breaking_change_description:
             raise ValueError("breaking_change_description must be provided if breaking_change is true")
         return self

@@ -482,27 +482,16 @@ def generate_commit_message(
     **kwargs,
 ) -> CommitPlan:
     """
-    Generate a commit plan from the current diff.
-
-    Applies any locked directive values to the generated plan before returning it.
-    Transient LLM errors (connection, timeout, rate-limit) are retried
-    automatically via the ``@llm_retry`` decorator.
-
+    Generate a commit plan from the supplied diff.
+    
+    Applies locked directive values to the generated plan before returning it.
+    
     Parameters:
-        client (instructor.Instructor): The instructor-patched OpenAI client.
-        diff_output (str): The git diff to send to the model.
-        model_name (str): The model to use for generation.
-        system_prompt (str): The system instructions for generation.
-        active_directives (dict[str, str] | None): Locked directive values to apply to the generated plan.
-        residual_guidance (str | None): Optional guidance text from a previous generation attempt.
-
+        active_directives (dict[str, str] | None): Directive values that override the generated commit type or scope.
+        residual_guidance (str | None): Additional guidance from a previous generation attempt.
+    
     Returns:
         CommitPlan: The generated commit plan.
-
-    Raises:
-        openai.APIConnectionError: If all retry attempts are exhausted for connection errors.
-        openai.APITimeoutError: If all retry attempts are exhausted for timeout errors.
-        openai.RateLimitError: If all retry attempts are exhausted for rate-limit errors.
     """
     opik_args = kwargs.get("opik_args") or {}
     tags = opik_args.get("trace", {}).get("tags", [])
@@ -585,20 +574,19 @@ def build_system_prompt(
     contract=None,
 ) -> str:
     """
-    Compose the system prompt used to generate a structured Conventional Commit `CommitPlan`.
-
+    Compose the system prompt for generating a structured Conventional Commit plan.
+    
     Parameters:
-        diff_output (str): Git diff content used for language detection and optional legacy ranking.
-        verbose (bool): Enables extra diagnostic output while building the prompt.
-        active_directives (dict[str, str] | None): Locked regeneration overrides such as preferred type or scope.
-        residual_guidance (str | None): Free-text regeneration guidance that should influence intent selection and wording.
-        previous_plan (CommitPlan | None): Previously generated commit plan to include when regenerating.
-        ranked_candidates: Optional precomputed rank list (single shared pass). When provided, the
-            prompt does not re-rank the diff.
-        contract: Optional resolved semantic contract to lock in the system prompt before generation.
-
+        diff_output (str): Git diff content used for language detection and intent ranking.
+        verbose (bool): Whether to enable diagnostic output while building the prompt.
+        active_directives (dict[str, str] | None): Locked regeneration overrides, such as a preferred type or scope.
+        residual_guidance (str | None): Free-text guidance to apply during regeneration.
+        previous_plan (CommitPlan | None): Previously generated plan to include during regeneration.
+        ranked_candidates (list | None): Precomputed intent candidates to include instead of ranking the diff.
+        contract: Semantic contract whose values must be preserved in the generated plan.
+    
     Returns:
-        str: The complete system prompt, including SOP-derived context, ranked intent candidates when available, language-detection guidance, localisation requirements, and regeneration guidance when supplied.
+        str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
     """
     sop_data = load_sop()
     if not sop_data and verbose:
@@ -888,17 +876,16 @@ def _interactive_review_dry_run(
     review_state: ReviewState, *, verbose: bool, strict: bool, gui_editor: bool = False
 ) -> str:
     """
-    Present the current ReviewState to the user via a temporary preview file and run the interactive review flow.
-
-    Writes the rendered commit message from `review_state` to a temporary file, invokes the same interactive review routine used for actual commits, and ensures the temporary file is removed afterwards.
-
+    Present the current review state for interactive dry-run review.
+    
     Parameters:
-        review_state (ReviewState): The review state containing the generated CommitPlan and any issue references to preview.
-        verbose (bool): If True, enable verbose logging within the interactive flow.
-        strict (bool): If True, treat interactive failures as strict errors (affects behaviour in the interactive routine).
-
+        review_state (ReviewState): The generated commit plan and associated review state.
+        verbose (bool): Whether to enable verbose output during review.
+        strict (bool): Whether to apply strict error handling.
+        gui_editor (bool): Whether to use GUI editor preferences when editing.
+    
     Returns:
-        str: The action chosen by the user (for example `"Regenerate"`, `"Edit"`, `"Commit"`, `"Cancel"`).
+        str: The action selected by the user.
     """
     temp_path = ""
     try:
@@ -940,15 +927,21 @@ def pack_prompt_diff(
     *,
     max_chars: int = PROMPT_DIFF_MAX_CHARS,
 ) -> tuple[str, list[str]]:
-    """Pack a prompt-bound diff without mid-file hard slices.
-
-    Keeps whole ``diff --git`` file sections while under ``max_chars``. When the
-    budget is exceeded, omitted paths are listed in an inventory footer instead of
-    chopping mid-hunk. Analysis/rank callers must use the full ``analysis_diff``.
-
+    """Prepare a size-limited diff for use in an LLM prompt.
+    
+    Preserves complete file sections where possible and reports omitted paths in the
+    returned inventory. Large or unstructured diffs may be truncated with an
+    explanatory note.
+    
+    Parameters:
+        analysis_diff (str): Full staged diff used for analysis and intent ranking.
+        max_chars (int): Maximum size of the prompt-bound diff.
+    
     Returns:
-        prompt_diff: Budgeted diff text for the LLM user message only.
-        omitted_paths: Paths dropped from the prompt payload (may be empty).
+        tuple[str, list[str]]: The prompt-bound diff and paths omitted from it.
+    
+    Raises:
+        ValueError: If ``max_chars`` is less than or equal to zero.
     """
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
@@ -1018,10 +1011,14 @@ def pack_prompt_diff(
 
 @opik.track(project_name="gitCommitGenerator")
 def extract_git_diff(verbose: bool, strict: bool) -> str:
-    """Extract the full staged git diff for analysis/ranking (no hard char-slice).
-
-    Prompt packing is separate via ``pack_prompt_diff`` so deterministic ranking
-    never consumes a mid-diff ``[:50000]`` chop (Issue #161 Slice 4).
+    """
+    Extract the staged Git diff for analysis and ranking.
+    
+    Returns:
+    	str: The staged diff content.
+    
+    Raises:
+    	typer.Exit: If no staged changes are found or diff extraction fails.
     """
     try:
         has_rtk = shutil.which("rtk") is not None
@@ -1084,6 +1081,15 @@ def _validate_commit_source(
 
 
 def _detect_branch_issue_reference(verbose: bool) -> list[IssueReference]:
+    """
+    Detect an issue reference from the current Git branch name.
+    
+    Parameters:
+        verbose (bool): Whether to log the detected issue reference.
+    
+    Returns:
+        list[IssueReference]: Issue references containing the first number followed by a hyphen found after a slash or at the start of the branch name.
+    """
     issue_references: list[IssueReference] = []
     try:
         branch_name = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
@@ -1104,10 +1110,16 @@ def _build_generation_context(
     enable_semantic: bool | None = None,
     enrichment_facts=None,
 ):
-    """Build deterministic generation context with a single shared rank pass.
-
-    When semantic mode is enabled, optional ``enrichment_facts`` (Phase 1/2) are
-    passed into the ranker as closed-vocabulary marker inputs only.
+    """
+    Build the deterministic context used for commit generation.
+    
+    Parameters:
+    	diff_output (str): The staged diff to analyse.
+    	enable_semantic (bool | None): Whether semantic enrichment is enabled.
+    	enrichment_facts: Optional closed-vocabulary semantic facts used to enrich intent ranking.
+    
+    Returns:
+    	GenerationContext: The extracted diff signals, ranked intents, and selection constraints.
     """
     from git_cg.intent import IntentSelectionConstraints, derive_intent_selection_constraints
     from git_cg.regeneration import GenerationContext
