@@ -2,39 +2,62 @@
 
 ### ✨ Features
 
-- ✨ feat(intent): add gated closed-vocabulary marker enrichment (#161)
-- ✨ feat(models): reject unknown LLM intent ids at schema boundary (#161)
-- ✨ feat(regeneration): lock first-pass contract to top ranked intent (#161)
-- ✨ feat(main): resolve contract before LLM with shared rank pass (#161)
 - ✨ feat(main): wire fingerprint enrichment into shared rank pass (#161)
 - ✨ feat(telemetry): add preflight_* fields with skipped defaults (#161)
+- ✨ feat(main): resolve contract before LLM with shared rank pass (#161)
+- ✨ feat(regeneration): lock first-pass contract to top ranked intent (#161)
+- ✨ feat(models): reject unknown LLM intent ids at schema boundary (#161)
+- ✨ feat(intent): add gated closed-vocabulary marker enrichment (#161)
 
 ### 🐛 Bug Fixes & Refactors
 
-- 🐛 fix(main): stop hard-slicing analysis diff before ranking (#161)
 - 🐛 fix(prompt_diff): prevent prompt diff packing length overflow (#161)
-- 🐛 fix(telemetry): resolve final_commit_plan intent_id from matrix (#161)
 - ♻️ refactor(git_cg): centralise helpers and harden constraints (#161)
-- 🚨 refactor(config): reorder imports to fix ruff E402 / isort CI (#161)
+- 🚨 refactor(config): reorder imports to fix ruff E402 warnings (#161)
+- 🐛 fix(telemetry): resolve final_commit_plan intent_id from matrix (#161)
+- 🐛 fix(main): stop hard-slicing analysis diff before ranking (#161)
 
 ### 📝 Documentation
 
+- 🎨 style(docs): normalise CodeRabbit docstring indentation (#161)
+- 📝 Add docstrings to `feat/161-intent-engine-preservation` (#161)
+- 📝 CodeRabbit Chat: Generate Unit Tests for PR Changes (#161)
+- 📝 docs(fixtures): intent characterisation README (#161)
 - 📝 docs: record Phase 3 vs 0.5/7/11 ownership for intent engine (#161)
 - 📝 docs: document branch issue auto-detection for git-cg (#161)
-- 📝 docs(fixtures): intent characterisation README (#161)
 
 ### ✅ Tests
 
-- ✅ test(intent): freeze characterisation corpus for Phase 3 (#161)
-- ✅ test(intent): derive characterisation case IDs from corpus (#161)
-- ✅ test(intent): cover flag-off stability and enrichment filters (#161)
-- ✅ test: harden Phase 3 edge coverage and fixture docs (#161)
+- ✅ test(tests): add markdown parser helper and fallback tests (#161)
+- ✅ test(tests): align tests with refactored logic (#161)
 - ✅ test(telemetry): assert trailer-authoritative changelog_group (#161)
-- ✅ test(models/regeneration/main/telemetry): contract, packing, reverse-parse edges (#161)
+- ✅ test(intent): derive characterisation case IDs from corpus (#161)
+- ✅ test: harden Phase 3 edge coverage and fixture docs (#161)
+- ✅ test(regeneration): enforce/empty-matrix/allowed-row cases (#161)
+- ✅ test(models): breaking-description and empty-matrix paths (#161)
+- ✅ test(main): pack_prompt_diff boundary cases (#161)
+- ✅ test(main): unit tests for semantic enrichment builder (#161)
+- ✅ test(telemetry): matrix lookup and reverse-parse intent resolution (#161)
+- ✅ test(main): prompt packing boundary and rank independence (#161)
+- ✅ test(telemetry): defaults, persistence, legacy backfill, redaction (#161)
+- ✅ test(main): prompt includes locked contract text (#161)
+- ✅ test(regeneration): first-pass and constraint contract cases (#161)
+- ✅ test(models): strict reject vs internal coerce (#161)
+- ✅ test(intent): cover flag-off stability and enrichment filters (#161)
+- ✅ test(intent): freeze characterisation corpus for Phase 3 (#161)
 
 ### 🎨 Style
 
-- 🎨 style(docs): normalise CodeRabbit docstring indentation (#161)
+- 🎨 style(intent): normalise docstring indentation (#161)
+- 🎨 style(main): normalise docstring indentation (#161)
+- 🎨 style(models): normalise docstring indentation (#161)
+- 🎨 style(regeneration): normalise docstring indentation (#161)
+- 🎨 style(telemetry): normalise docstring indentation (#161)
+- 🎨 style(tests): normalise enrichment and contract docstrings (#161)
+
+### 🔧 Chores & Internal
+
+- 🔧 chore(ruff): add known package lists (#161)
 
 ## v0.4.0
 
