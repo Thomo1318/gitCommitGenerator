@@ -941,6 +941,9 @@ def test_reverse_parse_commit_message_full_structure():
     assert plan["primary_intent"]["semver_impact"] == "MAJOR"
     assert plan["primary_intent"]["intent_id"] != "unknown"
     assert plan["primary_intent"]["intent_id"]  # resolved from matrix via emoji/type
+    # The matrix-resolved changelog_group ("Added", from the ✨+feat row) must win
+    # over the "Changelog-Groups: core" trailer value in the rendered text.
+    assert plan["primary_intent"]["changelog_group"] == "Added"
 
     assert plan["breaking_change"] is True
     assert plan["breaking_change_description"] == "The `record_telemetry` signature has changed."
@@ -983,6 +986,97 @@ def test_reverse_parse_commit_message_simple():
     assert plan["split_recommended"] is False
     assert plan["rationale"] == ""
     assert plan["_partial"] is True
+
+
+# ---------------------------------------------------------------------------
+# _resolve_intent_fields_from_matrix (private helper backing reverse-parsing)
+#
+# This function does a fresh ``from git_cg.sop import get_gitmoji_matrix``
+# on every call, so it must be mocked via ``git_cg.sop.get_gitmoji_matrix``
+# rather than the ``git_cg.telemetry`` module attribute.
+# ---------------------------------------------------------------------------
+
+_RESOLVE_MATRIX_FIXTURE = [
+    {"intent_id": "feature_addition", "emoji": "✨", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added"},
+    {"intent_id": "bug_fix", "emoji": "🐛", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed"},
+    {"intent_id": "docs_only", "emoji": "📝", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Documentation"},
+    {"code": ":question:", "emoji": "❓", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Misc"},
+]
+
+
+def test_resolve_intent_fields_from_matrix_exact_emoji_and_cc_type_match(monkeypatch):
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: _RESOLVE_MATRIX_FIXTURE)
+
+    result = _resolve_intent_fields_from_matrix(gitmoji="🐛", cc_type="fix")
+
+    assert result == {"intent_id": "bug_fix", "semver_impact": "PATCH", "changelog_group": "Fixed"}
+
+
+def test_resolve_intent_fields_from_matrix_emoji_wins_over_mismatched_cc_type(monkeypatch):
+    """When emoji matches but the given cc_type has no row for that emoji, emoji match still wins."""
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: _RESOLVE_MATRIX_FIXTURE)
+
+    result = _resolve_intent_fields_from_matrix(gitmoji="🐛", cc_type="refactor")
+
+    assert result["intent_id"] == "bug_fix"
+    assert result["changelog_group"] == "Fixed"
+
+
+def test_resolve_intent_fields_from_matrix_cc_type_only_when_no_emoji(monkeypatch):
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: _RESOLVE_MATRIX_FIXTURE)
+
+    result = _resolve_intent_fields_from_matrix(gitmoji="", cc_type="docs")
+
+    assert result == {"intent_id": "docs_only", "semver_impact": "NONE", "changelog_group": "Documentation"}
+
+
+def test_resolve_intent_fields_from_matrix_no_match_falls_back_to_provided_values(monkeypatch):
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: _RESOLVE_MATRIX_FIXTURE)
+
+    result = _resolve_intent_fields_from_matrix(
+        gitmoji="🚀", cc_type="release", semver_impact="MAJOR", changelog_group="Released"
+    )
+
+    assert result == {"intent_id": "unknown", "semver_impact": "MAJOR", "changelog_group": "Released"}
+
+
+def test_resolve_intent_fields_from_matrix_no_match_defaults_when_no_fallback_values(monkeypatch):
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: _RESOLVE_MATRIX_FIXTURE)
+
+    result = _resolve_intent_fields_from_matrix(gitmoji="🚀", cc_type="release")
+
+    assert result == {"intent_id": "unknown", "semver_impact": "NONE", "changelog_group": "Miscellaneous"}
+
+
+def test_resolve_intent_fields_from_matrix_row_without_intent_id_uses_code_fallback(monkeypatch):
+    """Rows with no intent_id must derive one from `code`, stripped of leading/trailing colons."""
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: _RESOLVE_MATRIX_FIXTURE)
+
+    result = _resolve_intent_fields_from_matrix(gitmoji="❓", cc_type="chore")
+
+    assert result["intent_id"] == "question"
+
+
+def test_resolve_intent_fields_from_matrix_empty_matrix_returns_unknown(monkeypatch):
+    from git_cg.telemetry import _resolve_intent_fields_from_matrix
+
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: [])
+
+    result = _resolve_intent_fields_from_matrix(gitmoji="🐛", cc_type="fix")
+
+    assert result == {"intent_id": "unknown", "semver_impact": "NONE", "changelog_group": "Miscellaneous"}
 
 
 def test_generation_telemetry_phase1_fields_default():

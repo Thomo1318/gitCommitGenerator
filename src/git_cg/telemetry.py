@@ -198,14 +198,7 @@ def _strip_trailers(text: str) -> str:
 
 
 def classify_edit(original: str, edited: str) -> Provenance:
-    """
-    Classifies how a generated commit message differs from its edited version.
-    
-    Trailing references and trailer fields are ignored when determining substantive edits. An edit similarity of at least 0.85 is classified as minor; lower similarity is classified as substantive.
-    
-    Returns:
-        Provenance: The classification of the edit.
-    """
+    """Classify edit magnitude using a trailer-aware Levenshtein ratio."""
     if original.strip() == edited.strip():
         return Provenance.AI_ACCEPTED
 
@@ -229,17 +222,10 @@ def _resolve_intent_fields_from_matrix(
     semver_impact: str | None = None,
     changelog_group: str | None = None,
 ) -> dict[str, str]:
-    """
-    Resolve intent fields from the gitmoji matrix, using supplied values as fallbacks.
-    
-    Parameters:
-        gitmoji (str): Gitmoji used to identify a matrix entry.
-        cc_type (str): Conventional Commit type used for matrix matching.
-        semver_impact (str | None): Fallback semantic version impact.
-        changelog_group (str | None): Fallback changelog group.
-    
-    Returns:
-        dict[str, str]: Resolved intent identifier, semantic version impact, and changelog group.
+    """Best-effort matrix lookup for reverse-parsed rendered commit intents.
+
+    Prefer exact emoji match, then emoji+cc_type, then cc_type alone. Falls back
+    to the provided trailer-derived fields when no matrix row matches.
     """
     from git_cg.sop import get_gitmoji_matrix
 
@@ -248,7 +234,6 @@ def _resolve_intent_fields_from_matrix(
     ctype = (cc_type or "").strip()
 
     def _row_intent_id(row: dict) -> str:
-        """Return the intent identifier from a matrix row, falling back to its code or ``"unknown"``."""
         intent_id = row.get("intent_id")
         if intent_id:
             return str(intent_id)
@@ -285,12 +270,14 @@ def _resolve_intent_fields_from_matrix(
 
 def reverse_parse_commit_message(text: str) -> dict[str, Any]:
     """
-    Reverse-parse a rendered commit message into a partial CommitPlan-compatible dictionary.
-    
-    Unrecoverable fields are populated with schema-compatible placeholders, and the result is marked as partial.
-    
+    Reverse-parse a finalized commit message text into a CommitPlan-compatible dict.
+
+    Extracts components matching the deterministic format from `CommitPlan.render()`.
+    Fields that cannot be recovered from rendered text (`split_recommended`, `rationale`)
+    are filled with explicit placeholders and `_partial` is set to True.
+
     Returns:
-    	dict[str, Any]: Parsed commit details, including primary and secondary intents, body summary, trailers, and breaking-change information.
+        dict: Partial plan with primary_intent, body_summary, secondary_intents, and placeholders.
     """
     import re
 
@@ -485,13 +472,7 @@ def get_state_file_path(git_dir: str) -> Path:
 
 
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
-    """
-    Persist telemetry for use by the commit-msg hook, redacting sensitive payloads before writing the state file.
-    
-    Parameters:
-        git_dir (str): Path to the Git directory.
-        telemetry (GenerationTelemetry): Telemetry data to sanitise and persist.
-    """
+    """Write the current telemetry state to the .git directory for the commit-msg hook."""
     telemetry.diff_output = redact_payload(telemetry.diff_output)
     telemetry.generated_message = redact_payload(telemetry.generated_message)
 
@@ -580,7 +561,7 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["preflight_mode"] = PreflightMode.SKIPPED.value
             try:
                 data["preflight_groups_count"] = int(data.get("preflight_groups_count") or 0)
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 data["preflight_groups_count"] = 0
             if data.get("preflight_fallback_reason") is None:
                 data["preflight_fallback_reason"] = ""

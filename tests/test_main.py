@@ -1,4 +1,5 @@
-from unittest.mock import patch
+import subprocess
+from unittest.mock import MagicMock, patch
 
 import pytest
 import typer
@@ -7,11 +8,21 @@ import git_cg.main as main_module
 from git_cg.main import (
     ReviewState,
     _detect_branch_issue_reference,
+    _staged_diff_command,
     _validate_commit_source,
     build_generation_messages,
     build_system_prompt,
+    extract_git_diff,
+    generate_commit_message,
 )
-from git_cg.models import IssueReferenceKind
+from git_cg.models import (
+    CommitPlan,
+    CommitType,
+    IssueReferenceKind,
+    ModelCommitIntent,
+    ModelCommitPlan,
+    SemVerImpact,
+)
 
 
 def test_build_system_prompt_contains_diff():
@@ -390,3 +401,190 @@ def test_build_semantic_enrichment_facts_flag_on_builds_container():
     assert facts.fingerprints is not None
     assert facts.fingerprints.class_counts == {"formatting_only": 2}
     assert facts.fingerprints.markers == ["comments_only"]
+
+
+# ---------------------------------------------------------------------------
+# _staged_diff_command / extract_git_diff (Issue #161 Slice 4)
+#
+# extract_git_diff no longer hard-truncates the analysis diff at 50000 chars;
+# truncation now only happens (via pack_prompt_diff, tested separately) on
+# the LLM-facing prompt payload. These tests cover the rtk-vs-standard
+# command selection, fallback-on-failure, no-truncation regression, empty
+# diff handling, and the CalledProcessError -> _abort() path.
+# ---------------------------------------------------------------------------
+
+
+def test_staged_diff_command_standard_excludes_lockfiles():
+    cmd = _staged_diff_command(use_rtk=False)
+    assert cmd[:4] == ["git", "diff", "--cached", "--"]
+    assert cmd[4] == "."
+    assert ":(exclude)*.lock" in cmd
+    assert ":(exclude)*zensical*" in cmd
+
+
+def test_staged_diff_command_rtk_prefixes_git_diff():
+    cmd = _staged_diff_command(use_rtk=True)
+    assert cmd[:3] == ["rtk", "git", "diff"]
+    assert ":(exclude)*.lock" in cmd
+
+
+@patch("shutil.which", return_value=None)
+@patch("subprocess.check_output")
+def test_extract_git_diff_without_rtk_uses_standard_command(mock_check_output, mock_which):
+    mock_check_output.return_value = "diff --git a/x.py b/x.py\n+content\n"
+
+    result = extract_git_diff(verbose=False, strict=False)
+
+    assert result == "diff --git a/x.py b/x.py\n+content\n"
+    args, _ = mock_check_output.call_args
+    assert args[0][0] == "git"
+
+
+@patch("shutil.which", return_value="/usr/bin/rtk")
+@patch("subprocess.check_output")
+def test_extract_git_diff_with_rtk_available_uses_rtk_command(mock_check_output, mock_which):
+    mock_check_output.return_value = "diff --git a/x.py b/x.py\n+content\n"
+
+    result = extract_git_diff(verbose=False, strict=False)
+
+    assert result == "diff --git a/x.py b/x.py\n+content\n"
+    args, _ = mock_check_output.call_args
+    assert args[0][0] == "rtk"
+
+
+@patch("shutil.which", return_value="/usr/bin/rtk")
+@patch("subprocess.check_output")
+def test_extract_git_diff_rtk_failure_falls_back_to_standard_diff(mock_check_output, mock_which):
+    def side_effect(cmd, **kwargs):
+        if cmd[0] == "rtk":
+            raise subprocess.CalledProcessError(1, cmd, output="rtk boom")
+        return "diff --git a/x.py b/x.py\n+ok\n"
+
+    mock_check_output.side_effect = side_effect
+
+    result = extract_git_diff(verbose=True, strict=False)
+
+    assert result == "diff --git a/x.py b/x.py\n+ok\n"
+    assert mock_check_output.call_count == 2
+
+
+@patch("shutil.which", return_value=None)
+@patch("subprocess.check_output")
+def test_extract_git_diff_does_not_truncate_large_diffs(mock_check_output, mock_which):
+    """Regression: analysis diff must never be hard-sliced at 50000 chars (Issue #161 Slice 4)."""
+    big_diff = "diff --git a/x.py b/x.py\n" + ("+" + "a" * 60_000) + "\n"
+    mock_check_output.return_value = big_diff
+
+    result = extract_git_diff(verbose=False, strict=False)
+
+    assert result == big_diff
+    assert len(result) > 50_000
+    assert "TRUNCATED" not in result
+
+
+@patch("shutil.which", return_value=None)
+@patch("subprocess.check_output")
+def test_extract_git_diff_empty_diff_raises_exit_zero(mock_check_output, mock_which):
+    mock_check_output.return_value = "   \n"
+
+    with pytest.raises(typer.Exit) as excinfo:
+        extract_git_diff(verbose=False, strict=False)
+    assert excinfo.value.exit_code == 0
+
+
+@patch("shutil.which", return_value=None)
+@patch("subprocess.check_output")
+def test_extract_git_diff_command_failure_aborts_non_strict(mock_check_output, mock_which):
+    mock_check_output.side_effect = subprocess.CalledProcessError(1, ["git", "diff"], output="fatal: boom")
+
+    with pytest.raises(typer.Exit) as excinfo:
+        extract_git_diff(verbose=False, strict=False)
+    assert excinfo.value.exit_code == 0
+
+
+@patch("shutil.which", return_value=None)
+@patch("subprocess.check_output")
+def test_extract_git_diff_command_failure_aborts_strict_with_code_one(mock_check_output, mock_which):
+    mock_check_output.side_effect = subprocess.CalledProcessError(1, ["git", "diff"], output="fatal: boom")
+
+    with pytest.raises(typer.Exit) as excinfo:
+        extract_git_diff(verbose=False, strict=True)
+    assert excinfo.value.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# generate_commit_message — ModelCommitPlan -> CommitPlan conversion
+# (Issue #161 Slice 3: LLM now returns the strict ModelCommitPlan schema,
+# which is converted to the internal CommitPlan before directives/rendering.)
+# ---------------------------------------------------------------------------
+
+
+def _make_model_plan(
+    intent_id="bug_fix",
+    gitmoji="🐛",
+    cc_type=CommitType.FIX,
+    semver_impact=SemVerImpact.PATCH,
+    changelog_group="Fixed",
+):
+    return ModelCommitPlan(
+        primary_intent=ModelCommitIntent(
+            intent_id=intent_id,
+            gitmoji=gitmoji,
+            cc_type=cc_type,
+            description="fix the parser",
+            semver_impact=semver_impact,
+            changelog_group=changelog_group,
+        ),
+        rationale="Fix.",
+        body_summary="Did a fix.",
+    )
+
+
+def test_generate_commit_message_converts_model_plan_to_commit_plan():
+    client = MagicMock()
+    client.chat.completions.create.return_value = _make_model_plan()
+
+    result = generate_commit_message(client, "diff --git a/x b/x", "gpt-test", "system prompt")
+
+    assert isinstance(result, CommitPlan)
+    assert not isinstance(result, ModelCommitPlan)
+    assert result.primary_intent.intent_id == "bug_fix"
+    assert result.rationale == "Fix."
+    assert result.body_summary == "Did a fix."
+
+
+def test_generate_commit_message_passes_model_commit_plan_as_response_model():
+    client = MagicMock()
+    client.chat.completions.create.return_value = _make_model_plan()
+
+    generate_commit_message(client, "diff --git a/x b/x", "gpt-test", "system prompt")
+
+    _, kwargs = client.chat.completions.create.call_args
+    assert kwargs["response_model"] is ModelCommitPlan
+    assert kwargs["model"] == "gpt-test"
+    assert kwargs["messages"][1]["content"].startswith("Here is the diff:")
+
+
+def test_generate_commit_message_applies_active_directives_after_conversion():
+    client = MagicMock()
+    client.chat.completions.create.return_value = _make_model_plan()
+
+    result = generate_commit_message(
+        client,
+        "diff --git a/x b/x",
+        "gpt-test",
+        "system prompt",
+        active_directives={"preferred_type": "feat", "preferred_scope": "api"},
+    )
+
+    assert result.primary_intent.cc_type == CommitType.FEAT
+    assert result.primary_intent.scope == "api"
+
+
+def test_generate_commit_message_without_active_directives_leaves_scope_unset():
+    client = MagicMock()
+    client.chat.completions.create.return_value = _make_model_plan()
+
+    result = generate_commit_message(client, "diff --git a/x b/x", "gpt-test", "system prompt")
+
+    assert result.primary_intent.scope is None
