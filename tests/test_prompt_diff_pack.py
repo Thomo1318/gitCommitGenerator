@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from git_cg.intent import DiffSignals, _generate_signal_markers, rank_commit_intents
+from git_cg.intent import _generate_signal_markers, extract_diff_signals, rank_commit_intents
 from git_cg.main import PROMPT_DIFF_MAX_CHARS, pack_prompt_diff
 from git_cg.sop import load_sop
 
@@ -54,17 +54,20 @@ def test_analysis_rank_unchanged_when_prompt_omits_files():
     assert omitted  # prompt is reduced
 
     matrix = load_sop().get("gitmoji_reference_matrix", [])
-    # Use explicit signals path (same as ranker authority) to show packing is irrelevant.
-    signals = DiffSignals(only_docs=True, touches_docs=True, files=["README.md"])
-    markers = sorted(_generate_signal_markers(signals))
-    ranked = [(r.intent_id, r.score, r.semver_impact) for r in rank_commit_intents(signals, matrix)]
+    # Derive signals from the full analysis (ranker authority), not hard-coded fixtures
+    # and not from the packed prompt text.
+    signals_before = extract_diff_signals(analysis)
+    markers = sorted(_generate_signal_markers(signals_before))
+    ranked = [(r.intent_id, r.score, r.semver_impact) for r in rank_commit_intents(signals_before, matrix)]
 
-    # Recompute after packing — signals are independent of packed prompt text.
-    markers_after = sorted(_generate_signal_markers(signals))
-    ranked_after = [(r.intent_id, r.score, r.semver_impact) for r in rank_commit_intents(signals, matrix)]
+    signals_after = extract_diff_signals(analysis)
+    markers_after = sorted(_generate_signal_markers(signals_after))
+    ranked_after = [(r.intent_id, r.score, r.semver_impact) for r in rank_commit_intents(signals_after, matrix)]
     assert markers_after == markers
     assert ranked_after == ranked
+    # Packed prompt is shorter and must not be the ranking input.
     assert len(packed) < len(analysis)
+    assert extract_diff_signals(packed).files != signals_before.files or len(packed) < len(analysis)
 
 
 def test_prompt_diff_max_chars_constant():
@@ -83,7 +86,7 @@ def test_pack_prompt_diff_without_file_headers_uses_prefix_note():
     packed, omitted = pack_prompt_diff(blob, max_chars=500)
     assert omitted == ["<unbounded-diff>"]
     assert "no file boundaries found" in packed
-    assert len(packed) <= 500 + 5  # small slack for note assembly
+    assert len(packed) <= 500
 
 
 def test_pack_prompt_diff_single_oversized_file_partial_omit():
@@ -92,3 +95,16 @@ def test_pack_prompt_diff_single_oversized_file_partial_omit():
     packed, omitted = pack_prompt_diff(analysis, max_chars=800)
     assert omitted == ["src/only.py"]
     assert "single large file partially omitted" in packed
+
+
+def test_pack_prompt_diff_tiny_budget_never_exceeds_max_chars():
+    """Even when max_chars is smaller than the fixed notice, output must fit."""
+    blob = "not a unified diff\n" + ("z" * 10_000)
+    packed, omitted = pack_prompt_diff(blob, max_chars=40)
+    assert omitted == ["<unbounded-diff>"]
+    assert len(packed) <= 40
+
+    analysis = _file_section("src/only.py", "+" + ("q" * 20_000))
+    packed2, omitted2 = pack_prompt_diff(analysis, max_chars=40)
+    assert omitted2
+    assert len(packed2) <= 40

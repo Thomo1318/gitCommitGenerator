@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from git_cg.intent import DiffSignals, IntentSelectionConstraints, RankedIntent
+from git_cg.intent import DiffSignals, IntentSelectionConstraints, RankedIntent, matrix_row_intent_id
 from git_cg.models import CommitPlan
 from git_cg.sop import get_gitmoji_matrix
 
@@ -66,16 +66,16 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
 
     preferred_type = state.active_directives.get("preferred_type")
     resolved_row = None
+    allowed_ids = set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
 
     if preferred_type:
-        allowed_ids = set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
-
         for ranked in context.ranked_intents:
             if ranked.cc_type == preferred_type:
                 if allowed_ids and ranked.intent_id not in allowed_ids:
                     continue
                 resolved_row = next(
-                    (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) == ranked.intent_id), None
+                    (r for r in matrix if matrix_row_intent_id(r) == ranked.intent_id),
+                    None,
                 )
                 if resolved_row:
                     break
@@ -87,8 +87,7 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
                     (
                         r
                         for r in matrix
-                        if r.get("cc_type") == preferred_type
-                        and r.get("intent_id", r.get("code", "").strip(":")) in allowed_ids
+                        if r.get("cc_type") == preferred_type and matrix_row_intent_id(r) in allowed_ids
                     ),
                     None,
                 )
@@ -96,37 +95,36 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
                 resolved_row = next((r for r in matrix if r.get("cc_type") == preferred_type), None)
 
     if not resolved_row and state.previous_plan is not None:
-        # Stable anchor to the previous plan (regeneration path)
+        # Stable anchor to the previous plan only when still allowed by constraints.
         prev_intent_id = state.previous_plan.primary_intent.intent_id
-        resolved_row = next(
-            (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) == prev_intent_id), None
-        )
+        if not allowed_ids or prev_intent_id in allowed_ids:
+            resolved_row = next(
+                (r for r in matrix if matrix_row_intent_id(r) == prev_intent_id),
+                None,
+            )
 
     if not resolved_row:
-        # First-pass / no previous plan: lock to top ranked intent (constraints-aware)
-        allowed_ids = set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
+        # First-pass / disallowed previous plan: lock to top ranked intent (constraints-aware)
         for ranked in context.ranked_intents:
             if allowed_ids and ranked.intent_id not in allowed_ids:
                 continue
             resolved_row = next(
-                (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) == ranked.intent_id),
+                (r for r in matrix if matrix_row_intent_id(r) == ranked.intent_id),
                 None,
             )
             if resolved_row:
                 break
 
     if not resolved_row:
-        if allowed_ids := (
-            set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
-        ):
+        if allowed_ids:
             resolved_row = next(
-                (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) in allowed_ids),
+                (r for r in matrix if matrix_row_intent_id(r) in allowed_ids),
                 matrix[0],
             )
         else:
             resolved_row = matrix[0]
 
-    primary_id = resolved_row.get("intent_id", resolved_row.get("code", "unknown").strip(":"))
+    primary_id = matrix_row_intent_id(resolved_row)
 
     return ResolvedCommitContract(
         primary_intent_id=primary_id,
