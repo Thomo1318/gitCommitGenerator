@@ -20,7 +20,7 @@ class GenerationContext:
 class RegenerationState:
     """Review-loop steering state."""
 
-    previous_plan: CommitPlan
+    previous_plan: CommitPlan | None = None
     active_directives: dict[str, str] = field(default_factory=dict)
     residual_guidance: str | None = None
 
@@ -102,12 +102,36 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
             else:
                 resolved_row = next((r for r in matrix if r.get("cc_type") == preferred_type), None)
 
-    if not resolved_row:
-        # Stable anchor to the previous plan
+    if not resolved_row and state.previous_plan is not None:
+        # Stable anchor to the previous plan (regeneration path)
         prev_intent_id = state.previous_plan.primary_intent.intent_id
         resolved_row = next(
-            (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) == prev_intent_id), matrix[0]
+            (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) == prev_intent_id), None
         )
+
+    if not resolved_row:
+        # First-pass / no previous plan: lock to top ranked intent (constraints-aware)
+        allowed_ids = set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
+        for ranked in context.ranked_intents:
+            if allowed_ids and ranked.intent_id not in allowed_ids:
+                continue
+            resolved_row = next(
+                (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) == ranked.intent_id),
+                None,
+            )
+            if resolved_row:
+                break
+
+    if not resolved_row:
+        if allowed_ids := (
+            set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
+        ):
+            resolved_row = next(
+                (r for r in matrix if r.get("intent_id", r.get("code", "").strip(":")) in allowed_ids),
+                matrix[0],
+            )
+        else:
+            resolved_row = matrix[0]
 
     primary_id = resolved_row.get("intent_id", resolved_row.get("code", "unknown").strip(":"))
 
@@ -117,7 +141,9 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
         cc_type=resolved_row.get("cc_type", "chore"),
         semver_impact=resolved_row.get("semver_impact", "NONE"),
         changelog_group=resolved_row.get("changelog_group", "Miscellaneous"),
-        secondary_intent_ids=[sec.intent_id for sec in state.previous_plan.secondary_intents],
+        secondary_intent_ids=(
+            [sec.intent_id for sec in state.previous_plan.secondary_intents] if state.previous_plan else []
+        ),
     )
 
 
