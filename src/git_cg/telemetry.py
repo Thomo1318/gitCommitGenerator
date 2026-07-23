@@ -30,6 +30,14 @@ class Provenance(enum.StrEnum):
     CANCELLED = "cancelled"  # Aborted commit
 
 
+class PreflightMode(enum.StrEnum):
+    """How commit-group preflight ran (Phase 0.5 product may populate non-skipped later)."""
+
+    LLM = "llm"
+    HEURISTIC = "heuristic"
+    SKIPPED = "skipped"
+
+
 @dataclass
 class DeterministicScoreCard:
     """Binary pass/fail structural validation results."""
@@ -80,6 +88,10 @@ class GenerationTelemetry:
     fingerprint_class_counts: dict | None = None
     fingerprint_grammar_version: str = "unknown"
     fingerprint_markers: list | None = None
+    # Phase 3 preflight telemetry hooks (Issue #161). Default skipped until Phase 0.5.
+    preflight_mode: str = PreflightMode.SKIPPED.value
+    preflight_groups_count: int = 0
+    preflight_fallback_reason: str = ""
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -406,6 +418,14 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
             metrics["semantic_fallback_reasons"] = redacted_reasons
         telemetry.semantic_parser_metrics = metrics
 
+    # Phase 3: free-text preflight reason through betterleaks gateway.
+    if telemetry.preflight_fallback_reason:
+        redacted_reason = redact_payload(telemetry.preflight_fallback_reason)
+        if redacted_reason == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+            telemetry.preflight_fallback_reason = "[REDACTED]"
+        else:
+            telemetry.preflight_fallback_reason = redacted_reason
+
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
         json.dump(asdict(telemetry), f, indent=2)
@@ -446,6 +466,24 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("fingerprint_class_counts", None)
             data.setdefault("fingerprint_grammar_version", "unknown")
             data.setdefault("fingerprint_markers", None)
+            # Phase 3 preflight telemetry defaults (Issue #161).
+            data.setdefault("preflight_mode", PreflightMode.SKIPPED.value)
+            data.setdefault("preflight_groups_count", 0)
+            data.setdefault("preflight_fallback_reason", "")
+            # Normalise enum-ish values to plain strings for dataclass storage.
+            mode = data.get("preflight_mode")
+            if isinstance(mode, PreflightMode):
+                data["preflight_mode"] = mode.value
+            elif mode not in {m.value for m in PreflightMode}:
+                data["preflight_mode"] = PreflightMode.SKIPPED.value
+            try:
+                data["preflight_groups_count"] = int(data.get("preflight_groups_count") or 0)
+            except TypeError, ValueError:
+                data["preflight_groups_count"] = 0
+            if data.get("preflight_fallback_reason") is None:
+                data["preflight_fallback_reason"] = ""
+            else:
+                data["preflight_fallback_reason"] = str(data["preflight_fallback_reason"])
             return GenerationTelemetry(**data)
     except Exception:
         return None

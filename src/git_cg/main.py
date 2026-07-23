@@ -1044,6 +1044,9 @@ def _write_telemetry_state_safe(
     fingerprint_class_counts: dict | None = None,
     fingerprint_grammar_version: str = "unknown",
     fingerprint_markers: list | None = None,
+    preflight_mode: str = "skipped",
+    preflight_groups_count: int = 0,
+    preflight_fallback_reason: str = "",
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1070,6 +1073,9 @@ def _write_telemetry_state_safe(
         fingerprint_class_counts (dict | None): Counts of fingerprint comparison classes.
         fingerprint_grammar_version (str): Fingerprint grammar version used for comparison.
         fingerprint_markers (list | None): Markers produced during fingerprint comparison.
+        preflight_mode (str): Preflight grouping mode (`llm` / `heuristic` / `skipped`).
+        preflight_groups_count (int): Number of preflight groups when preflight ran.
+        preflight_fallback_reason (str): Why preflight skipped or fell back (redacted on write).
     """
     try:
         import dataclasses
@@ -1108,6 +1114,9 @@ def _write_telemetry_state_safe(
             fingerprint_class_counts=fingerprint_class_counts,
             fingerprint_grammar_version=fingerprint_grammar_version,
             fingerprint_markers=fingerprint_markers,
+            preflight_mode=preflight_mode,
+            preflight_groups_count=preflight_groups_count,
+            preflight_fallback_reason=preflight_fallback_reason,
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1382,6 +1391,10 @@ def _run_commit_generation(
         "fingerprint_class_counts": fingerprint_class_counts,
         "fingerprint_grammar_version": fingerprint_grammar_version,
         "fingerprint_markers": fingerprint_markers,
+        # Phase 3 preflight hooks (default skipped until Phase 0.5 grouping product).
+        "preflight_mode": "skipped",
+        "preflight_groups_count": 0,
+        "preflight_fallback_reason": "",
     }
     if semantic_parser_metrics:
         # Flatten non-content parser metrics into the trace metadata.
@@ -1620,6 +1633,9 @@ def _run_commit_generation(
         fingerprint_class_counts=fingerprint_class_counts,
         fingerprint_grammar_version=fingerprint_grammar_version,
         fingerprint_markers=fingerprint_markers,
+        preflight_mode="skipped",
+        preflight_groups_count=0,
+        preflight_fallback_reason="",
     )
 
     opik.flush_tracker()
@@ -1987,6 +2003,10 @@ def record_telemetry(
                     "fingerprint_class_counts": telemetry_state.get("fingerprint_class_counts"),
                     "fingerprint_grammar_version": telemetry_state.get("fingerprint_grammar_version", "unknown"),
                     "fingerprint_markers": telemetry_state.get("fingerprint_markers"),
+                    # Phase 3 preflight telemetry (Issue #161).
+                    "preflight_mode": telemetry_state.get("preflight_mode", "skipped"),
+                    "preflight_groups_count": telemetry_state.get("preflight_groups_count", 0),
+                    "preflight_fallback_reason": telemetry_state.get("preflight_fallback_reason", ""),
                 },
                 feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
                 thread_id=thread_id,

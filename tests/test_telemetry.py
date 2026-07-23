@@ -1195,3 +1195,133 @@ def test_read_legacy_json_backfills_phase2_fields(tmp_path):
     assert loaded.fingerprint_class_counts is None
     assert loaded.fingerprint_grammar_version == "unknown"
     assert loaded.fingerprint_markers is None
+
+
+def test_generation_telemetry_preflight_fields_default():
+    """Phase 3 preflight fields default to skipped / 0 / empty."""
+    from git_cg.telemetry import GenerationTelemetry, PreflightMode
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+    )
+    assert tel.preflight_mode == PreflightMode.SKIPPED.value
+    assert tel.preflight_groups_count == 0
+    assert tel.preflight_fallback_reason == ""
+
+
+def test_generation_telemetry_preflight_fields_persist(tmp_path, monkeypatch):
+    """Phase 3 preflight fields round-trip through write/read telemetry state."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GenerationTelemetry, PreflightMode, read_telemetry_state, write_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+        preflight_mode=PreflightMode.HEURISTIC.value,
+        preflight_groups_count=3,
+        preflight_fallback_reason="llm_unavailable",
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.preflight_mode == "heuristic"
+    assert loaded.preflight_groups_count == 3
+    assert loaded.preflight_fallback_reason == "llm_unavailable"
+
+
+def test_read_legacy_json_backfills_preflight_fields(tmp_path):
+    """Pre-Phase-3 state files deserialize with skipped preflight defaults."""
+    import json
+
+    from git_cg.telemetry import get_state_file_path, read_telemetry_state
+
+    payload = {
+        "diff_hash": "dh",
+        "diff_output": "diff",
+        "repo_name": "legacy-repo",
+        "engine": "mlx",
+        "model_name": "m",
+        "system_prompt_hash": "ph",
+        "generated_message": "msg",
+        "commit_plan_json": {},
+        "score_card": {},
+    }
+    path = get_state_file_path(str(tmp_path))
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.preflight_mode == "skipped"
+    assert loaded.preflight_groups_count == 0
+    assert loaded.preflight_fallback_reason == ""
+
+
+def test_write_telemetry_state_redacts_preflight_fallback_reason(tmp_path, monkeypatch):
+    """preflight_fallback_reason must pass through redact_payload on write."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    seen: list[str] = []
+
+    def fake_redact(payload: str) -> str:
+        seen.append(payload)
+        if payload == "secret-token-reason":
+            return "found [REDACTED]"
+        return payload
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", fake_redact)
+
+    tel = GenerationTelemetry(
+        trace_id="t1",
+        thread_id="th1",
+        diff_hash="dh1",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mlx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message="msg",
+        commit_plan_json={"intent": "feat"},
+        score_card={},
+        preflight_mode="skipped",
+        preflight_groups_count=0,
+        preflight_fallback_reason="secret-token-reason",
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    assert "secret-token-reason" in seen
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.preflight_fallback_reason == "found [REDACTED]"
+
+
+def test_preflight_mode_enum_values():
+    from git_cg.telemetry import PreflightMode
+
+    assert set(PreflightMode) == {
+        PreflightMode.LLM,
+        PreflightMode.HEURISTIC,
+        PreflightMode.SKIPPED,
+    }
+    assert PreflightMode.LLM.value == "llm"
+    assert PreflightMode.HEURISTIC.value == "heuristic"
+    assert PreflightMode.SKIPPED.value == "skipped"
