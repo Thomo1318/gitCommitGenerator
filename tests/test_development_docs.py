@@ -50,6 +50,23 @@ def _section_after_heading(content: str, heading: str) -> str:
     return "".join(out)
 
 
+def _section_after_h3(content: str, heading: str) -> str:
+    """Return content after an H3 ``heading`` until the next H2/H3 (or EOF)."""
+    if heading not in content:
+        raise AssertionError(f"missing heading: {heading}")
+    rest = content.split(heading, 1)[1]
+    lines = rest.splitlines(keepends=True)
+    out: list[str] = []
+    for i, line in enumerate(lines):
+        if i == 0:
+            out.append(line)
+            continue
+        if line.startswith("## "):
+            break
+        out.append(line)
+    return "".join(out)
+
+
 # ===========================================================================
 # DEVELOPMENT.md
 # ===========================================================================
@@ -454,16 +471,23 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
 
     def test_wp0_baseline_section_present(self):
         content = self._content()
-        assert "### Evidence expectations (Issue #177 WP0 baseline)" in content
-        assert "44c9d3e31220b953541ebb724e4f5bc8802897d8" in content
-        assert "29995846892" in content  # ci.yml run id
+        heading = "### Evidence expectations (Issue #177 WP0 baseline)"
+        assert heading in content
+        section = _section_after_h3(content, heading)
+        assert "44c9d3e31220b953541ebb724e4f5bc8802897d8" in section
+        assert "29995846892" in section  # ci.yml run id
+        assert "Deferred Phase 3 leftovers" in section
 
     def test_dependency_floors_section_present(self):
         content = self._content()
-        assert "### Dependency floors (Issue #177 WP1)" in content
-        assert "tree-sitter-language-pack" in content
-        assert ">=0.13,<1" in content
-        assert "pytest" in content
+        heading = "### Dependency floors (Issue #177 WP1)"
+        assert heading in content
+        section = _section_after_h3(content, heading)
+        assert "tree-sitter-language-pack" in section
+        assert ">=0.13,<1" in section
+        assert "| `pytest` | `>=9`" in section or "pytest` | `>=9`" in section
+        assert ">=0.26,<0.27" in section
+        assert "rich" in section
 
     def test_wp6_deferred_pin_bumps_section(self):
         content = self._content()
@@ -476,7 +500,7 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
     def test_wp0_baseline_table_lists_all_ci_workflow_runs(self):
         """Every workflow run link recorded at the #177 baseline must be present."""
         content = self._content()
-        section = _section_after_heading(content, "### Evidence expectations (Issue #177 WP0 baseline)")
+        section = _section_after_h3(content, "### Evidence expectations (Issue #177 WP0 baseline)")
         for run_id in ("29995846892", "29995847178", "29995846842", "29995846813"):
             assert run_id in section, run_id
         for workflow in ("ci.yml", "security.yml", "docs.yml", "codeql.yml"):
@@ -484,14 +508,14 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
 
     def test_wp0_baseline_table_records_branch_and_local_evidence(self):
         content = self._content()
-        section = _section_after_heading(content, "### Evidence expectations (Issue #177 WP0 baseline)")
+        section = _section_after_h3(content, "### Evidence expectations (Issue #177 WP0 baseline)")
         assert "`main` and `CI/177-deps-actions-and-python-upgrades`" in section
         assert "**1006 passed**" in section
         assert "Python 3.14.5" in section
 
     def test_wp0_baseline_table_records_deferred_leftovers_and_epic_link(self):
         content = self._content()
-        section = _section_after_heading(content, "### Evidence expectations (Issue #177 WP0 baseline)")
+        section = _section_after_h3(content, "### Evidence expectations (Issue #177 WP0 baseline)")
         assert "Deferred Phase 3 leftovers" in section
         assert "**none** for this baseline" in section
         assert "Parent epic link" in section
@@ -500,7 +524,7 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
     def test_wp1_dependency_floor_table_rows_have_rationale(self):
         """Each WP1 floor row must document its floor/bound and rationale, not just the name."""
         content = self._content()
-        section = _section_after_heading(content, "### Dependency floors (Issue #177 WP1)")
+        section = _section_after_h3(content, "### Dependency floors (Issue #177 WP1)")
         assert "| `pytest` | `>=9` |" in section
         assert "| `pytest-cov` | `>=7` |" in section
         assert "| `tree-sitter-language-pack` | `>=0.13,<1` |" in section
@@ -511,14 +535,14 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
 
     def test_wp1_dependency_floor_table_explains_ceilings(self):
         content = self._content()
-        section = _section_after_heading(content, "### Dependency floors (Issue #177 WP1)")
+        section = _section_after_h3(content, "### Dependency floors (Issue #177 WP1)")
         assert "CRG `<1` cap" in section
         assert "instructor` 1.15.x requires `rich<15`" in section
         assert "no silent rich 15 / tslp 1.x beyond the CRG `<1` cap" in section
 
     def test_wp6_deferred_pin_bumps_lists_each_bullet(self):
         content = self._content()
-        section = _section_after_heading(content, "### Deferred pin bumps (Issue #177 WP6)")
+        section = _section_after_h3(content, "### Deferred pin bumps (Issue #177 WP6)")
         assert "**`ruff`** and **`hk`**" in section
         assert "`mise.toml` exact `hk` pin" in section
         assert "`hk.pkl` / `min_hk_version`" in section
@@ -539,9 +563,7 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
 
     def test_issue_177_sections_precede_contribution_workflow(self):
         content = self._content()
-        assert content.index("### Deferred pin bumps (Issue #177 WP6)") < content.index(
-            "## 🤝 Contribution Workflow"
-        )
+        assert content.index("### Deferred pin bumps (Issue #177 WP6)") < content.index("## 🤝 Contribution Workflow")
 
 
 # ===========================================================================
@@ -558,9 +580,12 @@ class TestChangelogUnreleasedIssue177Entries:
     def test_file_exists(self):
         assert CHANGELOG_MD.is_file()
 
-    def test_unreleased_is_the_first_heading(self):
+    def test_changelog_document_title_and_unreleased_section(self):
         content = self._content()
-        assert content.lstrip().startswith("## Unreleased")
+        assert content.lstrip().startswith("# Changelog")
+        assert "## Unreleased" in content
+        # Unreleased remains the first release section after the document H1.
+        assert content.index("# Changelog") < content.index("## Unreleased")
 
     def test_unreleased_precedes_v0_5_0(self):
         content = self._content()

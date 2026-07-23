@@ -135,11 +135,11 @@ def language_for_path(path: str | Path) -> str | None:
 def is_probably_binary(path: str | Path, source: bytes | None = None) -> bool:
     """
     Determine whether a path and its optional content appear to be binary.
-    
+
     Parameters:
         source (bytes | None): File content to inspect for NUL bytes when MIME
             detection is inconclusive or the extension is recognised.
-    
+
     Returns:
         bool: True if the input appears binary and should be skipped by the text
             parser, false otherwise.

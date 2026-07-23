@@ -112,12 +112,12 @@ def test_all_language_map_ids_resolve_and_minimal_parse():
     """Every `_LANGUAGE_BY_EXT` language id must load a parser and accept a minimal parse."""
     from git_cg.ast_parser import _LANGUAGE_BY_EXT, ParseStatus, get_parser_for, parse_source
 
-    # Sample sources keyed by language id. For parse_source path mapping we use
-    # `src/*` paths. Bare `*.ts` is often guessed as video/mp2t by mimetypes.
+    # Sample sources keyed by language id. Paths use `src/*` for realism; non-NUL
+    # mapped sources must parse successfully (no BINARY continue escape hatch).
     samples: dict[str, tuple[str, bytes]] = {
         "python": ("src/x.py", b"def f():\n    return 1\n"),
         "javascript": ("src/x.js", b"function f() { return 1 }\n"),
-        "typescript": ("src/app.tsx".replace(".tsx", ".ts"), b"const x: number = 1\n"),
+        "typescript": ("src/model.ts", b"const x: number = 1\n"),
         "tsx": ("src/x.tsx", b"const x = <div />\n"),
         "go": ("src/x.go", b"package main\nfunc main() {}\n"),
         "rust": ("src/x.rs", b"fn main() {}\n"),
@@ -139,8 +139,6 @@ def test_all_language_map_ids_resolve_and_minimal_parse():
         "css": ("src/x.css", b"a { color: red }\n"),
         "sql": ("src/x.sql", b"SELECT 1;\n"),
     }
-    # Keep typescript path explicit (avoid clever replace above in final file)
-    samples["typescript"] = ("src/model.ts", b"const x: number = 1\n")
 
     langs = sorted(set(_LANGUAGE_BY_EXT.values()))
     assert set(langs) == set(samples), f"language map drift: {set(langs) ^ set(samples)}"
@@ -149,16 +147,12 @@ def test_all_language_map_ids_resolve_and_minimal_parse():
         parser = get_parser_for(lang)
         assert parser is not None
         path, src = samples[lang]
+        assert b"\x00" not in src
         tree = parser.parse(src)
         assert tree.root_node is not None
         assert getattr(tree.root_node, "type", None)
 
-        # parse_source also exercises extension→language mapping + binary gate.
-        # If MIME still false-positives a source path as binary, language-id
-        # validity has already been proven via get_parser_for/parse above.
         result = parse_source(path, src)
-        if result.status == ParseStatus.BINARY:
-            continue
         assert result.status == ParseStatus.SUCCESS, (lang, result.status, result.error)
         assert result.language == lang
         assert result.root_type
