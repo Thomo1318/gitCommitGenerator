@@ -1,6 +1,6 @@
 """
 Tests for CI/CD and packaging configuration changes in this PR:
-  - .github/workflows/ci.yml    (codecov-action pinned to v4, `file` -> `files`)
+  - .github/workflows/ci.yml    (codecov-action SHA-pinned; `files`; #170 OIDC layout; #177 WP2 majors)
   - .github/workflows/docs.yml  (removed `--strict` from `zensical build`)
   - pyproject.toml              (requires-python gained an upper bound `<4.0`)
   - uv.lock                     (requires-python mirrors pyproject.toml)
@@ -99,17 +99,20 @@ class TestCiWorkflowCodecovStep:
         """ci.yml must parse as valid YAML."""
         assert isinstance(self._workflow(), dict)
 
-    def test_codecov_action_pinned_to_v4(self):
-        """
-        Verify that the Codecov upload step uses the pinned version 4 of the Codecov action.
-        """
+    def test_codecov_action_pinned_to_allowed_major_sha(self):
+        """Codecov upload must use the WP2-pinned codecov-action v7 commit SHA."""
         step = self._codecov_step()
-        assert step["uses"] == "codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238"
+        assert step["uses"] == ("codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f")
 
-    def test_codecov_action_not_v7(self):
-        """Ensure the Codecov upload step uses a supported action version."""
+    def test_codecov_action_not_floating_tag(self):
+        """Codecov must not use a floating tag ref (SHA pin required)."""
         step = self._codecov_step()
-        assert step["uses"] != "codecov/codecov-action@v7"
+        uses = step["uses"]
+        assert uses.startswith("codecov/codecov-action@")
+        ref = uses.split("@", 1)[1]
+        assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref)
+        assert uses != "codecov/codecov-action@v7"
+        assert uses != "codecov/codecov-action@v4"
 
     def test_uses_plural_files_key(self):
         """The `with` block must use the `files` key (plural), not `file`."""
@@ -733,3 +736,67 @@ class TestCodecovYmlContracts:
         assert "paths" not in patch_default
         assert "flags" not in patch_default
         assert patch_default.get("target") == "80%"
+
+
+# ===========================================================================
+# Cross-workflow SHA pin matrix (Issue #177 WP2)
+# ===========================================================================
+
+
+def _load_workflow(name: str) -> dict:
+    """Load a workflow YAML document from ``.github/workflows/{name}``."""
+    import yaml
+
+    path = REPO_ROOT / ".github" / "workflows" / name
+    with path.open(encoding="utf-8") as fh:
+        return yaml.safe_load(fh)
+
+
+def _assert_uses_full_sha(workflow_name: str, uses: str) -> None:
+    assert "@" in uses, f"{workflow_name}: {uses}"
+    ref = uses.split("@", 1)[1].split()[0]  # strip trailing comments if any
+    # YAML loader already drops comments; keep split for safety.
+    assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), (
+        f"{workflow_name}: action not SHA-pinned: {uses}"
+    )
+
+
+class TestWorkflowShaPinMatrix:
+    """Every third-party action under .github/workflows must be full-SHA pinned."""
+
+    WORKFLOWS = (
+        "ci.yml",
+        "security.yml",
+        "docs.yml",
+        "codeql.yml",
+        "pr-review.yml",
+        "pr-review-comment.yml",
+    )
+
+    def test_all_workflow_uses_are_full_shas(self):
+        for name in self.WORKFLOWS:
+            wf = _load_workflow(name)
+            for job_name, job in (wf.get("jobs") or {}).items():
+                for step in job.get("steps") or []:
+                    uses = step.get("uses")
+                    if not uses:
+                        continue
+                    _assert_uses_full_sha(f"{name}:{job_name}", uses)
+
+    def test_pr_review_workflows_are_sha_pinned(self):
+        """Former floating @v7/@v8 tags must be full SHAs after WP2."""
+        for name in ("pr-review.yml", "pr-review-comment.yml"):
+            wf = _load_workflow(name)
+            for job in (wf.get("jobs") or {}).values():
+                for step in job.get("steps") or []:
+                    uses = step.get("uses")
+                    if not uses:
+                        continue
+                    _assert_uses_full_sha(name, uses)
+
+    def test_pr_review_checkout_disables_persist_credentials(self):
+        wf = _load_workflow("pr-review.yml")
+        for step in wf["jobs"]["review"]["steps"]:
+            uses = step.get("uses", "")
+            if uses.startswith("actions/checkout@"):
+                assert (step.get("with") or {}).get("persist-credentials") is False
