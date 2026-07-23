@@ -675,3 +675,97 @@ class TestMiseQualityPinsAndTasks:
         assert tools["syft"] != "latest"
         assert tools["grype"] != "latest"
         assert tools["ubi:anchore/grant"] != "latest"
+
+
+# ===========================================================================
+# Issue #177 WP1 — dependency floor specifier boundaries (functional checks,
+# complementing the literal-text lock in test_dependency_floor_constraints).
+# ===========================================================================
+
+
+class TestDependencyFloorSpecifierBoundaries:
+    """Verify the WP1 floors accept/reject the exact versions they were designed for."""
+
+    def _requires_dist(self) -> dict[str, str]:
+        """Map dependency name -> raw specifier string from [project.dependencies]."""
+        import tomllib as _toml
+
+        with open(REPO_ROOT / "pyproject.toml", "rb") as f:
+            data = _toml.load(f)
+        deps = data["project"]["dependencies"]
+        out = {}
+        for entry in deps:
+            for sep in (">=", "<", "==", "~="):
+                if sep in entry:
+                    name = entry.split(sep, 1)[0].strip()
+                    out[name] = entry[len(name) :].strip()
+                    break
+        return out
+
+    def _dev_requires(self) -> dict[str, str]:
+        import tomllib as _toml
+
+        with open(REPO_ROOT / "pyproject.toml", "rb") as f:
+            data = _toml.load(f)
+        deps = data["dependency-groups"]["dev"]
+        out = {}
+        for entry in deps:
+            for sep in (">=", "<", "==", "~="):
+                if sep in entry:
+                    name = entry.split(sep, 1)[0].strip()
+                    out[name] = entry[len(name) :].strip()
+                    break
+        return out
+
+    def test_pytest_floor_accepts_locked_version_rejects_old_floor(self):
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import Version
+
+        spec = SpecifierSet(self._dev_requires()["pytest"])
+        assert Version("9.1.1") in spec
+        assert Version("8.9.9") not in spec
+
+    def test_pytest_cov_floor_accepts_locked_version_rejects_old_floor(self):
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import Version
+
+        spec = SpecifierSet(self._dev_requires()["pytest-cov"])
+        assert Version("7.0.0") in spec
+        assert Version("6.9.9") not in spec
+
+    def test_tree_sitter_floor_accepts_0_26_rejects_0_27_and_below_0_26(self):
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import Version
+
+        spec = SpecifierSet(self._requires_dist()["tree-sitter"])
+        assert Version("0.26.0") in spec
+        assert Version("0.25.2") not in spec
+        assert Version("0.27.0") not in spec
+
+    def test_tree_sitter_language_pack_floor_accepts_0_13_rejects_1_0(self):
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import Version
+
+        spec = SpecifierSet(self._requires_dist()["tree-sitter-language-pack"])
+        assert Version("0.13.0") in spec
+        assert Version("0.99.0") in spec
+        assert Version("1.0.0") not in spec
+        assert Version("0.12.9") not in spec
+
+    def test_rich_floor_accepts_14_x_rejects_below_floor_and_16(self):
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import Version
+
+        spec = SpecifierSet(self._requires_dist()["rich"])
+        assert Version("14.3.4") in spec
+        assert Version("15.9.0") in spec
+        assert Version("14.3.3") not in spec
+        assert Version("16.0.0") not in spec
+
+    def test_code_review_graph_floor_accepts_locked_version(self):
+        from packaging.specifiers import SpecifierSet
+        from packaging.version import Version
+
+        spec = SpecifierSet(self._requires_dist()["code-review-graph"])
+        assert Version("2.3.7") in spec
+        assert Version("2.3.6") not in spec
