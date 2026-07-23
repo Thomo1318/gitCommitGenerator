@@ -182,3 +182,45 @@ def test_typescript_not_classified_binary_by_mime():
     result = parse_source("x.ts", src)
     assert result.status == ParseStatus.SUCCESS
     assert result.language == "typescript"
+
+
+# ===========================================================================
+# `is_probably_binary` — extension-registry-first branch (regression coverage
+# for the `if language_for_path(path) is not None:` early return).
+# ===========================================================================
+
+
+def test_is_probably_binary_known_extension_skips_mime_but_honours_nul_scan():
+    """A recognised extension still detects NUL-byte binaries without consulting MIME."""
+    assert is_probably_binary("src/thing.py", b"import os\x00garbage") is True
+
+
+def test_is_probably_binary_known_extension_clean_source_is_text():
+    assert is_probably_binary("src/thing.rs", b"fn main() {}\n") is False
+
+
+def test_is_probably_binary_known_extension_without_source_bytes():
+    """No source bytes to scan => never classified as binary, regardless of extension."""
+    assert is_probably_binary("src/thing.py") is False
+    assert is_probably_binary("src/thing.py", None) is False
+
+
+def test_is_probably_binary_known_extension_nul_only_checked_within_first_8192_bytes():
+    """NUL bytes beyond the 8192-byte sniff window must not trigger a binary classification."""
+    padded = b"a" * 8192 + b"\x00"
+    assert is_probably_binary("src/thing.py", padded) is False
+
+
+def test_is_probably_binary_unknown_extension_nul_bytes_detected():
+    """Unmapped extensions fall through to the NUL-byte heuristic same as before."""
+    assert is_probably_binary("blob.unknownext", b"\x00\x00garbage") is True
+
+
+def test_is_probably_binary_unknown_extension_without_source_bytes():
+    assert is_probably_binary("blob.unknownext") is False
+
+
+def test_is_probably_binary_known_extension_overrides_binary_looking_mime_guess():
+    """Even if mimetypes would guess a non-text type for the extension, registry wins."""
+    # .cs (csharp) is registered; ensure clean C# source is never flagged as binary.
+    assert is_probably_binary("Program.cs", b"class A { void M() {} }\n") is False
