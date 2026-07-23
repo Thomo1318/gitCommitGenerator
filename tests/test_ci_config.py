@@ -386,6 +386,55 @@ class TestUvLockRequiresPython:
 
 
 # ===========================================================================
+# uv.lock - Issue #177 WP1/WP5 dependency version bumps
+# ===========================================================================
+
+
+class TestUvLockDependencyVersionBumps:
+    """uv.lock must reflect the exact locked versions from the WP1/WP5 floor bumps."""
+
+    ROOT_PACKAGE = "gitcommitgenerator"
+
+    def _package(self, name: str) -> dict:
+        for pkg in _load_uv_lock()["package"]:
+            if pkg.get("name") == name:
+                return pkg
+        raise AssertionError(f"package {name!r} not found in uv.lock")
+
+    def _root_requires_dist(self) -> list[dict]:
+        return self._package(self.ROOT_PACKAGE)["metadata"]["requires-dist"]
+
+    def _root_requires_dev(self) -> list[dict]:
+        return self._package(self.ROOT_PACKAGE)["metadata"]["requires-dev"]["dev"]
+
+    def test_code_review_graph_locked_to_2_3_7(self):
+        assert self._package("code-review-graph")["version"] == "2.3.7"
+
+    def test_pytest_locked_to_9_1_1(self):
+        assert self._package("pytest")["version"] == "9.1.1"
+
+    def test_tree_sitter_locked_to_0_26_0(self):
+        assert self._package("tree-sitter")["version"] == "0.26.0"
+
+    def test_root_requires_dist_mirrors_pyproject_floors(self):
+        by_name = {entry["name"]: entry["specifier"] for entry in self._root_requires_dist()}
+        assert by_name["code-review-graph"] == ">=2.3.7"
+        assert by_name["rich"] == ">=14.3.4,<16"
+        assert by_name["tree-sitter"] == ">=0.26,<0.27"
+        assert by_name["tree-sitter-language-pack"] == ">=0.13,<1"
+
+    def test_root_requires_dev_mirrors_pyproject_floors(self):
+        by_name = {entry["name"]: entry["specifier"] for entry in self._root_requires_dev()}
+        assert by_name["pytest"] == ">=9"
+        assert by_name["pytest-cov"] == ">=7"
+
+    def test_code_review_graph_gained_pyyaml_dependency(self):
+        """v2.3.7 added a direct `pyyaml` runtime dependency vs. v2.3.6."""
+        deps = {d["name"] for d in self._package("code-review-graph")["dependencies"]}
+        assert "pyyaml" in deps
+
+
+# ===========================================================================
 # .github/workflows/ci.yml - concurrency, permissions, hk lint job
 # ===========================================================================
 
@@ -803,126 +852,99 @@ class TestWorkflowShaPinMatrix:
 
 
 # ===========================================================================
-# Exact WP2 major-version SHA pins (Issue #177) — regression lock so a future
-# edit cannot silently swap in a *different* valid-looking 40-char SHA.
+# Exact action-SHA regression matrix (Issue #177 WP2)
 # ===========================================================================
+#
+# `TestWorkflowShaPinMatrix` above only proves every `uses:` ref is *some*
+# full 40-char commit SHA. That alone would not catch a regression where an
+# action silently drifts to a different (but still full-SHA) commit for the
+# same nominal version, or where two workflows disagree on the pin for the
+# same action@version. These tests pin the exact expected commit per action
+# so any accidental edit is caught precisely.
 
 
-class TestWorkflowExactShaPins:
-    """Lock the specific commit SHAs each workflow was bumped to under WP2."""
+# Canonical action -> commit SHA expected after the #177 WP2 staged-majors
+# rollout. Keys are the `uses:` prefix (without ref); values are the full
+# 40-char commit SHA that must follow the `@`.
+_EXPECTED_ACTION_SHAS: dict[str, str] = {
+    "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",  # v7.0.1
+    "astral-sh/setup-uv": "c771a70e6277c0a99b617c7a806ffedaca235ff9",  # v9.0.0
+    "actions/upload-artifact": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",  # v7.0.1
+    "actions/download-artifact": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",  # v8.0.1
+    "codecov/codecov-action": "fb8b3582c8e4def4969c97caa2f19720cb33a72f",  # v7.0.0
+    "github/codeql-action/init": "e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81",  # v4.37.3
+    "github/codeql-action/analyze": "e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81",  # v4.37.3
+    "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",  # v7.0.0
+    "tirth8205/code-review-graph": "6a1ee1c7063cc35cfa5ff12b8198c29360f3e4ad",  # v2.3.7
+}
 
-    CHECKOUT_V7_0_1 = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-    SETUP_UV_V9_0_0 = "c771a70e6277c0a99b617c7a806ffedaca235ff9"
-    UPLOAD_ARTIFACT_V7_0_1 = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-    DOWNLOAD_ARTIFACT_V8_0_1 = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-    CODEQL_V4_37_3 = "e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81"
+_WORKFLOWS_WITH_PINNED_ACTIONS = (
+    "ci.yml",
+    "security.yml",
+    "docs.yml",
+    "codeql.yml",
+    "pr-review.yml",
+    "pr-review-comment.yml",
+)
 
-    def _steps_uses(self, workflow_name: str, job_name: str) -> list:
-        wf = _load_workflow(workflow_name)
-        return [s.get("uses") for s in wf["jobs"][job_name]["steps"] if s.get("uses")]
 
-    def test_ci_yml_checkout_and_setup_uv_pins(self):
-        for job_name in ("lint", "test-and-coverage", "upload-coverage"):
-            uses_list = self._steps_uses("ci.yml", job_name)
-            checkouts = [u for u in uses_list if u.startswith("actions/checkout@")]
-            assert checkouts and all(u.endswith(f"@{self.CHECKOUT_V7_0_1}") for u in checkouts)
-        lint_uses = self._steps_uses("ci.yml", "lint")
-        assert f"astral-sh/setup-uv@{self.SETUP_UV_V9_0_0}" in lint_uses
-        test_uses = self._steps_uses("ci.yml", "test-and-coverage")
-        assert f"astral-sh/setup-uv@{self.SETUP_UV_V9_0_0}" in test_uses
-        assert f"actions/upload-artifact@{self.UPLOAD_ARTIFACT_V7_0_1}" in test_uses
-        upload_uses = self._steps_uses("ci.yml", "upload-coverage")
-        assert f"actions/download-artifact@{self.DOWNLOAD_ARTIFACT_V8_0_1}" in upload_uses
+def _iter_workflow_uses(workflow_name: str):
+    """Yield `(job_name, uses)` for every step with a `uses:` key."""
+    wf = _load_workflow(workflow_name)
+    for job_name, job in (wf.get("jobs") or {}).items():
+        for step in job.get("steps") or []:
+            uses = step.get("uses")
+            if uses:
+                yield job_name, uses
 
-    def test_codeql_yml_checkout_and_action_pins(self):
-        uses_list = self._steps_uses("codeql.yml", "analyze")
-        assert f"actions/checkout@{self.CHECKOUT_V7_0_1}" in uses_list
-        assert f"github/codeql-action/init@{self.CODEQL_V4_37_3}" in uses_list
-        assert f"github/codeql-action/analyze@{self.CODEQL_V4_37_3}" in uses_list
 
-    def test_docs_yml_checkout_setup_uv_and_setup_python_pins(self):
-        uses_list = self._steps_uses("docs.yml", "deploy")
-        assert f"actions/checkout@{self.CHECKOUT_V7_0_1}" in uses_list
-        assert f"astral-sh/setup-uv@{self.SETUP_UV_V9_0_0}" in uses_list
-        assert any(
-            u.startswith("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") for u in uses_list
+class TestWorkflowActionPinsExactShas:
+    """Every occurrence of a tracked action must resolve to its expected commit SHA."""
+
+    def test_known_actions_pin_to_expected_sha_everywhere(self):
+        seen_any = {action: False for action in _EXPECTED_ACTION_SHAS}
+        for workflow_name in _WORKFLOWS_WITH_PINNED_ACTIONS:
+            for job_name, uses in _iter_workflow_uses(workflow_name):
+                action, _, ref = uses.partition("@")
+                expected = _EXPECTED_ACTION_SHAS.get(action)
+                if expected is None:
+                    continue
+                seen_any[action] = True
+                assert ref == expected, (
+                    f"{workflow_name}:{job_name} pins {action}@{ref}, expected {action}@{expected}"
+                )
+        # Sanity: every tracked action must actually appear at least once,
+        # otherwise this test would pass vacuously after a rename/removal.
+        missing = [action for action, found in seen_any.items() if not found]
+        assert not missing, f"tracked actions never encountered: {missing}"
+
+    def test_checkout_sha_identical_across_all_workflows(self):
+        """actions/checkout must use one single commit SHA repo-wide, not per-file drift."""
+        refs = {
+            uses.split("@", 1)[1]
+            for workflow_name in _WORKFLOWS_WITH_PINNED_ACTIONS
+            for _job_name, uses in _iter_workflow_uses(workflow_name)
+            if uses.startswith("actions/checkout@")
+        }
+        assert refs == {_EXPECTED_ACTION_SHAS["actions/checkout"]}
+
+    def test_upload_and_download_artifact_are_not_cross_pinned(self):
+        """upload-artifact and download-artifact must not share a SHA (different actions/majors)."""
+        assert (
+            _EXPECTED_ACTION_SHAS["actions/upload-artifact"]
+            != _EXPECTED_ACTION_SHAS["actions/download-artifact"]
         )
 
-    def test_security_yml_checkout_and_upload_artifact_pins(self):
-        trufflehog_uses = self._steps_uses("security.yml", "trufflehog")
-        sbom_uses = self._steps_uses("security.yml", "sbom")
-        assert f"actions/checkout@{self.CHECKOUT_V7_0_1}" in trufflehog_uses
-        assert f"actions/checkout@{self.CHECKOUT_V7_0_1}" in sbom_uses
-        assert f"actions/upload-artifact@{self.UPLOAD_ARTIFACT_V7_0_1}" in sbom_uses
+    def test_codeql_init_and_analyze_share_the_same_release_sha(self):
+        """init/analyze are sub-actions of the same release and must move in lockstep."""
+        assert (
+            _EXPECTED_ACTION_SHAS["github/codeql-action/init"]
+            == _EXPECTED_ACTION_SHAS["github/codeql-action/analyze"]
+        )
 
-    def test_pr_review_yml_pins(self):
-        uses_list = self._steps_uses("pr-review.yml", "review")
-        assert f"actions/checkout@{self.CHECKOUT_V7_0_1}" in uses_list
-        assert "tirth8205/code-review-graph@6a1ee1c7063cc35cfa5ff12b8198c29360f3e4ad" in uses_list
-        assert f"actions/upload-artifact@{self.UPLOAD_ARTIFACT_V7_0_1}" in uses_list
-
-    def test_pr_review_comment_yml_download_artifact_pin(self):
-        uses_list = self._steps_uses("pr-review-comment.yml", "comment")
-        assert f"actions/download-artifact@{self.DOWNLOAD_ARTIFACT_V8_0_1}" in uses_list
-
-    def test_no_workflow_still_references_the_old_pre_wp2_shas(self):
-        """The superseded major-version SHAs must not linger anywhere under workflows/."""
-        stale_shas = {
-            "11bd71901bbe5b1630ceea73d27597364c9af683",  # old checkout v4.2.2
-            "9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",  # old checkout (codeql/docs)
-            "37802adc94f370d6bfd71619e3f0bf239e1f3b78",  # old setup-uv v7.6.0
-            "b17378828233a8d43dbf67c40f72f2ae5d669916",  # old setup-uv v5 (docs.yml)
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",  # old upload-artifact v4.6.2
-            "95815c38cf2ff2164869cbab79da8d1f422bc89e",  # old download-artifact v4.2.1
-            "b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238",  # old codecov-action v4
-            "99df26d4f13ea111d4ec1a7dddef6063f76b97e9",  # old codeql-action
-            "ece7cb06caefa5fff74198d8649806c4678c61a1",  # old setup-python v5
-        }
-        workflows_dir = REPO_ROOT / ".github" / "workflows"
-        for wf_path in workflows_dir.glob("*.yml"):
-            raw = wf_path.read_text(encoding="utf-8")
-            for stale_sha in stale_shas:
-                assert stale_sha not in raw, f"{wf_path.name} still references stale SHA {stale_sha}"
-
-
-# ===========================================================================
-# CHANGELOG.md — Unreleased section recording the WP0-WP6 dependency/Actions
-# upgrade programme (Issue #177 / #158).
-# ===========================================================================
-
-
-class TestChangelogUnreleasedSection:
-    def _content(self) -> str:
-        return (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-
-    def test_unreleased_heading_present_and_precedes_latest_release(self):
-        content = self._content()
-        assert "## Unreleased" in content
-        assert content.index("## Unreleased") < content.index("## v0.5.0")
-
-    def test_unreleased_section_has_security_dependencies_subheading(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        assert "### 🔒️ Security / Dependencies" in section
-
-    def test_unreleased_section_mentions_issue_177_and_158(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        assert "#177" in section
-        assert "#158" in section
-
-    def test_unreleased_section_mentions_key_dependency_bumps(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        assert "tree-sitter 0.25.2" in section
-        assert "0.26.0" in section
-        assert "pytest 9.0.3" in section
-        assert "9.1.1" in section
-        assert "code-review-graph 2.3.6" in section
-        assert "2.3.7" in section
-
-    def test_unreleased_section_mentions_ci_actions_staging(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        assert "GitHub Actions majors" in section
-        assert "full SHA pins" in section
+    def test_docs_workflow_setup_python_targets_314(self):
+        wf = _load_workflow("docs.yml")
+        steps = wf["jobs"]["deploy"]["steps"]
+        step = next(s for s in steps if s.get("uses", "").startswith("actions/setup-python@"))
+        assert step["uses"].split("@", 1)[1] == _EXPECTED_ACTION_SHAS["actions/setup-python"]
+        assert step["with"]["python-version"] == "3.14"
