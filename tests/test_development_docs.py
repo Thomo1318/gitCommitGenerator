@@ -26,6 +26,24 @@ def _read_readme_md() -> str:
     return README_MD.read_text(encoding="utf-8")
 
 
+def _section_after_heading(content: str, heading: str) -> str:
+    """Return content after ``heading`` until the next markdown H2 (or EOF)."""
+    if heading not in content:
+        raise AssertionError(f"missing heading: {heading}")
+    rest = content.split(heading, 1)[1]
+    # Stop at the next top-level ## heading so later sections cannot pollute assertions.
+    lines = rest.splitlines(keepends=True)
+    out: list[str] = []
+    for i, line in enumerate(lines):
+        if i == 0:
+            out.append(line)
+            continue
+        if line.startswith("## ") and not line.startswith("### "):
+            break
+        out.append(line)
+    return "".join(out)
+
+
 # ===========================================================================
 # DEVELOPMENT.md
 # ===========================================================================
@@ -344,13 +362,13 @@ class TestDevelopmentMdAdr0005PhaseOwnership:
 
     def test_section_references_issue_161_as_phase_3(self):
         content = self._content()
-        section = content.split("## ADR-0005 phase ownership (intent engine)")[1]
+        section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
         assert "Phase 3" in section
         assert "Issue #161" in section
 
     def test_phase_ownership_table_covers_all_documented_phases(self):
         content = self._content()
-        section = content.split("## ADR-0005 phase ownership (intent engine)")[1]
+        section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
         assert "**Phase 3** (#161)" in section
         assert "**Phase 0.5**" in section
         assert "**Phase 7**" in section
@@ -359,7 +377,7 @@ class TestDevelopmentMdAdr0005PhaseOwnership:
 
     def test_phase_ownership_table_lists_expected_concerns(self):
         content = self._content()
-        section = content.split("## ADR-0005 phase ownership (intent engine)")[1]
+        section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
         assert "preflight_" in section
         assert "Preflight multi-group product" in section
         assert "Semantic summary object for prompts" in section
@@ -383,9 +401,11 @@ class TestDevelopmentMdAdr0005PhaseOwnership:
 
     def test_analysis_vs_prompt_diff_subsection_appears_after_ownership_table(self):
         content = self._content()
-        assert content.index("## ADR-0005 phase ownership (intent engine)") < content.index(
-            "### Analysis vs prompt diff (interim until Phase 11)"
-        )
+        section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
+        # Ownership table ends at the Out of scope row; subsection must follow that row.
+        table_end_marker = "**Out of scope**"
+        assert table_end_marker in section
+        assert section.index(table_end_marker) < section.index("### Analysis vs prompt diff (interim until Phase 11)")
 
 
 # ===========================================================================

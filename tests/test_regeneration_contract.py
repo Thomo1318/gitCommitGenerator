@@ -356,3 +356,22 @@ def test_resolve_semantic_contract_previous_plan_respects_allowed_constraints():
 
     assert contract.primary_intent_id == "documentation_update"
     assert contract.cc_type == "docs"
+
+
+def test_resolve_semantic_contract_nonempty_matrix_falls_back_to_first_row():
+    """With ranked intents empty and no constraints, lock to matrix[0]."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+    contract = resolve_semantic_contract(context, state)
+
+    # mock_matrix fixture orders feature_addition first
+    assert contract.primary_intent_id == "feature_addition"
+    assert contract.cc_type == "feat"
+    assert contract.gitmoji == "✨"
+    assert contract.semver_impact == "MINOR"
+    assert contract.changelog_group == "Added"
+    assert contract.secondary_intent_ids == []
