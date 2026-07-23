@@ -30,12 +30,12 @@ GOLDENS_PATH = FIXTURE_DIR / "goldens.json"
 def _load_json(path: Path) -> dict:
     """
     Load and parse a UTF-8 encoded JSON file.
-    
+
     Parameters:
-    	path (Path): Path to the JSON file.
-    
+        path (Path): Path to the JSON file.
+
     Returns:
-    	dict: Parsed JSON object.
+        dict: Parsed JSON object.
     """
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -43,12 +43,12 @@ def _load_json(path: Path) -> dict:
 def _sop_matrix_sha256(matrix: list[dict]) -> str:
     """
     Compute the SHA-256 digest of a serialised SOP matrix.
-    
+
     Parameters:
-    	matrix (list[dict]): SOP matrix rows to hash.
-    
+        matrix (list[dict]): SOP matrix rows to hash.
+
     Returns:
-    	str: Lowercase hexadecimal SHA-256 digest of the canonical JSON representation.
+        str: Lowercase hexadecimal SHA-256 digest of the canonical JSON representation.
     """
     payload = json.dumps(matrix, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
@@ -56,10 +56,10 @@ def _sop_matrix_sha256(matrix: list[dict]) -> str:
 
 def _canonical_rank_key(row: dict) -> tuple:
     """Build a canonical comparison key for ranked intent snapshots.
-    
+
     Parameters:
         row (dict): Ranked intent data containing score, priority, specificity, and intent identifier.
-    
+
     Returns:
         tuple: Values ordered by descending score, priority, and specificity, followed by the intent identifier."""
     return (
@@ -73,12 +73,12 @@ def _canonical_rank_key(row: dict) -> tuple:
 def _rank_snapshot(ranked) -> list[dict]:
     """
     Convert ranked intent results into serialisable dictionaries containing their identifying and ranking attributes.
-    
+
     Parameters:
-    	ranked: Ranked intent results to snapshot.
-    
+        ranked: Ranked intent results to snapshot.
+
     Returns:
-    	A list of dictionaries describing each ranked intent.
+        A list of dictionaries describing each ranked intent.
     """
     return [
         {
@@ -107,9 +107,9 @@ def _constraints_snapshot(constraints) -> dict:
 def sop_matrix() -> list[dict]:
     """
     Load the production SOP matrix used by intent characterisation tests.
-    
+
     Returns:
-    	list[dict]: The non-empty Gitmoji reference matrix.
+        list[dict]: The non-empty Gitmoji reference matrix.
     """
     data = load_sop()
     matrix = data.get("gitmoji_reference_matrix", [])
@@ -131,17 +131,25 @@ def goldens() -> dict:
     return _load_json(GOLDENS_PATH)
 
 
+def _corpus_case_ids() -> list[str]:
+    """Return characterisation case IDs from corpus.json for parametrization."""
+    corpus = _load_json(CORPUS_PATH)
+    return [case["id"] for case in corpus["cases"]]
+
+
 @pytest.fixture(scope="module")
 def corpus_case_ids(corpus: dict) -> list[str]:
     """Return the identifiers of all cases in the characterisation corpus.
-    
+
     Parameters:
-    	corpus (dict): Characterisation corpus containing a ``cases`` collection.
-    
+        corpus (dict): Characterisation corpus containing a ``cases`` collection.
+
     Returns:
-    	list[str]: Case identifiers in corpus order.
+        list[str]: Case identifiers in corpus order.
     """
-    return [case["id"] for case in corpus["cases"]]
+    ids = _corpus_case_ids()
+    assert ids == [case["id"] for case in corpus["cases"]]
+    return ids
 
 
 def test_characterisation_fixtures_pin_production_sop(sop_matrix: list[dict], corpus: dict, goldens: dict) -> None:
@@ -154,25 +162,7 @@ def test_characterisation_fixtures_pin_production_sop(sop_matrix: list[dict], co
     assert set(goldens["cases"]) == {case["id"] for case in corpus["cases"]}
 
 
-@pytest.mark.parametrize(
-    "case_id",
-    [
-        "empty_baseline",
-        "docs_only",
-        "tests_only",
-        "dependency_upgrade_only",
-        "security_fix",
-        "feature_with_docs_mixed",
-        "breaking_change",
-        "breaking_with_tests",
-        "formatting_only",
-        "generic_refactor_centralization",
-        "bug_fix_error_handling",
-        "architecture_restructure",
-        "ci_hooks",
-        "files_added_deleted_renamed",
-    ],
-)
+@pytest.mark.parametrize("case_id", _corpus_case_ids())
 def test_characterisation_case_matches_golden(
     case_id: str,
     sop_matrix: list[dict],
@@ -181,12 +171,12 @@ def test_characterisation_case_matches_golden(
 ) -> None:
     """
     Verify marker generation, intent ranking, and selection constraints against the golden snapshot for a corpus case.
-    
+
     Parameters:
-    	case_id (str): Identifier of the corpus case to verify.
-    	sop_matrix (list[dict]): SOP matrix used to evaluate the case.
-    	corpus (dict): Corpus containing the case signals.
-    	goldens (dict): Expected snapshots keyed by case identifier.
+        case_id (str): Identifier of the corpus case to verify.
+        sop_matrix (list[dict]): SOP matrix used to evaluate the case.
+        corpus (dict): Corpus containing the case signals.
+        goldens (dict): Expected snapshots keyed by case identifier.
     """
     case = next(item for item in corpus["cases"] if item["id"] == case_id)
     expected = goldens["cases"][case_id]
@@ -240,10 +230,10 @@ def test_matrix_row_reorder_canonical_order_is_stable(sop_matrix: list[dict], co
     def canonical(matrix: list[dict]) -> list[str]:
         """
         Produce a reorder-invariant canonical ordering of intent identifiers.
-        
+
         Parameters:
             matrix (list[dict]): SOP matrix used to rank the intents.
-        
+
         Returns:
             list[str]: Intent identifiers ordered by score, priority, specificity, and identifier.
         """
