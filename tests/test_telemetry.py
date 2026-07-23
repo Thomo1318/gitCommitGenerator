@@ -939,6 +939,8 @@ def test_reverse_parse_commit_message_full_structure():
     assert plan["primary_intent"]["scope"] == "core"
     assert plan["primary_intent"]["description"] == "implement new telemetry pipeline"
     assert plan["primary_intent"]["semver_impact"] == "MAJOR"
+    assert plan["primary_intent"]["intent_id"] != "unknown"
+    assert plan["primary_intent"]["intent_id"]  # resolved from matrix via emoji/type
 
     assert plan["breaking_change"] is True
     assert plan["breaking_change_description"] == "The `record_telemetry` signature has changed."
@@ -947,7 +949,9 @@ def test_reverse_parse_commit_message_full_structure():
     assert plan["secondary_intents"][0]["cc_type"] == "fix"
     assert plan["secondary_intents"][0]["scope"] == "telemetry"
     assert plan["secondary_intents"][0]["gitmoji"] == "🐛"
+    assert plan["secondary_intents"][0]["intent_id"] != "unknown"
     assert plan["secondary_intents"][1]["cc_type"] == "refactor"
+    assert plan["secondary_intents"][1]["intent_id"] != "unknown"
 
     # Body reconstruction uses real newlines and excludes trailer metadata.
     assert plan["body_summary"] == (
@@ -971,6 +975,8 @@ def test_reverse_parse_commit_message_simple():
     assert plan["primary_intent"]["cc_type"] == "fix"
     assert plan["primary_intent"]["scope"] is None
     assert plan["primary_intent"]["description"] == "typos in docs"
+    # No emoji: still resolve a matrix intent via cc_type when possible.
+    assert plan["primary_intent"]["intent_id"] != "unknown"
     assert plan["breaking_change"] is False
     assert len(plan["secondary_intents"]) == 0
     assert plan["body_summary"] == "Fixed some typos."
@@ -1325,3 +1331,16 @@ def test_preflight_mode_enum_values():
     assert PreflightMode.LLM.value == "llm"
     assert PreflightMode.HEURISTIC.value == "heuristic"
     assert PreflightMode.SKIPPED.value == "skipped"
+
+
+def test_reverse_parse_resolves_intent_id_from_emoji():
+    from git_cg.sop import get_gitmoji_matrix
+    from git_cg.telemetry import reverse_parse_commit_message
+
+    matrix = get_gitmoji_matrix()
+    sparkles = next(row for row in matrix if row.get("emoji") == "✨")
+    expected = sparkles.get("intent_id") or str(sparkles.get("code", "")).strip(":")
+
+    plan = reverse_parse_commit_message("✨ feat(core): add endpoint\n\nBody.\n\nSemVer-Impact: MINOR\n")
+    assert plan["primary_intent"]["intent_id"] == expected
+    assert plan["_partial"] is True  # rationale/split still unrecoverable
