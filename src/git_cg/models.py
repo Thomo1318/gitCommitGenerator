@@ -137,6 +137,66 @@ class CommitIntent(BaseModel):
         return self
 
 
+class ModelCommitIntent(BaseModel):
+    """LLM-facing commit intent: unknown matrix ids fail validation (no coerce).
+
+    Internal/deterministic paths continue to use ``CommitIntent``, which may
+    canonicalise or fall back to a safe matrix row. Instructor reask surfaces
+    failures from this model-facing schema.
+    """
+
+    intent_id: str = Field(description="The intent_id from the ranked candidates list")
+    gitmoji: str = Field(description="The literal unicode emoji character (e.g., ✨)")
+    cc_type: CommitType = Field(description="The Conventional Commit type")
+    scope: str | None = Field(
+        default=None,
+        description="The scope of the commit, typically the module or file affected. Keep it short (e.g., 'ui', 'api').",
+    )
+    description: str = Field(description="The imperative description. Must be VERY concise (maximum 50 characters).")
+    semver_impact: SemVerImpact = Field(description="The SemVer impact from the candidate list")
+    changelog_group: str = Field(description="The changelog group from the candidate list")
+
+    @model_validator(mode="after")
+    def reject_unknown_matrix_intent(self) -> ModelCommitIntent:
+        """Reject intent ids that are not present on the live SOP matrix."""
+        from git_cg.sop import get_gitmoji_matrix
+
+        matrix = get_gitmoji_matrix()
+        if not matrix:
+            # Cannot enforce without SOP; allow through (contract enforcement still applies).
+            return self
+
+        entry = next((item for item in matrix if item.get("intent_id") == self.intent_id), None)
+        if entry is None:
+            known = sorted(
+                {
+                    str(item.get("intent_id") or str(item.get("code") or "").strip(":"))
+                    for item in matrix
+                    if item.get("intent_id") or item.get("code")
+                }
+            )
+            preview = ", ".join(known[:12])
+            more = "" if len(known) <= 12 else f", … ({len(known)} total)"
+            raise ValueError(
+                f"Unknown intent_id {self.intent_id!r} is not present in the SOP matrix. "
+                f"Select an intent_id from the ranked candidates or matrix vocabulary "
+                f"(examples: {preview}{more})."
+            )
+        return self
+
+    def to_commit_intent(self) -> CommitIntent:
+        """Map into the internal CommitIntent (matrix canonicalisation may still apply)."""
+        return CommitIntent(
+            intent_id=self.intent_id,
+            gitmoji=self.gitmoji,
+            cc_type=self.cc_type,
+            scope=self.scope,
+            description=self.description,
+            semver_impact=self.semver_impact,
+            changelog_group=self.changelog_group,
+        )
+
+
 class CommitPlan(BaseModel):
     """
     A structured commit plan replacing the flat Commit model.
@@ -256,3 +316,47 @@ class CommitPlan(BaseModel):
             lines.append(f"BREAKING CHANGE: {self.breaking_change_description}")
 
         return "\n".join(lines)
+
+
+class ModelCommitPlan(BaseModel):
+    """LLM-facing commit plan using strict ModelCommitIntent validation."""
+
+    primary_intent: ModelCommitIntent = Field(description="The dominant, primary reason for this commit.")
+    secondary_intents: list[ModelCommitIntent] = Field(
+        default_factory=list,
+        description="Other distinct intents included in this diff (e.g., docs, chores, side-fixes).",
+    )
+    split_recommended: bool = Field(
+        default=False,
+        description="True if the changes are unrelated and should ideally be split into multiple atomic commits.",
+    )
+    rationale: str = Field(
+        description="Brief explanation of why the primary intent was chosen over others, and why a split is or isn't recommended."
+    )
+    body_summary: str | None = Field(
+        default=None, description="Detailed explanation of the changes. Explain the 'why' and 'how'."
+    )
+    breaking_change: bool = Field(
+        default=False, description="Whether this commit introduces a backwards-incompatible breaking change."
+    )
+    breaking_change_description: str | None = Field(
+        default=None, description="Explanation of the breaking change. Required if breaking_change is true."
+    )
+
+    @model_validator(mode="after")
+    def validate_breaking_change(self) -> ModelCommitPlan:
+        if self.breaking_change and not self.breaking_change_description:
+            raise ValueError("breaking_change_description must be provided if breaking_change is true")
+        return self
+
+    def to_commit_plan(self) -> CommitPlan:
+        """Convert a validated model-facing plan into the internal CommitPlan."""
+        return CommitPlan(
+            primary_intent=self.primary_intent.to_commit_intent(),
+            secondary_intents=[item.to_commit_intent() for item in self.secondary_intents],
+            split_recommended=self.split_recommended,
+            rationale=self.rationale,
+            body_summary=self.body_summary,
+            breaking_change=self.breaking_change,
+            breaking_change_description=self.breaking_change_description,
+        )
