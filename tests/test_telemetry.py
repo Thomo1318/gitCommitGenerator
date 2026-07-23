@@ -1384,6 +1384,7 @@ def test_write_telemetry_state_redacts_preflight_fallback_reason(tmp_path, monke
     seen: list[str] = []
 
     def fake_redact(payload: str) -> str:
+        """Replace the test token with its redacted representation and record each payload received."""
         seen.append(payload)
         if payload == "secret-token-reason":
             return "found [REDACTED]"

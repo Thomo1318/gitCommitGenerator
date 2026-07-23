@@ -96,10 +96,10 @@ class GenerationTelemetry:
 
 def compute_prompt_hash(prompt: str) -> str:
     """
-    Produce a version-tracking identifier for a prompt.
-
+    Generate a 16-character identifier for a prompt.
+    
     Returns:
-        str: The first 16 hexadecimal characters of the prompt's SHA-256 hash.
+    	str: The first 16 hexadecimal characters of the prompt's SHA-256 hash.
     """
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
@@ -198,7 +198,16 @@ def _strip_trailers(text: str) -> str:
 
 
 def classify_edit(original: str, edited: str) -> Provenance:
-    """Classify edit magnitude using a trailer-aware Levenshtein ratio."""
+    """
+    Classifies how an edited commit message differs from the original message.
+    
+    Parameters:
+    	original (str): The generated commit message.
+    	edited (str): The final commit message.
+    
+    Returns:
+    	Provenance: The classification of the message edit.
+    """
     if original.strip() == edited.strip():
         return Provenance.AI_ACCEPTED
 
@@ -222,10 +231,17 @@ def _resolve_intent_fields_from_matrix(
     semver_impact: str | None = None,
     changelog_group: str | None = None,
 ) -> dict[str, str]:
-    """Best-effort matrix lookup for reverse-parsed rendered commit intents.
-
-    Prefer exact emoji match, then emoji+cc_type, then cc_type alone. Falls back
-    to the provided trailer-derived fields when no matrix row matches.
+    """
+    Resolve rendered commit intent fields against the Gitmoji matrix, using supplied values when no matching entry is found.
+    
+    Parameters:
+    	gitmoji (str): Emoji associated with the commit intent.
+    	cc_type (str): Conventional commit type associated with the intent.
+    	semver_impact (str | None): Fallback semantic version impact.
+    	changelog_group (str | None): Fallback changelog group.
+    
+    Returns:
+    	dict[str, str]: Resolved intent ID, semantic version impact, and changelog group.
     """
     from git_cg.sop import get_gitmoji_matrix
 
@@ -234,6 +250,14 @@ def _resolve_intent_fields_from_matrix(
     ctype = (cc_type or "").strip()
 
     def _row_intent_id(row: dict) -> str:
+        """Extract an intent identifier from a gitmoji matrix row.
+        
+        Parameters:
+        	row (dict): Matrix row containing an optional ``intent_id`` or ``code`` value.
+        
+        Returns:
+        	str: The row's intent identifier, falling back to the stripped ``code`` or ``"unknown"``.
+        """
         intent_id = row.get("intent_id")
         if intent_id:
             return str(intent_id)
@@ -270,14 +294,15 @@ def _resolve_intent_fields_from_matrix(
 
 def reverse_parse_commit_message(text: str) -> dict[str, Any]:
     """
-    Reverse-parse a finalized commit message text into a CommitPlan-compatible dict.
-
-    Extracts components matching the deterministic format from `CommitPlan.render()`.
-    Fields that cannot be recovered from rendered text (`split_recommended`, `rationale`)
-    are filled with explicit placeholders and `_partial` is set to True.
-
+    Parse a rendered commit message into a partial CommitPlan-compatible dictionary.
+    
+    Recoverable intent, body, secondary changes, trailers, and breaking-change
+    information are populated; fields unavailable in the rendered message use
+    placeholders, and the result is marked as partial.
+    
     Returns:
-        dict: Partial plan with primary_intent, body_summary, secondary_intents, and placeholders.
+    	dict[str, Any]: The reconstructed partial commit plan, or an empty dictionary
+    		if the message contains no lines.
     """
     import re
 
@@ -472,7 +497,13 @@ def get_state_file_path(git_dir: str) -> Path:
 
 
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
-    """Write the current telemetry state to the .git directory for the commit-msg hook."""
+    """
+    Persist redacted telemetry state in the repository's Git directory for retrieval by a later hook.
+    
+    Parameters:
+    	git_dir (str): Path to the Git directory where the state file is stored.
+    	telemetry (GenerationTelemetry): Telemetry data to redact and persist.
+    """
     telemetry.diff_output = redact_payload(telemetry.diff_output)
     telemetry.generated_message = redact_payload(telemetry.generated_message)
 
