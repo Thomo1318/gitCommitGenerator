@@ -941,9 +941,9 @@ def test_reverse_parse_commit_message_full_structure():
     assert plan["primary_intent"]["semver_impact"] == "MAJOR"
     assert plan["primary_intent"]["intent_id"] != "unknown"
     assert plan["primary_intent"]["intent_id"]  # resolved from matrix via emoji/type
-    # The matrix-resolved changelog_group ("Added", from the ✨+feat row) must win
-    # over the "Changelog-Groups: core" trailer value in the rendered text.
-    assert plan["primary_intent"]["changelog_group"] == "Added"
+    # Rendered trailers are authoritative for the final message; matrix fills only
+    # when Changelog-Groups is absent. intent_id still comes from emoji/type lookup.
+    assert plan["primary_intent"]["changelog_group"] == "core"
 
     assert plan["breaking_change"] is True
     assert plan["breaking_change_description"] == "The `record_telemetry` signature has changed."
@@ -997,9 +997,21 @@ def test_reverse_parse_commit_message_simple():
 # ---------------------------------------------------------------------------
 
 _RESOLVE_MATRIX_FIXTURE = [
-    {"intent_id": "feature_addition", "emoji": "✨", "cc_type": "feat", "semver_impact": "MINOR", "changelog_group": "Added"},
+    {
+        "intent_id": "feature_addition",
+        "emoji": "✨",
+        "cc_type": "feat",
+        "semver_impact": "MINOR",
+        "changelog_group": "Added",
+    },
     {"intent_id": "bug_fix", "emoji": "🐛", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed"},
-    {"intent_id": "docs_only", "emoji": "📝", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Documentation"},
+    {
+        "intent_id": "docs_only",
+        "emoji": "📝",
+        "cc_type": "docs",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+    },
     {"code": ":question:", "emoji": "❓", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Misc"},
 ]
 
