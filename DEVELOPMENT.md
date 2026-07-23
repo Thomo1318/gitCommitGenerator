@@ -127,52 +127,50 @@ Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 
 ---
 
-
 ---
 
 ## 📏 Canonical quality commands (`mise` vs `just`)
 
 > **Do not redefine** `just lint` / `just test`. Their historical meanings stay:
 >
-> | Command | Meaning (unchanged) |
-> | --- | --- |
-> | `just lint` | Zsh syntax check of legacy scripts |
+> | Command     | Meaning (unchanged)                   |
+> | ----------- | ------------------------------------- |
+> | `just lint` | Zsh syntax check of legacy scripts    |
 > | `just test` | Temporary-repo `git-cg` smoke dry-run |
 >
 > Canonical CI/DX commands live in **`mise`**:
 
-| Command | Meaning |
-| --- | --- |
-| `mise run lint` | Read-only fast lint (CI-shaped): `hk validate` + `hk check --check --no-stage --all` with `HK_SKIP_STEPS=pytest-cov,betterleaks,gen-docs,gen-toc` |
-| `mise run test` | Full project `pytest` suite |
-| `mise run cov` | Slow coverage verification (`--cov=src/git_cg --cov-branch`) |
-| `mise run security` | Optional local SBOM + Grant + Grype |
+| Command             | Meaning                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mise run lint`     | Read-only fast lint (CI-shaped): `hk validate` + `hk check --check --no-stage --all` with `HK_SKIP_STEPS=pytest-cov,betterleaks,gen-docs,gen-toc` |
+| `mise run test`     | Full project `pytest` suite                                                                                                                       |
+| `mise run cov`      | Slow coverage verification (`--cov=src/git_cg --cov-branch`)                                                                                      |
+| `mise run security` | Optional local SBOM + Grant + Grype                                                                                                               |
 
 ### `hk` profiles
 
-* **Fast (default pre-commit):** ruff, ruff-format, betterleaks, gen-docs, gen-toc
-* **Slow:** `pytest-cov` only when `hk check --slow` / `HK_PROFILE=slow`
-* **CI lint:** always read-only (`--check --no-stage`); never mutates the index
-* **PR CI:** `hk check --check --no-stage --pr ...` with valid base (`fetch-depth: 0`)
-* **Push / `workflow_dispatch` CI:** `--all` (or verified delta) — **never** `--pr` alone
-* **Version contract:** `min_hk_version = "1.45.0"`; exact `hk` pin in `mise.toml` aligned with the Pkl package amend
+- **Fast (default pre-commit):** ruff, ruff-format, betterleaks, gen-docs, gen-toc
+- **Slow:** `pytest-cov` only when `hk check --slow` / `HK_PROFILE=slow`
+- **CI lint:** always read-only (`--check --no-stage`); never mutates the index
+- **PR CI:** `hk check --check --no-stage --pr ...` with valid base (`fetch-depth: 0`)
+- **Push / `workflow_dispatch` CI:** `--all` (or verified delta) — **never** `--pr` alone
+- **Version contract:** `min_hk_version = "1.45.0"`; exact `hk` pin in `mise.toml` aligned with the Pkl package amend
 
 ### Codecov upload policy
 
-* **Same-repository** uploads only, authenticated with **OIDC** (`use_oidc: true`)
-* `id-token: write` is scoped **only** to the coverage upload job
-* **Fork PRs skip upload**; tests/coverage generation still run and must pass
-* Eligible uploads use `fail_ci_if_error: true` (no blanket `continue-on-error`)
-* Branch protection must **not** require the Codecov upload check on fork PRs (it is intentionally skipped)
-* Downloaded Codecov CLI from `codecov-action` is an **accepted pin exception** (action SHA is pinned; CLI binary tracks the action release channel). A hermetic CLI version pin is optional future work only if supply-chain policy tightens further.
-* **Patch 80% burn-in note:** root patch target stays `80%` with no `paths`/`flags`. Huge diffs concentrated in `src/git_cg/main.py` (`cli-main` component) can temporarily pressure patch status; prefer splitting product changes or accepting a deliberate patch miss over weakening the global target / component map.
-
+- **Same-repository** uploads only, authenticated with **OIDC** (`use_oidc: true`)
+- `id-token: write` is scoped **only** to the coverage upload job
+- **Fork PRs skip upload**; tests/coverage generation still run and must pass
+- Eligible uploads use `fail_ci_if_error: true` (no blanket `continue-on-error`)
+- Branch protection must **not** require the Codecov upload check on fork PRs (it is intentionally skipped)
+- Downloaded Codecov CLI from `codecov-action` is an **accepted pin exception** (action SHA is pinned; CLI binary tracks the action release channel). A hermetic CLI version pin is optional future work only if supply-chain policy tightens further.
+- **Patch 80% burn-in note:** root patch target stays `80%` with no `paths`/`flags`. Huge diffs concentrated in `src/git_cg/main.py` (`cli-main` component) can temporarily pressure patch status; prefer splitting product changes or accepting a deliberate patch miss over weakening the global target / component map.
 
 ### Security / SBOM
 
-* TruffleHog Action is **SHA-pinned** and the scanner **version** is pinned (action SHA ≠ payload pin alone)
-* Syft / Grype / Grant install via **mise exact versions** — no `curl \| sh`, no `latest` for those tools
-* SBOM artifact upload uses `if: ${{ env.ACT != 'true' }}` (never `ACT: "false"` + `!env.ACT`)
+- TruffleHog Action is **SHA-pinned** and the scanner **version** is pinned (action SHA ≠ payload pin alone)
+- Syft / Grype / Grant install via **mise exact versions** — no `curl \| sh`, no `latest` for those tools
+- SBOM artifact upload uses `if: ${{ env.ACT != 'true' }}` (never `ACT: "false"` + `!env.ACT`)
 
 ### Evidence expectations (Issue #170 close-out)
 
@@ -181,7 +179,6 @@ Before closing pipeline hardening work, record:
 1. Same-repo PR with successful OIDC Codecov upload and visible `semantic-core` / `cli-main` component signal
 2. Fork PR with upload skipped and CI green
 3. Security workflow success with SBOM artifact + Grype threshold
-
 
 ## 🤝 Contribution Workflow
 
@@ -314,3 +311,25 @@ When creating issues or pull requests, refer to these pristine examples of our s
 | **General**   | `wontfix`              | This will not be worked on                                |
 
 </details>
+
+## ADR-0005 phase ownership (intent engine)
+
+Phase 3 (**Issue #161**) preserves the SOP-marker intent engine and hardens the
+contract boundary. Related work is intentionally split across later phases:
+
+| Concern                                                                                 | Owner                                                        |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Intent ranking / additive markers / contract-before-LLM / `preflight_*` telemetry hooks | **Phase 3** (#161)                                           |
+| Preflight multi-group product / cheap-LLM grouping UX                                   | **Phase 0.5**                                                |
+| Semantic summary object for prompts                                                     | **Phase 7**                                                  |
+| Token-budget prompt assembly (`prompt_budget.py`), hierarchical packer product          | **Phase 11**                                                 |
+| CRG embeddings / `semantic_search` as ranking input                                     | **Out of scope** (retrieval/DX only; never SemVer authority) |
+
+### Analysis vs prompt diff (interim until Phase 11)
+
+`extract_git_diff()` returns the **full** staged analysis diff for signals,
+ranking, contract resolution, and telemetry hashing.
+
+`pack_prompt_diff()` may apply an interim character ceiling to the **LLM user
+payload only**, preferring whole-file omission with an inventory footer over a
+mid-hunk `[:50000]` chop. This is **not** the Phase 11 packer product.
