@@ -45,7 +45,7 @@ _LANGUAGE_BY_EXT: dict[str, str] = {
     ".kts": "kotlin",
     ".rb": "ruby",
     ".php": "php",
-    ".cs": "c_sharp",
+    ".cs": "csharp",
     ".swift": "swift",
     ".scala": "scala",
     ".toml": "toml",
@@ -139,6 +139,11 @@ def is_probably_binary(path: str | Path, source: bytes | None = None) -> bool:
     Returns:
         True when the path/content should be skipped by the text parser.
     """
+    # Prefer extension→language registry over MIME. stdlib mimetypes maps `*.ts`
+    # to video/mp2t (MPEG-TS), which would skip TypeScript sources incorrectly.
+    if language_for_path(path) is not None:
+        return source is not None and b"\x00" in source[:8192]
+
     mime, _ = mimetypes.guess_type(str(path))
     if (
         mime

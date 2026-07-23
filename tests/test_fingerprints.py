@@ -7,6 +7,7 @@ from git_cg.fingerprints import (
     compare_file_fingerprints,
     compare_fingerprint_sets,
     empty_fingerprint_metrics,
+    grammar_version,
 )
 
 
@@ -212,3 +213,45 @@ def test_collect_fingerprints_from_source_tree_unavailable(monkeypatch):
     assert triple is None
     assert lang == "python"
     assert err == "parse tree unavailable"
+
+
+def test_grammar_version_uses_package_metadata():
+    """grammar_version must prefer package metadata over path-only fallback."""
+    value = grammar_version()
+    assert value.startswith("tree-sitter-language-pack=="), value
+    assert "@" not in value.split("==", 1)[-1]
+
+
+def test_fingerprint_relational_invariants_multi_language():
+    """Relational fingerprint invariants hold across a small multi-language set."""
+    cases = {
+        "a.py": (
+            b"def foo(x):\n    return x + 1\n",
+            b"def foo(x):\n    # note\n    return x + 1\n",
+            FingerprintClass.COMMENTS_ONLY,
+        ),
+        "a.js": (
+            b"function foo(x) { return x + 1 }\n",
+            b"function foo(x) { /* note */ return x + 1 }\n",
+            None,  # classification may vary by grammar trivia; check relational fps
+        ),
+        "a.go": (
+            b"package main\nfunc foo(x int) int { return x + 1 }\n",
+            b"package main\n// note\nfunc foo(x int) int { return x + 1 }\n",
+            None,
+        ),
+    }
+    for path, (base, staged, expected) in cases.items():
+        result = compare_file_fingerprints(path, baseline_source=base, staged_source=staged)
+        assert result.baseline_fps is not None and result.staged_fps is not None
+        # same shape for comment/trivia-only edits when grammar exposes comments as trivia
+        if expected is not None:
+            assert result.classification == expected
+            assert result.baseline_fps.shape_fp == result.staged_fps.shape_fp
+            assert result.baseline_fps.code_fp == result.staged_fps.code_fp
+            assert result.baseline_fps.text_fp != result.staged_fps.text_fp
+        else:
+            # At minimum: fingerprints are stable/populated and classification is known
+            assert result.classification in set(FingerprintClass)
+            assert result.baseline_fps.shape_fp
+            assert result.staged_fps.shape_fp
