@@ -1,5 +1,7 @@
 """Tests for three-fingerprint algebra (Issue #160)."""
 
+import pytest
+
 from git_cg.fingerprints import (
     FingerprintClass,
     classify_fingerprint_equality,
@@ -215,11 +217,28 @@ def test_collect_fingerprints_from_source_tree_unavailable(monkeypatch):
     assert err == "parse tree unavailable"
 
 
-def test_grammar_version_uses_package_metadata():
-    """grammar_version must prefer package metadata over path-only fallback."""
+def test_grammar_version_uses_package_metadata(monkeypatch: pytest.MonkeyPatch):
+    """grammar_version must use package metadata when module attrs are absent."""
+    import importlib.metadata as md
+
+    import tree_sitter_language_pack as tslp
+
+    # Disable module-level version attributes so metadata path is exercised.
+    monkeypatch.setattr(tslp, "__version__", None, raising=False)
+    if hasattr(tslp, "VERSION"):
+        monkeypatch.setattr(tslp, "VERSION", None, raising=False)
+
+    expected = "9.9.9-test"
+
+    def _fake_version(name: str) -> str:
+        assert name == "tree-sitter-language-pack"
+        return expected
+
+    monkeypatch.setattr(md, "version", _fake_version)
+
     value = grammar_version()
-    assert value.startswith("tree-sitter-language-pack=="), value
-    assert "@" not in value.split("==", 1)[-1]
+    assert value == f"tree-sitter-language-pack=={expected}", value
+    assert "@" not in value
 
 
 def test_fingerprint_relational_invariants_multi_language():
@@ -233,7 +252,7 @@ def test_fingerprint_relational_invariants_multi_language():
         "a.js": (
             b"function foo(x) { return x + 1 }\n",
             b"function foo(x) { /* note */ return x + 1 }\n",
-            None,  # classification may vary by grammar trivia; check relational fps
+            None,
         ),
         "a.go": (
             b"package main\nfunc foo(x int) int { return x + 1 }\n",
@@ -244,17 +263,47 @@ def test_fingerprint_relational_invariants_multi_language():
     for path, (base, staged, expected) in cases.items():
         result = compare_file_fingerprints(path, baseline_source=base, staged_source=staged)
         assert result.baseline_fps is not None and result.staged_fps is not None
-        # same shape for comment/trivia-only edits when grammar exposes comments as trivia
+        base_fp = result.baseline_fps
+        staged_fp = result.staged_fps
+        assert base_fp.shape_fp and staged_fp.shape_fp
+        assert base_fp.code_fp and staged_fp.code_fp
+        assert base_fp.text_fp and staged_fp.text_fp
+        assert result.classification in set(FingerprintClass)
+
         if expected is not None:
             assert result.classification == expected
-            assert result.baseline_fps.shape_fp == result.staged_fps.shape_fp
-            assert result.baseline_fps.code_fp == result.staged_fps.code_fp
-            assert result.baseline_fps.text_fp != result.staged_fps.text_fp
+            assert base_fp.shape_fp == staged_fp.shape_fp
+            assert base_fp.code_fp == staged_fp.code_fp
+            assert base_fp.text_fp != staged_fp.text_fp
+            continue
+
+        # JS/Go comment edits: allow grammar-dependent classification, but require
+        # a coherent relationship among the three fingerprints.
+        if base_fp.text_fp == staged_fp.text_fp:
+            # Byte-identical after normalisation — all three should match.
+            assert base_fp.shape_fp == staged_fp.shape_fp
+            assert base_fp.code_fp == staged_fp.code_fp
+            assert result.classification == FingerprintClass.NOOP
         else:
-            # At minimum: fingerprints are stable/populated and classification is known
-            assert result.classification in set(FingerprintClass)
-            assert result.baseline_fps.shape_fp
-            assert result.staged_fps.shape_fp
+            # Text changed. Prefer comments/formatting-only when shape holds;
+            # otherwise accept structural/inconsistent only if code or shape moved.
+            if base_fp.shape_fp == staged_fp.shape_fp:
+                assert result.classification in {
+                    FingerprintClass.COMMENTS_ONLY,
+                    FingerprintClass.FORMATTING_ONLY,
+                    FingerprintClass.IDENTIFIER_OR_LITERAL_ONLY,
+                    FingerprintClass.NOOP,
+                }
+                if result.classification == FingerprintClass.COMMENTS_ONLY:
+                    assert base_fp.code_fp == staged_fp.code_fp
+                if result.classification == FingerprintClass.IDENTIFIER_OR_LITERAL_ONLY:
+                    assert base_fp.code_fp != staged_fp.code_fp
+            else:
+                assert result.classification in {
+                    FingerprintClass.STRUCTURAL,
+                    FingerprintClass.INCONSISTENT,
+                }
+                assert base_fp.shape_fp != staged_fp.shape_fp or base_fp.code_fp != staged_fp.code_fp
 
 
 def test_grammar_version_prefers_dunder_version_attribute(monkeypatch):

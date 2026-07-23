@@ -756,7 +756,7 @@ def _load_workflow(name: str) -> dict:
 def _assert_uses_full_sha(workflow_name: str, uses: str) -> None:
     """
     Validate that a workflow action reference uses a full lowercase commit SHA.
-    
+
     Parameters:
         workflow_name (str): Name of the workflow containing the action reference.
         uses (str): Action reference to validate.
