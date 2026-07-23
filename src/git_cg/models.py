@@ -210,6 +210,15 @@ class ModelCommitIntent(BaseModel):
         )
 
 
+def _require_breaking_change_description(*, breaking_change: bool, breaking_change_description: str | None) -> None:
+    """Raise if a breaking change is marked without a description.
+
+    Shared by CommitPlan and ModelCommitPlan validators so the error contract stays identical.
+    """
+    if breaking_change and not breaking_change_description:
+        raise ValueError("breaking_change_description must be provided if breaking_change is true")
+
+
 class CommitPlan(BaseModel):
     """
     A structured commit plan replacing the flat Commit model.
@@ -249,8 +258,10 @@ class CommitPlan(BaseModel):
         Returns:
             CommitPlan: The same CommitPlan instance (`self`).
         """
-        if self.breaking_change and not self.breaking_change_description:
-            raise ValueError("breaking_change_description must be provided if breaking_change is true")
+        _require_breaking_change_description(
+            breaking_change=self.breaking_change,
+            breaking_change_description=self.breaking_change_description,
+        )
         return self
 
     def render(self, issue_references: list[IssueReference] | None = None) -> str:
@@ -367,8 +378,10 @@ class ModelCommitPlan(BaseModel):
         Raises:
                 ValueError: If `breaking_change` is true and no description is provided.
         """
-        if self.breaking_change and not self.breaking_change_description:
-            raise ValueError("breaking_change_description must be provided if breaking_change is true")
+        _require_breaking_change_description(
+            breaking_change=self.breaking_change,
+            breaking_change_description=self.breaking_change_description,
+        )
         return self
 
     def to_commit_plan(self) -> CommitPlan:

@@ -153,11 +153,10 @@ def test_resolve_semantic_contract_respects_allowed_constraints_when_directive_p
 
     contract = resolve_semantic_contract(context, state)
 
-    # Since the ranked "feature_addition" is disallowed, it should fallback to the first matrix row that matches the type
-    # and is allowed. Our mock matrix has "feature_addition", but it's disallowed. There are no other "feat" rows.
-    # Therefore, it will fall through to the stable anchor (previous plan), which is "bug_fix".
-    assert contract.primary_intent_id == "bug_fix"
-    assert contract.cc_type == "fix"
+    # Ranked feature_addition is disallowed and no other feat rows exist. Previous plan bug_fix is also outside
+    # allowed_intent_ids, so the resolver must fall through to the allowed ranked/matrix path (documentation_update).
+    assert contract.primary_intent_id == "documentation_update"
+    assert contract.cc_type == "docs"
 
 
 def test_resolve_semantic_contract_first_pass_locks_top_ranked_intent():
@@ -310,3 +309,50 @@ def test_resolve_semantic_contract_first_pass_falls_back_to_allowed_matrix_row()
     state = RegenerationState(previous_plan=None, active_directives={})
     contract = resolve_semantic_contract(context, state)
     assert contract.primary_intent_id == "documentation_update"
+
+
+def test_resolve_semantic_contract_previous_plan_respects_allowed_constraints():
+    """Previous-plan anchor is skipped when that intent is outside allowed_intent_ids."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=10.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="documentation_update",
+                emoji="📝",
+                code=":memo:",
+                cc_type="docs",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Changed",
+                intent_group="docs",
+                score=5.0,
+                priority=50,
+                specificity=50,
+                split_weight=25,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(allowed_intent_ids=["documentation_update"]),
+    )
+    state = RegenerationState(
+        previous_plan=_make_commit_plan(intent_id="bug_fix", cc_type=CommitType.FIX),
+        active_directives={},
+    )
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "documentation_update"
+    assert contract.cc_type == "docs"

@@ -948,9 +948,12 @@ def pack_prompt_diff(
     matches = list(_DIFF_FILE_HEADER_RE.finditer(analysis_diff))
     if not matches:
         # No file headers — keep a conservative prefix with an explicit note.
-        kept = analysis_diff[: max(0, max_chars - 120)].rstrip()
+        # Always honour max_chars, even when the notice is longer than the budget.
         note = "\n\n... [PROMPT DIFF TRUNCATED — no file boundaries found; analysis/rank used full staged diff] ...\n"
-        return kept + note, ["<unbounded-diff>"]
+        if len(note) >= max_chars:
+            return note[:max_chars], ["<unbounded-diff>"]
+        kept = analysis_diff[: max(0, max_chars - len(note))].rstrip()
+        return (kept + note)[:max_chars], ["<unbounded-diff>"]
 
     sections: list[tuple[str | None, str]] = []
     for index, match in enumerate(matches):
@@ -982,13 +985,15 @@ def pack_prompt_diff(
     kept_body = "".join(kept_parts).strip()
     if not kept_body and sections:
         first_path, first_body = sections[0]
-        kept = (prefix + first_body)[: max(0, max_chars - 160)].rstrip()
         note = (
             "\n\n... [PROMPT DIFF TRUNCATED at file boundary budget; "
             "single large file partially omitted from prompt only] ...\n"
         )
         omitted = omitted_paths or [first_path or "<unknown-path>"]
-        return kept + note, omitted
+        if len(note) >= max_chars:
+            return note[:max_chars], omitted
+        kept = (prefix + first_body)[: max(0, max_chars - len(note))].rstrip()
+        return (kept + note)[:max_chars], omitted
 
     if not omitted_paths:
         return analysis_diff if len(analysis_diff) <= max_chars else "".join(kept_parts), []

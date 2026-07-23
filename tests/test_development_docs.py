@@ -16,6 +16,16 @@ ADR_0002 = REPO_ROOT / "docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md"
 README_MD = REPO_ROOT / "README.md"
 
 
+def _read_development_md() -> str:
+    """Return UTF-8 contents of DEVELOPMENT.md (module-level shared reader)."""
+    return DEVELOPMENT_MD.read_text(encoding="utf-8")
+
+
+def _read_readme_md() -> str:
+    """Return UTF-8 contents of README.md (module-level shared reader)."""
+    return README_MD.read_text(encoding="utf-8")
+
+
 # ===========================================================================
 # DEVELOPMENT.md
 # ===========================================================================
@@ -26,7 +36,7 @@ class TestDevelopmentMdCanonicalQualitySection:
 
     def _content(self) -> str:
         """Read and return the contents of the development documentation file."""
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_file_exists(self):
         assert DEVELOPMENT_MD.is_file()
@@ -102,7 +112,7 @@ class TestDevelopmentMdGitHooksSectionUpdated:
 
     def _content(self) -> str:
         """Read and return the contents of the development documentation file."""
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_pre_commit_description_mentions_fast_local_path(self):
         content = self._content()
@@ -125,7 +135,7 @@ class TestDevelopmentMdContributionWorkflowUpdated:
 
     def _content(self) -> str:
         """Read and return the contents of the development documentation file."""
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_contribution_step_references_mise_run_lint_and_test(self):
         """Verify that the contribution workflow documents the canonical lint and test commands."""
@@ -154,7 +164,7 @@ class TestDevelopmentMdCodecovCliPinExceptionDetailed:
 
     def _content(self) -> str:
         """Read and return the contents of the development documentation file."""
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_accepted_pin_exception_exact_text(self):
         content = self._content()
@@ -181,7 +191,7 @@ class TestDevelopmentMdPatchBurnInNote:
 
     def _content(self) -> str:
         """Read and return the contents of the development documentation file."""
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_patch_burn_in_note_label_and_target_exact_text(self):
         content = self._content()
@@ -303,7 +313,7 @@ class TestDevelopmentMdContributionWorkflowBranchNaming:
     """Tests for the updated Contribution Workflow branch-naming guidance."""
 
     def _content(self) -> str:
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_branch_naming_step_mentions_issue_number_auto_detection(self):
         content = self._content()
@@ -326,7 +336,7 @@ class TestDevelopmentMdAdr0005PhaseOwnership:
     """Tests for the new '## ADR-0005 phase ownership (intent engine)' section."""
 
     def _content(self) -> str:
-        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+        return _read_development_md()
 
     def test_section_heading_present(self):
         content = self._content()
@@ -387,7 +397,7 @@ class TestReadmeIssueAutoDetectionTip:
     """Tests for the new '> [!TIP] Issue Auto-Detection' callout in README.md."""
 
     def _content(self) -> str:
-        return README_MD.read_text(encoding="utf-8")
+        return _read_readme_md()
 
     def test_file_exists(self):
         assert README_MD.is_file()
