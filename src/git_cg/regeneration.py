@@ -42,9 +42,11 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
     Resolve the semantic commit contract for the next generation cycle.
 
     Selects a primary intent from the gitmoji contract matrix, respecting an optional
-    `preferred_type` directive and any allowed-intent constraints, and falls back to the
-    previous plan's primary intent to avoid semantic drift. Secondary intent ids are
-    sourced from the previous commit plan.
+    `preferred_type` directive and any allowed-intent constraints. When regenerating,
+    falls back to the previous plan's primary intent; on first pass (no previous plan),
+    locks to the top ranked intent (constraints-aware), then an allowed matrix row, then
+    the first matrix row. Secondary intent ids are sourced from the previous commit plan
+    when present.
 
     Parameters:
         context (GenerationContext): Deterministic inputs for resolution, including ranked intents and selection constraints.

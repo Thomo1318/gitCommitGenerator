@@ -101,3 +101,33 @@ def test_model_commit_plan_to_commit_plan_maps_intents():
     internal = plan.to_commit_plan()
     assert internal.primary_intent.intent_id == "feature_addition"
     assert internal.rationale == "Feature."
+
+
+def test_model_commit_plan_requires_breaking_description():
+    with pytest.raises(ValidationError, match="breaking_change_description"):
+        ModelCommitPlan(
+            primary_intent=ModelCommitIntent(
+                intent_id="feature_addition",
+                gitmoji="✨",
+                cc_type=CommitType.FEAT,
+                description="add endpoint",
+                semver_impact=SemVerImpact.MINOR,
+                changelog_group="Added",
+            ),
+            rationale="break",
+            breaking_change=True,
+            breaking_change_description=None,
+        )
+
+
+def test_model_commit_intent_allows_when_matrix_unavailable(monkeypatch):
+    monkeypatch.setattr("git_cg.sop.get_gitmoji_matrix", lambda: [])
+    intent = ModelCommitIntent(
+        intent_id="anything",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        description="x",
+        semver_impact=SemVerImpact.MINOR,
+        changelog_group="Added",
+    )
+    assert intent.intent_id == "anything"

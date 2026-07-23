@@ -60,3 +60,26 @@ def test_analysis_rank_unchanged_when_prompt_omits_files():
 
 def test_prompt_diff_max_chars_constant():
     assert PROMPT_DIFF_MAX_CHARS == 50_000
+
+
+def test_pack_prompt_diff_rejects_non_positive_budget():
+    import pytest
+
+    with pytest.raises(ValueError, match="max_chars"):
+        pack_prompt_diff("diff --git a/x b/x\n", max_chars=0)
+
+
+def test_pack_prompt_diff_without_file_headers_uses_prefix_note():
+    blob = "not a unified diff\n" + ("z" * 10_000)
+    packed, omitted = pack_prompt_diff(blob, max_chars=500)
+    assert omitted == ["<unbounded-diff>"]
+    assert "no file boundaries found" in packed
+    assert len(packed) <= 500 + 5  # small slack for note assembly
+
+
+def test_pack_prompt_diff_single_oversized_file_partial_omit():
+    body = "+" + ("q" * 20_000)
+    analysis = _file_section("src/only.py", body)
+    packed, omitted = pack_prompt_diff(analysis, max_chars=800)
+    assert omitted == ["src/only.py"]
+    assert "single large file partially omitted" in packed
