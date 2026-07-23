@@ -216,9 +216,19 @@ Canonical floors live in `pyproject.toml`. Contract tests: `tests/test_project_c
 | `pytest-cov` | `>=7` | Align to locked 7.x |
 | `tree-sitter-language-pack` | `>=0.13,<1` | Bridge from stale `>=0.1.0`; `<1` ceiling matches `code-review-graph` 2.3.7 (`tslp>=0.3,<1`); pack 1.x blocked until CRG allows it |
 | `tree-sitter` | `>=0.26,<0.27` | Locked on 0.26 after WP5; keep `<0.27` ceiling |
-| `rich` | `>=14.3.4,<16` | Keep 14.x until WP4; upper bound blocks accidental 16+ |
+| `rich` | `>=14.3.4,<16` | Stay on 14.x: PyPI `instructor` 1.15.x requires `rich<15`; ceiling still allows a future 15.x once instructor unblocks |
+| `code-review-graph` | `>=2.3.7` | Locked with Action pin on v2.3.7; CRG also caps `tree-sitter-language-pack<1` |
 
 Floor changes must keep lock movement intentional (no silent rich 15 / tslp 1.x beyond the CRG `<1` cap). Security/SBOM transitive floors remain under `[tool.uv] constraint-dependencies`.
+
+### Deferred pin bumps (Issue #177 WP6)
+
+After the Actions harness and dependency floors above, **do not** bump these in the same programme without a dedicated follow-up:
+
+* **`ruff`** and **`hk`** (including `mise.toml` exact `hk` pin and `hk.pkl` / `min_hk_version`) — highest direct `hk check` rework risk; leave `tests/test_hk_config.py` unchanged until a focused PR after WP2-style CI is stable on `main`.
+* **`rich` 15.x** — blocked by `instructor` (`rich<15`) until upstream allows it.
+* **`tree-sitter-language-pack` 1.x** — blocked by `code-review-graph` (`tslp<1`) until upstream allows it.
+* **Dependabot `github-actions` grouping** (`patterns: ["*"]`) — consider ungrouping majors or targeted ignores so the next Actions wave is not another opaque mega-PR (#175-style).
 
 ## 🤝 Contribution Workflow
 

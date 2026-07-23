@@ -2,6 +2,8 @@
 
 ### 🔒️ Security / Dependencies
 
+- 📝 docs(dev-guide): record #177 WP6 ruff/hk and upstream blocker deferrals (#177) (#158)
+
 - ⬆️ build(deps): bump tree-sitter 0.25.2 → 0.26.0; keep language-pack 0.13 under CRG `<1` cap (#177) (#158)
 
 - ⬆️ build(deps): bump pytest 9.0.3 → 9.1.1 (#177) (#158)

@@ -458,3 +458,11 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
         assert "tree-sitter-language-pack" in content
         assert ">=0.13,<1" in content
         assert "pytest" in content
+
+    def test_wp6_deferred_pin_bumps_section(self):
+        content = self._content()
+        assert "### Deferred pin bumps (Issue #177 WP6)" in content
+        assert "ruff" in content
+        assert "hk" in content
+        assert "instructor" in content
+        assert "tree-sitter-language-pack" in content
