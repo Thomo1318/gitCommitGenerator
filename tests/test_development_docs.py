@@ -1,7 +1,11 @@
 """
-Tests for documentation changes introduced by Issue #170 pipeline hardening:
-  - DEVELOPMENT.md                                  (canonical `mise` quality task docs)
+Tests for documentation changes introduced by Issue #170 pipeline hardening
+and Issue #161 (Phase 3 SOP-marker intent engine hardening):
+  - DEVELOPMENT.md                                  (canonical `mise` quality task docs;
+                                                      ADR-0005 phase ownership; branch-naming
+                                                      auto-detection convention)
   - docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md  (Update 4 / v1.4.0 pin posture)
+  - README.md                                        (Issue Auto-Detection tip)
 """
 
 from pathlib import Path
@@ -9,6 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent
 DEVELOPMENT_MD = REPO_ROOT / "DEVELOPMENT.md"
 ADR_0002 = REPO_ROOT / "docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md"
+README_MD = REPO_ROOT / "README.md"
 
 
 # ===========================================================================
@@ -287,3 +292,119 @@ class TestAdr0002Update4Section:
         frontmatter = content.split("```yaml")[1].split("```")[0]
         assert 'version: "v1.4.0"' in frontmatter
         assert 'version: "v1.3.0"' not in frontmatter
+
+
+# ===========================================================================
+# DEVELOPMENT.md — Issue #161 (Phase 3 intent engine hardening) additions
+# ===========================================================================
+
+
+class TestDevelopmentMdContributionWorkflowBranchNaming:
+    """Tests for the updated Contribution Workflow branch-naming guidance."""
+
+    def _content(self) -> str:
+        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+
+    def test_branch_naming_step_mentions_issue_number_auto_detection(self):
+        content = self._content()
+        assert "including the issue number in the branch name to enable `git-cg` auto-detection" in content
+
+    def test_branch_naming_step_gives_concrete_example(self):
+        content = self._content()
+        assert "`feat/123-my-new-feature`" in content
+
+    def test_branch_naming_step_is_first_step_of_contribution_workflow(self):
+        """The auto-detection guidance must live in step 1, directly under the workflow heading."""
+        content = self._content()
+        workflow_section = content.split("## 🤝 Contribution Workflow")[1]
+        first_step = workflow_section.strip().splitlines()[0]
+        assert first_step.startswith("1. Branch off `main`")
+        assert "auto-detection" in first_step
+
+
+class TestDevelopmentMdAdr0005PhaseOwnership:
+    """Tests for the new '## ADR-0005 phase ownership (intent engine)' section."""
+
+    def _content(self) -> str:
+        return DEVELOPMENT_MD.read_text(encoding="utf-8")
+
+    def test_section_heading_present(self):
+        content = self._content()
+        assert "## ADR-0005 phase ownership (intent engine)" in content
+
+    def test_section_references_issue_161_as_phase_3(self):
+        content = self._content()
+        section = content.split("## ADR-0005 phase ownership (intent engine)")[1]
+        assert "Phase 3" in section
+        assert "Issue #161" in section
+
+    def test_phase_ownership_table_covers_all_documented_phases(self):
+        content = self._content()
+        section = content.split("## ADR-0005 phase ownership (intent engine)")[1]
+        assert "**Phase 3** (#161)" in section
+        assert "**Phase 0.5**" in section
+        assert "**Phase 7**" in section
+        assert "**Phase 11**" in section
+        assert "**Out of scope**" in section
+
+    def test_phase_ownership_table_lists_expected_concerns(self):
+        content = self._content()
+        section = content.split("## ADR-0005 phase ownership (intent engine)")[1]
+        assert "preflight_" in section
+        assert "Preflight multi-group product" in section
+        assert "Semantic summary object for prompts" in section
+        assert "Token-budget prompt assembly (`prompt_budget.py`)" in section
+        assert "CRG embeddings" in section
+
+    def test_analysis_vs_prompt_diff_subsection_present(self):
+        content = self._content()
+        assert "### Analysis vs prompt diff (interim until Phase 11)" in content
+
+    def test_analysis_vs_prompt_diff_documents_extract_git_diff_contract(self):
+        content = self._content()
+        section = content.split("### Analysis vs prompt diff (interim until Phase 11)")[1]
+        assert "`extract_git_diff()` returns the **full** staged analysis diff" in section
+
+    def test_analysis_vs_prompt_diff_documents_pack_prompt_diff_contract(self):
+        content = self._content()
+        section = content.split("### Analysis vs prompt diff (interim until Phase 11)")[1]
+        assert "`pack_prompt_diff()`" in section
+        assert "not** the Phase 11 packer product" in section
+
+    def test_analysis_vs_prompt_diff_subsection_appears_after_ownership_table(self):
+        content = self._content()
+        assert content.index("## ADR-0005 phase ownership (intent engine)") < content.index(
+            "### Analysis vs prompt diff (interim until Phase 11)"
+        )
+
+
+# ===========================================================================
+# README.md — Issue #161 Issue Auto-Detection tip
+# ===========================================================================
+
+
+class TestReadmeIssueAutoDetectionTip:
+    """Tests for the new '> [!TIP] Issue Auto-Detection' callout in README.md."""
+
+    def _content(self) -> str:
+        return README_MD.read_text(encoding="utf-8")
+
+    def test_file_exists(self):
+        assert README_MD.is_file()
+
+    def test_tip_callout_present(self):
+        content = self._content()
+        assert "> [!TIP]" in content
+        assert "Issue Auto-Detection" in content
+
+    def test_tip_explains_branch_name_hyphen_convention(self):
+        content = self._content()
+        assert "branch name contains an issue number separated by a hyphen" in content
+
+    def test_tip_gives_concrete_branch_example(self):
+        content = self._content()
+        assert "`feat/123-new-badge`" in content
+
+    def test_tip_documents_resolves_trailer_behavior(self):
+        content = self._content()
+        assert "`git-cg` will automatically detect it and append `Resolves: #123`" in content

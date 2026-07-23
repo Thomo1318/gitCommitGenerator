@@ -21,26 +21,12 @@ from git_cg.sop import load_sop
 
 @pytest.fixture
 def sop_matrix() -> list[dict]:
-    """
-    Load the Gitmoji reference matrix from the SOP data.
-    
-    Returns:
-    	list[dict]: The Gitmoji reference matrix, or an empty list when it is absent.
-    """
     data = load_sop()
     return data.get("gitmoji_reference_matrix", [])
 
 
 @pytest.fixture
 def matrix_vocab(sop_matrix: list[dict]) -> frozenset[str]:
-    """Return the set of signal markers defined in the SOP matrix.
-    
-    Parameters:
-    	sop_matrix (list[dict]): SOP matrix entries from which to derive the marker vocabulary.
-    
-    Returns:
-    	frozenset[str]: The SOP-defined signal marker vocabulary.
-    """
     return matrix_signal_vocabulary(sop_matrix)
 
 
@@ -114,6 +100,82 @@ def test_graph_enrichment_medium_blast_uses_internal_restructure(
     )
     markers = enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab)
     assert markers == {"internal_restructure"}
+
+
+def test_graph_enrichment_boundary_exactly_25_uses_major_subsystem_tier(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """total_impacted == 25 is the inclusive lower bound of the major-subsystem tier."""
+    facts = SemanticEnrichmentFacts(graph=GraphEnrichmentFacts(total_impacted=25, outcome="ok"))
+    markers = enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab)
+    assert markers == {"major_subsystem_restructured", "core_architecture_changed"}
+
+
+def test_graph_enrichment_boundary_exactly_10_uses_internal_restructure_tier(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """total_impacted == 10 is the inclusive lower bound of the internal-restructure tier."""
+    facts = SemanticEnrichmentFacts(graph=GraphEnrichmentFacts(total_impacted=10, outcome="ok"))
+    markers = enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab)
+    assert markers == {"internal_restructure"}
+
+
+def test_graph_enrichment_below_threshold_emits_no_markers(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """total_impacted below the internal-restructure floor (10) must emit nothing."""
+    facts = SemanticEnrichmentFacts(graph=GraphEnrichmentFacts(total_impacted=5, outcome="ok"))
+    assert enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab) == set()
+
+
+def test_graph_enrichment_missing_total_impacted_emits_no_markers(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """An 'ok' outcome with no total_impacted value must not emit blast-radius markers."""
+    facts = SemanticEnrichmentFacts(graph=GraphEnrichmentFacts(total_impacted=None, outcome="ok"))
+    assert enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab) == set()
+
+
+def test_fingerprint_high_similarity_identifier_only_adds_formatting_only(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """High body-similarity plus an identifier/literal-only class implies formatting_only."""
+    facts = SemanticEnrichmentFacts(
+        fingerprints=FingerprintEnrichmentFacts(
+            class_counts={"identifier_or_literal_only": 3},
+            body_similarity_min=0.95,
+        )
+    )
+    markers = enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab)
+    assert "formatting_only" in markers
+
+
+def test_fingerprint_high_similarity_without_identifier_class_omits_formatting_only(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """High body-similarity alone (no identifier/literal-only class hits) must not imply formatting_only."""
+    facts = SemanticEnrichmentFacts(
+        fingerprints=FingerprintEnrichmentFacts(
+            class_counts={},
+            body_similarity_min=0.95,
+        )
+    )
+    markers = enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab)
+    assert "formatting_only" not in markers
+
+
+def test_fingerprint_low_similarity_identifier_only_omits_formatting_only(
+    matrix_vocab: frozenset[str],
+) -> None:
+    """Below the 0.9 similarity threshold, formatting_only must not be inferred."""
+    facts = SemanticEnrichmentFacts(
+        fingerprints=FingerprintEnrichmentFacts(
+            class_counts={"identifier_or_literal_only": 3},
+            body_similarity_min=0.5,
+        )
+    )
+    markers = enrich_markers_from_facts(facts, matrix_vocab=matrix_vocab)
+    assert "formatting_only" not in markers
 
 
 def test_graph_unavailable_or_error_emits_no_markers(matrix_vocab: frozenset[str]) -> None:
