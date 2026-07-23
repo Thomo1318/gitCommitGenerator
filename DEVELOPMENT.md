@@ -214,11 +214,11 @@ Canonical floors live in `pyproject.toml`. Contract tests: `tests/test_project_c
 | --- | --- | --- |
 | `pytest` | `>=9` | Align floor to locked 9.x; patch moves (e.g. 9.1.1) are separate WPs |
 | `pytest-cov` | `>=7` | Align to locked 7.x |
-| `tree-sitter-language-pack` | `>=0.13,<2` | Bridge from stale `>=0.1.0`; `<2` ceiling allows eventual 1.x under one bound; WP5 tightens floor to `>=1,<2` when the lock majors |
-| `tree-sitter` | `>=0.25,<0.27` | Match locked 0.25.x; prevent accidental resolver jump to 0.26 outside WP5 |
+| `tree-sitter-language-pack` | `>=0.13,<1` | Bridge from stale `>=0.1.0`; `<1` ceiling matches `code-review-graph` 2.3.7 (`tslp>=0.3,<1`); pack 1.x blocked until CRG allows it |
+| `tree-sitter` | `>=0.26,<0.27` | Locked on 0.26 after WP5; keep `<0.27` ceiling |
 | `rich` | `>=14.3.4,<16` | Keep 14.x until WP4; upper bound blocks accidental 16+ |
 
-WP1 must keep `uv.lock` metadata-only (no silent rich 15 / tslp 1.x / tree-sitter 0.26). Security/SBOM transitive floors remain under `[tool.uv] constraint-dependencies`.
+Floor changes must keep lock movement intentional (no silent rich 15 / tslp 1.x beyond the CRG `<1` cap). Security/SBOM transitive floors remain under `[tool.uv] constraint-dependencies`.
 
 ## 🤝 Contribution Workflow
 

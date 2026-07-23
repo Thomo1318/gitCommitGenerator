@@ -456,5 +456,5 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
         content = self._content()
         assert "### Dependency floors (Issue #177 WP1)" in content
         assert "tree-sitter-language-pack" in content
-        assert ">=0.13,<2" in content
+        assert ">=0.13,<1" in content
         assert "pytest" in content

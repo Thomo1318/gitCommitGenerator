@@ -155,6 +155,15 @@ def grammar_version() -> str:
         str: A grammar pack identity suitable for metrics and cache invalidation.
     """
     version = getattr(tslp, "__version__", None) or getattr(tslp, "VERSION", None)
+    if not version:
+        try:
+            from importlib.metadata import PackageNotFoundError, version as pkg_version
+
+            version = pkg_version("tree-sitter-language-pack")
+        except PackageNotFoundError:
+            version = None
+        except Exception:
+            version = None
     if version:
         return f"tree-sitter-language-pack=={version}"
     return f"tree-sitter-language-pack@{getattr(tslp, '__file__', 'unknown')}"
