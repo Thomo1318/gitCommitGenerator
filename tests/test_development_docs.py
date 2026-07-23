@@ -438,3 +438,23 @@ class TestReadmeIssueAutoDetectionTip:
     def test_tip_documents_resolves_trailer_behavior(self):
         content = self._content()
         assert "`git-cg` will automatically detect it and append `Resolves: #123`" in content
+
+
+class TestDevelopmentMdIssue177BaselineAndFloors:
+    """Issue #177 WP0 baseline evidence and WP1 dependency floor docs."""
+
+    def _content(self) -> str:
+        return _read_development_md()
+
+    def test_wp0_baseline_section_present(self):
+        content = self._content()
+        assert "### Evidence expectations (Issue #177 WP0 baseline)" in content
+        assert "44c9d3e31220b953541ebb724e4f5bc8802897d8" in content
+        assert "29995846892" in content  # ci.yml run id
+
+    def test_dependency_floors_section_present(self):
+        content = self._content()
+        assert "### Dependency floors (Issue #177 WP1)" in content
+        assert "tree-sitter-language-pack" in content
+        assert ">=0.13,<2" in content
+        assert "pytest" in content

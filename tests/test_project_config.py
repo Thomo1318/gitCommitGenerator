@@ -506,6 +506,20 @@ class TestMiseQualityPinsAndTasks:
         assert "aiohttp>=3.14.1" in text
         assert "pydantic-settings>=2.14.2" in text
 
+    def test_dependency_floor_constraints(self):
+        """Issue #177 WP1 floors must stay declared (pytest/tslp/tree-sitter/rich)."""
+        text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        assert '"pytest>=9"' in text
+        assert '"pytest-cov>=7"' in text
+        assert '"tree-sitter-language-pack>=0.13,<2"' in text
+        assert '"tree-sitter>=0.25,<0.27"' in text
+        assert '"rich>=14.3.4,<16"' in text
+        # Stale pre-WP1 floors must not return.
+        assert '"pytest>=8.0.0"' not in text
+        assert '"pytest-cov>=5.0.0"' not in text
+        assert '"tree-sitter-language-pack>=0.1.0"' not in text
+        assert '"tree-sitter>=0.22.0"' not in text
+
     def test_tools_have_no_floating_latest(self):
         """Security-relevant and DX tools must not float on latest in mise.toml [tools]."""
         text = (REPO_ROOT / "mise.toml").read_text(encoding="utf-8")

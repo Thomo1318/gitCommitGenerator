@@ -1,3 +1,9 @@
+## Unreleased
+
+### 🔒️ Security / Dependencies
+
+- 🔒️ fix(deps): raise pytest/tree-sitter/rich floors toward lock (#177) (#158)
+
 ## v0.5.0
 
 ### ✨ Features
