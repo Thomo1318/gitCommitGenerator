@@ -361,3 +361,32 @@ def test_build_system_prompt_includes_locked_contract_when_provided():
     assert "primary_intent_id: bug_fix" in prompt
     assert "Unknown intent ids are invalid" in prompt
     assert "bug_fix" in prompt
+
+
+def test_build_semantic_enrichment_facts_flag_off_returns_none():
+    from git_cg.main import _build_semantic_enrichment_facts
+
+    facts = _build_semantic_enrichment_facts(
+        semantic_enabled=False,
+        fingerprint_class_counts={"formatting_only": 1},
+        body_similarity_min=0.99,
+        body_similarity_avg=0.99,
+        fingerprint_markers=["formatting_only"],
+    )
+    assert facts is None
+
+
+def test_build_semantic_enrichment_facts_flag_on_builds_container():
+    from git_cg.main import _build_semantic_enrichment_facts
+
+    facts = _build_semantic_enrichment_facts(
+        semantic_enabled=True,
+        fingerprint_class_counts={"formatting_only": 2},
+        body_similarity_min=0.95,
+        body_similarity_avg=0.97,
+        fingerprint_markers=["comments_only"],
+    )
+    assert facts is not None
+    assert facts.fingerprints is not None
+    assert facts.fingerprints.class_counts == {"formatting_only": 2}
+    assert facts.fingerprints.markers == ["comments_only"]
