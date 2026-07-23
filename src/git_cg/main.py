@@ -483,10 +483,10 @@ def generate_commit_message(
 ) -> CommitPlan:
     """
     Generate a commit plan from the supplied diff and system prompt.
-    
+
     Parameters:
         active_directives (dict[str, str] | None): Directive values that override the generated commit type or scope.
-    
+
     Returns:
         CommitPlan: The generated commit plan with applicable directive overrides.
     """
@@ -572,7 +572,7 @@ def build_system_prompt(
 ) -> str:
     """
     Compose the system prompt for generating a structured Conventional Commit plan.
-    
+
     Parameters:
         diff_output (str): Git diff content used for language detection and intent ranking.
         verbose (bool): Whether to enable diagnostic output while building the prompt.
@@ -581,7 +581,7 @@ def build_system_prompt(
         previous_plan (CommitPlan | None): Previously generated plan to include during regeneration.
         ranked_candidates (list | None): Precomputed intent candidates to include instead of ranking the diff.
         contract: Semantic contract whose values must be preserved in the generated plan.
-    
+
     Returns:
         str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
     """
@@ -874,13 +874,13 @@ def _interactive_review_dry_run(
 ) -> str:
     """
     Present the current review state for interactive dry-run review.
-    
+
     Parameters:
         review_state (ReviewState): The generated commit plan and associated review state.
         verbose (bool): Whether to enable verbose output during review.
         strict (bool): Whether to apply strict error handling.
         gui_editor (bool): Whether to use GUI editor preferences when editing.
-    
+
     Returns:
         str: The action selected by the user.
     """
@@ -926,18 +926,18 @@ def pack_prompt_diff(
 ) -> tuple[str, list[str]]:
     """
     Prepare a size-limited diff for use in an LLM prompt.
-    
+
     Preserves complete file sections where possible and reports omitted paths in the returned inventory. Large or unstructured diffs may be truncated with an explanatory note.
-    
+
     Parameters:
-    	analysis_diff (str): Full staged diff used for analysis and intent ranking.
-    	max_chars (int): Maximum size of the prompt-bound diff.
-    
+        analysis_diff (str): Full staged diff used for analysis and intent ranking.
+        max_chars (int): Maximum size of the prompt-bound diff.
+
     Returns:
-    	tuple[str, list[str]]: The prompt-bound diff and paths omitted from it.
-    
+        tuple[str, list[str]]: The prompt-bound diff and paths omitted from it.
+
     Raises:
-    	ValueError: If `max_chars` is less than or equal to zero.
+        ValueError: If `max_chars` is less than or equal to zero.
     """
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
@@ -1009,12 +1009,12 @@ def pack_prompt_diff(
 def extract_git_diff(verbose: bool, strict: bool) -> str:
     """
     Extracts the staged Git diff for analysis and ranking.
-    
+
     Returns:
-    	str: The staged diff content.
-    
+        str: The staged diff content.
+
     Raises:
-    	typer.Exit: If diff extraction fails or no staged changes are found.
+        typer.Exit: If diff extraction fails or no staged changes are found.
     """
     try:
         has_rtk = shutil.which("rtk") is not None
@@ -1079,10 +1079,10 @@ def _validate_commit_source(
 def _detect_branch_issue_reference(verbose: bool) -> list[IssueReference]:
     """
     Detect an issue reference from the current Git branch name.
-    
+
     Parameters:
         verbose (bool): Whether to log the detected issue reference.
-    
+
     Returns:
         list[IssueReference]: Issue references containing the first number followed by a hyphen found after a slash or at the start of the branch name.
     """
@@ -1108,14 +1108,14 @@ def _build_generation_context(
 ):
     """
     Build the deterministic context used for commit generation.
-    
+
     Parameters:
-    	diff_output (str): The staged diff to analyse.
-    	enable_semantic (bool | None): Whether semantic enrichment is enabled.
-    	enrichment_facts: Optional closed-vocabulary semantic facts used to enrich intent ranking.
-    
+        diff_output (str): The staged diff to analyse.
+        enable_semantic (bool | None): Whether semantic enrichment is enabled.
+        enrichment_facts: Optional closed-vocabulary semantic facts used to enrich intent ranking.
+
     Returns:
-    	GenerationContext: The extracted diff signals, ranked intents, and selection constraints.
+        GenerationContext: The extracted diff signals, ranked intents, and selection constraints.
     """
     from git_cg.intent import IntentSelectionConstraints, derive_intent_selection_constraints
     from git_cg.regeneration import GenerationContext
@@ -1154,14 +1154,14 @@ def _build_semantic_enrichment_facts(
 ):
     """
     Build optional semantic enrichment facts from collected fingerprint data.
-    
+
     Parameters:
         semantic_enabled (bool): Whether semantic enrichment is enabled.
         fingerprint_class_counts (dict | None): Fingerprint counts grouped by class.
         body_similarity_min (float | None): Minimum body similarity score.
         body_similarity_avg (float | None): Average body similarity score.
         fingerprint_markers (list | None): Markers identified during fingerprint comparison.
-    
+
     Returns:
         SemanticEnrichmentFacts | None: Enrichment facts when semantic mode is enabled and usable data is available; otherwise, `None`.
     """

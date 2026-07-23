@@ -40,15 +40,15 @@ class ResolvedCommitContract:
 def resolve_semantic_contract(context: GenerationContext, state: RegenerationState) -> ResolvedCommitContract:
     """
     Resolve the semantic commit contract for the next generation cycle.
-    
+
     Selects a primary intent using active directives, allowed-intent constraints, ranked
     intents, and the previous plan when available. Uses a graceful fallback contract when
     the gitmoji matrix is unavailable.
-    
+
     Parameters:
         context (GenerationContext): Inputs containing ranked intents and selection constraints.
         state (RegenerationState): Steering state containing active directives and an optional previous plan.
-    
+
     Returns:
         ResolvedCommitContract: The selected primary intent metadata and secondary intent identifiers.
     """

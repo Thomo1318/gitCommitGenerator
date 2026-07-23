@@ -97,9 +97,9 @@ class GenerationTelemetry:
 def compute_prompt_hash(prompt: str) -> str:
     """
     Generate a 16-character identifier for a prompt.
-    
+
     Returns:
-    	str: The first 16 hexadecimal characters of the prompt's SHA-256 hash.
+        str: The first 16 hexadecimal characters of the prompt's SHA-256 hash.
     """
     return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
@@ -200,13 +200,13 @@ def _strip_trailers(text: str) -> str:
 def classify_edit(original: str, edited: str) -> Provenance:
     """
     Classifies how an edited commit message differs from the original message.
-    
+
     Parameters:
-    	original (str): The generated commit message.
-    	edited (str): The final commit message.
-    
+        original (str): The generated commit message.
+        edited (str): The final commit message.
+
     Returns:
-    	Provenance: The classification of the message edit.
+        Provenance: The classification of the message edit.
     """
     if original.strip() == edited.strip():
         return Provenance.AI_ACCEPTED
@@ -233,15 +233,15 @@ def _resolve_intent_fields_from_matrix(
 ) -> dict[str, str]:
     """
     Resolve rendered commit intent fields against the Gitmoji matrix, using supplied values when no matching entry is found.
-    
+
     Parameters:
-    	gitmoji (str): Emoji associated with the commit intent.
-    	cc_type (str): Conventional commit type associated with the intent.
-    	semver_impact (str | None): Fallback semantic version impact.
-    	changelog_group (str | None): Fallback changelog group.
-    
+        gitmoji (str): Emoji associated with the commit intent.
+        cc_type (str): Conventional commit type associated with the intent.
+        semver_impact (str | None): Fallback semantic version impact.
+        changelog_group (str | None): Fallback changelog group.
+
     Returns:
-    	dict[str, str]: Resolved intent ID, semantic version impact, and changelog group.
+        dict[str, str]: Resolved intent ID, semantic version impact, and changelog group.
     """
     from git_cg.sop import get_gitmoji_matrix
 
@@ -251,12 +251,12 @@ def _resolve_intent_fields_from_matrix(
 
     def _row_intent_id(row: dict) -> str:
         """Extract an intent identifier from a gitmoji matrix row.
-        
+
         Parameters:
-        	row (dict): Matrix row containing an optional ``intent_id`` or ``code`` value.
-        
+                row (dict): Matrix row containing an optional ``intent_id`` or ``code`` value.
+
         Returns:
-        	str: The row's intent identifier, falling back to the stripped ``code`` or ``"unknown"``.
+                str: The row's intent identifier, falling back to the stripped ``code`` or ``"unknown"``.
         """
         intent_id = row.get("intent_id")
         if intent_id:
@@ -295,14 +295,14 @@ def _resolve_intent_fields_from_matrix(
 def reverse_parse_commit_message(text: str) -> dict[str, Any]:
     """
     Parse a rendered commit message into a partial CommitPlan-compatible dictionary.
-    
+
     Recoverable intent, body, secondary changes, trailers, and breaking-change
     information are populated; fields unavailable in the rendered message use
     placeholders, and the result is marked as partial.
-    
+
     Returns:
-    	dict[str, Any]: The reconstructed partial commit plan, or an empty dictionary
-    		if the message contains no lines.
+        dict[str, Any]: The reconstructed partial commit plan, or an empty dictionary
+                if the message contains no lines.
     """
     import re
 
@@ -499,10 +499,10 @@ def get_state_file_path(git_dir: str) -> Path:
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     """
     Persist redacted telemetry state in the repository's Git directory for retrieval by a later hook.
-    
+
     Parameters:
-    	git_dir (str): Path to the Git directory where the state file is stored.
-    	telemetry (GenerationTelemetry): Telemetry data to redact and persist.
+        git_dir (str): Path to the Git directory where the state file is stored.
+        telemetry (GenerationTelemetry): Telemetry data to redact and persist.
     """
     telemetry.diff_output = redact_payload(telemetry.diff_output)
     telemetry.generated_message = redact_payload(telemetry.generated_message)
@@ -592,7 +592,7 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["preflight_mode"] = PreflightMode.SKIPPED.value
             try:
                 data["preflight_groups_count"] = int(data.get("preflight_groups_count") or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 data["preflight_groups_count"] = 0
             if data.get("preflight_fallback_reason") is None:
                 data["preflight_fallback_reason"] = ""
