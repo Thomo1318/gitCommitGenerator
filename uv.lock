@@ -689,19 +689,19 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
     { name = "reportlab", specifier = ">=5.0.0" },
-    { name = "rich", specifier = ">=14.3.4" },
+    { name = "rich", specifier = ">=14.3.4,<16" },
     { name = "semver", specifier = ">=3.0.4" },
     { name = "sentry-sdk", specifier = ">=2.61.0" },
     { name = "tenacity", specifier = ">=9.1.2" },
-    { name = "tree-sitter", specifier = ">=0.22.0" },
-    { name = "tree-sitter-language-pack", specifier = ">=0.1.0" },
+    { name = "tree-sitter", specifier = ">=0.25,<0.27" },
+    { name = "tree-sitter-language-pack", specifier = ">=0.13,<2" },
     { name = "typer", specifier = ">=0.26.3" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-cov", specifier = ">=5.0.0" },
+    { name = "pytest", specifier = ">=9" },
+    { name = "pytest-cov", specifier = ">=7" },
     { name = "ruff", specifier = ">=0.15.15" },
 ]
 docs = [

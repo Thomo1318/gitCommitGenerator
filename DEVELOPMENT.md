@@ -188,6 +188,38 @@ Before closing pipeline hardening work, record:
 2. Fork PR with upload skipped and CI green
 3. Security workflow success with SBOM artifact + Grype threshold
 
+### Evidence expectations (Issue #177 WP0 baseline)
+
+Recorded before dependency / Actions upgrade PRs under [#177](https://github.com/Thomo1318/gitCommitGenerator/issues/177):
+
+| Field | Value |
+| --- | --- |
+| Baseline SHA | `44c9d3e31220b953541ebb724e4f5bc8802897d8` |
+| Branches | `main` and `CI/177-deps-actions-and-python-upgrades` (identical at baseline) |
+| Tip subject | `📝 docs(adr): add ADR-0014 for fnox canonical secrets` |
+| Local lint | `hk validate` + `hk check --check --no-stage --all --fail-fast` with `HK_SKIP_STEPS=pytest-cov,betterleaks,gen-docs,gen-toc` — green (project `mise run lint` shape; not global MegaLinter) |
+| Local test | `uv run pytest` / `mise run test` — **1006 passed** (Python 3.14.5) |
+| CI `ci.yml` | success — [run 29995846892](https://github.com/Thomo1318/gitCommitGenerator/actions/runs/29995846892) |
+| CI `security.yml` | success — [run 29995847178](https://github.com/Thomo1318/gitCommitGenerator/actions/runs/29995847178) |
+| CI `docs.yml` | success — [run 29995846842](https://github.com/Thomo1318/gitCommitGenerator/actions/runs/29995846842) |
+| CI `codeql.yml` | success — [run 29995846813](https://github.com/Thomo1318/gitCommitGenerator/actions/runs/29995846813) |
+| Deferred Phase 3 leftovers | **none** for this baseline (Phase 3 / #161 / #176 already merged; ADR-0014 secrets rewrite stays **out of** #177) |
+| Parent epic link | [#158](https://github.com/Thomo1318/gitCommitGenerator/issues/158) checklist already references #177 |
+
+### Dependency floors (Issue #177 WP1)
+
+Canonical floors live in `pyproject.toml`. Contract tests: `tests/test_project_config.py`.
+
+| Constraint | Floor / bound | Rationale |
+| --- | --- | --- |
+| `pytest` | `>=9` | Align floor to locked 9.x; patch moves (e.g. 9.1.1) are separate WPs |
+| `pytest-cov` | `>=7` | Align to locked 7.x |
+| `tree-sitter-language-pack` | `>=0.13,<2` | Bridge from stale `>=0.1.0`; `<2` ceiling allows eventual 1.x under one bound; WP5 tightens floor to `>=1,<2` when the lock majors |
+| `tree-sitter` | `>=0.25,<0.27` | Match locked 0.25.x; prevent accidental resolver jump to 0.26 outside WP5 |
+| `rich` | `>=14.3.4,<16` | Keep 14.x until WP4; upper bound blocks accidental 16+ |
+
+WP1 must keep `uv.lock` metadata-only (no silent rich 15 / tslp 1.x / tree-sitter 0.26). Security/SBOM transitive floors remain under `[tool.uv] constraint-dependencies`.
+
 ## 🤝 Contribution Workflow
 
 1. Branch off `main` for your feature or fix, including the issue number in the branch name to enable `git-cg` auto-detection (e.g., `feat/123-my-new-feature`).
