@@ -185,7 +185,7 @@ Before closing pipeline hardening work, record:
 
 ## 🤝 Contribution Workflow
 
-1. Branch off `main` for your feature or fix (e.g., `feat/my-new-feature`).
+1. Branch off `main` for your feature or fix, including the issue number in the branch name to enable `git-cg` auto-detection (e.g., `feat/123-my-new-feature`).
 2. Write tests for any new logic.
 3. Commit using `git-cg` or ensure your manual commits adhere strictly to our Hybrid Commit Matrix (found in `config/gitops_agent_sop.json`).
 4. Ensure `mise run lint` and `mise run test` pass locally (and keep `just lint` / `just test` green if you touch those surfaces).
