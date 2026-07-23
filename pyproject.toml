@@ -5,7 +5,7 @@ description = "Terminal native agentic gitops workflow utilizing gum"
 readme = "README.md"
 requires-python = ">=3.14, <4.0"
 dependencies = [
-  "code-review-graph>=2.3.0",
+  "code-review-graph>=2.3.7",
   "hf-transfer>=0.1.9",
   "httpx>=0.28.0",
   "instructor>=1.15.1",

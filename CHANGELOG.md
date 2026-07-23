@@ -2,6 +2,8 @@
 
 ### 🔒️ Security / Dependencies
 
+- ⬆️ build(deps): bump code-review-graph 2.3.6 → 2.3.7 (#177) (#158)
+
 - 👷 ci(deps): stage GitHub Actions majors with full SHA pins (#177) (#158)
 
 - 🔒️ fix(deps): raise pytest/tree-sitter/rich floors toward lock (#177) (#158)

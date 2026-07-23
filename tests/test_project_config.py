@@ -514,11 +514,13 @@ class TestMiseQualityPinsAndTasks:
         assert '"tree-sitter-language-pack>=0.13,<2"' in text
         assert '"tree-sitter>=0.25,<0.27"' in text
         assert '"rich>=14.3.4,<16"' in text
+        assert '"code-review-graph>=2.3.7"' in text
         # Stale pre-WP1 floors must not return.
         assert '"pytest>=8.0.0"' not in text
         assert '"pytest-cov>=5.0.0"' not in text
         assert '"tree-sitter-language-pack>=0.1.0"' not in text
         assert '"tree-sitter>=0.22.0"' not in text
+        assert '"code-review-graph>=2.3.0"' not in text
 
     def test_tools_have_no_floating_latest(self):
         """Security-relevant and DX tools must not float on latest in mise.toml [tools]."""
