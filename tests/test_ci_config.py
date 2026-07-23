@@ -732,6 +732,7 @@ class TestCodecovYmlContracts:
             assert set(comps[cid]["paths"]) == exp["paths"]
 
     def test_root_patch_has_no_paths_or_flags(self):
+        """Verify that the root patch coverage configuration has an 80% target without path or flag filters."""
         patch_default = self._cfg()["coverage"]["status"]["patch"]["default"]
         assert "paths" not in patch_default
         assert "flags" not in patch_default
@@ -753,6 +754,13 @@ def _load_workflow(name: str) -> dict:
 
 
 def _assert_uses_full_sha(workflow_name: str, uses: str) -> None:
+    """
+    Validate that a workflow action reference uses a full lowercase commit SHA.
+    
+    Parameters:
+        workflow_name (str): Name of the workflow containing the action reference.
+        uses (str): Action reference to validate.
+    """
     assert "@" in uses, f"{workflow_name}: {uses}"
     ref = uses.split("@", 1)[1].split()[0]  # strip trailing comments if any
     # YAML loader already drops comments; keep split for safety.

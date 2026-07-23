@@ -134,10 +134,15 @@ def language_for_path(path: str | Path) -> str | None:
 
 def is_probably_binary(path: str | Path, source: bytes | None = None) -> bool:
     """
-    Heuristic binary detection via mimetypes and optional NUL-byte scan.
-
+    Determine whether a path and its optional content appear to be binary.
+    
+    Parameters:
+        source (bytes | None): File content to inspect for NUL bytes when MIME
+            detection is inconclusive or the extension is recognised.
+    
     Returns:
-        True when the path/content should be skipped by the text parser.
+        bool: True if the input appears binary and should be skipped by the text
+            parser, false otherwise.
     """
     # Prefer extension→language registry over MIME. stdlib mimetypes maps `*.ts`
     # to video/mp2t (MPEG-TS), which would skip TypeScript sources incorrectly.
