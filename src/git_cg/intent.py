@@ -672,7 +672,15 @@ CLOSED_ENRICHMENT_MARKERS: frozenset[str] = frozenset(
 
 
 def matrix_signal_vocabulary(matrix: list[dict]) -> frozenset[str]:
-    """Union of positive/negative marker strings declared on SOP matrix rows."""
+    """
+    Collect the marker vocabulary declared by the positive and negative signals in SOP matrix rows.
+    
+    Parameters:
+    	matrix (list[dict]): SOP matrix rows containing optional signal lists.
+    
+    Returns:
+    	frozenset[str]: Unique positive and negative signal markers.
+    """
     vocab: set[str] = set()
     for row in matrix:
         vocab.update(str(item) for item in (row.get("positive_signals") or []) if item)
@@ -693,7 +701,14 @@ def _filter_enrichment_markers(
 
 
 def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
-    """Map structural graph facts to closed-vocabulary markers (markers only)."""
+    """Map successful structural graph facts to closed-vocabulary enrichment markers.
+    
+    Parameters:
+    	facts (GraphEnrichmentFacts | None): Structural graph facts to interpret.
+    
+    Returns:
+    	set[str]: Enrichment markers derived from the impacted-item count, or an empty set when facts are unavailable or unsuccessful.
+    """
     if facts is None or facts.outcome != "ok":
         return set()
 
@@ -710,7 +725,15 @@ def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
 
 
 def _enrich_markers_from_fingerprints(facts: FingerprintEnrichmentFacts | None) -> set[str]:
-    """Map Phase 2 fingerprint aggregates to closed-vocabulary markers."""
+    """
+    Extract closed-vocabulary markers from fingerprint enrichment facts.
+    
+    Parameters:
+        facts (FingerprintEnrichmentFacts | None): Fingerprint aggregates and optional marker candidates.
+    
+    Returns:
+        set[str]: Markers supported by the closed vocabulary.
+    """
     if facts is None:
         return set()
 
@@ -739,7 +762,16 @@ def enrich_markers_from_facts(
     *,
     matrix_vocab: frozenset[str] | None = None,
 ) -> set[str]:
-    """Derive additive enrichment markers from optional facts (no DiffSignals mutation)."""
+    """
+    Derive additive markers from optional semantic enrichment facts.
+    
+    Parameters:
+    	facts (SemanticEnrichmentFacts | None): Semantic facts used to derive enrichment markers.
+    	matrix_vocab (frozenset[str] | None): Optional vocabulary restricting the returned markers.
+    
+    Returns:
+    	set[str]: Enrichment markers permitted by the closed vocabulary and, when provided, the matrix vocabulary.
+    """
     if facts is None:
         return set()
     candidates = set()
@@ -755,10 +787,16 @@ def collect_active_markers(
     enable_semantic: bool | None = None,
     matrix_vocab: frozenset[str] | None = None,
 ) -> set[str]:
-    """Build the active marker set: baseline additive markers plus optional enrichment.
-
-    When semantic mode is off, ``enrichment`` is ignored so legacy ranking stays
-    corpus-stable. Enrichment never mutates ``signals`` hard-veto fields.
+    """
+    Build the active marker set from diff signals and optional semantic enrichment.
+    
+    Parameters:
+    	enrichment (SemanticEnrichmentFacts | None): Optional semantic facts used when semantic mode is enabled.
+    	enable_semantic (bool | None): Controls whether semantic enrichment is included.
+    	matrix_vocab (frozenset[str] | None): Optional marker vocabulary restricting enrichment markers.
+    
+    Returns:
+    	set[str]: The additive markers derived from the signals and, when enabled, filtered enrichment facts.
     """
     markers = set(_generate_signal_markers(signals))
     if not is_semantic_enabled(enable_semantic):

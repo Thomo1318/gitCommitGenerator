@@ -28,16 +28,40 @@ GOLDENS_PATH = FIXTURE_DIR / "goldens.json"
 
 
 def _load_json(path: Path) -> dict:
+    """
+    Load and parse a UTF-8 encoded JSON file.
+    
+    Parameters:
+    	path (Path): Path to the JSON file.
+    
+    Returns:
+    	dict: Parsed JSON object.
+    """
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _sop_matrix_sha256(matrix: list[dict]) -> str:
+    """
+    Compute the SHA-256 digest of a serialised SOP matrix.
+    
+    Parameters:
+    	matrix (list[dict]): SOP matrix rows to hash.
+    
+    Returns:
+    	str: Lowercase hexadecimal SHA-256 digest of the canonical JSON representation.
+    """
     payload = json.dumps(matrix, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()
 
 
 def _canonical_rank_key(row: dict) -> tuple:
-    """Documented compare key for reorder-invariant assertions."""
+    """Build a canonical comparison key for ranked intent snapshots.
+    
+    Parameters:
+        row (dict): Ranked intent data containing score, priority, specificity, and intent identifier.
+    
+    Returns:
+        tuple: Values ordered by descending score, priority, and specificity, followed by the intent identifier."""
     return (
         -float(row["score"]),
         -int(row["priority"]),
@@ -47,6 +71,15 @@ def _canonical_rank_key(row: dict) -> tuple:
 
 
 def _rank_snapshot(ranked) -> list[dict]:
+    """
+    Convert ranked intent results into serialisable dictionaries containing their identifying and ranking attributes.
+    
+    Parameters:
+    	ranked: Ranked intent results to snapshot.
+    
+    Returns:
+    	A list of dictionaries describing each ranked intent.
+    """
     return [
         {
             "intent_id": item.intent_id,
@@ -62,6 +95,7 @@ def _rank_snapshot(ranked) -> list[dict]:
 
 
 def _constraints_snapshot(constraints) -> dict:
+    """Convert intent selection constraints into a plain dictionary snapshot."""
     return {
         "reasons": list(constraints.reasons),
         "allowed_intent_ids": list(constraints.allowed_intent_ids),
@@ -71,6 +105,12 @@ def _constraints_snapshot(constraints) -> dict:
 
 @pytest.fixture(scope="module")
 def sop_matrix() -> list[dict]:
+    """
+    Load the production SOP matrix used by intent characterisation tests.
+    
+    Returns:
+    	list[dict]: The non-empty Gitmoji reference matrix.
+    """
     data = load_sop()
     matrix = data.get("gitmoji_reference_matrix", [])
     assert matrix, "production SOP matrix must be loadable for characterisation"
@@ -79,18 +119,28 @@ def sop_matrix() -> list[dict]:
 
 @pytest.fixture(scope="module")
 def corpus() -> dict:
+    """Load the intent-characterisation corpus fixture."""
     assert CORPUS_PATH.is_file(), f"missing corpus fixture: {CORPUS_PATH}"
     return _load_json(CORPUS_PATH)
 
 
 @pytest.fixture(scope="module")
 def goldens() -> dict:
+    """Load the golden intent-characterisation fixture data."""
     assert GOLDENS_PATH.is_file(), f"missing goldens fixture: {GOLDENS_PATH}"
     return _load_json(GOLDENS_PATH)
 
 
 @pytest.fixture(scope="module")
 def corpus_case_ids(corpus: dict) -> list[str]:
+    """Return the identifiers of all cases in the characterisation corpus.
+    
+    Parameters:
+    	corpus (dict): Characterisation corpus containing a ``cases`` collection.
+    
+    Returns:
+    	list[str]: Case identifiers in corpus order.
+    """
     return [case["id"] for case in corpus["cases"]]
 
 
@@ -155,7 +205,7 @@ def test_breaking_with_tests_accumulates_independent_marker_families(corpus: dic
 
 
 def test_matrix_row_reorder_preserves_per_intent_scores_and_semver(sop_matrix: list[dict], corpus: dict) -> None:
-    """Row order must not change per-intent score or matrix-owned semver_impact."""
+    """Verify that reordering the SOP matrix preserves each intent's ranking values."""
     case = next(item for item in corpus["cases"] if item["id"] == "feature_with_docs_mixed")
     signals = DiffSignals(**case["signals"])
 
@@ -180,6 +230,15 @@ def test_matrix_row_reorder_canonical_order_is_stable(sop_matrix: list[dict], co
     signals = DiffSignals(**case["signals"])
 
     def canonical(matrix: list[dict]) -> list[str]:
+        """
+        Produce a reorder-invariant canonical ordering of intent identifiers.
+        
+        Parameters:
+            matrix (list[dict]): SOP matrix used to rank the intents.
+        
+        Returns:
+            list[str]: Intent identifiers ordered by score, priority, specificity, and identifier.
+        """
         snap = _rank_snapshot(rank_commit_intents(signals, matrix))
         return [row["intent_id"] for row in sorted(snap, key=_canonical_rank_key)]
 
@@ -187,7 +246,9 @@ def test_matrix_row_reorder_canonical_order_is_stable(sop_matrix: list[dict], co
 
 
 def test_engine_rank_sort_keys_match_documented_tie_break(sop_matrix: list[dict], corpus: dict, goldens: dict) -> None:
-    """Engine order must be non-increasing on (score, priority, specificity)."""
+    """
+    Verify that ranked intents follow the documented tie-break ordering and match the empty-baseline golden fixture.
+    """
     case = next(item for item in corpus["cases"] if item["id"] == "empty_baseline")
     ranked = goldens["cases"]["empty_baseline"]["rank"]
     assert len(ranked) == len(sop_matrix)
