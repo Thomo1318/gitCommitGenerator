@@ -215,6 +215,59 @@ def classify_edit(original: str, edited: str) -> Provenance:
     return Provenance.AI_EDITED_SUBSTANTIVE
 
 
+def _resolve_intent_fields_from_matrix(
+    *,
+    gitmoji: str,
+    cc_type: str,
+    semver_impact: str | None = None,
+    changelog_group: str | None = None,
+) -> dict[str, str]:
+    """Best-effort matrix lookup for reverse-parsed rendered commit intents.
+
+    Prefer exact emoji match, then emoji+cc_type, then cc_type alone. Falls back
+    to the provided trailer-derived fields when no matrix row matches.
+    """
+    from git_cg.sop import get_gitmoji_matrix
+
+    matrix = get_gitmoji_matrix() or []
+    emoji = (gitmoji or "").strip()
+    ctype = (cc_type or "").strip()
+
+    def _row_intent_id(row: dict) -> str:
+        intent_id = row.get("intent_id")
+        if intent_id:
+            return str(intent_id)
+        code = row.get("code")
+        return str(code or "unknown").strip(":")
+
+    match = None
+    if emoji:
+        candidates = [row for row in matrix if row.get("emoji") == emoji]
+        if ctype:
+            typed = [row for row in candidates if row.get("cc_type") == ctype]
+            if typed:
+                candidates = typed
+        if candidates:
+            match = candidates[0]
+    if match is None and ctype:
+        typed = [row for row in matrix if row.get("cc_type") == ctype]
+        if typed:
+            match = typed[0]
+
+    if match is None:
+        return {
+            "intent_id": "unknown",
+            "semver_impact": semver_impact or "NONE",
+            "changelog_group": changelog_group or "Miscellaneous",
+        }
+
+    return {
+        "intent_id": _row_intent_id(match),
+        "semver_impact": str(match.get("semver_impact") or semver_impact or "NONE"),
+        "changelog_group": str(match.get("changelog_group") or changelog_group or "Miscellaneous"),
+    }
+
+
 def reverse_parse_commit_message(text: str) -> dict[str, Any]:
     """
     Reverse-parse a finalized commit message text into a CommitPlan-compatible dict.
@@ -346,6 +399,36 @@ def reverse_parse_commit_message(text: str) -> dict[str, Any]:
     # Enrich primary intent from trailers if possible
     if "SemVer-Impact" in trailers:
         primary_intent["semver_impact"] = trailers["SemVer-Impact"]
+    if "Changelog-Groups" in trailers:
+        # First group is the primary changelog group in rendered messages.
+        groups = [part.strip() for part in trailers["Changelog-Groups"].split(",") if part.strip()]
+        if groups:
+            primary_intent["changelog_group"] = groups[0]
+
+    # Resolve intent_id (and fill matrix-owned fields) from emoji/type.
+    resolved_primary = _resolve_intent_fields_from_matrix(
+        gitmoji=str(primary_intent.get("gitmoji") or ""),
+        cc_type=str(primary_intent.get("cc_type") or ""),
+        semver_impact=str(primary_intent.get("semver_impact") or "NONE"),
+        changelog_group=str(primary_intent.get("changelog_group") or "Miscellaneous"),
+    )
+    primary_intent["intent_id"] = resolved_primary["intent_id"]
+    # Prefer trailer SemVer when present; otherwise matrix value.
+    if "SemVer-Impact" not in trailers:
+        primary_intent["semver_impact"] = resolved_primary["semver_impact"]
+    if "Changelog-Groups" not in trailers:
+        primary_intent["changelog_group"] = resolved_primary["changelog_group"]
+
+    for secondary in plan["secondary_intents"]:
+        resolved_secondary = _resolve_intent_fields_from_matrix(
+            gitmoji=str(secondary.get("gitmoji") or ""),
+            cc_type=str(secondary.get("cc_type") or ""),
+            semver_impact=str(secondary.get("semver_impact") or "NONE"),
+            changelog_group=str(secondary.get("changelog_group") or "Miscellaneous"),
+        )
+        secondary["intent_id"] = resolved_secondary["intent_id"]
+        secondary["semver_impact"] = resolved_secondary["semver_impact"]
+        secondary["changelog_group"] = resolved_secondary["changelog_group"]
 
     return plan
 
