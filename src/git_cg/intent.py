@@ -8,14 +8,20 @@ Design goals:
     * Keep signals explicit and testable.
     * Provide evidence strings that can later be shown to the LLM or used in
       golden-diff tests.
+    * Keep marker accumulation flat and additive (multiple markers may coexist).
+    * Allow optional Phase 1/2 facts as closed-vocabulary marker enrichment only
+      when semantic mode is enabled — never write ``semver_impact`` here.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import PurePosixPath
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from git_cg.semantic_flags import is_semantic_enabled
 
 
 class DiffSignals(BaseModel):
@@ -615,6 +621,152 @@ class IntentSelectionConstraints(BaseModel):
     disallowed_intent_ids: list[str] = Field(default_factory=list)
 
 
+GraphFactOutcome = Literal["ok", "unavailable", "error"]
+
+
+class GraphEnrichmentFacts(BaseModel):
+    """Structural graph facts for marker enrichment only (no CRG I/O here)."""
+
+    total_impacted: int | None = None
+    test_gaps_count: int | None = None
+    impacted_has_test_nodes: bool | None = None
+    impacted_has_production_nodes: bool | None = None
+    outcome: GraphFactOutcome = "unavailable"
+
+
+class FingerprintEnrichmentFacts(BaseModel):
+    """Phase 2 fingerprint / body-similarity aggregates for marker enrichment only."""
+
+    class_counts: dict[str, int] | None = None
+    body_similarity_min: float | None = None
+    body_similarity_avg: float | None = None
+    markers: list[str] | None = None
+
+
+class SemanticEnrichmentFacts(BaseModel):
+    """Optional Phase 1/2 facts assembled outside the ranker (e.g. in main).
+
+    ``intent`` / ``rank_commit_intents`` must not import CRG or perform graph I/O.
+    Missing or non-ok facts degrade to zero extra markers.
+    """
+
+    graph: GraphEnrichmentFacts | None = None
+    fingerprints: FingerprintEnrichmentFacts | None = None
+
+
+# Closed enrichment vocabulary (Issue #161). Only strings that exist in the
+# production SOP positive/negative signal sets may affect ranking. Strings
+# absent from the live matrix are filtered out at rank time.
+CLOSED_ENRICHMENT_MARKERS: frozenset[str] = frozenset(
+    {
+        "major_subsystem_restructured",
+        "core_architecture_changed",
+        "internal_restructure",
+        "formatting_only",
+        "whitespace_or_style_cleanup",
+        "comments_only",
+        "inline_comment_changed",
+        "source_comments_added",
+    }
+)
+
+
+def matrix_signal_vocabulary(matrix: list[dict]) -> frozenset[str]:
+    """Union of positive/negative marker strings declared on SOP matrix rows."""
+    vocab: set[str] = set()
+    for row in matrix:
+        vocab.update(str(item) for item in (row.get("positive_signals") or []) if item)
+        vocab.update(str(item) for item in (row.get("negative_signals") or []) if item)
+    return frozenset(vocab)
+
+
+def _filter_enrichment_markers(
+    candidates: set[str],
+    *,
+    matrix_vocab: frozenset[str] | None = None,
+) -> set[str]:
+    """Keep only closed-vocabulary markers, optionally intersected with SOP rows."""
+    allowed = set(CLOSED_ENRICHMENT_MARKERS)
+    if matrix_vocab is not None:
+        allowed &= set(matrix_vocab)
+    return {marker for marker in candidates if marker in allowed}
+
+
+def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
+    """Map structural graph facts to closed-vocabulary markers (markers only)."""
+    if facts is None or facts.outcome != "ok":
+        return set()
+
+    markers: set[str] = set()
+    if facts.total_impacted is not None:
+        impacted = int(facts.total_impacted)
+        if impacted >= 25:
+            markers.update({"major_subsystem_restructured", "core_architecture_changed"})
+        elif impacted >= 10:
+            markers.add("internal_restructure")
+    # test_gaps_count intentionally does not emit markers unless/until a matching
+    # SOP string exists (test_coverage_gap is not in the current matrix).
+    return markers
+
+
+def _enrich_markers_from_fingerprints(facts: FingerprintEnrichmentFacts | None) -> set[str]:
+    """Map Phase 2 fingerprint aggregates to closed-vocabulary markers."""
+    if facts is None:
+        return set()
+
+    markers: set[str] = set()
+    class_counts = facts.class_counts or {}
+    for key, count in class_counts.items():
+        if count and key in CLOSED_ENRICHMENT_MARKERS:
+            markers.add(key)
+
+    # High body similarity with an identifier/literal-only class is formatting-ish.
+    if (
+        facts.body_similarity_min is not None
+        and facts.body_similarity_min > 0.9
+        and int(class_counts.get("identifier_or_literal_only", 0) or 0) > 0
+    ):
+        markers.add("formatting_only")
+
+    for raw in facts.markers or []:
+        if raw in CLOSED_ENRICHMENT_MARKERS:
+            markers.add(raw)
+    return markers
+
+
+def enrich_markers_from_facts(
+    facts: SemanticEnrichmentFacts | None,
+    *,
+    matrix_vocab: frozenset[str] | None = None,
+) -> set[str]:
+    """Derive additive enrichment markers from optional facts (no DiffSignals mutation)."""
+    if facts is None:
+        return set()
+    candidates = set()
+    candidates |= _enrich_markers_from_graph(facts.graph)
+    candidates |= _enrich_markers_from_fingerprints(facts.fingerprints)
+    return _filter_enrichment_markers(candidates, matrix_vocab=matrix_vocab)
+
+
+def collect_active_markers(
+    signals: DiffSignals,
+    *,
+    enrichment: SemanticEnrichmentFacts | None = None,
+    enable_semantic: bool | None = None,
+    matrix_vocab: frozenset[str] | None = None,
+) -> set[str]:
+    """Build the active marker set: baseline additive markers plus optional enrichment.
+
+    When semantic mode is off, ``enrichment`` is ignored so legacy ranking stays
+    corpus-stable. Enrichment never mutates ``signals`` hard-veto fields.
+    """
+    markers = set(_generate_signal_markers(signals))
+    if not is_semantic_enabled(enable_semantic):
+        return markers
+    markers |= enrich_markers_from_facts(enrichment, matrix_vocab=matrix_vocab)
+    return markers
+
+
 def matrix_row_intent_id(row: dict) -> str:
     """
     Get the canonical intent identifier for a matrix row.
@@ -691,13 +843,18 @@ def derive_intent_selection_constraints(signals: DiffSignals, matrix: list[dict]
 
 
 def _generate_signal_markers(signals: DiffSignals) -> set[str]:
-    """
-    Map DiffSignals into the SOP matrix semantic marker strings.
+    """Map DiffSignals into SOP matrix semantic marker strings.
+
+    Marker accumulation is **flat, independent, and additive**: each ``if`` may
+    contribute markers without precluding others. A single diff can therefore
+    carry multiple families at once (e.g. breaking-change markers and tests
+    markers together).
 
     Returns:
-        markers (set[str]): Set of marker identifiers representing active signals (for example: 'breaking_change_declared', 'docs_only', 'dependency_added').
+        markers (set[str]): Active marker identifiers (for example
+        ``breaking_change_declared``, ``docs_only``, ``dependency_added``).
     """
-    markers = set()
+    markers: set[str] = set()
 
     # Breaking changes
     if signals.has_breaking_change:
@@ -772,24 +929,42 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     return markers
 
 
-def rank_commit_intents(signals: DiffSignals, matrix: list[dict]) -> list[RankedIntent]:
+def rank_commit_intents(
+    signals: DiffSignals,
+    matrix: list[dict],
+    *,
+    enrichment: SemanticEnrichmentFacts | None = None,
+    enable_semantic: bool | None = None,
+) -> list[RankedIntent]:
     """
     Rank SOP matrix rows against extracted diff signals and return them sorted by score.
 
     Scores each matrix row using priority and specificity as a base, then adjusts the score for matched positive and negative signals and applies hard vetoes when the diff is exclusively docs, tests, or dependency changes. Evidence and penalty messages for matches and vetoes are included on each returned item.
+
+    Optional ``enrichment`` may add closed-vocabulary markers when semantic mode is
+    enabled. Enrichment never assigns ``semver_impact``; that field is copied only
+    from matched matrix rows. When semantic mode is off, enrichment is ignored.
 
     Parameters:
         signals (DiffSignals): Extracted deterministic signals and metadata from the diff.
         matrix (list[dict]): SOP matrix rows where each row may include keys such as
             "intent_id" or "code", "intent_group", "priority", "specificity",
             "split_weight", "positive_signals", "negative_signals" and descriptive fields.
+        enrichment: Optional Phase 1/2 facts container assembled by the caller.
+        enable_semantic: Explicit semantic flag; defaults to ``is_semantic_enabled()``.
 
     Returns:
         list[RankedIntent]: Ranked intents with computed `score`, `evidence` and `penalties`,
         sorted highest score first (ties broken by `priority` then `specificity`).
     """
     ranked: list[RankedIntent] = []
-    active_markers = _generate_signal_markers(signals)
+    matrix_vocab = matrix_signal_vocabulary(matrix)
+    active_markers = collect_active_markers(
+        signals,
+        enrichment=enrichment,
+        enable_semantic=enable_semantic,
+        matrix_vocab=matrix_vocab,
+    )
 
     for row in matrix:
         # Fallback values for matrices that haven't been fully updated yet
