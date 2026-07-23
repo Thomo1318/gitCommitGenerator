@@ -1,3 +1,41 @@
+## v0.5.0
+
+### ✨ Features
+
+- ✨ feat(intent): add gated closed-vocabulary marker enrichment (#161)
+- ✨ feat(models): reject unknown LLM intent ids at schema boundary (#161)
+- ✨ feat(regeneration): lock first-pass contract to top ranked intent (#161)
+- ✨ feat(main): resolve contract before LLM with shared rank pass (#161)
+- ✨ feat(main): wire fingerprint enrichment into shared rank pass (#161)
+- ✨ feat(telemetry): add preflight_* fields with skipped defaults (#161)
+
+### 🐛 Bug Fixes & Refactors
+
+- 🐛 fix(main): stop hard-slicing analysis diff before ranking (#161)
+- 🐛 fix(prompt_diff): prevent prompt diff packing length overflow (#161)
+- 🐛 fix(telemetry): resolve final_commit_plan intent_id from matrix (#161)
+- ♻️ refactor(git_cg): centralise helpers and harden constraints (#161)
+- 🚨 refactor(config): reorder imports to fix ruff E402 / isort CI (#161)
+
+### 📝 Documentation
+
+- 📝 docs: record Phase 3 vs 0.5/7/11 ownership for intent engine (#161)
+- 📝 docs: document branch issue auto-detection for git-cg (#161)
+- 📝 docs(fixtures): intent characterisation README (#161)
+
+### ✅ Tests
+
+- ✅ test(intent): freeze characterisation corpus for Phase 3 (#161)
+- ✅ test(intent): derive characterisation case IDs from corpus (#161)
+- ✅ test(intent): cover flag-off stability and enrichment filters (#161)
+- ✅ test: harden Phase 3 edge coverage and fixture docs (#161)
+- ✅ test(telemetry): assert trailer-authoritative changelog_group (#161)
+- ✅ test(models/regeneration/main/telemetry): contract, packing, reverse-parse edges (#161)
+
+### 🎨 Style
+
+- 🎨 style(docs): normalise CodeRabbit docstring indentation (#161)
+
 ## v0.4.0
 
 ### ✨ Features
