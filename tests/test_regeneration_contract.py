@@ -248,3 +248,65 @@ def test_resolve_semantic_contract_first_pass_respects_allowed_constraints():
 
     assert contract.primary_intent_id == "documentation_update"
     assert contract.cc_type == "docs"
+
+
+def test_enforce_semantic_contract_locks_primary_and_scope():
+    from git_cg.regeneration import ResolvedCommitContract, enforce_semantic_contract
+
+    plan = _make_commit_plan(intent_id="bug_fix", cc_type=CommitType.FIX)
+    contract = ResolvedCommitContract(
+        primary_intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type="feat",
+        semver_impact="MINOR",
+        changelog_group="Added",
+        secondary_intent_ids=[],
+    )
+    out = enforce_semantic_contract(plan, contract, active_directives={"preferred_scope": "api"})
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.gitmoji == "✨"
+    assert out.primary_intent.cc_type == CommitType.FEAT
+    assert out.primary_intent.semver_impact == SemVerImpact.MINOR
+    assert out.primary_intent.changelog_group == "Added"
+    assert out.primary_intent.scope == "api"
+
+
+def test_resolve_semantic_contract_empty_matrix_fallback(monkeypatch):
+    monkeypatch.setattr("git_cg.regeneration.get_gitmoji_matrix", lambda: [])
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+    contract = resolve_semantic_contract(context, state)
+    assert contract.primary_intent_id == "unknown"
+    assert contract.cc_type == "chore"
+    assert contract.secondary_intent_ids == []
+
+
+def test_resolve_semantic_contract_first_pass_falls_back_to_allowed_matrix_row():
+    """When ranked intents miss allowed set, pick first allowed matrix row."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            )
+        ],
+        constraints=IntentSelectionConstraints(allowed_intent_ids=["documentation_update"]),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+    contract = resolve_semantic_contract(context, state)
+    assert contract.primary_intent_id == "documentation_update"
