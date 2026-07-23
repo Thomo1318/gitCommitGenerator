@@ -40,26 +40,17 @@ class ResolvedCommitContract:
 def resolve_semantic_contract(context: GenerationContext, state: RegenerationState) -> ResolvedCommitContract:
     """
     Resolve the semantic commit contract for the next generation cycle.
-
-    Selects a primary intent from the gitmoji contract matrix, respecting an optional
-    `preferred_type` directive and any allowed-intent constraints. When regenerating,
-    falls back to the previous plan's primary intent; on first pass (no previous plan),
-    locks to the top ranked intent (constraints-aware), then an allowed matrix row, then
-    the first matrix row. Secondary intent ids are sourced from the previous commit plan
-    when present.
-
+    
+    Selects a primary intent using active directives, allowed-intent constraints, ranked
+    intents, and the previous plan when available. Uses a graceful fallback contract when
+    the gitmoji matrix is unavailable.
+    
     Parameters:
-        context (GenerationContext): Deterministic inputs for resolution, including ranked intents and selection constraints.
-        state (RegenerationState): Review-loop steering state containing active directives and the previous commit plan.
-
+        context (GenerationContext): Inputs containing ranked intents and selection constraints.
+        state (RegenerationState): Steering state containing active directives and an optional previous plan.
+    
     Returns:
-        ResolvedCommitContract: Resolved contract populated with:
-            - `primary_intent_id`: chosen primary intent identifier,
-            - `gitmoji`: associated emoji (may be empty),
-            - `cc_type`: commit classification type (defaults to "chore"),
-            - `semver_impact`: semantic versioning impact (defaults to "NONE"),
-            - `changelog_group`: changelog grouping (defaults to "Miscellaneous"),
-            - `secondary_intent_ids`: list of secondary intent ids taken from the previous plan.
+        ResolvedCommitContract: The selected primary intent metadata and secondary intent identifiers.
     """
     matrix = get_gitmoji_matrix()
     if not matrix:

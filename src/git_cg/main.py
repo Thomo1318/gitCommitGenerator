@@ -482,16 +482,13 @@ def generate_commit_message(
     **kwargs,
 ) -> CommitPlan:
     """
-    Generate a commit plan from the supplied diff.
-    
-    Applies locked directive values to the generated plan before returning it.
+    Generate a commit plan from the supplied diff and system prompt.
     
     Parameters:
         active_directives (dict[str, str] | None): Directive values that override the generated commit type or scope.
-        residual_guidance (str | None): Additional guidance from a previous generation attempt.
     
     Returns:
-        CommitPlan: The generated commit plan.
+        CommitPlan: The generated commit plan with applicable directive overrides.
     """
     opik_args = kwargs.get("opik_args") or {}
     tags = opik_args.get("trace", {}).get("tags", [])
@@ -927,21 +924,20 @@ def pack_prompt_diff(
     *,
     max_chars: int = PROMPT_DIFF_MAX_CHARS,
 ) -> tuple[str, list[str]]:
-    """Prepare a size-limited diff for use in an LLM prompt.
+    """
+    Prepare a size-limited diff for use in an LLM prompt.
     
-    Preserves complete file sections where possible and reports omitted paths in the
-    returned inventory. Large or unstructured diffs may be truncated with an
-    explanatory note.
+    Preserves complete file sections where possible and reports omitted paths in the returned inventory. Large or unstructured diffs may be truncated with an explanatory note.
     
     Parameters:
-        analysis_diff (str): Full staged diff used for analysis and intent ranking.
-        max_chars (int): Maximum size of the prompt-bound diff.
+    	analysis_diff (str): Full staged diff used for analysis and intent ranking.
+    	max_chars (int): Maximum size of the prompt-bound diff.
     
     Returns:
-        tuple[str, list[str]]: The prompt-bound diff and paths omitted from it.
+    	tuple[str, list[str]]: The prompt-bound diff and paths omitted from it.
     
     Raises:
-        ValueError: If ``max_chars`` is less than or equal to zero.
+    	ValueError: If `max_chars` is less than or equal to zero.
     """
     if max_chars <= 0:
         raise ValueError("max_chars must be positive")
@@ -1012,13 +1008,13 @@ def pack_prompt_diff(
 @opik.track(project_name="gitCommitGenerator")
 def extract_git_diff(verbose: bool, strict: bool) -> str:
     """
-    Extract the staged Git diff for analysis and ranking.
+    Extracts the staged Git diff for analysis and ranking.
     
     Returns:
     	str: The staged diff content.
     
     Raises:
-    	typer.Exit: If no staged changes are found or diff extraction fails.
+    	typer.Exit: If diff extraction fails or no staged changes are found.
     """
     try:
         has_rtk = shutil.which("rtk") is not None
@@ -1156,10 +1152,18 @@ def _build_semantic_enrichment_facts(
     body_similarity_avg: float | None,
     fingerprint_markers: list | None,
 ):
-    """Assemble optional ranker enrichment facts from already-collected producers.
-
-    Fail-open: returns None when semantic mode is off or no usable facts exist.
-    Does not perform graph I/O (keeps intent ranker free of CRG imports).
+    """
+    Build optional semantic enrichment facts from collected fingerprint data.
+    
+    Parameters:
+        semantic_enabled (bool): Whether semantic enrichment is enabled.
+        fingerprint_class_counts (dict | None): Fingerprint counts grouped by class.
+        body_similarity_min (float | None): Minimum body similarity score.
+        body_similarity_avg (float | None): Average body similarity score.
+        fingerprint_markers (list | None): Markers identified during fingerprint comparison.
+    
+    Returns:
+        SemanticEnrichmentFacts | None: Enrichment facts when semantic mode is enabled and usable data is available; otherwise, `None`.
     """
     if not semantic_enabled:
         return None

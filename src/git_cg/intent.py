@@ -701,13 +701,14 @@ def _filter_enrichment_markers(
 
 
 def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
-    """Map successful structural graph facts to closed-vocabulary enrichment markers.
+    """
+    Map successful structural graph facts to closed-vocabulary enrichment markers.
     
     Parameters:
     	facts (GraphEnrichmentFacts | None): Structural graph facts to interpret.
     
     Returns:
-    	set[str]: Enrichment markers derived from the impacted-item count, or an empty set when facts are unavailable or unsuccessful.
+    	set[str]: Markers derived from the impacted-item count, or an empty set when facts are unavailable, unsuccessful, or contain no applicable count.
     """
     if facts is None or facts.outcome != "ok":
         return set()
@@ -726,13 +727,13 @@ def _enrich_markers_from_graph(facts: GraphEnrichmentFacts | None) -> set[str]:
 
 def _enrich_markers_from_fingerprints(facts: FingerprintEnrichmentFacts | None) -> set[str]:
     """
-    Extract closed-vocabulary markers from fingerprint enrichment facts.
+    Extracts supported markers from fingerprint enrichment facts.
     
     Parameters:
-        facts (FingerprintEnrichmentFacts | None): Fingerprint aggregates and optional marker candidates.
+    	facts (FingerprintEnrichmentFacts | None): Fingerprint aggregates and optional marker candidates.
     
     Returns:
-        set[str]: Markers supported by the closed vocabulary.
+    	set[str]: Closed-vocabulary markers identified in the facts.
     """
     if facts is None:
         return set()
@@ -763,14 +764,14 @@ def enrich_markers_from_facts(
     matrix_vocab: frozenset[str] | None = None,
 ) -> set[str]:
     """
-    Derive additive markers from optional semantic enrichment facts.
+    Derive enrichment markers from optional semantic facts.
     
     Parameters:
-    	facts (SemanticEnrichmentFacts | None): Semantic facts used to derive enrichment markers.
-    	matrix_vocab (frozenset[str] | None): Optional vocabulary restricting the returned markers.
+    	facts (SemanticEnrichmentFacts | None): Semantic facts from which to derive markers.
+    	matrix_vocab (frozenset[str] | None): Optional matrix-defined vocabulary that further restricts the markers.
     
     Returns:
-    	set[str]: Enrichment markers permitted by the closed vocabulary and, when provided, the matrix vocabulary.
+    	set[str]: Markers allowed by the enrichment vocabulary and, when provided, the matrix vocabulary.
     """
     if facts is None:
         return set()

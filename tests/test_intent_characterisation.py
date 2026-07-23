@@ -145,7 +145,7 @@ def corpus_case_ids(corpus: dict) -> list[str]:
 
 
 def test_characterisation_fixtures_pin_production_sop(sop_matrix: list[dict], corpus: dict, goldens: dict) -> None:
-    """Corpus and goldens must record the live SOP matrix identity."""
+    """Verify that the corpus and golden fixtures match the live SOP matrix and case set."""
     live_hash = _sop_matrix_sha256(sop_matrix)
     assert corpus["sop_matrix_sha256"] == live_hash
     assert goldens["sop_matrix_sha256"] == live_hash
@@ -179,7 +179,15 @@ def test_characterisation_case_matches_golden(
     corpus: dict,
     goldens: dict,
 ) -> None:
-    """Full markers + rank + constraints snapshot for each corpus family."""
+    """
+    Verify marker generation, intent ranking, and selection constraints against the golden snapshot for a corpus case.
+    
+    Parameters:
+    	case_id (str): Identifier of the corpus case to verify.
+    	sop_matrix (list[dict]): SOP matrix used to evaluate the case.
+    	corpus (dict): Corpus containing the case signals.
+    	goldens (dict): Expected snapshots keyed by case identifier.
+    """
     case = next(item for item in corpus["cases"] if item["id"] == case_id)
     expected = goldens["cases"][case_id]
 
@@ -194,7 +202,7 @@ def test_characterisation_case_matches_golden(
 
 
 def test_breaking_with_tests_accumulates_independent_marker_families(corpus: dict, goldens: dict) -> None:
-    """Additive contract sample: breaking + tests markers coexist on one diff."""
+    """Verify that breaking-change and test-related marker families coexist for the same diff."""
     case = next(item for item in corpus["cases"] if item["id"] == "breaking_with_tests")
     markers = set(goldens["cases"]["breaking_with_tests"]["markers"])
     # Recompute to keep the assertion tied to engine output as well.
@@ -247,7 +255,7 @@ def test_matrix_row_reorder_canonical_order_is_stable(sop_matrix: list[dict], co
 
 def test_engine_rank_sort_keys_match_documented_tie_break(sop_matrix: list[dict], corpus: dict, goldens: dict) -> None:
     """
-    Verify that ranked intents follow the documented tie-break ordering and match the empty-baseline golden fixture.
+    Verify that ranking follows the documented tie-break ordering and matches the empty-baseline golden fixture.
     """
     case = next(item for item in corpus["cases"] if item["id"] == "empty_baseline")
     ranked = goldens["cases"]["empty_baseline"]["rank"]

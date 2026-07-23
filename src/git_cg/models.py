@@ -83,12 +83,12 @@ class CommitIntent(BaseModel):
     @model_validator(mode="after")
     def validate_and_correct_matrix(self) -> CommitIntent:
         """
-        Align this CommitIntent to the canonical gitmoji SOP matrix, or apply a safe fallback.
-
-        Looks up a matrix entry (from git_cg.sop.get_gitmoji_matrix) in this order: matching `intent_id`, then `emoji`, then `code`. If the matrix is unavailable, returns the instance unchanged. If no matching entry is found, selects the entry with `code == ":wrench:"` when present or the first matrix entry as a fallback. In both matched and fallback cases, replaces the matrix-owned fields `intent_id`, `gitmoji`, `cc_type`, `semver_impact`, and `changelog_group` with the values from the chosen matrix entry and returns the instance. Does not raise on missing matrix data.
-
+        Align the intent with the canonical SOP matrix or apply a safe fallback.
+        
+        If the matrix is unavailable, the intent is returned unchanged. Otherwise, matching or fallback matrix values replace its matrix-owned fields.
+        
         Returns:
-            CommitIntent: The same instance after canonicalisation or fallback application.
+        	CommitIntent: The canonicalised or fallback-adjusted intent.
         """
         from git_cg.sop import get_gitmoji_matrix
 
@@ -193,7 +193,12 @@ class ModelCommitIntent(BaseModel):
         return self
 
     def to_commit_intent(self) -> CommitIntent:
-        """Map into the internal CommitIntent (matrix canonicalisation may still apply)."""
+        """
+        Convert the model-facing intent into an internal commit intent.
+        
+        Returns:
+        	CommitIntent: The corresponding internal intent, with matrix canonicalisation applied when applicable.
+        """
         return CommitIntent(
             intent_id=self.intent_id,
             gitmoji=self.gitmoji,
