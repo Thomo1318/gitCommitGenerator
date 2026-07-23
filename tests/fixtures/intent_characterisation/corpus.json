@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "sop_matrix_sha256": "b83700261c41cc97b3cc70ef38325935e3676cd681a2216d87dead8c201b7f00",
+  "sop_matrix_row_count": 75,
+  "tie_break": {
+    "rank_sort_keys_desc": [
+      "score",
+      "priority",
+      "specificity"
+    ],
+    "residual_ties": "stable_sort_preserves_matrix_input_order",
+    "canonical_compare_keys_desc": [
+      "score",
+      "priority",
+      "specificity",
+      "intent_id_asc_as_final_key_note"
+    ],
+    "notes": "Engine sorts by (score, priority, specificity) descending with Python stable sort. Goldens store engine order. Reorder tests assert per-intent score/semver invariance and canonical order by (score, priority, specificity, intent_id)."
+  },
+  "cases": [
+    {
+      "id": "empty_baseline",
+      "description": "No signals set \u2014 base priority/specificity ordering only",
+      "signals": {}
+    },
+    {
+      "id": "docs_only",
+      "description": "Documentation-only change family",
+      "signals": {
+        "only_docs": true,
+        "touches_docs": true,
+        "files": [
+          "docs/guide.md",
+          "README.md"
+        ]
+      }
+    },
+    {
+      "id": "tests_only",
+      "description": "Tests-only change family",
+      "signals": {
+        "only_tests": true,
+        "touches_tests": true,
+        "files": [
+          "tests/test_foo.py"
+        ]
+      }
+    },
+    {
+      "id": "dependency_upgrade_only",
+      "description": "Dependency-only upgrade family",
+      "signals": {
+        "dependency_upgraded": true,
+        "package_metadata_changed": true,
+        "only_dependency_changes": true,
+        "files": [
+          "pyproject.toml",
+          "uv.lock"
+        ]
+      }
+    },
+    {
+      "id": "security_fix",
+      "description": "Security-touching production paths",
+      "signals": {
+        "touches_security": true,
+        "files": [
+          "src/auth/jwt.py",
+          "src/secrets.py"
+        ]
+      }
+    },
+    {
+      "id": "feature_with_docs_mixed",
+      "description": "Mixed feature + docs (not docs-only)",
+      "signals": {
+        "adds_public_api": true,
+        "touches_docs": true,
+        "only_docs": false,
+        "files": [
+          "src/api/routes.py",
+          "docs/api.md"
+        ]
+      }
+    },
+    {
+      "id": "breaking_change",
+      "description": "Declared breaking change",
+      "signals": {
+        "has_breaking_change": true,
+        "adds_public_api": true,
+        "files": [
+          "src/api/client.py"
+        ]
+      }
+    },
+    {
+      "id": "breaking_with_tests",
+      "description": "Mixed breaking + tests markers must coexist",
+      "signals": {
+        "has_breaking_change": true,
+        "touches_tests": true,
+        "adds_public_api": true,
+        "files": [
+          "src/api/client.py",
+          "tests/test_client.py"
+        ]
+      }
+    },
+    {
+      "id": "formatting_only",
+      "description": "Formatting-only placeholder path",
+      "signals": {
+        "only_formatting": true,
+        "files": [
+          "src/git_cg/main.py"
+        ]
+      }
+    },
+    {
+      "id": "generic_refactor_centralization",
+      "description": "Shared-module centralization without renames",
+      "signals": {
+        "new_shared_module": true,
+        "centralized_config_resolution": true,
+        "hook_portability": true,
+        "moves_or_renames_files": false
+      }
+    },
+    {
+      "id": "bug_fix_error_handling",
+      "description": "Error-handling / validation oriented fix signals",
+      "signals": {
+        "error_handling_added": true,
+        "validation_added": true,
+        "files": [
+          "src/git_cg/main.py"
+        ]
+      }
+    },
+    {
+      "id": "architecture_restructure",
+      "description": "Architecture change signals",
+      "signals": {
+        "changes_architecture": true,
+        "files": [
+          "src/git_cg/intent.py",
+          "src/git_cg/main.py"
+        ]
+      }
+    },
+    {
+      "id": "ci_hooks",
+      "description": "CI and hooks touch family",
+      "signals": {
+        "touches_ci": true,
+        "touches_hooks": true,
+        "files": [
+          ".github/workflows/ci.yml",
+          ".git/hooks/pre-commit"
+        ]
+      }
+    },
+    {
+      "id": "files_added_deleted_renamed",
+      "description": "File lifecycle markers coexistence",
+      "signals": {
+        "adds_files": true,
+        "deletes_files": true,
+        "moves_or_renames_files": true,
+        "files": [
+          "src/new_mod.py",
+          "src/old_mod.py"
+        ]
+      }
+    }
+  ]
+}
