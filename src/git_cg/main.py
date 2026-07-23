@@ -1006,7 +1006,11 @@ def pack_prompt_diff(
     )
     packed = "".join(kept_parts).rstrip() + footer
     if len(packed) > max_chars:
-        packed = packed[:max_chars].rstrip() + "\n"
+        # Keep the final string (including any trailing newline) within max_chars.
+        packed = packed[:max_chars].rstrip()
+        if len(packed) < max_chars:
+            packed += "\n"
+        packed = packed[:max_chars]
     return packed, omitted_paths
 
 

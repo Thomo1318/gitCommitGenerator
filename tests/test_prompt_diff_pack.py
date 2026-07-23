@@ -108,3 +108,14 @@ def test_pack_prompt_diff_tiny_budget_never_exceeds_max_chars():
     packed2, omitted2 = pack_prompt_diff(analysis, max_chars=40)
     assert omitted2
     assert len(packed2) <= 40
+
+
+def test_pack_prompt_diff_omission_footer_never_exceeds_max_chars():
+    """Final packed string including trailing newline must stay within max_chars."""
+    small = _file_section("a.md", "+a")
+    huge = _file_section("b.py", "+" + ("z" * 80_000))
+    analysis = small + huge
+    for budget in (50, 120, 500, 2000):
+        packed, omitted = pack_prompt_diff(analysis, max_chars=budget)
+        assert omitted
+        assert len(packed) <= budget
