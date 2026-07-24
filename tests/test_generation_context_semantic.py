@@ -104,3 +104,32 @@ def test_build_semantic_summary_helper_no_producer_io():
     )
     assert summary.blast_radius_size == 10
     assert summary.test_coverage_gap is False
+
+
+def test_generation_context_reused_across_regeneration_iterations(monkeypatch):
+    """Flag-on context is built once; contract resolution reuses the same object."""
+    monkeypatch.setenv("GIT_CG_ENABLE_SEMANTIC", "1")
+    summary = SemanticDiffSummary(blast_radius_size=12, fallback_reasons=["graph:unavailable"])
+    risk = RiskAssessment(risk_score=0.2, outcome="unavailable")
+    facts = _build_semantic_enrichment_facts(
+        semantic_enabled=True,
+        fingerprint_class_counts=None,
+        body_similarity_min=None,
+        body_similarity_avg=None,
+        fingerprint_markers=None,
+        graph_enrichment=GraphEnrichmentFacts(total_impacted=12, outcome="ok"),
+    )
+    ctx = _build_generation_context(
+        "diff --git a/x b/x\n",
+        enable_semantic=True,
+        enrichment_facts=facts,
+        semantic_summary=summary,
+        risk_assessment=risk,
+    )
+    assert ctx.semantic_summary is summary
+    # Simulate regen loop: same GenerationContext object is passed repeatedly.
+    c1 = resolve_semantic_contract(ctx, RegenerationState())
+    c2 = resolve_semantic_contract(ctx, RegenerationState(previous_plan=None))
+    assert ctx.semantic_summary is summary
+    assert c1.primary_intent_id
+    assert c2.primary_intent_id
