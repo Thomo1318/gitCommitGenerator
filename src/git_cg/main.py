@@ -1534,6 +1534,12 @@ def _collect_semantic_producer_metrics(
         result["graph_build_latency_ms"] = 0.0
         result["graph_query_latency_ms"] = 0.0
         result["crg_schema_version"] = None
+
+        from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
+
+        reasons = list(result.get("graph_fallback_reasons") or [])
+        reasons.append(f"graph_stage:{type(graph_exc).__name__}")
+        result["graph_fallback_reasons"] = _bound_str_list(reasons, max_items=MAX_FALLBACK_REASONS)
     return result
 
 
