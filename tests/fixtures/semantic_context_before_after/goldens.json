@@ -1,0 +1,532 @@
+{
+  "cases": {
+    "blast_below_threshold": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": 0,
+        "blast_radius_size": 5,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      }
+    },
+    "blast_internal_10": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": 2,
+        "blast_radius_size": 10,
+        "fallback_reasons": [],
+        "markers": [
+          "internal_restructure"
+        ],
+        "semver_impact": "PATCH",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "generic_refactor",
+        "top3": [
+          "generic_refactor",
+          "breaking_change",
+          "security_privacy_fix"
+        ]
+      }
+    },
+    "blast_major_25": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": 2,
+        "blast_radius_size": 25,
+        "fallback_reasons": [],
+        "markers": [
+          "core_architecture_changed",
+          "major_subsystem_restructured"
+        ],
+        "semver_impact": "MAJOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "architecture_refactor",
+        "top3": [
+          "architecture_refactor",
+          "breaking_change",
+          "security_privacy_fix"
+        ]
+      }
+    },
+    "blast_with_gaps": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": 2,
+        "blast_radius_size": 15,
+        "fallback_reasons": [],
+        "markers": [
+          "internal_restructure"
+        ],
+        "semver_impact": "PATCH",
+        "summary_present": true,
+        "test_coverage_gap": true,
+        "top1": "generic_refactor",
+        "top3": [
+          "generic_refactor",
+          "breaking_change",
+          "security_privacy_fix"
+        ]
+      }
+    },
+    "control_equal": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "ci_workflow_updated",
+          "github_actions_changed",
+          "pipeline_fix"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "ci_build_system",
+        "top3": [
+          "ci_build_system",
+          "ci_fix",
+          "breaking_change"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "ci_workflow_updated",
+          "github_actions_changed",
+          "pipeline_fix"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "ci_build_system",
+        "top3": [
+          "ci_build_system",
+          "ci_fix",
+          "breaking_change"
+        ]
+      }
+    },
+    "docs_only": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "docs_only",
+          "docs_text_only",
+          "documentation_expanded",
+          "documentation_typo_only",
+          "markdown_changed",
+          "readme_changed"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "documentation_update",
+        "top3": [
+          "documentation_update",
+          "typo_fix",
+          "project_initialization"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "docs_only",
+          "docs_text_only",
+          "documentation_expanded",
+          "documentation_typo_only",
+          "markdown_changed",
+          "readme_changed"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "documentation_update",
+        "top3": [
+          "documentation_update",
+          "typo_fix",
+          "project_initialization"
+        ]
+      }
+    },
+    "empty_staged": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      }
+    },
+    "feature_api": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "functional_code_changed",
+          "new_api",
+          "new_user_facing_capability"
+        ],
+        "semver_impact": "MINOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "feature_addition",
+        "top3": [
+          "feature_addition",
+          "breaking_change",
+          "security_privacy_fix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "functional_code_changed",
+          "new_api",
+          "new_user_facing_capability"
+        ],
+        "semver_impact": "MINOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "feature_addition",
+        "top3": [
+          "feature_addition",
+          "breaking_change",
+          "security_privacy_fix"
+        ]
+      }
+    },
+    "formatting_fingerprint": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "formatting_only"
+        ],
+        "semver_impact": "MAJOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      }
+    },
+    "graph_error": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [
+          "graph:error"
+        ],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      }
+    },
+    "graph_unavailable": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [
+          "graph:unavailable"
+        ],
+        "markers": [],
+        "semver_impact": "MAJOR",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "breaking_change",
+        "top3": [
+          "breaking_change",
+          "security_privacy_fix",
+          "critical_hotfix"
+        ]
+      }
+    },
+    "mixed_docs_tests": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "documentation_expanded",
+          "markdown_changed",
+          "readme_changed",
+          "test_fixtures_changed",
+          "tests_added",
+          "tests_updated"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "tests_update",
+        "top3": [
+          "tests_update",
+          "documentation_update",
+          "breaking_change"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "documentation_expanded",
+          "markdown_changed",
+          "readme_changed",
+          "test_fixtures_changed",
+          "tests_added",
+          "tests_updated"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "tests_update",
+        "top3": [
+          "tests_update",
+          "documentation_update",
+          "breaking_change"
+        ]
+      }
+    },
+    "security_path": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "privacy_issue_fixed",
+          "security_vulnerability_fixed"
+        ],
+        "semver_impact": "PATCH",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "security_privacy_fix",
+        "top3": [
+          "security_privacy_fix",
+          "breaking_change",
+          "critical_hotfix"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "privacy_issue_fixed",
+          "security_vulnerability_fixed"
+        ],
+        "semver_impact": "PATCH",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "security_privacy_fix",
+        "top3": [
+          "security_privacy_fix",
+          "breaking_change",
+          "critical_hotfix"
+        ]
+      }
+    },
+    "tests_only": {
+      "flag_off": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "test_fixtures_changed",
+          "test_logic_primary",
+          "test_only",
+          "tests_added",
+          "tests_only",
+          "tests_updated"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": false,
+        "test_coverage_gap": null,
+        "top1": "tests_update",
+        "top3": [
+          "tests_update",
+          "project_initialization",
+          "failing_test"
+        ]
+      },
+      "flag_on": {
+        "affected_flows_count": null,
+        "blast_radius_size": null,
+        "fallback_reasons": [],
+        "markers": [
+          "test_fixtures_changed",
+          "test_logic_primary",
+          "test_only",
+          "tests_added",
+          "tests_only",
+          "tests_updated"
+        ],
+        "semver_impact": "NONE",
+        "summary_present": true,
+        "test_coverage_gap": null,
+        "top1": "tests_update",
+        "top3": [
+          "tests_update",
+          "project_initialization",
+          "failing_test"
+        ]
+      }
+    }
+  },
+  "schema_version": 1,
+  "sop_matrix_row_count": 75,
+  "sop_matrix_sha256": "b83700261c41cc97b3cc70ef38325935e3676cd681a2216d87dead8c201b7f00"
+}
