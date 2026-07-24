@@ -41,6 +41,22 @@ docs = ["markdown>=3.7", "pymdown-extensions>=10.14", "zensical>=0.0.45"]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
+[tool.coverage.run]
+branch = true
+source = ["src/git_cg"]
+omit = [
+  "src/git_cg/evals/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/git_cg"]
 
@@ -90,22 +106,6 @@ known-third-party = ["opik"]
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.coverage.run]
-branch = true
-source = ["src/git_cg"]
-omit = [
-  "src/git_cg/evals/*",
-]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
-exclude_lines = [
-  "pragma: no cover",
-  "if TYPE_CHECKING:",
-  "raise NotImplementedError",
-]
-
 # Security / SBOM floor pins for transitive deps (Grype --fail-on high).
 # pillow via reportlab; aiohttp via instructor/litellm; pydantic-settings via opik/mcp.
 [tool.uv]
@@ -114,4 +114,3 @@ constraint-dependencies = [
   "aiohttp>=3.14.1",
   "pydantic-settings>=2.14.2",
 ]
-
