@@ -498,6 +498,34 @@ def redact_payload(payload: str) -> str:
         return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
 
+def _normalize_optional_bool(value: Any) -> bool | None:
+    """
+    Normalize persisted/serialized values into ``bool | None``.
+
+    Accepts native bools, 0/1 numerics, and common string forms
+    (``true``/``false``/``yes``/``no``/``on``/``off``/``1``/``0``).
+    Unrecognized values become ``None``.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        if value == 1 or value == 1.0:
+            return True
+        if value == 0 or value == 0.0:
+            return False
+        return None
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in {"true", "1", "yes", "on"}:
+            return True
+        if token in {"false", "0", "no", "off"}:
+            return False
+        return None
+    return None
+
+
 def get_state_file_path(git_dir: str) -> Path:
     return Path(git_dir) / "GIT_CG_OPIK_STATE.json"
 
@@ -633,11 +661,7 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                         data[int_key] = int(raw)
                     except TypeError, ValueError:
                         data[int_key] = None
-            gap = data.get("test_coverage_gap")
-            if gap is None or gap == "":
-                data["test_coverage_gap"] = None
-            else:
-                data["test_coverage_gap"] = bool(gap)
+            data["test_coverage_gap"] = _normalize_optional_bool(data.get("test_coverage_gap"))
             data["semantic_context_schema_version"] = str(data.get("semantic_context_schema_version") or "")
             reasons = data.get("semantic_context_fallback_reasons")
             if reasons is None:
