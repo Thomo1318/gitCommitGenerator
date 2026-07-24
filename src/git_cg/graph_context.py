@@ -394,38 +394,70 @@ def collect_graph_product_bundle(
         tuple[dict[str, Any], list[GraphOperationResult]]: Mapped product fields and
         raw query results (for latency aggregation).
     """
-    from git_cg.semantic import map_graph_product_results
+    try:
+        from git_cg.semantic import empty_graph_product_fields, map_graph_product_results
 
-    query_results: list[GraphOperationResult] = []
-    detect_result = detect_changes(
-        repo_root=repo_root,
-        base=base,
-        changed_files=changed_files,
-        include_source=False,
-        max_depth=max_depth,
-        detail_level=detail_level,
-    )
-    query_results.append(detect_result)
+        query_results: list[GraphOperationResult] = []
+        detect_result = detect_changes(
+            repo_root=repo_root,
+            base=base,
+            changed_files=changed_files,
+            include_source=False,
+            max_depth=max_depth,
+            detail_level=detail_level,
+        )
+        query_results.append(detect_result)
 
-    impact_result = impact_radius(
-        repo_root=repo_root,
-        changed_files=changed_files,
-        max_depth=max_depth,
-        base=base,
-        detail_level=detail_level,
-    )
-    query_results.append(impact_result)
+        impact_result = impact_radius(
+            repo_root=repo_root,
+            changed_files=changed_files,
+            max_depth=max_depth,
+            base=base,
+            detail_level=detail_level,
+        )
+        query_results.append(impact_result)
 
-    flows_result = affected_flows(
-        repo_root=repo_root,
-        changed_files=changed_files,
-        base=base,
-    )
-    query_results.append(flows_result)
+        flows_result = affected_flows(
+            repo_root=repo_root,
+            changed_files=changed_files,
+            base=base,
+        )
+        query_results.append(flows_result)
 
-    product = map_graph_product_results(
-        detect_result=detect_result,
-        impact_result=impact_result,
-        flows_result=flows_result,
-    )
-    return product, query_results
+        product = map_graph_product_results(
+            detect_result=detect_result,
+            impact_result=impact_result,
+            flows_result=flows_result,
+        )
+        return product, query_results
+    except Exception as exc:
+        # Fail-open for direct callers; commit path also wraps this call.
+        try:
+            from git_cg.semantic import empty_graph_product_fields
+
+            product = empty_graph_product_fields()
+        except Exception:
+            product = {
+                "blast_radius_size": None,
+                "affected_flows_count": None,
+                "test_coverage_gap": None,
+                "test_gaps_count": None,
+                "risk_assessment": None,
+                "graph_enrichment": None,
+                "graph_fallback_reasons": [f"graph_product_bundle:{type(exc).__name__}"],
+                "impacts_tests": None,
+                "impacts_production_code": None,
+            }
+        else:
+            reasons = list(product.get("graph_fallback_reasons") or [])
+            reasons.append(f"graph_product_bundle:{type(exc).__name__}")
+            product["graph_fallback_reasons"] = reasons
+        failure = GraphOperationResult(
+            ok=False,
+            operation="graph_product_bundle",
+            outcome=GraphOutcome.ERROR,
+            latency_ms=0.0,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        return product, [failure]

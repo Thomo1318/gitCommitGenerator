@@ -1349,7 +1349,18 @@ def _collect_semantic_producer_metrics(
     from git_cg.semantic_flags import is_semantic_enabled
 
     semantic_enabled = is_semantic_enabled(enable_semantic)
-    from git_cg.semantic import empty_graph_product_fields
+    # Local defaults keep flag-off zero-safe without importing Phase 7 semantic module.
+    graph_product_defaults = {
+        "blast_radius_size": None,
+        "affected_flows_count": None,
+        "test_coverage_gap": None,
+        "test_gaps_count": None,
+        "risk_assessment": None,
+        "graph_enrichment": None,
+        "graph_fallback_reasons": [],
+        "impacts_tests": None,
+        "impacts_production_code": None,
+    }
 
     result: dict = {
         "semantic_enabled": semantic_enabled,
@@ -1365,11 +1376,13 @@ def _collect_semantic_producer_metrics(
         "fingerprint_grammar_version": "unknown",
         "fingerprint_markers": None,
         "crg_schema_version": None,
-        **empty_graph_product_fields(),
+        **graph_product_defaults,
         "changed_files": [],
     }
     if not semantic_enabled:
         return result
+
+    from git_cg.semantic import empty_graph_product_fields
 
     # Parser stage — isolated so later producer failures keep parse metrics.
     semantic_parser_metrics: dict | None = None
