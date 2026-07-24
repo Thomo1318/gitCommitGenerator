@@ -92,6 +92,12 @@ class GenerationTelemetry:
     preflight_mode: str = PreflightMode.SKIPPED.value
     preflight_groups_count: int = 0
     preflight_fallback_reason: str = ""
+    # Phase 7 semantic context product metrics (Issue #162).
+    blast_radius_size: int | None = None
+    affected_flows_count: int | None = None
+    test_coverage_gap: bool | None = None
+    semantic_context_schema_version: str = ""
+    semantic_context_fallback_reasons: list[str] | None = None
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -540,6 +546,19 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
         else:
             telemetry.preflight_fallback_reason = redacted_reason
 
+    # Phase 7: redact semantic context fallback reasons (path/error-bearing).
+    if isinstance(telemetry.semantic_context_fallback_reasons, list):
+        redacted_ctx: list[str] = []
+        for reason in telemetry.semantic_context_fallback_reasons:
+            if not isinstance(reason, str):
+                continue
+            redacted = redact_payload(reason)
+            if redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+                redacted_ctx.append("[REDACTED]")
+            else:
+                redacted_ctx.append(redacted)
+        telemetry.semantic_context_fallback_reasons = redacted_ctx
+
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
         json.dump(asdict(telemetry), f, indent=2)
@@ -584,6 +603,12 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("preflight_mode", PreflightMode.SKIPPED.value)
             data.setdefault("preflight_groups_count", 0)
             data.setdefault("preflight_fallback_reason", "")
+            # Phase 7 semantic context defaults (Issue #162).
+            data.setdefault("blast_radius_size", None)
+            data.setdefault("affected_flows_count", None)
+            data.setdefault("test_coverage_gap", None)
+            data.setdefault("semantic_context_schema_version", "")
+            data.setdefault("semantic_context_fallback_reasons", None)
             # Normalise enum-ish values to plain strings for dataclass storage.
             mode = data.get("preflight_mode")
             if isinstance(mode, PreflightMode):
@@ -598,6 +623,29 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["preflight_fallback_reason"] = ""
             else:
                 data["preflight_fallback_reason"] = str(data["preflight_fallback_reason"])
+            # Phase 7 normalise.
+            for int_key in ("blast_radius_size", "affected_flows_count"):
+                raw = data.get(int_key)
+                if raw is None or raw == "":
+                    data[int_key] = None
+                else:
+                    try:
+                        data[int_key] = int(raw)
+                    except TypeError, ValueError:
+                        data[int_key] = None
+            gap = data.get("test_coverage_gap")
+            if gap is None or gap == "":
+                data["test_coverage_gap"] = None
+            else:
+                data["test_coverage_gap"] = bool(gap)
+            data["semantic_context_schema_version"] = str(data.get("semantic_context_schema_version") or "")
+            reasons = data.get("semantic_context_fallback_reasons")
+            if reasons is None:
+                data["semantic_context_fallback_reasons"] = None
+            elif isinstance(reasons, list):
+                data["semantic_context_fallback_reasons"] = [str(item) for item in reasons if item is not None]
+            else:
+                data["semantic_context_fallback_reasons"] = None
             return GenerationTelemetry(**data)
     except Exception:
         return None

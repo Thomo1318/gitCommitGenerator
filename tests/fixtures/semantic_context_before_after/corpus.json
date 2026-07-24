@@ -1,0 +1,228 @@
+{
+  "cases": [
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "docs_only",
+      "fingerprints": null,
+      "graph": null,
+      "id": "docs_only",
+      "signals": {
+        "files": [
+          "docs/a.md"
+        ],
+        "only_docs": true,
+        "touches_docs": true
+      }
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "tests_only",
+      "fingerprints": null,
+      "graph": null,
+      "id": "tests_only",
+      "signals": {
+        "files": [
+          "tests/t.py"
+        ],
+        "only_tests": true,
+        "touches_tests": true
+      }
+    },
+    {
+      "equal_to_flag_off": false,
+      "expects_fallback": false,
+      "expects_phase7_fields": true,
+      "expects_rank_delta": true,
+      "family": "formatting_ish",
+      "fingerprints": {
+        "body_similarity_avg": 0.96,
+        "body_similarity_min": 0.95,
+        "class_counts": {
+          "identifier_or_literal_only": 1
+        },
+        "markers": [
+          "formatting_only"
+        ]
+      },
+      "graph": null,
+      "id": "formatting_fingerprint",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "public_api",
+      "fingerprints": null,
+      "graph": null,
+      "id": "feature_api",
+      "signals": {
+        "adds_public_api": true,
+        "files": [
+          "src/git_cg/main.py"
+        ]
+      }
+    },
+    {
+      "equal_to_flag_off": false,
+      "expects_fallback": false,
+      "expects_phase7_fields": true,
+      "expects_rank_delta": true,
+      "family": "blast_internal",
+      "fingerprints": null,
+      "graph": {
+        "outcome": "ok",
+        "test_gaps_count": null,
+        "total_impacted": 10
+      },
+      "id": "blast_internal_10",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": false,
+      "expects_fallback": false,
+      "expects_phase7_fields": true,
+      "expects_rank_delta": true,
+      "family": "blast_major",
+      "fingerprints": null,
+      "graph": {
+        "outcome": "ok",
+        "test_gaps_count": null,
+        "total_impacted": 25
+      },
+      "id": "blast_major_25",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": true,
+      "expects_rank_delta": false,
+      "family": "blast_below",
+      "fingerprints": null,
+      "graph": {
+        "outcome": "ok",
+        "test_gaps_count": null,
+        "total_impacted": 5
+      },
+      "id": "blast_below_threshold",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": true,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "graph_fallback",
+      "fingerprints": null,
+      "graph": {
+        "outcome": "unavailable",
+        "test_gaps_count": null,
+        "total_impacted": 99
+      },
+      "id": "graph_unavailable",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "empty_tiny",
+      "fingerprints": null,
+      "graph": null,
+      "id": "empty_staged",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "mixed_intent",
+      "fingerprints": null,
+      "graph": null,
+      "id": "mixed_docs_tests",
+      "signals": {
+        "files": [
+          "docs/a.md",
+          "tests/t.py"
+        ],
+        "touches_docs": true,
+        "touches_tests": true
+      }
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "security_path",
+      "fingerprints": null,
+      "graph": null,
+      "id": "security_path",
+      "signals": {
+        "files": [
+          "src/git_cg/secrets.py"
+        ],
+        "touches_security": true
+      }
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": false,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "control_equal",
+      "fingerprints": null,
+      "graph": null,
+      "id": "control_equal",
+      "signals": {
+        "files": [
+          ".github/workflows/ci.yml"
+        ],
+        "touches_ci": true
+      }
+    },
+    {
+      "equal_to_flag_off": false,
+      "expects_fallback": false,
+      "expects_phase7_fields": true,
+      "expects_rank_delta": true,
+      "family": "fill_rate_gaps",
+      "fingerprints": null,
+      "graph": {
+        "outcome": "ok",
+        "test_gaps_count": 3,
+        "total_impacted": 15
+      },
+      "id": "blast_with_gaps",
+      "signals": {}
+    },
+    {
+      "equal_to_flag_off": true,
+      "expects_fallback": true,
+      "expects_phase7_fields": false,
+      "expects_rank_delta": false,
+      "family": "graph_fallback",
+      "fingerprints": null,
+      "graph": {
+        "outcome": "error",
+        "test_gaps_count": null,
+        "total_impacted": 40
+      },
+      "id": "graph_error",
+      "signals": {}
+    }
+  ],
+  "schema_version": 1,
+  "sop_matrix_row_count": 75,
+  "sop_matrix_sha256": "b83700261c41cc97b3cc70ef38325935e3676cd681a2216d87dead8c201b7f00"
+}

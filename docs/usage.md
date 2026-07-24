@@ -58,21 +58,39 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
-- **Usage**: `git-cg release [-d] [-v] [--pre-release <IDENTIFIER>]`
+- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
 
 Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
 
 ### Flags
 
-#### `-d --dry-run`
-
-Run the release process without making any changes (no commits, tags, or file modifications).
-
-#### `-v --verbose`
-
-Enable verbose output during the release process.
-
 #### `--pre-release <IDENTIFIER>`
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
+
+## Semantic context (Phase 7)
+
+`git-cg` can optionally collect **semantic context** from staged blobs, fingerprints, and local code-review-graph product queries.
+
+### Enable
+
+* CLI: `--enable-semantic` / `--no-enable-semantic`
+* Env: `GIT_CG_ENABLE_SEMANTIC=1` (also `true` / `yes` / `on`)
+* Default: **off** (dark launch)
+
+### What it does
+
+* Builds a versioned `SemanticDiffSummary` on `GenerationContext` when producers succeed
+* May add **closed-vocabulary** ranking markers from graph/fingerprint facts (SOP matrix remains the only SemVer/intent authority)
+* Emits non-content telemetry: `blast_radius_size`, `affected_flows_count`, `test_coverage_gap`, plus `semantic_context_*` fields via Opik state / `record-telemetry`
+
+### What it does **not** do (current MVP)
+
+* Does **not** inject a semantic summary evidence block into the LLM prompt (Phase 11 owns packing)
+* Does **not** promise better commit prose under flag-on; message text may be unchanged vs flag-off
+* Does **not** use embeddings or cloud graph providers on the commit path
+
+### Measurement
+
+Phase work is gated by **Claim A** (plumbing/safety) and **Claim B** (deterministic ranking/context before-after fixtures). Final-message quality uplift (**Claim C**) is a follow-on / post-merge concern. Future phases should define A/B/C the same way.
 
