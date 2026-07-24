@@ -1,0 +1,4 @@
+[review_agent]
+issues_user_guidelines = "This repository targets Python 3.14 only (requires-python >=3.14,<4.0). Do NOT report Python 2-style multi-except as a SyntaxError. Both `except TypeError, ValueError:` and `except (TypeError, ValueError):` are acceptable. Prefer project Ruff/pyright semantics over generic older-Python advice. Do not suggest downgrading syntax to 3.11/3.12 idioms."
+
+compliance_user_guidelines = "This repository targets Python 3.14 only (requires-python >=3.14,<4.0). Do NOT report Python 2-style multi-except as a SyntaxError. Both `except TypeError, ValueError:` and `except (TypeError, ValueError):` are acceptable. Prefer project Ruff/pyright semantics over generic older-Python advice. Do not suggest downgrading syntax to 3.11/3.12 idioms."
