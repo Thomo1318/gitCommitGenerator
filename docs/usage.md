@@ -80,7 +80,7 @@ Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
 
 ### What it does
 
-* Builds a versioned `SemanticDiffSummary` on `GenerationContext` when producers succeed
+* Builds a versioned `SemanticDiffSummary` on `GenerationContext` when semantic mode is **on** — both when producers succeed and on **fail-open fallback** paths (partial summary + explicit `fallback_reasons` when graph/parser/fingerprint producers are unavailable or error)
 * May add **closed-vocabulary** ranking markers from graph/fingerprint facts (SOP matrix remains the only SemVer/intent authority)
 * Emits non-content telemetry: `blast_radius_size`, `affected_flows_count`, `test_coverage_gap`, plus `semantic_context_*` fields via Opik state / `record-telemetry`
 
