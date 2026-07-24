@@ -367,3 +367,65 @@ def collect_graph_telemetry(
         "graph_fallback_reasons": failures,
         "graph_schema_version": schema_version,
     }
+
+
+def collect_graph_product_bundle(
+    repo_root: str | None = None,
+    *,
+    changed_files: list[str] | None = None,
+    base: str = "HEAD",
+    max_depth: int = 2,
+    detail_level: str = "minimal",
+) -> tuple[dict[str, Any], list[GraphOperationResult]]:
+    """
+    Run Phase 7 graph product queries and map them into summary/enrichment fields.
+
+    Prefers one rich ``detect_changes`` call and supplements with ``impact_radius`` /
+    ``affected_flows`` when needed. Fail-open: never raises.
+
+    Parameters:
+        repo_root (str | None): Repository root path.
+        changed_files (list[str] | None): Staged changed paths for query focus.
+        base (str): Git ref base for change detection.
+        max_depth (int): Impact/detect traversal depth (commit path default 2).
+        detail_level (str): CRG detail level (commit path default "minimal").
+
+    Returns:
+        tuple[dict[str, Any], list[GraphOperationResult]]: Mapped product fields and
+        raw query results (for latency aggregation).
+    """
+    from git_cg.semantic import map_graph_product_results
+
+    query_results: list[GraphOperationResult] = []
+    detect_result = detect_changes(
+        repo_root=repo_root,
+        base=base,
+        changed_files=changed_files,
+        include_source=False,
+        max_depth=max_depth,
+        detail_level=detail_level,
+    )
+    query_results.append(detect_result)
+
+    impact_result = impact_radius(
+        repo_root=repo_root,
+        changed_files=changed_files,
+        max_depth=max_depth,
+        base=base,
+        detail_level=detail_level,
+    )
+    query_results.append(impact_result)
+
+    flows_result = affected_flows(
+        repo_root=repo_root,
+        changed_files=changed_files,
+        base=base,
+    )
+    query_results.append(flows_result)
+
+    product = map_graph_product_results(
+        detect_result=detect_result,
+        impact_result=impact_result,
+        flows_result=flows_result,
+    )
+    return product, query_results

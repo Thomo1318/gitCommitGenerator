@@ -1,6 +1,9 @@
 """Orchestration layer for guided regeneration and semantic contract resolution."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import Any
 
 from git_cg.intent import DiffSignals, IntentSelectionConstraints, RankedIntent, matrix_row_intent_id
 from git_cg.models import CommitPlan
@@ -9,11 +12,19 @@ from git_cg.sop import get_gitmoji_matrix
 
 @dataclass
 class GenerationContext:
-    """Deterministic context derived from the diff and SOP."""
+    """Deterministic context derived from the diff and SOP.
+
+    Phase 7 optional fields (``semantic_summary``, ``risk_assessment``) are ignored by
+    ``resolve_semantic_contract`` / ``enforce_semantic_contract`` — matrix authority only.
+    """
 
     diff_signals: DiffSignals
     ranked_intents: list[RankedIntent]
     constraints: IntentSelectionConstraints
+    semantic_summary: Any | None = None  # SemanticDiffSummary | None (typed at edges)
+    risk_assessment: Any | None = None  # RiskAssessment | None
+    scope_priors: Any | None = None  # Phase 8.5 placeholder
+    preflight_groups: Any | None = None  # Phase 0.5 placeholder
 
 
 @dataclass
