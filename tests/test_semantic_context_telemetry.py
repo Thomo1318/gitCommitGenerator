@@ -77,6 +77,29 @@ def test_phase7_telemetry_back_compat_missing_keys(tmp_path):
     assert loaded.test_coverage_gap is None
     assert loaded.semantic_context_schema_version == ""
 
+    # Legacy string boolean testing
+    path.write_text(
+        json.dumps(
+            {
+                "trace_id": None,
+                "diff_hash": "x",
+                "diff_output": "d",
+                "repo_name": "r",
+                "engine": "e",
+                "model_name": "m",
+                "system_prompt_hash": "h",
+                "generated_message": "g",
+                "commit_plan_json": {},
+                "score_card": {},
+                "test_coverage_gap": "false",
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded_with_false = read_telemetry_state(str(tmp_path))
+    assert loaded_with_false is not None
+    assert loaded_with_false.test_coverage_gap is False
+
 
 def test_phase7_fallback_reasons_redacted(tmp_path, monkeypatch):
     monkeypatch.setattr(
