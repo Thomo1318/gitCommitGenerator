@@ -209,3 +209,283 @@ def test_collect_semantic_producer_metrics_flag_off_skips_graph_product(monkeypa
     assert out["blast_radius_size"] is None
     assert out["test_coverage_gap"] is None
     assert called["n"] == 0
+
+
+def test_collect_semantic_producer_metrics_flag_off_does_not_import_semantic(monkeypatch):
+    """Flag-off must not import git_cg.semantic (keeps zero-safe path isolated)."""
+    import builtins
+    import sys
+
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "git_cg.semantic" or (name == "git_cg" and fromlist and "semantic" in fromlist):
+            raise ImportError("semantic import blocked in flag-off test")
+        return real_import(name, globals, locals, fromlist, level)
+
+    # Drop cached module so import would be attempted if code path touches it.
+    sys.modules.pop("git_cg.semantic", None)
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=False)
+    assert out["semantic_enabled"] is False
+    assert out["blast_radius_size"] is None
+    assert out["graph_fallback_reasons"] == []
+
+
+def test_collect_graph_product_bundle_fail_open_on_mapper_error(monkeypatch):
+    from git_cg import graph_context as gc
+    from git_cg.graph_context import collect_graph_product_bundle
+
+    def boom(**kwargs):
+        raise RuntimeError("mapper exploded")
+
+    # Force an unexpected exception inside the bundle body (docstring: never raises).
+    monkeypatch.setattr(gc, "detect_changes", boom)
+    product, results = collect_graph_product_bundle(repo_root=".")
+    assert product["blast_radius_size"] is None
+    assert product.get("graph_fallback_reasons")
+    assert results and results[0].ok is False
+    assert results[0].operation == "graph_product_bundle"
+    assert results[0].error_type == "RuntimeError"
+
+
+def test_bound_str_and_list_helpers():
+    from git_cg.semantic import MAX_REASON_STRING_LENGTH, _bound_str, _bound_str_list
+
+    assert _bound_str("short") == "short"
+    long = "x" * (MAX_REASON_STRING_LENGTH + 20)
+    clipped = _bound_str(long)
+    assert clipped.endswith("...")
+    assert len(clipped) == MAX_REASON_STRING_LENGTH
+    assert _bound_str_list(None, max_items=3) == []
+    assert _bound_str_list(["a", 1, "b", "c", "d"], max_items=3) == ["a", "b", "c"]
+
+
+def test_outcome_from_graph_result_branches():
+    from git_cg.semantic import _outcome_from_graph_result
+
+    class Outcome:
+        def __init__(self, value: str):
+            self.value = value
+
+    class R:
+        def __init__(self, ok, outcome, value_attr=False):
+            self.ok = ok
+            self.outcome = Outcome(outcome) if value_attr else outcome
+
+    assert _outcome_from_graph_result(None) == "unavailable"
+    assert _outcome_from_graph_result(R(True, "ok")) == "ok"
+    assert _outcome_from_graph_result(R(True, "")) == "ok"
+    assert _outcome_from_graph_result(R(False, "error")) == "error"
+    assert _outcome_from_graph_result(R(False, "unavailable")) == "unavailable"
+    assert _outcome_from_graph_result(R(True, "ok", value_attr=True)) == "ok"
+    assert _outcome_from_graph_result(R(False, "weird")) == "unavailable"
+    assert _outcome_from_graph_result(R(True, "weird")) == "ok"
+
+
+def test_count_from_payload_shapes():
+    from git_cg.semantic import _count_from_payload
+
+    assert _count_from_payload({}, "total") is None
+    assert _count_from_payload({"total": None}, "total") is None
+    assert _count_from_payload({"total": True}, "total") is None
+    assert _count_from_payload({"total": 7}, "total") == 7
+    assert _count_from_payload({"items": [1, 2, 3]}, "items") == 3
+    assert _count_from_payload({"wrap": {"total": 4}}, "wrap") == 4
+    assert _count_from_payload({"wrap": {"flows": ["a", "b"]}}, "wrap") == 2
+    assert _count_from_payload({"wrap": {"nope": 1}}, "wrap") is None
+
+
+def test_test_gaps_count_shapes():
+    from git_cg.semantic import _test_gaps_count
+
+    assert _test_gaps_count({}) is None
+    assert _test_gaps_count({"test_gaps": ["a", "b"]}) == 2
+    assert _test_gaps_count({"test_coverage_gaps": 3}) == 3
+    assert _test_gaps_count({"knowledge_gaps": {"items": [1]}}) == 1
+    assert _test_gaps_count({"untested_hotspots": {"count": 5}}) == 5
+    assert _test_gaps_count({"gaps": {"test_gaps": ["x"]}}) == 1
+    assert _test_gaps_count({"coverage": {"test_gaps": []}}) == 0
+
+
+def test_risk_score_and_priority_labels():
+    from git_cg.semantic import _priority_labels, _risk_score
+
+    assert _risk_score({"risk_score": 0.4}) == 0.4
+    assert _risk_score({"risk": {"score": 0.2}}) == 0.2
+    assert _risk_score({"summary": {"risk_score": 0.9}}) == 0.9
+    assert _risk_score({}) is None
+    labels = _priority_labels(
+        {
+            "priorities": [
+                "plain",
+                {"name": "n1"},
+                {"title": "t1"},
+                {"id": "i1"},
+                {"path": "p1"},
+                {"kind": "k1"},
+                {"other": "skip"},
+                12,
+            ]
+        }
+    )
+    assert "plain" in labels
+    assert "n1" in labels
+    assert "t1" in labels
+
+
+def test_impact_flags_from_nodes_and_explicit():
+    from git_cg.semantic import _impact_flags
+
+    has_test, has_prod = _impact_flags(
+        {
+            "nodes": [
+                {"name": "test_foo", "is_test": True},
+                {"name": "svc", "file_path": "src/a.py"},
+                "skip",
+                {"kind": "Test", "name": "Suite"},
+            ]
+        }
+    )
+    assert has_test is True
+    assert has_prod is True
+    has_test2, has_prod2 = _impact_flags({"impacted_has_test_nodes": False, "impacted_has_production_nodes": True})
+    assert has_test2 is False
+    assert has_prod2 is True
+
+
+def test_map_graph_product_non_dict_payloads_and_impact_only_risk():
+    from git_cg.semantic import RiskAssessment, map_graph_product_results
+
+    class R:
+        def __init__(self, ok, outcome, data, error_type=None):
+            self.ok = ok
+            self.outcome = outcome
+            self.data = data
+            self.error_type = error_type
+
+    product = map_graph_product_results(
+        detect_result=R(True, "ok", "not-a-dict"),
+        impact_result=R(True, "ok", {"total_impacted": 9, "risk_score": 0.55}),
+        flows_result=R(True, "ok", {"flows": [1, 2]}),
+    )
+    assert product["blast_radius_size"] == 9
+    assert product["affected_flows_count"] == 2
+    assert isinstance(product["risk_assessment"], RiskAssessment)
+    assert product["risk_assessment"].risk_score == 0.55
+
+
+def test_map_graph_product_detect_none_uses_impact_outcome():
+    from git_cg.semantic import map_graph_product_results
+
+    class R:
+        def __init__(self, ok, outcome, data):
+            self.ok = ok
+            self.outcome = outcome
+            self.data = data
+            self.error_type = None
+
+    product = map_graph_product_results(
+        detect_result=None,
+        impact_result=R(False, "error", {}),
+        flows_result=None,
+    )
+    assert product["risk_assessment"].outcome == "error"
+    assert any("impact_radius" in r for r in product["graph_fallback_reasons"])
+
+
+def test_parser_coverage_ratio_edges():
+    from git_cg.semantic import _parser_coverage_ratio
+
+    assert _parser_coverage_ratio(None) is None
+    assert _parser_coverage_ratio({"semantic_files_total": "x", "semantic_files_parsed": 1}) is None
+    assert _parser_coverage_ratio({"semantic_files_total": 0, "semantic_files_parsed": 0}) == 0.0
+    assert _parser_coverage_ratio({"semantic_files_total": 4, "semantic_files_parsed": 5}) == 1.0
+    assert _parser_coverage_ratio({"semantic_files_total": 4, "semantic_files_parsed": 2}) == 0.5
+
+
+def test_build_semantic_summary_invalid_risk_and_fp_counts(monkeypatch):
+    from git_cg.semantic import build_semantic_summary
+
+    summary = build_semantic_summary(
+        {
+            "blast_radius_size": 1,
+            "risk_assessment": {"risk_score": "bad", "outcome": "nope"},
+            "fingerprint_class_counts": ["not", "a", "dict"],
+            "notable_callers": "not-a-list",
+            "graph_fallback_reasons": [1, "ok"],
+        }
+    )
+    assert any("risk_assessment:invalid" in r for r in summary.fallback_reasons)
+    assert any("fingerprints:invalid_class_counts" in r for r in summary.fallback_reasons)
+    assert summary.notable_callers == []
+
+
+def test_build_semantic_summary_gap_from_count_only():
+    from git_cg.semantic import build_semantic_summary
+
+    summary = build_semantic_summary({"test_gaps_count": 2, "body_similarity_min": 0.2})
+    assert summary.test_coverage_gap is True
+    assert summary.test_gaps_count == 2
+
+
+def test_build_semantic_summary_opik_context_failure_is_swallowed(monkeypatch):
+    import builtins
+
+    from git_cg.semantic import build_semantic_summary
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "opik" or name.startswith("opik."):
+            raise ImportError("opik unavailable in test")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    summary = build_semantic_summary({"blast_radius_size": 4, "body_similarity_min": 0.1})
+    assert summary.blast_radius_size == 4
+
+
+def test_semantic_analysis_metadata_none():
+    from git_cg.semantic import semantic_analysis_metadata
+
+    meta = semantic_analysis_metadata(None)
+    assert meta["blast_radius_size"] is None
+    assert meta["semantic_context_schema_version"] == ""
+    assert meta["semantic_context_fallback_reasons"] is None
+
+
+def test_map_graph_product_non_dict_impact_and_flows():
+    from git_cg.semantic import map_graph_product_results
+
+    class R:
+        def __init__(self, ok, outcome, data):
+            self.ok = ok
+            self.outcome = outcome
+            self.data = data
+            self.error_type = None
+
+    product = map_graph_product_results(
+        detect_result=R(True, "ok", {"total_impacted": 2, "test_gaps": []}),
+        impact_result=R(True, "ok", ["not", "dict"]),
+        flows_result=R(True, "ok", "nope"),
+    )
+    # detect supplies blast when impact payload is unusable
+    assert product["blast_radius_size"] == 2
+    assert product["affected_flows_count"] is None
+    assert product["test_coverage_gap"] is False
+
+
+def test_build_semantic_summary_accepts_risk_assessment_model():
+    from git_cg.semantic import RiskAssessment, build_semantic_summary
+
+    risk = RiskAssessment(risk_score=0.33, outcome="ok", priorities=["a"])
+    summary = build_semantic_summary(
+        {"body_similarity_min": 0.4},
+        risk_assessment=risk,
+        graph_product={"blast_radius_size": 6},
+    )
+    assert summary.risk_score == 0.33
+    assert summary.blast_radius_size == 6

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from git_cg.graph_context import GraphOperationResult, GraphOutcome
 from git_cg.intent import (
     DiffSignals,
     FingerprintEnrichmentFacts,
@@ -26,7 +27,7 @@ from git_cg.intent import (
     matrix_signal_vocabulary,
     rank_commit_intents,
 )
-from git_cg.semantic import build_semantic_summary
+from git_cg.semantic import build_semantic_summary, map_graph_product_results
 from git_cg.sop import load_sop
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "semantic_context_before_after"
@@ -94,17 +95,51 @@ def _run_case(
     summary = None
     if enable:
         metrics: dict = {}
-        if graph is not None and graph.outcome == "ok":
-            metrics.update(
-                {
-                    "blast_radius_size": graph.total_impacted,
-                    "test_gaps_count": graph.test_gaps_count,
-                    "test_coverage_gap": (
-                        (graph.test_gaps_count or 0) > 0 if graph.test_gaps_count is not None else None
-                    ),
-                    "affected_flows_count": 2 if (graph.total_impacted or 0) >= 10 else 0,
-                }
+        # Exercise production graph-product mapping (not hand-built field copies).
+        if graph is not None:
+            detect_data: dict = {}
+            if graph.outcome == "ok":
+                if graph.total_impacted is not None:
+                    detect_data["total_impacted"] = graph.total_impacted
+                if graph.test_gaps_count is not None:
+                    detect_data["test_gaps"] = [f"gap-{i}" for i in range(int(graph.test_gaps_count))]
+                if graph.impacted_has_test_nodes is not None:
+                    detect_data["impacted_has_test_nodes"] = graph.impacted_has_test_nodes
+                if graph.impacted_has_production_nodes is not None:
+                    detect_data["impacted_has_production_nodes"] = graph.impacted_has_production_nodes
+            detect = GraphOperationResult(
+                ok=graph.outcome == "ok",
+                operation="detect_changes",
+                outcome=GraphOutcome(graph.outcome),
+                latency_ms=0.0,
+                data=detect_data,
+                error=None if graph.outcome == "ok" else graph.outcome,
+                error_type=None if graph.outcome == "ok" else graph.outcome,
             )
+            impact = GraphOperationResult(
+                ok=graph.outcome == "ok",
+                operation="impact_radius",
+                outcome=GraphOutcome(graph.outcome),
+                latency_ms=0.0,
+                data={"total_impacted": graph.total_impacted} if graph.outcome == "ok" else {},
+                error=None if graph.outcome == "ok" else graph.outcome,
+                error_type=None if graph.outcome == "ok" else graph.outcome,
+            )
+            flows = GraphOperationResult(
+                ok=graph.outcome == "ok",
+                operation="affected_flows",
+                outcome=GraphOutcome(graph.outcome),
+                latency_ms=0.0,
+                data={"total": 2 if (graph.total_impacted or 0) >= 10 else 0} if graph.outcome == "ok" else {},
+                error=None if graph.outcome == "ok" else graph.outcome,
+                error_type=None if graph.outcome == "ok" else graph.outcome,
+            )
+            product = map_graph_product_results(
+                detect_result=detect,
+                impact_result=impact,
+                flows_result=flows,
+            )
+            metrics.update(product)
         if fp is not None:
             metrics.update(
                 {
@@ -113,11 +148,6 @@ def _run_case(
                     "fingerprint_class_counts": fp.class_counts,
                 }
             )
-        if graph is not None and graph.outcome != "ok":
-            metrics = {
-                "body_similarity_min": 0.1,
-                "graph_fallback_reasons": [f"graph:{graph.outcome}"],
-            }
         if not metrics:
             metrics = {"body_similarity_min": 0.1}
         summary = build_semantic_summary(metrics)

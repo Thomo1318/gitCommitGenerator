@@ -347,7 +347,10 @@
         "affected_flows_count": null,
         "blast_radius_size": null,
         "fallback_reasons": [
-          "graph:error"
+          "detect_changes:error",
+          "impact_radius:error",
+          "affected_flows:error",
+          "summary:no_producer_success"
         ],
         "markers": [],
         "semver_impact": "MAJOR",
@@ -381,7 +384,10 @@
         "affected_flows_count": null,
         "blast_radius_size": null,
         "fallback_reasons": [
-          "graph:unavailable"
+          "detect_changes:unavailable",
+          "impact_radius:unavailable",
+          "affected_flows:unavailable",
+          "summary:no_producer_success"
         ],
         "markers": [],
         "semver_impact": "MAJOR",
