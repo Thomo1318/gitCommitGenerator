@@ -394,10 +394,10 @@ def collect_graph_product_bundle(
         tuple[dict[str, Any], list[GraphOperationResult]]: Mapped product fields and
         raw query results (for latency aggregation).
     """
+    query_results: list[GraphOperationResult] = []
     try:
         from git_cg.semantic import empty_graph_product_fields, map_graph_product_results
 
-        query_results: list[GraphOperationResult] = []
         detect_result = detect_changes(
             repo_root=repo_root,
             base=base,
@@ -432,6 +432,7 @@ def collect_graph_product_bundle(
         return product, query_results
     except Exception as exc:
         # Fail-open for direct callers; commit path also wraps this call.
+        # Preserve any partial query results already collected before the failure.
         try:
             from git_cg.semantic import empty_graph_product_fields
 
@@ -460,4 +461,4 @@ def collect_graph_product_bundle(
             error=str(exc),
             error_type=type(exc).__name__,
         )
-        return product, [failure]
+        return product, [*query_results, failure]

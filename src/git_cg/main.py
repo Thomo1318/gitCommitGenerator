@@ -1529,13 +1529,11 @@ def _collect_semantic_producer_metrics(
     except Exception as graph_exc:
         if verbose:
             console.log(f"[yellow]Semantic graph producers failed: {graph_exc}[/yellow]")
+        # Reset only graph build/query latency + schema. Do not wipe product fields
+        # already merged by collect_graph_product_bundle / inner product_exc fallback.
         result["graph_build_latency_ms"] = 0.0
         result["graph_query_latency_ms"] = 0.0
         result["crg_schema_version"] = None
-        from git_cg.semantic import empty_graph_product_fields
-
-        for key, value in empty_graph_product_fields().items():
-            result[key] = value
     return result
 
 
