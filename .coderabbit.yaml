@@ -1,0 +1,36 @@
+# .coderabbit.yaml
+inheritance: true
+language: en-US
+
+# Project facts CodeRabbit should not fight
+# If your CodeRabbit plan supports path/instructions, prefer those;
+# the critical bit is the reviews.path_instructions / chat settings below.
+
+reviews:
+  profile: assertive
+  high_level_summary: true
+  path_filters:
+    - "!**/uv.lock"
+    - "!**/.libs/**"
+    - "!**/site/**"
+  path_instructions:
+    - path: "**/*.{py,toml,yml,yaml,md}"
+      instructions: |
+        This repository targets Python 3.14 only
+        (requires-python >=3.14,<4.0; Ruff target-version = py314).
+
+        Do NOT report Python 2-style multi-except as a SyntaxError when the
+        codebase uses either:
+          except TypeError, ValueError:
+        or
+          except (TypeError, ValueError):
+        Both are acceptable under Python 3.14; prefer the parenthesized form
+        for new code.
+
+        Prefer project Ruff/pyright semantics over generic older-Python advice.
+        Do not suggest downgrading syntax to 3.11/3.12 idioms that conflict
+        with 3.14-only features already in use.
+
+        Ranking/SOP/SemVer authority is matrix-owned; do not recommend
+        LLM/prompt changes that reopen that contract unless the PR is
+        explicitly about SOP governance.
