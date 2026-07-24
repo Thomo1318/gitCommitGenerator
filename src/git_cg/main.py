@@ -1114,6 +1114,8 @@ def _build_generation_context(
     *,
     enable_semantic: bool | None = None,
     enrichment_facts=None,
+    semantic_summary=None,
+    risk_assessment=None,
 ):
     """
     Build the deterministic context used for commit generation.
@@ -1122,9 +1124,11 @@ def _build_generation_context(
         diff_output (str): The staged diff to analyse.
         enable_semantic (bool | None): Whether semantic enrichment is enabled.
         enrichment_facts: Optional closed-vocabulary semantic facts used to enrich intent ranking.
+        semantic_summary: Optional Phase 7 ``SemanticDiffSummary`` (flag-on only).
+        risk_assessment: Optional Phase 7 ``RiskAssessment`` (flag-on only).
 
     Returns:
-        GenerationContext: The extracted diff signals, ranked intents, and selection constraints.
+        GenerationContext: Diff signals, ranked intents, constraints, and optional semantic context.
     """
     from git_cg.intent import IntentSelectionConstraints, derive_intent_selection_constraints
     from git_cg.regeneration import GenerationContext
@@ -1150,6 +1154,8 @@ def _build_generation_context(
         diff_signals=signals,
         ranked_intents=ranked_candidates,
         constraints=constraints,
+        semantic_summary=semantic_summary if semantic_on else None,
+        risk_assessment=risk_assessment if semantic_on else None,
     )
 
 
@@ -1160,9 +1166,10 @@ def _build_semantic_enrichment_facts(
     body_similarity_min: float | None,
     body_similarity_avg: float | None,
     fingerprint_markers: list | None,
+    graph_enrichment=None,
 ):
     """
-    Build optional semantic enrichment facts from collected fingerprint data.
+    Build optional semantic enrichment facts from fingerprint and graph product data.
 
     Parameters:
         semantic_enabled (bool): Whether semantic enrichment is enabled.
@@ -1170,27 +1177,36 @@ def _build_semantic_enrichment_facts(
         body_similarity_min (float | None): Minimum body similarity score.
         body_similarity_avg (float | None): Average body similarity score.
         fingerprint_markers (list | None): Markers identified during fingerprint comparison.
+        graph_enrichment: Optional ``GraphEnrichmentFacts`` from Phase 7 graph product bundle.
 
     Returns:
-        SemanticEnrichmentFacts | None: Enrichment facts when semantic mode is enabled and usable data is available; otherwise, `None`.
+        SemanticEnrichmentFacts | None: Enrichment facts when semantic mode is enabled and usable
+        fingerprint and/or graph data is available; otherwise, `None`.
     """
     if not semantic_enabled:
         return None
 
-    from git_cg.intent import FingerprintEnrichmentFacts, SemanticEnrichmentFacts
+    from git_cg.intent import FingerprintEnrichmentFacts, GraphEnrichmentFacts, SemanticEnrichmentFacts
 
     has_fp = bool(fingerprint_class_counts) or bool(fingerprint_markers)
     has_sim = body_similarity_min is not None or body_similarity_avg is not None
-    if not has_fp and not has_sim:
+    graph_facts = graph_enrichment if isinstance(graph_enrichment, GraphEnrichmentFacts) else None
+    has_graph = graph_facts is not None and graph_facts.outcome == "ok"
+    if not has_fp and not has_sim and not has_graph:
         return None
 
-    return SemanticEnrichmentFacts(
-        fingerprints=FingerprintEnrichmentFacts(
+    fingerprints = None
+    if has_fp or has_sim:
+        fingerprints = FingerprintEnrichmentFacts(
             class_counts=dict(fingerprint_class_counts) if fingerprint_class_counts else None,
             body_similarity_min=body_similarity_min,
             body_similarity_avg=body_similarity_avg,
             markers=list(fingerprint_markers) if fingerprint_markers else None,
         )
+
+    return SemanticEnrichmentFacts(
+        graph=graph_facts,
+        fingerprints=fingerprints,
     )
 
 
@@ -1220,6 +1236,11 @@ def _write_telemetry_state_safe(
     preflight_mode: str = "skipped",
     preflight_groups_count: int = 0,
     preflight_fallback_reason: str = "",
+    blast_radius_size: int | None = None,
+    affected_flows_count: int | None = None,
+    test_coverage_gap: bool | None = None,
+    semantic_context_schema_version: str = "",
+    semantic_context_fallback_reasons: list | None = None,
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1290,6 +1311,13 @@ def _write_telemetry_state_safe(
             preflight_mode=preflight_mode,
             preflight_groups_count=preflight_groups_count,
             preflight_fallback_reason=preflight_fallback_reason,
+            blast_radius_size=blast_radius_size,
+            affected_flows_count=affected_flows_count,
+            test_coverage_gap=test_coverage_gap,
+            semantic_context_schema_version=semantic_context_schema_version,
+            semantic_context_fallback_reasons=(
+                list(semantic_context_fallback_reasons) if isinstance(semantic_context_fallback_reasons, list) else None
+            ),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1321,6 +1349,8 @@ def _collect_semantic_producer_metrics(
     from git_cg.semantic_flags import is_semantic_enabled
 
     semantic_enabled = is_semantic_enabled(enable_semantic)
+    from git_cg.semantic import empty_graph_product_fields
+
     result: dict = {
         "semantic_enabled": semantic_enabled,
         "parser_latency_ms": 0.0,
@@ -1335,6 +1365,8 @@ def _collect_semantic_producer_metrics(
         "fingerprint_grammar_version": "unknown",
         "fingerprint_markers": None,
         "crg_schema_version": None,
+        **empty_graph_product_fields(),
+        "changed_files": [],
     }
     if not semantic_enabled:
         return result
@@ -1420,13 +1452,19 @@ def _collect_semantic_producer_metrics(
         result["fingerprint_markers"] = None
         # Keep parser metrics already populated.
 
-    # Graph stage — failures only clear graph-related fields.
+    # Graph stage — stats/refresh + Phase 7 product queries; failures clear graph fields only.
     try:
         from git_cg.git_index import should_refresh_graph
         from git_cg.graph_context import (
+            collect_graph_product_bundle,
             collect_graph_telemetry,
             graph_stats,
             refresh_graph,
+        )
+        from git_cg.semantic import (
+            COMMIT_PATH_GRAPH_DETAIL_LEVEL,
+            COMMIT_PATH_GRAPH_MAX_DEPTH,
+            empty_graph_product_fields,
         )
 
         build_result = None
@@ -1439,11 +1477,33 @@ def _collect_semantic_producer_metrics(
                 )
 
         stats_result = graph_stats(repo_root=repo_root)
+        query_results = [stats_result]
+
+        changed_files = sorted(staged_files.keys()) if staged_files else []
+        result["changed_files"] = list(changed_files)
+        try:
+            product, product_queries = collect_graph_product_bundle(
+                repo_root=repo_root,
+                changed_files=changed_files or None,
+                base="HEAD",
+                max_depth=COMMIT_PATH_GRAPH_MAX_DEPTH,
+                detail_level=COMMIT_PATH_GRAPH_DETAIL_LEVEL,
+            )
+            query_results.extend(product_queries)
+            for key, value in product.items():
+                result[key] = value
+        except Exception as product_exc:
+            if verbose:
+                console.log(f"[yellow]Semantic graph product bundle failed: {product_exc}[/yellow]")
+            for key, value in empty_graph_product_fields().items():
+                result[key] = value
+
         graph_meta = collect_graph_telemetry(
             build_result=build_result,
-            query_results=[stats_result],
+            query_results=query_results,
         )
         result["graph_build_latency_ms"] = float(graph_meta.get("graph_build_latency_ms") or 0.0)
+        # Product query latency accumulates into existing graph_query_latency_ms.
         result["graph_query_latency_ms"] = float(graph_meta.get("graph_query_latency_ms") or 0.0)
         if stats_result.ok:
             maybe_schema = stats_result.data.get("schema_version") or stats_result.data.get("graph_schema_version")
@@ -1459,6 +1519,10 @@ def _collect_semantic_producer_metrics(
         result["graph_build_latency_ms"] = 0.0
         result["graph_query_latency_ms"] = 0.0
         result["crg_schema_version"] = None
+        from git_cg.semantic import empty_graph_product_fields
+
+        for key, value in empty_graph_product_fields().items():
+            result[key] = value
     return result
 
 
@@ -1527,8 +1591,9 @@ def _run_commit_generation(
         crg_schema_version = "unknown"
     sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
 
-    # Phase 1/2: dark-launched semantic producers (parser, fingerprints, graph metrics).
-    # Does not alter ranking/prompt behaviour yet — facts are recorded for telemetry.
+    # Phase 1/2/7: semantic producers (parser, fingerprints, graph product bundle).
+    # Flag-on may enrich closed-vocab ranking markers and attach SemanticDiffSummary context.
+    # Prompt MVP ships no summary evidence block (Phase 11 owns packing).
     semantic_metrics = _collect_semantic_producer_metrics(
         repo_root,
         enable_semantic=enable_semantic,
@@ -1546,6 +1611,11 @@ def _run_commit_generation(
     fingerprint_class_counts = semantic_metrics["fingerprint_class_counts"]
     fingerprint_grammar_version = str(semantic_metrics["fingerprint_grammar_version"] or "unknown")
     fingerprint_markers = semantic_metrics["fingerprint_markers"]
+    blast_radius_size = semantic_metrics.get("blast_radius_size")
+    affected_flows_count = semantic_metrics.get("affected_flows_count")
+    test_coverage_gap = semantic_metrics.get("test_coverage_gap")
+    graph_enrichment = semantic_metrics.get("graph_enrichment")
+    risk_assessment = semantic_metrics.get("risk_assessment")
     if semantic_metrics.get("crg_schema_version"):
         crg_schema_version = str(semantic_metrics["crg_schema_version"])
         sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
@@ -1568,6 +1638,12 @@ def _run_commit_generation(
         "preflight_mode": "skipped",
         "preflight_groups_count": 0,
         "preflight_fallback_reason": "",
+        # Phase 7 semantic context product metrics (Issue #162).
+        "blast_radius_size": blast_radius_size,
+        "affected_flows_count": affected_flows_count,
+        "test_coverage_gap": test_coverage_gap,
+        "semantic_context_schema_version": "",
+        "semantic_context_fallback_reasons": None,
     }
     if semantic_parser_metrics:
         # Flatten non-content parser metrics into the trace metadata.
@@ -1661,11 +1737,29 @@ def _run_commit_generation(
         body_similarity_min=body_similarity_min,
         body_similarity_avg=body_similarity_avg,
         fingerprint_markers=fingerprint_markers if isinstance(fingerprint_markers, list) else None,
+        graph_enrichment=graph_enrichment,
     )
+
+    semantic_summary = None
+    semantic_context_schema_version = ""
+    semantic_context_fallback_reasons = None
+    if semantic_enabled:
+        from git_cg.semantic import build_semantic_summary, semantic_analysis_metadata
+
+        semantic_summary = build_semantic_summary(semantic_metrics, risk_assessment=risk_assessment)
+        summary_meta = semantic_analysis_metadata(semantic_summary)
+        semantic_context_schema_version = str(summary_meta.get("semantic_context_schema_version") or "")
+        semantic_context_fallback_reasons = summary_meta.get("semantic_context_fallback_reasons")
+        opik_metadata.update(summary_meta)
+        with contextlib.suppress(Exception):
+            opik_context.update_current_trace(metadata=opik_metadata)
+
     gen_context = _build_generation_context(
         analysis_diff,
         enable_semantic=semantic_enabled,
         enrichment_facts=enrichment_facts,
+        semantic_summary=semantic_summary,
+        risk_assessment=risk_assessment,
     )
 
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
@@ -1833,6 +1927,11 @@ def _run_commit_generation(
         preflight_mode="skipped",
         preflight_groups_count=0,
         preflight_fallback_reason="",
+        blast_radius_size=blast_radius_size if isinstance(blast_radius_size, int) else None,
+        affected_flows_count=affected_flows_count if isinstance(affected_flows_count, int) else None,
+        test_coverage_gap=bool(test_coverage_gap) if test_coverage_gap is not None else None,
+        semantic_context_schema_version=semantic_context_schema_version,
+        semantic_context_fallback_reasons=semantic_context_fallback_reasons,
     )
 
     opik.flush_tracker()
@@ -2204,6 +2303,12 @@ def record_telemetry(
                     "preflight_mode": telemetry_state.get("preflight_mode", "skipped"),
                     "preflight_groups_count": telemetry_state.get("preflight_groups_count", 0),
                     "preflight_fallback_reason": telemetry_state.get("preflight_fallback_reason", ""),
+                    # Phase 7 semantic context product metrics (Issue #162).
+                    "blast_radius_size": telemetry_state.get("blast_radius_size"),
+                    "affected_flows_count": telemetry_state.get("affected_flows_count"),
+                    "test_coverage_gap": telemetry_state.get("test_coverage_gap"),
+                    "semantic_context_schema_version": telemetry_state.get("semantic_context_schema_version", ""),
+                    "semantic_context_fallback_reasons": telemetry_state.get("semantic_context_fallback_reasons"),
                 },
                 feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
                 thread_id=thread_id,
