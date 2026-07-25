@@ -1954,10 +1954,16 @@ def _run_commit_generation(
         preflight_mode="skipped",
         preflight_groups_count=0,
         preflight_fallback_reason="",
-        blast_radius_size=blast_radius_size if isinstance(blast_radius_size, int) else None,
-        affected_flows_count=affected_flows_count if isinstance(affected_flows_count, int) else None,
+        blast_radius_size=blast_radius_size
+        if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
+        else None,
+        affected_flows_count=affected_flows_count
+        if isinstance(affected_flows_count, int) and not isinstance(affected_flows_count, bool)
+        else None,
         test_coverage_gap=bool(test_coverage_gap) if test_coverage_gap is not None else None,
-        test_gaps_count=test_gaps_count if isinstance(test_gaps_count, int) else None,
+        test_gaps_count=test_gaps_count
+        if isinstance(test_gaps_count, int) and not isinstance(test_gaps_count, bool)
+        else None,
         semantic_context_schema_version=semantic_context_schema_version,
         semantic_context_fallback_reasons=semantic_context_fallback_reasons,
     )
