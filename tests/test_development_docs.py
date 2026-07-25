@@ -403,7 +403,7 @@ class TestDevelopmentMdAdr0005PhaseOwnership:
         section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
         assert "preflight_" in section
         assert "Preflight multi-group product" in section
-        assert "Semantic summary object for prompts" in section
+        assert "Semantic summary object / graph product metrics" in section
         assert "Token-budget prompt assembly (`prompt_budget.py`)" in section
         assert "CRG embeddings" in section
 
