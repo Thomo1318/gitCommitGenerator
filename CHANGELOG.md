@@ -2,19 +2,50 @@
 
 ## Unreleased
 
+## v0.6.0
+
+### ✨ Features
+
+- ✨ feat(semantic): integrate Phase 7 telemetry and context verification (#162)
+- 📈 feat(telemetry): add optional `test_gaps_count` and Phase 7 context fields (#162)
+- ♻️ refactor(semantic): add `SemanticDiffSummary` / `RiskAssessment` context models (#162)
+
+### 🐛 Bug Fixes & Refactors
+
+- 🥅 fix(git_cg): guard int telemetry counts against bool subclass (#162)
+- 🥅 fix(git_cg): bound graph-stage fallback reasons (#162)
+- 🥅 fix(semantic): graph product fail-open and telemetry normalisation (#162)
+- 🥅 fix(graph_context): preserve partial query results on failure (#162)
+- ⚡️ perf(cli): isolate semantic module imports on flag-off (#162)
+- 🔒️ fix(deps): raise python-dotenv floor to >=1.2.2 (#177)
+- 🐛 fix(fingerprints): catch missing package metadata errors (#177)
+
+### 📝 Documentation
+
+- 📝 docs(usage): document semantic context, fail-open summary, and telemetry (#162)
+- 📝 docs(dev-guide): Phase 7 / 7.5 ownership and measurement notes (#162)
+- 📝 docs(adr): add ADR-0014 for fnox canonical secrets (#177)
+- 📝 docs(changelog): flatten v0.5.0 changelog entries
+
+### ✅ Tests
+
+- ✅ test(semantic): context, graph mapping, before/after fixtures, fallbacks (#162)
+- ✅ test(telemetry): bool normalisation, malformed preflight counts, gaps count (#162)
+- ✅ test(docs): development docs assertion alignment (#162)
+- ✅ test(tests): coverage and error-handling improvements (#177)
+
+### 🔧 Chores & Internal
+
+- 🔧 chore(config): AI review tool Python 3.14 syntax config (#162)
+- 🔧 chore(config): coverage layout / gitignore hygiene (#162)
+- ⬆️ build(deps): bump pytest, code-review-graph; raise floors / bounds (#177)
+- 📌 build(ci): pin CI actions to full commit SHAs (#177)
+- 🔐 chore(dev-guide): record WP6 deferrals for pins (#177)
+
 ### 🔒️ Security / Dependencies
 
-- 📝 docs(dev-guide): record #177 WP6 ruff/hk and upstream blocker deferrals (#177) (#158)
-
-- ⬆️ build(deps): bump tree-sitter 0.25.2 → 0.26.0; keep language-pack 0.13 under CRG `<1` cap (#177) (#158)
-
-- ⬆️ build(deps): bump pytest 9.0.3 → 9.1.1 (#177) (#158)
-
-- ⬆️ build(deps): bump code-review-graph 2.3.6 → 2.3.7 (#177) (#158)
-
-- 👷 ci(deps): stage GitHub Actions majors with full SHA pins (#177) (#158)
-
-- 🔒️ fix(deps): raise pytest/tree-sitter/rich floors toward lock (#177) (#158)
+- 🔒️ fix(deps): raise python-dotenv floor for GHSA-mf9w-mj56-hr94 / CVE-2026-28684 (#177)
+- 👷 ci(deps): stage GitHub Actions majors with full SHA pins (#177)
 
 ## v0.5.0
 
