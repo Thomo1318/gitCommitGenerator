@@ -2208,6 +2208,16 @@ def release(
         "--skip-github-notes",
         help="Only bump versions/CHANGELOG; skip gold-standard GitHub notes assembly",
     ),
+    repo_slug: str | None = typer.Option(
+        None,
+        "--repo-slug",
+        help="GitHub owner/repo for compare links and gh publish (default: detect from origin/gh)",
+    ),
+    github_target: str | None = typer.Option(
+        None,
+        "--github-target",
+        help="Optional git ref for gh release create --target; omit to use an existing local tag",
+    ),
 ) -> None:
     """
     Run the release workflow.
@@ -2224,7 +2234,12 @@ def release(
         publish_github: Create the GitHub release with ``gh`` (non-dry-run only).
         github_latest: When publishing, mark as full latest release instead of pre-release.
         skip_github_notes: Legacy path — version/changelog only.
+        repo_slug: Optional ``owner/repo`` override for notes links and publish.
+        github_target: Optional ref for ``gh release create --target``.
     """
+    if publish_github and skip_github_notes:
+        raise typer.BadParameter("--publish-github cannot be combined with --skip-github-notes")
+
     try:
         from git_cg.release import execute_release
 
@@ -2236,11 +2251,16 @@ def release(
             notes_path=notes_file,
             publish_github=publish_github,
             github_prerelease=not github_latest,
+            repo_slug=repo_slug,
             skip_github_notes=skip_github_notes,
+            github_target=github_target,
         )
     except ImportError as e:
         console.print(f"[bold red]Error loading release module:[/bold red] {e}")
         sys.exit(1)
+    except ValueError as e:
+        console.print(f"[bold red]Invalid release options:[/bold red] {e}")
+        sys.exit(2)
 
 
 @app.command("record-telemetry")

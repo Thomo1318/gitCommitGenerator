@@ -610,6 +610,8 @@ def test_release_command_maps_all_new_flags_to_execute_release(mock_execute_rele
         publish_github=True,
         github_latest=False,
         skip_github_notes=False,
+        repo_slug=None,
+        github_target=None,
     )
 
     mock_execute_release.assert_called_once_with(
@@ -620,7 +622,9 @@ def test_release_command_maps_all_new_flags_to_execute_release(mock_execute_rele
         notes_path="/tmp/notes.md",
         publish_github=True,
         github_prerelease=True,
+        repo_slug=None,
         skip_github_notes=False,
+        github_target=None,
     )
 
 
@@ -638,6 +642,8 @@ def test_release_command_github_latest_inverts_to_prerelease_false(mock_execute_
         publish_github=True,
         github_latest=True,
         skip_github_notes=False,
+        repo_slug=None,
+        github_target=None,
     )
 
     _args, kwargs = mock_execute_release.call_args
@@ -658,6 +664,8 @@ def test_release_command_default_github_latest_false_keeps_prerelease_true(mock_
         publish_github=False,
         github_latest=False,
         skip_github_notes=False,
+        repo_slug=None,
+        github_target=None,
     )
 
     _args, kwargs = mock_execute_release.call_args
@@ -677,6 +685,8 @@ def test_release_command_skip_github_notes_passed_through(mock_execute_release):
         publish_github=False,
         github_latest=False,
         skip_github_notes=True,
+        repo_slug=None,
+        github_target=None,
     )
 
     _args, kwargs = mock_execute_release.call_args
@@ -697,8 +707,53 @@ def test_release_command_notes_file_none_maps_to_notes_path_none(mock_execute_re
         publish_github=False,
         github_latest=False,
         skip_github_notes=False,
+        repo_slug=None,
+        github_target=None,
     )
 
     _args, kwargs = mock_execute_release.call_args
     assert kwargs["notes_path"] is None
     assert kwargs["theme"] is None
+
+
+@patch("git_cg.release.execute_release")
+def test_release_command_maps_repo_slug_and_github_target(mock_execute_release):
+    from git_cg.main import release
+
+    release(
+        dry_run=False,
+        verbose=False,
+        pre_release=None,
+        theme=None,
+        notes_file=None,
+        publish_github=True,
+        github_latest=False,
+        skip_github_notes=False,
+        repo_slug="acme/widget",
+        github_target="HEAD",
+    )
+
+    _args, kwargs = mock_execute_release.call_args
+    assert kwargs["repo_slug"] == "acme/widget"
+    assert kwargs["github_target"] == "HEAD"
+
+
+def test_release_command_rejects_publish_with_skip_github_notes():
+    import pytest
+    import typer
+
+    from git_cg.main import release
+
+    with pytest.raises(typer.BadParameter, match="--publish-github cannot be combined"):
+        release(
+            dry_run=False,
+            verbose=False,
+            pre_release=None,
+            theme=None,
+            notes_file=None,
+            publish_github=True,
+            github_latest=False,
+            skip_github_notes=True,
+            repo_slug=None,
+            github_target=None,
+        )

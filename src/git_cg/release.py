@@ -355,6 +355,10 @@ CHANGELOG_GROUP_TO_GITHUB_SECTION: dict[str, str] = {
     "Build": "🔧 Chores & Internal",
 }
 
+DEFAULT_REPO_SLUG = "Thomo1318/gitCommitGenerator"
+DEFAULT_DOCS_CHANGELOG_URL = "https://thomo1318.github.io/gitCommitGenerator/CHANGELOG.html"
+GH_RELEASE_TIMEOUT_SECONDS = 120
+
 
 @dataclass(frozen=True)
 class ReleaseNotesInput:
@@ -366,8 +370,8 @@ class ReleaseNotesInput:
     bump_type: str
     commits: list[str]
     gitmoji_matrix: list
-    repo_slug: str = "Thomo1318/gitCommitGenerator"
-    docs_changelog_url: str = "https://thomo1318.github.io/gitCommitGenerator/CHANGELOG.html"
+    repo_slug: str = DEFAULT_REPO_SLUG
+    docs_changelog_url: str = DEFAULT_DOCS_CHANGELOG_URL
     in_scope: list[str] = field(default_factory=list)
     out_of_scope: list[str] = field(default_factory=list)
     invariant: str = (
@@ -381,12 +385,12 @@ class ReleaseNotesInput:
 
 def _normalise_tag(tag: str) -> str:
     """Normalise a release tag by trimming whitespace and ensuring it starts with ``v``.
-    
+
     Parameters:
-    	tag (str): The release tag to normalise.
-    
+        tag (str): The release tag to normalise.
+
     Returns:
-    	str: The normalised tag, or an empty string when no tag is provided.
+        str: The normalised tag, or an empty string when no tag is provided.
     """
     tag = (tag or "").strip()
     if not tag:
@@ -397,12 +401,12 @@ def _normalise_tag(tag: str) -> str:
 def _version_display(tag: str) -> str:
     """
     Return a release tag without its leading `v` prefix.
-    
+
     Parameters:
-    	tag (str): The release tag to format.
-    
+        tag (str): The release tag to format.
+
     Returns:
-    	str: The normalised tag without a leading `v`.
+        str: The normalised tag without a leading `v`.
     """
     t = _normalise_tag(tag)
     return t[1:] if t.startswith("v") else t
@@ -426,12 +430,12 @@ def format_release_title(*, new_tag: str, theme: str) -> str:
 
 def _subject_from_commit(commit: str) -> str:
     """Extract the subject line from a formatted commit string.
-    
+
     Parameters:
-    	commit (str): A commit string containing an optional body delimiter.
-    
+        commit (str): A commit string containing an optional body delimiter.
+
     Returns:
-    	str: The trimmed commit subject.
+        str: The trimmed commit subject.
     """
     parts = commit.split("---COMMIT_BODY---", 1)
     return parts[0].strip()
@@ -451,13 +455,41 @@ def group_commits_for_github_sections(
     out: dict[str, list[str]] = defaultdict(list)
     for group, subjects in raw.items():
         section = CHANGELOG_GROUP_TO_GITHUB_SECTION.get(group, group)
-        if section not in CHANGELOG_GROUP_TO_GITHUB_SECTION.values() and section not in GITHUB_CHANGELOG_SECTION_ORDER:
-            # Unknown custom group: keep name, append under Miscellaneous-like bucket
-            section = group if group else "Miscellaneous"
+        if section not in GITHUB_CHANGELOG_SECTION_ORDER:
+            # Unknown custom group: bucket under Miscellaneous (stable house headings).
+            section = "Miscellaneous"
         for subject in subjects:
             if subject not in out[section]:
                 out[section].append(subject)
     return dict(out)
+
+
+def _ordered_nonempty_sections(
+    sections: dict[str, list[str]],
+    preferred_order: tuple[str, ...] | list[str],
+) -> list[str]:
+    """Return non-empty section keys: preferred order first, then alphabetical extras."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for key in preferred_order:
+        if sections.get(key):
+            ordered.append(key)
+            seen.add(key)
+    for key in sorted(k for k in sections if k not in seen and sections[k]):
+        ordered.append(key)
+    return ordered
+
+
+def _render_grouped_sections(ordered_keys: list[str], sections: dict[str, list[str]]) -> list[str]:
+    """Render ``###`` section headings and bullet subjects as markdown lines."""
+    lines: list[str] = []
+    for group in ordered_keys:
+        lines.append(f"### {group}")
+        lines.append("")
+        for subject in sections[group]:
+            lines.append(f"- {subject}")
+        lines.append("")
+    return lines
 
 
 def format_changelog_markdown(
@@ -488,35 +520,21 @@ def format_changelog_markdown(
         order = list(groups.keys())
 
     lines = [f"## {tag}", ""]
-    # Stable order: known sections first, then any extras alphabetically.
-    seen: set[str] = set()
-    ordered_keys: list[str] = []
-    for key in order:
-        if groups.get(key):
-            ordered_keys.append(key)
-            seen.add(key)
-    for key in sorted(k for k in groups if k not in seen and groups[k]):
-        ordered_keys.append(key)
-
-    for group in ordered_keys:
-        lines.append(f"### {group}")
-        lines.append("")
-        for subject in groups[group]:
-            lines.append(f"- {subject}")
-        lines.append("")
+    ordered_keys = _ordered_nonempty_sections(groups, order)
+    lines.extend(_render_grouped_sections(ordered_keys, groups))
     return "\n".join(lines).rstrip() + "\n"
 
 
 def _default_boundary_rows(*, bump_type: str, theme: str) -> tuple[list[str], list[str]]:
     """
     Build default in-scope and out-of-scope release boundary rows.
-    
+
     Parameters:
-    	bump_type (str): The calculated semantic version impact.
-    	theme (str): The release theme used in the in-scope description.
-    
+        bump_type (str): The calculated semantic version impact.
+        theme (str): The release theme used in the in-scope description.
+
     Returns:
-    	tuple[list[str], list[str]]: In-scope and out-of-scope release boundary rows.
+        tuple[list[str], list[str]]: In-scope and out-of-scope release boundary rows.
     """
     theme_bit = theme.strip() or "this release"
     in_scope = [
@@ -536,14 +554,14 @@ def _default_boundary_rows(*, bump_type: str, theme: str) -> tuple[list[str], li
 def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> list[str]:
     """
     Build default release highlights for the specified release.
-    
+
     Parameters:
-    	bump_type (str): The semantic version impact level for the release.
-    	theme (str): The release theme used in the primary highlight.
-    	commit_count (int): The number of commits included since the previous tag.
-    
+        bump_type (str): The semantic version impact level for the release.
+        theme (str): The release theme used in the primary highlight.
+        commit_count (int): The number of commits included since the previous tag.
+
     Returns:
-    	list[str]: Three Markdown-formatted release highlight statements.
+        list[str]: Three Markdown-formatted release highlight statements.
     """
     return [
         f"**{theme.strip() or 'Release'}** — prepared as a **{bump_type}** cut from {commit_count} commit(s) since the previous tag.",
@@ -555,12 +573,12 @@ def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> lis
 def build_github_release_notes(data: ReleaseNotesInput) -> str:
     """
     Assemble a structured GitHub Release markdown body.
-    
+
     Parameters:
-    	data (ReleaseNotesInput): Release metadata, scope details, highlights, and commit information.
-    
+        data (ReleaseNotesInput): Release metadata, scope details, highlights, and commit information.
+
     Returns:
-    	str: Formatted GitHub Release notes in Markdown.
+        str: Formatted GitHub Release notes in Markdown.
     """
     new_tag = _normalise_tag(data.new_tag)
     prev = _normalise_tag(data.previous_tag) if data.previous_tag else ""
@@ -642,21 +660,8 @@ def build_github_release_notes(data: ReleaseNotesInput) -> str:
         ]
     )
 
-    ordered: list[str] = []
-    seen: set[str] = set()
-    for key in GITHUB_CHANGELOG_SECTION_ORDER:
-        if sections.get(key):
-            ordered.append(key)
-            seen.add(key)
-    for key in sorted(k for k in sections if k not in seen and sections[k]):
-        ordered.append(key)
-
-    for group in ordered:
-        lines.append(f"### {group}")
-        lines.append("")
-        for subject in sections[group]:
-            lines.append(f"- {subject}")
-        lines.append("")
+    ordered = _ordered_nonempty_sections(sections, GITHUB_CHANGELOG_SECTION_ORDER)
+    lines.extend(_render_grouped_sections(ordered, sections))
 
     compare = (
         f"https://github.com/{data.repo_slug}/compare/{prev}...{new_tag}"
@@ -684,15 +689,131 @@ def write_github_release_notes_file(path: str | Path, body: str) -> Path:
     return out
 
 
+def detect_repo_slug(explicit: str | None = None, *, allow_default: bool = True) -> str:
+    """
+    Resolve ``owner/repo`` for GitHub links and ``gh release create``.
+
+    Preference order: explicit non-empty value → ``git remote get-url origin`` →
+    ``gh repo view`` → ``DEFAULT_REPO_SLUG`` (when ``allow_default``).
+
+    Raises:
+        RuntimeError: When no slug can be resolved and ``allow_default`` is false.
+    """
+    if explicit and explicit.strip():
+        return explicit.strip().removesuffix(".git")
+
+    # git@github.com:owner/repo.git or https://github.com/owner/repo.git
+    try:
+        url = subprocess.check_output(
+            ["git", "remote", "get-url", "origin"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=30,
+        ).strip()
+    except subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired:
+        url = ""
+
+    slug = _parse_github_slug_from_remote(url)
+    if slug:
+        return slug
+
+    try:
+        slug = subprocess.check_output(
+            ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=30,
+        ).strip()
+        if slug and "/" in slug:
+            return slug
+    except subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired:
+        pass
+
+    if allow_default:
+        return DEFAULT_REPO_SLUG
+    raise RuntimeError(
+        "Could not detect GitHub owner/repo from git remote or `gh repo view`. "
+        "Pass --repo-slug owner/repo when using --publish-github."
+    )
+
+
+def _parse_github_slug_from_remote(url: str) -> str:
+    """Extract ``owner/repo`` from a git remote URL, or return empty string."""
+    text = (url or "").strip()
+    if not text:
+        return ""
+    text = text.removesuffix(".git")
+    # ssh: git@github.com:owner/repo
+    m = re.search(r"github\.com[:/](?P<slug>[^/]+/[^/]+)$", text)
+    if m:
+        return m.group("slug")
+    # https://github.com/owner/repo
+    m = re.search(r"https?://github\.com/(?P<slug>[^/]+/[^/]+)$", text)
+    if m:
+        return m.group("slug")
+    return ""
+
+
+def default_docs_changelog_url(repo_slug: str) -> str:
+    """Best-effort pages URL for the repo changelog; falls back to project default."""
+    slug = (repo_slug or DEFAULT_REPO_SLUG).strip()
+    if slug == DEFAULT_REPO_SLUG:
+        return DEFAULT_DOCS_CHANGELOG_URL
+    owner, _, repo = slug.partition("/")
+    if owner and repo:
+        return f"https://{owner}.github.io/{repo}/CHANGELOG.html"
+    return DEFAULT_DOCS_CHANGELOG_URL
+
+
+def require_existing_release_tag(tag: str) -> str:
+    """
+    Ensure ``tag`` exists locally and return the commit SHA it points at.
+
+    Raises:
+        RuntimeError: When the tag is missing.
+    """
+    tag_n = _normalise_tag(tag)
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", f"{tag_n}^{{commit}}"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Git tag '{tag_n}' does not exist locally. "
+            "Commit the version cut and create the tag before --publish-github "
+            f"(e.g. `git tag {tag_n}`)."
+        ) from exc
+    if not sha:
+        raise RuntimeError(f"Could not resolve commit for tag '{tag_n}'.")
+    return sha
+
+
+def effective_semver_bump_type(last_tag: str, bump_type: str) -> str:
+    """
+    Return the bump type after SemVer 0.x Rule 4 adjustment (MAJOR→MINOR when major==0).
+    """
+    if bump_type != "MAJOR" or not last_tag:
+        return bump_type
+    try:
+        if semver.VersionInfo.parse(last_tag.lstrip("v")).major == 0:
+            return "MINOR"
+    except Exception:
+        pass
+    return bump_type
+
+
 def create_github_release(
     *,
     tag: str,
     title: str,
     body: str,
-    repo_slug: str = "Thomo1318/gitCommitGenerator",
+    repo_slug: str = DEFAULT_REPO_SLUG,
     prerelease: bool = True,
-    target: str = "main",
+    target: str | None = None,
     dry_run: bool = False,
+    require_existing_tag: bool = True,
 ) -> str:
     """
     Create a GitHub Release via the ``gh`` CLI.
@@ -703,66 +824,107 @@ def create_github_release(
         body: Markdown body.
         repo_slug: ``owner/repo``.
         prerelease: Mark as pre-release (house default for current cadence).
-        target: Git ref to tag/release from.
+        target: Optional git ref. When omitted and the tag exists, ``gh`` is
+            invoked **without** ``--target`` so the existing tag is used.
+            When provided, must resolve to the same commit as the tag if the
+            tag already exists.
         dry_run: When true, do not invoke ``gh``; return a summary string.
+        require_existing_tag: When true (default), refuse to publish unless
+            the tag already exists locally.
 
     Returns:
         URL or dry-run summary string.
 
     Raises:
-        RuntimeError: When ``gh`` fails.
+        RuntimeError: When ``gh`` fails or the tag is missing/mismatched.
     """
     tag_n = _normalise_tag(tag)
+    tag_sha: str | None = None
+    if require_existing_tag:
+        tag_sha = require_existing_release_tag(tag_n)
+
+    if target:
+        try:
+            target_sha = subprocess.check_output(
+                ["git", "rev-parse", f"{target}^{{commit}}"],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"Could not resolve --github-target '{target}'.") from exc
+        if tag_sha and target_sha and tag_sha != target_sha:
+            raise RuntimeError(
+                f"Tag '{tag_n}' points at {tag_sha[:12]} but target '{target}' "
+                f"resolves to {target_sha[:12]}. Refusing to publish mismatched refs."
+            )
+
     if dry_run:
         return (
             f"[dry-run] gh release create {tag_n} --repo {repo_slug} "
-            f"--title {title!r} --target {target} "
-            f"{'--prerelease ' if prerelease else ''}({len(body)} bytes notes)"
+            f"--title {title!r} "
+            f"{'--target ' + target + ' ' if target else '(existing tag) '}"
+            f"{'--prerelease ' if prerelease else ''}"
+            f"({len(body)} bytes notes; tag_sha={tag_sha[:12] if tag_sha else 'n/a'})"
         )
 
-    import tempfile
-
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
-        fh.write(body if body.endswith("\n") else body + "\n")
-        notes_path = fh.name
-    cmd = [
-        "gh",
-        "release",
-        "create",
-        tag_n,
-        "--repo",
-        repo_slug,
-        "--title",
-        title,
-        "--notes-file",
-        notes_path,
-        "--target",
-        target,
-    ]
-    if prerelease:
-        cmd.append("--prerelease")
+    notes_path = ""
     try:
-        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode("utf-8").strip()
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+            fh.write(body if body.endswith("\n") else body + "\n")
+            notes_path = fh.name
+        cmd = [
+            "gh",
+            "release",
+            "create",
+            tag_n,
+            "--repo",
+            repo_slug,
+            "--title",
+            title,
+            "--notes-file",
+            notes_path,
+        ]
+        # Prefer existing tag: omit --target so gh attaches notes to that tag.
+        if target:
+            cmd.extend(["--target", target])
+        if prerelease:
+            cmd.append("--prerelease")
+        out = (
+            subprocess.check_output(
+                cmd,
+                stderr=subprocess.STDOUT,
+                timeout=GH_RELEASE_TIMEOUT_SECONDS,
+            )
+            .decode("utf-8")
+            .strip()
+        )
         return out or f"https://github.com/{repo_slug}/releases/tag/{tag_n}"
     except FileNotFoundError as exc:
         raise RuntimeError("`gh` CLI not found on PATH; install GitHub CLI to publish releases.") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"gh release create timed out after {GH_RELEASE_TIMEOUT_SECONDS}s: {exc}") from exc
     except subprocess.CalledProcessError as exc:
         detail = exc.output.decode("utf-8", errors="replace") if exc.output else str(exc)
         raise RuntimeError(f"gh release create failed: {detail}") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Failed preparing GitHub release notes temp file: {exc}") from exc
     finally:
-        with contextlib.suppress(Exception):
-            Path(notes_path).unlink(missing_ok=True)
+        if notes_path:
+            with contextlib.suppress(Exception):
+                Path(notes_path).unlink(missing_ok=True)
 
 
 def resolve_release_theme(theme: str | None, *, bump_type: str, commits: list[str]) -> str:
     """
     Pick a concise theme phrase for the release title.
-    
+
     Parameters:
         theme (str | None): Optional theme supplied for the release.
         bump_type (str): SemVer impact level used when no theme can be inferred.
         commits (list[str]): Commit messages inspected for a feature summary.
-    
+
     Returns:
         str: The normalised theme, an inferred feature summary, or a fallback release description.
     """
@@ -785,10 +947,10 @@ def resolve_release_theme(theme: str | None, *, bump_type: str, commits: list[st
 def validate_release(new_tag: str) -> bool:
     """
     Check whether a release tag is available for use.
-    
+
     Parameters:
         new_tag (str): Tag name to validate.
-    
+
     Returns:
         bool: `True` if the tag is not found locally, `False` if it already exists locally.
     """
@@ -817,33 +979,48 @@ def validate_release(new_tag: str) -> bool:
 def _prepend_changelog_version(old_content: str, changelog_str: str, new_tag: str) -> str:
     """
     Merge a new version block into existing CHANGELOG.md content.
-    
-    Parameters:
-        old_content (str): Existing changelog content.
-        changelog_str (str): Markdown block for the new version.
-        new_tag (str): Version tag to insert, with or without a leading ``v``.
-    
-    Returns:
-        str: Changelog content with the new version block inserted, or the original content if the version is already present.
+
+    Prefer inserting after an existing ``## Unreleased`` section. If the file
+    starts with ``# Changelog`` but has no Unreleased section, insert after the
+    H1 (before the first ``## `` version heading). Otherwise prepend with a
+    blank-line separator.
     """
     tag = new_tag if new_tag.startswith("v") else f"v{new_tag}"
+    block = changelog_str if changelog_str.endswith("\n") else changelog_str + "\n"
     if f"## {tag}" in old_content:
         return old_content
+
     if old_content.startswith("# Changelog") and "## Unreleased" in old_content:
-        parts = old_content.split("## Unreleased", 1)
-        head = parts[0] + "## Unreleased\n\n"
-        rest = parts[1]
-        rest_lstripped = rest.lstrip("\n")
-        if rest_lstripped.startswith("## "):
-            return head + changelog_str + "\n" + rest_lstripped
-        next_h2 = rest.find("\n## ")
-        if next_h2 == -1:
-            suffix = "" if rest.endswith("\n") else "\n"
-            return head + rest.lstrip("\n") + suffix + changelog_str
-        unreleased_body = rest[: next_h2 + 1]
-        after = rest[next_h2 + 1 :]
-        return head + unreleased_body.lstrip("\n") + changelog_str + "\n" + after
-    return changelog_str + old_content
+        parts = re.split(r"(?m)^(## Unreleased\b[^\n]*\n)", old_content, maxsplit=1)
+        if len(parts) == 3:
+            before, unreleased_line, rest = parts
+            head = before + unreleased_line + "\n"
+            rest_lstripped = rest.lstrip("\n")
+            if rest_lstripped.startswith("## "):
+                return head + block + "\n" + rest_lstripped
+            next_h2 = rest.find("\n## ")
+            if next_h2 == -1:
+                body = rest.lstrip("\n").rstrip("\n")
+                return head + (body + "\n\n" if body else "") + block
+            unreleased_body = rest[: next_h2 + 1]
+            after = rest[next_h2 + 1 :]
+            body = unreleased_body.lstrip("\n").rstrip("\n")
+            mid = (body + "\n") if body else ""
+            return head + mid + block + "\n" + after.lstrip("\n")
+
+    if old_content.startswith("# Changelog"):
+        match = re.match(r"(# Changelog[^\n]*\n(?:\n)*)", old_content)
+        if match:
+            head = match.group(1)
+            if not head.endswith("\n"):
+                head = head.rstrip("\n") + "\n"
+            rest = old_content[match.end() :]
+            sep = "" if not rest or rest.startswith("\n") else "\n"
+            return head + block + sep + rest
+
+    if not old_content:
+        return block
+    return block + "\n" + old_content.lstrip("\n")
 
 
 def execute_release(
@@ -855,16 +1032,17 @@ def execute_release(
     notes_path: str | None = None,
     publish_github: bool = False,
     github_prerelease: bool = True,
-    repo_slug: str = "Thomo1318/gitCommitGenerator",
+    repo_slug: str | None = None,
     skip_github_notes: bool = False,
+    github_target: str | None = None,
 ):
     """
     Prepare a release from commits since the latest Git tag.
-    
+
     Calculates the release version, updates configured version fields, updates
     CHANGELOG.md, and prepares GitHub release notes. In dry-run mode, reports the
     planned changes without writing files or publishing a release.
-    
+
     Parameters:
         dry_run: Simulate the release without writing files or publishing.
         verbose: Emit additional progress output.
@@ -875,7 +1053,19 @@ def execute_release(
         github_prerelease: Mark the published GitHub release as a pre-release.
         repo_slug: GitHub repository in `owner/repository` format.
         skip_github_notes: Skip GitHub release note generation and publishing.
+        github_target: Optional git ref for ``gh release create --target``.
     """
+    if publish_github and skip_github_notes:
+        raise ValueError("--publish-github cannot be combined with --skip-github-notes")
+
+    try:
+        # Publishing must not silently target the hardcoded default repo.
+        resolved_repo_slug = detect_repo_slug(repo_slug, allow_default=not publish_github)
+    except RuntimeError as exc:
+        console.print(f"[bold red]GitHub repository detection failed:[/bold red] {exc}")
+        return
+    docs_url = default_docs_changelog_url(resolved_repo_slug)
+
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
 
@@ -945,14 +1135,18 @@ def execute_release(
 
     if not dry_run:
         changelog_path = "CHANGELOG.md"
-        old_content = ""
-        if os.path.exists(changelog_path):
-            with open(changelog_path, encoding="utf-8") as f:
-                old_content = f.read()
-        new_content = _prepend_changelog_version(old_content, changelog_str, new_tag)
-        with open(changelog_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-        console.print("[bold green]CHANGELOG.md updated.[/bold green]")
+        try:
+            old_content = ""
+            if os.path.exists(changelog_path):
+                with open(changelog_path, encoding="utf-8") as f:
+                    old_content = f.read()
+            new_content = _prepend_changelog_version(old_content, changelog_str, new_tag)
+            with open(changelog_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            console.print("[bold green]CHANGELOG.md updated.[/bold green]")
+        except OSError as exc:
+            console.print(f"[bold red]Failed to update CHANGELOG.md:[/bold red] {exc}")
+            return
 
     if skip_github_notes:
         if not dry_run:
@@ -964,14 +1158,16 @@ def execute_release(
 
     resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
     title = format_release_title(new_tag=new_tag, theme=resolved_theme)
+    notes_bump = effective_semver_bump_type(last_tag, bump_type)
     notes_input = ReleaseNotesInput(
         new_tag=new_tag,
         previous_tag=last_tag or "",
         theme=resolved_theme,
-        bump_type=bump_type,
+        bump_type=notes_bump,
         commits=commits,
         gitmoji_matrix=gitmoji_matrix,
-        repo_slug=repo_slug,
+        repo_slug=resolved_repo_slug,
+        docs_changelog_url=docs_url,
     )
     github_body = build_github_release_notes(notes_input)
 
@@ -988,14 +1184,20 @@ def execute_release(
                     tag=new_tag,
                     title=title,
                     body=github_body,
-                    repo_slug=repo_slug,
+                    repo_slug=resolved_repo_slug,
                     prerelease=github_prerelease,
+                    target=github_target,
                     dry_run=True,
+                    require_existing_tag=False,
                 )
             )
         return
 
-    written = write_github_release_notes_file(default_notes, github_body)
+    try:
+        written = write_github_release_notes_file(default_notes, github_body)
+    except OSError as exc:
+        console.print(f"[bold red]Failed to write release notes file:[/bold red] {exc}")
+        return
     console.print(f"[bold green]GitHub release notes written:[/bold green] {written}")
     console.print(f"[bold green]Release title:[/bold green] {title}")
 
@@ -1005,9 +1207,11 @@ def execute_release(
                 tag=new_tag,
                 title=title,
                 body=github_body,
-                repo_slug=repo_slug,
+                repo_slug=resolved_repo_slug,
                 prerelease=github_prerelease,
+                target=github_target,
                 dry_run=False,
+                require_existing_tag=True,
             )
             console.print(f"[bold green]GitHub release created:[/bold green] {url}")
         except RuntimeError as exc:

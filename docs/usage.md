@@ -58,11 +58,11 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
+### Flags
+
 - **Usage**: `git-cg release [FLAGS]`
 
 Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, update Changelog, and assemble **gold-standard GitHub Release notes** (boundary table, highlights, grouped What’s Changed, compare links).
-
-### Flags
 
 #### `-d --dry-run`
 
@@ -94,7 +94,16 @@ When publishing, mark the GitHub release as latest (not pre-release).
 
 #### `--skip-github-notes`
 
-Only bump versions / CHANGELOG; skip gold-standard GitHub notes assembly.
+Only bump versions / CHANGELOG; skip gold-standard GitHub notes assembly. Cannot be combined with `--publish-github`.
+
+#### `--repo-slug <OWNER/REPO>`
+
+Override the GitHub repository used for compare links and optional `gh` publish. When omitted, `git-cg` detects `owner/repo` from `git remote get-url origin` (then `gh repo view`). Publishing refuses to fall back to a hardcoded default if detection fails.
+
+#### `--github-target <REF>`
+
+Optional git ref passed to `gh release create --target`. By default, publish requires the release tag to already exist locally and omits `--target` so GitHub attaches notes to that tag (avoids tagging the wrong branch tip).
+
 
 ## Semantic context (Phase 7)
 

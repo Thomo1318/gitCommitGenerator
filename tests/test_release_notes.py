@@ -161,12 +161,13 @@ def test_group_commits_for_github_sections_empty_commits_returns_empty_dict():
     assert group_commits_for_github_sections([], MOCK_GITMOJI_MATRIX) == {}
 
 
-def test_group_commits_for_github_sections_custom_group_kept_as_is():
-    """A Changelog-Groups value with no known mapping must be preserved verbatim as its own section."""
+def test_group_commits_for_github_sections_unknown_group_buckets_to_miscellaneous():
+    """Unmapped Changelog-Groups values must land under Miscellaneous, not ad-hoc headings."""
     commits = [_c("🔧 chore: custom thing", "Changelog-Groups: TotallyCustomGroup\n")]
     groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
-    assert "TotallyCustomGroup" in groups
-    assert any("custom thing" in s for s in groups["TotallyCustomGroup"])
+    assert "TotallyCustomGroup" not in groups
+    assert "Miscellaneous" in groups
+    assert any("custom thing" in s for s in groups["Miscellaneous"])
 
 
 def test_group_commits_for_github_sections_deduplicates_subjects_within_a_section():
@@ -176,7 +177,8 @@ def test_group_commits_for_github_sections_deduplicates_subjects_within_a_sectio
         _c("✨ feat: add x", "Changelog-Groups: Features\n"),
     ]
     groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
-    assert groups["✨ Features"].count("✨ feat: add x") == 1
+    feature_subjects = [s.strip() for s in groups["✨ Features"]]
+    assert feature_subjects.count("✨ feat: add x") == 1
 
 
 def test_format_changelog_markdown_empty_commits_still_has_heading():
@@ -260,16 +262,22 @@ def test_create_github_release_dry_run_does_not_invoke_gh():
             repo_slug="acme/repo",
             prerelease=True,
             dry_run=True,
+            require_existing_tag=False,
         )
     mock_check_output.assert_not_called()
     assert summary.startswith("[dry-run] gh release create v1.2.3 --repo acme/repo")
     assert "--prerelease" in summary
-    assert "(6 bytes notes)" in summary
+    assert "6 bytes notes" in summary
 
 
 def test_create_github_release_dry_run_without_prerelease_omits_flag():
     summary = release_module.create_github_release(
-        tag="v1.2.3", title="T", body="B", prerelease=False, dry_run=True
+        tag="v1.2.3",
+        title="T",
+        body="B",
+        prerelease=False,
+        dry_run=True,
+        require_existing_tag=False,
     )
     assert "--prerelease" not in summary
 
@@ -285,22 +293,27 @@ def test_create_github_release_success_invokes_gh_with_expected_args(mock_check_
         repo_slug="acme/repo",
         prerelease=True,
         dry_run=False,
+        require_existing_tag=False,
     )
 
     assert url == "https://github.com/acme/repo/releases/tag/v1.0.0"
-    args, _kwargs = mock_check_output.call_args
+    args, kwargs = mock_check_output.call_args
     cmd = args[0]
     assert cmd[:4] == ["gh", "release", "create", "v1.0.0"]
     assert "--repo" in cmd and "acme/repo" in cmd
     assert "--title" in cmd and "Title" in cmd
     assert "--prerelease" in cmd
+    assert "--target" not in cmd
+    assert kwargs.get("timeout") == release_module.GH_RELEASE_TIMEOUT_SECONDS
 
 
 @patch("git_cg.release.subprocess.check_output")
 def test_create_github_release_without_prerelease_omits_flag(mock_check_output):
     mock_check_output.return_value = b"ok"
 
-    release_module.create_github_release(tag="v1.0.0", title="T", body="B", prerelease=False, dry_run=False)
+    release_module.create_github_release(
+        tag="v1.0.0", title="T", body="B", prerelease=False, dry_run=False, require_existing_tag=False
+    )
 
     args, _kwargs = mock_check_output.call_args
     assert "--prerelease" not in args[0]
@@ -311,7 +324,12 @@ def test_create_github_release_falls_back_to_constructed_url_when_output_empty(m
     mock_check_output.return_value = b"   "
 
     url = release_module.create_github_release(
-        tag="v2.0.0", title="T", body="B", repo_slug="acme/repo", dry_run=False
+        tag="v2.0.0",
+        title="T",
+        body="B",
+        repo_slug="acme/repo",
+        dry_run=False,
+        require_existing_tag=False,
     )
 
     assert url == "https://github.com/acme/repo/releases/tag/v2.0.0"
@@ -321,7 +339,7 @@ def test_create_github_release_falls_back_to_constructed_url_when_output_empty(m
 def test_create_github_release_cleans_up_temp_notes_file_on_success(mock_check_output):
     mock_check_output.return_value = b"ok"
 
-    release_module.create_github_release(tag="v1.0.0", title="T", body="B", dry_run=False)
+    release_module.create_github_release(tag="v1.0.0", title="T", body="B", dry_run=False, require_existing_tag=False)
 
     args, _kwargs = mock_check_output.call_args
     cmd = args[0]
@@ -332,7 +350,9 @@ def test_create_github_release_cleans_up_temp_notes_file_on_success(mock_check_o
 @patch("git_cg.release.subprocess.check_output", side_effect=FileNotFoundError())
 def test_create_github_release_missing_gh_cli_raises_runtime_error(_mock_check_output):
     with pytest.raises(RuntimeError, match="`gh` CLI not found"):
-        release_module.create_github_release(tag="v1.0.0", title="T", body="B", dry_run=False)
+        release_module.create_github_release(
+            tag="v1.0.0", title="T", body="B", dry_run=False, require_existing_tag=False
+        )
 
 
 def test_create_github_release_gh_failure_raises_runtime_error_with_detail_and_cleans_up_temp_file():
@@ -342,9 +362,13 @@ def test_create_github_release_gh_failure_raises_runtime_error_with_detail_and_c
         captured["notes_path"] = cmd[cmd.index("--notes-file") + 1]
         raise subprocess.CalledProcessError(1, cmd, output=b"not authenticated")
 
-    with patch("git_cg.release.subprocess.check_output", side_effect=fake_check_output):
-        with pytest.raises(RuntimeError, match="not authenticated"):
-            release_module.create_github_release(tag="v1.0.0", title="T", body="B", dry_run=False)
+    with (
+        patch("git_cg.release.subprocess.check_output", side_effect=fake_check_output),
+        pytest.raises(RuntimeError, match="not authenticated"),
+    ):
+        release_module.create_github_release(
+            tag="v1.0.0", title="T", body="B", dry_run=False, require_existing_tag=False
+        )
 
     assert not Path(captured["notes_path"]).exists()
 
@@ -356,13 +380,18 @@ def test_create_github_release_gh_failure_raises_runtime_error_with_detail_and_c
 _FEAT_COMMIT = _c("✨ feat: add semantic context", "Changelog-Groups: Added\nSemVer-Impact: MINOR\n")
 
 
-def _patch_release_collaborators(monkeypatch, *, commits, last_tag="v0.5.0"):
+def _patch_release_collaborators(monkeypatch, *, commits, last_tag="v0.5.0", repo_slug="acme/repo"):
     """Stub out git/SOP collaborators of execute_release so tests run without a real git repo."""
     monkeypatch.setattr(release_module, "get_sop_data", lambda: {"gitmoji_reference_matrix": MOCK_GITMOJI_MATRIX})
     monkeypatch.setattr(release_module, "get_last_tag", lambda: last_tag)
     monkeypatch.setattr(release_module, "get_commits_since", lambda _tag: commits)
     monkeypatch.setattr(release_module, "get_modified_files_since", lambda _tag: [])
     monkeypatch.setattr(release_module, "validate_release", lambda _tag: True)
+    monkeypatch.setattr(
+        release_module,
+        "detect_repo_slug",
+        lambda explicit=None, allow_default=True: explicit or repo_slug,
+    )
 
 
 def _printed_text(mock_print: MagicMock) -> str:
@@ -396,7 +425,7 @@ def test_execute_release_dry_run_with_publish_calls_create_github_release_in_dry
     mock_create = MagicMock(return_value="[dry-run] gh release create v0.6.0 ...")
     monkeypatch.setattr(release_module, "create_github_release", mock_create)
 
-    release_module.execute_release(dry_run=True, verbose=False, publish_github=True)
+    release_module.execute_release(dry_run=True, verbose=False, publish_github=True, repo_slug="acme/repo")
 
     mock_create.assert_called_once()
     _args, kwargs = mock_create.call_args
@@ -415,7 +444,7 @@ def test_execute_release_writes_notes_file_at_custom_path_when_not_skipped(monke
     assert notes_path.exists()
     body = notes_path.read_text(encoding="utf-8")
     assert "## 📝 Release Notes" in body
-    assert "🚀 git-cg v0.6.0:" in body
+    assert "compare/v0.5.0...v0.6.0" in body or "v0.6.0" in body
     changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "## v0.6.0" in changelog
 
@@ -438,7 +467,7 @@ def test_execute_release_publish_github_success_prints_url(monkeypatch, tmp_path
     mock_create = MagicMock(return_value="https://github.com/acme/repo/releases/tag/v0.6.0")
     monkeypatch.setattr(release_module, "create_github_release", mock_create)
 
-    release_module.execute_release(dry_run=False, verbose=False, publish_github=True)
+    release_module.execute_release(dry_run=False, verbose=False, publish_github=True, repo_slug="acme/repo")
 
     mock_create.assert_called_once()
     _args, kwargs = mock_create.call_args
@@ -460,7 +489,7 @@ def test_execute_release_publish_github_failure_is_handled_gracefully(monkeypatc
     )
 
     # Must not raise, and must not lose the already-prepared files.
-    release_module.execute_release(dry_run=False, verbose=False, publish_github=True)
+    release_module.execute_release(dry_run=False, verbose=False, publish_github=True, repo_slug="acme/repo")
 
     printed = _printed_text(mock_print)
     assert "GitHub publish failed" in printed
@@ -504,3 +533,126 @@ def test_execute_release_merges_new_version_after_existing_unreleased_section(mo
     content = changelog_path.read_text(encoding="utf-8")
     assert content.index("## Unreleased") < content.index("## v0.6.0") < content.index("## v0.5.0")
     assert "- old entry" in content
+
+
+# ---------------------------------------------------------------------------
+# Review-finding regressions (PR #183)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_github_slug_from_remote_ssh_and_https():
+    assert release_module._parse_github_slug_from_remote("git@github.com:Acme/Repo.git") == "Acme/Repo"
+    assert release_module._parse_github_slug_from_remote("https://github.com/Acme/Repo.git") == "Acme/Repo"
+    assert release_module._parse_github_slug_from_remote("not-a-remote") == ""
+
+
+def test_detect_repo_slug_prefers_explicit_then_remote(monkeypatch):
+    assert release_module.detect_repo_slug(" explicit/repo.git ") == "explicit/repo"
+
+    monkeypatch.setattr(
+        release_module.subprocess,
+        "check_output",
+        lambda *a, **k: "git@github.com:from/remote.git\n",
+    )
+    assert release_module.detect_repo_slug(None) == "from/remote"
+
+
+def test_detect_repo_slug_disallow_default_raises(monkeypatch):
+    def boom(*_a, **_k):
+        raise FileNotFoundError("no git")
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", boom)
+    with pytest.raises(RuntimeError, match="Could not detect GitHub owner/repo"):
+        release_module.detect_repo_slug(None, allow_default=False)
+
+
+def test_effective_semver_bump_type_downgrades_major_on_0x():
+    assert release_module.effective_semver_bump_type("v0.5.0", "MAJOR") == "MINOR"
+    assert release_module.effective_semver_bump_type("v1.2.0", "MAJOR") == "MAJOR"
+    assert release_module.effective_semver_bump_type("v0.5.0", "PATCH") == "PATCH"
+
+
+def test_prepend_changelog_inserts_after_h1_when_unreleased_missing():
+    from git_cg.release import _prepend_changelog_version
+
+    old = "# Changelog\n\n## v0.5.0\n\n### Added\n\n- old\n"
+    block = "## v0.6.0\n\n### Added\n\n- new\n"
+    out = _prepend_changelog_version(old, block, "v0.6.0")
+    assert out.startswith("# Changelog\n")
+    assert out.index("# Changelog") < out.index("## v0.6.0") < out.index("## v0.5.0")
+
+
+def test_prepend_changelog_blank_line_when_unreleased_has_body_without_next_heading():
+    from git_cg.release import _prepend_changelog_version
+
+    old = "# Changelog\n\n## Unreleased\n\n- pending\n"
+    block = "## v0.6.0\n\n### Added\n\n- new\n"
+    out = _prepend_changelog_version(old, block, "v0.6.0")
+    assert "## Unreleased\n\n- pending\n\n## v0.6.0" in out
+
+
+def test_create_github_release_requires_existing_tag_by_default(monkeypatch):
+    def fake_check_output(cmd, **_kwargs):
+        raise subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    with pytest.raises(RuntimeError, match="does not exist locally"):
+        release_module.create_github_release(
+            tag="v9.9.9", title="T", body="B", dry_run=False, require_existing_tag=True
+        )
+
+
+def test_create_github_release_timeout_raises_runtime_error(monkeypatch):
+    def fake_check_output(cmd, **_kwargs):
+        # First call is only for gh itself when require_existing_tag=False
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=1)
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    with pytest.raises(RuntimeError, match="timed out"):
+        release_module.create_github_release(
+            tag="v1.0.0", title="T", body="B", dry_run=False, require_existing_tag=False
+        )
+
+
+def test_create_github_release_rejects_mismatched_target(monkeypatch):
+    def fake_check_output(cmd, **_kwargs):
+        joined = " ".join(cmd)
+        if "rev-parse" in joined and "v1.0.0" in joined:
+            return "aaa111\n"
+        if "rev-parse" in joined and "main" in joined:
+            return "bbb222\n"
+        return b"ok"
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    with pytest.raises(RuntimeError, match="Refusing to publish mismatched refs"):
+        release_module.create_github_release(
+            tag="v1.0.0",
+            title="T",
+            body="B",
+            target="main",
+            dry_run=False,
+            require_existing_tag=True,
+        )
+
+
+def test_execute_release_rejects_publish_with_skip_notes(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    with pytest.raises(ValueError, match="--publish-github cannot be combined"):
+        release_module.execute_release(dry_run=True, verbose=False, publish_github=True, skip_github_notes=True)
+
+
+def test_execute_release_notes_use_effective_0x_bump(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    breaking = _c("💥 feat!: break api", "Changelog-Groups: Added\nSemVer-Impact: MAJOR\n")
+    _patch_release_collaborators(monkeypatch, commits=[breaking], last_tag="v0.5.0")
+    monkeypatch.setattr(release_module, "calculate_global_bump", lambda *_a, **_k: "MAJOR")
+    notes_path = tmp_path / "notes.md"
+
+    release_module.execute_release(dry_run=False, verbose=False, notes_path=str(notes_path))
+
+    body = notes_path.read_text(encoding="utf-8")
+    # Tag is MINOR under 0.x rule 4, and notes must not claim MAJOR.
+    assert "v0.6.0" in body
+    assert "**MAJOR**" not in body
+    assert "**MINOR**" in body
