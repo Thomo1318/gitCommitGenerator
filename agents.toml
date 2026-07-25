@@ -59,6 +59,194 @@ source = "mandarange/MaraudersMapMD-skill"
 name = "marauders-factcheck-skill"
 source = "mandarange/Marauders_FactCheck_Skill"
 
+[[skills]]
+name = "api-patterns"
+source = "path:.agents/skills/api-patterns"
+
+[[skills]]
+name = "app-builder"
+source = "path:.agents/skills/app-builder"
+
+[[skills]]
+name = "architecture"
+source = "path:.agents/skills/architecture"
+
+[[skills]]
+name = "bash-linux"
+source = "path:.agents/skills/bash-linux"
+
+[[skills]]
+name = "batch-operations"
+source = "path:.agents/skills/batch-operations"
+
+[[skills]]
+name = "behavioral-modes"
+source = "path:.agents/skills/behavioral-modes"
+
+[[skills]]
+name = "brainstorming"
+source = "path:.agents/skills/brainstorming"
+
+[[skills]]
+name = "clean-code"
+source = "path:.agents/skills/clean-code"
+
+[[skills]]
+name = "code-review-checklist"
+source = "path:.agents/skills/code-review-checklist"
+
+[[skills]]
+name = "code-review-graph"
+source = "tirth8205/code-review-graph"
+
+[[skills]]
+name = "context-compression"
+source = "path:.agents/skills/context-compression"
+
+[[skills]]
+name = "coordinator-mode"
+source = "path:.agents/skills/coordinator-mode"
+
+[[skills]]
+name = "database-design"
+source = "path:.agents/skills/database-design"
+
+[[skills]]
+name = "deployment-procedures"
+source = "path:.agents/skills/deployment-procedures"
+
+[[skills]]
+name = "design-spec"
+source = "path:.agents/skills/design-spec"
+
+[[skills]]
+name = "documentation-templates"
+source = "path:.agents/skills/documentation-templates"
+
+[[skills]]
+name = "frontend-architecture"
+source = "path:.agents/skills/frontend-architecture"
+
+[[skills]]
+name = "frontend-design"
+source = "path:.agents/skills/frontend-design"
+
+[[skills]]
+name = "game-development"
+source = "path:.agents/skills/game-development"
+
+[[skills]]
+name = "geo-fundamentals"
+source = "path:.agents/skills/geo-fundamentals"
+
+[[skills]]
+name = "i18n-localization"
+source = "path:.agents/skills/i18n-localization"
+
+[[skills]]
+name = "intelligent-routing"
+source = "path:.agents/skills/intelligent-routing"
+
+[[skills]]
+name = "lint-and-validate"
+source = "path:.agents/skills/lint-and-validate"
+
+[[skills]]
+name = "mcp-builder"
+source = "path:.agents/skills/mcp-builder"
+
+[[skills]]
+name = "memory-system"
+source = "path:.agents/skills/memory-system"
+
+[[skills]]
+name = "mobile-design"
+source = "path:.agents/skills/mobile-design"
+
+[[skills]]
+name = "nextjs-react-expert"
+source = "path:.agents/skills/nextjs-react-expert"
+
+[[skills]]
+name = "nodejs-best-practices"
+source = "path:.agents/skills/nodejs-best-practices"
+
+[[skills]]
+name = "parallel-agents"
+source = "path:.agents/skills/parallel-agents"
+
+[[skills]]
+name = "performance-profiling"
+source = "path:.agents/skills/performance-profiling"
+
+[[skills]]
+name = "plan-writing"
+source = "path:.agents/skills/plan-writing"
+
+[[skills]]
+name = "powershell-windows"
+source = "path:.agents/skills/powershell-windows"
+
+[[skills]]
+name = "python-patterns"
+source = "path:.agents/skills/python-patterns"
+
+[[skills]]
+name = "red-team-tactics"
+source = "path:.agents/skills/red-team-tactics"
+
+[[skills]]
+name = "rust-pro"
+source = "path:.agents/skills/rust-pro"
+
+[[skills]]
+name = "seo-fundamentals"
+source = "path:.agents/skills/seo-fundamentals"
+
+[[skills]]
+name = "server-management"
+source = "path:.agents/skills/server-management"
+
+[[skills]]
+name = "simplify-code"
+source = "path:.agents/skills/simplify-code"
+
+[[skills]]
+name = "skillify"
+source = "path:.agents/skills/skillify"
+
+[[skills]]
+name = "systematic-debugging"
+source = "path:.agents/skills/systematic-debugging"
+
+[[skills]]
+name = "tailwind-patterns"
+source = "path:.agents/skills/tailwind-patterns"
+
+[[skills]]
+name = "tdd-workflow"
+source = "path:.agents/skills/tdd-workflow"
+
+[[skills]]
+name = "testing-patterns"
+source = "path:.agents/skills/testing-patterns"
+
+[[skills]]
+name = "verify-changes"
+source = "path:.agents/skills/verify-changes"
+
+[[skills]]
+name = "vulnerability-scanner"
+source = "path:.agents/skills/vulnerability-scanner"
+
+[[skills]]
+name = "web-design-guidelines"
+source = "path:.agents/skills/web-design-guidelines"
+
+[[skills]]
+name = "webapp-testing"
+source = "path:.agents/skills/webapp-testing"
+
 [[mcp]]
 name = "deepwiki"
 url = "https://mcp.deepwiki.com/mcp"
