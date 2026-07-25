@@ -152,6 +152,19 @@ def test_prepend_changelog_inserts_after_unreleased():
 # ---------------------------------------------------------------------------
 
 
+def test_prepend_changelog_does_not_treat_prerelease_heading_as_final():
+    """## v0.6.0-rc.1 must not suppress insertion of ## v0.6.0."""
+    from git_cg.release import _prepend_changelog_version
+
+    old = "# Changelog\n\n## Unreleased\n\n## v0.6.0-rc.1\n\n### Added\n\n- rc only\n"
+    block = "## v0.6.0\n\n### Added\n\n- final\n"
+    out = _prepend_changelog_version(old, block, "v0.6.0")
+    assert "## v0.6.0\n" in out
+    assert out.index("## v0.6.0\n") < out.index("## v0.6.0-rc.1")
+    # exact final heading present as its own line
+    assert any(line.strip() == "## v0.6.0" for line in out.splitlines())
+
+
 def test_format_release_title_default_theme_when_empty():
     title = format_release_title(new_tag="v1.0.0", theme="")
     assert title == "🚀 git-cg v1.0.0: Release"
@@ -401,12 +414,15 @@ def _printed_text(mock_print: MagicMock) -> str:
 def test_execute_release_skip_github_notes_only_updates_changelog(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    mock_detect = MagicMock(side_effect=AssertionError("detect_repo_slug must not run on skip_github_notes"))
+    monkeypatch.setattr(release_module, "detect_repo_slug", mock_detect)
 
     release_module.execute_release(dry_run=False, verbose=False, skip_github_notes=True)
 
     changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "## v0.6.0" in changelog
     assert not (tmp_path / ".git").exists()
+    mock_detect.assert_not_called()
 
 
 def test_execute_release_dry_run_writes_no_files(monkeypatch, tmp_path):
@@ -444,7 +460,7 @@ def test_execute_release_writes_notes_file_at_custom_path_when_not_skipped(monke
     assert notes_path.exists()
     body = notes_path.read_text(encoding="utf-8")
     assert "## 📝 Release Notes" in body
-    assert "compare/v0.5.0...v0.6.0" in body or "v0.6.0" in body
+    assert "compare/v0.5.0...v0.6.0" in body
     changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "## v0.6.0" in changelog
 
