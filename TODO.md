@@ -103,6 +103,8 @@ TODO:
 
 TODO:
 
+- force `sd` instead of `sed`
+
 - Review [fitinprogress](https://open-vsx.org/vscode/item?itemName=YusukeAbe.gitinprogress) to identify features to include in `git-cg`
 
 - With the planned config integration make the majority of the app's functions be able to toggle on/off
@@ -425,7 +427,6 @@ Your API keys sit in the hardware-backed iOS keychain and are sent only to the s
 
 ---
 
-- [ ] Install and test this [Codegraph](https://github.com/colbymchenry/codegraph)
 
 ---
 
