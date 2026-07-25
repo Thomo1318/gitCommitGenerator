@@ -15,6 +15,7 @@ DEVELOPMENT_MD = REPO_ROOT / "DEVELOPMENT.md"
 ADR_0002 = REPO_ROOT / "docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md"
 README_MD = REPO_ROOT / "README.md"
 CHANGELOG_MD = REPO_ROOT / "CHANGELOG.md"
+USAGE_MD = REPO_ROOT / "docs/usage.md"
 
 
 def _read_development_md() -> str:
@@ -631,3 +632,95 @@ class TestChangelogUnreleasedIssue177Entries:
         assert "## v0.5.0" in content
         v0_5_0_section = content.split("## v0.5.0", 1)[1]
         assert "### ✨ Features" in v0_5_0_section
+
+
+# ===========================================================================
+# docs/usage.md — `git-cg release` gold-standard GitHub notes flags (#181)
+# ===========================================================================
+
+
+class TestUsageMdReleaseFlags:
+    """Tests for the expanded 'git-cg release' flags section (Issue #181)."""
+
+    def _content(self) -> str:
+        """Return UTF-8 contents of docs/usage.md."""
+        return USAGE_MD.read_text(encoding="utf-8")
+
+    def _release_section(self) -> str:
+        """Return the `git-cg release` section body, up to the next top-level heading."""
+        content = self._content()
+        return content.split("## `git-cg release`", 1)[1].split("## Semantic context", 1)[0]
+
+    def test_file_exists(self):
+        assert USAGE_MD.is_file()
+
+    def test_usage_line_uses_generic_flags_placeholder(self):
+        """The old literal `[--pre-release <IDENTIFIER>]` usage line is replaced by `[FLAGS]`."""
+        content = self._content()
+        assert "- **Usage**: `git-cg release [FLAGS]`" in content
+        assert "- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`" not in content
+
+    def test_description_mentions_gold_standard_release_notes(self):
+        content = self._content()
+        assert "**gold-standard GitHub Release notes**" in content
+        assert "boundary table, highlights, grouped What\u2019s Changed, compare links" in content
+
+    def test_flags_heading_present(self):
+        section = self._release_section()
+        assert section.strip().startswith("### Flags")
+
+    def test_dry_run_flag_documented(self):
+        section = self._release_section()
+        assert "#### `-d --dry-run`" in section
+        assert "Print planned changelog and GitHub notes without writing files or publishing." in section
+
+    def test_verbose_flag_documented(self):
+        section = self._release_section()
+        assert "#### `-v --verbose`" in section
+        assert "Enable verbose output." in section
+
+    def test_pre_release_flag_still_documented(self):
+        section = self._release_section()
+        assert "#### `--pre-release <IDENTIFIER>`" in section
+        assert "Add or bump a pre-release identifier (e.g., 'alpha', 'rc')" in section
+
+    def test_theme_flag_documented_with_example(self):
+        section = self._release_section()
+        assert "#### `--theme <THEME>`" in section
+        assert "Semantic Context integration" in section
+        assert "🚀 git-cg vX.Y.Z: Semantic Context integration" in section
+
+    def test_notes_file_flag_documents_default_path(self):
+        section = self._release_section()
+        assert "#### `--notes-file <PATH>`" in section
+        assert ".git/GIT_CG_RELEASE_NOTES_<tag>.md" in section
+
+    def test_publish_github_flag_documents_prerelease_default(self):
+        section = self._release_section()
+        assert "#### `--publish-github`" in section
+        assert "Create the GitHub Release via `gh` after preparing files (requires auth)." in section
+        assert "Default marks the release as **pre-release**." in section
+
+    def test_github_latest_flag_documented(self):
+        section = self._release_section()
+        assert "#### `--github-latest`" in section
+        assert "mark the GitHub release as latest (not pre-release)" in section
+
+    def test_skip_github_notes_flag_documented(self):
+        section = self._release_section()
+        assert "#### `--skip-github-notes`" in section
+        assert "Only bump versions / CHANGELOG; skip gold-standard GitHub notes assembly." in section
+
+    def test_flags_appear_in_declared_order(self):
+        """Flags must be documented in the same order they are declared in main.py's release() signature."""
+        section = self._release_section()
+        assert (
+            section.index("-d --dry-run")
+            < section.index("-v --verbose")
+            < section.index("--pre-release")
+            < section.index("--theme")
+            < section.index("--notes-file")
+            < section.index("--publish-github")
+            < section.index("--github-latest")
+            < section.index("--skip-github-notes")
+        )

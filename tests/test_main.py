@@ -588,3 +588,117 @@ def test_generate_commit_message_without_active_directives_leaves_scope_unset():
     result = generate_commit_message(client, "diff --git a/x b/x", "gpt-test", "system prompt")
 
     assert result.primary_intent.scope is None
+
+
+# ---------------------------------------------------------------------------
+# release() CLI command — new gold-standard GitHub notes flags wiring
+# (Issue #181: --theme, --notes-file, --publish-github, --github-latest,
+# --skip-github-notes now map into execute_release()).
+# ---------------------------------------------------------------------------
+
+
+@patch("git_cg.release.execute_release")
+def test_release_command_maps_all_new_flags_to_execute_release(mock_execute_release):
+    from git_cg.main import release
+
+    release(
+        dry_run=True,
+        verbose=True,
+        pre_release="alpha",
+        theme="My Theme",
+        notes_file="/tmp/notes.md",
+        publish_github=True,
+        github_latest=False,
+        skip_github_notes=False,
+    )
+
+    mock_execute_release.assert_called_once_with(
+        dry_run=True,
+        verbose=True,
+        pre_release="alpha",
+        theme="My Theme",
+        notes_path="/tmp/notes.md",
+        publish_github=True,
+        github_prerelease=True,
+        skip_github_notes=False,
+    )
+
+
+@patch("git_cg.release.execute_release")
+def test_release_command_github_latest_inverts_to_prerelease_false(mock_execute_release):
+    """--github-latest must map to github_prerelease=False (the inverse)."""
+    from git_cg.main import release
+
+    release(
+        dry_run=False,
+        verbose=False,
+        pre_release=None,
+        theme=None,
+        notes_file=None,
+        publish_github=True,
+        github_latest=True,
+        skip_github_notes=False,
+    )
+
+    _args, kwargs = mock_execute_release.call_args
+    assert kwargs["github_prerelease"] is False
+
+
+@patch("git_cg.release.execute_release")
+def test_release_command_default_github_latest_false_keeps_prerelease_true(mock_execute_release):
+    """When --github-latest is not passed, the release must default to pre-release=True."""
+    from git_cg.main import release
+
+    release(
+        dry_run=False,
+        verbose=False,
+        pre_release=None,
+        theme=None,
+        notes_file=None,
+        publish_github=False,
+        github_latest=False,
+        skip_github_notes=False,
+    )
+
+    _args, kwargs = mock_execute_release.call_args
+    assert kwargs["github_prerelease"] is True
+
+
+@patch("git_cg.release.execute_release")
+def test_release_command_skip_github_notes_passed_through(mock_execute_release):
+    from git_cg.main import release
+
+    release(
+        dry_run=False,
+        verbose=False,
+        pre_release=None,
+        theme=None,
+        notes_file=None,
+        publish_github=False,
+        github_latest=False,
+        skip_github_notes=True,
+    )
+
+    _args, kwargs = mock_execute_release.call_args
+    assert kwargs["skip_github_notes"] is True
+
+
+@patch("git_cg.release.execute_release")
+def test_release_command_notes_file_none_maps_to_notes_path_none(mock_execute_release):
+    """When --notes-file is omitted, notes_path must be passed through as None (library default applies)."""
+    from git_cg.main import release
+
+    release(
+        dry_run=False,
+        verbose=False,
+        pre_release=None,
+        theme=None,
+        notes_file=None,
+        publish_github=False,
+        github_latest=False,
+        skip_github_notes=False,
+    )
+
+    _args, kwargs = mock_execute_release.call_args
+    assert kwargs["notes_path"] is None
+    assert kwargs["theme"] is None
