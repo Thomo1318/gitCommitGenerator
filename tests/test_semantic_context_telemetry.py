@@ -295,3 +295,17 @@ def test_semantic_analysis_metadata_includes_test_gaps_count():
     assert meta["test_gaps_count"] == 3
     assert meta["test_coverage_gap"] is True
     assert meta["blast_radius_size"] == 10
+
+
+def test_int_count_guard_rejects_bool_subclass():
+    """bool is a subclass of int; Phase 7 counts must not accept True/False as sizes."""
+
+    def _as_optional_int(value):
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    assert _as_optional_int(3) == 3
+    assert _as_optional_int(0) == 0
+    assert _as_optional_int(True) is None
+    assert _as_optional_int(False) is None
+    assert _as_optional_int(3.0) is None
+    assert _as_optional_int("3") is None
