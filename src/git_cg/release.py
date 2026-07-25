@@ -1059,6 +1059,20 @@ def execute_release(
     if publish_github and skip_github_notes:
         raise ValueError("--publish-github cannot be combined with --skip-github-notes")
 
+    # Preflight repo slug before any version/changelog mutations whenever GitHub
+    # notes will be assembled (including --publish-github). Changelog-only runs
+    # that skip notes still avoid git/gh detection work.
+    resolved_repo_slug: str | None = None
+    docs_url: str | None = None
+    if not skip_github_notes:
+        try:
+            # Publishing must not silently target the hardcoded default repo.
+            resolved_repo_slug = detect_repo_slug(repo_slug, allow_default=not publish_github)
+        except RuntimeError as exc:
+            console.print(f"[bold red]GitHub repository detection failed:[/bold red] {exc}")
+            return
+        docs_url = default_docs_changelog_url(resolved_repo_slug)
+
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
 
@@ -1149,14 +1163,8 @@ def execute_release(
             )
         return
 
-    try:
-        # Publishing must not silently target the hardcoded default repo.
-        # Deferred past skip_github_notes so changelog-only runs avoid git/gh work.
-        resolved_repo_slug = detect_repo_slug(repo_slug, allow_default=not publish_github)
-    except RuntimeError as exc:
-        console.print(f"[bold red]GitHub repository detection failed:[/bold red] {exc}")
-        return
-    docs_url = default_docs_changelog_url(resolved_repo_slug)
+    # resolved_repo_slug / docs_url were preflighted above when notes are enabled.
+    assert resolved_repo_slug is not None and docs_url is not None
 
     resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
     title = format_release_title(new_tag=new_tag, theme=resolved_theme)

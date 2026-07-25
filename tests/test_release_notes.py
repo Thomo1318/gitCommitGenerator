@@ -425,6 +425,23 @@ def test_execute_release_skip_github_notes_only_updates_changelog(monkeypatch, t
     mock_detect.assert_not_called()
 
 
+def test_execute_release_repo_slug_failure_before_mutations_writes_nothing(monkeypatch, tmp_path):
+    """Failed repo detection must abort before version/changelog mutations when notes are enabled."""
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    mock_detect = MagicMock(side_effect=RuntimeError("no remote"))
+    mock_inject = MagicMock()
+    monkeypatch.setattr(release_module, "detect_repo_slug", mock_detect)
+    monkeypatch.setattr(release_module, "inject_file_versions", mock_inject)
+
+    release_module.execute_release(dry_run=False, verbose=False, publish_github=True, repo_slug=None)
+
+    mock_detect.assert_called_once()
+    mock_inject.assert_not_called()
+    assert not (tmp_path / "CHANGELOG.md").exists()
+    assert not (tmp_path / ".git").exists()
+
+
 def test_execute_release_dry_run_writes_no_files(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
