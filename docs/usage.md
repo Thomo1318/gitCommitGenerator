@@ -58,15 +58,43 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
-- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
+- **Usage**: `git-cg release [FLAGS]`
 
-Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
+Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, update Changelog, and assemble **gold-standard GitHub Release notes** (boundary table, highlights, grouped What’s Changed, compare links).
 
 ### Flags
+
+#### `-d --dry-run`
+
+Print planned changelog and GitHub notes without writing files or publishing.
+
+#### `-v --verbose`
+
+Enable verbose output.
 
 #### `--pre-release <IDENTIFIER>`
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
+
+#### `--theme <THEME>`
+
+GitHub release title theme after the version (e.g. `Semantic Context integration` → `🚀 git-cg vX.Y.Z: Semantic Context integration`).
+
+#### `--notes-file <PATH>`
+
+Write gold-standard GitHub release notes markdown to this path (default: `.git/GIT_CG_RELEASE_NOTES_<tag>.md`).
+
+#### `--publish-github`
+
+Create the GitHub Release via `gh` after preparing files (requires auth). Default marks the release as **pre-release**.
+
+#### `--github-latest`
+
+When publishing, mark the GitHub release as latest (not pre-release).
+
+#### `--skip-github-notes`
+
+Only bump versions / CHANGELOG; skip gold-standard GitHub notes assembly.
 
 ## Semantic context (Phase 7)
 
