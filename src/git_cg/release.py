@@ -987,7 +987,8 @@ def _prepend_changelog_version(old_content: str, changelog_str: str, new_tag: st
     """
     tag = new_tag if new_tag.startswith("v") else f"v{new_tag}"
     block = changelog_str if changelog_str.endswith("\n") else changelog_str + "\n"
-    if f"## {tag}" in old_content:
+    # Match a full heading line only — avoid treating ## v0.6.0-rc.1 as ## v0.6.0.
+    if re.search(rf"(?m)^## {re.escape(tag)}\s*$", old_content):
         return old_content
 
     if old_content.startswith("# Changelog") and "## Unreleased" in old_content:
@@ -1057,14 +1058,6 @@ def execute_release(
     """
     if publish_github and skip_github_notes:
         raise ValueError("--publish-github cannot be combined with --skip-github-notes")
-
-    try:
-        # Publishing must not silently target the hardcoded default repo.
-        resolved_repo_slug = detect_repo_slug(repo_slug, allow_default=not publish_github)
-    except RuntimeError as exc:
-        console.print(f"[bold red]GitHub repository detection failed:[/bold red] {exc}")
-        return
-    docs_url = default_docs_changelog_url(resolved_repo_slug)
 
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
@@ -1155,6 +1148,15 @@ def execute_release(
                 f"and `git tag {new_tag}` to finish.[/bold yellow]"
             )
         return
+
+    try:
+        # Publishing must not silently target the hardcoded default repo.
+        # Deferred past skip_github_notes so changelog-only runs avoid git/gh work.
+        resolved_repo_slug = detect_repo_slug(repo_slug, allow_default=not publish_github)
+    except RuntimeError as exc:
+        console.print(f"[bold red]GitHub repository detection failed:[/bold red] {exc}")
+        return
+    docs_url = default_docs_changelog_url(resolved_repo_slug)
 
     resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
     title = format_release_title(new_tag=new_tag, theme=resolved_theme)
