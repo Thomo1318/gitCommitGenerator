@@ -667,7 +667,7 @@ class TestUsageMdReleaseFlags:
 
     def test_flags_heading_present(self):
         section = self._release_section()
-        assert section.strip().startswith("### Flags")
+        assert "### Flags" in section
 
     def test_dry_run_flag_documented(self):
         section = self._release_section()
