@@ -573,10 +573,19 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
 
 
 class TestChangelogUnreleasedIssue177Entries:
-    """Tests for the new '## Unreleased' section documenting the #177 dependency/Actions work."""
+    """Tests for CHANGELOG structure after #177 work landed under v0.6.0.
+
+    Historically these assertions targeted a populated ``## Unreleased`` block.
+    That content was cut into ``## v0.6.0``; keep Unreleased as the leading
+    placeholder and assert #177 evidence on the v0.6.0 section instead.
+    """
 
     def _content(self) -> str:
         return _read_changelog_md()
+
+    def _v0_6_0_section(self) -> str:
+        content = self._content()
+        return content.split("## v0.6.0", 1)[1].split("## v0.5.0", 1)[0]
 
     def test_file_exists(self):
         assert CHANGELOG_MD.is_file()
@@ -588,46 +597,35 @@ class TestChangelogUnreleasedIssue177Entries:
         # Unreleased remains the first release section after the document H1.
         assert content.index("# Changelog") < content.index("## Unreleased")
 
-    def test_unreleased_precedes_v0_5_0(self):
+    def test_unreleased_precedes_version_sections(self):
         content = self._content()
-        assert content.index("## Unreleased") < content.index("## v0.5.0")
+        assert content.index("## Unreleased") < content.index("## v0.6.0") < content.index("## v0.5.0")
 
-    def test_security_dependencies_subheading_present(self):
+    def test_unreleased_section_has_no_bullets(self):
+        """Unreleased is a placeholder once v0.6.0 absorbed the staged entries."""
         content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
+        section = content.split("## Unreleased", 1)[1].split("## v0.6.0", 1)[0]
+        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
+        assert bullet_lines == []
+
+    def test_v0_6_0_security_dependencies_subheading_present(self):
+        section = self._v0_6_0_section()
         assert "### 🔒️ Security / Dependencies" in section
 
-    def test_all_expected_bullet_entries_present(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        expected_bullets = [
-            "📝 docs(dev-guide): record #177 WP6 ruff/hk and upstream blocker deferrals (#177) (#158)",
-            "⬆️ build(deps): bump tree-sitter 0.25.2 → 0.26.0; keep language-pack 0.13 under CRG `<1` cap (#177) (#158)",
-            "⬆️ build(deps): bump pytest 9.0.3 → 9.1.1 (#177) (#158)",
-            "⬆️ build(deps): bump code-review-graph 2.3.6 → 2.3.7 (#177) (#158)",
-            "👷 ci(deps): stage GitHub Actions majors with full SHA pins (#177) (#158)",
-            "🔒️ fix(deps): raise pytest/tree-sitter/rich floors toward lock (#177) (#158)",
+    def test_v0_6_0_retains_issue_177_dependency_work(self):
+        section = self._v0_6_0_section()
+        expected_fragments = [
+            "(#177)",
+            "python-dotenv",
+            "GitHub Actions",
+            "pytest",
+            "code-review-graph",
         ]
-        for bullet in expected_bullets:
-            assert bullet in section, bullet
-
-    def test_unreleased_section_has_exactly_six_bullets(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
-        assert len(bullet_lines) == 6
-
-    def test_every_bullet_references_issue_177_and_epic_158(self):
-        content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
-        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
-        assert bullet_lines
-        for line in bullet_lines:
-            assert "(#177)" in line, line
-            assert "(#158)" in line, line
+        for fragment in expected_fragments:
+            assert fragment in section, fragment
 
     def test_v0_5_0_section_still_follows_with_features_heading(self):
-        """The pre-existing v0.5.0 release section must be preserved unchanged below Unreleased."""
+        """The pre-existing v0.5.0 release section must be preserved below newer cuts."""
         content = self._content()
         assert "## v0.5.0" in content
         v0_5_0_section = content.split("## v0.5.0", 1)[1]
