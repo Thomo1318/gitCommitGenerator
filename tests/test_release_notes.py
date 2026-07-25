@@ -25,6 +25,16 @@ MOCK_GITMOJI_MATRIX = [
 
 
 def _c(subject: str, body: str = "") -> str:
+    """
+    Format a commit subject and body as a test commit string.
+    
+    Parameters:
+    	subject (str): The commit subject.
+    	body (str): The commit body.
+    
+    Returns:
+    	str: The formatted commit string.
+    """
     return f"{subject}\n---COMMIT_BODY---\n{body}\n"
 
 

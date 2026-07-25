@@ -380,6 +380,14 @@ class ReleaseNotesInput:
 
 
 def _normalise_tag(tag: str) -> str:
+    """Normalise a release tag by trimming whitespace and ensuring it starts with ``v``.
+    
+    Parameters:
+    	tag (str): The release tag to normalise.
+    
+    Returns:
+    	str: The normalised tag, or an empty string when no tag is provided.
+    """
     tag = (tag or "").strip()
     if not tag:
         return ""
@@ -387,6 +395,15 @@ def _normalise_tag(tag: str) -> str:
 
 
 def _version_display(tag: str) -> str:
+    """
+    Return a release tag without its leading `v` prefix.
+    
+    Parameters:
+    	tag (str): The release tag to format.
+    
+    Returns:
+    	str: The normalised tag without a leading `v`.
+    """
     t = _normalise_tag(tag)
     return t[1:] if t.startswith("v") else t
 
@@ -408,6 +425,14 @@ def format_release_title(*, new_tag: str, theme: str) -> str:
 
 
 def _subject_from_commit(commit: str) -> str:
+    """Extract the subject line from a formatted commit string.
+    
+    Parameters:
+    	commit (str): A commit string containing an optional body delimiter.
+    
+    Returns:
+    	str: The trimmed commit subject.
+    """
     parts = commit.split("---COMMIT_BODY---", 1)
     return parts[0].strip()
 
@@ -483,6 +508,16 @@ def format_changelog_markdown(
 
 
 def _default_boundary_rows(*, bump_type: str, theme: str) -> tuple[list[str], list[str]]:
+    """
+    Build default in-scope and out-of-scope release boundary rows.
+    
+    Parameters:
+    	bump_type (str): The calculated semantic version impact.
+    	theme (str): The release theme used in the in-scope description.
+    
+    Returns:
+    	tuple[list[str], list[str]]: In-scope and out-of-scope release boundary rows.
+    """
     theme_bit = theme.strip() or "this release"
     in_scope = [
         f"{theme_bit} (calculated SemVer impact: **{bump_type}**)",
@@ -499,6 +534,17 @@ def _default_boundary_rows(*, bump_type: str, theme: str) -> tuple[list[str], li
 
 
 def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> list[str]:
+    """
+    Build default release highlights for the specified release.
+    
+    Parameters:
+    	bump_type (str): The semantic version impact level for the release.
+    	theme (str): The release theme used in the primary highlight.
+    	commit_count (int): The number of commits included since the previous tag.
+    
+    Returns:
+    	list[str]: Three Markdown-formatted release highlight statements.
+    """
     return [
         f"**{theme.strip() or 'Release'}** — prepared as a **{bump_type}** cut from {commit_count} commit(s) since the previous tag.",
         "**Trailer-authoritative grouping** — `Changelog-Groups` / `SemVer-Impact` drive notes when present; gitmoji matrix remains the legacy fallback.",
@@ -508,11 +554,13 @@ def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> lis
 
 def build_github_release_notes(data: ReleaseNotesInput) -> str:
     """
-    Assemble the gold-standard GitHub Release markdown body.
-
-    Structure mirrors recent house releases (v0.5.0 / v0.6.0): welcome blurb,
-    boundary table, invariant, highlights, optional DX section, grouped What's
-    Changed, docs changelog link, and compare URL.
+    Assemble a structured GitHub Release markdown body.
+    
+    Parameters:
+    	data (ReleaseNotesInput): Release metadata, scope details, highlights, and commit information.
+    
+    Returns:
+    	str: Formatted GitHub Release notes in Markdown.
     """
     new_tag = _normalise_tag(data.new_tag)
     prev = _normalise_tag(data.previous_tag) if data.previous_tag else ""
@@ -707,7 +755,17 @@ def create_github_release(
 
 
 def resolve_release_theme(theme: str | None, *, bump_type: str, commits: list[str]) -> str:
-    """Pick a short theme phrase for the release title."""
+    """
+    Pick a concise theme phrase for the release title.
+    
+    Parameters:
+        theme (str | None): Optional theme supplied for the release.
+        bump_type (str): SemVer impact level used when no theme can be inferred.
+        commits (list[str]): Commit messages inspected for a feature summary.
+    
+    Returns:
+        str: The normalised theme, an inferred feature summary, or a fallback release description.
+    """
     if theme and theme.strip():
         return " ".join(theme.split()).strip(" :")
     type_prefix = re.compile(r"^\S+\s+[a-z]+(?:\([^)]*\))?:\s*")
@@ -725,7 +783,15 @@ def resolve_release_theme(theme: str | None, *, bump_type: str, commits: list[st
 
 
 def validate_release(new_tag: str) -> bool:
-    """Ensure the new tag does not already exist locally or remotely."""
+    """
+    Check whether a release tag is available for use.
+    
+    Parameters:
+        new_tag (str): Tag name to validate.
+    
+    Returns:
+        bool: `True` if the tag is not found locally, `False` if it already exists locally.
+    """
     try:
         subprocess.check_call(["git", "fetch", "--tags"], stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
@@ -750,9 +816,15 @@ def validate_release(new_tag: str) -> bool:
 
 def _prepend_changelog_version(old_content: str, changelog_str: str, new_tag: str) -> str:
     """
-    Merge a new version block into CHANGELOG.md content.
-
-    Prefer inserting after an existing ``## Unreleased`` section; otherwise prepend.
+    Merge a new version block into existing CHANGELOG.md content.
+    
+    Parameters:
+        old_content (str): Existing changelog content.
+        changelog_str (str): Markdown block for the new version.
+        new_tag (str): Version tag to insert, with or without a leading ``v``.
+    
+    Returns:
+        str: Changelog content with the new version block inserted, or the original content if the version is already present.
     """
     tag = new_tag if new_tag.startswith("v") else f"v{new_tag}"
     if f"## {tag}" in old_content:
@@ -787,22 +859,22 @@ def execute_release(
     skip_github_notes: bool = False,
 ):
     """
-    Prepare a release from the commits since the last Git tag.
-
-    Determines the required SemVer bump, updates configured version fields, and
-    prepends a generated changelog entry to CHANGELOG.md unless dry-run mode is
-    enabled. Also assembles gold-standard GitHub Release notes (Issue #181).
-
+    Prepare a release from commits since the latest Git tag.
+    
+    Calculates the release version, updates configured version fields, updates
+    CHANGELOG.md, and prepares GitHub release notes. In dry-run mode, reports the
+    planned changes without writing files or publishing a release.
+    
     Parameters:
         dry_run: Simulate the release without writing files or publishing.
         verbose: Emit additional progress output.
-        pre_release: Optional pre-release identifier to apply to the generated version.
-        theme: Optional GitHub release title theme (after ``vX.Y.Z:``).
-        notes_path: Optional path to write GitHub release notes markdown.
-        publish_github: When true (and not dry-run), create the GitHub release via ``gh``.
-        github_prerelease: Mark published GitHub release as pre-release (default true).
-        repo_slug: GitHub ``owner/repo`` for compare links and ``gh release create``.
-        skip_github_notes: When true, only perform legacy changelog/version injection.
+        pre_release: Optional pre-release identifier for the generated version.
+        theme: Optional theme for the GitHub release title.
+        notes_path: Optional path for the generated GitHub release notes.
+        publish_github: Publish the release through the GitHub CLI when true.
+        github_prerelease: Mark the published GitHub release as a pre-release.
+        repo_slug: GitHub repository in `owner/repository` format.
+        skip_github_notes: Skip GitHub release note generation and publishing.
     """
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
