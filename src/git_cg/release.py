@@ -1,7 +1,10 @@
+import contextlib
 import os
 import re
 import subprocess
 from collections import defaultdict
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import semver
 from rich.console import Console
@@ -316,6 +319,411 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
     return changelog_groups
 
 
+# ---------------------------------------------------------------------------
+# Gold-standard GitHub Release notes (Issue #181)
+# ---------------------------------------------------------------------------
+
+# Preferred section order for GitHub "What's Changed" (Hybrid house style).
+GITHUB_CHANGELOG_SECTION_ORDER: tuple[str, ...] = (
+    "✨ Features",
+    "🐛 Bug Fixes & Refactors",
+    "📝 Documentation",
+    "✅ Tests",
+    "🔧 Chores & Internal",
+    "🔒️ Security / Dependencies",
+    "Miscellaneous",
+)
+
+# Map trailer / matrix changelog_group tokens → GitHub section headings.
+CHANGELOG_GROUP_TO_GITHUB_SECTION: dict[str, str] = {
+    "Added": "✨ Features",
+    "Features": "✨ Features",
+    "Fixed": "🐛 Bug Fixes & Refactors",
+    "Changed": "🐛 Bug Fixes & Refactors",
+    "Removed": "🐛 Bug Fixes & Refactors",
+    "Deprecated": "🐛 Bug Fixes & Refactors",
+    "Documentation": "📝 Documentation",
+    "Docs": "📝 Documentation",
+    "Tests": "✅ Tests",
+    "Test": "✅ Tests",
+    "Miscellaneous": "Miscellaneous",
+    "Chores": "🔧 Chores & Internal",
+    "Internal": "🔧 Chores & Internal",
+    "Security": "🔒️ Security / Dependencies",
+    "Dependencies": "🔒️ Security / Dependencies",
+    "CI": "🔧 Chores & Internal",
+    "Build": "🔧 Chores & Internal",
+}
+
+
+@dataclass(frozen=True)
+class ReleaseNotesInput:
+    """Inputs for gold-standard GitHub release note assembly."""
+
+    new_tag: str
+    previous_tag: str
+    theme: str
+    bump_type: str
+    commits: list[str]
+    gitmoji_matrix: list
+    repo_slug: str = "Thomo1318/gitCommitGenerator"
+    docs_changelog_url: str = "https://thomo1318.github.io/gitCommitGenerator/CHANGELOG.html"
+    in_scope: list[str] = field(default_factory=list)
+    out_of_scope: list[str] = field(default_factory=list)
+    invariant: str = (
+        "the deterministic SOP / intent ranker remains semantic authority. "
+        "Release automation must not invent SemVer or override Hybrid trailers."
+    )
+    highlights: list[str] = field(default_factory=list)
+    dx_improvements: list[str] = field(default_factory=list)
+    welcome_blurb: str = ""
+
+
+def _normalise_tag(tag: str) -> str:
+    tag = (tag or "").strip()
+    if not tag:
+        return ""
+    return tag if tag.startswith("v") else f"v{tag}"
+
+
+def _version_display(tag: str) -> str:
+    t = _normalise_tag(tag)
+    return t[1:] if t.startswith("v") else t
+
+
+def format_release_title(*, new_tag: str, theme: str) -> str:
+    """
+    Build the gold-standard GitHub release title.
+
+    Parameters:
+        new_tag: SemVer tag (with or without leading ``v``).
+        theme: Short theme phrase after the version (no trailing period).
+
+    Returns:
+        Title like ``🚀 git-cg v0.6.0: Semantic Context integration``.
+    """
+    tag = _normalise_tag(new_tag)
+    theme_clean = " ".join((theme or "Release").split()).strip(" :")
+    return f"🚀 git-cg {tag}: {theme_clean}"
+
+
+def _subject_from_commit(commit: str) -> str:
+    parts = commit.split("---COMMIT_BODY---", 1)
+    return parts[0].strip()
+
+
+def group_commits_for_github_sections(
+    commits: list[str],
+    gitmoji_matrix: list,
+) -> dict[str, list[str]]:
+    """
+    Group commit subjects into gold-standard GitHub release sections.
+
+    Uses the same trailer/matrix rules as ``group_commits_for_changelog``, then
+    maps group tokens onto the Hybrid GitHub section headings used in v0.5/v0.6.
+    """
+    raw = group_commits_for_changelog(commits, gitmoji_matrix)
+    out: dict[str, list[str]] = defaultdict(list)
+    for group, subjects in raw.items():
+        section = CHANGELOG_GROUP_TO_GITHUB_SECTION.get(group, group)
+        if section not in CHANGELOG_GROUP_TO_GITHUB_SECTION.values() and section not in GITHUB_CHANGELOG_SECTION_ORDER:
+            # Unknown custom group: keep name, append under Miscellaneous-like bucket
+            section = group if group else "Miscellaneous"
+        for subject in subjects:
+            if subject not in out[section]:
+                out[section].append(subject)
+    return dict(out)
+
+
+def format_changelog_markdown(
+    *,
+    new_tag: str,
+    commits: list[str],
+    gitmoji_matrix: list,
+    use_github_sections: bool = False,
+) -> str:
+    """
+    Format a CHANGELOG.md slice for ``new_tag``.
+
+    Parameters:
+        new_tag: Version heading (``vX.Y.Z``).
+        commits: Raw commit strings from ``get_commits_since``.
+        gitmoji_matrix: SOP gitmoji matrix.
+        use_github_sections: When true, use gold-standard GitHub section titles.
+
+    Returns:
+        Markdown starting with ``## {tag}``.
+    """
+    tag = _normalise_tag(new_tag)
+    if use_github_sections:
+        groups = group_commits_for_github_sections(commits, gitmoji_matrix)
+        order = list(GITHUB_CHANGELOG_SECTION_ORDER)
+    else:
+        groups = group_commits_for_changelog(commits, gitmoji_matrix)
+        order = list(groups.keys())
+
+    lines = [f"## {tag}", ""]
+    # Stable order: known sections first, then any extras alphabetically.
+    seen: set[str] = set()
+    ordered_keys: list[str] = []
+    for key in order:
+        if groups.get(key):
+            ordered_keys.append(key)
+            seen.add(key)
+    for key in sorted(k for k in groups if k not in seen and groups[k]):
+        ordered_keys.append(key)
+
+    for group in ordered_keys:
+        lines.append(f"### {group}")
+        lines.append("")
+        for subject in groups[group]:
+            lines.append(f"- {subject}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _default_boundary_rows(*, bump_type: str, theme: str) -> tuple[list[str], list[str]]:
+    theme_bit = theme.strip() or "this release"
+    in_scope = [
+        f"{theme_bit} (calculated SemVer impact: **{bump_type}**)",
+        "Hybrid commit trailer-driven changelog grouping",
+        "Version injection into configured project files",
+        "Gold-standard GitHub release notes body (dry-run / file / optional publish)",
+    ]
+    out_scope = [
+        "Rewriting historical GitHub releases",
+        "Changing SemVer bump mathematics",
+        "Epic product phases unrelated to this cut",
+    ]
+    return in_scope, out_scope
+
+
+def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> list[str]:
+    return [
+        f"**{theme.strip() or 'Release'}** — prepared as a **{bump_type}** cut from {commit_count} commit(s) since the previous tag.",
+        "**Trailer-authoritative grouping** — `Changelog-Groups` / `SemVer-Impact` drive notes when present; gitmoji matrix remains the legacy fallback.",
+        "**Gold-standard GitHub body** — boundary table, invariant, highlights, and compare links match the v0.5/v0.6 Releases house style.",
+    ]
+
+
+def build_github_release_notes(data: ReleaseNotesInput) -> str:
+    """
+    Assemble the gold-standard GitHub Release markdown body.
+
+    Structure mirrors recent house releases (v0.5.0 / v0.6.0): welcome blurb,
+    boundary table, invariant, highlights, optional DX section, grouped What's
+    Changed, docs changelog link, and compare URL.
+    """
+    new_tag = _normalise_tag(data.new_tag)
+    prev = _normalise_tag(data.previous_tag) if data.previous_tag else ""
+    version = _version_display(new_tag)
+    theme = " ".join((data.theme or "Release").split()).strip(" :")
+
+    in_scope = (
+        list(data.in_scope) if data.in_scope else _default_boundary_rows(bump_type=data.bump_type, theme=theme)[0]
+    )
+    out_scope = (
+        list(data.out_of_scope)
+        if data.out_of_scope
+        else _default_boundary_rows(bump_type=data.bump_type, theme=theme)[1]
+    )
+    # Pad rows so the markdown table stays rectangular.
+    while len(in_scope) < len(out_scope):
+        in_scope.append("")
+    while len(out_scope) < len(in_scope):
+        out_scope.append("")
+
+    highlights = (
+        list(data.highlights)
+        if data.highlights
+        else _default_highlights(bump_type=data.bump_type, theme=theme, commit_count=len(data.commits))
+    )
+
+    welcome = (
+        data.welcome_blurb.strip()
+        if data.welcome_blurb
+        else (f"Welcome to **`{version}`** of `git-cg`.\n\nThis release covers **{theme}**.")
+    )
+
+    sections = group_commits_for_github_sections(data.commits, data.gitmoji_matrix)
+
+    lines: list[str] = [
+        "## 📝 Release Notes",
+        "",
+        welcome,
+        "",
+        "### Boundary (read this first)",
+        "",
+        "| In this release | **Not** in this release |",
+        "| --- | --- |",
+    ]
+    for left, right in zip(in_scope, out_scope, strict=True):
+        lines.append(f"| {left} | {right} |")
+
+    lines.extend(
+        [
+            "",
+            f"**Invariant:** {data.invariant.strip()}",
+            "",
+            "### 🌟 Highlights",
+            "",
+        ]
+    )
+    for idx, item in enumerate(highlights, start=1):
+        text = item.strip()
+        if not text.startswith("**"):
+            text = f"**Item {idx}.** {text}"
+        lines.append(f"{idx}. {text}")
+        lines.append("")
+
+    if data.dx_improvements:
+        lines.append("### 🛡️ DX & Stability Improvements")
+        lines.append("")
+        for idx, item in enumerate(data.dx_improvements, start=1):
+            lines.append(f"{idx}. {item.strip()}")
+        lines.append("")
+
+    lines.extend(
+        [
+            "---",
+            "",
+            "## 📦 What's Changed",
+            "",
+            f"## {new_tag}",
+            "",
+        ]
+    )
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for key in GITHUB_CHANGELOG_SECTION_ORDER:
+        if sections.get(key):
+            ordered.append(key)
+            seen.add(key)
+    for key in sorted(k for k in sections if k not in seen and sections[k]):
+        ordered.append(key)
+
+    for group in ordered:
+        lines.append(f"### {group}")
+        lines.append("")
+        for subject in sections[group]:
+            lines.append(f"- {subject}")
+        lines.append("")
+
+    compare = (
+        f"https://github.com/{data.repo_slug}/compare/{prev}...{new_tag}"
+        if prev
+        else f"https://github.com/{data.repo_slug}/releases/tag/{new_tag}"
+    )
+    lines.extend(
+        [
+            f"**Full Granular Changelog**: {data.docs_changelog_url}",
+            "",
+            "---",
+            "",
+            f"**Full Changelog**: {compare}",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_github_release_notes_file(path: str | Path, body: str) -> Path:
+    """Write release notes markdown to ``path`` (parents created as needed)."""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(body if body.endswith("\n") else body + "\n", encoding="utf-8")
+    return out
+
+
+def create_github_release(
+    *,
+    tag: str,
+    title: str,
+    body: str,
+    repo_slug: str = "Thomo1318/gitCommitGenerator",
+    prerelease: bool = True,
+    target: str = "main",
+    dry_run: bool = False,
+) -> str:
+    """
+    Create a GitHub Release via the ``gh`` CLI.
+
+    Parameters:
+        tag: Git tag name (``vX.Y.Z``).
+        title: Release title.
+        body: Markdown body.
+        repo_slug: ``owner/repo``.
+        prerelease: Mark as pre-release (house default for current cadence).
+        target: Git ref to tag/release from.
+        dry_run: When true, do not invoke ``gh``; return a summary string.
+
+    Returns:
+        URL or dry-run summary string.
+
+    Raises:
+        RuntimeError: When ``gh`` fails.
+    """
+    tag_n = _normalise_tag(tag)
+    if dry_run:
+        return (
+            f"[dry-run] gh release create {tag_n} --repo {repo_slug} "
+            f"--title {title!r} --target {target} "
+            f"{'--prerelease ' if prerelease else ''}({len(body)} bytes notes)"
+        )
+
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+        fh.write(body if body.endswith("\n") else body + "\n")
+        notes_path = fh.name
+    cmd = [
+        "gh",
+        "release",
+        "create",
+        tag_n,
+        "--repo",
+        repo_slug,
+        "--title",
+        title,
+        "--notes-file",
+        notes_path,
+        "--target",
+        target,
+    ]
+    if prerelease:
+        cmd.append("--prerelease")
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode("utf-8").strip()
+        return out or f"https://github.com/{repo_slug}/releases/tag/{tag_n}"
+    except FileNotFoundError as exc:
+        raise RuntimeError("`gh` CLI not found on PATH; install GitHub CLI to publish releases.") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.output.decode("utf-8", errors="replace") if exc.output else str(exc)
+        raise RuntimeError(f"gh release create failed: {detail}") from exc
+    finally:
+        with contextlib.suppress(Exception):
+            Path(notes_path).unlink(missing_ok=True)
+
+
+def resolve_release_theme(theme: str | None, *, bump_type: str, commits: list[str]) -> str:
+    """Pick a short theme phrase for the release title."""
+    if theme and theme.strip():
+        return " ".join(theme.split()).strip(" :")
+    type_prefix = re.compile(r"^\S+\s+[a-z]+(?:\([^)]*\))?:\s*")
+    for commit in commits:
+        subject = _subject_from_commit(commit)
+        if "feat" in subject.lower():
+            cleaned = type_prefix.sub("", subject, count=1).strip()
+            if cleaned:
+                return cleaned[:72]
+    return {
+        "MAJOR": "Major release",
+        "MINOR": "Feature release",
+        "PATCH": "Patch release",
+    }.get(bump_type, "Release")
+
+
 def validate_release(new_tag: str) -> bool:
     """Ensure the new tag does not already exist locally or remotely."""
     try:
@@ -340,16 +748,61 @@ def validate_release(new_tag: str) -> bool:
     return True
 
 
-def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None):
+def _prepend_changelog_version(old_content: str, changelog_str: str, new_tag: str) -> str:
+    """
+    Merge a new version block into CHANGELOG.md content.
+
+    Prefer inserting after an existing ``## Unreleased`` section; otherwise prepend.
+    """
+    tag = new_tag if new_tag.startswith("v") else f"v{new_tag}"
+    if f"## {tag}" in old_content:
+        return old_content
+    if old_content.startswith("# Changelog") and "## Unreleased" in old_content:
+        parts = old_content.split("## Unreleased", 1)
+        head = parts[0] + "## Unreleased\n\n"
+        rest = parts[1]
+        rest_lstripped = rest.lstrip("\n")
+        if rest_lstripped.startswith("## "):
+            return head + changelog_str + "\n" + rest_lstripped
+        next_h2 = rest.find("\n## ")
+        if next_h2 == -1:
+            suffix = "" if rest.endswith("\n") else "\n"
+            return head + rest.lstrip("\n") + suffix + changelog_str
+        unreleased_body = rest[: next_h2 + 1]
+        after = rest[next_h2 + 1 :]
+        return head + unreleased_body.lstrip("\n") + changelog_str + "\n" + after
+    return changelog_str + old_content
+
+
+def execute_release(
+    dry_run: bool,
+    verbose: bool,
+    pre_release: str | None = None,
+    *,
+    theme: str | None = None,
+    notes_path: str | None = None,
+    publish_github: bool = False,
+    github_prerelease: bool = True,
+    repo_slug: str = "Thomo1318/gitCommitGenerator",
+    skip_github_notes: bool = False,
+):
     """
     Prepare a release from the commits since the last Git tag.
 
-    Determines the required SemVer bump, updates configured version fields, and prepends a generated changelog entry to CHANGELOG.md unless dry run mode is enabled. If no version change is needed, the release is skipped.
+    Determines the required SemVer bump, updates configured version fields, and
+    prepends a generated changelog entry to CHANGELOG.md unless dry-run mode is
+    enabled. Also assembles gold-standard GitHub Release notes (Issue #181).
 
     Parameters:
-        dry_run (bool): Simulate the release without writing files.
-        verbose (bool): Emit additional progress output.
-        pre_release (str | None): Optional pre-release identifier to apply to the generated version.
+        dry_run: Simulate the release without writing files or publishing.
+        verbose: Emit additional progress output.
+        pre_release: Optional pre-release identifier to apply to the generated version.
+        theme: Optional GitHub release title theme (after ``vX.Y.Z:``).
+        notes_path: Optional path to write GitHub release notes markdown.
+        publish_github: When true (and not dry-run), create the GitHub release via ``gh``.
+        github_prerelease: Mark published GitHub release as pre-release (default true).
+        repo_slug: GitHub ``owner/repo`` for compare links and ``gh release create``.
+        skip_github_notes: When true, only perform legacy changelog/version injection.
     """
     sop_data = get_sop_data()
     gitmoji_matrix = sop_data.get("gitmoji_reference_matrix", [])
@@ -380,7 +833,8 @@ def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None
             semver.VersionInfo.parse(f"0.1.0-{pre_release}.0")
         except Exception:
             console.print(
-                f"[bold red]Validation Error:[/bold red] Invalid pre-release identifier '{pre_release}'. Must comply with SemVer 2.0.0."
+                f"[bold red]Validation Error:[/bold red] Invalid pre-release identifier '{pre_release}'. "
+                "Must comply with SemVer 2.0.0."
             )
             return
 
@@ -401,40 +855,100 @@ def execute_release(dry_run: bool, verbose: bool, pre_release: str | None = None
 
     console.print(f"[bold green]Next Version:[/bold green] {new_tag}")
 
-    # File injection (per file)
     modified_files = get_modified_files_since(last_tag)
     if verbose:
         console.log(f"Scanning {len(modified_files)} modified files for version headers...")
 
     inject_file_versions(modified_files, bump_type, sop_data, dry_run, verbose, pre_release=pre_release)
 
-    # Generate Changelog
-
-    changelog_groups = group_commits_for_changelog(commits, gitmoji_matrix)
-
-    # Format changelog
-    changelog_str = f"## {new_tag}\n\n"
-    for group, subjects in changelog_groups.items():
-        changelog_str += f"### {group}\n"
-        for sub in subjects:
-            changelog_str += f"- {sub}\n"
-        changelog_str += "\n"
+    changelog_str = format_changelog_markdown(
+        new_tag=new_tag,
+        commits=commits,
+        gitmoji_matrix=gitmoji_matrix,
+        use_github_sections=False,
+    )
 
     if dry_run or verbose:
         console.print(Panel(changelog_str, title=f"Generated Changelog for {new_tag}"))
 
     if not dry_run:
-        # Prepend to CHANGELOG.md
         changelog_path = "CHANGELOG.md"
         old_content = ""
         if os.path.exists(changelog_path):
-            with open(changelog_path) as f:
+            with open(changelog_path, encoding="utf-8") as f:
                 old_content = f.read()
-        with open(changelog_path, "w") as f:
-            f.write(changelog_str + old_content)
+        new_content = _prepend_changelog_version(old_content, changelog_str, new_tag)
+        with open(changelog_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
         console.print("[bold green]CHANGELOG.md updated.[/bold green]")
 
-        # We don't automatically tag here as user requested to just prepare it
+    if skip_github_notes:
+        if not dry_run:
+            console.print(
+                f"[bold yellow]Files modified. Run `git add . && git commit -m '🔖 release: {new_tag}'` "
+                f"and `git tag {new_tag}` to finish.[/bold yellow]"
+            )
+        return
+
+    resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
+    title = format_release_title(new_tag=new_tag, theme=resolved_theme)
+    notes_input = ReleaseNotesInput(
+        new_tag=new_tag,
+        previous_tag=last_tag or "",
+        theme=resolved_theme,
+        bump_type=bump_type,
+        commits=commits,
+        gitmoji_matrix=gitmoji_matrix,
+        repo_slug=repo_slug,
+    )
+    github_body = build_github_release_notes(notes_input)
+
+    default_notes = notes_path or f".git/GIT_CG_RELEASE_NOTES_{new_tag}.md"
+    if dry_run or verbose:
+        console.print(Panel(github_body, title=f"GitHub Release Notes — {title}"))
+
+    if dry_run:
+        console.print(f"[cyan]Dry-run title:[/cyan] {title}")
+        console.print(f"[cyan]Notes would be written to:[/cyan] {default_notes}")
+        if publish_github:
+            console.print(
+                create_github_release(
+                    tag=new_tag,
+                    title=title,
+                    body=github_body,
+                    repo_slug=repo_slug,
+                    prerelease=github_prerelease,
+                    dry_run=True,
+                )
+            )
+        return
+
+    written = write_github_release_notes_file(default_notes, github_body)
+    console.print(f"[bold green]GitHub release notes written:[/bold green] {written}")
+    console.print(f"[bold green]Release title:[/bold green] {title}")
+
+    if publish_github:
+        try:
+            url = create_github_release(
+                tag=new_tag,
+                title=title,
+                body=github_body,
+                repo_slug=repo_slug,
+                prerelease=github_prerelease,
+                dry_run=False,
+            )
+            console.print(f"[bold green]GitHub release created:[/bold green] {url}")
+        except RuntimeError as exc:
+            console.print(f"[bold red]GitHub publish failed:[/bold red] {exc}")
+            console.print(
+                "[yellow]Version/changelog/notes files were still prepared. "
+                "Create the tag/release manually if needed.[/yellow]"
+            )
+    else:
+        prerelease_flag = " --prerelease" if github_prerelease else ""
         console.print(
-            f"[bold yellow]Files modified. Run `git add . && git commit -m '🔖 release: {new_tag}'` and `git tag {new_tag}` to finish.[/bold yellow]"
+            "[bold yellow]Files modified. Commit the version cut, tag "
+            f"`{new_tag}`, then publish with "
+            f"`gh release create {new_tag} --title {title!r} "
+            f"--notes-file {written}{prerelease_flag}`.[/bold yellow]"
         )

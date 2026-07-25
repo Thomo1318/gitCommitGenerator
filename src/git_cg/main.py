@@ -2183,17 +2183,61 @@ def release(
     pre_release: str | None = typer.Option(
         None, "--pre-release", help="Add or bump a pre-release identifier (e.g., 'alpha', 'rc')"
     ),
+    theme: str | None = typer.Option(
+        None,
+        "--theme",
+        help="GitHub release title theme after the version (e.g. 'Semantic Context integration')",
+    ),
+    notes_file: str | None = typer.Option(
+        None,
+        "--notes-file",
+        help="Path to write gold-standard GitHub release notes markdown (default under .git/)",
+    ),
+    publish_github: bool = typer.Option(
+        False,
+        "--publish-github",
+        help="Create the GitHub Release via `gh` after preparing files (requires network + auth)",
+    ),
+    github_latest: bool = typer.Option(
+        False,
+        "--github-latest",
+        help="Publish GitHub release as latest (not pre-release). Default is pre-release.",
+    ),
+    skip_github_notes: bool = typer.Option(
+        False,
+        "--skip-github-notes",
+        help="Only bump versions/CHANGELOG; skip gold-standard GitHub notes assembly",
+    ),
 ) -> None:
     """
     Run the release workflow.
 
+    Calculates SemVer impact from Hybrid trailers, injects versions, updates
+    CHANGELOG.md, and assembles gold-standard GitHub Release notes (Issue #181).
+
     Parameters:
-        pre_release (str | None): A pre-release identifier to add or bump, such as `alpha` or `rc`.
+        dry_run: Print planned changelog/notes without writing files or publishing.
+        verbose: Extra logging.
+        pre_release: Pre-release identifier to add or bump (e.g. `alpha`, `rc`).
+        theme: Optional title theme after ``vX.Y.Z:``.
+        notes_file: Optional path for the GitHub notes markdown file.
+        publish_github: Create the GitHub release with ``gh`` (non-dry-run only).
+        github_latest: When publishing, mark as full latest release instead of pre-release.
+        skip_github_notes: Legacy path — version/changelog only.
     """
     try:
         from git_cg.release import execute_release
 
-        execute_release(dry_run=dry_run, verbose=verbose, pre_release=pre_release)
+        execute_release(
+            dry_run=dry_run,
+            verbose=verbose,
+            pre_release=pre_release,
+            theme=theme,
+            notes_path=notes_file,
+            publish_github=publish_github,
+            github_prerelease=not github_latest,
+            skip_github_notes=skip_github_notes,
+        )
     except ImportError as e:
         console.print(f"[bold red]Error loading release module:[/bold red] {e}")
         sys.exit(1)
