@@ -791,6 +791,8 @@ Refactor offline evaluations into a tiered, multi-metric Opik evaluation runner,
 
 Offline evaluation relies on an ad-hoc Python script (`scripts/eval_commit_message.py`). It lacks standardisation and does not natively integrate with Opik's structured pipelines. This prevents establishing deterministic validation gates before running expensive semantic scoring.
 
+Furthermore, drawing from [Confident AI's Agent Observability](https://www.confident-ai.com/blog/ai-agent-observability), true observability demands understanding the execution hierarchy (Session → Thread → Trace → Span) so we can perform targeted evaluation on specific span types. Rather than just grading the final output, we must be able to evaluate a retrieval span for context relevancy independently of an LLM reasoning span. Without this, silent failures (e.g., retrieving the wrong ticket ID while generating a perfectly formatted response) go completely unnoticed.
+
 ##### Architectural direction
 
 Convert the local script into a modular `opik_metrics.py` system. Metrics (`FormatMetric` and `CommitMessageQuality`) execute concurrently to provide complete observability data on every trace.
@@ -845,6 +847,15 @@ Convert the local script into a modular `opik_metrics.py` system. Metrics (`Form
 ##### Risks / things to watch
 
 - LLM graders can be flaky; ensure prompt instructions for GEval are extremely rigid.
+
+##### Resources
+
+- [AI Agent Observability](https://www.confident-ai.com/blog/ai-agent-observability)
+- [Human-in-the-Loop AI Agent Evaluation](https://www.confident-ai.com/blog/human-in-the-loop-ai-agent-evaluation)
+- [Definitive AI Agent Evaluation Guide](https://www.confident-ai.com/blog/definitive-ai-agent-evaluation-guide)
+- [G-Eval: The Definitive Guide](https://www.confident-ai.com/blog/g-eval-the-definitive-guide)
+- [DeepEval](https://deepeval.com/)
+- [Trackio](https://github.com/gradio-app/trackio)
 
 ##### References
 
