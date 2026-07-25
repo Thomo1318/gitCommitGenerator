@@ -58,11 +58,11 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
-### Flags
-
 - **Usage**: `git-cg release [FLAGS]`
 
 Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, update Changelog, and assemble **gold-standard GitHub Release notes** (boundary table, highlights, grouped What’s Changed, compare links).
+
+### Flags
 
 #### `-d --dry-run`
 
