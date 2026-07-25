@@ -94,6 +94,8 @@ opik/
 # Added by code-review-graph
 .code-review-graph/
 gitCommitGenerator
+.ag-kit-backups
+.agents.BU
 # Streamlit agent skills (environment-specific symlinks)
 .agents/skills/developing-with-streamlit/
 .claude/skills/developing-with-streamlit/
