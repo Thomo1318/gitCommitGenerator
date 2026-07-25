@@ -489,3 +489,73 @@ def test_build_semantic_summary_accepts_risk_assessment_model():
     )
     assert summary.risk_score == 0.33
     assert summary.blast_radius_size == 6
+
+
+def test_collect_semantic_producer_metrics_outer_graph_stage_records_fallback(monkeypatch):
+    """Outer graph-stage failures append bounded graph_stage:<Type> without wiping product fields."""
+    from types import SimpleNamespace
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.semantic import empty_graph_product_fields
+
+    staged = SimpleNamespace(files={"a.py": "x = 1\n"}, errors=[], skipped=[])
+    head = SimpleNamespace(files={}, errors=[], skipped=[])
+
+    class Parsed:
+        def to_metrics_dict(self):
+            return {"semantic_files_total": 1, "semantic_files_parsed": 1}
+
+    monkeypatch.setattr("git_cg.git_index.read_staged_sources", lambda *a, **k: staged)
+    monkeypatch.setattr("git_cg.ast_parser.parse_files", lambda files: Parsed())
+    monkeypatch.setattr("git_cg.git_index.read_head_sources", lambda *a, **k: head)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+
+    product = empty_graph_product_fields()
+    product["blast_radius_size"] = 9
+    product["affected_flows_count"] = 2
+    product["test_coverage_gap"] = True
+    product["graph_fallback_reasons"] = ["detect_changes:ok"]
+
+    def fake_bundle(**kwargs):
+        return product, [
+            GraphOperationResult(
+                ok=True,
+                operation="detect_changes",
+                outcome=GraphOutcome.OK,
+                data={},
+                latency_ms=1.0,
+            )
+        ]
+
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", fake_bundle)
+
+    def fake_stats(*, repo_root=None, **kwargs):
+        return GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.5,
+        )
+
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", fake_stats)
+
+    def boom_meta(**kwargs):
+        raise RuntimeError("telemetry aggregation failed")
+
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_telemetry", boom_meta)
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["semantic_enabled"] is True
+    # Product fields preserved (outer except must not wipe them).
+    assert out["blast_radius_size"] == 9
+    assert out["affected_flows_count"] == 2
+    assert out["test_coverage_gap"] is True
+    # Latency/schema reset + bounded graph_stage reason appended.
+    assert out["graph_build_latency_ms"] == 0.0
+    assert out["graph_query_latency_ms"] == 0.0
+    assert out["crg_schema_version"] is None
+    reasons = out.get("graph_fallback_reasons") or []
+    assert "detect_changes:ok" in reasons
+    assert any(r == "graph_stage:RuntimeError" for r in reasons)

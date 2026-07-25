@@ -96,6 +96,7 @@ class GenerationTelemetry:
     blast_radius_size: int | None = None
     affected_flows_count: int | None = None
     test_coverage_gap: bool | None = None
+    test_gaps_count: int | None = None  # optional raw count; summary/debug (Issue #162 nice-to-have)
     semantic_context_schema_version: str = ""
     semantic_context_fallback_reasons: list[str] | None = None
 
@@ -635,6 +636,7 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("blast_radius_size", None)
             data.setdefault("affected_flows_count", None)
             data.setdefault("test_coverage_gap", None)
+            data.setdefault("test_gaps_count", None)
             data.setdefault("semantic_context_schema_version", "")
             data.setdefault("semantic_context_fallback_reasons", None)
             # Normalise enum-ish values to plain strings for dataclass storage.
@@ -652,7 +654,7 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             else:
                 data["preflight_fallback_reason"] = str(data["preflight_fallback_reason"])
             # Phase 7 normalise.
-            for int_key in ("blast_radius_size", "affected_flows_count"):
+            for int_key in ("blast_radius_size", "affected_flows_count", "test_gaps_count"):
                 raw = data.get(int_key)
                 if raw is None or raw == "":
                     data[int_key] = None
