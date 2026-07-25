@@ -1239,6 +1239,7 @@ def _write_telemetry_state_safe(
     blast_radius_size: int | None = None,
     affected_flows_count: int | None = None,
     test_coverage_gap: bool | None = None,
+    test_gaps_count: int | None = None,
     semantic_context_schema_version: str = "",
     semantic_context_fallback_reasons: list | None = None,
 ) -> None:
@@ -1270,6 +1271,12 @@ def _write_telemetry_state_safe(
         preflight_mode (str): Preflight grouping mode (`llm` / `heuristic` / `skipped`).
         preflight_groups_count (int): Number of preflight groups when preflight ran.
         preflight_fallback_reason (str): Why preflight skipped or fell back (redacted on write).
+        blast_radius_size (int | None): Phase 7 graph blast-radius size when available.
+        affected_flows_count (int | None): Phase 7 affected-flows count when available.
+        test_coverage_gap (bool | None): Phase 7 coverage-gap flag when available.
+        test_gaps_count (int | None): Optional raw test-gap count for analytics/debug.
+        semantic_context_schema_version (str): SemanticDiffSummary schema version when built.
+        semantic_context_fallback_reasons (list | None): Bounded redacted fallback reasons.
     """
     try:
         import dataclasses
@@ -1314,6 +1321,7 @@ def _write_telemetry_state_safe(
             blast_radius_size=blast_radius_size,
             affected_flows_count=affected_flows_count,
             test_coverage_gap=test_coverage_gap,
+            test_gaps_count=test_gaps_count,
             semantic_context_schema_version=semantic_context_schema_version,
             semantic_context_fallback_reasons=(
                 list(semantic_context_fallback_reasons) if isinstance(semantic_context_fallback_reasons, list) else None
@@ -1631,6 +1639,7 @@ def _run_commit_generation(
     blast_radius_size = semantic_metrics.get("blast_radius_size")
     affected_flows_count = semantic_metrics.get("affected_flows_count")
     test_coverage_gap = semantic_metrics.get("test_coverage_gap")
+    test_gaps_count = semantic_metrics.get("test_gaps_count")
     graph_enrichment = semantic_metrics.get("graph_enrichment")
     risk_assessment = semantic_metrics.get("risk_assessment")
     if semantic_metrics.get("crg_schema_version"):
@@ -1659,6 +1668,7 @@ def _run_commit_generation(
         "blast_radius_size": blast_radius_size,
         "affected_flows_count": affected_flows_count,
         "test_coverage_gap": test_coverage_gap,
+        "test_gaps_count": test_gaps_count,
         "semantic_context_schema_version": "",
         "semantic_context_fallback_reasons": None,
     }
@@ -1947,6 +1957,7 @@ def _run_commit_generation(
         blast_radius_size=blast_radius_size if isinstance(blast_radius_size, int) else None,
         affected_flows_count=affected_flows_count if isinstance(affected_flows_count, int) else None,
         test_coverage_gap=bool(test_coverage_gap) if test_coverage_gap is not None else None,
+        test_gaps_count=test_gaps_count if isinstance(test_gaps_count, int) else None,
         semantic_context_schema_version=semantic_context_schema_version,
         semantic_context_fallback_reasons=semantic_context_fallback_reasons,
     )
@@ -2324,6 +2335,7 @@ def record_telemetry(
                     "blast_radius_size": telemetry_state.get("blast_radius_size"),
                     "affected_flows_count": telemetry_state.get("affected_flows_count"),
                     "test_coverage_gap": telemetry_state.get("test_coverage_gap"),
+                    "test_gaps_count": telemetry_state.get("test_gaps_count"),
                     "semantic_context_schema_version": telemetry_state.get("semantic_context_schema_version", ""),
                     "semantic_context_fallback_reasons": telemetry_state.get("semantic_context_fallback_reasons"),
                 },

@@ -27,6 +27,7 @@ def test_phase7_telemetry_defaults():
     assert tel.blast_radius_size is None
     assert tel.affected_flows_count is None
     assert tel.test_coverage_gap is None
+    assert tel.test_gaps_count is None
     assert tel.semantic_context_schema_version == ""
     assert tel.semantic_context_fallback_reasons is None
 
@@ -37,6 +38,7 @@ def test_phase7_telemetry_round_trip(tmp_path, monkeypatch):
         blast_radius_size=11,
         affected_flows_count=2,
         test_coverage_gap=True,
+        test_gaps_count=4,
         semantic_context_schema_version="semantic_diff_summary_v1",
         semantic_context_fallback_reasons=["graph:unavailable"],
     )
@@ -46,6 +48,7 @@ def test_phase7_telemetry_round_trip(tmp_path, monkeypatch):
     assert loaded.blast_radius_size == 11
     assert loaded.affected_flows_count == 2
     assert loaded.test_coverage_gap is True
+    assert loaded.test_gaps_count == 4
     assert loaded.semantic_context_schema_version == "semantic_diff_summary_v1"
     assert loaded.semantic_context_fallback_reasons == ["graph:unavailable"]
 
@@ -75,6 +78,7 @@ def test_phase7_telemetry_back_compat_missing_keys(tmp_path):
     assert loaded is not None
     assert loaded.blast_radius_size is None
     assert loaded.test_coverage_gap is None
+    assert loaded.test_gaps_count is None
     assert loaded.semantic_context_schema_version == ""
 
     # Legacy string boolean testing
@@ -215,6 +219,7 @@ def test_phase7_int_field_invalid_becomes_none(tmp_path):
                 "score_card": {},
                 "blast_radius_size": "nope",
                 "affected_flows_count": {"bad": 1},
+                "test_gaps_count": "nope",
             }
         ),
         encoding="utf-8",
@@ -223,3 +228,70 @@ def test_phase7_int_field_invalid_becomes_none(tmp_path):
     assert loaded is not None
     assert loaded.blast_radius_size is None
     assert loaded.affected_flows_count is None
+    assert loaded.test_gaps_count is None
+
+
+def test_phase7_malformed_preflight_groups_count_normalises_to_zero(tmp_path):
+    """Non-numeric persisted preflight_groups_count must normalise to 0."""
+    import json
+
+    git_dir = tmp_path / "preflight-bad"
+    git_dir.mkdir()
+    (git_dir / "GIT_CG_OPIK_STATE.json").write_text(
+        json.dumps(
+            {
+                "trace_id": None,
+                "diff_hash": "x",
+                "diff_output": "d",
+                "repo_name": "r",
+                "engine": "e",
+                "model_name": "m",
+                "system_prompt_hash": "h",
+                "generated_message": "g",
+                "commit_plan_json": {},
+                "score_card": {},
+                "preflight_groups_count": "nope",
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = read_telemetry_state(str(git_dir))
+    assert loaded is not None
+    assert loaded.preflight_groups_count == 0
+
+    # Also exercise TypeError path (unhashable / non-int-coercible container).
+    (git_dir / "GIT_CG_OPIK_STATE.json").write_text(
+        json.dumps(
+            {
+                "trace_id": None,
+                "diff_hash": "x",
+                "diff_output": "d",
+                "repo_name": "r",
+                "engine": "e",
+                "model_name": "m",
+                "system_prompt_hash": "h",
+                "generated_message": "g",
+                "commit_plan_json": {},
+                "score_card": {},
+                "preflight_groups_count": {"bad": 1},
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded2 = read_telemetry_state(str(git_dir))
+    assert loaded2 is not None
+    assert loaded2.preflight_groups_count == 0
+
+
+def test_semantic_analysis_metadata_includes_test_gaps_count():
+    from git_cg.semantic import SemanticDiffSummary, semantic_analysis_metadata
+
+    empty = semantic_analysis_metadata(None)
+    assert empty["test_gaps_count"] is None
+
+    meta = semantic_analysis_metadata(
+        SemanticDiffSummary(test_coverage_gap=True, test_gaps_count=3, blast_radius_size=10)
+    )
+    assert meta["test_gaps_count"] == 3
+    assert meta["test_coverage_gap"] is True
+    assert meta["blast_radius_size"] == 10

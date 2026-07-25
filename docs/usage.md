@@ -67,3 +67,32 @@ Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions int
 #### `--pre-release <IDENTIFIER>`
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
+
+## Semantic context (Phase 7)
+
+`git-cg` can optionally collect **semantic context** from staged blobs, fingerprints, and local code-review-graph product queries.
+
+### Enable
+
+* CLI: `--enable-semantic` / `--no-enable-semantic`
+* Env: `GIT_CG_ENABLE_SEMANTIC=1` (also `true` / `yes` / `on`)
+* Default: **off** (dark launch)
+
+### What it does
+
+* Builds a versioned `SemanticDiffSummary` on `GenerationContext` when semantic mode is **on** — both when producers succeed and on **fail-open fallback** paths (partial summary + explicit `fallback_reasons` when graph/parser/fingerprint producers are unavailable or error)
+* May add **closed-vocabulary** ranking markers from graph/fingerprint facts (SOP matrix remains the only SemVer/intent authority)
+* Emits non-content telemetry: `blast_radius_size`, `affected_flows_count`, `test_coverage_gap` (bool), optional `test_gaps_count` (int raw count for analytics/debug), plus `semantic_context_*` fields via Opik state / `record-telemetry`
+
+### What it does **not** do (current MVP)
+
+* Does **not** inject a semantic summary evidence block into the LLM prompt (Phase 11 owns packing / optional bounded evidence)
+* Does **not** promise better commit prose under flag-on; message text may be unchanged vs flag-off (**Claim C** is follow-on)
+* Does **not** use embeddings or cloud graph providers on the commit path
+* Does **not** run hub/callers fan-out or populate `complex_function_changed` / hub / callers product fields by default (Phase 9 / cheap follow-on only)
+* Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) still runs on the live worktree until **Phase 7.5** (#180) staged-index shadow isolation
+
+### Measurement
+
+Phase work is gated by **Claim A** (plumbing/safety) and **Claim B** (deterministic ranking/context before-after fixtures). Final-message quality uplift (**Claim C**) is a follow-on / post-merge concern. Future phases should define A/B/C the same way.
+

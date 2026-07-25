@@ -371,8 +371,13 @@ contract boundary. Related work is intentionally split across later phases:
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Intent ranking / additive markers / contract-before-LLM / `preflight_*` telemetry hooks | **Phase 3** (#161)                                           |
 | Preflight multi-group product / cheap-LLM grouping UX                                   | **Phase 0.5**                                                |
-| Semantic summary object for prompts                                                     | **Phase 7**                                                  |
-| Token-budget prompt assembly (`prompt_budget.py`), hierarchical packer product          | **Phase 11**                                                 |
+| Semantic summary object / graph product metrics / Phase 7 telemetry (`blast_radius_*`, `test_coverage_gap`, optional `test_gaps_count`) | **Phase 7** (#162)                                           |
+| Staged-index shadow isolation for opt-in CRG refresh (`include_unstaged=False`)         | **Phase 7.5** (#180; see `docs/stagingADRs/ADR-0005-Complete/Cleaned_Phase_7_5.md`) |
+| Hub / bridge / community split product; complex-function / callers population when not free on detect_changes | **Phase 9** (#163)                                           |
+| Post-render fact/description veto                                                       | **Phase 10** (#164)                                          |
+| Token-budget prompt assembly (`prompt_budget.py`), hierarchical packer, optional bounded `SemanticDiffSummary` prompt evidence | **Phase 11** (#165)                                          |
+| diskcache fingerprint/cache substrate                                                   | **Phase 11.5** (Epic C / cleaned plan)                       |
+| Claim C final-message quality uplift (promptfoo / GEval / Opik cohorts)                 | **Post-merge follow-on** after Phase 7 (+ optional evidence / Phase 11 packing) — not a #162 close gate |
 | CRG embeddings / `semantic_search` as ranking input                                     | **Out of scope** (retrieval/DX only; never SemVer authority) |
 
 ### Analysis vs prompt diff (interim until Phase 11)
