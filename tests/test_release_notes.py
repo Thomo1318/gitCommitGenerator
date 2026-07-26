@@ -785,25 +785,9 @@ def test_execute_release_changelog_write_failure(monkeypatch, tmp_path):
     printed = []
     monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
 
-    real_open = open
-
-    def boom(path, *a, **k):
-        if str(path) == "CHANGELOG.md" and (
-            (a and "w" in a[0]) or k.get("mode") == "w" or (a and len(a) > 0 and "w" in str(a))
-        ):
-            # fail writes
-            if a and "w" in a[0]:
-                raise OSError("disk full")
-            if not a and k.get("mode", "r").startswith("w"):
-                raise OSError("disk full")
-        # pathlib/open for read of missing is fine
-        try:
-            return real_open(path, *a, **k)
-        except TypeError:
-            return real_open(path, *a, **k)
-
-    # Simpler: patch builtins open used in execute_release write path via monkeypatch on release module's open? it uses global open
     import builtins
+
+    real_open = open
 
     def open_proxy(file, mode="r", *a, **k):
         if str(file) == "CHANGELOG.md" and "w" in mode:
