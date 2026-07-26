@@ -273,7 +273,7 @@ def test_inject_file_versions_all_methods(tmp_path, monkeypatch):
     monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
     files = {
         "pkg.json": '{"version": "1.0.0"}',
-        "cfg.toml": "# version: v1.0.0\n",
+        "cfg.toml": "# version: v2.0.0\n",
         "app.js": "// version: v1.0.0\n",
         "page.html": "<!-- version: v1.0.0 -->\n",
         "mod.py": '__version__ = "1.0.0"\n',

@@ -243,7 +243,7 @@ def inject_file_versions(
                 # Matches: "version": "1.0.0"
                 new_content = re.sub(r'("version"\s*:\s*")([^"]+)(")', replacer, file_content, count=1)
             elif method in ("hash_comment", "header_comment"):
-                # Matches: # version: v2.0.0
+                # Matches: # version: v3.0.0
                 new_content = re.sub(
                     r"(#\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*)", replacer, file_content, count=1, flags=re.IGNORECASE
                 )
@@ -278,6 +278,14 @@ def inject_file_versions(
                 console.print(f"Could not inject version into {filepath}: {e}")
 
 
+def _get_commit_priority(subject: str, gitmoji_matrix: list) -> int:
+    """Return the priority of the first matched gitmoji in the subject."""
+    for entry in gitmoji_matrix:
+        if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
+            return entry.get("priority", 0)
+    return 0
+
+
 def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
     """
     Group commit subjects into changelog sections.
@@ -304,7 +312,16 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
             groups = [g.strip() for g in trailer_match.group(1).split(",")]
             for g in groups:
                 if g:
-                    changelog_groups[g].append(subject)
+                    if g == "Miscellaneous":
+                        # Legacy trailers mapped Tests/Docs/Chores to Miscellaneous. Re-bucket them via gitmoji matrix.
+                        mapped_g = "Miscellaneous"
+                        for entry in gitmoji_matrix:
+                            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
+                                mapped_g = entry.get("changelog_group", "Miscellaneous")
+                                break
+                        changelog_groups[mapped_g].append(subject)
+                    else:
+                        changelog_groups[g].append(subject)
             continue
 
         # Legacy fallback logic
@@ -314,6 +331,14 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
                 group = entry.get("changelog_group", "Miscellaneous")
                 break
         changelog_groups[group].append(subject)
+
+    # Sort commits within each group by their SOP priority (highest first)
+    for group in changelog_groups:
+        changelog_groups[group] = sorted(
+            changelog_groups[group],
+            key=lambda subj: _get_commit_priority(subj, gitmoji_matrix),
+            reverse=True,
+        )
 
     return changelog_groups
 
@@ -513,7 +538,12 @@ def format_changelog_markdown(
     tag = _normalise_tag(new_tag)
     if use_github_sections:
         groups = group_commits_for_github_sections(commits, gitmoji_matrix)
-        order = list(GITHUB_CHANGELOG_SECTION_ORDER)
+
+        def section_priority(section: str) -> int:
+            priorities = [_get_commit_priority(subj, gitmoji_matrix) for subj in groups.get(section, [])]
+            return max(priorities) if priorities else 0
+
+        order = sorted(list(GITHUB_CHANGELOG_SECTION_ORDER), key=section_priority, reverse=True)
     else:
         groups = group_commits_for_changelog(commits, gitmoji_matrix)
         order = list(groups.keys())
@@ -659,7 +689,12 @@ def build_github_release_notes(data: ReleaseNotesInput) -> str:
         ]
     )
 
-    ordered = _ordered_nonempty_sections(sections, GITHUB_CHANGELOG_SECTION_ORDER)
+    def section_priority(section: str) -> int:
+        priorities = [_get_commit_priority(subj, data.gitmoji_matrix) for subj in sections.get(section, [])]
+        return max(priorities) if priorities else 0
+
+    ordered_keys = sorted(list(GITHUB_CHANGELOG_SECTION_ORDER), key=section_priority, reverse=True)
+    ordered = _ordered_nonempty_sections(sections, ordered_keys)
     lines.extend(_render_grouped_sections(ordered, sections))
 
     compare = (

@@ -26,31 +26,53 @@
       "enforcement": "When tasked with versioning a standalone file, the agent MUST use the syntax mapped to the file extension. NEVER inject comments into unsupported formats like JSON. Default to project-level files (e.g., package.json, VERSION) unless executing on a standalone script.",
       "strategies": {
         "json": {
-          "extensions": [".json"],
+          "extensions": [
+            ".json"
+          ],
           "method": "root_key",
           "syntax": "\"version\": \"{SEMVER}\"",
           "rule": "DO NOT use comments. Find or create a `version` key at the root object level."
         },
         "hash_comment": {
-          "extensions": [".py", ".sh", ".yaml", ".yml", ".rb", ".conf"],
+          "extensions": [
+            ".py",
+            ".sh",
+            ".yaml",
+            ".yml",
+            ".rb",
+            ".conf"
+          ],
           "method": "header_comment",
           "syntax": "# version: v{SEMVER}",
           "rule": "Inject or replace on line 1 or 2 of the file."
         },
         "slash_comment": {
-          "extensions": [".js", ".ts", ".c", ".cpp", ".java", ".go"],
+          "extensions": [
+            ".js",
+            ".ts",
+            ".c",
+            ".cpp",
+            ".java",
+            ".go"
+          ],
           "method": "header_comment",
           "syntax": "// version: v{SEMVER}",
           "rule": "Inject or replace on line 1 or 2 of the file."
         },
         "block_comment": {
-          "extensions": [".html", ".xml", ".md"],
+          "extensions": [
+            ".html",
+            ".xml",
+            ".md"
+          ],
           "method": "header_comment",
           "syntax": "<!-- version: v{SEMVER} -->",
           "rule": "Inject or replace at the top of the document."
         },
         "python_variable": {
-          "extensions": [".py"],
+          "extensions": [
+            ".py"
+          ],
           "method": "python_variable",
           "syntax": "__version__ = \"{SEMVER}\"",
           "rule": "Replace __version__ string assignment."
@@ -99,2105 +121,2105 @@
     "NONE": "Applied only when all selected primary and secondary intent rows have semver_impact NONE."
   },
   "commit_language": "en-US",
-  "gitmoji_reference_matrix":[
-  {
-    "emoji": "🎨",
-    "code": ":art:",
-    "intent_id": "code_structure_formatting",
-    "intent_group": "style_assets_text",
-    "description": "Improve structure/format of the code",
-    "cc_type": "style",
-    "semver_impact": "NONE",
-    "changelog_group": "Changed",
-    "priority": 40,
-    "specificity": 45,
-    "split_weight": 30,
-    "positive_signals": [
-      "formatting_only",
-      "code_reordered_without_logic_change",
-      "whitespace_or_style_cleanup",
-      "import_sorting",
-      "non_functional_structure_cleanup"
-    ],
-    "negative_signals": [
-      "runtime_logic_changed",
-      "new_feature_added",
-      "bug_fixed",
-      "public_api_changed",
-      "security_or_build_change"
-    ],
-    "selection_rule": "Use when the primary change improves formatting or code structure without changing runtime behaviour."
-  },
-  {
-    "emoji": "⚡️",
-    "code": ":zap:",
-    "intent_id": "performance_improvement",
-    "intent_group": "performance",
-    "description": "Improve performance",
-    "cc_type": "perf",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 80,
-    "specificity": 75,
-    "split_weight": 70,
-    "positive_signals": [
-      "performance_optimization",
-      "latency_reduction",
-      "memory_usage_reduction",
-      "algorithmic_improvement",
-      "benchmark_improvement"
-    ],
-    "negative_signals": [
-      "formatting_only",
-      "docs_only",
-      "dependency_only",
-      "no_runtime_path_changed"
-    ],
-    "selection_rule": "Use when the dominant user-visible or operational impact is improved speed, latency, throughput, or resource usage."
-  },
-  {
-    "emoji": "🔥",
-    "code": ":fire:",
-    "intent_id": "remove_code_files",
-    "intent_group": "refactor_architecture",
-    "description": "Remove code or files",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Removed",
-    "priority": 60,
-    "specificity": 75,
-    "split_weight": 60,
-    "positive_signals": [
-      "files_deleted",
-      "code_removed",
-      "feature_removed_without_deprecation",
-      "obsolete_module_removed",
-      "large_deletion"
-    ],
-    "negative_signals": [
-      "dead_code_only",
-      "deprecation_only",
-      "move_or_rename_only",
-      "formatting_only",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change actively removes code or files. Prefer ⚰️ for dead-code removal and 🗑️ for deprecation."
-  },
-  {
-    "emoji": "🐛",
-    "code": ":bug:",
-    "intent_id": "bug_fix",
-    "intent_group": "bugfix",
-    "description": "Fix a bug",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Fixed",
-    "priority": 85,
-    "specificity": 65,
-    "split_weight": 85,
-    "positive_signals": [
-      "bug_fixed",
-      "incorrect_behavior_corrected",
-      "regression_fixed",
-      "failing_behavior_repaired",
-      "runtime_error_resolved"
-    ],
-    "negative_signals": [
-      "docs_only",
-      "formatting_only",
-      "test_only_without_fix",
-      "feature_addition",
-      "pure_refactor"
-    ],
-    "selection_rule": "Use for a normal bug fix where the primary change corrects incorrect runtime behaviour."
-  },
-  {
-    "emoji": "🚑",
-    "code": ":ambulance:",
-    "intent_id": "critical_hotfix",
-    "intent_group": "critical_fix",
-    "description": "Critical hotfix",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Fixed",
-    "priority": 92,
-    "specificity": 85,
-    "split_weight": 92,
-    "positive_signals": [
-      "urgent_production_fix",
-      "critical_runtime_failure",
-      "severe_regression",
-      "service_outage_fix",
-      "hotfix_language_present"
-    ],
-    "negative_signals": [
-      "minor_bug_fix",
-      "docs_only",
-      "refactor_only",
-      "test_only",
-      "non_urgent_change"
-    ],
-    "selection_rule": "Use only for urgent high-impact fixes, especially production breakages or critical regressions."
-  },
-  {
-    "emoji": "✨",
-    "code": ":sparkles:",
-    "intent_id": "feature_addition",
-    "intent_group": "feature",
-    "description": "Introduce new features",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 85,
-    "specificity": 60,
-    "split_weight": 85,
-    "positive_signals": [
-      "new_user_facing_capability",
-      "new_command",
-      "new_option",
-      "new_api",
-      "new_workflow"
-    ],
-    "negative_signals": [
-      "bug_fix_only",
-      "docs_only",
-      "refactor_only",
-      "configuration_only",
-      "test_only"
-    ],
-    "selection_rule": "Use when the primary change adds a new user-facing or API-visible capability. Prefer more specific feature intents when applicable."
-  },
-  {
-    "emoji": "📝",
-    "code": ":memo:",
-    "intent_id": "documentation_update",
-    "intent_group": "docs",
-    "description": "Add or update documentation",
-    "cc_type": "docs",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 40,
-    "specificity": 55,
-    "split_weight": 40,
-    "positive_signals": [
-      "docs_only",
-      "readme_changed",
-      "markdown_changed",
-      "adr_added",
-      "documentation_expanded"
-    ],
-    "negative_signals": [
-      "functional_code_changed",
-      "security_change",
-      "build_or_packaging_change",
-      "runtime_behavior_changed",
-      "release_metadata_changed_as_primary"
-    ],
-    "selection_rule": "Use for documentation-only or documentation-primary changes. Do not use when functional security, build, runtime, or release changes are the main impact."
-  },
-  {
-    "emoji": "🚀",
-    "code": ":rocket:",
-    "intent_id": "deployment_change",
-    "intent_group": "release_management",
-    "description": "Deploy stuff",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 55,
-    "specificity": 65,
-    "split_weight": 55,
-    "positive_signals": [
-      "deployment_configuration",
-      "deployment_script",
-      "deploy_pipeline",
-      "release_deployment",
-      "hosting_target_changed"
-    ],
-    "negative_signals": [
-      "feature_development",
-      "local_dev_script_only",
-      "ci_build_only",
-      "docs_only",
-      "version_tag_only"
-    ],
-    "selection_rule": "Use when the primary change is deployment-related. Prefer 👷 for CI build system and 🔖 for release/version tags."
-  },
-  {
-    "emoji": "💄",
-    "code": ":lipstick:",
-    "intent_id": "ui_style_update",
-    "intent_group": "style_assets_text",
-    "description": "Add or update the UI and style files",
-    "cc_type": "style",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 55,
-    "specificity": 75,
-    "split_weight": 55,
-    "positive_signals": [
-      "ui_style_files_changed",
-      "css_changed",
-      "theme_changed",
-      "visual_design_changed",
-      "frontend_presentation_changed"
-    ],
-    "negative_signals": [
-      "backend_only",
-      "docs_only",
-      "logic_refactor_only",
-      "non_ui_formatting_only",
-      "accessibility_primary"
-    ],
-    "selection_rule": "Use when the primary change updates UI styling or visual presentation. Prefer ♿️ for accessibility-driven changes."
-  },
-  {
-    "emoji": "🎉",
-    "code": ":tada:",
-    "intent_id": "project_initialization",
-    "intent_group": "miscellaneous",
-    "description": "Begin a project",
-    "cc_type": "init",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 50,
-    "specificity": 90,
-    "split_weight": 50,
-    "positive_signals": [
-      "initial_commit",
-      "new_project_scaffold",
-      "first_repository_files",
-      "initial_structure",
-      "bootstrap_project"
-    ],
-    "negative_signals": [
-      "existing_project_change",
-      "incremental_feature",
-      "bug_fix",
-      "docs_update_only",
-      "release_change"
-    ],
-    "selection_rule": "Use only for initial project creation or major bootstrap commits."
-  },
-  {
-    "emoji": "✅",
-    "code": ":white_check_mark:",
-    "intent_id": "tests_update",
-    "intent_group": "tests",
-    "description": "Add, update, or pass tests",
-    "cc_type": "test",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 50,
-    "specificity": 60,
-    "split_weight": 50,
-    "positive_signals": [
-      "tests_added",
-      "tests_updated",
-      "test_fixtures_changed",
-      "test_assertions_changed",
-      "coverage_improved"
-    ],
-    "negative_signals": [
-      "runtime_fix_in_source",
-      "feature_code_primary",
-      "docs_only",
-      "ci_pipeline_primary",
-      "failing_test_intent"
-    ],
-    "selection_rule": "Use when the primary change is adding or updating tests. Prefer 🧪 for intentionally adding a failing test."
-  },
-  {
-    "emoji": "🔒️",
-    "code": ":lock:",
-    "intent_id": "security_privacy_fix",
-    "intent_group": "security",
-    "description": "Fix security or privacy issues",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Security",
-    "priority": 95,
-    "specificity": 85,
-    "split_weight": 95,
-    "positive_signals": [
-      "security_vulnerability_fixed",
-      "privacy_issue_fixed",
-      "secret_leak_prevented",
-      "auth_bypass_fixed",
-      "sensitive_data_protected"
-    ],
-    "negative_signals": [
-      "secrets_configuration_only",
-      "docs_only",
-      "security_tooling_only_without_fix",
-      "generic_chore",
-      "non_security_bug"
-    ],
-    "selection_rule": "Use when the primary change fixes a security or privacy issue. Security fixes should not be hidden under docs/chore headers."
-  },
-  {
-    "emoji": "🔐",
-    "code": ":closed_lock_with_key:",
-    "intent_id": "secrets_update",
-    "intent_group": "security",
-    "description": "Add or update secrets",
-    "cc_type": "chore",
-    "semver_impact": "PATCH",
-    "changelog_group": "Security",
-    "priority": 85,
-    "specificity": 85,
-    "split_weight": 85,
-    "positive_signals": [
-      "secret_reference_changed",
-      "secret_management_config_changed",
-      "credential_injection_updated",
-      "encrypted_secret_file_changed",
-      "secret_rotation_metadata"
-    ],
-    "negative_signals": [
-      "plaintext_secret_added",
-      "security_vulnerability_fix_primary",
-      "docs_only",
-      "generic_config_change",
-      "non_secret_environment_change"
-    ],
-    "selection_rule": "Use for secret-management changes, encrypted secret metadata, or credential orchestration. Do not use for plaintext secrets; those should be blocked."
-  },
-  {
-    "emoji": "🔖",
-    "code": ":bookmark:",
-    "intent_id": "release_version_tag",
-    "intent_group": "release_management",
-    "description": "Release/Version tags",
-    "cc_type": "release",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 70,
-    "specificity": 80,
-    "split_weight": 70,
-    "positive_signals": [
-      "release_commit",
-      "version_tag",
-      "changelog_release_entry",
-      "version_bump",
-      "release_metadata"
-    ],
-    "negative_signals": [
-      "feature_primary",
-      "bug_fix_primary",
-      "docs_only",
-      "dependency_update_primary",
-      "non_release_version_reference"
-    ],
-    "selection_rule": "Use for release commits, version tags, and release metadata. Prefer dependency/build intents for dependency-only version changes."
-  },
-  {
-    "emoji": "🚨",
-    "code": ":rotating_light:",
-    "intent_id": "lint_warning_fix",
-    "intent_group": "refactor_architecture",
-    "description": "Fix compiler/linter warnings",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 55,
-    "specificity": 80,
-    "split_weight": 45,
-    "positive_signals": [
-      "lint_warnings_fixed",
-      "compiler_warnings_fixed",
-      "static_analysis_cleanup",
-      "ruff_fix",
-      "typechecker_warning_fixed"
-    ],
-    "negative_signals": [
-      "runtime_bug_fixed",
-      "feature_added",
-      "general_refactor",
-      "formatting_only",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change fixes compiler, linter, or static-analysis warnings. Prefer 🎨 for pure formatting."
-  },
-  {
-    "emoji": "🚧",
-    "code": ":construction:",
-    "intent_id": "work_in_progress",
-    "intent_group": "miscellaneous",
-    "description": "Work in progress",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 20,
-    "specificity": 60,
-    "split_weight": 20,
-    "positive_signals": [
-      "wip_marker",
-      "temporary_incomplete_work",
-      "partial_implementation",
-      "construction_state",
-      "draft_change"
-    ],
-    "negative_signals": [
-      "complete_feature",
-      "complete_fix",
-      "release_ready_change",
-      "public_history_quality_required",
-      "final_commit"
-    ],
-    "selection_rule": "Use sparingly for temporary work-in-progress commits. Avoid in polished public history."
-  },
-  {
-    "emoji": "💚",
-    "code": ":green_heart:",
-    "intent_id": "ci_fix",
-    "intent_group": "ci_infra",
-    "description": "Fix CI Build",
-    "cc_type": "ci",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 65,
-    "specificity": 80,
-    "split_weight": 65,
-    "positive_signals": [
-      "ci_failure_fixed",
-      "workflow_failure_fixed",
-      "broken_build_repaired",
-      "pipeline_fix",
-      "github_actions_fix"
-    ],
-    "negative_signals": [
-      "new_ci_workflow_added",
-      "infrastructure_primary",
-      "tests_only",
-      "docs_only",
-      "local_script_only"
-    ],
-    "selection_rule": "Use when the primary change fixes a failing CI/build pipeline. Prefer 👷 for adding or updating CI systems."
-  },
-  {
-    "emoji": "⬇️",
-    "code": ":arrow_down:",
-    "intent_id": "dependency_downgrade",
-    "intent_group": "runtime_build_package",
-    "description": "Downgrade dependencies",
-    "cc_type": "build",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 70,
-    "specificity": 85,
-    "split_weight": 75,
-    "positive_signals": [
-      "dependency_version_decreased",
-      "lockfile_downgrade",
-      "pin_to_older_version",
-      "rollback_dependency",
-      "compatibility_downgrade"
-    ],
-    "negative_signals": [
-      "dependency_upgrade",
-      "dependency_addition",
-      "dependency_removal",
-      "non_dependency_version_change",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change downgrades one or more dependencies."
-  },
-  {
-    "emoji": "⬆️",
-    "code": ":arrow_up:",
-    "intent_id": "dependency_upgrade",
-    "intent_group": "runtime_build_package",
-    "description": "Upgrade dependencies",
-    "cc_type": "build",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 70,
-    "specificity": 85,
-    "split_weight": 75,
-    "positive_signals": [
-      "dependency_version_increased",
-      "lockfile_upgrade",
-      "package_upgrade",
-      "dependency_refresh",
-      "security_dependency_update"
-    ],
-    "negative_signals": [
-      "dependency_downgrade",
-      "dependency_addition",
-      "dependency_removal",
-      "non_dependency_version_change",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change upgrades existing dependencies."
-  },
-  {
-    "emoji": "📌",
-    "code": ":pushpin:",
-    "intent_id": "dependency_pin",
-    "intent_group": "runtime_build_package",
-    "description": "Pin dependencies to specific versions",
-    "cc_type": "build",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 68,
-    "specificity": 85,
-    "split_weight": 70,
-    "positive_signals": [
-      "dependency_pinned",
-      "version_constraint_added",
-      "lockfile_pin",
-      "exact_version_set",
-      "range_replaced_with_exact_version"
-    ],
-    "negative_signals": [
-      "dependency_upgrade_primary",
-      "dependency_downgrade_primary",
-      "dependency_addition_primary",
-      "docs_only",
-      "non_dependency_config"
-    ],
-    "selection_rule": "Use when the primary change pins dependency versions or tightens version constraints."
-  },
-  {
-    "emoji": "👷",
-    "code": ":construction_worker:",
-    "intent_id": "ci_build_system",
-    "intent_group": "ci_infra",
-    "description": "Add or update CI build system",
-    "cc_type": "ci",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 70,
-    "specificity": 75,
-    "split_weight": 70,
-    "positive_signals": [
-      "ci_workflow_added",
-      "ci_workflow_updated",
-      "github_actions_changed",
-      "build_pipeline_changed",
-      "automation_pipeline_changed"
-    ],
-    "negative_signals": [
-      "ci_failure_fix_only",
-      "local_dev_script_primary",
-      "runtime_infrastructure_primary",
-      "tests_only",
-      "docs_only"
-    ],
-    "selection_rule": "Use for adding or updating CI/build automation. Prefer 💚 when fixing a broken CI build."
-  },
-  {
-    "emoji": "📈",
-    "code": ":chart_with_upwards_trend:",
-    "intent_id": "analytics_tracking",
-    "intent_group": "feature",
-    "description": "Add or update analytics or track code",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 75,
-    "specificity": 85,
-    "split_weight": 75,
-    "positive_signals": [
-      "analytics_added",
-      "tracking_code_added",
-      "telemetry_added",
-      "metrics_collection_changed",
-      "usage_tracking"
-    ],
-    "negative_signals": [
-      "logs_only",
-      "observability_docs_only",
-      "performance_metric_internal_only",
-      "privacy_fix_primary",
-      "generic_feature"
-    ],
-    "selection_rule": "Use when the primary change adds or updates analytics, telemetry, tracking, or metrics collection."
-  },
-  {
-    "emoji": "♻️",
-    "code": ":recycle:",
-    "intent_id": "generic_refactor",
-    "intent_group": "refactor_architecture",
-    "description": "Refactor code",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 75,
-    "specificity": 55,
-    "split_weight": 60,
-    "positive_signals": [
-      "centralize_logic",
-      "deduplicate_code",
-      "extract_shared_helper",
-      "internal_restructure",
-      "behavior_preserving_code_change"
-    ],
-    "negative_signals": [
-      "primary_change_is_file_rename",
-      "primary_change_is_resource_move",
-      "primary_change_is_dead_code_removal",
-      "new_feature_added",
-      "bug_fix_primary"
-    ],
-    "selection_rule": "Use for internal restructuring, centralisation, or deduplication when no more specific refactor subtype dominates."
-  },
-  {
-    "emoji": "➕",
-    "code": ":heavy_plus_sign:",
-    "intent_id": "dependency_add",
-    "intent_group": "runtime_build_package",
-    "description": "Add a dependency",
-    "cc_type": "build",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 72,
-    "specificity": 85,
-    "split_weight": 78,
-    "positive_signals": [
-      "dependency_added",
-      "new_package_in_pyproject",
-      "new_package_in_package_json",
-      "lockfile_new_dependency",
-      "new_tool_dependency"
-    ],
-    "negative_signals": [
-      "dependency_removed",
-      "dependency_upgraded_only",
-      "dependency_downgraded_only",
-      "version_pin_only",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change adds a new dependency or tool dependency."
-  },
-  {
-    "emoji": "➖",
-    "code": ":heavy_minus_sign:",
-    "intent_id": "dependency_remove",
-    "intent_group": "runtime_build_package",
-    "description": "Remove a dependency",
-    "cc_type": "build",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 72,
-    "specificity": 85,
-    "split_weight": 78,
-    "positive_signals": [
-      "dependency_removed",
-      "package_removed_from_manifest",
-      "lockfile_dependency_removed",
-      "tool_dependency_removed",
-      "unused_dependency_removed"
-    ],
-    "negative_signals": [
-      "dependency_added",
-      "dependency_upgraded_only",
-      "dependency_downgraded_only",
-      "code_removed_primary",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change removes a dependency or tool dependency."
-  },
-  {
-    "emoji": "🔧",
-    "code": ":wrench:",
-    "intent_id": "configuration_update",
-    "intent_group": "config_chore",
-    "description": "Add or update configuration files",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 50,
-    "specificity": 65,
-    "split_weight": 45,
-    "positive_signals": [
-      "configuration_file_changed",
-      "toml_yaml_json_config_changed",
-      "tool_config_changed",
-      "settings_changed",
-      "project_config_changed"
-    ],
-    "negative_signals": [
-      "code_change_primary",
-      "security_config_primary",
-      "ci_config_primary",
-      "package_metadata_primary",
-      "docs_only"
-    ],
-    "selection_rule": "Use for configuration-file changes. Do not use when code merely reads config; choose the code intent instead."
-  },
-  {
-    "emoji": "🔨",
-    "code": ":hammer:",
-    "intent_id": "development_script_update",
-    "intent_group": "config_chore",
-    "description": "Add or update development scripts",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 50,
-    "specificity": 75,
-    "split_weight": 50,
-    "positive_signals": [
-      "dev_script_added",
-      "dev_script_updated",
-      "justfile_task_changed",
-      "automation_script_changed",
-      "local_tooling_script"
-    ],
-    "negative_signals": [
-      "ci_workflow_primary",
-      "deployment_script_primary",
-      "runtime_code_primary",
-      "docs_only",
-      "package_build_primary"
-    ],
-    "selection_rule": "Use when the primary change adds or updates local development scripts or task-runner commands."
-  },
-  {
-    "emoji": "🌐",
-    "code": ":globe_with_meridians:",
-    "intent_id": "i18n_l10n",
-    "intent_group": "feature",
-    "description": "Internationalization and localization",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 78,
-    "specificity": 90,
-    "split_weight": 80,
-    "positive_signals": [
-      "translation_added",
-      "locale_support_added",
-      "i18n_framework_changed",
-      "language_files_changed",
-      "localization_feature"
-    ],
-    "negative_signals": [
-      "spelling_variant_config_only",
-      "text_literal_update_only",
-      "docs_translation_only",
-      "generic_feature",
-      "ui_style_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates internationalisation/localisation support."
-  },
-  {
-    "emoji": "✏️",
-    "code": ":pencil2:",
-    "intent_id": "typo_fix",
-    "intent_group": "docs",
-    "description": "Fix typos",
-    "cc_type": "docs",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 30,
-    "specificity": 80,
-    "split_weight": 25,
-    "positive_signals": [
-      "typo_fixed",
-      "spelling_corrected",
-      "grammar_corrected",
-      "minor_text_correction",
-      "documentation_typo_only"
-    ],
-    "negative_signals": [
-      "substantial_docs_update",
-      "runtime_text_change",
-      "feature_change",
-      "bug_fix",
-      "configuration_change"
-    ],
-    "selection_rule": "Use for typo/spelling/grammar corrections, especially in documentation. Prefer 📝 for substantial documentation updates."
-  },
-  {
-    "emoji": "💩",
-    "code": ":poop:",
-    "intent_id": "known_bad_code",
-    "intent_group": "miscellaneous",
-    "description": "Write bad code that needs to be improved",
-    "cc_type": "refactor",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 10,
-    "specificity": 85,
-    "split_weight": 10,
-    "positive_signals": [
-      "explicit_bad_code_marker",
-      "intentional_technical_debt",
-      "temporary_hack",
-      "known_poor_quality",
-      "prototype_shortcut"
-    ],
-    "negative_signals": [
-      "normal_refactor",
-      "production_ready_change",
-      "docs_only",
-      "test_only",
-      "release_commit"
-    ],
-    "selection_rule": "Use only when the author intentionally marks the change as bad/temporary technical debt. Avoid in public polished history."
-  },
-  {
-    "emoji": "⏪",
-    "code": ":rewind:",
-    "intent_id": "revert_change",
-    "intent_group": "release_management",
-    "description": "Revert changes",
-    "cc_type": "revert",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 75,
-    "specificity": 90,
-    "split_weight": 80,
-    "positive_signals": [
-      "git_revert",
-      "revert_commit",
-      "rollback_change",
-      "undo_previous_commit",
-      "restore_previous_behavior"
-    ],
-    "negative_signals": [
-      "ordinary_bug_fix",
-      "dependency_downgrade_only",
-      "manual_refactor",
-      "docs_only",
-      "version_rollback_only"
-    ],
-    "selection_rule": "Use when the primary change reverts or rolls back previous changes."
-  },
-  {
-    "emoji": "🔀",
-    "code": ":twisted_rightwards_arrows:",
-    "intent_id": "merge_branch",
-    "intent_group": "release_management",
-    "description": "Merge branches",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 20,
-    "specificity": 90,
-    "split_weight": 20,
-    "positive_signals": [
-      "merge_commit",
-      "branch_merge",
-      "non_squash_merge",
-      "merge_conflict_resolution",
-      "integration_merge"
-    ],
-    "negative_signals": [
-      "normal_feature_commit",
-      "normal_fix_commit",
-      "squashed_changes",
-      "docs_only",
-      "manual_combined_commit"
-    ],
-    "selection_rule": "Use for actual merge commits or branch integrations. Normal feature/fix commits should not use this."
-  },
-  {
-    "emoji": "📦",
-    "code": ":package:",
-    "intent_id": "package_artifact_update",
-    "intent_group": "runtime_build_package",
-    "description": "Add or update compiled files or packages",
-    "cc_type": "build",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 75,
-    "specificity": 75,
-    "split_weight": 80,
-    "positive_signals": [
-      "package_artifact_changed",
-      "wheel_or_sdist_config_changed",
-      "build_backend_changed",
-      "packaged_data_changed",
-      "distribution_metadata_changed"
-    ],
-    "negative_signals": [
-      "dependency_only",
-      "release_tag_only",
-      "docs_only",
-      "generic_config_change",
-      "source_refactor_primary"
-    ],
-    "selection_rule": "Use when the primary change affects packaging, build artifacts, package data, or distribution metadata."
-  },
-  {
-    "emoji": "👽️",
-    "code": ":alien:",
-    "intent_id": "external_api_update",
-    "intent_group": "refactor_architecture",
-    "description": "Update code due to external API changes",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 72,
-    "specificity": 85,
-    "split_weight": 70,
-    "positive_signals": [
-      "external_api_changed",
-      "third_party_api_adaptation",
-      "provider_contract_changed",
-      "sdk_api_update",
-      "compatibility_with_external_service"
-    ],
-    "negative_signals": [
-      "internal_api_refactor",
-      "dependency_upgrade_only",
-      "bug_fix_unrelated_to_external_api",
-      "docs_only",
-      "new_feature_primary"
-    ],
-    "selection_rule": "Use when the primary change adapts code to an external API or third-party contract change."
-  },
-  {
-    "emoji": "🚚",
-    "code": ":truck:",
-    "intent_id": "move_rename",
-    "intent_group": "refactor_architecture",
-    "description": "Move or rename resources",
-    "cc_type": "refactor",
-    "semver_impact": "NONE",
-    "changelog_group": "Changed",
-    "priority": 60,
-    "specificity": 85,
-    "split_weight": 45,
-    "positive_signals": [
-      "git_rename_detected",
-      "path_moved",
-      "resource_renamed",
-      "module_renamed",
-      "directory_reorganized"
-    ],
-    "negative_signals": [
-      "no_renames",
-      "pure_logic_refactor",
-      "centralized_loader_without_moves",
-      "new_helper_module_without_move",
-      "portability_improvement_without_resource_move"
-    ],
-    "selection_rule": "Use only when the primary change is moving or renaming files/resources. Do not use for general centralisation, modularisation, or portability improvements unless file movement is dominant."
-  },
-  {
-    "emoji": "📄",
-    "code": ":page_facing_up:",
-    "intent_id": "license_update",
-    "intent_group": "docs",
-    "description": "Add or update license",
-    "cc_type": "docs",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 90,
-    "split_weight": 45,
-    "positive_signals": [
-      "license_file_changed",
-      "license_added",
-      "copyright_updated",
-      "notice_file_changed",
-      "legal_metadata_changed"
-    ],
-    "negative_signals": [
-      "general_docs_update",
-      "package_metadata_only",
-      "security_policy_update",
-      "docs_only_without_license",
-      "release_note_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates license, copyright, or legal notice files."
-  },
-  {
-    "emoji": "💥",
-    "code": ":boom:",
-    "intent_id": "breaking_change",
-    "intent_group": "breaking",
-    "description": "Introduce breaking changes",
-    "cc_type": "feat",
-    "semver_impact": "MAJOR",
-    "changelog_group": "Changed",
-    "priority": 100,
-    "specificity": 90,
-    "split_weight": 100,
-    "positive_signals": [
-      "breaking_change_declared",
-      "public_api_removed",
-      "backwards_incompatible_behavior",
-      "migration_required",
-      "breaking_change_footer"
-    ],
-    "negative_signals": [
-      "backwards_compatible_feature",
-      "internal_refactor_only",
-      "docs_only",
-      "minor_bug_fix",
-      "test_only"
-    ],
-    "selection_rule": "Use when the primary change is backwards-incompatible or explicitly declares a breaking change. Breaking changes must not be hidden under lower-priority headers."
-  },
-  {
-    "emoji": "🍱",
-    "code": ":bento:",
-    "intent_id": "asset_update",
-    "intent_group": "style_assets_text",
-    "description": "Add or update assets",
-    "cc_type": "chore",
-    "semver_impact": "PATCH",
-    "changelog_group": "Added",
-    "priority": 50,
-    "specificity": 75,
-    "split_weight": 50,
-    "positive_signals": [
-      "asset_file_added",
-      "image_asset_changed",
-      "static_asset_updated",
-      "media_file_changed",
-      "documentation_asset_added"
-    ],
-    "negative_signals": [
-      "source_code_primary",
-      "ui_style_primary",
-      "docs_text_only",
-      "package_artifact_primary",
-      "generated_build_output_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates assets such as images, media, or static files."
-  },
-  {
-    "emoji": "♿️",
-    "code": ":wheelchair:",
-    "intent_id": "accessibility_improvement",
-    "intent_group": "feature",
-    "description": "Improve accessibility",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 75,
-    "specificity": 90,
-    "split_weight": 75,
-    "positive_signals": [
-      "accessibility_improved",
-      "aria_changed",
-      "keyboard_navigation_improved",
-      "screen_reader_support",
-      "contrast_or_a11y_fix"
-    ],
-    "negative_signals": [
-      "generic_ui_style",
-      "docs_only",
-      "unrelated_feature",
-      "bug_fix_non_accessibility",
-      "responsive_design_primary"
-    ],
-    "selection_rule": "Use when the primary change improves accessibility. Prefer this over generic feature or style when accessibility is the intent."
-  },
-  {
-    "emoji": "💡",
-    "code": ":bulb:",
-    "intent_id": "comments_update",
-    "intent_group": "docs",
-    "description": "Add or update comments in source code",
-    "cc_type": "docs",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 35,
-    "specificity": 75,
-    "split_weight": 30,
-    "positive_signals": [
-      "source_comments_added",
-      "docstring_updated",
-      "inline_comment_changed",
-      "code_explanation_added",
-      "comments_only"
-    ],
-    "negative_signals": [
-      "runtime_logic_changed",
-      "documentation_file_changed_primary",
-      "bug_fix",
-      "feature_added",
-      "refactor_primary"
-    ],
-    "selection_rule": "Use when the primary change adds or updates comments/docstrings in source code without changing behaviour."
-  },
-  {
-    "emoji": "🍻",
-    "code": ":beers:",
-    "intent_id": "low_quality_code",
-    "intent_group": "miscellaneous",
-    "description": "Write code drunkenly",
-    "cc_type": "refactor",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 5,
-    "specificity": 90,
-    "split_weight": 5,
-    "positive_signals": [
-      "explicit_joke_commit",
-      "intentionally_unpolished_code",
-      "informal_experimental_change",
-      "author_explicitly_marks_drunken_code",
-      "non_public_history"
-    ],
-    "negative_signals": [
-      "public_release_ready",
-      "normal_refactor",
-      "production_fix",
-      "docs_only",
-      "security_change"
-    ],
-    "selection_rule": "Use only for explicit joke/informal commits. Avoid in public project history."
-  },
-  {
-    "emoji": "💬",
-    "code": ":speech_balloon:",
-    "intent_id": "text_literal_update",
-    "intent_group": "style_assets_text",
-    "description": "Add or update text and literals",
-    "cc_type": "style",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 45,
-    "specificity": 75,
-    "split_weight": 45,
-    "positive_signals": [
-      "user_facing_text_changed",
-      "string_literal_updated",
-      "copy_changed",
-      "message_text_changed",
-      "label_text_changed"
-    ],
-    "negative_signals": [
-      "documentation_text_only",
-      "i18n_primary",
-      "ui_style_primary",
-      "bug_fix_primary",
-      "feature_primary"
-    ],
-    "selection_rule": "Use when the primary change updates user-facing text or literals. Prefer 🌐 for localization/i18n changes."
-  },
-  {
-    "emoji": "🗃️",
-    "code": ":card_file_box:",
-    "intent_id": "database_change",
-    "intent_group": "feature",
-    "description": "Perform database related changes",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 75,
-    "specificity": 90,
-    "split_weight": 80,
-    "positive_signals": [
-      "database_schema_changed",
-      "migration_added",
-      "query_changed",
-      "data_model_persistence_changed",
-      "database_config_changed"
-    ],
-    "negative_signals": [
-      "non_database_storage",
-      "docs_only",
-      "generic_feature",
-      "test_fixture_only",
-      "config_only_unrelated_to_database"
-    ],
-    "selection_rule": "Use when the primary change affects database schema, migrations, queries, or persistence behaviour."
-  },
-  {
-    "emoji": "🔊",
-    "code": ":loud_sound:",
-    "intent_id": "logging_add",
-    "intent_group": "config_chore",
-    "description": "Add or update logs",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 75,
-    "split_weight": 45,
-    "positive_signals": [
-      "log_statement_added",
-      "logging_improved",
-      "debug_output_added",
-      "observability_logging",
-      "log_context_updated"
-    ],
-    "negative_signals": [
-      "logging_removed",
-      "analytics_tracking_primary",
-      "bug_fix_primary",
-      "docs_only",
-      "tracing_system_primary"
-    ],
-    "selection_rule": "Use when the primary change adds or updates logging. Prefer 📈 for analytics/tracking telemetry."
-  },
-  {
-    "emoji": "🔇",
-    "code": ":mute:",
-    "intent_id": "logging_remove",
-    "intent_group": "config_chore",
-    "description": "Remove logs",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 75,
-    "split_weight": 45,
-    "positive_signals": [
-      "log_statement_removed",
-      "debug_output_removed",
-      "noise_reduced",
-      "logging_suppressed",
-      "verbose_output_removed"
-    ],
-    "negative_signals": [
-      "logging_added",
-      "bug_fix_primary",
-      "performance_primary",
-      "docs_only",
-      "security_redaction_primary"
-    ],
-    "selection_rule": "Use when the primary change removes or silences logs. Prefer 🔒️ if the change removes sensitive logging for security/privacy."
-  },
-  {
-    "emoji": "👥",
-    "code": ":busts_in_silhouette:",
-    "intent_id": "contributor_update",
-    "intent_group": "miscellaneous",
-    "description": "Add or update contributor(s)",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 35,
-    "specificity": 85,
-    "split_weight": 35,
-    "positive_signals": [
-      "contributors_file_changed",
-      "author_metadata_changed",
-      "credits_updated",
-      "maintainer_list_updated",
-      "acknowledgements_updated"
-    ],
-    "negative_signals": [
-      "general_docs_update",
-      "license_update",
-      "package_author_metadata_primary",
-      "feature_change",
-      "bug_fix"
-    ],
-    "selection_rule": "Use when the primary change updates contributor, maintainer, or acknowledgement metadata."
-  },
-  {
-    "emoji": "🚸",
-    "code": ":children_crossing:",
-    "intent_id": "ux_usability_improvement",
-    "intent_group": "feature",
-    "description": "Improve user experience/usability",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 72,
-    "specificity": 80,
-    "split_weight": 75,
-    "positive_signals": [
-      "ux_improved",
-      "usability_improved",
-      "user_flow_improved",
-      "error_message_improved",
-      "interaction_simplified"
-    ],
-    "negative_signals": [
-      "accessibility_primary",
-      "ui_style_only",
-      "bug_fix_primary",
-      "docs_only",
-      "developer_experience_primary"
-    ],
-    "selection_rule": "Use when the primary change improves end-user experience or usability without introducing a major new feature."
-  },
-  {
-    "emoji": "🏗️",
-    "code": ":building_construction:",
-    "intent_id": "architecture_refactor",
-    "intent_group": "refactor_architecture",
-    "description": "Make architectural changes",
-    "cc_type": "refactor",
-    "semver_impact": "MAJOR",
-    "changelog_group": "Changed",
-    "priority": 90,
-    "specificity": 80,
-    "split_weight": 85,
-    "positive_signals": [
-      "major_subsystem_restructured",
-      "architecture_boundary_changed",
-      "core_architecture_changed",
-      "large_scale_refactor",
-      "module_relationships_redesigned"
-    ],
-    "negative_signals": [
-      "small_helper_extraction",
-      "generic_refactor",
-      "move_or_rename_only",
-      "formatting_only",
-      "docs_only"
-    ],
-    "selection_rule": "Use for broad architectural restructuring. Do not use for small helper extraction or ordinary internal refactoring."
-  },
-  {
-    "emoji": "📱",
-    "code": ":iphone:",
-    "intent_id": "responsive_design",
-    "intent_group": "feature",
-    "description": "Work on responsive design",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 68,
-    "specificity": 85,
-    "split_weight": 65,
-    "positive_signals": [
-      "responsive_layout_changed",
-      "mobile_layout_improved",
-      "viewport_handling_changed",
-      "breakpoints_changed",
-      "mobile_ui_support"
-    ],
-    "negative_signals": [
-      "generic_ui_style",
-      "accessibility_primary",
-      "backend_only",
-      "docs_only",
-      "non_responsive_feature"
-    ],
-    "selection_rule": "Use when the primary change improves responsive/mobile design."
-  },
-  {
-    "emoji": "🤡",
-    "code": ":clown_face:",
-    "intent_id": "mock_update",
-    "intent_group": "tests",
-    "description": "Mock things",
-    "cc_type": "test",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 85,
-    "split_weight": 45,
-    "positive_signals": [
-      "mock_added",
-      "mock_updated",
-      "test_double_changed",
-      "fake_service_changed",
-      "stub_changed"
-    ],
-    "negative_signals": [
-      "production_code_primary",
-      "test_assertions_primary",
-      "failing_test_primary",
-      "docs_only",
-      "runtime_feature"
-    ],
-    "selection_rule": "Use when the primary change adds or updates mocks, stubs, fakes, or test doubles."
-  },
-  {
-    "emoji": "🥚",
-    "code": ":egg:",
-    "intent_id": "easter_egg",
-    "intent_group": "feature",
-    "description": "Add or update an easter egg",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Added",
-    "priority": 40,
-    "specificity": 90,
-    "split_weight": 40,
-    "positive_signals": [
-      "easter_egg_added",
-      "hidden_feature_added",
-      "novelty_behavior_added",
-      "fun_interaction_added",
-      "secret_ui_behavior"
-    ],
-    "negative_signals": [
-      "normal_feature",
-      "bug_fix",
-      "docs_only",
-      "test_only",
-      "security_change"
-    ],
-    "selection_rule": "Use only when the primary change is an easter egg or hidden novelty behaviour."
-  },
-  {
-    "emoji": "🙈",
-    "code": ":see_no_evil:",
-    "intent_id": "gitignore_update",
-    "intent_group": "config_chore",
-    "description": "Add or update a .gitignore file",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 90,
-    "split_weight": 35,
-    "positive_signals": [
-      "gitignore_changed",
-      "ignore_pattern_added",
-      "ignore_pattern_removed",
-      "vcs_ignore_updated",
-      "runtime_artifacts_ignored"
-    ],
-    "negative_signals": [
-      "security_scanner_config_primary",
-      "build_config_primary",
-      "docs_only",
-      "source_code_primary",
-      "package_config_primary"
-    ],
-    "selection_rule": "Use when the primary change updates `.gitignore` or VCS ignore patterns."
-  },
-  {
-    "emoji": "📸",
-    "code": ":camera_flash:",
-    "intent_id": "snapshot_update",
-    "intent_group": "tests",
-    "description": "Add or update snapshots",
-    "cc_type": "test",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 85,
-    "split_weight": 45,
-    "positive_signals": [
-      "snapshot_added",
-      "snapshot_updated",
-      "golden_file_changed",
-      "visual_snapshot_changed",
-      "test_snapshot_refresh"
-    ],
-    "negative_signals": [
-      "runtime_code_primary",
-      "test_logic_primary",
-      "asset_update_primary",
-      "docs_only",
-      "failing_test_primary"
-    ],
-    "selection_rule": "Use when the primary change adds or updates test snapshots or golden files."
-  },
-  {
-    "emoji": "⚗️",
-    "code": ":alembic:",
-    "intent_id": "experiment",
-    "intent_group": "feature",
-    "description": "Perform experiments",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 45,
-    "specificity": 80,
-    "split_weight": 45,
-    "positive_signals": [
-      "experiment_added",
-      "prototype_added",
-      "experimental_feature",
-      "spike_code",
-      "trial_implementation"
-    ],
-    "negative_signals": [
-      "production_feature_complete",
-      "bug_fix",
-      "docs_only",
-      "test_only",
-      "release_ready_feature"
-    ],
-    "selection_rule": "Use when the primary change is experimental or exploratory. Prefer ✨ for production-ready features."
-  },
-  {
-    "emoji": "🔍",
-    "code": ":mag:",
-    "intent_id": "seo_improvement",
-    "intent_group": "feature",
-    "description": "Improve SEO",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 55,
-    "specificity": 90,
-    "split_weight": 55,
-    "positive_signals": [
-      "seo_metadata_changed",
-      "search_indexing_improved",
-      "meta_tags_changed",
-      "structured_data_changed",
-      "canonical_url_changed"
-    ],
-    "negative_signals": [
-      "generic_docs",
-      "analytics_tracking_primary",
-      "ui_style_only",
-      "backend_only",
-      "non_seo_metadata"
-    ],
-    "selection_rule": "Use when the primary change improves search engine optimization."
-  },
-  {
-    "emoji": "🏷️",
-    "code": ":label:",
-    "intent_id": "types_update",
-    "intent_group": "refactor_architecture",
-    "description": "Add or update types",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 70,
-    "specificity": 85,
-    "split_weight": 60,
-    "positive_signals": [
-      "type_annotations_added",
-      "types_updated",
-      "schema_types_changed",
-      "pydantic_model_changed",
-      "typing_improved"
-    ],
-    "negative_signals": [
-      "runtime_logic_primary",
-      "generic_refactor",
-      "validation_behavior_primary",
-      "docs_only",
-      "test_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates types, typing models, schemas, or annotations."
-  },
-  {
-    "emoji": "🌱",
-    "code": ":seedling:",
-    "intent_id": "seed_data",
-    "intent_group": "config_chore",
-    "description": "Add or update seed files",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 45,
-    "specificity": 85,
-    "split_weight": 45,
-    "positive_signals": [
-      "seed_file_added",
-      "seed_data_updated",
-      "fixture_seed_changed",
-      "initial_data_changed",
-      "sample_data_changed"
-    ],
-    "negative_signals": [
-      "database_schema_primary",
-      "test_fixture_primary",
-      "asset_update_primary",
-      "docs_only",
-      "runtime_logic_primary"
-    ],
-    "selection_rule": "Use when the primary change adds or updates seed data files."
-  },
-  {
-    "emoji": "🚩",
-    "code": ":triangular_flag_on_post:",
-    "intent_id": "feature_flags_update",
-    "intent_group": "feature",
-    "description": "Add, update, or remove feature flags",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 78,
-    "specificity": 90,
-    "split_weight": 80,
-    "positive_signals": [
-      "feature_flag_added",
-      "feature_flag_updated",
-      "feature_flag_removed",
-      "flag_gate_changed",
-      "runtime_toggle_added"
-    ],
-    "negative_signals": [
-      "generic_config",
-      "release_flag_metadata_only",
-      "docs_only",
-      "ordinary_feature_without_flag",
-      "test_only"
-    ],
-    "selection_rule": "Use when the primary change adds, updates, or removes feature flags or runtime toggles."
-  },
-  {
-    "emoji": "🥅",
-    "code": ":goal_net:",
-    "intent_id": "error_handling",
-    "intent_group": "bugfix",
-    "description": "Catch errors",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Fixed",
-    "priority": 80,
-    "specificity": 85,
-    "split_weight": 85,
-    "positive_signals": [
-      "exception_handling_added",
-      "error_handling_improved",
-      "fallback_added",
-      "failure_mode_handled",
-      "try_except_added"
-    ],
-    "negative_signals": [
-      "validation_primary",
-      "generic_bug_fix",
-      "logging_only",
-      "docs_only",
-      "test_only"
-    ],
-    "selection_rule": "Use when the primary change catches, handles, or recovers from errors. Prefer 🦺 for validation-specific changes."
-  },
-  {
-    "emoji": "💫",
-    "code": ":dizzy:",
-    "intent_id": "animation_transition",
-    "intent_group": "style_assets_text",
-    "description": "Add or update animations and transitions",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 55,
-    "specificity": 90,
-    "split_weight": 55,
-    "positive_signals": [
-      "animation_added",
-      "transition_updated",
-      "motion_effect_changed",
-      "ui_animation_changed",
-      "interaction_animation"
-    ],
-    "negative_signals": [
-      "generic_ui_style",
-      "performance_primary",
-      "accessibility_primary",
-      "docs_only",
-      "backend_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates animations, transitions, or motion effects."
-  },
-  {
-    "emoji": "🗑️",
-    "code": ":wastebasket:",
-    "intent_id": "deprecation",
-    "intent_group": "refactor_architecture",
-    "description": "Deprecate code that needs to be cleaned up",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Deprecated",
-    "priority": 65,
-    "specificity": 90,
-    "split_weight": 70,
-    "positive_signals": [
-      "deprecation_added",
-      "deprecated_api_marked",
-      "deprecation_warning_added",
-      "cleanup_planned",
-      "legacy_path_marked_deprecated"
-    ],
-    "negative_signals": [
-      "code_removed_primary",
-      "dead_code_removed",
-      "breaking_change_primary",
-      "docs_only",
-      "generic_refactor"
-    ],
-    "selection_rule": "Use when the primary change marks code or APIs as deprecated. Prefer 🔥 or ⚰️ when code is actually removed."
-  },
-  {
-    "emoji": "🛂",
-    "code": ":passport_control:",
-    "intent_id": "authorization_permissions",
-    "intent_group": "security",
-    "description": "Work on code related to authorization, roles and permissions",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Security",
-    "priority": 88,
-    "specificity": 90,
-    "split_weight": 88,
-    "positive_signals": [
-      "authorization_changed",
-      "permissions_changed",
-      "role_access_changed",
-      "access_control_added",
-      "authz_policy_changed"
-    ],
-    "negative_signals": [
-      "auth_bug_fix_primary",
-      "security_privacy_fix_primary",
-      "generic_feature",
-      "docs_only",
-      "config_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates authorization, roles, permissions, or access-control features."
-  },
-  {
-    "emoji": "🩹",
-    "code": ":adhesive_bandage:",
-    "intent_id": "small_fix",
-    "intent_group": "bugfix",
-    "description": "Simple fix for a non-critical issue",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Fixed",
-    "priority": 65,
-    "specificity": 75,
-    "split_weight": 65,
-    "positive_signals": [
-      "small_fix",
-      "minor_issue_fixed",
-      "non_critical_fix",
-      "one_line_fix",
-      "low_risk_correction"
-    ],
-    "negative_signals": [
-      "critical_hotfix",
-      "security_fix",
-      "large_bug_fix",
-      "feature_added",
-      "docs_only"
-    ],
-    "selection_rule": "Use for small non-critical fixes. Prefer 🐛 for normal bugs and 🚑 for critical hotfixes."
-  },
-  {
-    "emoji": "🧐",
-    "code": ":monocle_face:",
-    "intent_id": "data_inspection",
-    "intent_group": "miscellaneous",
-    "description": "Data exploration/inspection",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 35,
-    "specificity": 85,
-    "split_weight": 35,
-    "positive_signals": [
-      "data_inspection",
-      "exploratory_analysis",
-      "notebook_analysis",
-      "diagnostic_output",
-      "investigation_artifact"
-    ],
-    "negative_signals": [
-      "database_change_primary",
-      "analytics_feature_primary",
-      "docs_only",
-      "runtime_feature",
-      "test_fixture_primary"
-    ],
-    "selection_rule": "Use when the primary change adds or updates data exploration, inspection, or investigation artifacts."
-  },
-  {
-    "emoji": "⚰️",
-    "code": ":coffin:",
-    "intent_id": "dead_code_removal",
-    "intent_group": "refactor_architecture",
-    "description": "Remove dead code",
-    "cc_type": "refactor",
-    "semver_impact": "PATCH",
-    "changelog_group": "Removed",
-    "priority": 60,
-    "specificity": 90,
-    "split_weight": 60,
-    "positive_signals": [
-      "dead_code_removed",
-      "unused_code_removed",
-      "unreachable_code_removed",
-      "obsolete_function_removed",
-      "unused_imports_removed"
-    ],
-    "negative_signals": [
-      "active_code_removed",
-      "feature_removed",
-      "deprecation_primary",
-      "move_or_rename_only",
-      "docs_only"
-    ],
-    "selection_rule": "Use when the primary change removes dead, unused, or unreachable code. Prefer 🔥 for broader active code/file removal."
-  },
-  {
-    "emoji": "🧪",
-    "code": ":test_tube:",
-    "intent_id": "failing_test",
-    "intent_group": "tests",
-    "description": "Add a failing test",
-    "cc_type": "test",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 50,
-    "specificity": 90,
-    "split_weight": 50,
-    "positive_signals": [
-      "failing_test_added",
-      "regression_test_before_fix",
-      "expected_failure_added",
-      "xfail_added",
-      "red_test_added"
-    ],
-    "negative_signals": [
-      "passing_tests_added",
-      "bug_fix_in_same_primary_change",
-      "test_refactor_only",
-      "docs_only",
-      "mock_update_primary"
-    ],
-    "selection_rule": "Use when the primary change intentionally adds a failing or expected-failure test."
-  },
-  {
-    "emoji": "👔",
-    "code": ":necktie:",
-    "intent_id": "business_logic",
-    "intent_group": "feature",
-    "description": "Add or update business logic",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 82,
-    "specificity": 80,
-    "split_weight": 85,
-    "positive_signals": [
-      "business_rule_changed",
-      "domain_logic_added",
-      "business_logic_updated",
-      "workflow_rule_added",
-      "core_domain_behavior_changed"
-    ],
-    "negative_signals": [
-      "generic_feature",
-      "bug_fix_primary",
-      "refactor_only",
-      "docs_only",
-      "config_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates business/domain logic."
-  },
-  {
-    "emoji": "🩺",
-    "code": ":stethoscope:",
-    "intent_id": "healthcheck",
-    "intent_group": "feature",
-    "description": "Add or update healthcheck",
-    "cc_type": "feat",
-    "semver_impact": "PATCH",
-    "changelog_group": "Added",
-    "priority": 70,
-    "specificity": 90,
-    "split_weight": 75,
-    "positive_signals": [
-      "healthcheck_added",
-      "health_endpoint_changed",
-      "readiness_check_added",
-      "liveness_check_added",
-      "service_status_check"
-    ],
-    "negative_signals": [
-      "observability_logging_only",
-      "ci_health_check_only",
-      "docs_only",
-      "generic_feature",
-      "monitoring_config_only"
-    ],
-    "selection_rule": "Use when the primary change adds or updates application/service health checks."
-  },
-  {
-    "emoji": "🧱",
-    "code": ":bricks:",
-    "intent_id": "infrastructure_change",
-    "intent_group": "ci_infra",
-    "description": "Infrastructure related changes",
-    "cc_type": "ci",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 75,
-    "specificity": 80,
-    "split_weight": 80,
-    "positive_signals": [
-      "infrastructure_config_changed",
-      "deployment_infra_changed",
-      "container_or_runtime_infra",
-      "system_tooling_changed",
-      "platform_configuration_changed"
-    ],
-    "negative_signals": [
-      "ci_workflow_only",
-      "local_config_only",
-      "docs_only",
-      "application_feature_primary",
-      "dependency_only"
-    ],
-    "selection_rule": "Use when the primary change affects infrastructure, platform, or system-level runtime configuration."
-  },
-  {
-    "emoji": "🧑‍💻",
-    "code": ":technologist:",
-    "intent_id": "developer_experience",
-    "intent_group": "config_chore",
-    "description": "Improve developer experience",
-    "cc_type": "chore",
-    "semver_impact": "NONE",
-    "changelog_group": "Miscellaneous",
-    "priority": 55,
-    "specificity": 75,
-    "split_weight": 55,
-    "positive_signals": [
-      "developer_experience_improved",
-      "local_workflow_improved",
-      "tooling_usability_improved",
-      "dev_setup_simplified",
-      "contributor_experience_improved"
-    ],
-    "negative_signals": [
-      "end_user_ux_primary",
-      "ci_pipeline_primary",
-      "runtime_feature_primary",
-      "docs_only",
-      "build_package_primary"
-    ],
-    "selection_rule": "Use when the primary change improves local developer or contributor experience."
-  },
-  {
-    "emoji": "💸",
-    "code": ":money_with_wings:",
-    "intent_id": "sponsorship_financial",
-    "intent_group": "feature",
-    "description": "Add sponsorships or money related infrastructure",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 65,
-    "specificity": 90,
-    "split_weight": 65,
-    "positive_signals": [
-      "sponsorship_added",
-      "funding_metadata_changed",
-      "billing_feature_added",
-      "payment_infrastructure_changed",
-      "financial_integration_added"
-    ],
-    "negative_signals": [
-      "generic_business_logic",
-      "docs_only",
-      "license_update",
-      "contributor_update",
-      "non_financial_feature"
-    ],
-    "selection_rule": "Use when the primary change adds sponsorship, funding, billing, payment, or money-related infrastructure."
-  },
-  {
-    "emoji": "🧵",
-    "code": ":thread:",
-    "intent_id": "concurrency_update",
-    "intent_group": "refactor_architecture",
-    "description": "Add or update code related to multithreading or concurrency",
-    "cc_type": "refactor",
-    "semver_impact": "MINOR",
-    "changelog_group": "Changed",
-    "priority": 80,
-    "specificity": 90,
-    "split_weight": 85,
-    "positive_signals": [
-      "concurrency_changed",
-      "threading_changed",
-      "async_behavior_changed",
-      "parallel_execution_changed",
-      "race_condition_handled"
-    ],
-    "negative_signals": [
-      "generic_refactor",
-      "performance_only_without_concurrency",
-      "docs_only",
-      "test_only",
-      "bug_fix_unrelated_to_concurrency"
-    ],
-    "selection_rule": "Use when the primary change adds or updates threading, async, concurrency, or parallel execution behaviour."
-  },
-  {
-    "emoji": "🦺",
-    "code": ":safety_vest:",
-    "intent_id": "validation_update",
-    "intent_group": "validation_safety",
-    "description": "Add or update code related to validation",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 80,
-    "specificity": 85,
-    "split_weight": 82,
-    "positive_signals": [
-      "validation_added",
-      "validation_hardened",
-      "schema_validation_changed",
-      "input_validation_changed",
-      "safety_guard_added"
-    ],
-    "negative_signals": [
-      "generic_bug_fix",
-      "error_handling_primary",
-      "types_only",
-      "docs_only",
-      "test_only"
-    ],
-    "selection_rule": "Use when the primary change adds or hardens validation/safety guards. Prefer 🥅 for error-catching and 🏷️ for type-only changes."
-  },
-  {
-    "emoji": "✈️",
-    "code": ":airplane:",
-    "intent_id": "offline_support",
-    "intent_group": "feature",
-    "description": "Improve offline support",
-    "cc_type": "feat",
-    "semver_impact": "MINOR",
-    "changelog_group": "Added",
-    "priority": 78,
-    "specificity": 90,
-    "split_weight": 80,
-    "positive_signals": [
-      "offline_mode_added",
-      "offline_support_improved",
-      "network_fallback_added",
-      "local_cache_for_offline",
-      "offline_first_behavior"
-    ],
-    "negative_signals": [
-      "generic_feature",
-      "performance_cache_only",
-      "docs_only",
-      "ci_offline_test_only",
-      "network_bug_fix_primary"
-    ],
-    "selection_rule": "Use when the primary change improves offline support or offline-first behaviour."
-  },
-  {
-    "emoji": "🦖",
-    "code": ":t-rex:",
-    "intent_id": "backwards_compatibility",
-    "intent_group": "bugfix",
-    "description": "Code that adds backwards compatibility",
-    "cc_type": "fix",
-    "semver_impact": "PATCH",
-    "changelog_group": "Changed",
-    "priority": 78,
-    "specificity": 90,
-    "split_weight": 80,
-    "positive_signals": [
-      "backwards_compatibility_added",
-      "legacy_support_added",
-      "compatibility_shim_added",
-      "old_api_supported",
-      "migration_compatibility"
-    ],
-    "negative_signals": [
-      "breaking_change_primary",
-      "new_feature_without_compatibility",
-      "generic_bug_fix",
-      "docs_only",
-      "dependency_pin_only"
-    ],
-    "selection_rule": "Use when the primary change preserves or adds backwards compatibility."
-  }
-]
+  "gitmoji_reference_matrix": [
+    {
+      "emoji": "🎨",
+      "code": ":art:",
+      "intent_id": "code_structure_formatting",
+      "intent_group": "style_assets_text",
+      "description": "Improve structure/format of the code",
+      "cc_type": "style",
+      "semver_impact": "NONE",
+      "changelog_group": "Changed",
+      "priority": 40,
+      "specificity": 45,
+      "split_weight": 30,
+      "positive_signals": [
+        "formatting_only",
+        "code_reordered_without_logic_change",
+        "whitespace_or_style_cleanup",
+        "import_sorting",
+        "non_functional_structure_cleanup"
+      ],
+      "negative_signals": [
+        "runtime_logic_changed",
+        "new_feature_added",
+        "bug_fixed",
+        "public_api_changed",
+        "security_or_build_change"
+      ],
+      "selection_rule": "Use when the primary change improves formatting or code structure without changing runtime behaviour."
+    },
+    {
+      "emoji": "⚡️",
+      "code": ":zap:",
+      "intent_id": "performance_improvement",
+      "intent_group": "performance",
+      "description": "Improve performance",
+      "cc_type": "perf",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 80,
+      "specificity": 75,
+      "split_weight": 70,
+      "positive_signals": [
+        "performance_optimization",
+        "latency_reduction",
+        "memory_usage_reduction",
+        "algorithmic_improvement",
+        "benchmark_improvement"
+      ],
+      "negative_signals": [
+        "formatting_only",
+        "docs_only",
+        "dependency_only",
+        "no_runtime_path_changed"
+      ],
+      "selection_rule": "Use when the dominant user-visible or operational impact is improved speed, latency, throughput, or resource usage."
+    },
+    {
+      "emoji": "🔥",
+      "code": ":fire:",
+      "intent_id": "remove_code_files",
+      "intent_group": "refactor_architecture",
+      "description": "Remove code or files",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Removed",
+      "priority": 60,
+      "specificity": 75,
+      "split_weight": 60,
+      "positive_signals": [
+        "files_deleted",
+        "code_removed",
+        "feature_removed_without_deprecation",
+        "obsolete_module_removed",
+        "large_deletion"
+      ],
+      "negative_signals": [
+        "dead_code_only",
+        "deprecation_only",
+        "move_or_rename_only",
+        "formatting_only",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change actively removes code or files. Prefer ⚰️ for dead-code removal and 🗑️ for deprecation."
+    },
+    {
+      "emoji": "🐛",
+      "code": ":bug:",
+      "intent_id": "bug_fix",
+      "intent_group": "bugfix",
+      "description": "Fix a bug",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Fixed",
+      "priority": 85,
+      "specificity": 65,
+      "split_weight": 85,
+      "positive_signals": [
+        "bug_fixed",
+        "incorrect_behavior_corrected",
+        "regression_fixed",
+        "failing_behavior_repaired",
+        "runtime_error_resolved"
+      ],
+      "negative_signals": [
+        "docs_only",
+        "formatting_only",
+        "test_only_without_fix",
+        "feature_addition",
+        "pure_refactor"
+      ],
+      "selection_rule": "Use for a normal bug fix where the primary change corrects incorrect runtime behaviour."
+    },
+    {
+      "emoji": "🚑",
+      "code": ":ambulance:",
+      "intent_id": "critical_hotfix",
+      "intent_group": "critical_fix",
+      "description": "Critical hotfix",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Fixed",
+      "priority": 92,
+      "specificity": 85,
+      "split_weight": 92,
+      "positive_signals": [
+        "urgent_production_fix",
+        "critical_runtime_failure",
+        "severe_regression",
+        "service_outage_fix",
+        "hotfix_language_present"
+      ],
+      "negative_signals": [
+        "minor_bug_fix",
+        "docs_only",
+        "refactor_only",
+        "test_only",
+        "non_urgent_change"
+      ],
+      "selection_rule": "Use only for urgent high-impact fixes, especially production breakages or critical regressions."
+    },
+    {
+      "emoji": "✨",
+      "code": ":sparkles:",
+      "intent_id": "feature_addition",
+      "intent_group": "feature",
+      "description": "Introduce new features",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 85,
+      "specificity": 60,
+      "split_weight": 85,
+      "positive_signals": [
+        "new_user_facing_capability",
+        "new_command",
+        "new_option",
+        "new_api",
+        "new_workflow"
+      ],
+      "negative_signals": [
+        "bug_fix_only",
+        "docs_only",
+        "refactor_only",
+        "configuration_only",
+        "test_only"
+      ],
+      "selection_rule": "Use when the primary change adds a new user-facing or API-visible capability. Prefer more specific feature intents when applicable."
+    },
+    {
+      "emoji": "📝",
+      "code": ":memo:",
+      "intent_id": "documentation_update",
+      "intent_group": "docs",
+      "description": "Add or update documentation",
+      "cc_type": "docs",
+      "semver_impact": "NONE",
+      "changelog_group": "Documentation",
+      "priority": 40,
+      "specificity": 55,
+      "split_weight": 40,
+      "positive_signals": [
+        "docs_only",
+        "readme_changed",
+        "markdown_changed",
+        "adr_added",
+        "documentation_expanded"
+      ],
+      "negative_signals": [
+        "functional_code_changed",
+        "security_change",
+        "build_or_packaging_change",
+        "runtime_behavior_changed",
+        "release_metadata_changed_as_primary"
+      ],
+      "selection_rule": "Use for documentation-only or documentation-primary changes. Do not use when functional security, build, runtime, or release changes are the main impact."
+    },
+    {
+      "emoji": "🚀",
+      "code": ":rocket:",
+      "intent_id": "deployment_change",
+      "intent_group": "release_management",
+      "description": "Deploy stuff",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 55,
+      "specificity": 65,
+      "split_weight": 55,
+      "positive_signals": [
+        "deployment_configuration",
+        "deployment_script",
+        "deploy_pipeline",
+        "release_deployment",
+        "hosting_target_changed"
+      ],
+      "negative_signals": [
+        "feature_development",
+        "local_dev_script_only",
+        "ci_build_only",
+        "docs_only",
+        "version_tag_only"
+      ],
+      "selection_rule": "Use when the primary change is deployment-related. Prefer 👷 for CI build system and 🔖 for release/version tags."
+    },
+    {
+      "emoji": "💄",
+      "code": ":lipstick:",
+      "intent_id": "ui_style_update",
+      "intent_group": "style_assets_text",
+      "description": "Add or update the UI and style files",
+      "cc_type": "style",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 55,
+      "specificity": 75,
+      "split_weight": 55,
+      "positive_signals": [
+        "ui_style_files_changed",
+        "css_changed",
+        "theme_changed",
+        "visual_design_changed",
+        "frontend_presentation_changed"
+      ],
+      "negative_signals": [
+        "backend_only",
+        "docs_only",
+        "logic_refactor_only",
+        "non_ui_formatting_only",
+        "accessibility_primary"
+      ],
+      "selection_rule": "Use when the primary change updates UI styling or visual presentation. Prefer ♿️ for accessibility-driven changes."
+    },
+    {
+      "emoji": "🎉",
+      "code": ":tada:",
+      "intent_id": "project_initialization",
+      "intent_group": "miscellaneous",
+      "description": "Begin a project",
+      "cc_type": "init",
+      "semver_impact": "NONE",
+      "changelog_group": "Miscellaneous",
+      "priority": 50,
+      "specificity": 90,
+      "split_weight": 50,
+      "positive_signals": [
+        "initial_commit",
+        "new_project_scaffold",
+        "first_repository_files",
+        "initial_structure",
+        "bootstrap_project"
+      ],
+      "negative_signals": [
+        "existing_project_change",
+        "incremental_feature",
+        "bug_fix",
+        "docs_update_only",
+        "release_change"
+      ],
+      "selection_rule": "Use only for initial project creation or major bootstrap commits."
+    },
+    {
+      "emoji": "✅",
+      "code": ":white_check_mark:",
+      "intent_id": "tests_update",
+      "intent_group": "tests",
+      "description": "Add, update, or pass tests",
+      "cc_type": "test",
+      "semver_impact": "NONE",
+      "changelog_group": "Tests",
+      "priority": 50,
+      "specificity": 60,
+      "split_weight": 50,
+      "positive_signals": [
+        "tests_added",
+        "tests_updated",
+        "test_fixtures_changed",
+        "test_assertions_changed",
+        "coverage_improved"
+      ],
+      "negative_signals": [
+        "runtime_fix_in_source",
+        "feature_code_primary",
+        "docs_only",
+        "ci_pipeline_primary",
+        "failing_test_intent"
+      ],
+      "selection_rule": "Use when the primary change is adding or updating tests. Prefer 🧪 for intentionally adding a failing test."
+    },
+    {
+      "emoji": "🔒️",
+      "code": ":lock:",
+      "intent_id": "security_privacy_fix",
+      "intent_group": "security",
+      "description": "Fix security or privacy issues",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Security",
+      "priority": 95,
+      "specificity": 85,
+      "split_weight": 95,
+      "positive_signals": [
+        "security_vulnerability_fixed",
+        "privacy_issue_fixed",
+        "secret_leak_prevented",
+        "auth_bypass_fixed",
+        "sensitive_data_protected"
+      ],
+      "negative_signals": [
+        "secrets_configuration_only",
+        "docs_only",
+        "security_tooling_only_without_fix",
+        "generic_chore",
+        "non_security_bug"
+      ],
+      "selection_rule": "Use when the primary change fixes a security or privacy issue. Security fixes should not be hidden under docs/chore headers."
+    },
+    {
+      "emoji": "🔐",
+      "code": ":closed_lock_with_key:",
+      "intent_id": "secrets_update",
+      "intent_group": "security",
+      "description": "Add or update secrets",
+      "cc_type": "chore",
+      "semver_impact": "PATCH",
+      "changelog_group": "Security",
+      "priority": 85,
+      "specificity": 85,
+      "split_weight": 85,
+      "positive_signals": [
+        "secret_reference_changed",
+        "secret_management_config_changed",
+        "credential_injection_updated",
+        "encrypted_secret_file_changed",
+        "secret_rotation_metadata"
+      ],
+      "negative_signals": [
+        "plaintext_secret_added",
+        "security_vulnerability_fix_primary",
+        "docs_only",
+        "generic_config_change",
+        "non_secret_environment_change"
+      ],
+      "selection_rule": "Use for secret-management changes, encrypted secret metadata, or credential orchestration. Do not use for plaintext secrets; those should be blocked."
+    },
+    {
+      "emoji": "🔖",
+      "code": ":bookmark:",
+      "intent_id": "release_version_tag",
+      "intent_group": "release_management",
+      "description": "Release/Version tags",
+      "cc_type": "release",
+      "semver_impact": "NONE",
+      "changelog_group": "Miscellaneous",
+      "priority": 70,
+      "specificity": 80,
+      "split_weight": 70,
+      "positive_signals": [
+        "release_commit",
+        "version_tag",
+        "changelog_release_entry",
+        "version_bump",
+        "release_metadata"
+      ],
+      "negative_signals": [
+        "feature_primary",
+        "bug_fix_primary",
+        "docs_only",
+        "dependency_update_primary",
+        "non_release_version_reference"
+      ],
+      "selection_rule": "Use for release commits, version tags, and release metadata. Prefer dependency/build intents for dependency-only version changes."
+    },
+    {
+      "emoji": "🚨",
+      "code": ":rotating_light:",
+      "intent_id": "lint_warning_fix",
+      "intent_group": "refactor_architecture",
+      "description": "Fix compiler/linter warnings",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 55,
+      "specificity": 80,
+      "split_weight": 45,
+      "positive_signals": [
+        "lint_warnings_fixed",
+        "compiler_warnings_fixed",
+        "static_analysis_cleanup",
+        "ruff_fix",
+        "typechecker_warning_fixed"
+      ],
+      "negative_signals": [
+        "runtime_bug_fixed",
+        "feature_added",
+        "general_refactor",
+        "formatting_only",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change fixes compiler, linter, or static-analysis warnings. Prefer 🎨 for pure formatting."
+    },
+    {
+      "emoji": "🚧",
+      "code": ":construction:",
+      "intent_id": "work_in_progress",
+      "intent_group": "miscellaneous",
+      "description": "Work in progress",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 20,
+      "specificity": 60,
+      "split_weight": 20,
+      "positive_signals": [
+        "wip_marker",
+        "temporary_incomplete_work",
+        "partial_implementation",
+        "construction_state",
+        "draft_change"
+      ],
+      "negative_signals": [
+        "complete_feature",
+        "complete_fix",
+        "release_ready_change",
+        "public_history_quality_required",
+        "final_commit"
+      ],
+      "selection_rule": "Use sparingly for temporary work-in-progress commits. Avoid in polished public history."
+    },
+    {
+      "emoji": "💚",
+      "code": ":green_heart:",
+      "intent_id": "ci_fix",
+      "intent_group": "ci_infra",
+      "description": "Fix CI Build",
+      "cc_type": "ci",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 65,
+      "specificity": 80,
+      "split_weight": 65,
+      "positive_signals": [
+        "ci_failure_fixed",
+        "workflow_failure_fixed",
+        "broken_build_repaired",
+        "pipeline_fix",
+        "github_actions_fix"
+      ],
+      "negative_signals": [
+        "new_ci_workflow_added",
+        "infrastructure_primary",
+        "tests_only",
+        "docs_only",
+        "local_script_only"
+      ],
+      "selection_rule": "Use when the primary change fixes a failing CI/build pipeline. Prefer 👷 for adding or updating CI systems."
+    },
+    {
+      "emoji": "⬇️",
+      "code": ":arrow_down:",
+      "intent_id": "dependency_downgrade",
+      "intent_group": "runtime_build_package",
+      "description": "Downgrade dependencies",
+      "cc_type": "build",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 70,
+      "specificity": 85,
+      "split_weight": 75,
+      "positive_signals": [
+        "dependency_version_decreased",
+        "lockfile_downgrade",
+        "pin_to_older_version",
+        "rollback_dependency",
+        "compatibility_downgrade"
+      ],
+      "negative_signals": [
+        "dependency_upgrade",
+        "dependency_addition",
+        "dependency_removal",
+        "non_dependency_version_change",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change downgrades one or more dependencies."
+    },
+    {
+      "emoji": "⬆️",
+      "code": ":arrow_up:",
+      "intent_id": "dependency_upgrade",
+      "intent_group": "runtime_build_package",
+      "description": "Upgrade dependencies",
+      "cc_type": "build",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 70,
+      "specificity": 85,
+      "split_weight": 75,
+      "positive_signals": [
+        "dependency_version_increased",
+        "lockfile_upgrade",
+        "package_upgrade",
+        "dependency_refresh",
+        "security_dependency_update"
+      ],
+      "negative_signals": [
+        "dependency_downgrade",
+        "dependency_addition",
+        "dependency_removal",
+        "non_dependency_version_change",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change upgrades existing dependencies."
+    },
+    {
+      "emoji": "📌",
+      "code": ":pushpin:",
+      "intent_id": "dependency_pin",
+      "intent_group": "runtime_build_package",
+      "description": "Pin dependencies to specific versions",
+      "cc_type": "build",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 68,
+      "specificity": 85,
+      "split_weight": 70,
+      "positive_signals": [
+        "dependency_pinned",
+        "version_constraint_added",
+        "lockfile_pin",
+        "exact_version_set",
+        "range_replaced_with_exact_version"
+      ],
+      "negative_signals": [
+        "dependency_upgrade_primary",
+        "dependency_downgrade_primary",
+        "dependency_addition_primary",
+        "docs_only",
+        "non_dependency_config"
+      ],
+      "selection_rule": "Use when the primary change pins dependency versions or tightens version constraints."
+    },
+    {
+      "emoji": "👷",
+      "code": ":construction_worker:",
+      "intent_id": "ci_build_system",
+      "intent_group": "ci_infra",
+      "description": "Add or update CI build system",
+      "cc_type": "ci",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 70,
+      "specificity": 75,
+      "split_weight": 70,
+      "positive_signals": [
+        "ci_workflow_added",
+        "ci_workflow_updated",
+        "github_actions_changed",
+        "build_pipeline_changed",
+        "automation_pipeline_changed"
+      ],
+      "negative_signals": [
+        "ci_failure_fix_only",
+        "local_dev_script_primary",
+        "runtime_infrastructure_primary",
+        "tests_only",
+        "docs_only"
+      ],
+      "selection_rule": "Use for adding or updating CI/build automation. Prefer 💚 when fixing a broken CI build."
+    },
+    {
+      "emoji": "📈",
+      "code": ":chart_with_upwards_trend:",
+      "intent_id": "analytics_tracking",
+      "intent_group": "feature",
+      "description": "Add or update analytics or track code",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 75,
+      "specificity": 85,
+      "split_weight": 75,
+      "positive_signals": [
+        "analytics_added",
+        "tracking_code_added",
+        "telemetry_added",
+        "metrics_collection_changed",
+        "usage_tracking"
+      ],
+      "negative_signals": [
+        "logs_only",
+        "observability_docs_only",
+        "performance_metric_internal_only",
+        "privacy_fix_primary",
+        "generic_feature"
+      ],
+      "selection_rule": "Use when the primary change adds or updates analytics, telemetry, tracking, or metrics collection."
+    },
+    {
+      "emoji": "♻️",
+      "code": ":recycle:",
+      "intent_id": "generic_refactor",
+      "intent_group": "refactor_architecture",
+      "description": "Refactor code",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 75,
+      "specificity": 55,
+      "split_weight": 60,
+      "positive_signals": [
+        "centralize_logic",
+        "deduplicate_code",
+        "extract_shared_helper",
+        "internal_restructure",
+        "behavior_preserving_code_change"
+      ],
+      "negative_signals": [
+        "primary_change_is_file_rename",
+        "primary_change_is_resource_move",
+        "primary_change_is_dead_code_removal",
+        "new_feature_added",
+        "bug_fix_primary"
+      ],
+      "selection_rule": "Use for internal restructuring, centralisation, or deduplication when no more specific refactor subtype dominates."
+    },
+    {
+      "emoji": "➕",
+      "code": ":heavy_plus_sign:",
+      "intent_id": "dependency_add",
+      "intent_group": "runtime_build_package",
+      "description": "Add a dependency",
+      "cc_type": "build",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 72,
+      "specificity": 85,
+      "split_weight": 78,
+      "positive_signals": [
+        "dependency_added",
+        "new_package_in_pyproject",
+        "new_package_in_package_json",
+        "lockfile_new_dependency",
+        "new_tool_dependency"
+      ],
+      "negative_signals": [
+        "dependency_removed",
+        "dependency_upgraded_only",
+        "dependency_downgraded_only",
+        "version_pin_only",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change adds a new dependency or tool dependency."
+    },
+    {
+      "emoji": "➖",
+      "code": ":heavy_minus_sign:",
+      "intent_id": "dependency_remove",
+      "intent_group": "runtime_build_package",
+      "description": "Remove a dependency",
+      "cc_type": "build",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 72,
+      "specificity": 85,
+      "split_weight": 78,
+      "positive_signals": [
+        "dependency_removed",
+        "package_removed_from_manifest",
+        "lockfile_dependency_removed",
+        "tool_dependency_removed",
+        "unused_dependency_removed"
+      ],
+      "negative_signals": [
+        "dependency_added",
+        "dependency_upgraded_only",
+        "dependency_downgraded_only",
+        "code_removed_primary",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change removes a dependency or tool dependency."
+    },
+    {
+      "emoji": "🔧",
+      "code": ":wrench:",
+      "intent_id": "configuration_update",
+      "intent_group": "config_chore",
+      "description": "Add or update configuration files",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 50,
+      "specificity": 65,
+      "split_weight": 45,
+      "positive_signals": [
+        "configuration_file_changed",
+        "toml_yaml_json_config_changed",
+        "tool_config_changed",
+        "settings_changed",
+        "project_config_changed"
+      ],
+      "negative_signals": [
+        "code_change_primary",
+        "security_config_primary",
+        "ci_config_primary",
+        "package_metadata_primary",
+        "docs_only"
+      ],
+      "selection_rule": "Use for configuration-file changes. Do not use when code merely reads config; choose the code intent instead."
+    },
+    {
+      "emoji": "🔨",
+      "code": ":hammer:",
+      "intent_id": "development_script_update",
+      "intent_group": "config_chore",
+      "description": "Add or update development scripts",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 50,
+      "specificity": 75,
+      "split_weight": 50,
+      "positive_signals": [
+        "dev_script_added",
+        "dev_script_updated",
+        "justfile_task_changed",
+        "automation_script_changed",
+        "local_tooling_script"
+      ],
+      "negative_signals": [
+        "ci_workflow_primary",
+        "deployment_script_primary",
+        "runtime_code_primary",
+        "docs_only",
+        "package_build_primary"
+      ],
+      "selection_rule": "Use when the primary change adds or updates local development scripts or task-runner commands."
+    },
+    {
+      "emoji": "🌐",
+      "code": ":globe_with_meridians:",
+      "intent_id": "i18n_l10n",
+      "intent_group": "feature",
+      "description": "Internationalization and localization",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 78,
+      "specificity": 90,
+      "split_weight": 80,
+      "positive_signals": [
+        "translation_added",
+        "locale_support_added",
+        "i18n_framework_changed",
+        "language_files_changed",
+        "localization_feature"
+      ],
+      "negative_signals": [
+        "spelling_variant_config_only",
+        "text_literal_update_only",
+        "docs_translation_only",
+        "generic_feature",
+        "ui_style_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates internationalisation/localisation support."
+    },
+    {
+      "emoji": "✏️",
+      "code": ":pencil2:",
+      "intent_id": "typo_fix",
+      "intent_group": "docs",
+      "description": "Fix typos",
+      "cc_type": "docs",
+      "semver_impact": "NONE",
+      "changelog_group": "Documentation",
+      "priority": 30,
+      "specificity": 80,
+      "split_weight": 25,
+      "positive_signals": [
+        "typo_fixed",
+        "spelling_corrected",
+        "grammar_corrected",
+        "minor_text_correction",
+        "documentation_typo_only"
+      ],
+      "negative_signals": [
+        "substantial_docs_update",
+        "runtime_text_change",
+        "feature_change",
+        "bug_fix",
+        "configuration_change"
+      ],
+      "selection_rule": "Use for typo/spelling/grammar corrections, especially in documentation. Prefer 📝 for substantial documentation updates."
+    },
+    {
+      "emoji": "💩",
+      "code": ":poop:",
+      "intent_id": "known_bad_code",
+      "intent_group": "miscellaneous",
+      "description": "Write bad code that needs to be improved",
+      "cc_type": "refactor",
+      "semver_impact": "NONE",
+      "changelog_group": "Miscellaneous",
+      "priority": 10,
+      "specificity": 85,
+      "split_weight": 10,
+      "positive_signals": [
+        "explicit_bad_code_marker",
+        "intentional_technical_debt",
+        "temporary_hack",
+        "known_poor_quality",
+        "prototype_shortcut"
+      ],
+      "negative_signals": [
+        "normal_refactor",
+        "production_ready_change",
+        "docs_only",
+        "test_only",
+        "release_commit"
+      ],
+      "selection_rule": "Use only when the author intentionally marks the change as bad/temporary technical debt. Avoid in public polished history."
+    },
+    {
+      "emoji": "⏪",
+      "code": ":rewind:",
+      "intent_id": "revert_change",
+      "intent_group": "release_management",
+      "description": "Revert changes",
+      "cc_type": "revert",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 75,
+      "specificity": 90,
+      "split_weight": 80,
+      "positive_signals": [
+        "git_revert",
+        "revert_commit",
+        "rollback_change",
+        "undo_previous_commit",
+        "restore_previous_behavior"
+      ],
+      "negative_signals": [
+        "ordinary_bug_fix",
+        "dependency_downgrade_only",
+        "manual_refactor",
+        "docs_only",
+        "version_rollback_only"
+      ],
+      "selection_rule": "Use when the primary change reverts or rolls back previous changes."
+    },
+    {
+      "emoji": "🔀",
+      "code": ":twisted_rightwards_arrows:",
+      "intent_id": "merge_branch",
+      "intent_group": "release_management",
+      "description": "Merge branches",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 20,
+      "specificity": 90,
+      "split_weight": 20,
+      "positive_signals": [
+        "merge_commit",
+        "branch_merge",
+        "non_squash_merge",
+        "merge_conflict_resolution",
+        "integration_merge"
+      ],
+      "negative_signals": [
+        "normal_feature_commit",
+        "normal_fix_commit",
+        "squashed_changes",
+        "docs_only",
+        "manual_combined_commit"
+      ],
+      "selection_rule": "Use for actual merge commits or branch integrations. Normal feature/fix commits should not use this."
+    },
+    {
+      "emoji": "📦",
+      "code": ":package:",
+      "intent_id": "package_artifact_update",
+      "intent_group": "runtime_build_package",
+      "description": "Add or update compiled files or packages",
+      "cc_type": "build",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 75,
+      "specificity": 75,
+      "split_weight": 80,
+      "positive_signals": [
+        "package_artifact_changed",
+        "wheel_or_sdist_config_changed",
+        "build_backend_changed",
+        "packaged_data_changed",
+        "distribution_metadata_changed"
+      ],
+      "negative_signals": [
+        "dependency_only",
+        "release_tag_only",
+        "docs_only",
+        "generic_config_change",
+        "source_refactor_primary"
+      ],
+      "selection_rule": "Use when the primary change affects packaging, build artifacts, package data, or distribution metadata."
+    },
+    {
+      "emoji": "👽️",
+      "code": ":alien:",
+      "intent_id": "external_api_update",
+      "intent_group": "refactor_architecture",
+      "description": "Update code due to external API changes",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 72,
+      "specificity": 85,
+      "split_weight": 70,
+      "positive_signals": [
+        "external_api_changed",
+        "third_party_api_adaptation",
+        "provider_contract_changed",
+        "sdk_api_update",
+        "compatibility_with_external_service"
+      ],
+      "negative_signals": [
+        "internal_api_refactor",
+        "dependency_upgrade_only",
+        "bug_fix_unrelated_to_external_api",
+        "docs_only",
+        "new_feature_primary"
+      ],
+      "selection_rule": "Use when the primary change adapts code to an external API or third-party contract change."
+    },
+    {
+      "emoji": "🚚",
+      "code": ":truck:",
+      "intent_id": "move_rename",
+      "intent_group": "refactor_architecture",
+      "description": "Move or rename resources",
+      "cc_type": "refactor",
+      "semver_impact": "NONE",
+      "changelog_group": "Changed",
+      "priority": 60,
+      "specificity": 85,
+      "split_weight": 45,
+      "positive_signals": [
+        "git_rename_detected",
+        "path_moved",
+        "resource_renamed",
+        "module_renamed",
+        "directory_reorganized"
+      ],
+      "negative_signals": [
+        "no_renames",
+        "pure_logic_refactor",
+        "centralized_loader_without_moves",
+        "new_helper_module_without_move",
+        "portability_improvement_without_resource_move"
+      ],
+      "selection_rule": "Use only when the primary change is moving or renaming files/resources. Do not use for general centralisation, modularisation, or portability improvements unless file movement is dominant."
+    },
+    {
+      "emoji": "📄",
+      "code": ":page_facing_up:",
+      "intent_id": "license_update",
+      "intent_group": "docs",
+      "description": "Add or update license",
+      "cc_type": "docs",
+      "semver_impact": "NONE",
+      "changelog_group": "Documentation",
+      "priority": 45,
+      "specificity": 90,
+      "split_weight": 45,
+      "positive_signals": [
+        "license_file_changed",
+        "license_added",
+        "copyright_updated",
+        "notice_file_changed",
+        "legal_metadata_changed"
+      ],
+      "negative_signals": [
+        "general_docs_update",
+        "package_metadata_only",
+        "security_policy_update",
+        "docs_only_without_license",
+        "release_note_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates license, copyright, or legal notice files."
+    },
+    {
+      "emoji": "💥",
+      "code": ":boom:",
+      "intent_id": "breaking_change",
+      "intent_group": "breaking",
+      "description": "Introduce breaking changes",
+      "cc_type": "feat",
+      "semver_impact": "MAJOR",
+      "changelog_group": "Changed",
+      "priority": 100,
+      "specificity": 90,
+      "split_weight": 100,
+      "positive_signals": [
+        "breaking_change_declared",
+        "public_api_removed",
+        "backwards_incompatible_behavior",
+        "migration_required",
+        "breaking_change_footer"
+      ],
+      "negative_signals": [
+        "backwards_compatible_feature",
+        "internal_refactor_only",
+        "docs_only",
+        "minor_bug_fix",
+        "test_only"
+      ],
+      "selection_rule": "Use when the primary change is backwards-incompatible or explicitly declares a breaking change. Breaking changes must not be hidden under lower-priority headers."
+    },
+    {
+      "emoji": "🍱",
+      "code": ":bento:",
+      "intent_id": "asset_update",
+      "intent_group": "style_assets_text",
+      "description": "Add or update assets",
+      "cc_type": "chore",
+      "semver_impact": "PATCH",
+      "changelog_group": "Added",
+      "priority": 50,
+      "specificity": 75,
+      "split_weight": 50,
+      "positive_signals": [
+        "asset_file_added",
+        "image_asset_changed",
+        "static_asset_updated",
+        "media_file_changed",
+        "documentation_asset_added"
+      ],
+      "negative_signals": [
+        "source_code_primary",
+        "ui_style_primary",
+        "docs_text_only",
+        "package_artifact_primary",
+        "generated_build_output_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates assets such as images, media, or static files."
+    },
+    {
+      "emoji": "♿️",
+      "code": ":wheelchair:",
+      "intent_id": "accessibility_improvement",
+      "intent_group": "feature",
+      "description": "Improve accessibility",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 75,
+      "specificity": 90,
+      "split_weight": 75,
+      "positive_signals": [
+        "accessibility_improved",
+        "aria_changed",
+        "keyboard_navigation_improved",
+        "screen_reader_support",
+        "contrast_or_a11y_fix"
+      ],
+      "negative_signals": [
+        "generic_ui_style",
+        "docs_only",
+        "unrelated_feature",
+        "bug_fix_non_accessibility",
+        "responsive_design_primary"
+      ],
+      "selection_rule": "Use when the primary change improves accessibility. Prefer this over generic feature or style when accessibility is the intent."
+    },
+    {
+      "emoji": "💡",
+      "code": ":bulb:",
+      "intent_id": "comments_update",
+      "intent_group": "docs",
+      "description": "Add or update comments in source code",
+      "cc_type": "docs",
+      "semver_impact": "NONE",
+      "changelog_group": "Documentation",
+      "priority": 35,
+      "specificity": 75,
+      "split_weight": 30,
+      "positive_signals": [
+        "source_comments_added",
+        "docstring_updated",
+        "inline_comment_changed",
+        "code_explanation_added",
+        "comments_only"
+      ],
+      "negative_signals": [
+        "runtime_logic_changed",
+        "documentation_file_changed_primary",
+        "bug_fix",
+        "feature_added",
+        "refactor_primary"
+      ],
+      "selection_rule": "Use when the primary change adds or updates comments/docstrings in source code without changing behaviour."
+    },
+    {
+      "emoji": "🍻",
+      "code": ":beers:",
+      "intent_id": "low_quality_code",
+      "intent_group": "miscellaneous",
+      "description": "Write code drunkenly",
+      "cc_type": "refactor",
+      "semver_impact": "NONE",
+      "changelog_group": "Miscellaneous",
+      "priority": 5,
+      "specificity": 90,
+      "split_weight": 5,
+      "positive_signals": [
+        "explicit_joke_commit",
+        "intentionally_unpolished_code",
+        "informal_experimental_change",
+        "author_explicitly_marks_drunken_code",
+        "non_public_history"
+      ],
+      "negative_signals": [
+        "public_release_ready",
+        "normal_refactor",
+        "production_fix",
+        "docs_only",
+        "security_change"
+      ],
+      "selection_rule": "Use only for explicit joke/informal commits. Avoid in public project history."
+    },
+    {
+      "emoji": "💬",
+      "code": ":speech_balloon:",
+      "intent_id": "text_literal_update",
+      "intent_group": "style_assets_text",
+      "description": "Add or update text and literals",
+      "cc_type": "style",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 45,
+      "specificity": 75,
+      "split_weight": 45,
+      "positive_signals": [
+        "user_facing_text_changed",
+        "string_literal_updated",
+        "copy_changed",
+        "message_text_changed",
+        "label_text_changed"
+      ],
+      "negative_signals": [
+        "documentation_text_only",
+        "i18n_primary",
+        "ui_style_primary",
+        "bug_fix_primary",
+        "feature_primary"
+      ],
+      "selection_rule": "Use when the primary change updates user-facing text or literals. Prefer 🌐 for localization/i18n changes."
+    },
+    {
+      "emoji": "🗃️",
+      "code": ":card_file_box:",
+      "intent_id": "database_change",
+      "intent_group": "feature",
+      "description": "Perform database related changes",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 75,
+      "specificity": 90,
+      "split_weight": 80,
+      "positive_signals": [
+        "database_schema_changed",
+        "migration_added",
+        "query_changed",
+        "data_model_persistence_changed",
+        "database_config_changed"
+      ],
+      "negative_signals": [
+        "non_database_storage",
+        "docs_only",
+        "generic_feature",
+        "test_fixture_only",
+        "config_only_unrelated_to_database"
+      ],
+      "selection_rule": "Use when the primary change affects database schema, migrations, queries, or persistence behaviour."
+    },
+    {
+      "emoji": "🔊",
+      "code": ":loud_sound:",
+      "intent_id": "logging_add",
+      "intent_group": "config_chore",
+      "description": "Add or update logs",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 45,
+      "specificity": 75,
+      "split_weight": 45,
+      "positive_signals": [
+        "log_statement_added",
+        "logging_improved",
+        "debug_output_added",
+        "observability_logging",
+        "log_context_updated"
+      ],
+      "negative_signals": [
+        "logging_removed",
+        "analytics_tracking_primary",
+        "bug_fix_primary",
+        "docs_only",
+        "tracing_system_primary"
+      ],
+      "selection_rule": "Use when the primary change adds or updates logging. Prefer 📈 for analytics/tracking telemetry."
+    },
+    {
+      "emoji": "🔇",
+      "code": ":mute:",
+      "intent_id": "logging_remove",
+      "intent_group": "config_chore",
+      "description": "Remove logs",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 45,
+      "specificity": 75,
+      "split_weight": 45,
+      "positive_signals": [
+        "log_statement_removed",
+        "debug_output_removed",
+        "noise_reduced",
+        "logging_suppressed",
+        "verbose_output_removed"
+      ],
+      "negative_signals": [
+        "logging_added",
+        "bug_fix_primary",
+        "performance_primary",
+        "docs_only",
+        "security_redaction_primary"
+      ],
+      "selection_rule": "Use when the primary change removes or silences logs. Prefer 🔒️ if the change removes sensitive logging for security/privacy."
+    },
+    {
+      "emoji": "👥",
+      "code": ":busts_in_silhouette:",
+      "intent_id": "contributor_update",
+      "intent_group": "miscellaneous",
+      "description": "Add or update contributor(s)",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 35,
+      "specificity": 85,
+      "split_weight": 35,
+      "positive_signals": [
+        "contributors_file_changed",
+        "author_metadata_changed",
+        "credits_updated",
+        "maintainer_list_updated",
+        "acknowledgements_updated"
+      ],
+      "negative_signals": [
+        "general_docs_update",
+        "license_update",
+        "package_author_metadata_primary",
+        "feature_change",
+        "bug_fix"
+      ],
+      "selection_rule": "Use when the primary change updates contributor, maintainer, or acknowledgement metadata."
+    },
+    {
+      "emoji": "🚸",
+      "code": ":children_crossing:",
+      "intent_id": "ux_usability_improvement",
+      "intent_group": "feature",
+      "description": "Improve user experience/usability",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 72,
+      "specificity": 80,
+      "split_weight": 75,
+      "positive_signals": [
+        "ux_improved",
+        "usability_improved",
+        "user_flow_improved",
+        "error_message_improved",
+        "interaction_simplified"
+      ],
+      "negative_signals": [
+        "accessibility_primary",
+        "ui_style_only",
+        "bug_fix_primary",
+        "docs_only",
+        "developer_experience_primary"
+      ],
+      "selection_rule": "Use when the primary change improves end-user experience or usability without introducing a major new feature."
+    },
+    {
+      "emoji": "🏗️",
+      "code": ":building_construction:",
+      "intent_id": "architecture_refactor",
+      "intent_group": "refactor_architecture",
+      "description": "Make architectural changes",
+      "cc_type": "refactor",
+      "semver_impact": "MAJOR",
+      "changelog_group": "Changed",
+      "priority": 90,
+      "specificity": 80,
+      "split_weight": 85,
+      "positive_signals": [
+        "major_subsystem_restructured",
+        "architecture_boundary_changed",
+        "core_architecture_changed",
+        "large_scale_refactor",
+        "module_relationships_redesigned"
+      ],
+      "negative_signals": [
+        "small_helper_extraction",
+        "generic_refactor",
+        "move_or_rename_only",
+        "formatting_only",
+        "docs_only"
+      ],
+      "selection_rule": "Use for broad architectural restructuring. Do not use for small helper extraction or ordinary internal refactoring."
+    },
+    {
+      "emoji": "📱",
+      "code": ":iphone:",
+      "intent_id": "responsive_design",
+      "intent_group": "feature",
+      "description": "Work on responsive design",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 68,
+      "specificity": 85,
+      "split_weight": 65,
+      "positive_signals": [
+        "responsive_layout_changed",
+        "mobile_layout_improved",
+        "viewport_handling_changed",
+        "breakpoints_changed",
+        "mobile_ui_support"
+      ],
+      "negative_signals": [
+        "generic_ui_style",
+        "accessibility_primary",
+        "backend_only",
+        "docs_only",
+        "non_responsive_feature"
+      ],
+      "selection_rule": "Use when the primary change improves responsive/mobile design."
+    },
+    {
+      "emoji": "🤡",
+      "code": ":clown_face:",
+      "intent_id": "mock_update",
+      "intent_group": "tests",
+      "description": "Mock things",
+      "cc_type": "test",
+      "semver_impact": "NONE",
+      "changelog_group": "Tests",
+      "priority": 45,
+      "specificity": 85,
+      "split_weight": 45,
+      "positive_signals": [
+        "mock_added",
+        "mock_updated",
+        "test_double_changed",
+        "fake_service_changed",
+        "stub_changed"
+      ],
+      "negative_signals": [
+        "production_code_primary",
+        "test_assertions_primary",
+        "failing_test_primary",
+        "docs_only",
+        "runtime_feature"
+      ],
+      "selection_rule": "Use when the primary change adds or updates mocks, stubs, fakes, or test doubles."
+    },
+    {
+      "emoji": "🥚",
+      "code": ":egg:",
+      "intent_id": "easter_egg",
+      "intent_group": "feature",
+      "description": "Add or update an easter egg",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Added",
+      "priority": 40,
+      "specificity": 90,
+      "split_weight": 40,
+      "positive_signals": [
+        "easter_egg_added",
+        "hidden_feature_added",
+        "novelty_behavior_added",
+        "fun_interaction_added",
+        "secret_ui_behavior"
+      ],
+      "negative_signals": [
+        "normal_feature",
+        "bug_fix",
+        "docs_only",
+        "test_only",
+        "security_change"
+      ],
+      "selection_rule": "Use only when the primary change is an easter egg or hidden novelty behaviour."
+    },
+    {
+      "emoji": "🙈",
+      "code": ":see_no_evil:",
+      "intent_id": "gitignore_update",
+      "intent_group": "config_chore",
+      "description": "Add or update a .gitignore file",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 45,
+      "specificity": 90,
+      "split_weight": 35,
+      "positive_signals": [
+        "gitignore_changed",
+        "ignore_pattern_added",
+        "ignore_pattern_removed",
+        "vcs_ignore_updated",
+        "runtime_artifacts_ignored"
+      ],
+      "negative_signals": [
+        "security_scanner_config_primary",
+        "build_config_primary",
+        "docs_only",
+        "source_code_primary",
+        "package_config_primary"
+      ],
+      "selection_rule": "Use when the primary change updates `.gitignore` or VCS ignore patterns."
+    },
+    {
+      "emoji": "📸",
+      "code": ":camera_flash:",
+      "intent_id": "snapshot_update",
+      "intent_group": "tests",
+      "description": "Add or update snapshots",
+      "cc_type": "test",
+      "semver_impact": "NONE",
+      "changelog_group": "Tests",
+      "priority": 45,
+      "specificity": 85,
+      "split_weight": 45,
+      "positive_signals": [
+        "snapshot_added",
+        "snapshot_updated",
+        "golden_file_changed",
+        "visual_snapshot_changed",
+        "test_snapshot_refresh"
+      ],
+      "negative_signals": [
+        "runtime_code_primary",
+        "test_logic_primary",
+        "asset_update_primary",
+        "docs_only",
+        "failing_test_primary"
+      ],
+      "selection_rule": "Use when the primary change adds or updates test snapshots or golden files."
+    },
+    {
+      "emoji": "⚗️",
+      "code": ":alembic:",
+      "intent_id": "experiment",
+      "intent_group": "feature",
+      "description": "Perform experiments",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 45,
+      "specificity": 80,
+      "split_weight": 45,
+      "positive_signals": [
+        "experiment_added",
+        "prototype_added",
+        "experimental_feature",
+        "spike_code",
+        "trial_implementation"
+      ],
+      "negative_signals": [
+        "production_feature_complete",
+        "bug_fix",
+        "docs_only",
+        "test_only",
+        "release_ready_feature"
+      ],
+      "selection_rule": "Use when the primary change is experimental or exploratory. Prefer ✨ for production-ready features."
+    },
+    {
+      "emoji": "🔍",
+      "code": ":mag:",
+      "intent_id": "seo_improvement",
+      "intent_group": "feature",
+      "description": "Improve SEO",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 55,
+      "specificity": 90,
+      "split_weight": 55,
+      "positive_signals": [
+        "seo_metadata_changed",
+        "search_indexing_improved",
+        "meta_tags_changed",
+        "structured_data_changed",
+        "canonical_url_changed"
+      ],
+      "negative_signals": [
+        "generic_docs",
+        "analytics_tracking_primary",
+        "ui_style_only",
+        "backend_only",
+        "non_seo_metadata"
+      ],
+      "selection_rule": "Use when the primary change improves search engine optimization."
+    },
+    {
+      "emoji": "🏷️",
+      "code": ":label:",
+      "intent_id": "types_update",
+      "intent_group": "refactor_architecture",
+      "description": "Add or update types",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 70,
+      "specificity": 85,
+      "split_weight": 60,
+      "positive_signals": [
+        "type_annotations_added",
+        "types_updated",
+        "schema_types_changed",
+        "pydantic_model_changed",
+        "typing_improved"
+      ],
+      "negative_signals": [
+        "runtime_logic_primary",
+        "generic_refactor",
+        "validation_behavior_primary",
+        "docs_only",
+        "test_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates types, typing models, schemas, or annotations."
+    },
+    {
+      "emoji": "🌱",
+      "code": ":seedling:",
+      "intent_id": "seed_data",
+      "intent_group": "config_chore",
+      "description": "Add or update seed files",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 45,
+      "specificity": 85,
+      "split_weight": 45,
+      "positive_signals": [
+        "seed_file_added",
+        "seed_data_updated",
+        "fixture_seed_changed",
+        "initial_data_changed",
+        "sample_data_changed"
+      ],
+      "negative_signals": [
+        "database_schema_primary",
+        "test_fixture_primary",
+        "asset_update_primary",
+        "docs_only",
+        "runtime_logic_primary"
+      ],
+      "selection_rule": "Use when the primary change adds or updates seed data files."
+    },
+    {
+      "emoji": "🚩",
+      "code": ":triangular_flag_on_post:",
+      "intent_id": "feature_flags_update",
+      "intent_group": "feature",
+      "description": "Add, update, or remove feature flags",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 78,
+      "specificity": 90,
+      "split_weight": 80,
+      "positive_signals": [
+        "feature_flag_added",
+        "feature_flag_updated",
+        "feature_flag_removed",
+        "flag_gate_changed",
+        "runtime_toggle_added"
+      ],
+      "negative_signals": [
+        "generic_config",
+        "release_flag_metadata_only",
+        "docs_only",
+        "ordinary_feature_without_flag",
+        "test_only"
+      ],
+      "selection_rule": "Use when the primary change adds, updates, or removes feature flags or runtime toggles."
+    },
+    {
+      "emoji": "🥅",
+      "code": ":goal_net:",
+      "intent_id": "error_handling",
+      "intent_group": "bugfix",
+      "description": "Catch errors",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Fixed",
+      "priority": 80,
+      "specificity": 85,
+      "split_weight": 85,
+      "positive_signals": [
+        "exception_handling_added",
+        "error_handling_improved",
+        "fallback_added",
+        "failure_mode_handled",
+        "try_except_added"
+      ],
+      "negative_signals": [
+        "validation_primary",
+        "generic_bug_fix",
+        "logging_only",
+        "docs_only",
+        "test_only"
+      ],
+      "selection_rule": "Use when the primary change catches, handles, or recovers from errors. Prefer 🦺 for validation-specific changes."
+    },
+    {
+      "emoji": "💫",
+      "code": ":dizzy:",
+      "intent_id": "animation_transition",
+      "intent_group": "style_assets_text",
+      "description": "Add or update animations and transitions",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 55,
+      "specificity": 90,
+      "split_weight": 55,
+      "positive_signals": [
+        "animation_added",
+        "transition_updated",
+        "motion_effect_changed",
+        "ui_animation_changed",
+        "interaction_animation"
+      ],
+      "negative_signals": [
+        "generic_ui_style",
+        "performance_primary",
+        "accessibility_primary",
+        "docs_only",
+        "backend_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates animations, transitions, or motion effects."
+    },
+    {
+      "emoji": "🗑️",
+      "code": ":wastebasket:",
+      "intent_id": "deprecation",
+      "intent_group": "refactor_architecture",
+      "description": "Deprecate code that needs to be cleaned up",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Deprecated",
+      "priority": 65,
+      "specificity": 90,
+      "split_weight": 70,
+      "positive_signals": [
+        "deprecation_added",
+        "deprecated_api_marked",
+        "deprecation_warning_added",
+        "cleanup_planned",
+        "legacy_path_marked_deprecated"
+      ],
+      "negative_signals": [
+        "code_removed_primary",
+        "dead_code_removed",
+        "breaking_change_primary",
+        "docs_only",
+        "generic_refactor"
+      ],
+      "selection_rule": "Use when the primary change marks code or APIs as deprecated. Prefer 🔥 or ⚰️ when code is actually removed."
+    },
+    {
+      "emoji": "🛂",
+      "code": ":passport_control:",
+      "intent_id": "authorization_permissions",
+      "intent_group": "security",
+      "description": "Work on code related to authorization, roles and permissions",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Security",
+      "priority": 88,
+      "specificity": 90,
+      "split_weight": 88,
+      "positive_signals": [
+        "authorization_changed",
+        "permissions_changed",
+        "role_access_changed",
+        "access_control_added",
+        "authz_policy_changed"
+      ],
+      "negative_signals": [
+        "auth_bug_fix_primary",
+        "security_privacy_fix_primary",
+        "generic_feature",
+        "docs_only",
+        "config_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates authorization, roles, permissions, or access-control features."
+    },
+    {
+      "emoji": "🩹",
+      "code": ":adhesive_bandage:",
+      "intent_id": "small_fix",
+      "intent_group": "bugfix",
+      "description": "Simple fix for a non-critical issue",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Fixed",
+      "priority": 65,
+      "specificity": 75,
+      "split_weight": 65,
+      "positive_signals": [
+        "small_fix",
+        "minor_issue_fixed",
+        "non_critical_fix",
+        "one_line_fix",
+        "low_risk_correction"
+      ],
+      "negative_signals": [
+        "critical_hotfix",
+        "security_fix",
+        "large_bug_fix",
+        "feature_added",
+        "docs_only"
+      ],
+      "selection_rule": "Use for small non-critical fixes. Prefer 🐛 for normal bugs and 🚑 for critical hotfixes."
+    },
+    {
+      "emoji": "🧐",
+      "code": ":monocle_face:",
+      "intent_id": "data_inspection",
+      "intent_group": "miscellaneous",
+      "description": "Data exploration/inspection",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 35,
+      "specificity": 85,
+      "split_weight": 35,
+      "positive_signals": [
+        "data_inspection",
+        "exploratory_analysis",
+        "notebook_analysis",
+        "diagnostic_output",
+        "investigation_artifact"
+      ],
+      "negative_signals": [
+        "database_change_primary",
+        "analytics_feature_primary",
+        "docs_only",
+        "runtime_feature",
+        "test_fixture_primary"
+      ],
+      "selection_rule": "Use when the primary change adds or updates data exploration, inspection, or investigation artifacts."
+    },
+    {
+      "emoji": "⚰️",
+      "code": ":coffin:",
+      "intent_id": "dead_code_removal",
+      "intent_group": "refactor_architecture",
+      "description": "Remove dead code",
+      "cc_type": "refactor",
+      "semver_impact": "PATCH",
+      "changelog_group": "Removed",
+      "priority": 60,
+      "specificity": 90,
+      "split_weight": 60,
+      "positive_signals": [
+        "dead_code_removed",
+        "unused_code_removed",
+        "unreachable_code_removed",
+        "obsolete_function_removed",
+        "unused_imports_removed"
+      ],
+      "negative_signals": [
+        "active_code_removed",
+        "feature_removed",
+        "deprecation_primary",
+        "move_or_rename_only",
+        "docs_only"
+      ],
+      "selection_rule": "Use when the primary change removes dead, unused, or unreachable code. Prefer 🔥 for broader active code/file removal."
+    },
+    {
+      "emoji": "🧪",
+      "code": ":test_tube:",
+      "intent_id": "failing_test",
+      "intent_group": "tests",
+      "description": "Add a failing test",
+      "cc_type": "test",
+      "semver_impact": "NONE",
+      "changelog_group": "Tests",
+      "priority": 50,
+      "specificity": 90,
+      "split_weight": 50,
+      "positive_signals": [
+        "failing_test_added",
+        "regression_test_before_fix",
+        "expected_failure_added",
+        "xfail_added",
+        "red_test_added"
+      ],
+      "negative_signals": [
+        "passing_tests_added",
+        "bug_fix_in_same_primary_change",
+        "test_refactor_only",
+        "docs_only",
+        "mock_update_primary"
+      ],
+      "selection_rule": "Use when the primary change intentionally adds a failing or expected-failure test."
+    },
+    {
+      "emoji": "👔",
+      "code": ":necktie:",
+      "intent_id": "business_logic",
+      "intent_group": "feature",
+      "description": "Add or update business logic",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 82,
+      "specificity": 80,
+      "split_weight": 85,
+      "positive_signals": [
+        "business_rule_changed",
+        "domain_logic_added",
+        "business_logic_updated",
+        "workflow_rule_added",
+        "core_domain_behavior_changed"
+      ],
+      "negative_signals": [
+        "generic_feature",
+        "bug_fix_primary",
+        "refactor_only",
+        "docs_only",
+        "config_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates business/domain logic."
+    },
+    {
+      "emoji": "🩺",
+      "code": ":stethoscope:",
+      "intent_id": "healthcheck",
+      "intent_group": "feature",
+      "description": "Add or update healthcheck",
+      "cc_type": "feat",
+      "semver_impact": "PATCH",
+      "changelog_group": "Added",
+      "priority": 70,
+      "specificity": 90,
+      "split_weight": 75,
+      "positive_signals": [
+        "healthcheck_added",
+        "health_endpoint_changed",
+        "readiness_check_added",
+        "liveness_check_added",
+        "service_status_check"
+      ],
+      "negative_signals": [
+        "observability_logging_only",
+        "ci_health_check_only",
+        "docs_only",
+        "generic_feature",
+        "monitoring_config_only"
+      ],
+      "selection_rule": "Use when the primary change adds or updates application/service health checks."
+    },
+    {
+      "emoji": "🧱",
+      "code": ":bricks:",
+      "intent_id": "infrastructure_change",
+      "intent_group": "ci_infra",
+      "description": "Infrastructure related changes",
+      "cc_type": "ci",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 75,
+      "specificity": 80,
+      "split_weight": 80,
+      "positive_signals": [
+        "infrastructure_config_changed",
+        "deployment_infra_changed",
+        "container_or_runtime_infra",
+        "system_tooling_changed",
+        "platform_configuration_changed"
+      ],
+      "negative_signals": [
+        "ci_workflow_only",
+        "local_config_only",
+        "docs_only",
+        "application_feature_primary",
+        "dependency_only"
+      ],
+      "selection_rule": "Use when the primary change affects infrastructure, platform, or system-level runtime configuration."
+    },
+    {
+      "emoji": "🧑‍💻",
+      "code": ":technologist:",
+      "intent_id": "developer_experience",
+      "intent_group": "config_chore",
+      "description": "Improve developer experience",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Chores",
+      "priority": 55,
+      "specificity": 75,
+      "split_weight": 55,
+      "positive_signals": [
+        "developer_experience_improved",
+        "local_workflow_improved",
+        "tooling_usability_improved",
+        "dev_setup_simplified",
+        "contributor_experience_improved"
+      ],
+      "negative_signals": [
+        "end_user_ux_primary",
+        "ci_pipeline_primary",
+        "runtime_feature_primary",
+        "docs_only",
+        "build_package_primary"
+      ],
+      "selection_rule": "Use when the primary change improves local developer or contributor experience."
+    },
+    {
+      "emoji": "💸",
+      "code": ":money_with_wings:",
+      "intent_id": "sponsorship_financial",
+      "intent_group": "feature",
+      "description": "Add sponsorships or money related infrastructure",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 65,
+      "specificity": 90,
+      "split_weight": 65,
+      "positive_signals": [
+        "sponsorship_added",
+        "funding_metadata_changed",
+        "billing_feature_added",
+        "payment_infrastructure_changed",
+        "financial_integration_added"
+      ],
+      "negative_signals": [
+        "generic_business_logic",
+        "docs_only",
+        "license_update",
+        "contributor_update",
+        "non_financial_feature"
+      ],
+      "selection_rule": "Use when the primary change adds sponsorship, funding, billing, payment, or money-related infrastructure."
+    },
+    {
+      "emoji": "🧵",
+      "code": ":thread:",
+      "intent_id": "concurrency_update",
+      "intent_group": "refactor_architecture",
+      "description": "Add or update code related to multithreading or concurrency",
+      "cc_type": "refactor",
+      "semver_impact": "MINOR",
+      "changelog_group": "Changed",
+      "priority": 80,
+      "specificity": 90,
+      "split_weight": 85,
+      "positive_signals": [
+        "concurrency_changed",
+        "threading_changed",
+        "async_behavior_changed",
+        "parallel_execution_changed",
+        "race_condition_handled"
+      ],
+      "negative_signals": [
+        "generic_refactor",
+        "performance_only_without_concurrency",
+        "docs_only",
+        "test_only",
+        "bug_fix_unrelated_to_concurrency"
+      ],
+      "selection_rule": "Use when the primary change adds or updates threading, async, concurrency, or parallel execution behaviour."
+    },
+    {
+      "emoji": "🦺",
+      "code": ":safety_vest:",
+      "intent_id": "validation_update",
+      "intent_group": "validation_safety",
+      "description": "Add or update code related to validation",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 80,
+      "specificity": 85,
+      "split_weight": 82,
+      "positive_signals": [
+        "validation_added",
+        "validation_hardened",
+        "schema_validation_changed",
+        "input_validation_changed",
+        "safety_guard_added"
+      ],
+      "negative_signals": [
+        "generic_bug_fix",
+        "error_handling_primary",
+        "types_only",
+        "docs_only",
+        "test_only"
+      ],
+      "selection_rule": "Use when the primary change adds or hardens validation/safety guards. Prefer 🥅 for error-catching and 🏷️ for type-only changes."
+    },
+    {
+      "emoji": "✈️",
+      "code": ":airplane:",
+      "intent_id": "offline_support",
+      "intent_group": "feature",
+      "description": "Improve offline support",
+      "cc_type": "feat",
+      "semver_impact": "MINOR",
+      "changelog_group": "Added",
+      "priority": 78,
+      "specificity": 90,
+      "split_weight": 80,
+      "positive_signals": [
+        "offline_mode_added",
+        "offline_support_improved",
+        "network_fallback_added",
+        "local_cache_for_offline",
+        "offline_first_behavior"
+      ],
+      "negative_signals": [
+        "generic_feature",
+        "performance_cache_only",
+        "docs_only",
+        "ci_offline_test_only",
+        "network_bug_fix_primary"
+      ],
+      "selection_rule": "Use when the primary change improves offline support or offline-first behaviour."
+    },
+    {
+      "emoji": "🦖",
+      "code": ":t-rex:",
+      "intent_id": "backwards_compatibility",
+      "intent_group": "bugfix",
+      "description": "Code that adds backwards compatibility",
+      "cc_type": "fix",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 78,
+      "specificity": 90,
+      "split_weight": 80,
+      "positive_signals": [
+        "backwards_compatibility_added",
+        "legacy_support_added",
+        "compatibility_shim_added",
+        "old_api_supported",
+        "migration_compatibility"
+      ],
+      "negative_signals": [
+        "breaking_change_primary",
+        "new_feature_without_compatibility",
+        "generic_bug_fix",
+        "docs_only",
+        "dependency_pin_only"
+      ],
+      "selection_rule": "Use when the primary change preserves or adds backwards compatibility."
+    }
+  ]
 }
