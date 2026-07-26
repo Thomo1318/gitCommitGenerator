@@ -689,3 +689,136 @@ def test_execute_release_notes_use_effective_0x_bump(monkeypatch, tmp_path):
     assert "v0.6.0" in body
     assert "**MAJOR**" not in body
     assert "**MINOR**" in body
+
+
+def test_prepend_changelog_idempotent_exact_heading():
+    from git_cg.release import _prepend_changelog_version
+
+    old = "# Changelog\n\n## v0.6.0\n\n### Added\n\n- already\n"
+    block = "## v0.6.0\n\n### Added\n\n- again\n"
+    assert _prepend_changelog_version(old, block, "v0.6.0") == old
+
+
+def test_prepend_changelog_empty_and_non_changelog_prefix():
+    from git_cg.release import _prepend_changelog_version
+
+    block = "## v0.6.0\n\n### Added\n\n- x\n"
+    assert _prepend_changelog_version("", block, "0.6.0").startswith("## v0.6.0")
+    out = _prepend_changelog_version("notes\n", block, "v0.6.0")
+    assert out.startswith("## v0.6.0")
+    assert "notes" in out
+
+
+def test_require_existing_release_tag_success_and_empty_sha(monkeypatch):
+    monkeypatch.setattr(
+        release_module.subprocess,
+        "check_output",
+        lambda *a, **k: "abc123\n",
+    )
+    assert release_module.require_existing_release_tag("v1.0.0") == "abc123"
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", lambda *a, **k: "\n")
+    with pytest.raises(RuntimeError, match="Could not resolve commit"):
+        release_module.require_existing_release_tag("v1.0.0")
+
+
+def test_create_github_release_with_matching_target_passes_target(monkeypatch):
+    calls = []
+
+    def fake_check_output(cmd, **k):
+        calls.append(cmd)
+        if cmd[:2] == ["git", "rev-parse"]:
+            return "deadbeef\n"
+        return b"https://github.com/acme/repo/releases/tag/v1.0.0\n"
+
+    monkeypatch.setattr(release_module, "require_existing_release_tag", lambda tag: "deadbeef")
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    url = release_module.create_github_release(
+        tag="v1.0.0",
+        title="T",
+        body="B",
+        repo_slug="acme/repo",
+        target="deadbeef",
+        dry_run=False,
+        require_existing_tag=True,
+        prerelease=False,
+    )
+    assert "releases/tag/v1.0.0" in url
+    gh_cmds = [c for c in calls if c and c[0] == "gh"]
+    assert gh_cmds
+    assert "--target" in gh_cmds[0]
+    assert "--prerelease" not in gh_cmds[0]
+
+
+def test_execute_release_aborts_when_no_bump(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_c("📝 docs: x", "SemVer-Impact: NONE\n")])
+    monkeypatch.setattr(release_module, "calculate_global_bump", lambda *_a, **_k: "NONE")
+    printed = []
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
+    release_module.execute_release(dry_run=False, verbose=False, skip_github_notes=True)
+    assert any("No changes warrant" in p for p in printed)
+    assert not (tmp_path / "CHANGELOG.md").exists()
+
+
+def test_execute_release_aborts_when_validate_release_false(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    monkeypatch.setattr(release_module, "validate_release", lambda _t: False)
+    release_module.execute_release(dry_run=False, verbose=False, skip_github_notes=True)
+    assert not (tmp_path / "CHANGELOG.md").exists()
+
+
+def test_execute_release_invalid_prerelease_on_first_tag(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT], last_tag="")
+    monkeypatch.setattr(release_module, "calculate_global_bump", lambda *_a, **_k: "MINOR")
+    printed = []
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
+    release_module.execute_release(dry_run=True, verbose=False, pre_release="bad id!", skip_github_notes=True)
+    assert any("Invalid pre-release" in p for p in printed)
+
+
+def test_execute_release_changelog_write_failure(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    printed = []
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
+
+    real_open = open
+
+    def boom(path, *a, **k):
+        if str(path) == "CHANGELOG.md" and (
+            (a and "w" in a[0]) or k.get("mode") == "w" or (a and len(a) > 0 and "w" in str(a))
+        ):
+            # fail writes
+            if a and "w" in a[0]:
+                raise OSError("disk full")
+            if not a and k.get("mode", "r").startswith("w"):
+                raise OSError("disk full")
+        # pathlib/open for read of missing is fine
+        try:
+            return real_open(path, *a, **k)
+        except TypeError:
+            return real_open(path, *a, **k)
+
+    # Simpler: patch builtins open used in execute_release write path via monkeypatch on release module's open? it uses global open
+    import builtins
+
+    def open_proxy(file, mode="r", *a, **k):
+        if str(file) == "CHANGELOG.md" and "w" in mode:
+            raise OSError("disk full")
+        return real_open(file, mode, *a, **k)
+
+    monkeypatch.setattr(builtins, "open", open_proxy)
+    release_module.execute_release(dry_run=False, verbose=False, skip_github_notes=True)
+    assert any("Failed to update CHANGELOG.md" in p for p in printed)
+
+
+def test_execute_release_verbose_logs(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    logs = []
+    monkeypatch.setattr(release_module.console, "log", lambda *a, **k: logs.append(str(a[0]) if a else ""))
+    release_module.execute_release(dry_run=True, verbose=True, skip_github_notes=True)
+    assert any("commits since tag" in x for x in logs)
