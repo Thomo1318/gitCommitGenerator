@@ -42,8 +42,7 @@ def get_commits_since(tag: str) -> list[str]:
             log_output = subprocess.check_output(
                 ["git", "log", "--pretty=format:%s---COMMIT_BODY---%b---COMMIT_DELIM---"], stderr=subprocess.DEVNULL
             ).decode("utf-8")
-
-        commits = [line for line in log_output.split("---COMMIT_DELIM---") if line.strip()]
+        commits = [line.strip() for line in log_output.split("---COMMIT_DELIM---") if line.strip()]
         return commits
     except subprocess.CalledProcessError:
         return []
@@ -1134,7 +1133,7 @@ def execute_release(
         new_tag=new_tag,
         commits=commits,
         gitmoji_matrix=gitmoji_matrix,
-        use_github_sections=False,
+        use_github_sections=bool(theme == "Gold Standard Release Notes"),
     )
 
     if dry_run or verbose:
