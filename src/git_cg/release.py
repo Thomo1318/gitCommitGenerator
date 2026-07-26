@@ -1164,7 +1164,8 @@ def execute_release(
         return
 
     # resolved_repo_slug / docs_url were preflighted above when notes are enabled.
-    assert resolved_repo_slug is not None and docs_url is not None
+    if resolved_repo_slug is None or docs_url is None:
+        raise RuntimeError("Internal error: repository slug/docs URL were not resolved before GitHub notes assembly.")
 
     resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
     title = format_release_title(new_tag=new_tag, theme=resolved_theme)

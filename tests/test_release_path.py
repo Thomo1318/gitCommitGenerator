@@ -196,9 +196,7 @@ def test_get_commits_since_with_and_without_tag(monkeypatch):
 def test_get_modified_files_since(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
-    (tmp_path / "missing.py").write_text("y\n", encoding="utf-8")
-    # only a.py will exist after we delete missing from disk listing simulation
-    (tmp_path / "missing.py").unlink()
+    # missing.py is intentionally absent on disk but present in mocked git output
 
     def fake_check_output(cmd, **k):
         return b"a.py\nmissing.py\n\n"
