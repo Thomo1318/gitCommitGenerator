@@ -286,6 +286,186 @@ def _get_commit_priority(subject: str, gitmoji_matrix: list) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Gold-standard GitHub Release notes (Issue #181)
+# ---------------------------------------------------------------------------
+
+# Preferred section order for GitHub "What's Changed" (Hybrid house style).
+# Empty sections are omitted at render time via ``_ordered_nonempty_sections``.
+GITHUB_CHANGELOG_SECTION_ORDER: tuple[str, ...] = (
+    "✨ Features",
+    "💥 Breaking Changes",
+    "🐛 Bug Fixes",
+    "♻️ Refactors",
+    "⚡️ Performance",
+    "📝 Documentation",
+    "✅ Tests",
+    "🎨 Style",
+    "🏗️ Build & CI",
+    "🔧 Chores & Internal",
+    "🔒️ Security / Dependencies",
+    "⏪ Reverts",
+    "Miscellaneous",
+)
+
+# Map trailer / matrix changelog_group tokens and CC-type aliases → GitHub
+# section headings. Every CommitType / SOP changelog_group must resolve here so
+# gold-standard notes never invent ad-hoc headings. Finer CC-type heads
+# (Performance, Refactors, Style, Build & CI, Reverts, Breaking Changes) are
+# first-class; empty heads are simply not rendered.
+CHANGELOG_GROUP_TO_GITHUB_SECTION: dict[str, str] = {
+    # Keep-a-Changelog / Hybrid trailer tokens
+    "Added": "✨ Features",
+    "Features": "✨ Features",
+    "Fixed": "🐛 Bug Fixes",
+    "Changed": "🐛 Bug Fixes",
+    "Removed": "🐛 Bug Fixes",
+    "Deprecated": "🐛 Bug Fixes",
+    "Documentation": "📝 Documentation",
+    "Docs": "📝 Documentation",
+    "Tests": "✅ Tests",
+    "Test": "✅ Tests",
+    "Miscellaneous": "Miscellaneous",
+    "Chores": "🔧 Chores & Internal",
+    "Internal": "🔧 Chores & Internal",
+    "Security": "🔒️ Security / Dependencies",
+    "Dependencies": "🔒️ Security / Dependencies",
+    "CI": "🏗️ Build & CI",
+    "Build": "🏗️ Build & CI",
+    "Style": "🎨 Style",
+    "Perf": "⚡️ Performance",
+    "Performance": "⚡️ Performance",
+    "Refactor": "♻️ Refactors",
+    "Refactors": "♻️ Refactors",
+    "Revert": "⏪ Reverts",
+    "Reverts": "⏪ Reverts",
+    "Breaking": "💥 Breaking Changes",
+    "BreakingChanges": "💥 Breaking Changes",
+    "Init": "Miscellaneous",
+    "Release": "Miscellaneous",
+    # Conventional Commit type aliases (Change-Types / informal trailers)
+    "feat": "✨ Features",
+    "fix": "🐛 Bug Fixes",
+    "docs": "📝 Documentation",
+    "style": "🎨 Style",
+    "refactor": "♻️ Refactors",
+    "perf": "⚡️ Performance",
+    "test": "✅ Tests",
+    "build": "🏗️ Build & CI",
+    "ci": "🏗️ Build & CI",
+    "chore": "🔧 Chores & Internal",
+    "revert": "⏪ Reverts",
+    "init": "Miscellaneous",
+    "release": "Miscellaneous",
+    # Back-compat aliases for the pre-split heading name
+    "Bug Fixes & Refactors": "🐛 Bug Fixes",
+    "BugFixes": "🐛 Bug Fixes",
+}
+
+# Case-insensitive lookup table derived from the canonical map above.
+_CHANGELOG_GROUP_LOOKUP: dict[str, str] = {
+    key.casefold(): value for key, value in CHANGELOG_GROUP_TO_GITHUB_SECTION.items()
+}
+
+# Generic sections that may be refined further from the subject CC type.
+_GENERIC_FIX_SECTIONS: frozenset[str] = frozenset(
+    {
+        "🐛 Bug Fixes",
+        "🐛 Bug Fixes & Refactors",
+    }
+)
+
+DEFAULT_REPO_SLUG = "Thomo1318/gitCommitGenerator"
+DEFAULT_DOCS_CHANGELOG_URL = "https://thomo1318.github.io/gitCommitGenerator/CHANGELOG.html"
+GH_RELEASE_TIMEOUT_SECONDS = 120
+
+
+def _matrix_changelog_group(subject: str, gitmoji_matrix: list) -> str:
+    """Resolve a subject to a SOP ``changelog_group`` token via gitmoji match."""
+    for entry in gitmoji_matrix:
+        if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
+            return entry.get("changelog_group") or "Miscellaneous"
+    return "Miscellaneous"
+
+
+def _cc_type_from_subject(subject: str, gitmoji_matrix: list | None = None) -> str | None:
+    """Extract a conventional-commit type from a Hybrid subject line or matrix row."""
+    match = re.search(r"^[^\s]+\s+([a-z]+)(?:\(.*?\))?!?:", subject.strip())
+    if match:
+        return match.group(1)
+    if gitmoji_matrix:
+        for entry in gitmoji_matrix:
+            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
+                cc = entry.get("cc_type")
+                if cc:
+                    return str(cc)
+    return None
+
+
+def _is_breaking_commit(commit: str) -> bool:
+    """Return True when a commit is explicitly breaking (trailer, bang, or prose)."""
+    parts = commit.split("---COMMIT_BODY---", 1)
+    subject = parts[0]
+    body = parts[1] if len(parts) > 1 else ""
+    if re.search(r"^SemVer-Impact:\s*MAJOR\b", body, flags=re.MULTILINE):
+        return True
+    if "BREAKING CHANGE:" in body or "BREAKING CHANGE:" in subject:
+        return True
+    return bool(re.search(r"^[^\s]+\s+[a-z]+(?:\(.*?\))?!:", subject.strip()))
+
+
+def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) -> str:
+    """Map a changelog group token + subject onto a gold GitHub section heading."""
+    section = _CHANGELOG_GROUP_LOOKUP.get(group.casefold(), group)
+    if section == "🐛 Bug Fixes & Refactors":
+        section = "🐛 Bug Fixes"
+
+    # Explicit fine-grained tokens already resolved above; refine only generic buckets
+    # using the subject CC type so style/perf/refactor/build/ci/revert split out.
+    cc = _cc_type_from_subject(subject, gitmoji_matrix)
+    if cc == "perf" and section in _GENERIC_FIX_SECTIONS | {"🔧 Chores & Internal", "🏗️ Build & CI"}:
+        return "⚡️ Performance"
+    if cc == "style" and section in _GENERIC_FIX_SECTIONS | {"🔧 Chores & Internal"}:
+        return "🎨 Style"
+    if cc == "refactor" and section in _GENERIC_FIX_SECTIONS:
+        return "♻️ Refactors"
+    if cc in {"build", "ci"} and section in _GENERIC_FIX_SECTIONS | {"🔧 Chores & Internal", "🏗️ Build & CI"}:
+        return "🏗️ Build & CI"
+    if cc == "revert":
+        return "⏪ Reverts"
+    if section not in GITHUB_CHANGELOG_SECTION_ORDER:
+        return "Miscellaneous"
+    return section
+
+
+def _canonical_changelog_group(token: str, subject: str, gitmoji_matrix: list) -> str:
+    """
+    Normalise a trailer/matrix group token to a canonical SOP changelog_group.
+
+    Unknown tokens that already map to a gold GitHub section (including CC-type
+    aliases like ``feat`` / ``docs``) are preserved. Bare ``Miscellaneous`` is
+    re-bucketed through the gitmoji matrix so legacy trailers that collapsed
+    Tests/Docs/Chores still land under the correct gold heading.
+    """
+    raw = (token or "").strip()
+    if not raw:
+        return "Miscellaneous"
+    if raw == "Miscellaneous" or raw.casefold() == "miscellaneous":
+        return _matrix_changelog_group(subject, gitmoji_matrix)
+    # Prefer the original casing when it is a known map key; otherwise keep token
+    # so CC-type aliases (feat/fix/...) still resolve in the GitHub section map.
+    if raw in CHANGELOG_GROUP_TO_GITHUB_SECTION:
+        return raw
+    folded = raw.casefold()
+    if folded in _CHANGELOG_GROUP_LOOKUP:
+        # Recover a stable canonical key when possible.
+        for key in CHANGELOG_GROUP_TO_GITHUB_SECTION:
+            if key.casefold() == folded:
+                return key
+        return raw
+    return raw
+
+
 def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
     """
     Group commit subjects into changelog sections.
@@ -302,7 +482,7 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
     changelog_groups = defaultdict(list)
     for commit in commits:
         parts = commit.split("---COMMIT_BODY---", 1)
-        subject = parts[0]
+        subject = parts[0].strip()
         body = parts[1] if len(parts) > 1 else ""
 
         # Prefer machine-readable trailer for mixed-commit support
@@ -311,77 +491,33 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
             # Commit can belong to multiple groups if it had secondary intents
             groups = [g.strip() for g in trailer_match.group(1).split(",")]
             for g in groups:
-                if g:
-                    if g == "Miscellaneous":
-                        # Legacy trailers mapped Tests/Docs/Chores to Miscellaneous. Re-bucket them via gitmoji matrix.
-                        mapped_g = "Miscellaneous"
-                        for entry in gitmoji_matrix:
-                            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
-                                mapped_g = entry.get("changelog_group", "Miscellaneous")
-                                break
-                        changelog_groups[mapped_g].append(subject)
-                    else:
-                        changelog_groups[g].append(subject)
+                if not g:
+                    continue
+                mapped_g = _canonical_changelog_group(g, subject, gitmoji_matrix)
+                changelog_groups[mapped_g].append(subject)
             continue
 
         # Legacy fallback logic
-        group = "Miscellaneous"
-        for entry in gitmoji_matrix:
-            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
-                group = entry.get("changelog_group", "Miscellaneous")
-                break
+        group = _matrix_changelog_group(subject, gitmoji_matrix)
         changelog_groups[group].append(subject)
 
-    # Sort commits within each group by their SOP priority (highest first)
-    for group in changelog_groups:
+    # Dedupe (multi-trailer re-bucket can land the same subject twice), then
+    # sort commits within each group by their SOP priority (highest first).
+    for group, subjects in list(changelog_groups.items()):
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for subject in subjects:
+            if subject in seen:
+                continue
+            seen.add(subject)
+            deduped.append(subject)
         changelog_groups[group] = sorted(
-            changelog_groups[group],
+            deduped,
             key=lambda subj: _get_commit_priority(subj, gitmoji_matrix),
             reverse=True,
         )
 
     return changelog_groups
-
-
-# ---------------------------------------------------------------------------
-# Gold-standard GitHub Release notes (Issue #181)
-# ---------------------------------------------------------------------------
-
-# Preferred section order for GitHub "What's Changed" (Hybrid house style).
-GITHUB_CHANGELOG_SECTION_ORDER: tuple[str, ...] = (
-    "✨ Features",
-    "🐛 Bug Fixes & Refactors",
-    "📝 Documentation",
-    "✅ Tests",
-    "🔧 Chores & Internal",
-    "🔒️ Security / Dependencies",
-    "Miscellaneous",
-)
-
-# Map trailer / matrix changelog_group tokens → GitHub section headings.
-CHANGELOG_GROUP_TO_GITHUB_SECTION: dict[str, str] = {
-    "Added": "✨ Features",
-    "Features": "✨ Features",
-    "Fixed": "🐛 Bug Fixes & Refactors",
-    "Changed": "🐛 Bug Fixes & Refactors",
-    "Removed": "🐛 Bug Fixes & Refactors",
-    "Deprecated": "🐛 Bug Fixes & Refactors",
-    "Documentation": "📝 Documentation",
-    "Docs": "📝 Documentation",
-    "Tests": "✅ Tests",
-    "Test": "✅ Tests",
-    "Miscellaneous": "Miscellaneous",
-    "Chores": "🔧 Chores & Internal",
-    "Internal": "🔧 Chores & Internal",
-    "Security": "🔒️ Security / Dependencies",
-    "Dependencies": "🔒️ Security / Dependencies",
-    "CI": "🔧 Chores & Internal",
-    "Build": "🔧 Chores & Internal",
-}
-
-DEFAULT_REPO_SLUG = "Thomo1318/gitCommitGenerator"
-DEFAULT_DOCS_CHANGELOG_URL = "https://thomo1318.github.io/gitCommitGenerator/CHANGELOG.html"
-GH_RELEASE_TIMEOUT_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -473,18 +609,34 @@ def group_commits_for_github_sections(
     Group commit subjects into gold-standard GitHub release sections.
 
     Uses the same trailer/matrix rules as ``group_commits_for_changelog``, then
-    maps group tokens onto the Hybrid GitHub section headings used in v0.5/v0.6.
+    maps group tokens onto Hybrid GitHub section headings. CC types refine
+    generic buckets (e.g. ``Changed`` + ``refactor`` → Refactors). Breaking
+    commits are also listed under ``💥 Breaking Changes``. Empty sections are
+    omitted by the renderer.
     """
     raw = group_commits_for_changelog(commits, gitmoji_matrix)
     out: dict[str, list[str]] = defaultdict(list)
     for group, subjects in raw.items():
-        section = CHANGELOG_GROUP_TO_GITHUB_SECTION.get(group, group)
-        if section not in GITHUB_CHANGELOG_SECTION_ORDER:
-            # Unknown custom group: bucket under Miscellaneous (stable house headings).
-            section = "Miscellaneous"
         for subject in subjects:
+            section = _github_section_for_group(group, subject, gitmoji_matrix)
             if subject not in out[section]:
                 out[section].append(subject)
+
+    # Dual-list breaking commits under the dedicated heading when detected.
+    for commit in commits:
+        if not _is_breaking_commit(commit):
+            continue
+        subject = _subject_from_commit(commit)
+        if subject and subject not in out["💥 Breaking Changes"]:
+            out["💥 Breaking Changes"].append(subject)
+
+    # Keep within-section priority ordering stable after refinement/dual-list.
+    for section, subjects in list(out.items()):
+        out[section] = sorted(
+            subjects,
+            key=lambda subj: _get_commit_priority(subj, gitmoji_matrix),
+            reverse=True,
+        )
     return dict(out)
 
 
@@ -538,12 +690,9 @@ def format_changelog_markdown(
     tag = _normalise_tag(new_tag)
     if use_github_sections:
         groups = group_commits_for_github_sections(commits, gitmoji_matrix)
-
-        def section_priority(section: str) -> int:
-            priorities = [_get_commit_priority(subj, gitmoji_matrix) for subj in groups.get(section, [])]
-            return max(priorities) if priorities else 0
-
-        order = sorted(list(GITHUB_CHANGELOG_SECTION_ORDER), key=section_priority, reverse=True)
+        # Gold house style uses a fixed section order (v0.6.0), not dynamic
+        # priority reordering of headings. Within-section sort remains priority-based.
+        order = list(GITHUB_CHANGELOG_SECTION_ORDER)
     else:
         groups = group_commits_for_changelog(commits, gitmoji_matrix)
         order = list(groups.keys())
@@ -689,12 +838,8 @@ def build_github_release_notes(data: ReleaseNotesInput) -> str:
         ]
     )
 
-    def section_priority(section: str) -> int:
-        priorities = [_get_commit_priority(subj, data.gitmoji_matrix) for subj in sections.get(section, [])]
-        return max(priorities) if priorities else 0
-
-    ordered_keys = sorted(list(GITHUB_CHANGELOG_SECTION_ORDER), key=section_priority, reverse=True)
-    ordered = _ordered_nonempty_sections(sections, ordered_keys)
+    # Preserve the fixed gold-standard heading order from GITHUB_CHANGELOG_SECTION_ORDER.
+    ordered = _ordered_nonempty_sections(sections, GITHUB_CHANGELOG_SECTION_ORDER)
     lines.extend(_render_grouped_sections(ordered, sections))
 
     compare = (

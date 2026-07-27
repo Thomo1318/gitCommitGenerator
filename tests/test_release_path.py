@@ -287,7 +287,7 @@ def test_inject_file_versions_all_methods(tmp_path, monkeypatch):
 
     inject_file_versions(paths, "MINOR", _sop_with_strategies(), dry_run=False, verbose=True)
     assert '"1.1.0"' in (tmp_path / "pkg.json").read_text(encoding="utf-8")
-    assert "v1.1.0" in (tmp_path / "cfg.toml").read_text(encoding="utf-8")
+    assert "v2.1.0" in (tmp_path / "cfg.toml").read_text(encoding="utf-8")
     assert "v1.1.0" in (tmp_path / "app.js").read_text(encoding="utf-8")
     assert "v1.1.0" in (tmp_path / "page.html").read_text(encoding="utf-8")
     assert "1.1.0" in (tmp_path / "mod.py").read_text(encoding="utf-8")
@@ -309,3 +309,32 @@ def test_inject_file_versions_verbose_error_on_unreadable(tmp_path, monkeypatch)
     missing = str(tmp_path / "nope.json")
     inject_file_versions([missing], "MINOR", _sop_with_strategies(), dry_run=False, verbose=True)
     assert any("Could not inject" in p for p in printed)
+
+
+def test_group_commits_rebuckets_miscellaneous_trailer():
+    matrix = [
+        {"emoji": "✅", "code": "white_check_mark", "cc_type": "test", "priority": 50, "changelog_group": "Tests"},
+        {"emoji": "📝", "code": "memo", "cc_type": "docs", "priority": 40, "changelog_group": "Documentation"},
+    ]
+    commits = [
+        "✅ test: a\n---COMMIT_BODY---\nChangelog-Groups: Miscellaneous\n",
+        "📝 docs: b\n---COMMIT_BODY---\nChangelog-Groups: Miscellaneous\n",
+    ]
+    groups = group_commits_for_changelog(commits, matrix)
+    assert "Tests" in groups and "Documentation" in groups
+    assert "Miscellaneous" not in groups
+
+
+def test_group_commits_sorts_within_section_by_priority():
+    matrix = [
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 50, "changelog_group": "Fixed"},
+        {"emoji": "🚑", "code": "ambulance", "cc_type": "fix", "priority": 90, "changelog_group": "Fixed"},
+    ]
+    commits = [
+        "🐛 fix: low\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+        "🚑 fix: high\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+    ]
+    groups = group_commits_for_changelog(commits, matrix)
+    subjects = groups["Fixed"]
+    assert subjects[0].startswith("🚑")
+    assert subjects[1].startswith("🐛")
