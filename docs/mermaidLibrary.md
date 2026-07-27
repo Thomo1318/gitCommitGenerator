@@ -1571,7 +1571,7 @@ flowchart TD
     LLM["LLM / Instructor render"]:::authority
     PROMPT["Prompt view<br/>pack_prompt_diff ceiling"]:::existing
 
-    STAGED --> SPLIT --> ANALYSIS --> SIG --> MARK --> RANK --> CTX_BASE --> CONTRACT --> LLM
+    STAGED --> SPLIT --> ANALYSIS --> SIG --> MARK --> RANK --> CTX_BASE --> CTX_EXT --> CONTRACT --> LLM
     SPLIT --> PROMPT
     PROMPT --> LLM
   end
@@ -1603,7 +1603,6 @@ flowchart TD
     STATE --> REDACT
 
     %% Context overlay onto existing context
-    CTX_BASE --> CTX_EXT
   end
 
   %% Prompt evidence overlay
@@ -1656,7 +1655,7 @@ flowchart TD
 
   CLI["git-cg release FLAGS"]:::existing
   FLAGS{"Flag validation<br/>publish ⨯ skip-notes forbidden"}:::safety
-  PRE{"skip_github_notes?"}:::decision
+  PRE{"notes path?"}:::decision
   SLUG["detect_repo_slug preflight<br/>explicit → remote → gh<br/>allow_default=not publish"]:::feature
   BUMP["SemVer bump + validate_release<br/>matrix trailers authority"]:::authority
   INJECT["inject_file_versions"]:::existing
@@ -1678,8 +1677,8 @@ flowchart TD
   DRY["dry-run panels + dry-run gh summary<br/>no file writes / no remote create"]:::feature
 
   CLI --> FLAGS --> PRE
-  PRE -->|no notes path| SLUG --> BUMP
-  PRE -->|changelog-only| BUMP
+  PRE -->|assemble notes| SLUG --> BUMP
+  PRE -->|changelog-only skip notes| BUMP
   BUMP --> INJECT --> CLOG
   CLOG --> PRE2{"skip_github_notes?"}:::decision
   PRE2 -->|yes| SKIP

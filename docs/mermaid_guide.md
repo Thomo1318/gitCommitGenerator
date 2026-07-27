@@ -46,7 +46,7 @@ You can use frontmatter (`%%{init: ...}%%`) to inject raw CSS into the generated
 graph LR
     A[Code Push] --> B{CI Checks}
     B -->|Pass| C[Deploy]:::primer-success
-```
+```markdown
 
 ### Method 2: Fallback Hex Codes via `classDef`
 
@@ -73,7 +73,7 @@ graph TD
     accTitle: Authentication Flow
     accDescr: A flowchart detailing the OAuth2 login sequence.
     A[User clicks Login] --> B[Redirect to Auth]
-```
+```markdown
 
 - **`accTitle`**: Provides a brief title for screen readers.
 - **`accDescr`**: Provides a detailed summary of the diagram's flow.
@@ -116,7 +116,7 @@ flowchart TD
   UI --> API
   CLI --> API
   API --> DB
-```
+```markdown
 
 ### 4.2 "The Core Bus"
 
@@ -162,7 +162,7 @@ flowchart LR
   SCH -.-> ING
   ORC -.-> PROC
   PROC -.-> LOG
-```
+```markdown
 
 ---
 
@@ -209,7 +209,7 @@ flowchart TD
     A2[" "]:::hidden -.->|Dry Run Flow| B2[" "]:::hidden
   end
   style ARROWS fill:none,stroke:none
-```
+```markdown
 
 ---
 
@@ -261,7 +261,7 @@ sequenceDiagram
         A-->>C: 401 Unauthorized
         C-->>U: Show Error Message
     end
-```
+```markdown
 
 ### 6.3 Entity-Relationship (ER) Diagrams: Database Schemas
 
@@ -310,7 +310,7 @@ stateDiagram-v2
 
     Completed --> [*]: Complete
     Failed --> [*]: Terminated
-```
+```markdown
 
 ### 6.5 Requirement Diagrams: System Specifications & Testing
 
@@ -368,7 +368,7 @@ Add this to the very top of your diagram:
 %%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart TD
   ...
-```
+```markdown
 ````
 
 > [!WARNING]
@@ -414,7 +414,7 @@ flowchart TD
     direction LR
     A --> B --> C
   end
-```
+```markdown
 
 _(Note: Forcing grid alignments with invisible links `~~~` is covered in the Advanced Layout & Grid Tricks section.)_
 
@@ -453,7 +453,7 @@ flowchart TD
 
   CLI["git-cg release FLAGS"]:::existing
   FLAGS{"Flag validation<br/>publish ⨯ skip-notes forbidden"}:::safety
-  PRE{"skip_github_notes?"}:::decision
+  PRE{"notes path?"}:::decision
   SLUG["detect_repo_slug preflight<br/>explicit → remote → gh<br/>allow_default=not publish"]:::feature
   BUMP["SemVer bump + validate_release<br/>matrix trailers authority"]:::authority
   INJECT["inject_file_versions"]:::existing
@@ -475,8 +475,8 @@ flowchart TD
   DRY["dry-run panels + dry-run gh summary<br/>no file writes / no remote create"]:::feature
 
   CLI --> FLAGS --> PRE
-  PRE -->|no notes path| SLUG --> BUMP
-  PRE -->|changelog-only| BUMP
+  PRE -->|assemble notes| SLUG --> BUMP
+  PRE -->|changelog-only skip notes| BUMP
   BUMP --> INJECT --> CLOG
   CLOG --> PRE2{"skip_github_notes?"}:::decision
   PRE2 -->|yes| SKIP
@@ -522,7 +522,7 @@ flowchart TD
 ### Key Takeaways for High-Quality GitHub Diagrams
 
 1. **Prefer `themeCSS` with Primer CSS Variables (`var(--fgColor-success)`)** if you want perfect dual-mode (Light/Dark) compatibility.
-2. **Use `accTitle` and `accDescr`** on _every_ complex diagram you merge.
+2. **Use `accTitle` and `accDescr`** on complex diagrams that are copied from library templates already carrying them (or add both when authoring new multi-subgraph charts).
 3. **Use Subgraphs** to group related architecture (e.g., placing all frontend nodes in a `subgraph Frontend` block).
 4. **Link out:** Connect your architectural boxes to the actual code folders using the `click` command.
 
@@ -562,7 +562,7 @@ For a comprehensive collection of architectural diagram examples, variations, an
 The library contains:
 
 - 17 distinct architectural options and flow layouts (including the evolution of the `git-cg` architecture).
-- Pre-configured `elk` and `dagre` layout examples.
+- Layout and routing examples that can be adapted for `elk` or `dagre` renderers.
 - Strict grid column and orthogonal routing demonstrations.
 - Accessible (`accTitle` / `accDescr`) examples for various chart styles.
 

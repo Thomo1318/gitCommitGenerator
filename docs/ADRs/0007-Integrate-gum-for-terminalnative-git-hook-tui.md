@@ -658,7 +658,7 @@ Included changes:
 Resolves #26
 SemVer-Impact: NONE
 Change-Types: ci, chore
-Changelog-Groups: Chores
+Changelog-Groups: Miscellaneous
 ```
 
 ### 3. Impact Radius (Cause, Change, Effect)
@@ -1015,6 +1015,41 @@ To maintain consistency across project documentation, all new prose and future r
 
 This is an append-only enforcement rule; historical text in this document retains its original American spelling to preserve the integrity of the initial record.
 
+
+---
+
+## VI. Refinement 7: Changelog-Groups vocabulary alignment (v1.7.0)
+
+### 1. Architectural Catalyst
+
+Refinement 2's example trailer historically used `Changelog-Groups: Miscellaneous` for a `ci, chore` change. After the SOP matrix rebucket (Issue #181 follow-up), those intents resolve to the first-class `Chores` token, and the schema/hook allowlist now treat `Documentation`, `Tests`, and `Chores` as closed vocabulary. Historical ADR prose must remain append-only, so the original example is preserved above; this refinement records the corrected present-day trailer vocabulary for implementers.
+
+### 2. Updated Decision
+
+- Do **not** rewrite historical Refinement 2 examples.
+- New guided examples and hook-legal trailers for chore/ci-style work should use `Changelog-Groups: Chores` (or multi-value sets drawn from the closed schema enum).
+- Parser and `validateCommitHook.mjs` allowlists must accept the extended set; release notes map those tokens onto gold section heads.
+
+#### Corrected present-day example (non-historical)
+
+```markdown
+Included changes:
+
+- 👷 ci(docs): add GitHub Pages deployment workflow
+- 🔧 chore(mise): add gum to toolchain and update gitignore
+
+Resolves #26
+SemVer-Impact: NONE
+Change-Types: ci, chore
+Changelog-Groups: Chores
+```
+
+### 3. Implementation Guidance
+
+- Prefer matrix-authored `changelog_group` values over free-text groups.
+- Keep issue references above machine-readable trailers.
+- Treat this as documentation/governance alignment only; ranking and SemVer authority are unchanged.
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-09 10:00:00): Proposed migration from `alerter` to `gum` for terminal-native interaction.
@@ -1035,3 +1070,4 @@ This is an append-only enforcement rule; historical text in this document retain
 - **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
 - **Why this visual aid was chosen**: The flowchart clearly delineates the critical fork in execution logic (TTY vs No TTY). The sequence diagram illustrates how control is passed between Python, the external `gum` binary, and the user's terminal to circumvent standard Git hook limitations.
 -->
+- v1.7.0 (2026-07-27): Added Refinement 7 documenting append-only Changelog-Groups vocabulary alignment (`Chores` / `Documentation` / `Tests`) without rewriting historical Refinement 2 examples.

@@ -311,7 +311,7 @@ Resolves: #80
 Refs: #81
 SemVer-Impact: PATCH
 Change-Types: fix, docs
-Changelog-Groups: Fixed, Miscellaneous
+Changelog-Groups: Fixed, Documentation
 ```
 
 If no terminal device is available, the tool degrades cleanly and completes without trying to open the TUI.
@@ -355,7 +355,7 @@ Included changes:
 Refs: #80
 SemVer-Impact: PATCH
 Change-Types: refactor, fix, build
-Changelog-Groups: Changed, Fixed, Miscellaneous
+Changelog-Groups: Changed, Fixed
 ```
 
 #### Gitmoji Reference Matrix
