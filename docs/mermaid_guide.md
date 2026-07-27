@@ -46,13 +46,13 @@ You can use frontmatter (`%%{init: ...}%%`) to inject raw CSS into the generated
 graph LR
     A[Code Push] --> B{CI Checks}
     B -->|Pass| C[Deploy]:::primer-success
-```markdown
+```
 
 ### Method 2: Fallback Hex Codes via `classDef`
 
 If you prefer standard Mermaid syntax without CSS injection, use Primer's core hex codes. Note: these perfectly match GitHub's light mode branding.
 
-````
+````markdown
 ```mermaid
 graph TD
     classDef default fill:#f6f8fa,stroke:#d0d7de,color:#24292f;
@@ -73,7 +73,7 @@ graph TD
     accTitle: Authentication Flow
     accDescr: A flowchart detailing the OAuth2 login sequence.
     A[User clicks Login] --> B[Redirect to Auth]
-```markdown
+```
 
 - **`accTitle`**: Provides a brief title for screen readers.
 - **`accDescr`**: Provides a detailed summary of the diagram's flow.
@@ -116,7 +116,7 @@ flowchart TD
   UI --> API
   CLI --> API
   API --> DB
-```markdown
+```
 
 ### 4.2 "The Core Bus"
 
@@ -162,7 +162,7 @@ flowchart LR
   SCH -.-> ING
   ORC -.-> PROC
   PROC -.-> LOG
-```markdown
+```
 
 ---
 
@@ -209,7 +209,7 @@ flowchart TD
     A2[" "]:::hidden -.->|Dry Run Flow| B2[" "]:::hidden
   end
   style ARROWS fill:none,stroke:none
-```markdown
+```
 
 ---
 
@@ -261,7 +261,7 @@ sequenceDiagram
         A-->>C: 401 Unauthorized
         C-->>U: Show Error Message
     end
-```markdown
+```
 
 ### 6.3 Entity-Relationship (ER) Diagrams: Database Schemas
 
@@ -310,7 +310,7 @@ stateDiagram-v2
 
     Completed --> [*]: Complete
     Failed --> [*]: Terminated
-```markdown
+```
 
 ### 6.5 Requirement Diagrams: System Specifications & Testing
 
@@ -363,12 +363,12 @@ By default, Mermaid uses the `dagre` layout engine. You can switch to the **`elk
 
 Add this to the very top of your diagram:
 
-````
+````markdown
 ```mermaid
 %%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart TD
   ...
-```markdown
+```
 ````
 
 > [!WARNING]
@@ -396,7 +396,7 @@ flowchart TD
 
 If the layout looks too squished or too spread out, you can explicitly define the padding between nodes (`nodeSpacing`) and the distance between vertical rows (`rankSpacing`):
 
-````
+````markdown
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 100, "rankSpacing": 150}} }%%
 flowchart TD
@@ -414,7 +414,7 @@ flowchart TD
     direction LR
     A --> B --> C
   end
-```markdown
+```
 
 _(Note: Forcing grid alignments with invisible links `~~~` is covered in the Advanced Layout & Grid Tricks section.)_
 
@@ -453,7 +453,7 @@ flowchart TD
 
   CLI["git-cg release FLAGS"]:::existing
   FLAGS{"Flag validation<br/>publish ⨯ skip-notes forbidden"}:::safety
-  PRE{"notes path?"}:::decision
+  NOTES_PATH{"notes path?"}:::decision
   SLUG["detect_repo_slug preflight<br/>explicit → remote → gh<br/>allow_default=not publish"]:::feature
   BUMP["SemVer bump + validate_release<br/>matrix trailers authority"]:::authority
   INJECT["inject_file_versions"]:::existing
@@ -475,8 +475,8 @@ flowchart TD
   DRY["dry-run panels + dry-run gh summary<br/>no file writes / no remote create"]:::feature
 
   CLI --> FLAGS --> PRE
-  PRE -->|assemble notes| SLUG --> BUMP
-  PRE -->|changelog-only skip notes| BUMP
+  NOTES_PATH -->|assemble notes| SLUG --> BUMP
+  NOTES_PATH -->|changelog-only skip notes| BUMP
   BUMP --> INJECT --> CLOG
   CLOG --> PRE2{"skip_github_notes?"}:::decision
   PRE2 -->|yes| SKIP

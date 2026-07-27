@@ -178,13 +178,21 @@ def _hook_valid_groups() -> set[str]:
 
 
 def _matrix_changelog_groups() -> set[str]:
-    """Collect the changelog group values defined in the loaded SOP matrix.
+    """Collect the non-empty changelog group values from the loaded SOP matrix.
 
     Returns:
-        set[str]: The set of changelog group names, using an empty string for rows without a group.
+        set[str]: The set of non-empty changelog group names from matrix rows.
     """
     matrix = load_sop()["gitmoji_reference_matrix"]
-    return {str(row.get("changelog_group") or "") for row in matrix}
+    groups: set[str] = set()
+    for row in matrix:
+        raw = row.get("changelog_group")
+        if raw is None:
+            continue
+        value = str(raw).strip()
+        if value:
+            groups.add(value)
+    return groups
 
 
 def test_sop_validates_against_schema():

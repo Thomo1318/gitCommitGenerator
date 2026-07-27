@@ -1655,7 +1655,7 @@ flowchart TD
 
   CLI["git-cg release FLAGS"]:::existing
   FLAGS{"Flag validation<br/>publish ⨯ skip-notes forbidden"}:::safety
-  PRE{"notes path?"}:::decision
+  NOTES_PATH{"notes path?"}:::decision
   SLUG["detect_repo_slug preflight<br/>explicit → remote → gh<br/>allow_default=not publish"]:::feature
   BUMP["SemVer bump + validate_release<br/>matrix trailers authority"]:::authority
   INJECT["inject_file_versions"]:::existing
@@ -1677,8 +1677,8 @@ flowchart TD
   DRY["dry-run panels + dry-run gh summary<br/>no file writes / no remote create"]:::feature
 
   CLI --> FLAGS --> PRE
-  PRE -->|assemble notes| SLUG --> BUMP
-  PRE -->|changelog-only skip notes| BUMP
+  NOTES_PATH -->|assemble notes| SLUG --> BUMP
+  NOTES_PATH -->|changelog-only skip notes| BUMP
   BUMP --> INJECT --> CLOG
   CLOG --> PRE2{"skip_github_notes?"}:::decision
   PRE2 -->|yes| SKIP

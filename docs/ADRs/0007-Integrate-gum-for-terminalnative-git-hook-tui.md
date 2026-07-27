@@ -1061,6 +1061,7 @@ Changelog-Groups: Chores
 - v1.4.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardisations.
 - v1.5.0 (2026-06-27): Added Refinement 5 documenting the en-AU normalisation policy.
 - v1.6.0 (2026-06-27): Added Refinement 6 to acknowledge that guided-regeneration behaviour is governed by ADR-0009, while retaining legacy refinement notes for historical context.
+- v1.7.0 (2026-07-27): Added Refinement 7 documenting append-only Changelog-Groups vocabulary alignment (`Chores` / `Documentation` / `Tests`) without rewriting historical Refinement 2 examples.
 
 <!-- ## Supporting Visual Aids
 
@@ -1070,4 +1071,3 @@ Changelog-Groups: Chores
 - **Chosen visual aid**: Mermaid Flowchart and Sequence Diagram.
 - **Why this visual aid was chosen**: The flowchart clearly delineates the critical fork in execution logic (TTY vs No TTY). The sequence diagram illustrates how control is passed between Python, the external `gum` binary, and the user's terminal to circumvent standard Git hook limitations.
 -->
-- v1.7.0 (2026-07-27): Added Refinement 7 documenting append-only Changelog-Groups vocabulary alignment (`Chores` / `Documentation` / `Tests`) without rewriting historical Refinement 2 examples.
