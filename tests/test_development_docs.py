@@ -722,3 +722,145 @@ class TestUsageMdReleaseFlags:
             < section.index("--github-latest")
             < section.index("--skip-github-notes")
         )
+
+
+# ===========================================================================
+# README.md — Changelog-Groups vocabulary alignment (Documentation/Tests/Chores)
+# ===========================================================================
+
+
+class TestReadmeChangelogGroupsVocabularyAlignment:
+    """Tests for the Hybrid changelog vocabulary alignment (adds Documentation/Tests/Chores)."""
+
+    def _content(self) -> str:
+        return _read_readme_md()
+
+    def _matrix_section(self) -> str:
+        content = self._content()
+        return _section_after_heading(content, "#### Gitmoji Reference Matrix")
+
+    def test_file_exists(self):
+        assert README_MD.is_file()
+
+    def test_issue_reference_trailer_example_uses_documentation_not_miscellaneous(self):
+        """The structured-issue-reference example must no longer bucket docs under Miscellaneous."""
+        content = self._content()
+        assert "Changelog-Groups: Fixed, Documentation" in content
+        assert "Changelog-Groups: Fixed, Miscellaneous" not in content
+
+    def test_hybrid_commit_example_trailer_drops_trailing_miscellaneous(self):
+        """The Hybrid Commits example must resolve refactor/fix/build to Changed, Fixed only."""
+        content = self._content()
+        assert "Changelog-Groups: Changed, Fixed" in content
+        assert "Changelog-Groups: Changed, Fixed, Miscellaneous" not in content
+
+    def test_matrix_section_present_and_non_trivial(self):
+        section = self._matrix_section()
+        assert "| Emoji | Code" in section
+        assert section.count("\n|") > 50
+
+    def test_matrix_contains_chores_documentation_and_tests_columns(self):
+        """New hybrid tokens must actually appear as Changelog Group column values."""
+        section = self._matrix_section()
+        assert "| Chores" in section
+        assert "| Documentation" in section
+        assert "| Tests" in section
+
+    def test_matrix_chore_and_ci_rows_use_chores_not_miscellaneous(self):
+        """Representative chore/ci rows must resolve to the new Chores token."""
+        section = self._matrix_section()
+        assert "`:rocket:`" in section
+        rocket_line = next(line for line in section.splitlines() if ":rocket:" in line)
+        assert rocket_line.rstrip().endswith("Chores          |")
+        ci_line = next(line for line in section.splitlines() if ":construction_worker:" in line)
+        assert ci_line.rstrip().endswith("Chores          |")
+
+    def test_matrix_docs_rows_use_documentation_not_miscellaneous(self):
+        section = self._matrix_section()
+        memo_line = next(line for line in section.splitlines() if ":memo:" in line)
+        assert memo_line.rstrip().endswith("Documentation   |")
+
+    def test_matrix_test_rows_use_tests_not_miscellaneous(self):
+        section = self._matrix_section()
+        check_line = next(line for line in section.splitlines() if ":white_check_mark:" in line)
+        assert check_line.rstrip().endswith("Tests           |")
+
+    def test_matrix_miscellaneous_is_narrowed_to_exactly_four_rows(self):
+        """Only init/tada, refactor/poop, refactor/beers, and release/bookmark remain Miscellaneous."""
+        section = self._matrix_section()
+        misc_lines = [line for line in section.splitlines() if "Miscellaneous" in line]
+        assert len(misc_lines) == 4
+        for code in (":tada:", ":poop:", ":beers:", ":bookmark:"):
+            assert any(code in line for line in misc_lines), f"expected {code} row to remain Miscellaneous"
+
+
+# ===========================================================================
+# docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md
+# ===========================================================================
+
+ADR_0007 = REPO_ROOT / "docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md"
+
+
+class TestAdr0007Refinement7Section:
+    """Tests for the appended 'Refinement 7: Changelog-Groups vocabulary alignment' section."""
+
+    def _content(self) -> str:
+        return ADR_0007.read_text(encoding="utf-8")
+
+    def _refinement_7_section(self) -> str:
+        content = self._content()
+        heading = "## VI. Refinement 7: Changelog-Groups vocabulary alignment (v1.7.0)"
+        return _section_after_heading(content, heading)
+
+    def test_file_exists(self):
+        assert ADR_0007.is_file()
+
+    def test_refinement_7_heading_present(self):
+        content = self._content()
+        assert "## VI. Refinement 7: Changelog-Groups vocabulary alignment (v1.7.0)" in content
+
+    def test_refinement_7_explains_sop_matrix_rebucket_catalyst(self):
+        section = self._refinement_7_section()
+        assert "### 1. Architectural Catalyst" in section
+        assert "Changelog-Groups: Miscellaneous" in section
+        assert "first-class `Chores` token" in section
+        assert "`Documentation`, `Tests`, and `Chores` as closed vocabulary" in section
+
+    def test_refinement_7_updated_decision_forbids_rewriting_history(self):
+        section = self._refinement_7_section()
+        assert "### 2. Updated Decision" in section
+        assert "Do **not** rewrite historical Refinement 2 examples." in section
+        assert "validateCommitHook.mjs" in section
+
+    def test_refinement_7_corrected_example_uses_chores_token(self):
+        section = self._refinement_7_section()
+        assert "#### Corrected present-day example (non-historical)" in section
+        assert "Changelog-Groups: Chores" in section
+        assert "Change-Types: ci, chore" in section
+
+    def test_refinement_7_implementation_guidance_present(self):
+        section = self._refinement_7_section()
+        assert "### 3. Implementation Guidance" in section
+        assert "Prefer matrix-authored `changelog_group` values over free-text groups." in section
+
+    def test_historical_refinement_2_example_is_not_rewritten(self):
+        """Append-only guarantee: Refinement 2's original example must keep 'Miscellaneous'."""
+        content = self._content()
+        refinement_2_heading = "## III. Refinement 2: Structured Issue Reference Review Metadata (v1.2.0)"
+        refinement_2_section = _section_after_heading(content, refinement_2_heading)
+        assert "Changelog-Groups: Miscellaneous" in refinement_2_section
+        assert "Changelog-Groups: Chores" not in refinement_2_section
+
+    def test_changelog_has_v1_7_0_entry_documenting_refinement_7(self):
+        content = self._content()
+        changelog_section = _section_after_heading(content, "## CHANGELOG")
+        assert (
+            "v1.7.0 (2026-07-27): Added Refinement 7 documenting append-only Changelog-Groups vocabulary "
+            "alignment (`Chores` / `Documentation` / `Tests`) without rewriting historical Refinement 2 examples."
+        ) in changelog_section
+
+    def test_changelog_entries_remain_in_ascending_version_order(self):
+        """v1.7.0 must be the last (most recent) CHANGELOG bullet, after v1.6.0."""
+        content = self._content()
+        changelog_section = _section_after_heading(content, "## CHANGELOG")
+        assert changelog_section.index("v1.6.0") < changelog_section.index("v1.7.0")
