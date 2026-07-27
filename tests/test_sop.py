@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 from git_cg.sop import load_sop
 
@@ -140,3 +141,97 @@ def test_deep_merge_does_not_alter_source():
     _deep_merge(target, source)
 
     assert source == original_source
+
+
+# ---------------------------------------------------------------------------
+# Changelog-group vocabulary contract (SOP matrix ↔ schema ↔ hook ↔ release)
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_SCHEMA_PATH = _REPO_ROOT / "config" / "gitops_sop.schema.json"
+_HOOK_PATH = _REPO_ROOT / "scripts" / "validateCommitHook.mjs"
+
+
+def _schema_changelog_group_enum() -> set[str]:
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    enum = schema["properties"]["gitmoji_reference_matrix"]["items"]["properties"]["changelog_group"]["enum"]
+    return set(enum)
+
+
+def _hook_valid_groups() -> set[str]:
+    text = _HOOK_PATH.read_text(encoding="utf-8")
+    match = re.search(r"const validGroups = \[(.*?)\];", text, flags=re.DOTALL)
+    assert match, "validGroups array not found in validateCommitHook.mjs"
+    return set(re.findall(r"'([^']+)'", match.group(1)))
+
+
+def _matrix_changelog_groups() -> set[str]:
+    matrix = load_sop()["gitmoji_reference_matrix"]
+    return {str(row.get("changelog_group") or "") for row in matrix}
+
+
+def test_sop_validates_against_schema():
+    """Bundled SOP must validate against gitops_sop.schema.json (incl. changelog_group enum)."""
+    from jsonschema import Draft202012Validator
+
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    sop = load_sop()
+    errors = sorted(Draft202012Validator(schema).iter_errors(sop), key=lambda e: list(e.absolute_path))
+    assert not errors, "SOP schema validation failed:\n" + "\n".join(
+        f"- {list(e.absolute_path)}: {e.message}" for e in errors[:20]
+    )
+
+
+def test_matrix_changelog_groups_are_schema_enum_members():
+    """Every matrix changelog_group must be in the schema enum (no silent authority drift)."""
+    enum = _schema_changelog_group_enum()
+    matrix_groups = _matrix_changelog_groups()
+    unknown = sorted(g for g in matrix_groups if g not in enum)
+    assert not unknown, f"Matrix changelog_group values missing from schema enum: {unknown}"
+
+
+def test_hook_allowlist_covers_schema_and_matrix_groups():
+    """Hook Changelog-Groups allowlist must accept every schema/matrix token."""
+    enum = _schema_changelog_group_enum()
+    matrix_groups = _matrix_changelog_groups()
+    hook = _hook_valid_groups()
+    required = enum | matrix_groups
+    missing = sorted(required - hook)
+    assert not missing, f"validateCommitHook.mjs validGroups missing: {missing}"
+
+
+def test_release_mapping_covers_schema_and_matrix_groups():
+    """Release mapper must resolve every schema/matrix changelog_group to a gold heading."""
+    from git_cg.release import CHANGELOG_GROUP_TO_GITHUB_SECTION, GITHUB_CHANGELOG_SECTION_ORDER
+
+    enum = _schema_changelog_group_enum()
+    matrix_groups = _matrix_changelog_groups()
+    required = enum | matrix_groups
+    missing = sorted(g for g in required if g not in CHANGELOG_GROUP_TO_GITHUB_SECTION)
+    assert not missing, f"CHANGELOG_GROUP_TO_GITHUB_SECTION missing keys: {missing}"
+
+    gold = set(GITHUB_CHANGELOG_SECTION_ORDER)
+    bad_targets = sorted(
+        {
+            f"{g} -> {CHANGELOG_GROUP_TO_GITHUB_SECTION[g]}"
+            for g in required
+            if CHANGELOG_GROUP_TO_GITHUB_SECTION[g] not in gold
+        }
+    )
+    assert not bad_targets, f"Mapped headings outside gold order: {bad_targets}"
+
+
+def test_changelog_generation_rules_taxonomy_covers_matrix_groups():
+    """taxonomy prose must name every matrix changelog_group token in use."""
+    sop = load_sop()
+    taxonomy = sop.get("changelog_generation_rules", {}).get("taxonomy") or []
+    assert isinstance(taxonomy, list) and taxonomy, "changelog_generation_rules.taxonomy must be a non-empty list"
+    # Each taxonomy entry starts with "Token: ..."
+    named = set()
+    for line in taxonomy:
+        token = str(line).split(":", 1)[0].strip()
+        if token:
+            named.add(token)
+    matrix_groups = _matrix_changelog_groups()
+    missing = sorted(matrix_groups - named)
+    assert not missing, f"taxonomy missing matrix groups: {missing}"

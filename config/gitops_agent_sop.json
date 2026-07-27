@@ -106,12 +106,15 @@
     "enforcement": "Do not dump a raw git log. Parse the hybrid commits and group them under markdown headers based on the `changelog_group` mapped in the reference matrix.",
     "taxonomy": [
       "Added: for new features (e.g., ✨ feat).",
-      "Changed: for changes in existing functionality (e.g., ♻️ refactor, 🎨 style).",
+      "Changed: for changes in existing functionality that are not better classified below (e.g., broad behaviour changes).",
       "Deprecated: for soon-to-be removed features (e.g., 🗑️).",
       "Removed: for now removed features (e.g., 🔥).",
       "Fixed: for any bug fixes (e.g., 🐛 fix).",
       "Security: in case of vulnerabilities (e.g., 🔒️).",
-      "Miscellaneous: for chores, docs, and build updates (e.g., 📝 docs, 🚀 chore)."
+      "Documentation: for docs, comments, license, and typo updates (e.g., 📝 docs).",
+      "Tests: for test, mock, snapshot, and failing-test updates (e.g., ✅ test).",
+      "Chores: for chores, CI, config, logging, DX, and internal maintenance (e.g., 🔧 chore, 👷 ci).",
+      "Miscellaneous: residual bucket for init/release and uncategorised intents only."
     ]
   },
   "semver_resolution_matrix": {
