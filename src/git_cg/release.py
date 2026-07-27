@@ -32,6 +32,15 @@ def get_last_tag() -> str:
 
 
 def get_commits_since(tag: str) -> list[str]:
+    """
+    Retrieve formatted Git commits since the specified tag.
+    
+    Parameters:
+    	tag (str): The starting Git tag; an empty string retrieves the full log.
+    
+    Returns:
+    	list[str]: Trimmed commit entries containing each commit's subject and body, or an empty list if Git cannot retrieve the log.
+    """
     try:
         if tag:
             log_output = subprocess.check_output(
@@ -279,7 +288,16 @@ def inject_file_versions(
 
 
 def _get_commit_priority(subject: str, gitmoji_matrix: list) -> int:
-    """Return the priority of the first matched gitmoji in the subject."""
+    """
+    Determine the ordering priority for a commit subject.
+    
+    Parameters:
+    	subject (str): Commit subject to match against the gitmoji entries.
+    	gitmoji_matrix (list): Gitmoji entries containing emoji, code, and priority values.
+    
+    Returns:
+    	int: Priority of the first matching entry, or 0 when no entry matches.
+    """
     for entry in gitmoji_matrix:
         if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
             return entry.get("priority", 0)
@@ -389,7 +407,16 @@ def _matrix_changelog_group(subject: str, gitmoji_matrix: list) -> str:
 
 
 def _cc_type_from_subject(subject: str, gitmoji_matrix: list | None = None) -> str | None:
-    """Extract a conventional-commit type from a Hybrid subject line or matrix row."""
+    """
+    Extracts a conventional commit type from a subject line or matching gitmoji entry.
+    
+    Parameters:
+    	subject (str): Commit subject to inspect.
+    	gitmoji_matrix (list | None): Optional gitmoji entries used as a fallback.
+    
+    Returns:
+    	str | None: The conventional commit type, or `None` when no type is found.
+    """
     match = re.search(r"^[^\s]+\s+([a-z]+)(?:\(.*?\))?!?:", subject.strip())
     if match:
         return match.group(1)
@@ -403,7 +430,15 @@ def _cc_type_from_subject(subject: str, gitmoji_matrix: list | None = None) -> s
 
 
 def _is_breaking_commit(commit: str) -> bool:
-    """Return True when a commit is explicitly breaking (trailer, bang, or prose)."""
+    """
+    Determine whether a commit contains an explicit breaking-change marker.
+    
+    Parameters:
+    	commit (str): Formatted commit subject and body.
+    
+    Returns:
+    	bool: `True` if the commit declares a major semantic-version impact, breaking-change prose, or a breaking conventional-commit marker; `False` otherwise.
+    """
     parts = commit.split("---COMMIT_BODY---", 1)
     subject = parts[0]
     body = parts[1] if len(parts) > 1 else ""
@@ -415,7 +450,7 @@ def _is_breaking_commit(commit: str) -> bool:
 
 
 def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) -> str:
-    """Map a changelog group token + subject onto a gold GitHub section heading."""
+    """Map a changelog group and commit subject to a GitHub release section heading."""
     section = _CHANGELOG_GROUP_LOOKUP.get(group.casefold(), group)
     if section == "🐛 Bug Fixes & Refactors":
         section = "🐛 Bug Fixes"
@@ -440,12 +475,15 @@ def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) ->
 
 def _canonical_changelog_group(token: str, subject: str, gitmoji_matrix: list) -> str:
     """
-    Normalise a trailer/matrix group token to a canonical SOP changelog_group.
-
-    Unknown tokens that already map to a gold GitHub section (including CC-type
-    aliases like ``feat`` / ``docs``) are preserved. Bare ``Miscellaneous`` is
-    re-bucketed through the gitmoji matrix so legacy trailers that collapsed
-    Tests/Docs/Chores still land under the correct gold heading.
+    Normalise a changelog group token to a canonical SOP group.
+    
+    Parameters:
+    	token (str): Changelog group token from a trailer or matrix entry.
+    	subject (str): Commit subject used to classify miscellaneous groups.
+    	gitmoji_matrix (list): Gitmoji configuration used for fallback classification.
+    
+    Returns:
+    	str: Canonical changelog group, or the original token when no mapping exists.
     """
     raw = (token or "").strip()
     if not raw:
@@ -676,16 +714,16 @@ def format_changelog_markdown(
     use_github_sections: bool = False,
 ) -> str:
     """
-    Format a CHANGELOG.md slice for ``new_tag``.
-
+    Format a Markdown changelog section for a release tag.
+    
     Parameters:
-        new_tag: Version heading (``vX.Y.Z``).
-        commits: Raw commit strings from ``get_commits_since``.
-        gitmoji_matrix: SOP gitmoji matrix.
-        use_github_sections: When true, use gold-standard GitHub section titles.
-
+        new_tag (str): Release tag used for the section heading.
+        commits (list[str]): Commit entries to include in the changelog.
+        gitmoji_matrix (list): SOP gitmoji matrix used to classify commits.
+        use_github_sections (bool): Whether to use the ordered GitHub release sections.
+    
     Returns:
-        Markdown starting with ``## {tag}``.
+        str: Markdown beginning with the normalised release tag heading.
     """
     tag = _normalise_tag(new_tag)
     if use_github_sections:
@@ -750,11 +788,11 @@ def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> lis
 
 def build_github_release_notes(data: ReleaseNotesInput) -> str:
     """
-    Assemble a structured GitHub Release markdown body.
-
+    Assemble structured GitHub Release notes from release metadata and commit information.
+    
     Parameters:
         data (ReleaseNotesInput): Release metadata, scope details, highlights, and commit information.
-
+    
     Returns:
         str: Formatted GitHub Release notes in Markdown.
     """
@@ -1218,11 +1256,11 @@ def execute_release(
 ):
     """
     Prepare a release from commits since the latest Git tag.
-
+    
     Calculates the release version, updates configured version fields, updates
     CHANGELOG.md, and prepares GitHub release notes. In dry-run mode, reports the
     planned changes without writing files or publishing a release.
-
+    
     Parameters:
         dry_run: Simulate the release without writing files or publishing.
         verbose: Emit additional progress output.
@@ -1233,7 +1271,10 @@ def execute_release(
         github_prerelease: Mark the published GitHub release as a pre-release.
         repo_slug: GitHub repository in `owner/repository` format.
         skip_github_notes: Skip GitHub release note generation and publishing.
-        github_target: Optional git ref for ``gh release create --target``.
+        github_target: Optional git ref for `gh release create --target`.
+    
+    Raises:
+        ValueError: If GitHub publishing and GitHub notes skipping are both enabled.
     """
     if publish_github and skip_github_notes:
         raise ValueError("--publish-github cannot be combined with --skip-github-notes")

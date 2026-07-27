@@ -153,12 +153,24 @@ _HOOK_PATH = _REPO_ROOT / "scripts" / "validateCommitHook.mjs"
 
 
 def _schema_changelog_group_enum() -> set[str]:
+    """
+    Extract the allowed changelog group values from the SOP JSON schema.
+    
+    Returns:
+    	set[str]: The schema-defined changelog group values.
+    """
     schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     enum = schema["properties"]["gitmoji_reference_matrix"]["items"]["properties"]["changelog_group"]["enum"]
     return set(enum)
 
 
 def _hook_valid_groups() -> set[str]:
+    """
+    Extract the changelog groups allowed by the commit validation hook.
+    
+    Returns:
+    	set[str]: The set of valid changelog group names.
+    """
     text = _HOOK_PATH.read_text(encoding="utf-8")
     match = re.search(r"const validGroups = \[(.*?)\];", text, flags=re.DOTALL)
     assert match, "validGroups array not found in validateCommitHook.mjs"
@@ -166,6 +178,11 @@ def _hook_valid_groups() -> set[str]:
 
 
 def _matrix_changelog_groups() -> set[str]:
+    """Collect the changelog group values defined in the loaded SOP matrix.
+    
+    Returns:
+    	set[str]: The set of changelog group names, using an empty string for rows without a group.
+    """
     matrix = load_sop()["gitmoji_reference_matrix"]
     return {str(row.get("changelog_group") or "") for row in matrix}
 
@@ -191,7 +208,7 @@ def test_matrix_changelog_groups_are_schema_enum_members():
 
 
 def test_hook_allowlist_covers_schema_and_matrix_groups():
-    """Hook Changelog-Groups allowlist must accept every schema/matrix token."""
+    """Ensure the commit hook allowlist includes every changelog group defined by the schema and SOP matrix."""
     enum = _schema_changelog_group_enum()
     matrix_groups = _matrix_changelog_groups()
     hook = _hook_valid_groups()
