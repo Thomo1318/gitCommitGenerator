@@ -658,7 +658,7 @@ Included changes:
 Resolves #26
 SemVer-Impact: NONE
 Change-Types: ci, chore
-Changelog-Groups: Miscellaneous
+Changelog-Groups: Chores
 ```
 
 ### 3. Impact Radius (Cause, Change, Effect)
