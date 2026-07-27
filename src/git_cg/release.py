@@ -34,12 +34,12 @@ def get_last_tag() -> str:
 def get_commits_since(tag: str) -> list[str]:
     """
     Retrieve formatted Git commits since the specified tag.
-    
+
     Parameters:
-    	tag (str): The starting Git tag; an empty string retrieves the full log.
-    
+        tag (str): The starting Git tag; an empty string retrieves the full log.
+
     Returns:
-    	list[str]: Trimmed commit entries containing each commit's subject and body, or an empty list if Git cannot retrieve the log.
+        list[str]: Trimmed commit entries containing each commit's subject and body, or an empty list if Git cannot retrieve the log.
     """
     try:
         if tag:
@@ -287,21 +287,30 @@ def inject_file_versions(
                 console.print(f"Could not inject version into {filepath}: {e}")
 
 
+def _first_matching_matrix_entry(subject: str, gitmoji_matrix: list) -> dict | None:
+    """Return the first gitmoji matrix entry whose emoji or :code: appears in subject."""
+    for entry in gitmoji_matrix:
+        code = entry.get("code")
+        if entry.get("emoji") in subject or (code and f":{code}:" in subject):
+            return entry
+    return None
+
+
 def _get_commit_priority(subject: str, gitmoji_matrix: list) -> int:
     """
     Determine the ordering priority for a commit subject.
-    
+
     Parameters:
-    	subject (str): Commit subject to match against the gitmoji entries.
-    	gitmoji_matrix (list): Gitmoji entries containing emoji, code, and priority values.
-    
+        subject (str): Commit subject to match against the gitmoji entries.
+        gitmoji_matrix (list): Gitmoji entries containing emoji, code, and priority values.
+
     Returns:
-    	int: Priority of the first matching entry, or 0 when no entry matches.
+        int: Priority of the first matching entry, or 0 when no entry matches.
     """
-    for entry in gitmoji_matrix:
-        if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
-            return entry.get("priority", 0)
-    return 0
+    entry = _first_matching_matrix_entry(subject, gitmoji_matrix)
+    if entry is None:
+        return 0
+    return entry.get("priority", 0)
 
 
 # ---------------------------------------------------------------------------
@@ -394,57 +403,63 @@ _GENERIC_FIX_SECTIONS: frozenset[str] = frozenset(
 )
 
 DEFAULT_REPO_SLUG = "Thomo1318/gitCommitGenerator"
+GOLD_STANDARD_THEME = "Gold Standard Release Notes"
 DEFAULT_DOCS_CHANGELOG_URL = "https://thomo1318.github.io/gitCommitGenerator/CHANGELOG.html"
 GH_RELEASE_TIMEOUT_SECONDS = 120
 
 
 def _matrix_changelog_group(subject: str, gitmoji_matrix: list) -> str:
     """Resolve a subject to a SOP ``changelog_group`` token via gitmoji match."""
-    for entry in gitmoji_matrix:
-        if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
-            return entry.get("changelog_group") or "Miscellaneous"
-    return "Miscellaneous"
+    entry = _first_matching_matrix_entry(subject, gitmoji_matrix)
+    if entry is None:
+        return "Miscellaneous"
+    return entry.get("changelog_group") or "Miscellaneous"
 
 
 def _cc_type_from_subject(subject: str, gitmoji_matrix: list | None = None) -> str | None:
     """
     Extracts a conventional commit type from a subject line or matching gitmoji entry.
-    
+
     Parameters:
-    	subject (str): Commit subject to inspect.
-    	gitmoji_matrix (list | None): Optional gitmoji entries used as a fallback.
-    
+        subject (str): Commit subject to inspect.
+        gitmoji_matrix (list | None): Optional gitmoji entries used as a fallback.
+
     Returns:
-    	str | None: The conventional commit type, or `None` when no type is found.
+        str | None: The conventional commit type, or `None` when no type is found.
     """
     match = re.search(r"^[^\s]+\s+([a-z]+)(?:\(.*?\))?!?:", subject.strip())
     if match:
         return match.group(1)
     if gitmoji_matrix:
-        for entry in gitmoji_matrix:
-            if entry.get("emoji") in subject or f":{entry.get('code')}:" in subject:
-                cc = entry.get("cc_type")
-                if cc:
-                    return str(cc)
+        entry = _first_matching_matrix_entry(subject, gitmoji_matrix)
+        if entry is not None:
+            cc = entry.get("cc_type")
+            if cc:
+                return str(cc)
     return None
 
 
 def _is_breaking_commit(commit: str) -> bool:
     """
     Determine whether a commit contains an explicit breaking-change marker.
-    
+
     Parameters:
-    	commit (str): Formatted commit subject and body.
-    
+        commit (str): Formatted commit subject and body.
+
     Returns:
-    	bool: `True` if the commit declares a major semantic-version impact, breaking-change prose, or a breaking conventional-commit marker; `False` otherwise.
+        bool: `True` if the commit declares a major semantic-version impact, breaking-change prose, or a breaking conventional-commit marker; `False` otherwise.
     """
     parts = commit.split("---COMMIT_BODY---", 1)
     subject = parts[0]
     body = parts[1] if len(parts) > 1 else ""
     if re.search(r"^SemVer-Impact:\s*MAJOR\b", body, flags=re.MULTILINE):
         return True
-    if "BREAKING CHANGE:" in body or "BREAKING CHANGE:" in subject:
+    if (
+        "BREAKING CHANGE:" in body
+        or "BREAKING CHANGE:" in subject
+        or "BREAKING-CHANGE:" in body
+        or "BREAKING-CHANGE:" in subject
+    ):
         return True
     return bool(re.search(r"^[^\s]+\s+[a-z]+(?:\(.*?\))?!:", subject.strip()))
 
@@ -466,7 +481,7 @@ def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) ->
         return "♻️ Refactors"
     if cc in {"build", "ci"} and section in _GENERIC_FIX_SECTIONS | {"🔧 Chores & Internal", "🏗️ Build & CI"}:
         return "🏗️ Build & CI"
-    if cc == "revert":
+    if cc == "revert" and section in _GENERIC_FIX_SECTIONS:
         return "⏪ Reverts"
     if section not in GITHUB_CHANGELOG_SECTION_ORDER:
         return "Miscellaneous"
@@ -476,14 +491,14 @@ def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) ->
 def _canonical_changelog_group(token: str, subject: str, gitmoji_matrix: list) -> str:
     """
     Normalise a changelog group token to a canonical SOP group.
-    
+
     Parameters:
-    	token (str): Changelog group token from a trailer or matrix entry.
-    	subject (str): Commit subject used to classify miscellaneous groups.
-    	gitmoji_matrix (list): Gitmoji configuration used for fallback classification.
-    
+        token (str): Changelog group token from a trailer or matrix entry.
+        subject (str): Commit subject used to classify miscellaneous groups.
+        gitmoji_matrix (list): Gitmoji configuration used for fallback classification.
+
     Returns:
-    	str: Canonical changelog group, or the original token when no mapping exists.
+        str: Canonical changelog group, or the original token when no mapping exists.
     """
     raw = (token or "").strip()
     if not raw:
@@ -715,13 +730,13 @@ def format_changelog_markdown(
 ) -> str:
     """
     Format a Markdown changelog section for a release tag.
-    
+
     Parameters:
         new_tag (str): Release tag used for the section heading.
         commits (list[str]): Commit entries to include in the changelog.
         gitmoji_matrix (list): SOP gitmoji matrix used to classify commits.
         use_github_sections (bool): Whether to use the ordered GitHub release sections.
-    
+
     Returns:
         str: Markdown beginning with the normalised release tag heading.
     """
@@ -789,10 +804,10 @@ def _default_highlights(*, bump_type: str, theme: str, commit_count: int) -> lis
 def build_github_release_notes(data: ReleaseNotesInput) -> str:
     """
     Assemble structured GitHub Release notes from release metadata and commit information.
-    
+
     Parameters:
         data (ReleaseNotesInput): Release metadata, scope details, highlights, and commit information.
-    
+
     Returns:
         str: Formatted GitHub Release notes in Markdown.
     """
@@ -1256,11 +1271,11 @@ def execute_release(
 ):
     """
     Prepare a release from commits since the latest Git tag.
-    
+
     Calculates the release version, updates configured version fields, updates
     CHANGELOG.md, and prepares GitHub release notes. In dry-run mode, reports the
     planned changes without writing files or publishing a release.
-    
+
     Parameters:
         dry_run: Simulate the release without writing files or publishing.
         verbose: Emit additional progress output.
@@ -1272,7 +1287,7 @@ def execute_release(
         repo_slug: GitHub repository in `owner/repository` format.
         skip_github_notes: Skip GitHub release note generation and publishing.
         github_target: Optional git ref for `gh release create --target`.
-    
+
     Raises:
         ValueError: If GitHub publishing and GitHub notes skipping are both enabled.
     """
@@ -1350,11 +1365,12 @@ def execute_release(
 
     inject_file_versions(modified_files, bump_type, sop_data, dry_run, verbose, pre_release=pre_release)
 
+    resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
     changelog_str = format_changelog_markdown(
         new_tag=new_tag,
         commits=commits,
         gitmoji_matrix=gitmoji_matrix,
-        use_github_sections=bool(theme == "Gold Standard Release Notes"),
+        use_github_sections=bool(resolved_theme == GOLD_STANDARD_THEME),
     )
 
     if dry_run or verbose:
@@ -1387,7 +1403,6 @@ def execute_release(
     if resolved_repo_slug is None or docs_url is None:
         raise RuntimeError("Internal error: repository slug/docs URL were not resolved before GitHub notes assembly.")
 
-    resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)
     title = format_release_title(new_tag=new_tag, theme=resolved_theme)
     notes_bump = effective_semver_bump_type(last_tag, bump_type)
     notes_input = ReleaseNotesInput(

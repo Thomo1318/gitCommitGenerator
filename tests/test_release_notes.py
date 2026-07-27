@@ -147,6 +147,52 @@ def test_resolve_release_theme_explicit():
     assert resolve_release_theme("  My Theme  ", bump_type="MINOR", commits=[]) == "My Theme"
 
 
+def test_resolve_release_theme_collapses_gold_standard_whitespace():
+    """Whitespace-padded gold theme must normalize to GOLD_STANDARD_THEME."""
+    from git_cg.release import GOLD_STANDARD_THEME, resolve_release_theme
+
+    assert (
+        resolve_release_theme("  Gold Standard Release Notes  ", bump_type="MINOR", commits=[]) == GOLD_STANDARD_THEME
+    )
+    assert resolve_release_theme("Gold Standard Release Notes:", bump_type="PATCH", commits=[]) == GOLD_STANDARD_THEME
+
+
+def test_execute_release_gold_theme_whitespace_enables_github_sections(monkeypatch, tmp_path):
+    """Normalized gold theme (with trailing spaces) must use gold CHANGELOG heads."""
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, bool] = {}
+
+    def fake_format(*, new_tag, commits, gitmoji_matrix, use_github_sections=False):
+        captured["use_github_sections"] = use_github_sections
+        return f"## {new_tag}\n\n"
+
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    monkeypatch.setattr(release_module, "format_changelog_markdown", fake_format)
+    release_module.execute_release(
+        dry_run=True,
+        verbose=False,
+        theme="Gold Standard Release Notes ",
+        skip_github_notes=True,
+    )
+    assert captured.get("use_github_sections") is True
+
+
+def test_is_breaking_commit_accepts_hyphenated_footer():
+    from git_cg.release import _is_breaking_commit
+
+    msg = "✨ feat(api): expand\n---COMMIT_BODY---\nBREAKING-CHANGE: clients must update\n"
+    assert _is_breaking_commit(msg) is True
+
+
+def test_revert_cc_does_not_override_explicit_security_section():
+    """Explicit Security trailer must not be rewritten to Reverts by CC type."""
+    from git_cg.release import _github_section_for_group
+
+    subject = "⏪ revert(auth): undo token rotate"
+    section = _github_section_for_group("Security", subject, [])
+    assert section == "🔒️ Security / Dependencies"
+
+
 def test_resolve_release_theme_from_feat_commit():
     commits = [_c("✨ feat(core): Semantic Context integration", "SemVer-Impact: MINOR\n")]
     theme = resolve_release_theme(None, bump_type="MINOR", commits=commits)
@@ -830,33 +876,52 @@ def test_execute_release_verbose_logs(monkeypatch, tmp_path):
 
 def test_all_commit_types_map_to_gold_headings():
     """Every CommitType / SOP changelog token must resolve to a gold heading."""
+    import json
+    from pathlib import Path
+
     from git_cg.models import CommitType
     from git_cg.release import _CHANGELOG_GROUP_LOOKUP, GITHUB_CHANGELOG_SECTION_ORDER
 
     gold = set(GITHUB_CHANGELOG_SECTION_ORDER)
-    for token in (
-        "Added",
-        "Changed",
-        "Deprecated",
-        "Removed",
-        "Fixed",
-        "Security",
-        "Miscellaneous",
-        "Tests",
-        "Documentation",
-        "Chores",
-        "Style",
+    schema_path = Path(__file__).resolve().parents[1] / "config" / "gitops_sop.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    enum_tokens = schema["properties"]["gitmoji_reference_matrix"]["items"]["properties"]["changelog_group"]["enum"]
+    # Schema enum plus known CC/alias map keys already registered in the lookup.
+    tokens = set(enum_tokens) | {
+        "Features",
+        "Docs",
+        "Test",
+        "Internal",
+        "Dependencies",
+        "CI",
+        "Build",
         "Perf",
         "Performance",
         "Refactor",
         "Refactors",
         "Revert",
         "Reverts",
-        "Build",
-        "CI",
         "Breaking",
         "BreakingChanges",
-    ):
+        "Init",
+        "Release",
+        "Bug Fixes & Refactors",
+        "BugFixes",
+        "feat",
+        "fix",
+        "docs",
+        "style",
+        "refactor",
+        "perf",
+        "test",
+        "build",
+        "ci",
+        "chore",
+        "revert",
+        "init",
+        "release",
+    }
+    for token in sorted(tokens):
         section = _CHANGELOG_GROUP_LOOKUP[token.casefold()]
         assert section in gold, f"{token} -> {section}"
 

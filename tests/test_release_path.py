@@ -197,9 +197,7 @@ def test_get_commits_since_strips_whitespace_around_entries(monkeypatch):
     """Each returned commit entry must have leading/trailing whitespace stripped."""
 
     def fake_check_output(cmd, **k):
-        return (
-            b"  \n s1---COMMIT_BODY---b1---COMMIT_DELIM---\n\n   s2---COMMIT_BODY---b2  ---COMMIT_DELIM---  \n"
-        )
+        return b"  \n s1---COMMIT_BODY---b1---COMMIT_DELIM---\n\n   s2---COMMIT_BODY---b2  ---COMMIT_DELIM---  \n"
 
     monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
     commits = get_commits_since("v1.0.0")
