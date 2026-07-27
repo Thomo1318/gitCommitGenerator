@@ -193,6 +193,30 @@ def test_get_commits_since_with_and_without_tag(monkeypatch):
     assert get_commits_since("v1.0.0") == []
 
 
+def test_get_commits_since_strips_whitespace_around_entries(monkeypatch):
+    """Each returned commit entry must have leading/trailing whitespace stripped."""
+
+    def fake_check_output(cmd, **k):
+        return (
+            b"  \n s1---COMMIT_BODY---b1---COMMIT_DELIM---\n\n   s2---COMMIT_BODY---b2  ---COMMIT_DELIM---  \n"
+        )
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    commits = get_commits_since("v1.0.0")
+    assert commits == ["s1---COMMIT_BODY---b1", "s2---COMMIT_BODY---b2"]
+
+
+def test_get_commits_since_filters_out_whitespace_only_entries(monkeypatch):
+    """Entries that are empty/whitespace-only after stripping must be dropped, not kept as blanks."""
+
+    def fake_check_output(cmd, **k):
+        return b"only---COMMIT_BODY---x---COMMIT_DELIM---\n   \n---COMMIT_DELIM---\n"
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    commits = get_commits_since("")
+    assert commits == ["only---COMMIT_BODY---x"]
+
+
 def test_get_modified_files_since(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
@@ -338,3 +362,28 @@ def test_group_commits_sorts_within_section_by_priority():
     subjects = groups["Fixed"]
     assert subjects[0].startswith("🚑")
     assert subjects[1].startswith("🐛")
+
+
+def test_group_commits_for_changelog_unmatched_subject_sorts_last_with_zero_priority():
+    """A subject with no matching gitmoji entry defaults to priority 0 and sorts last."""
+    matrix = [
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 50, "changelog_group": "Fixed"},
+    ]
+    commits = [
+        "Unrecognised commit with no emoji\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+        "🐛 fix: known\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+    ]
+    groups = group_commits_for_changelog(commits, matrix)
+    subjects = groups["Fixed"]
+    assert subjects[0].startswith("🐛 fix: known")
+    assert subjects[1].startswith("Unrecognised commit")
+
+
+def test_group_commits_for_changelog_deduplicates_subject_within_same_group():
+    """The same subject repeated for the same resolved group must not be duplicated."""
+    matrix = [
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 50, "changelog_group": "Fixed"},
+    ]
+    commits = ["🐛 fix: dup\n---COMMIT_BODY---\nChangelog-Groups: Fixed, Fixed\n"]
+    groups = group_commits_for_changelog(commits, matrix)
+    assert groups["Fixed"] == ["🐛 fix: dup"]

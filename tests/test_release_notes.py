@@ -1065,3 +1065,168 @@ def test_major_semver_trailer_alone_dual_lists_under_breaking_heading():
     groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
     assert any("reshape public surface" in s for s in groups["♻️ Refactors"])
     assert any("reshape public surface" in s for s in groups["💥 Breaking Changes"])
+
+
+# ---------------------------------------------------------------------------
+# Direct unit tests for the private grouping/section helpers (PR #181)
+# ---------------------------------------------------------------------------
+
+
+def test_get_commit_priority_returns_matched_entry_priority():
+    matrix = [{"emoji": "🚑", "code": "ambulance", "priority": 90}]
+    assert release_module._get_commit_priority("🚑 fix: hotfix", matrix) == 90
+
+
+def test_get_commit_priority_matches_via_code_shorthand():
+    matrix = [{"emoji": "🐛", "code": "bug", "priority": 42}]
+    assert release_module._get_commit_priority("Fix :bug: something", matrix) == 42
+
+
+def test_get_commit_priority_defaults_to_zero_when_priority_key_missing():
+    matrix = [{"emoji": "🐛", "code": "bug"}]
+    assert release_module._get_commit_priority("🐛 fix: bug", matrix) == 0
+
+
+def test_get_commit_priority_defaults_to_zero_when_no_entry_matches():
+    matrix = [{"emoji": "🐛", "code": "bug", "priority": 50}]
+    assert release_module._get_commit_priority("✨ feat: unrelated", matrix) == 0
+
+
+def test_cc_type_from_subject_extracts_conventional_type():
+    assert release_module._cc_type_from_subject("✨ feat(core): add thing") == "feat"
+
+
+def test_cc_type_from_subject_extracts_type_with_breaking_bang():
+    assert release_module._cc_type_from_subject("♻️ refactor!: reshape api") == "refactor"
+
+
+def test_cc_type_from_subject_falls_back_to_matrix_cc_type_when_no_colon_type():
+    matrix = [{"emoji": "🎉", "code": "tada", "cc_type": "init"}]
+    assert release_module._cc_type_from_subject("🎉 initial commit", matrix) == "init"
+
+
+def test_cc_type_from_subject_returns_none_when_nothing_matches():
+    assert release_module._cc_type_from_subject("no type or emoji here", None) is None
+
+
+def test_cc_type_from_subject_returns_none_when_matrix_entry_missing_cc_type():
+    matrix = [{"emoji": "🎉", "code": "tada"}]
+    assert release_module._cc_type_from_subject("🎉 initial commit", matrix) is None
+
+
+def test_matrix_changelog_group_matches_via_emoji():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": "Fixed"}]
+    assert release_module._matrix_changelog_group("🐛 fix: bug", matrix) == "Fixed"
+
+
+def test_matrix_changelog_group_matches_via_code_shorthand():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": "Fixed"}]
+    assert release_module._matrix_changelog_group("Fix :bug: thing", matrix) == "Fixed"
+
+
+def test_matrix_changelog_group_defaults_to_miscellaneous_when_unmatched():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": "Fixed"}]
+    assert release_module._matrix_changelog_group("no matching marker here", matrix) == "Miscellaneous"
+
+
+def test_matrix_changelog_group_defaults_to_miscellaneous_when_entry_group_falsy():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": ""}]
+    assert release_module._matrix_changelog_group("🐛 fix: bug", matrix) == "Miscellaneous"
+
+
+def test_is_breaking_commit_true_for_major_semver_trailer():
+    assert release_module._is_breaking_commit(_c("♻️ refactor: x", "SemVer-Impact: MAJOR\n")) is True
+
+
+def test_is_breaking_commit_true_for_breaking_change_marker_in_body():
+    assert release_module._is_breaking_commit(_c("🐛 fix: x", "BREAKING CHANGE: something changed\n")) is True
+
+
+def test_is_breaking_commit_true_for_breaking_change_marker_in_subject():
+    commit = "BREAKING CHANGE: x\n---COMMIT_BODY---\n\n"
+    assert release_module._is_breaking_commit(commit) is True
+
+
+def test_is_breaking_commit_true_for_bang_syntax():
+    assert release_module._is_breaking_commit(_c("✨ feat(api)!: rename endpoint")) is True
+
+
+def test_is_breaking_commit_false_when_no_breaking_markers_present():
+    assert release_module._is_breaking_commit(_c("✨ feat: add thing", "SemVer-Impact: MINOR\n")) is False
+
+
+def test_canonical_changelog_group_empty_token_returns_miscellaneous():
+    assert release_module._canonical_changelog_group("", "any subject", MOCK_GITMOJI_MATRIX) == "Miscellaneous"
+    assert release_module._canonical_changelog_group("   ", "any subject", MOCK_GITMOJI_MATRIX) == "Miscellaneous"
+
+
+def test_canonical_changelog_group_exact_key_match_is_preserved():
+    assert release_module._canonical_changelog_group("Tests", "any subject", MOCK_GITMOJI_MATRIX) == "Tests"
+
+
+def test_canonical_changelog_group_case_insensitive_fold_recovers_canonical_spelling():
+    assert release_module._canonical_changelog_group("tests", "any subject", MOCK_GITMOJI_MATRIX) == "Tests"
+    assert release_module._canonical_changelog_group("TESTS", "any subject", MOCK_GITMOJI_MATRIX) == "Tests"
+
+
+def test_canonical_changelog_group_unknown_token_passed_through_unchanged():
+    token = "TotallyCustomGroup"
+    assert release_module._canonical_changelog_group(token, "any subject", MOCK_GITMOJI_MATRIX) == token
+
+
+def test_canonical_changelog_group_miscellaneous_literal_resolved_via_matrix():
+    matrix = [{"emoji": "✅", "code": "white_check_mark", "changelog_group": "Tests"}]
+    assert release_module._canonical_changelog_group("Miscellaneous", "✅ test: x", matrix) == "Tests"
+    assert release_module._canonical_changelog_group("miscellaneous", "✅ test: x", matrix) == "Tests"
+
+
+def test_github_section_for_group_unknown_group_and_no_cc_type_falls_back_to_miscellaneous():
+    section = release_module._github_section_for_group(
+        "TotallyCustomGroup", "no matching marker here", MOCK_GITMOJI_MATRIX
+    )
+    assert section == "Miscellaneous"
+
+
+def test_github_section_for_group_known_group_returned_as_is_without_refinement():
+    section = release_module._github_section_for_group("Added", "✨ feat: x", MOCK_GITMOJI_MATRIX)
+    assert section == "✨ Features"
+
+
+# ---------------------------------------------------------------------------
+# execute_release theme-driven use_github_sections wiring (PR #181)
+# ---------------------------------------------------------------------------
+
+
+def test_execute_release_gold_standard_theme_uses_github_sections_in_changelog(monkeypatch, tmp_path):
+    """theme='Gold Standard Release Notes' must render fixed GitHub-style headings in CHANGELOG.md."""
+    monkeypatch.chdir(tmp_path)
+    commits = [
+        _FEAT_COMMIT,
+        _c("🐛 fix: squash bug", "Changelog-Groups: Fixed\nSemVer-Impact: PATCH\n"),
+    ]
+    _patch_release_collaborators(monkeypatch, commits=commits)
+
+    release_module.execute_release(
+        dry_run=False, verbose=False, theme="Gold Standard Release Notes", skip_github_notes=True
+    )
+
+    changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "### ✨ Features" in changelog
+    assert "### 🐛 Bug Fixes" in changelog
+
+
+def test_execute_release_default_theme_keeps_legacy_dynamic_group_headings(monkeypatch, tmp_path):
+    """Without the Gold Standard theme, CHANGELOG.md keeps legacy per-group headings, not GitHub sections."""
+    monkeypatch.chdir(tmp_path)
+    commits = [
+        _FEAT_COMMIT,
+        _c("🐛 fix: squash bug", "Changelog-Groups: Fixed\nSemVer-Impact: PATCH\n"),
+    ]
+    _patch_release_collaborators(monkeypatch, commits=commits)
+
+    release_module.execute_release(dry_run=False, verbose=False, skip_github_notes=True)
+
+    changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "### Added" in changelog
+    assert "### Fixed" in changelog
+    assert "### ✨ Features" not in changelog

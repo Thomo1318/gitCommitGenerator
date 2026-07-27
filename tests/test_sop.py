@@ -199,6 +199,14 @@ def test_sop_validates_against_schema():
     )
 
 
+def test_schema_changelog_group_enum_includes_hybrid_extensions():
+    """The PR adds Documentation/Tests/Chores to the Keep-a-Changelog core enum."""
+    enum = _schema_changelog_group_enum()
+    assert {"Documentation", "Tests", "Chores"} <= enum
+    # Keep-a-Changelog core values must still be present alongside the extensions.
+    assert {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security", "Miscellaneous"} <= enum
+
+
 def test_matrix_changelog_groups_are_schema_enum_members():
     """Every matrix changelog_group must be in the schema enum (no silent authority drift)."""
     enum = _schema_changelog_group_enum()
