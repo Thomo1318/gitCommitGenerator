@@ -8,6 +8,7 @@ and Issue #161 (Phase 3 SOP-marker intent engine hardening):
   - README.md                                        (Issue Auto-Detection tip)
 """
 
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -602,9 +603,12 @@ class TestChangelogUnreleasedIssue177Entries:
         assert content.index("## Unreleased") < content.index("## v0.6.0") < content.index("## v0.5.0")
 
     def test_unreleased_section_has_no_bullets(self):
-        """Unreleased is a placeholder once v0.6.0 absorbed the staged entries."""
+        """Unreleased is a placeholder between cuts; only the next version H2 ends it."""
         content = self._content()
-        section = content.split("## Unreleased", 1)[1].split("## v0.6.0", 1)[0]
+        after = content.split("## Unreleased", 1)[1]
+        # Stop at the next release heading (## vX.Y.Z), not a hard-coded older tag.
+        match = re.search(r"(?m)^## v\d+", after)
+        section = after[: match.start()] if match else after
         bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
         assert bullet_lines == []
 

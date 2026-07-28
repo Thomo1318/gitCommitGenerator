@@ -1,4 +1,5 @@
 import contextlib
+import json
 import os
 import re
 import subprocess
@@ -179,6 +180,249 @@ def bump_version_string(version: str, bump_type: str, pre_release: str | None = 
         return version
 
 
+# Canonical package metadata paths always considered for release bumps.
+CANONICAL_PACKAGE_VERSION_FILES: tuple[str, ...] = ("pyproject.toml", "uv.lock")
+
+# Header-style version comments only match near the top of a file to avoid
+# false positives in prose/examples (e.g. SOP docs, test fixtures, comments).
+_HEADER_VERSION_SCAN_LINES = 5
+
+_ISSUE_REF_TRAILER_RE = re.compile(
+    r"^(Resolves|Refs|Closes|Fixes|Null)\s*:\s*#(\d+)\s*$",
+    flags=re.MULTILINE | re.IGNORECASE,
+)
+_EXISTING_ISSUE_SUFFIX_RE = re.compile(r"\s*\(#\d+(?:\s*/\s*#\d+)*\)\s*$")
+
+
+def _header_prefix_text(content: str, max_lines: int = _HEADER_VERSION_SCAN_LINES) -> tuple[str, str]:
+    """Split file content into a short header prefix and the remainder.
+
+    Returns:
+        tuple[str, str]: (prefix including trailing newline if present, remainder)
+    """
+    lines = content.splitlines(keepends=True)
+    if not lines:
+        return "", ""
+    head = lines[:max_lines]
+    tail = lines[max_lines:]
+    return "".join(head), "".join(tail)
+
+
+def _toml_project_version_pattern() -> re.Pattern[str]:
+    """Match project table version assignment in pyproject.toml."""
+    return re.compile(
+        r"(?ms)^(\[project\](?:(?!^\[).)*?^version\s*=\s*[\"'])"
+        r"(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)"
+        r"([\"'])"
+    )
+
+
+def _uv_lock_package_version_pattern(package_name: str) -> re.Pattern[str]:
+    """Match the version field for a named package block in uv.lock."""
+    return re.compile(
+        r'(?ms)(^\[\[package\]\]\s*\nname\s*=\s*"' + re.escape(package_name) + r'"\s*\nversion\s*=\s*")'
+        r"(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)"
+        r'(")'
+    )
+
+
+def _read_pyproject_package_name(pyproject_path: str = "pyproject.toml") -> str | None:
+    """Return the [project].name from pyproject.toml when present."""
+    try:
+        content = Path(pyproject_path).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(
+        r"(?ms)^\[project\](?:(?!^\[).)*?^name\s*=\s*[\"']([^\"']+)[\"']",
+        content,
+    )
+    return match.group(1) if match else None
+
+
+def _set_absolute_version_in_match(match: re.Match[str], *, new_version: str) -> str:
+    """Replace the captured version token with an absolute SemVer string."""
+    return match.group(1) + new_version + match.group(3)
+
+
+def inject_canonical_package_versions(
+    *,
+    new_version: str,
+    dry_run: bool,
+    verbose: bool,
+    package_name: str | None = None,
+    files: tuple[str, ...] | list[str] | None = None,
+) -> list[str]:
+    """Bump canonical package metadata files to an absolute release version.
+
+    Always targets ``pyproject.toml`` ``[project].version`` and the matching
+    ``uv.lock`` package block when those files exist. Unlike header injection,
+    this uses the calculated release version directly (not a relative bump of
+    whatever string was found in a comment).
+
+    Parameters:
+        new_version: Absolute SemVer without a leading ``v`` (e.g. ``0.7.1``).
+        dry_run: When true, report changes without writing.
+        verbose: When true, print bump details.
+        package_name: Optional package name override for ``uv.lock``.
+        files: Optional explicit file list (defaults to canonical paths).
+
+    Returns:
+        list[str]: Paths that were modified (or would be modified in dry-run).
+    """
+    version = (new_version or "").strip().lstrip("v")
+    if not version:
+        return []
+
+    targets = list(files) if files is not None else list(CANONICAL_PACKAGE_VERSION_FILES)
+    if package_name:
+        name = package_name
+    else:
+        pyproject_target = next(
+            (path for path in targets if os.path.basename(path) == "pyproject.toml" or path.endswith("pyproject.toml")),
+            None,
+        )
+        name = _read_pyproject_package_name(pyproject_target) if pyproject_target else None
+        # Fail closed only for explicit lock-only targets. Default canonical scans
+        # soft-skip uv.lock when the package name cannot be resolved.
+        explicit_lock_only = (
+            files is not None
+            and name is None
+            and any(os.path.basename(path) == "uv.lock" or path.endswith("uv.lock") for path in targets)
+            and not any(
+                os.path.basename(path) == "pyproject.toml" or path.endswith("pyproject.toml") for path in targets
+            )
+        )
+        if explicit_lock_only:
+            raise ValueError(
+                "package_name is required when no target pyproject.toml is available "
+                "to resolve the uv.lock package block"
+            )
+    changed: list[str] = []
+
+    for filepath in targets:
+        if not filepath or not os.path.exists(filepath):
+            continue
+        try:
+            original = Path(filepath).read_text(encoding="utf-8")
+        except OSError as exc:
+            if verbose:
+                console.print(f"Could not read canonical version file {filepath}: {exc}")
+            continue
+
+        new_content = original
+        base = os.path.basename(filepath)
+
+        if base == "pyproject.toml" or filepath.endswith("pyproject.toml"):
+
+            def _toml_repl(match: re.Match[str], current: str = filepath) -> str:
+                old_v = match.group(2).lstrip("v")
+                if old_v == version:
+                    return match.group(0)
+                if verbose or dry_run:
+                    console.print(
+                        f"Bumped [cyan]{current}[/cyan] [project].version: "
+                        f"[red]{old_v}[/red] -> [green]{version}[/green]"
+                    )
+                return _set_absolute_version_in_match(match, new_version=version)
+
+            new_content, n = _toml_project_version_pattern().subn(_toml_repl, original, count=1)
+            if n == 0 and (verbose or dry_run):
+                console.print(f"[yellow]No [project].version found in {filepath}[/yellow]")
+        elif base == "uv.lock" or filepath.endswith("uv.lock"):
+            if not name:
+                if verbose or dry_run:
+                    console.print(f"[yellow]Skipping {filepath}: package name unavailable for lock bump[/yellow]")
+                continue
+
+            def _lock_repl(match: re.Match[str], current: str = filepath) -> str:
+                old_v = match.group(2).lstrip("v")
+                if old_v == version:
+                    return match.group(0)
+                if verbose or dry_run:
+                    console.print(
+                        f"Bumped [cyan]{current}[/cyan] package {name!r}: "
+                        f"[red]{old_v}[/red] -> [green]{version}[/green]"
+                    )
+                return _set_absolute_version_in_match(match, new_version=version)
+
+            new_content, n = _uv_lock_package_version_pattern(name).subn(_lock_repl, original, count=1)
+            if n == 0 and (verbose or dry_run):
+                console.print(f"[yellow]No uv.lock package block for {name!r} in {filepath}[/yellow]")
+        else:
+            continue
+
+        if new_content != original:
+            changed.append(filepath)
+            if not dry_run:
+                Path(filepath).write_text(new_content, encoding="utf-8")
+
+    return changed
+
+
+def extract_issue_references_from_body(body: str) -> list[str]:
+    """Extract unique issue numbers from Hybrid issue-reference trailers.
+
+    Only ``Resolves`` / ``Refs`` / ``Closes`` / ``Fixes`` trailers contribute.
+    ``Null: #0`` is ignored. Order follows first appearance in the body.
+
+    Parameters:
+        body (str): Commit body text.
+
+    Returns:
+        list[str]: Issue numbers as strings (without ``#``).
+    """
+    if not body:
+        return []
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for match in _ISSUE_REF_TRAILER_RE.finditer(body):
+        kind = match.group(1).casefold()
+        number = match.group(2)
+        if kind == "null" or number == "0":
+            continue
+        if number in seen:
+            continue
+        seen.add(number)
+        ordered.append(number)
+    return ordered
+
+
+def format_subject_with_issue_refs(subject: str, body: str) -> str:
+    """Append ``(#N)`` / ``(#N / #M)`` issue suffixes to a changelog subject.
+
+    Matches the v0.6.0 house style. Subjects that already end with an issue
+    suffix are left unchanged. When no issue trailers exist, the subject is
+    returned unchanged.
+
+    Parameters:
+        subject (str): Commit subject line.
+        body (str): Commit body containing optional issue trailers.
+
+    Returns:
+        str: Subject with issue reference suffix when applicable.
+    """
+    cleaned = (subject or "").strip()
+    if not cleaned:
+        return cleaned
+    if _EXISTING_ISSUE_SUFFIX_RE.search(cleaned):
+        return cleaned
+    refs = extract_issue_references_from_body(body or "")
+    if not refs:
+        return cleaned
+    if len(refs) == 1:
+        return f"{cleaned} (#{refs[0]})"
+    joined = " / ".join(f"#{n}" for n in refs)
+    return f"{cleaned} ({joined})"
+
+
+def _subject_and_body(commit: str) -> tuple[str, str]:
+    """Split a formatted commit string into subject and body."""
+    parts = commit.split("---COMMIT_BODY---", 1)
+    subject = parts[0].strip()
+    body = parts[1] if len(parts) > 1 else ""
+    return subject, body
+
+
 def inject_file_versions(
     files: list[str], bump_type: str, sop_data: dict, dry_run: bool, verbose: bool, pre_release: str | None = None
 ):
@@ -186,6 +430,11 @@ def inject_file_versions(
     Inject bumped version strings into matching files.
 
     Updates the first version string found in each file when its extension matches a configured injection strategy.
+
+    Header-style strategies (``# version:``, ``// version:``, ``<!-- version: -->``) only
+    scan the first few lines of a file so documentation examples and fixture strings are
+    not mutated. Canonical package metadata (``pyproject.toml`` / ``uv.lock``) is skipped
+    here and handled by :func:`inject_canonical_package_versions`.
 
     Parameters:
         files (list[str]): File paths to scan.
@@ -204,7 +453,14 @@ def inject_file_versions(
     if not strategies:
         return
 
+    canonical_basenames = {os.path.basename(p) for p in CANONICAL_PACKAGE_VERSION_FILES}
+
     for filepath in files:
+        base = os.path.basename(filepath)
+        # Package metadata is absolute-versioned separately; never relative-bump it here.
+        if base in canonical_basenames:
+            continue
+
         _, ext = os.path.splitext(filepath)
 
         # Find matching strategy
@@ -249,31 +505,77 @@ def inject_file_versions(
 
             new_content = file_content
             if method in ("root_key", "json"):
-                # Matches: "version": "1.0.0"
-                new_content = re.sub(r'("version"\s*:\s*")([^"]+)(")', replacer, file_content, count=1)
+                # SOP contract: only bump a root-object "version" key (never nested metadata).
+                try:
+                    parsed = json.loads(file_content)
+                except json.JSONDecodeError:
+                    if verbose:
+                        console.print(f"[yellow]Skipping non-JSON content in {filepath}[/yellow]")
+                    continue
+                if not isinstance(parsed, dict):
+                    if verbose:
+                        console.print(f"[yellow]Skipping non-object JSON root in {filepath}[/yellow]")
+                    continue
+                old_v = parsed.get("version")
+                if not isinstance(old_v, str) or not old_v.strip():
+                    continue
+                # Root key only; reject non-SemVer values instead of mutating metadata blobs.
+                if not re.fullmatch(r"v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?", old_v.strip()):
+                    if verbose:
+                        console.print(f"[yellow]Skipping non-SemVer root version in {filepath}: {old_v!r}[/yellow]")
+                    continue
+                try:
+                    new_v = bump_version_string(old_v, bump_type, pre_release=pre_release)
+                except Exception as exc:
+                    if verbose:
+                        console.print(f"[yellow]Skipping root version bump in {filepath}: {exc}[/yellow]")
+                    continue
+                if old_v != new_v:
+                    modified = True
+                    if verbose or dry_run:
+                        console.print(f"Bumped [cyan]{filepath}[/cyan]: [red]{old_v}[/red] -> [green]{new_v}[/green]")
+                    parsed["version"] = new_v
+                    dumped = json.dumps(parsed, indent=2, ensure_ascii=False, sort_keys=False)
+                    if file_content.endswith("\n"):
+                        dumped += "\n"
+                    new_content = dumped
             elif method in ("hash_comment", "header_comment"):
-                # Matches: # version: v3.0.0
-                new_content = re.sub(
-                    r"(#\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*)", replacer, file_content, count=1, flags=re.IGNORECASE
-                )
-            elif method == "slash_comment":
-                # Matches: // version: v1.0.0
-                new_content = re.sub(
-                    r"(//\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*)", replacer, file_content, count=1, flags=re.IGNORECASE
-                )
-            elif method == "block_comment":
-                # Matches: <!-- version: v1.0.0 -->
-                new_content = re.sub(
-                    r"(<!--\s*version:\s*)(v?\d+\.\d+\.\d+)(\s*-->)",
+                # Matches: # version: v3.0.0 — header only
+                head, tail = _header_prefix_text(file_content)
+                head_new = re.sub(
+                    r"(#\s*version:\s*)(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)(\s*)",
                     replacer,
-                    file_content,
+                    head,
                     count=1,
                     flags=re.IGNORECASE,
                 )
+                new_content = head_new + tail
+            elif method == "slash_comment":
+                # Matches: // version: v1.0.0 — header only
+                head, tail = _header_prefix_text(file_content)
+                head_new = re.sub(
+                    r"(//\s*version:\s*)(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)(\s*)",
+                    replacer,
+                    head,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+                new_content = head_new + tail
+            elif method == "block_comment":
+                # Matches: <!-- version: v1.0.0 --> — header only
+                head, tail = _header_prefix_text(file_content)
+                head_new = re.sub(
+                    r"(<!--\s*version:\s*)(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)(\s*-->)",
+                    replacer,
+                    head,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+                new_content = head_new + tail
             elif method == "python_variable":
                 # Matches: __version__ = "1.0.0" or __version__ = '1.0.0'
                 new_content = re.sub(
-                    r'(__version__\s*=\s*[\'"])(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)([\'"])',
+                    r"(__version__\s*=\s*['\"])(v?\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?)(['\"])",
                     replacer,
                     file_content,
                     count=1,
@@ -544,9 +846,8 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
     """
     changelog_groups = defaultdict(list)
     for commit in commits:
-        parts = commit.split("---COMMIT_BODY---", 1)
-        subject = parts[0].strip()
-        body = parts[1] if len(parts) > 1 else ""
+        subject, body = _subject_and_body(commit)
+        display_subject = format_subject_with_issue_refs(subject, body)
 
         # Prefer machine-readable trailer for mixed-commit support
         trailer_match = re.search(r"^Changelog-Groups:\s*(.+)$", body, flags=re.MULTILINE)
@@ -557,12 +858,12 @@ def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dic
                 if not g:
                     continue
                 mapped_g = _canonical_changelog_group(g, subject, gitmoji_matrix)
-                changelog_groups[mapped_g].append(subject)
+                changelog_groups[mapped_g].append(display_subject)
             continue
 
         # Legacy fallback logic
         group = _matrix_changelog_group(subject, gitmoji_matrix)
-        changelog_groups[group].append(subject)
+        changelog_groups[group].append(display_subject)
 
     # Dedupe (multi-trailer re-bucket can land the same subject twice), then
     # sort commits within each group by their SOP priority (highest first).
@@ -692,9 +993,10 @@ def group_commits_for_github_sections(
     for commit in commits:
         if not _is_breaking_commit(commit):
             continue
-        subject = _subject_from_commit(commit)
-        if subject and subject not in out["💥 Breaking Changes"]:
-            out["💥 Breaking Changes"].append(subject)
+        subject, body = _subject_and_body(commit)
+        display_subject = format_subject_with_issue_refs(subject, body)
+        if display_subject and display_subject not in out["💥 Breaking Changes"]:
+            out["💥 Breaking Changes"].append(display_subject)
 
     # Keep within-section priority ordering stable after refinement/dual-list.
     for section, subjects in list(out.items()):
@@ -1376,6 +1678,13 @@ def execute_release(
     if verbose:
         console.log(f"Scanning {len(modified_files)} modified files for version headers...")
 
+    # Canonical package metadata first (absolute version from calculated tag).
+    inject_canonical_package_versions(
+        new_version=_version_display(new_tag),
+        dry_run=dry_run,
+        verbose=verbose,
+    )
+    # Then optional header/script injection on files touched since last tag.
     inject_file_versions(modified_files, bump_type, sop_data, dry_run, verbose, pre_release=pre_release)
 
     resolved_theme = resolve_release_theme(theme, bump_type=bump_type, commits=commits)

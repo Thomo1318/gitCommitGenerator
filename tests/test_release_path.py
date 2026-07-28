@@ -2,10 +2,13 @@ import git_cg.release as release_module
 from git_cg.release import (
     bump_version_string,
     calculate_global_bump,
+    extract_issue_references_from_body,
+    format_subject_with_issue_refs,
     get_commits_since,
     get_last_tag,
     get_modified_files_since,
     group_commits_for_changelog,
+    inject_canonical_package_versions,
     inject_file_versions,
     parse_commit_impact,
     validate_release,
@@ -385,3 +388,168 @@ def test_group_commits_for_changelog_deduplicates_subject_within_same_group():
     commits = ["🐛 fix: dup\n---COMMIT_BODY---\nChangelog-Groups: Fixed, Fixed\n"]
     groups = group_commits_for_changelog(commits, matrix)
     assert groups["Fixed"] == ["🐛 fix: dup"]
+
+
+def test_inject_file_versions_skips_header_matches_below_scan_window(tmp_path, monkeypatch):
+    """Prose/examples below the header window must not be rewritten."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    # Use .toml so the hash_comment strategy is selected (not python_variable).
+    f = tmp_path / "notes.toml"
+    # 8 lines before the example comment — outside the 5-line header window
+    f.write_text(
+        'name = "demo"\n\n\n\n\n\n\n# version: v1.0.0\nvalue = 1\n',
+        encoding="utf-8",
+    )
+    inject_file_versions([str(f)], "MINOR", _sop_with_strategies(), dry_run=False, verbose=False)
+    assert "# version: v1.0.0" in f.read_text(encoding="utf-8")
+
+
+def test_inject_file_versions_updates_header_within_scan_window(tmp_path, monkeypatch):
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    f = tmp_path / "tool.sh"
+    f.write_text("#!/usr/bin/env bash\n# version: v1.2.0\necho hi\n", encoding="utf-8")
+    # .sh not in default strategies — use yml/toml hash via .toml
+    f = tmp_path / "cfg.toml"
+    f.write_text("# version: v1.2.0\nname = 'x'\n", encoding="utf-8")
+    inject_file_versions([str(f)], "PATCH", _sop_with_strategies(), dry_run=False, verbose=False)
+    assert "v1.2.1" in f.read_text(encoding="utf-8")
+
+
+def test_inject_file_versions_skips_canonical_package_files(tmp_path, monkeypatch):
+    """pyproject.toml / uv.lock must not be relative-bumped by header injection."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    py = tmp_path / "pyproject.toml"
+    # Include a matchable hash header so a non-skip path would rewrite this file.
+    py.write_text('# version: v1.0.0\n[project]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
+    lock = tmp_path / "uv.lock"
+    lock.write_text('# version: v1.0.0\n[[package]]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
+    sop = _sop_with_strategies()
+    # Configure a .lock strategy that would match if canonical skipping were removed.
+    sop["specifications_and_standards"]["version_injection_matrix"]["strategies"]["lock"] = {
+        "extensions": [".lock"],
+        "method": "hash_comment",
+    }
+    inject_file_versions([str(py), str(lock)], "MINOR", sop, dry_run=False, verbose=False)
+    py_text = py.read_text(encoding="utf-8")
+    lock_text = lock.read_text(encoding="utf-8")
+    assert "# version: v1.0.0" in py_text
+    assert 'version = "1.0.0"' in py_text
+    assert "# version: v1.0.0" in lock_text
+    assert 'version = "1.0.0"' in lock_text
+
+
+def test_inject_canonical_package_versions_updates_pyproject_and_uv_lock(tmp_path, monkeypatch):
+    printed = []
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
+    py = tmp_path / "pyproject.toml"
+    py.write_text(
+        '[build-system]\nrequires = ["hatchling"]\n\n[project]\nname = "gitcommitgenerator"\nversion = "0.7.0"\n',
+        encoding="utf-8",
+    )
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        'version = 1\n\n[[package]]\nname = "annotated-types"\nversion = "0.7.0"\n\n'
+        '[[package]]\nname = "gitcommitgenerator"\nversion = "0.7.0"\nsource = { editable = "." }\n',
+        encoding="utf-8",
+    )
+    changed = inject_canonical_package_versions(
+        new_version="0.7.1",
+        dry_run=False,
+        verbose=True,
+        package_name="gitcommitgenerator",
+        files=(str(py), str(lock)),
+    )
+    assert str(py) in changed and str(lock) in changed
+    assert 'version = "0.7.1"' in py.read_text(encoding="utf-8")
+    lock_text = lock.read_text(encoding="utf-8")
+    assert 'name = "gitcommitgenerator"\nversion = "0.7.1"' in lock_text
+    # sibling package with same version string must remain untouched
+    assert 'name = "annotated-types"\nversion = "0.7.0"' in lock_text
+    assert printed
+
+
+def test_inject_canonical_package_versions_dry_run_no_write(tmp_path, monkeypatch):
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    py = tmp_path / "pyproject.toml"
+    py.write_text('[project]\nname = "demo"\nversion = "1.2.3"\n', encoding="utf-8")
+    changed = inject_canonical_package_versions(
+        new_version="1.2.4",
+        dry_run=True,
+        verbose=False,
+        package_name="demo",
+        files=(str(py),),
+    )
+    assert changed == [str(py)]
+    assert 'version = "1.2.3"' in py.read_text(encoding="utf-8")
+
+
+def test_extract_issue_references_from_body_ignores_null_and_dedupes():
+    body = "Refs: #181\nResolves: #181\nNull: #0\nCloses: #186\nFixes: #184\n"
+    assert extract_issue_references_from_body(body) == ["181", "186", "184"]
+
+
+def test_format_subject_with_issue_refs_single_and_multi():
+    subj = "✨ feat(release): emit gold notes"
+    assert format_subject_with_issue_refs(subj, "Refs: #181\n") == f"{subj} (#181)"
+    assert format_subject_with_issue_refs(subj, "Refs: #181\nCloses: #186\n") == f"{subj} (#181 / #186)"
+    # already suffixed
+    assert format_subject_with_issue_refs(f"{subj} (#181)", "Refs: #999\n") == f"{subj} (#181)"
+    # no trailers
+    assert format_subject_with_issue_refs(subj, "SemVer-Impact: MINOR\n") == subj
+
+
+def test_inject_file_versions_json_only_bumps_root_version(tmp_path, monkeypatch):
+    """Nested metadata version keys must remain untouched (SOP root_key contract)."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    f = tmp_path / "manifest.json"
+    f.write_text(
+        ('{\n  "_meta": {\n    "version": "9.9.9"\n  },\n  "name": "demo",\n  "version": "1.0.0"\n}\n'),
+        encoding="utf-8",
+    )
+    inject_file_versions([str(f)], "MINOR", _sop_with_strategies(), dry_run=False, verbose=False)
+    text = f.read_text(encoding="utf-8")
+    assert '"version": "1.1.0"' in text
+    assert '"version": "9.9.9"' in text
+
+
+def test_inject_canonical_package_versions_reads_name_from_target_pyproject(tmp_path, monkeypatch):
+    """When package_name is omitted, resolve it from the target pyproject.toml path."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    py = pkg / "pyproject.toml"
+    py.write_text('[project]\nname = "from-target"\nversion = "0.1.0"\n', encoding="utf-8")
+    lock = pkg / "uv.lock"
+    lock.write_text(
+        '[[package]]\nname = "other"\nversion = "0.1.0"\n\n[[package]]\nname = "from-target"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+    changed = inject_canonical_package_versions(
+        new_version="0.1.1",
+        dry_run=False,
+        verbose=False,
+        files=(str(py), str(lock)),
+    )
+    assert str(py) in changed and str(lock) in changed
+    assert 'version = "0.1.1"' in py.read_text(encoding="utf-8")
+    lock_text = lock.read_text(encoding="utf-8")
+    assert 'name = "from-target"\nversion = "0.1.1"' in lock_text
+    assert 'name = "other"\nversion = "0.1.0"' in lock_text
+
+
+def test_inject_canonical_package_versions_requires_package_name_without_pyproject(tmp_path, monkeypatch):
+    """uv.lock-only targets without package_name must fail closed."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    lock = tmp_path / "uv.lock"
+    lock.write_text('[[package]]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
+    try:
+        inject_canonical_package_versions(
+            new_version="1.0.1",
+            dry_run=False,
+            verbose=False,
+            files=(str(lock),),
+        )
+    except ValueError as exc:
+        assert "package_name is required" in str(exc)
+    else:
+        raise AssertionError("expected ValueError when package_name cannot be resolved")

@@ -1264,3 +1264,24 @@ def test_execute_release_default_theme_keeps_legacy_dynamic_group_headings(monke
     assert "### Added" in changelog
     assert "### Fixed" in changelog
     assert "### ✨ Features" not in changelog
+
+
+def test_changelog_subjects_include_issue_refs_suffix():
+    """Gold/legacy changelog bullets append (#issue) from Hybrid trailers (v0.6.0 style)."""
+    commits = [
+        _c("✨ feat(release): emit gold notes", "Changelog-Groups: Added\nRefs: #181\n"),
+        _c("🥅 fix(sop): align vocabulary", "Changelog-Groups: Fixed\nCloses: #186\nRefs: #181\n"),
+        _c("📝 docs: no issue trailer", "Changelog-Groups: Documentation\nSemVer-Impact: NONE\n"),
+    ]
+    md = format_changelog_markdown(
+        new_tag="v0.7.1",
+        commits=commits,
+        gitmoji_matrix=MOCK_GITMOJI_MATRIX,
+        use_github_sections=True,
+    )
+    assert "- ✨ feat(release): emit gold notes (#181)" in md
+    assert (
+        "- 🥅 fix(sop): align vocabulary (#186 / #181)" in md or "- 🥅 fix(sop): align vocabulary (#181 / #186)" in md
+    )
+    assert "- 📝 docs: no issue trailer" in md
+    assert "- 📝 docs: no issue trailer (" not in md
