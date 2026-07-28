@@ -374,7 +374,7 @@ flowchart TD
 > [!WARNING]
 > **Do not stack multiple `%%{init}%%` blocks.** If you are already using an `init` block for the Primer theme variables (from Section 1), Mermaid will ignore one of them. You must merge all configurations into a single JSON-like object:
 >
-> ````
+> ````markdown
 > ```mermaid
 > %%{
 >   init: {
@@ -474,7 +474,7 @@ flowchart TD
   GH["create_github_release via gh<br/>--prerelease default<br/>optional --target"]:::feature
   DRY["dry-run panels + dry-run gh summary<br/>no file writes / no remote create"]:::feature
 
-  CLI --> FLAGS --> PRE
+  CLI --> FLAGS --> NOTES_PATH
   NOTES_PATH -->|assemble notes| SLUG --> BUMP
   NOTES_PATH -->|changelog-only skip notes| BUMP
   BUMP --> INJECT --> CLOG
