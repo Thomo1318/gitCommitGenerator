@@ -87,8 +87,12 @@ You can turn nodes into hyperlinks. This is highly useful in GitHub `README.md` 
 ```mermaid
 graph LR
     A[Frontend App] --> B[API Gateway]
-    click A "https://github.com/org/repo/tree/main/frontend" "Go to Frontend Code"
 ```
+
+> [!NOTE]
+> Mermaid `click` node hyperlinks are **not supported** in GitHub-rendered Markdown.
+> Use them only in local/custom Mermaid integrations (or link from surrounding prose).
+> Example (non-GitHub): `click A "https://github.com/org/repo/tree/main/frontend" "Go to Frontend Code"`.
 
 ---
 
@@ -357,11 +361,16 @@ Understanding shape semantics is crucial for GitHub Docs compliance.
 
 Mermaid's layout is automatically calculated by its underlying rendering engine. You cannot manually set exact (X, Y) coordinates, but you can heavily influence the output:
 
-### 8.1 Change the Rendering Engine (Elk)
+### 8.1 Change the Rendering Engine (Elk) — local/custom only
 
 By default, Mermaid uses the `dagre` layout engine. You can switch to the **`elk`** renderer, which is often much better at untangling crossing lines and routing complex graphs neatly.
 
-Add this to the very top of your diagram:
+> [!IMPORTANT]
+> **`flowchart.defaultRenderer: "elk"` is not supported by GitHub’s Mermaid renderer.**
+> Use ELK only in local previews, docs sites, or other custom Mermaid integrations.
+> On GitHub-rendered Markdown, keep the default `dagre` engine (or omit `defaultRenderer`).
+
+For **local/custom** Mermaid integrations, add this to the very top of your diagram:
 
 ````markdown
 ```mermaid
@@ -561,7 +570,7 @@ For a comprehensive collection of architectural diagram examples, variations, an
 
 The library contains:
 
-- 17 distinct architectural options and flow layouts (including the evolution of the `git-cg` architecture).
+- 19 distinct architectural options and flow layouts (including the evolution of the `git-cg` architecture).
 - Layout and routing examples that can be adapted for `elk` or `dagre` renderers.
 - Strict grid column and orthogonal routing demonstrations.
 - Accessible (`accTitle` / `accDescr`) examples for various chart styles.
