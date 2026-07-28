@@ -296,12 +296,8 @@ class CommitPlan(BaseModel):
                 sec_scope = f"({sec.scope})" if sec.scope else ""
                 lines.append(f"- {sec.gitmoji} {sec.cc_type.value}{sec_scope}: {sec.description}")
 
-        # Structured issue references must render above machine-readable trailers.
-        if issue_references:
-            lines.append("")
-            lines.extend(str(issue_reference) for issue_reference in issue_references)
-
-        # Machine-readable Trailers
+        # Machine-readable trailers (and optional issue refs) form one contiguous
+        # block: no blank lines between issue refs and SemVer/Change-Types/Changelog.
         all_intents = [self.primary_intent, *self.secondary_intents]
 
         impact_weights = {"MAJOR": 3, "MINOR": 2, "PATCH": 1, "NONE": 0}
@@ -325,14 +321,19 @@ class CommitPlan(BaseModel):
                 groups_seen.add(intent.changelog_group)
                 changelog_groups.append(intent.changelog_group)
 
-        lines.extend(
+        trailer_block: list[str] = []
+        if issue_references:
+            trailer_block.extend(str(issue_reference) for issue_reference in issue_references)
+        trailer_block.extend(
             [
-                "",
                 f"SemVer-Impact: {overall_impact}",
                 f"Change-Types: {', '.join(cc_types)}",
                 f"Changelog-Groups: {', '.join(changelog_groups)}",
             ]
         )
+        # Exactly one blank line separates body/included-changes from the trailer block.
+        lines.append("")
+        lines.extend(trailer_block)
 
         # Footer (Breaking Change)
         if self.breaking_change and self.breaking_change_description:

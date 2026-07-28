@@ -6,7 +6,10 @@ extra_javascript = [
     "https://unpkg.com/tablesort@5.7.1/dist/tablesort.min.js",
     "javascripts/tablesort-init.js",
 ]
-extra_css = ["stylesheets/tablesort.css"]
+extra_css = [
+    "stylesheets/tablesort.css",
+    "stylesheets/custom.css"
+]
 
 nav = [
     { "Home" = "index.md" },

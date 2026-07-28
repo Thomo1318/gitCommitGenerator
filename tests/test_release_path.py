@@ -193,6 +193,28 @@ def test_get_commits_since_with_and_without_tag(monkeypatch):
     assert get_commits_since("v1.0.0") == []
 
 
+def test_get_commits_since_strips_whitespace_around_entries(monkeypatch):
+    """Each returned commit entry must have leading/trailing whitespace stripped."""
+
+    def fake_check_output(cmd, **k):
+        return b"  \n s1---COMMIT_BODY---b1---COMMIT_DELIM---\n\n   s2---COMMIT_BODY---b2  ---COMMIT_DELIM---  \n"
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    commits = get_commits_since("v1.0.0")
+    assert commits == ["s1---COMMIT_BODY---b1", "s2---COMMIT_BODY---b2"]
+
+
+def test_get_commits_since_filters_out_whitespace_only_entries(monkeypatch):
+    """Entries that are empty/whitespace-only after stripping must be dropped, not kept as blanks."""
+
+    def fake_check_output(cmd, **k):
+        return b"only---COMMIT_BODY---x---COMMIT_DELIM---\n   \n---COMMIT_DELIM---\n"
+
+    monkeypatch.setattr(release_module.subprocess, "check_output", fake_check_output)
+    commits = get_commits_since("")
+    assert commits == ["only---COMMIT_BODY---x"]
+
+
 def test_get_modified_files_since(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
@@ -273,7 +295,7 @@ def test_inject_file_versions_all_methods(tmp_path, monkeypatch):
     monkeypatch.setattr(release_module.console, "print", lambda *a, **k: printed.append(str(a[0]) if a else ""))
     files = {
         "pkg.json": '{"version": "1.0.0"}',
-        "cfg.toml": "# version: v1.0.0\n",
+        "cfg.toml": "# version: v2.0.0\n",
         "app.js": "// version: v1.0.0\n",
         "page.html": "<!-- version: v1.0.0 -->\n",
         "mod.py": '__version__ = "1.0.0"\n',
@@ -287,7 +309,7 @@ def test_inject_file_versions_all_methods(tmp_path, monkeypatch):
 
     inject_file_versions(paths, "MINOR", _sop_with_strategies(), dry_run=False, verbose=True)
     assert '"1.1.0"' in (tmp_path / "pkg.json").read_text(encoding="utf-8")
-    assert "v1.1.0" in (tmp_path / "cfg.toml").read_text(encoding="utf-8")
+    assert "v2.1.0" in (tmp_path / "cfg.toml").read_text(encoding="utf-8")
     assert "v1.1.0" in (tmp_path / "app.js").read_text(encoding="utf-8")
     assert "v1.1.0" in (tmp_path / "page.html").read_text(encoding="utf-8")
     assert "1.1.0" in (tmp_path / "mod.py").read_text(encoding="utf-8")
@@ -309,3 +331,57 @@ def test_inject_file_versions_verbose_error_on_unreadable(tmp_path, monkeypatch)
     missing = str(tmp_path / "nope.json")
     inject_file_versions([missing], "MINOR", _sop_with_strategies(), dry_run=False, verbose=True)
     assert any("Could not inject" in p for p in printed)
+
+
+def test_group_commits_rebuckets_miscellaneous_trailer():
+    matrix = [
+        {"emoji": "✅", "code": "white_check_mark", "cc_type": "test", "priority": 50, "changelog_group": "Tests"},
+        {"emoji": "📝", "code": "memo", "cc_type": "docs", "priority": 40, "changelog_group": "Documentation"},
+    ]
+    commits = [
+        "✅ test: a\n---COMMIT_BODY---\nChangelog-Groups: Miscellaneous\n",
+        "📝 docs: b\n---COMMIT_BODY---\nChangelog-Groups: Miscellaneous\n",
+    ]
+    groups = group_commits_for_changelog(commits, matrix)
+    assert "Tests" in groups and "Documentation" in groups
+    assert "Miscellaneous" not in groups
+
+
+def test_group_commits_sorts_within_section_by_priority():
+    matrix = [
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 50, "changelog_group": "Fixed"},
+        {"emoji": "🚑", "code": "ambulance", "cc_type": "fix", "priority": 90, "changelog_group": "Fixed"},
+    ]
+    commits = [
+        "🐛 fix: low\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+        "🚑 fix: high\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+    ]
+    groups = group_commits_for_changelog(commits, matrix)
+    subjects = groups["Fixed"]
+    assert subjects[0].startswith("🚑")
+    assert subjects[1].startswith("🐛")
+
+
+def test_group_commits_for_changelog_unmatched_subject_sorts_last_with_zero_priority():
+    """A subject with no matching gitmoji entry defaults to priority 0 and sorts last."""
+    matrix = [
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 50, "changelog_group": "Fixed"},
+    ]
+    commits = [
+        "Unrecognised commit with no emoji\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+        "🐛 fix: known\n---COMMIT_BODY---\nChangelog-Groups: Fixed\n",
+    ]
+    groups = group_commits_for_changelog(commits, matrix)
+    subjects = groups["Fixed"]
+    assert subjects[0].startswith("🐛 fix: known")
+    assert subjects[1].startswith("Unrecognised commit")
+
+
+def test_group_commits_for_changelog_deduplicates_subject_within_same_group():
+    """The same subject repeated for the same resolved group must not be duplicated."""
+    matrix = [
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 50, "changelog_group": "Fixed"},
+    ]
+    commits = ["🐛 fix: dup\n---COMMIT_BODY---\nChangelog-Groups: Fixed, Fixed\n"]
+    groups = group_commits_for_changelog(commits, matrix)
+    assert groups["Fixed"] == ["🐛 fix: dup"]

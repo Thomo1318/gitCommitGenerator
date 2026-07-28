@@ -24,7 +24,27 @@ MOCK_GITMOJI_MATRIX = [
     {"emoji": "🐛", "code": "bug", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Fixed"},
     {"emoji": "📝", "code": "memo", "cc_type": "docs", "semver_impact": "NONE", "changelog_group": "Documentation"},
     {"emoji": "✅", "code": "white_check_mark", "cc_type": "test", "semver_impact": "NONE", "changelog_group": "Tests"},
-    {"emoji": "🔧", "code": "wrench", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Miscellaneous"},
+    {"emoji": "🔧", "code": "wrench", "cc_type": "chore", "semver_impact": "NONE", "changelog_group": "Chores"},
+    {"emoji": "🎨", "code": "art", "cc_type": "style", "semver_impact": "NONE", "changelog_group": "Changed"},
+    {"emoji": "⚡️", "code": "zap", "cc_type": "perf", "semver_impact": "PATCH", "changelog_group": "Changed"},
+    {"emoji": "♻️", "code": "recycle", "cc_type": "refactor", "semver_impact": "PATCH", "changelog_group": "Changed"},
+    {
+        "emoji": "👷",
+        "code": "construction_worker",
+        "cc_type": "ci",
+        "semver_impact": "NONE",
+        "changelog_group": "Chores",
+    },
+    {"emoji": "📦", "code": "package", "cc_type": "build", "semver_impact": "NONE", "changelog_group": "Changed"},
+    {"emoji": "⏪", "code": "rewind", "cc_type": "revert", "semver_impact": "PATCH", "changelog_group": "Changed"},
+    {"emoji": "🎉", "code": "tada", "cc_type": "init", "semver_impact": "MINOR", "changelog_group": "Miscellaneous"},
+    {
+        "emoji": "🔖",
+        "code": "bookmark",
+        "cc_type": "release",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+    },
     {"emoji": "🔒️", "code": "lock", "cc_type": "fix", "semver_impact": "PATCH", "changelog_group": "Security"},
 ]
 
@@ -52,7 +72,7 @@ def test_group_commits_maps_trailer_groups_to_github_sections():
     ]
     groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
     assert any("add context" in s for s in groups["✨ Features"])
-    assert any("guard bools" in s for s in groups["🐛 Bug Fixes & Refactors"])
+    assert any("guard bools" in s for s in groups["🐛 Bug Fixes"])
     assert any("usage" in s for s in groups["📝 Documentation"])
     assert any("floor" in s for s in groups["🔒️ Security / Dependencies"])
 
@@ -88,7 +108,7 @@ def test_build_github_release_notes_contains_house_sections():
     assert "### 🛡️ DX & Stability Improvements" in body
     assert "## 📦 What's Changed" in body
     assert "### ✨ Features" in body
-    assert "### 🐛 Bug Fixes & Refactors" in body
+    assert "### 🐛 Bug Fixes" in body
     assert "### ✅ Tests" in body
     assert "compare/v0.5.0...v0.6.0" in body
     assert "thomo1318.github.io/gitCommitGenerator/CHANGELOG.html" in body
@@ -125,6 +145,61 @@ def test_write_github_release_notes_file(tmp_path: Path):
 
 def test_resolve_release_theme_explicit():
     assert resolve_release_theme("  My Theme  ", bump_type="MINOR", commits=[]) == "My Theme"
+
+
+def test_resolve_release_theme_collapses_gold_standard_whitespace():
+    """Whitespace-padded gold theme must normalize to GOLD_STANDARD_THEME."""
+    from git_cg.release import GOLD_STANDARD_THEME, resolve_release_theme
+
+    assert (
+        resolve_release_theme("  Gold Standard Release Notes  ", bump_type="MINOR", commits=[]) == GOLD_STANDARD_THEME
+    )
+    assert resolve_release_theme("Gold Standard Release Notes:", bump_type="PATCH", commits=[]) == GOLD_STANDARD_THEME
+
+
+def test_execute_release_gold_theme_whitespace_enables_github_sections(monkeypatch, tmp_path):
+    """Normalized gold theme (with trailing spaces) must use gold CHANGELOG heads."""
+    monkeypatch.chdir(tmp_path)
+    captured: dict[str, bool] = {}
+
+    def fake_format(*, new_tag, commits, gitmoji_matrix, use_github_sections=False):
+        """Capture the requested changelog section format and return a heading for the release tag.
+
+        Parameters:
+            new_tag: The release tag used in the heading.
+            use_github_sections: Whether GitHub-style section formatting was requested.
+
+        Returns:
+            str: A Markdown heading for the release tag followed by a blank line.
+        """
+        captured["use_github_sections"] = use_github_sections
+        return f"## {new_tag}\n\n"
+
+    _patch_release_collaborators(monkeypatch, commits=[_FEAT_COMMIT])
+    monkeypatch.setattr(release_module, "format_changelog_markdown", fake_format)
+    release_module.execute_release(
+        dry_run=True,
+        verbose=False,
+        theme="Gold Standard Release Notes ",
+        skip_github_notes=True,
+    )
+    assert captured.get("use_github_sections") is True
+
+
+def test_is_breaking_commit_accepts_hyphenated_footer():
+    from git_cg.release import _is_breaking_commit
+
+    msg = "✨ feat(api): expand\n---COMMIT_BODY---\nBREAKING-CHANGE: clients must update\n"
+    assert _is_breaking_commit(msg) is True
+
+
+def test_revert_cc_does_not_override_explicit_security_section():
+    """Explicit Security trailer must not be rewritten to Reverts by CC type."""
+    from git_cg.release import _github_section_for_group
+
+    subject = "⏪ revert(auth): undo token rotate"
+    section = _github_section_for_group("Security", subject, [])
+    assert section == "🔒️ Security / Dependencies"
 
 
 def test_resolve_release_theme_from_feat_commit():
@@ -806,3 +881,386 @@ def test_execute_release_verbose_logs(monkeypatch, tmp_path):
     monkeypatch.setattr(release_module.console, "log", lambda *a, **k: logs.append(str(a[0]) if a else ""))
     release_module.execute_release(dry_run=True, verbose=True, skip_github_notes=True)
     assert any("commits since tag" in x for x in logs)
+
+
+def test_all_commit_types_map_to_gold_headings():
+    """Every registered changelog lookup key must resolve to a gold heading."""
+    from git_cg.models import CommitType
+    from git_cg.release import _CHANGELOG_GROUP_LOOKUP, GITHUB_CHANGELOG_SECTION_ORDER
+
+    gold = set(GITHUB_CHANGELOG_SECTION_ORDER)
+    # Iterate the live lookup keys (canonical + aliases) rather than a hardcoded set.
+    for token in sorted(_CHANGELOG_GROUP_LOOKUP.keys()):
+        section = _CHANGELOG_GROUP_LOOKUP[token.casefold()]
+        assert section in gold, f"{token} -> {section} not in gold order"
+
+    expected = {
+        "feat": "✨ Features",
+        "fix": "🐛 Bug Fixes",
+        "docs": "📝 Documentation",
+        "style": "🎨 Style",
+        "refactor": "♻️ Refactors",
+        "perf": "⚡️ Performance",
+        "test": "✅ Tests",
+        "build": "🏗️ Build & CI",
+        "ci": "🏗️ Build & CI",
+        "chore": "🔧 Chores & Internal",
+        "revert": "⏪ Reverts",
+        "init": "Miscellaneous",
+        "release": "Miscellaneous",
+    }
+    for ct in CommitType:
+        section = _CHANGELOG_GROUP_LOOKUP[ct.value.casefold()]
+        assert section == expected[ct.value], f"cc_type {ct.value} -> {section}"
+        assert section in gold
+
+
+def test_github_section_order_is_fixed_gold_not_priority_dynamic():
+    """Headings must follow GITHUB_CHANGELOG_SECTION_ORDER; empty heads omitted."""
+    commits = [
+        _c("🔧 chore: high priority chore", "Changelog-Groups: Chores\n"),
+        _c("✨ feat: feature", "Changelog-Groups: Added\n"),
+        _c("✅ test: coverage", "Changelog-Groups: Tests\n"),
+        _c("📝 docs: usage", "Changelog-Groups: Documentation\n"),
+        _c("🐛 fix: bug", "Changelog-Groups: Fixed\n"),
+        _c("🔒️ fix(deps): floor", "Changelog-Groups: Security\n"),
+        _c("♻️ refactor: tidy", "Changelog-Groups: Refactor\n"),
+        _c("⚡️ perf: faster", "Changelog-Groups: Perf\n"),
+        _c("🎨 style: format", "Changelog-Groups: Style\n"),
+        _c("👷 ci: pipeline", "Changelog-Groups: CI\n"),
+        _c("⏪ revert: undo", "Changelog-Groups: Revert\n"),
+        _c("💥 feat!: break api", "Changelog-Groups: Added\nSemVer-Impact: MAJOR\n\nBREAKING CHANGE: api\n"),
+    ]
+    matrix = [
+        {"emoji": "🔧", "code": "wrench", "cc_type": "chore", "priority": 99, "changelog_group": "Chores"},
+        {"emoji": "✨", "code": "sparkles", "cc_type": "feat", "priority": 10, "changelog_group": "Added"},
+        {"emoji": "✅", "code": "white_check_mark", "cc_type": "test", "priority": 50, "changelog_group": "Tests"},
+        {"emoji": "📝", "code": "memo", "cc_type": "docs", "priority": 40, "changelog_group": "Documentation"},
+        {"emoji": "🐛", "code": "bug", "cc_type": "fix", "priority": 80, "changelog_group": "Fixed"},
+        {"emoji": "🔒️", "code": "lock", "cc_type": "fix", "priority": 95, "changelog_group": "Security"},
+        {"emoji": "♻️", "code": "recycle", "cc_type": "refactor", "priority": 70, "changelog_group": "Changed"},
+        {"emoji": "⚡️", "code": "zap", "cc_type": "perf", "priority": 75, "changelog_group": "Changed"},
+        {"emoji": "🎨", "code": "art", "cc_type": "style", "priority": 40, "changelog_group": "Changed"},
+        {"emoji": "👷", "code": "construction_worker", "cc_type": "ci", "priority": 65, "changelog_group": "Chores"},
+        {"emoji": "⏪", "code": "rewind", "cc_type": "revert", "priority": 75, "changelog_group": "Changed"},
+        {"emoji": "💥", "code": "boom", "cc_type": "feat", "priority": 100, "changelog_group": "Added"},
+    ]
+    md = format_changelog_markdown(
+        new_tag="v0.7.0",
+        commits=commits,
+        gitmoji_matrix=matrix,
+        use_github_sections=True,
+    )
+    heads = [line for line in md.splitlines() if line.startswith("### ")]
+    assert heads == [
+        "### ✨ Features",
+        "### 💥 Breaking Changes",
+        "### 🐛 Bug Fixes",
+        "### ♻️ Refactors",
+        "### ⚡️ Performance",
+        "### 📝 Documentation",
+        "### ✅ Tests",
+        "### 🎨 Style",
+        "### 🏗️ Build & CI",
+        "### 🔧 Chores & Internal",
+        "### 🔒️ Security / Dependencies",
+        "### ⏪ Reverts",
+    ]
+
+    body = build_github_release_notes(
+        ReleaseNotesInput(
+            new_tag="v0.7.0",
+            previous_tag="v0.6.0",
+            theme="Gold Standard Release Notes",
+            bump_type="MAJOR",
+            commits=commits,
+            gitmoji_matrix=matrix,
+        )
+    )
+    changed = body.split("## 📦 What's Changed", 1)[1]
+    gh_heads = [line for line in changed.splitlines() if line.startswith("### ")]
+    assert gh_heads == heads
+
+
+def test_empty_optional_headings_are_omitted():
+    """Optional heads must not appear when no commits map to them."""
+    commits = [_c("✨ feat: only feature", "Changelog-Groups: Added\n")]
+    md = format_changelog_markdown(
+        new_tag="v0.7.0",
+        commits=commits,
+        gitmoji_matrix=MOCK_GITMOJI_MATRIX,
+        use_github_sections=True,
+    )
+    heads = [line for line in md.splitlines() if line.startswith("### ")]
+    assert heads == ["### ✨ Features"]
+    for absent in (
+        "💥 Breaking Changes",
+        "♻️ Refactors",
+        "⚡️ Performance",
+        "🎨 Style",
+        "🏗️ Build & CI",
+        "⏪ Reverts",
+        "Miscellaneous",
+    ):
+        assert f"### {absent}" not in md
+
+
+def test_cc_type_trailer_aliases_map_to_gold_sections():
+    commits = [
+        _c("✨ feat: x", "Changelog-Groups: feat\n"),
+        _c("🎨 style: y", "Changelog-Groups: style\n"),
+        _c("⚡️ perf: z", "Changelog-Groups: perf\n"),
+        _c("♻️ refactor: r", "Changelog-Groups: refactor\n"),
+        _c("👷 ci: pipeline", "Changelog-Groups: ci\n"),
+        _c("📦 build: deps", "Changelog-Groups: build\n"),
+        _c("✅ test: t", "Changelog-Groups: test\n"),
+        _c("📝 docs: d", "Changelog-Groups: docs\n"),
+        _c("🔧 chore: c", "Changelog-Groups: chore\n"),
+        _c("⏪ revert: back", "Changelog-Groups: revert\n"),
+        _c("🎉 init: start", "Changelog-Groups: init\n"),
+        _c("🔖 release: cut", "Changelog-Groups: release\n"),
+    ]
+    groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
+    assert any("feat: x" in s for s in groups["✨ Features"])
+    assert any("style: y" in s for s in groups["🎨 Style"])
+    assert any("perf: z" in s for s in groups["⚡️ Performance"])
+    assert any("refactor: r" in s for s in groups["♻️ Refactors"])
+    assert any("revert: back" in s for s in groups["⏪ Reverts"])
+    assert any("test: t" in s for s in groups["✅ Tests"])
+    assert any("docs: d" in s for s in groups["📝 Documentation"])
+    assert any("ci: pipeline" in s for s in groups["🏗️ Build & CI"])
+    assert any("build: deps" in s for s in groups["🏗️ Build & CI"])
+    assert any("chore: c" in s for s in groups["🔧 Chores & Internal"])
+    assert any("init: start" in s for s in groups["Miscellaneous"])
+    assert any("release: cut" in s for s in groups["Miscellaneous"])
+
+
+def test_legacy_miscellaneous_trailer_rebuckets_via_matrix():
+    commits = [
+        _c("✅ test: coverage", "Changelog-Groups: Miscellaneous\n"),
+        _c("📝 docs: usage", "Changelog-Groups: Miscellaneous\n"),
+        _c("🔧 chore: lock", "Changelog-Groups: Miscellaneous\n"),
+    ]
+    groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
+    assert any("coverage" in s for s in groups["✅ Tests"])
+    assert any("usage" in s for s in groups["📝 Documentation"])
+    assert any("lock" in s for s in groups["🔧 Chores & Internal"])
+    assert "Miscellaneous" not in groups
+
+
+def test_changed_group_refined_by_cc_type():
+    """SOP Changed + subject CC type should split into fine-grained gold heads."""
+    commits = [
+        _c("♻️ refactor(core): tidy", "Changelog-Groups: Changed\n"),
+        _c("⚡️ perf(cli): faster path", "Changelog-Groups: Changed\n"),
+        _c("🎨 style: format", "Changelog-Groups: Changed\n"),
+        _c("🐛 fix: real bug", "Changelog-Groups: Fixed\n"),
+    ]
+    groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
+    assert any("tidy" in s for s in groups["♻️ Refactors"])
+    assert any("faster path" in s for s in groups["⚡️ Performance"])
+    assert any("format" in s for s in groups["🎨 Style"])
+    assert any("real bug" in s for s in groups["🐛 Bug Fixes"])
+
+
+def test_breaking_change_dual_lists_under_breaking_heading():
+    commits = [
+        _c(
+            "✨ feat(api)!: rename endpoint",
+            "Changelog-Groups: Added\nSemVer-Impact: MAJOR\n\nBREAKING CHANGE: rename\n",
+        )
+    ]
+    groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
+    assert any("rename endpoint" in s for s in groups["✨ Features"])
+    assert any("rename endpoint" in s for s in groups["💥 Breaking Changes"])
+
+
+def test_non_breaking_refactor_does_not_enter_breaking_heading():
+    """Plain refactors with NONE impact must not dual-list under Breaking Changes."""
+    commits = [
+        _c(
+            "🏗️ refactor(adr): document observability hierarchy and resources",
+            "Changelog-Groups: Changed\nSemVer-Impact: NONE\n",
+        )
+    ]
+    groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
+    assert any("document observability" in s for s in groups["♻️ Refactors"])
+    assert "💥 Breaking Changes" not in groups
+
+
+def test_major_semver_trailer_alone_dual_lists_under_breaking_heading():
+    """SemVer-Impact: MAJOR is sufficient breaking signal without bang subject."""
+    commits = [
+        _c(
+            "♻️ refactor(api): reshape public surface",
+            "Changelog-Groups: Changed\nSemVer-Impact: MAJOR\n",
+        )
+    ]
+    groups = group_commits_for_github_sections(commits, MOCK_GITMOJI_MATRIX)
+    assert any("reshape public surface" in s for s in groups["♻️ Refactors"])
+    assert any("reshape public surface" in s for s in groups["💥 Breaking Changes"])
+
+
+# ---------------------------------------------------------------------------
+# Direct unit tests for the private grouping/section helpers (PR #181)
+# ---------------------------------------------------------------------------
+
+
+def test_get_commit_priority_returns_matched_entry_priority():
+    matrix = [{"emoji": "🚑", "code": "ambulance", "priority": 90}]
+    assert release_module._get_commit_priority("🚑 fix: hotfix", matrix) == 90
+
+
+def test_get_commit_priority_matches_via_code_shorthand():
+    matrix = [{"emoji": "🐛", "code": "bug", "priority": 42}]
+    assert release_module._get_commit_priority("Fix :bug: something", matrix) == 42
+
+
+def test_get_commit_priority_defaults_to_zero_when_priority_key_missing():
+    matrix = [{"emoji": "🐛", "code": "bug"}]
+    assert release_module._get_commit_priority("🐛 fix: bug", matrix) == 0
+
+
+def test_get_commit_priority_defaults_to_zero_when_no_entry_matches():
+    matrix = [{"emoji": "🐛", "code": "bug", "priority": 50}]
+    assert release_module._get_commit_priority("✨ feat: unrelated", matrix) == 0
+
+
+def test_cc_type_from_subject_extracts_conventional_type():
+    assert release_module._cc_type_from_subject("✨ feat(core): add thing") == "feat"
+
+
+def test_cc_type_from_subject_extracts_type_with_breaking_bang():
+    assert release_module._cc_type_from_subject("♻️ refactor!: reshape api") == "refactor"
+
+
+def test_cc_type_from_subject_falls_back_to_matrix_cc_type_when_no_colon_type():
+    matrix = [{"emoji": "🎉", "code": "tada", "cc_type": "init"}]
+    assert release_module._cc_type_from_subject("🎉 initial commit", matrix) == "init"
+
+
+def test_cc_type_from_subject_returns_none_when_nothing_matches():
+    assert release_module._cc_type_from_subject("no type or emoji here", None) is None
+
+
+def test_cc_type_from_subject_returns_none_when_matrix_entry_missing_cc_type():
+    matrix = [{"emoji": "🎉", "code": "tada"}]
+    assert release_module._cc_type_from_subject("🎉 initial commit", matrix) is None
+
+
+def test_matrix_changelog_group_matches_via_emoji():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": "Fixed"}]
+    assert release_module._matrix_changelog_group("🐛 fix: bug", matrix) == "Fixed"
+
+
+def test_matrix_changelog_group_matches_via_code_shorthand():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": "Fixed"}]
+    assert release_module._matrix_changelog_group("Fix :bug: thing", matrix) == "Fixed"
+
+
+def test_matrix_changelog_group_defaults_to_miscellaneous_when_unmatched():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": "Fixed"}]
+    assert release_module._matrix_changelog_group("no matching marker here", matrix) == "Miscellaneous"
+
+
+def test_matrix_changelog_group_defaults_to_miscellaneous_when_entry_group_falsy():
+    matrix = [{"emoji": "🐛", "code": "bug", "changelog_group": ""}]
+    assert release_module._matrix_changelog_group("🐛 fix: bug", matrix) == "Miscellaneous"
+
+
+def test_is_breaking_commit_true_for_major_semver_trailer():
+    assert release_module._is_breaking_commit(_c("♻️ refactor: x", "SemVer-Impact: MAJOR\n")) is True
+
+
+def test_is_breaking_commit_true_for_breaking_change_marker_in_body():
+    assert release_module._is_breaking_commit(_c("🐛 fix: x", "BREAKING CHANGE: something changed\n")) is True
+
+
+def test_is_breaking_commit_true_for_breaking_change_marker_in_subject():
+    commit = "BREAKING CHANGE: x\n---COMMIT_BODY---\n\n"
+    assert release_module._is_breaking_commit(commit) is True
+
+
+def test_is_breaking_commit_true_for_bang_syntax():
+    assert release_module._is_breaking_commit(_c("✨ feat(api)!: rename endpoint")) is True
+
+
+def test_is_breaking_commit_false_when_no_breaking_markers_present():
+    assert release_module._is_breaking_commit(_c("✨ feat: add thing", "SemVer-Impact: MINOR\n")) is False
+
+
+def test_canonical_changelog_group_empty_token_returns_miscellaneous():
+    assert release_module._canonical_changelog_group("", "any subject", MOCK_GITMOJI_MATRIX) == "Miscellaneous"
+    assert release_module._canonical_changelog_group("   ", "any subject", MOCK_GITMOJI_MATRIX) == "Miscellaneous"
+
+
+def test_canonical_changelog_group_exact_key_match_is_preserved():
+    assert release_module._canonical_changelog_group("Tests", "any subject", MOCK_GITMOJI_MATRIX) == "Tests"
+
+
+def test_canonical_changelog_group_case_insensitive_fold_recovers_canonical_spelling():
+    assert release_module._canonical_changelog_group("tests", "any subject", MOCK_GITMOJI_MATRIX) == "Tests"
+    assert release_module._canonical_changelog_group("TESTS", "any subject", MOCK_GITMOJI_MATRIX) == "Tests"
+
+
+def test_canonical_changelog_group_unknown_token_passed_through_unchanged():
+    token = "TotallyCustomGroup"
+    assert release_module._canonical_changelog_group(token, "any subject", MOCK_GITMOJI_MATRIX) == token
+
+
+def test_canonical_changelog_group_miscellaneous_literal_resolved_via_matrix():
+    matrix = [{"emoji": "✅", "code": "white_check_mark", "changelog_group": "Tests"}]
+    assert release_module._canonical_changelog_group("Miscellaneous", "✅ test: x", matrix) == "Tests"
+    assert release_module._canonical_changelog_group("miscellaneous", "✅ test: x", matrix) == "Tests"
+
+
+def test_github_section_for_group_unknown_group_and_no_cc_type_falls_back_to_miscellaneous():
+    section = release_module._github_section_for_group(
+        "TotallyCustomGroup", "no matching marker here", MOCK_GITMOJI_MATRIX
+    )
+    assert section == "Miscellaneous"
+
+
+def test_github_section_for_group_known_group_returned_as_is_without_refinement():
+    section = release_module._github_section_for_group("Added", "✨ feat: x", MOCK_GITMOJI_MATRIX)
+    assert section == "✨ Features"
+
+
+# ---------------------------------------------------------------------------
+# execute_release theme-driven use_github_sections wiring (PR #181)
+# ---------------------------------------------------------------------------
+
+
+def test_execute_release_gold_standard_theme_uses_github_sections_in_changelog(monkeypatch, tmp_path):
+    """theme='Gold Standard Release Notes' must render fixed GitHub-style headings in CHANGELOG.md."""
+    monkeypatch.chdir(tmp_path)
+    commits = [
+        _FEAT_COMMIT,
+        _c("🐛 fix: squash bug", "Changelog-Groups: Fixed\nSemVer-Impact: PATCH\n"),
+    ]
+    _patch_release_collaborators(monkeypatch, commits=commits)
+
+    release_module.execute_release(
+        dry_run=False, verbose=False, theme="Gold Standard Release Notes", skip_github_notes=True
+    )
+
+    changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "### ✨ Features" in changelog
+    assert "### 🐛 Bug Fixes" in changelog
+
+
+def test_execute_release_default_theme_keeps_legacy_dynamic_group_headings(monkeypatch, tmp_path):
+    """Without the Gold Standard theme, CHANGELOG.md keeps legacy per-group headings, not GitHub sections."""
+    monkeypatch.chdir(tmp_path)
+    commits = [
+        _FEAT_COMMIT,
+        _c("🐛 fix: squash bug", "Changelog-Groups: Fixed\nSemVer-Impact: PATCH\n"),
+    ]
+    _patch_release_collaborators(monkeypatch, commits=commits)
+
+    release_module.execute_release(dry_run=False, verbose=False, skip_github_notes=True)
+
+    changelog = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "### Added" in changelog
+    assert "### Fixed" in changelog
+    assert "### ✨ Features" not in changelog

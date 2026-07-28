@@ -91,6 +91,20 @@ def _make_commit_plan() -> CommitPlan:
     )
 
 
+def test_render_issue_refs_contiguous_with_machine_trailers():
+    """Issue refs must sit in the same trailer block as SemVer-Impact (no blank line)."""
+    commit_plan = _make_commit_plan()
+    rendered = commit_plan.render(
+        issue_references=[
+            IssueReference(kind=IssueReferenceKind.RESOLVES, issue_number=80),
+            IssueReference(kind=IssueReferenceKind.REFS, issue_number=81),
+        ]
+    )
+    assert "Resolves: #80\nRefs: #81\nSemVer-Impact: PATCH\n" in rendered
+    assert "Refs: #81\n\nSemVer-Impact:" not in rendered
+    assert "Resolves: #80\n\nRefs:" not in rendered
+
+
 @pytest.mark.parametrize("reference_kind", list(IssueReferenceKind))
 def test_issue_reference_renders_above_trailers(reference_kind: IssueReferenceKind):
     commit_plan = _make_commit_plan()

@@ -85,7 +85,7 @@ if (!changeTypesMatch) {
     }
 }
 
-const validGroups = ['Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security', 'Miscellaneous'];
+const validGroups = ['Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security', 'Miscellaneous', 'Tests', 'Documentation', 'Chores', 'Style', 'Perf', 'Performance', 'Refactor', 'Refactors', 'Revert', 'Reverts', 'Build', 'CI', 'Breaking', 'BreakingChanges'];
 const changelogGroupsMatch = fullText.match(/^Changelog-Groups:\s*(.+)$/m);
 if (!changelogGroupsMatch) {
     errors.push(`Missing 'Changelog-Groups' trailer. Expected one or more of: ${validGroups.join(', ')}.`);
@@ -145,7 +145,7 @@ if (errors.length > 0) {
     console.error(`Resolves: #<issue>`);
     console.error(`SemVer-Impact: <NONE | PATCH | MINOR | MAJOR>`);
     console.error(`Change-Types: <types>`);
-    console.error(`Changelog-Groups: <Added | Changed | Deprecated | Removed | Fixed | Security | Miscellaneous>`);
+    console.error(`Changelog-Groups: <Added | Changed | Deprecated | Removed | Fixed | Security | Miscellaneous | Tests | Documentation | Chores | Style | Perf | Performance | Refactor | Refactors | Revert | Reverts | Build | CI | Breaking | BreakingChanges>`);
     console.error(`========================\n`);
     process.exit(1);
 }

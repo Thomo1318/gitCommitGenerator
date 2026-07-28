@@ -210,7 +210,7 @@
       },
       "changelog_group": {
         "type": "string",
-        "description": "The markdown header this commit belongs under in CHANGELOG.md.",
+        "description": "Canonical Changelog-Groups / matrix token this intent emits. Keep-a-Changelog core plus Hybrid extensions used by the reference matrix (Documentation, Tests, Chores). Finer render-only aliases (Style, Perf, Refactor, …) are accepted on commit trailers by the hook/release mapper but are not matrix enum values.",
         "enum": [
           "Added",
           "Changed",
@@ -218,7 +218,10 @@
           "Removed",
           "Fixed",
           "Security",
-          "Miscellaneous"
+          "Miscellaneous",
+          "Documentation",
+          "Tests",
+          "Chores"
         ]
       },
       "priority": {
