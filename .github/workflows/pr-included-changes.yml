@@ -8,40 +8,47 @@ jobs:
   update-pr-body:
     name: Update Included Changes
     runs-on: ubuntu-latest
+    # Serialize concurrent runs for the same PR so a slower older run cannot
+    # overwrite a newer Included Changes section.
+    concurrency:
+      group: pr-included-changes-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     permissions:
       pull-requests: write
     steps:
       - name: Sync Included Changes
-        uses: actions/github-script@v7
+        # Pin to immutable commit SHA for actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
-            // 1. Fetch all commits for this PR (up to 100)
-            const commits = await github.rest.pulls.listCommits({
+            // 1. Fetch ALL commits for this PR (paginate beyond first page)
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
               per_page: 100
             });
-            
+
             let includedChanges = [];
-            
+
             // 2. Parse commits and extract "Included changes:"
-            for (const { commit } of commits.data) {
+            // github.paginate returns a flattened array of commit objects.
+            for (const { commit } of commits) {
               const lines = commit.message.split('\n');
               const subject = lines[0].trim();
-              
+
               // Top-level commit formatted with an asterisk
               includedChanges.push(`* ${subject}`);
-              
+
               let inIncludedChanges = false;
               for (const line of lines.slice(1)) {
                 const trimmed = line.trim();
-                
+
                 if (trimmed === 'Included changes:') {
                   inIncludedChanges = true;
                   continue;
                 }
-                
+
                 if (inIncludedChanges) {
                   if (trimmed.startsWith('- ')) {
                     // Replace '- ' with '  * ' for nested markdown list
@@ -56,24 +63,24 @@ jobs:
                 }
               }
             }
-            
+
             // 3. Fetch current PR body
             const pr = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
-            
+
             let body = pr.data.body || "";
-            
+
             // 4. Update the specific section via Regex
             // Matches '## 📦 Included Changes', optional HTML comment, and captures everything up to the next '## ' or EOF
             const regex = /(## 📦 Included Changes\s*(?:<!--[\s\S]*?-->\s*)?)([\s\S]*?)(?=\n## |$)/;
-            
+
             if (regex.test(body)) {
               const newText = includedChanges.length > 0 ? includedChanges.join('\n') + '\n\n' : '* No included changes detected.\n\n';
               const newBody = body.replace(regex, `$1\n${newText}`);
-              
+
               if (newBody !== body) {
                 await github.rest.pulls.update({
                   owner: context.repo.owner,
