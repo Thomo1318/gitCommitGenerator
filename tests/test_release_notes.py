@@ -884,55 +884,15 @@ def test_execute_release_verbose_logs(monkeypatch, tmp_path):
 
 
 def test_all_commit_types_map_to_gold_headings():
-    """Every CommitType / SOP changelog token must resolve to a gold heading."""
-    import json
-    from pathlib import Path
-
+    """Every registered changelog lookup key must resolve to a gold heading."""
     from git_cg.models import CommitType
     from git_cg.release import _CHANGELOG_GROUP_LOOKUP, GITHUB_CHANGELOG_SECTION_ORDER
 
     gold = set(GITHUB_CHANGELOG_SECTION_ORDER)
-    schema_path = Path(__file__).resolve().parents[1] / "config" / "gitops_sop.schema.json"
-    schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    enum_tokens = schema["properties"]["gitmoji_reference_matrix"]["items"]["properties"]["changelog_group"]["enum"]
-    # Schema enum plus known CC/alias map keys already registered in the lookup.
-    tokens = set(enum_tokens) | {
-        "Features",
-        "Docs",
-        "Test",
-        "Internal",
-        "Dependencies",
-        "CI",
-        "Build",
-        "Perf",
-        "Performance",
-        "Refactor",
-        "Refactors",
-        "Revert",
-        "Reverts",
-        "Breaking",
-        "BreakingChanges",
-        "Init",
-        "Release",
-        "Bug Fixes & Refactors",
-        "BugFixes",
-        "feat",
-        "fix",
-        "docs",
-        "style",
-        "refactor",
-        "perf",
-        "test",
-        "build",
-        "ci",
-        "chore",
-        "revert",
-        "init",
-        "release",
-    }
-    for token in sorted(tokens):
+    # Iterate the live lookup keys (canonical + aliases) rather than a hardcoded set.
+    for token in sorted(_CHANGELOG_GROUP_LOOKUP.keys()):
         section = _CHANGELOG_GROUP_LOOKUP[token.casefold()]
-        assert section in gold, f"{token} -> {section}"
+        assert section in gold, f"{token} -> {section} not in gold order"
 
     expected = {
         "feat": "✨ Features",

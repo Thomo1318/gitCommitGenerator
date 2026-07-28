@@ -766,24 +766,33 @@ class TestReadmeChangelogGroupsVocabularyAlignment:
         assert "| Documentation" in section
         assert "| Tests" in section
 
+    @staticmethod
+    def _changelog_group_cell(line: str) -> str:
+        """Return the Changelog Group cell value without depending on column padding."""
+        cells = [c.strip() for c in line.split("|")]
+        # Markdown tables: ['', col1, col2, ..., colN, '']
+        meaningful = [c for c in cells if c != ""]
+        assert meaningful, f"empty table row: {line!r}"
+        return meaningful[-1]
+
     def test_matrix_chore_and_ci_rows_use_chores_not_miscellaneous(self):
         """Representative chore/ci rows must resolve to the new Chores token."""
         section = self._matrix_section()
         assert "`:rocket:`" in section
         rocket_line = next(line for line in section.splitlines() if ":rocket:" in line)
-        assert rocket_line.rstrip().endswith("Chores          |")
+        assert self._changelog_group_cell(rocket_line) == "Chores"
         ci_line = next(line for line in section.splitlines() if ":construction_worker:" in line)
-        assert ci_line.rstrip().endswith("Chores          |")
+        assert self._changelog_group_cell(ci_line) == "Chores"
 
     def test_matrix_docs_rows_use_documentation_not_miscellaneous(self):
         section = self._matrix_section()
         memo_line = next(line for line in section.splitlines() if ":memo:" in line)
-        assert memo_line.rstrip().endswith("Documentation   |")
+        assert self._changelog_group_cell(memo_line) == "Documentation"
 
     def test_matrix_test_rows_use_tests_not_miscellaneous(self):
         section = self._matrix_section()
         check_line = next(line for line in section.splitlines() if ":white_check_mark:" in line)
-        assert check_line.rstrip().endswith("Tests           |")
+        assert self._changelog_group_cell(check_line) == "Tests"
 
     def test_matrix_miscellaneous_is_narrowed_to_exactly_four_rows(self):
         """Only init/tada, refactor/poop, refactor/beers, and release/bookmark remain Miscellaneous."""
