@@ -467,14 +467,14 @@ def _is_breaking_commit(commit: str) -> bool:
 def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) -> str:
     """
     Map a changelog group and commit subject to a GitHub release section heading.
-    
+
     Parameters:
-    	group (str): Changelog group token to resolve.
-    	subject (str): Commit subject used to refine generic group headings.
-    	gitmoji_matrix (list): Commit classification metadata used to identify the conventional commit type.
-    
+        group (str): Changelog group token to resolve.
+        subject (str): Commit subject used to refine generic group headings.
+        gitmoji_matrix (list): Commit classification metadata used to identify the conventional commit type.
+
     Returns:
-    	str: GitHub release section heading for the group and subject.
+        str: GitHub release section heading for the group and subject.
     """
     section = _CHANGELOG_GROUP_LOOKUP.get(group.casefold(), group)
     if section == "🐛 Bug Fixes & Refactors":
@@ -501,14 +501,14 @@ def _github_section_for_group(group: str, subject: str, gitmoji_matrix: list) ->
 def _canonical_changelog_group(token: str, subject: str, gitmoji_matrix: list) -> str:
     """
     Normalise a changelog group token to its canonical SOP group.
-    
+
     Parameters:
-    	token (str): Changelog group token from a trailer or matrix entry.
-    	subject (str): Commit subject used to classify miscellaneous groups.
-    	gitmoji_matrix (list): Gitmoji configuration used when the token is miscellaneous.
-    
+        token (str): Changelog group token from a trailer or matrix entry.
+        subject (str): Commit subject used to classify miscellaneous groups.
+        gitmoji_matrix (list): Gitmoji configuration used when the token is miscellaneous.
+
     Returns:
-    	str: Canonical changelog group, or the original token when no mapping exists.
+        str: Canonical changelog group, or the original token when no mapping exists.
     """
     raw = (token or "").strip()
     if not raw:
@@ -532,15 +532,15 @@ def _canonical_changelog_group(token: str, subject: str, gitmoji_matrix: list) -
 def group_commits_for_changelog(commits: list[str], gitmoji_matrix: list) -> dict[str, list[str]]:
     """
     Group commit subjects into ordered changelog sections.
-    
+
     Uses `Changelog-Groups:` trailers for explicit single- or multi-section assignment, and falls back to gitmoji metadata when no trailer is present.
-    
+
     Parameters:
-    	commits (list[str]): Raw commit strings containing a subject and optional body.
-    	gitmoji_matrix (list): Gitmoji metadata used to resolve fallback groups and subject priority.
-    
+        commits (list[str]): Raw commit strings containing a subject and optional body.
+        gitmoji_matrix (list): Gitmoji metadata used to resolve fallback groups and subject priority.
+
     Returns:
-    	dict[str, list[str]]: Changelog groups mapped to deduplicated subjects, ordered by descending priority.
+        dict[str, list[str]]: Changelog groups mapped to deduplicated subjects, ordered by descending priority.
     """
     changelog_groups = defaultdict(list)
     for commit in commits:
@@ -670,15 +670,15 @@ def group_commits_for_github_sections(
 ) -> dict[str, list[str]]:
     """
     Group commit subjects into ordered GitHub release-note sections.
-    
+
     Breaking commits are also included in the dedicated breaking-changes section.
-    
+
     Parameters:
-    	commits (list[str]): Commit records to classify and group.
-    	gitmoji_matrix (list): Classification and priority metadata for commit subjects.
-    
+        commits (list[str]): Commit records to classify and group.
+        gitmoji_matrix (list): Classification and priority metadata for commit subjects.
+
     Returns:
-    	dict[str, list[str]]: Section headings mapped to prioritised commit subjects.
+        dict[str, list[str]]: Section headings mapped to prioritised commit subjects.
     """
     raw = group_commits_for_changelog(commits, gitmoji_matrix)
     out: dict[str, list[str]] = defaultdict(list)
@@ -743,13 +743,13 @@ def format_changelog_markdown(
 ) -> str:
     """
     Format a Markdown changelog section for a release tag.
-    
+
     Parameters:
         new_tag (str): Release tag used for the section heading.
         commits (list[str]): Commit entries to include in the changelog.
         gitmoji_matrix (list): SOP gitmoji matrix used to classify commits.
         use_github_sections (bool): Whether to use the ordered GitHub release sections.
-    
+
     Returns:
         str: Markdown beginning with the normalised release tag heading.
     """

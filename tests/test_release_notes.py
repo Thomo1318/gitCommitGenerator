@@ -164,13 +164,13 @@ def test_execute_release_gold_theme_whitespace_enables_github_sections(monkeypat
 
     def fake_format(*, new_tag, commits, gitmoji_matrix, use_github_sections=False):
         """Capture the requested changelog section format and return a heading for the release tag.
-        
+
         Parameters:
-        	new_tag: The release tag used in the heading.
-        	use_github_sections: Whether GitHub-style section formatting was requested.
-        
+            new_tag: The release tag used in the heading.
+            use_github_sections: Whether GitHub-style section formatting was requested.
+
         Returns:
-        	str: A Markdown heading for the release tag followed by a blank line.
+            str: A Markdown heading for the release tag followed by a blank line.
         """
         captured["use_github_sections"] = use_github_sections
         return f"## {new_tag}\n\n"
