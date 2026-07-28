@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## v0.7.1
+
+### 🐛 Bug Fixes
+
+- 🥅 fix(release): harden package version injection contracts (#181)
+- 🥅 fix(release): canonical package bump and issue-ref changelog bullets (#181)
+
+### ✅ Tests
+
+- 🥅 fix(release): harden package version injection contracts (#181)
+- 🥅 fix(release): canonical package bump and issue-ref changelog bullets (#181)
+- ✅ test(docs): bound Unreleased bullets to next version heading (#181)
+
+### Miscellaneous
+
+- Merge pull request #187 from Thomo1318/fix/release-canonical-package-bump-and-issue-refs
+
 ## v0.7.0
 
 ### Miscellaneous
