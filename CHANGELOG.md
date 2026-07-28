@@ -2,6 +2,80 @@
 
 ## Unreleased
 
+## v0.7.0
+
+### Miscellaneous
+
+- Merge pull request #186 from Thomo1318/fix/181-followup-release-notes-vocabulary-gold-headings
+
+### Documentation
+
+- 📝 docs(zensical): add custom site stylesheet polish
+- 📝 docs(mermaid): qualify GitHub renderer limits and option count
+- 📝 docs(mermaid): route capstone FLAGS edge through NOTES_PATH
+- 📝 CodeRabbit Chat: Add Generated Unit Tests for PR Changes
+- 📝 Add docstrings to `fix/181-followup-release-notes-vocabulary-gold-headings`
+- 📝 docs(review): fix mermaid fences and ADR changelog ordering
+- 📝 docs(changelog): align examples and ADR with closed vocabulary
+- 📝 CodeRabbit Chat: Generate Unit Tests for PR Changes
+- 📝 docs(readme): align changelog group labels with SOP taxonomy
+- 📝 docs(usage): reposition Flags under release usage
+- 📝 Add docstrings to `feat/181-gold-standard-release-notes`
+- 📝 docs(todo): enforce sd instead of sed in TODO
+
+### Tests
+
+- ✨ feat(release): expand gold-standard release note headings
+- 🥅 fix(models): keep issue refs contiguous with machine trailers
+- 🥅 fix(release): normalise gold theme gate and harden section mapping
+- 🥅 fix(sop): align changelog_group vocabulary across schema and hooks
+- 🥅 fix(release): fix changelog grouping and priority sorting
+- ✅ test(docs): harden matrix cell and gold-heading assertions
+- ✅ test(bun): strengthen lockfile JSONC and integrity checks
+- ✅ test(release): raise release.py coverage above 80%
+- ✅ test(changelog): update tests for v0.6.0 changelog shift
+- 🎨 style(release): detab bot docstrings and restore ruff/hk hygiene
+- 📝 docs(review): fix mermaid fences and ADR changelog ordering
+
+### Chores
+
+- 🥅 fix(sop): align changelog_group vocabulary across schema and hooks
+- 👷 ci(workflows): harden PR included-changes sync
+- 👷 ci(workflows): add PR included changes sync
+- 🔧 chore(lock): sync uv.lock package version to 0.6.0
+- 🙈 chore(gitignore): add backup file patterns to gitignore
+
+### Fixed
+
+- 🥅 fix(models): keep issue refs contiguous with machine trailers
+- 🥅 fix(release): normalise gold theme gate and harden section mapping
+- 🥅 fix(sop): align changelog_group vocabulary across schema and hooks
+- 🥅 fix(release): fix changelog grouping and priority sorting
+- 🥅 fix(release): strip commit lines in release script
+- 🥅 fix(release): handle unresolved repo slug and docs URL
+- 🥅 fix(release): abort release on repo detection failure
+- 🥅 fix(release): fix changelog regex and defer repo detection
+- 🥅 fix(release): handle release flag validation and errors
+
+### Style
+
+- 🎨 style(release): detab bot docstrings and restore ruff/hk hygiene
+
+### Changed
+
+- 🏗️ refactor(adr): document observability hierarchy and resources
+- ✨ feat(release): expand gold-standard release note headings
+- 🥅 fix(release): normalise gold theme gate and harden section mapping
+- 🥅 fix(release): fix changelog grouping and priority sorting
+- 🥅 fix(release): handle release flag validation and errors
+- 🦺 fix(agents): add validation rules for agent skills
+
+### Added
+
+- ✨ feat(release): expand gold-standard release note headings
+- ✨ feat(release): emit gold-standard GitHub release notes
+- 🥅 fix(release): handle release flag validation and errors
+
 ## v0.6.0
 
 ### ✨ Features
