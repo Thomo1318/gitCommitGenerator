@@ -393,10 +393,11 @@ def test_group_commits_for_changelog_deduplicates_subject_within_same_group():
 def test_inject_file_versions_skips_header_matches_below_scan_window(tmp_path, monkeypatch):
     """Prose/examples below the header window must not be rewritten."""
     monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
-    f = tmp_path / "notes.py"
+    # Use .toml so the hash_comment strategy is selected (not python_variable).
+    f = tmp_path / "notes.toml"
     # 8 lines before the example comment — outside the 5-line header window
     f.write_text(
-        '"""module doc"""\n\n\n\n\n\n\n# version: v1.0.0\nprint(\'x\')\n',
+        'name = "demo"\n\n\n\n\n\n\n# version: v1.0.0\nvalue = 1\n',
         encoding="utf-8",
     )
     inject_file_versions([str(f)], "MINOR", _sop_with_strategies(), dry_run=False, verbose=False)
@@ -418,12 +419,23 @@ def test_inject_file_versions_skips_canonical_package_files(tmp_path, monkeypatc
     """pyproject.toml / uv.lock must not be relative-bumped by header injection."""
     monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
     py = tmp_path / "pyproject.toml"
-    py.write_text('[project]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
+    # Include a matchable hash header so a non-skip path would rewrite this file.
+    py.write_text('# version: v1.0.0\n[project]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
     lock = tmp_path / "uv.lock"
-    lock.write_text('[[package]]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
-    inject_file_versions([str(py), str(lock)], "MINOR", _sop_with_strategies(), dry_run=False, verbose=False)
-    assert 'version = "1.0.0"' in py.read_text(encoding="utf-8")
-    assert 'version = "1.0.0"' in lock.read_text(encoding="utf-8")
+    lock.write_text('# version: v1.0.0\n[[package]]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
+    sop = _sop_with_strategies()
+    # Configure a .lock strategy that would match if canonical skipping were removed.
+    sop["specifications_and_standards"]["version_injection_matrix"]["strategies"]["lock"] = {
+        "extensions": [".lock"],
+        "method": "hash_comment",
+    }
+    inject_file_versions([str(py), str(lock)], "MINOR", sop, dry_run=False, verbose=False)
+    py_text = py.read_text(encoding="utf-8")
+    lock_text = lock.read_text(encoding="utf-8")
+    assert "# version: v1.0.0" in py_text
+    assert 'version = "1.0.0"' in py_text
+    assert "# version: v1.0.0" in lock_text
+    assert 'version = "1.0.0"' in lock_text
 
 
 def test_inject_canonical_package_versions_updates_pyproject_and_uv_lock(tmp_path, monkeypatch):
@@ -484,3 +496,60 @@ def test_format_subject_with_issue_refs_single_and_multi():
     assert format_subject_with_issue_refs(f"{subj} (#181)", "Refs: #999\n") == f"{subj} (#181)"
     # no trailers
     assert format_subject_with_issue_refs(subj, "SemVer-Impact: MINOR\n") == subj
+
+
+def test_inject_file_versions_json_only_bumps_root_version(tmp_path, monkeypatch):
+    """Nested metadata version keys must remain untouched (SOP root_key contract)."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    f = tmp_path / "manifest.json"
+    f.write_text(
+        ('{\n  "_meta": {\n    "version": "9.9.9"\n  },\n  "name": "demo",\n  "version": "1.0.0"\n}\n'),
+        encoding="utf-8",
+    )
+    inject_file_versions([str(f)], "MINOR", _sop_with_strategies(), dry_run=False, verbose=False)
+    text = f.read_text(encoding="utf-8")
+    assert '"version": "1.1.0"' in text
+    assert '"version": "9.9.9"' in text
+
+
+def test_inject_canonical_package_versions_reads_name_from_target_pyproject(tmp_path, monkeypatch):
+    """When package_name is omitted, resolve it from the target pyproject.toml path."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    py = pkg / "pyproject.toml"
+    py.write_text('[project]\nname = "from-target"\nversion = "0.1.0"\n', encoding="utf-8")
+    lock = pkg / "uv.lock"
+    lock.write_text(
+        '[[package]]\nname = "other"\nversion = "0.1.0"\n\n[[package]]\nname = "from-target"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+    changed = inject_canonical_package_versions(
+        new_version="0.1.1",
+        dry_run=False,
+        verbose=False,
+        files=(str(py), str(lock)),
+    )
+    assert str(py) in changed and str(lock) in changed
+    assert 'version = "0.1.1"' in py.read_text(encoding="utf-8")
+    lock_text = lock.read_text(encoding="utf-8")
+    assert 'name = "from-target"\nversion = "0.1.1"' in lock_text
+    assert 'name = "other"\nversion = "0.1.0"' in lock_text
+
+
+def test_inject_canonical_package_versions_requires_package_name_without_pyproject(tmp_path, monkeypatch):
+    """uv.lock-only targets without package_name must fail closed."""
+    monkeypatch.setattr(release_module.console, "print", lambda *a, **k: None)
+    lock = tmp_path / "uv.lock"
+    lock.write_text('[[package]]\nname = "demo"\nversion = "1.0.0"\n', encoding="utf-8")
+    try:
+        inject_canonical_package_versions(
+            new_version="1.0.1",
+            dry_run=False,
+            verbose=False,
+            files=(str(lock),),
+        )
+    except ValueError as exc:
+        assert "package_name is required" in str(exc)
+    else:
+        raise AssertionError("expected ValueError when package_name cannot be resolved")

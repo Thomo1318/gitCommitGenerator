@@ -1,4 +1,5 @@
 import contextlib
+import json
 import os
 import re
 import subprocess
@@ -273,7 +274,29 @@ def inject_canonical_package_versions(
         return []
 
     targets = list(files) if files is not None else list(CANONICAL_PACKAGE_VERSION_FILES)
-    name = package_name or _read_pyproject_package_name()
+    if package_name:
+        name = package_name
+    else:
+        pyproject_target = next(
+            (path for path in targets if os.path.basename(path) == "pyproject.toml" or path.endswith("pyproject.toml")),
+            None,
+        )
+        name = _read_pyproject_package_name(pyproject_target) if pyproject_target else None
+        # Fail closed only for explicit lock-only targets. Default canonical scans
+        # soft-skip uv.lock when the package name cannot be resolved.
+        explicit_lock_only = (
+            files is not None
+            and name is None
+            and any(os.path.basename(path) == "uv.lock" or path.endswith("uv.lock") for path in targets)
+            and not any(
+                os.path.basename(path) == "pyproject.toml" or path.endswith("pyproject.toml") for path in targets
+            )
+        )
+        if explicit_lock_only:
+            raise ValueError(
+                "package_name is required when no target pyproject.toml is available "
+                "to resolve the uv.lock package block"
+            )
     changed: list[str] = []
 
     for filepath in targets:
@@ -482,12 +505,40 @@ def inject_file_versions(
 
             new_content = file_content
             if method in ("root_key", "json"):
-                # Matches: "version": "1.0.0" at file scope (first occurrence only).
-                # Skip non-package JSON that is clearly SOP/schema metadata by requiring
-                # the key near the start of the document.
-                head, tail = _header_prefix_text(file_content, max_lines=40)
-                head_new = re.sub(r'("version"\s*:\s*")([^"]+)(")', replacer, head, count=1)
-                new_content = head_new + tail
+                # SOP contract: only bump a root-object "version" key (never nested metadata).
+                try:
+                    parsed = json.loads(file_content)
+                except json.JSONDecodeError:
+                    if verbose:
+                        console.print(f"[yellow]Skipping non-JSON content in {filepath}[/yellow]")
+                    continue
+                if not isinstance(parsed, dict):
+                    if verbose:
+                        console.print(f"[yellow]Skipping non-object JSON root in {filepath}[/yellow]")
+                    continue
+                old_v = parsed.get("version")
+                if not isinstance(old_v, str) or not old_v.strip():
+                    continue
+                # Root key only; reject non-SemVer values instead of mutating metadata blobs.
+                if not re.fullmatch(r"v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?", old_v.strip()):
+                    if verbose:
+                        console.print(f"[yellow]Skipping non-SemVer root version in {filepath}: {old_v!r}[/yellow]")
+                    continue
+                try:
+                    new_v = bump_version_string(old_v, bump_type, pre_release=pre_release)
+                except Exception as exc:
+                    if verbose:
+                        console.print(f"[yellow]Skipping root version bump in {filepath}: {exc}[/yellow]")
+                    continue
+                if old_v != new_v:
+                    modified = True
+                    if verbose or dry_run:
+                        console.print(f"Bumped [cyan]{filepath}[/cyan]: [red]{old_v}[/red] -> [green]{new_v}[/green]")
+                    parsed["version"] = new_v
+                    dumped = json.dumps(parsed, indent=2, ensure_ascii=False, sort_keys=False)
+                    if file_content.endswith("\n"):
+                        dumped += "\n"
+                    new_content = dumped
             elif method in ("hash_comment", "header_comment"):
                 # Matches: # version: v3.0.0 — header only
                 head, tail = _header_prefix_text(file_content)
