@@ -126,6 +126,17 @@ Optional git ref passed to `gh release create --target`. By default, publish req
 * Does **not** inject a semantic summary evidence block into the LLM prompt (Phase 11 owns packing / optional bounded evidence)
 * Does **not** promise better commit prose under flag-on; message text may be unchanged vs flag-off (**Claim C** is follow-on)
 
+### Large-diff semantic tripwire (`--enable-semantic`)
+
+Under `--enable-semantic`, diffs impacting **>= 25** graph nodes can rank
+`architecture_refactor` even when genuinely additive (verified bound). Small diffs
+(`< 25` impacted nodes) are unaffected. For large additive commits, inspect ranking with
+`--dry-run --verbose` until the restructure-marker gate (follow-on P7) lands.
+
+* Does **not** use embeddings or cloud graph providers on the commit path
+* Does **not** run hub/callers fan-out or populate `complex_function_changed` / hub / callers product fields by default (Phase 9 / cheap follow-on only)
+* Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) still runs on the live worktree until **Phase 7.5** (#180) staged-index shadow isolation
+
 ## Commit-message gold lint (Phase 7.25)
 
 `git-cg` runs a deterministic **gold linter** (`git_cg.commit_gold`) over the structured
@@ -135,9 +146,11 @@ matrix ranker remains the sole intent/SemVer authority.
 
 ### What gold checks
 
-* **Banned body openers** (`GOLD_BODY_INVENTORY`): `This commit introduces` /
-  `This commit adds` / `This commit updates` / `This PR` / `We have` — lead with the
-  user-visible outcome and the why/behaviour delta instead.
+* **Banned body openers** (`GOLD_BODY_INVENTORY`): the first line of each body bullet is
+  checked against the authoritative `BANNED_BODY_OPENERS` constant in
+  `src/git_cg/commit_gold.py` (currently `This commit introduces` / `This commit adds` /
+  `This commit updates` / `This PR` / `We have`) — lead with the user-visible outcome
+  and the why/behaviour delta instead.
 * **Included-changes coverage** (`GOLD_INCLUDED_CHANGES_MISSING`): a multi-surface diff
   (>=2 path groups among `tests` / `docs` / `config_ci` / `release` / `product_src`) with a
   competitive ranked secondary should carry matrix-legal secondary intents (Included
@@ -179,17 +192,6 @@ regeneration through a dedicated, directive-free `gold_guidance` channel (no
 
 * `--dry-run` runs gold on the generation path (findings visible); no message is written.
 * `--recover` is a **gold no-op** (no structured plan exists on the recover path).
-
-### Large-diff semantic tripwire (`--enable-semantic`)
-
-Under `--enable-semantic`, diffs impacting **>= 25** graph nodes can rank
-`architecture_refactor` even when genuinely additive (verified bound). Small diffs
-(`< 25` impacted nodes) are unaffected. For large additive commits, inspect ranking with
-`--dry-run --verbose` until the restructure-marker gate (follow-on P7) lands.
-
-* Does **not** use embeddings or cloud graph providers on the commit path
-* Does **not** run hub/callers fan-out or populate `complex_function_changed` / hub / callers product fields by default (Phase 9 / cheap follow-on only)
-* Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) still runs on the live worktree until **Phase 7.5** (#180) staged-index shadow isolation
 
 ### Measurement
 
