@@ -744,8 +744,11 @@ def build_system_prompt(
         system_prompt += "\n\nCRITICAL PRECEDENCE RULE: The deterministic overrides and guidance above take absolute precedence over the initial deterministic ranking for intent selection and framing. "
         system_prompt += "Do not treat the guidance text itself as final commit content or trailer text.\n"
 
-    if previous_plan and not user_override_active:
+    if previous_plan:
         # Channel 2 — previous plan (neutral delta context; no user-override labelling).
+        # Emitted independently of the user-override channel so user-guided regeneration
+        # retains the structured plan it is meant to update (the plan never inherits the
+        # OVERRIDE + CRITICAL PRECEDENCE ranking-override language of channel 1).
         system_prompt += "\n\nPREVIOUS COMMIT PLAN (DELTA CONTEXT):\n"
         system_prompt += "You are regenerating the following commit. Treat this as a structural delta update. Do not rewrite from scratch unless new guidance demands it.\n"
         system_prompt += "```json\n" + previous_plan.model_dump_json(indent=2) + "\n```\n"
@@ -1924,11 +1927,18 @@ def _run_commit_generation(
                 )
 
         # K-P0.3: a gold wording pass must re-anchor to the same primary; a differing
-        # primary after a gold pass is a bug, not a feature.
-        if gold_guidance is not None and gold_previous_primary_id is not None:
-            assert contract.primary_intent_id == gold_previous_primary_id, (
-                f"gold pass re-anchored to a different primary intent: {contract.primary_intent_id!r} "
-                f"!= {gold_previous_primary_id!r}"
+        # primary after a gold pass is a bug, not a feature. Use a controlled abort (not
+        # a bare assert) so the invariant holds under `python -O` and surfaces via the
+        # project's `_abort` path instead of an uncaught AssertionError on the hook path.
+        if (
+            gold_guidance is not None
+            and gold_previous_primary_id is not None
+            and contract.primary_intent_id != gold_previous_primary_id
+        ):
+            _abort(
+                "[bold red]Internal error: gold pass re-anchored to a different primary intent "
+                f"({contract.primary_intent_id!r} != {gold_previous_primary_id!r}).[/bold red]",
+                strict=True,
             )
 
         review_state = ReviewState(

@@ -170,6 +170,52 @@ def _check_body_inventory(plan: CommitPlan) -> list[GoldFinding]:
     return []
 
 
+def _file_groups(path: str) -> frozenset[str]:
+    """Return every coverage group a single path classifies into (may be >1).
+
+    A file can legitimately carry more than one role (e.g. ``CHANGELOG.md`` is both
+    ``docs`` and ``release``; ``pyproject.toml`` is ``config_ci``/``build`` and
+    ``release``). Callers that count *distinct surfaces* must therefore count files,
+    not roles — see ``_distinct_surface_count``.
+    """
+    groups: set[str] = set()
+    if _is_test_path(path):
+        groups.add("tests")
+    if _is_docs_path(path):
+        groups.add("docs")
+    if _is_ci_path(path) or _is_config_path(path) or _is_hook_path(path) or _is_build_path(path):
+        groups.add("config_ci")
+    if _is_release_path(path):
+        groups.add("release")
+    return frozenset(groups)
+
+
+def _distinct_surface_count(signals: DiffSignals) -> int:
+    """Count the number of *distinct* change surfaces present in the diff.
+
+    Each touched file contributes exactly one surface, no matter how many coverage
+    roles it carries, so a lone ``CHANGELOG.md`` (docs+release) or ``pyproject.toml``
+    (config_ci+release) cannot by itself look like a multi-surface change. A strong
+    product-surface signal (``adds_public_api``) widens the *group* set but never
+    creates an additional surface on its own; an ungrouped file list is a single
+    product surface.
+
+    Parameters:
+        signals (DiffSignals): Deterministic diff signals including ``files``.
+
+    Returns:
+        int: The number of distinct surfaces (>= 2 means genuinely multi-surface).
+    """
+    # Distinct surfaces are counted by *touched files* only. A strong product signal
+    # (adds_public_api) widens _coverage_groups (product_src) but does not create an
+    # extra surface on its own — a lone CHANGELOG.md or pyproject.toml is one surface
+    # even when the diff also adds public API.
+    files = list(signals.files or [])
+    grouped = [path for path in files if _file_groups(path)]
+    ungrouped = [path for path in files if not _file_groups(path)]
+    return len(grouped) + len(ungrouped)
+
+
 def _coverage_groups(signals: DiffSignals) -> set[str]:
     """Derive active coverage groups from signal flags and real path helpers.
 
@@ -193,34 +239,22 @@ def _coverage_groups(signals: DiffSignals) -> set[str]:
     groups: set[str] = set()
     files = list(signals.files or [])
 
-    if signals.touches_tests or any(_is_test_path(path) for path in files):
+    if signals.touches_tests or any("tests" in _file_groups(path) for path in files):
         groups.add("tests")
-    if signals.touches_docs or signals.only_docs or any(_is_docs_path(path) for path in files):
+    if signals.touches_docs or signals.only_docs or any("docs" in _file_groups(path) for path in files):
         groups.add("docs")
     if (
         signals.touches_ci
         or signals.touches_config
         or signals.touches_hooks
         or signals.touches_build
-        or any(
-            _is_ci_path(path) or _is_config_path(path) or _is_hook_path(path) or _is_build_path(path) for path in files
-        )
+        or any("config_ci" in _file_groups(path) for path in files)
     ):
         groups.add("config_ci")
-    if signals.touches_release or any(_is_release_path(path) for path in files):
+    if signals.touches_release or any("release" in _file_groups(path) for path in files):
         groups.add("release")
 
-    grouped_files = {
-        path
-        for path in files
-        if _is_test_path(path)
-        or _is_docs_path(path)
-        or _is_ci_path(path)
-        or _is_config_path(path)
-        or _is_hook_path(path)
-        or _is_build_path(path)
-        or _is_release_path(path)
-    }
+    grouped_files = {path for path in files if _file_groups(path)}
     remaining = [path for path in files if path not in grouped_files]
     if remaining or signals.adds_public_api:
         groups.add("product_src")
@@ -242,6 +276,10 @@ def _check_included_changes(plan: CommitPlan, signals: DiffSignals, ranked_inten
 
     groups = _coverage_groups(signals)
     if len(groups) < 2:
+        return []
+    # A single file that spans two coverage roles (e.g. CHANGELOG.md -> docs+release)
+    # is not a multi-surface change; require genuinely distinct touched surfaces.
+    if _distinct_surface_count(signals) < 2:
         return []
 
     if not ranked_intents:
@@ -338,10 +376,11 @@ def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | N
         mismatches.append(f"gitmoji {primary.gitmoji!r} != contract {contract.gitmoji!r}")
     if primary_type != contract.cc_type:
         mismatches.append(f"cc_type {primary_type!r} != contract {contract.cc_type!r}")
-    if (
+    primary_semver = (
         primary.semver_impact.value if hasattr(primary.semver_impact, "value") else str(primary.semver_impact)
-    ) != contract.semver_impact:
-        mismatches.append(f"semver_impact != contract {contract.semver_impact!r}")
+    )
+    if primary_semver != contract.semver_impact:
+        mismatches.append(f"semver_impact {primary_semver!r} != contract {contract.semver_impact!r}")
     if str(primary.changelog_group) != str(contract.changelog_group):
         mismatches.append(f"changelog_group {primary.changelog_group!r} != contract {contract.changelog_group!r}")
     if not mismatches:
