@@ -18,6 +18,51 @@
 ### 📝 Documentation
 
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+## v0.8.0
+
+### Added
+
+- ✨ feat(commit): add --gold-strict CLI flag for gold strict mode (#182)
+- ✨ feat(gold): show findings as checklist in interactive review (#182)
+- ✨ feat(core): wire gold lint + additive rubric into generation (#182)
+- ✨ feat(core): add deterministic commit-message gold linter (#182)
+- 🔀 merge(182): Phase 7.25 gold-standard commit message content quality (#182 / #158)
+
+### Fixed
+
+- 🐛 fix(commit_gold): stop single-file diffs failing strict gold checks (#182)
+- 🐛 fix(intent): add product negatives to error_handling matrix row (#182)
+- 🦺 fix(schema): collapse changelog groups to Miscellaneous taxonomy (#182)
+- 🔀 merge(182): Phase 7.25 gold-standard commit message content quality (#182 / #158)
+
+### Miscellaneous
+
+- ✅ test(tests): pin gold surface-mode display before review menu (#182)
+- ✅ test(tests): enforce collapsed taxonomy in schema and ranker tests (#182)
+- ✅ test(tests): pin gold linter edge cases and harness isolation (#182)
+- 📝 docs(mermaid): document error handling and regen lifecycle (#182)
+- 📝 docs(pr-template): update PR template with Mermaid diagram guidance (#182)
+- 📝 docs(schema): narrow changelog-group collapse to docs and tests (#182)
+- 📝 Add docstrings to `feat/182-gold-standard-commit-message-content-quality`
+- 🔀 merge(182): Phase 7.25 gold-standard commit message content quality (#182 / #158)
+
+### Changed
+
+- 🦺 fix(schema): collapse changelog groups to Miscellaneous taxonomy (#182)
+- ⏪ revert(docstrings): restore normative gold documentation (#182)
+- ♻️ refactor(commit_gold): return distinct surface count directly (#182)
+
+### Documentation
+
+- 📝 docs(usage): document gold lint modes and coverage mapping (#182)
+- 📝 docs(changelog): restore issue refs on v0.7.0 bullets (#181)
+
+### Tests
+
+- ✨ feat(core): wire gold lint + additive rubric into generation (#182)
+- ✨ feat(core): add deterministic commit-message gold linter (#182)
+- 🐛 fix(intent): add product negatives to error_handling matrix row (#182)
+- ✅ test(changelog): re-anchor #177 entries to v0.6.0 section
 
 ## v0.7.1
 
