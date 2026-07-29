@@ -190,6 +190,7 @@ flowchart LR
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
 - **Spec-Driven**: Uses the [usage](https://usage.jdx.dev/) standard for automated autocompletion and help generation.
 - **Safe Dry-Runs**: Validate AI output before modifying your git message file.
+- **Commit-Message Gold Lint**: A deterministic post-enforcement linter (`git_cg.commit_gold`) checks wording quality, Included-changes coverage, and type/changelog-group coherence — without ever re-ranking intent (SOP matrix stays the SemVer authority). Modes: `off` / `warn` (hook-safe default) / `surface` (interactive) / `strict` (CI).
 
 ---
 

@@ -125,6 +125,68 @@ Optional git ref passed to `gh release create --target`. By default, publish req
 
 * Does **not** inject a semantic summary evidence block into the LLM prompt (Phase 11 owns packing / optional bounded evidence)
 * Does **not** promise better commit prose under flag-on; message text may be unchanged vs flag-off (**Claim C** is follow-on)
+
+## Commit-message gold lint (Phase 7.25)
+
+`git-cg` runs a deterministic **gold linter** (`git_cg.commit_gold`) over the structured
+commit plan **after** contract enforcement and the mixed-policy handle, and **before**
+the message is written or shown as final. It checks content quality only — the SOP
+matrix ranker remains the sole intent/SemVer authority.
+
+### What gold checks
+
+* **Banned body openers** (`GOLD_BODY_INVENTORY`): `This commit introduces` /
+  `This commit adds` / `This commit updates` / `This PR` / `We have` — lead with the
+  user-visible outcome and the why/behaviour delta instead.
+* **Included-changes coverage** (`GOLD_INCLUDED_CHANGES_MISSING`): a multi-surface diff
+  (>=2 path groups among `tests` / `docs` / `config_ci` / `release` / `product_src`) with a
+  competitive ranked secondary should carry matrix-legal secondary intents (Included
+  changes) or recommend a split. A split recommendation alone passes coverage.
+* **Type/group coherence** (`GOLD_GROUP_PRIMARY_MISMATCH`, `GOLD_TYPE_GROUP_INCOHERENT`):
+  structured type ↔ changelog-group stories that read as incoherent (e.g. a `feat`
+  primary in a `Fixed`-only group with no explaining fix secondary). A legitimate
+  `fix` primary + `feat` secondary that escalates the trailer to MINOR **passes** — this
+  is render-correct, not a gold fail.
+* **Contract smoke** (`GOLD_CONTRACT_SMOKE`): primary fields disagreeing with the
+  enforced contract (a bug; may hard-fail independent of mode).
+
+### Gold modes and resolution order
+
+Gold runs in one of four modes. Resolution order (no hook-argv sniffing):
+
+1. `GIT_CG_GOLD_MODE` = `off` / `warn` / `strict` (env override; `surface` is **not** a valid env value)
+2. `strict=True` (standalone `git-cg --strict`) → **strict**
+3. interactive TTY review (`-i` with a usable TTY) → **surface**
+4. default → **warn**
+
+| Mode | Behaviour |
+| --- | --- |
+| `off` | No-op. |
+| `warn` | Print findings; never block the commit (hook-safe default). |
+| `surface` | Show findings before the existing interactive review menu; user decides. |
+| `strict` | Findings in `STRICT_FAIL_CODES` fail; at most **1** automatic wording regeneration, then a non-zero exit. |
+
+Findings print unconditionally in `warn` / `surface` / `strict` (never verbose-gated).
+
+### Rank bugs vs wording bugs
+
+Gold never re-ranks. A wrong **primary intent** is a ranker/SOP/signals bug fixed with
+characterisation fixtures (Slice 1); gold only requests **wording** / **secondary-coverage**
+regeneration through a dedicated, directive-free `gold_guidance` channel (no
+`preferred_type`, no OVERRIDE / ranking-precedence language).
+
+### `--dry-run` and `--recover`
+
+* `--dry-run` runs gold on the generation path (findings visible); no message is written.
+* `--recover` is a **gold no-op** (no structured plan exists on the recover path).
+
+### Large-diff semantic tripwire (`--enable-semantic`)
+
+Under `--enable-semantic`, diffs impacting **>= 25** graph nodes can rank
+`architecture_refactor` even when genuinely additive (verified bound). Small diffs
+(`< 25` impacted nodes) are unaffected. For large additive commits, inspect ranking with
+`--dry-run --verbose` until the restructure-marker gate (follow-on P7) lands.
+
 * Does **not** use embeddings or cloud graph providers on the commit path
 * Does **not** run hub/callers fan-out or populate `complex_function_changed` / hub / callers product fields by default (Phase 9 / cheap follow-on only)
 * Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) still runs on the live worktree until **Phase 7.5** (#180) staged-index shadow isolation

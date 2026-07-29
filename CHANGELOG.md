@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### ✨ Features
+
+- ✨ feat(core): Phase 7.25 gold-standard commit-message content quality — deterministic `commit_gold` linter (wording/coverage/coherence findings) with three-channel prompt assembly and an additive GOLD RUBRIC (#182)
+
+### 🐛 Bug Fixes & Refactors
+
+- 🥅 fix(intent): close #181-class mis-rank by adding product markers to `error_handling` negative signals (feature_addition now outranks error_handling on product+error diffs) (#182)
+
+### ✅ Tests
+
+- ✅ test(intent): B1 characterisation fixtures (release-notes product, bugfix-pure, error-only) + golden cascade refresh via `GIT_CG_UPDATE_GOLDENS` (#182)
+- ✅ test(core): B2 gold-linter tables, Claim A purity tests (A_01-A_05), and generation-path gold wiring integration (#182)
+
+### 📝 Documentation
+
+- 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+
 ## v0.7.1
 
 ### 🐛 Bug Fixes
