@@ -180,8 +180,6 @@ def test_unconstrained_diff_exports_empty_constraint_sets(sop_matrix):
 
 # --- Issue #182 Slice 1: B1 ranker close bars + keep-green + shared snapshot ---
 
-B1_SEMANTIC_FACTS = None  # lazily built in the invariance test to keep import surface small
-
 
 def test_b1_release_notes_product_ranks_feature_addition(sop_matrix):
     """Close bar: #181-class product surface with error-handling noise ranks feat/MINOR/Added.
