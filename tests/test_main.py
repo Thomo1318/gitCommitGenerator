@@ -763,7 +763,6 @@ def test_release_command_rejects_publish_with_skip_github_notes():
 
 
 def _minimal_diff():
-    """Return a minimal release-module diff used by prompt tests."""
     return "diff --git a/src/git_cg/release.py b/src/git_cg/release.py\n+def new_helper():\n"
 
 
@@ -848,14 +847,12 @@ def test_user_directive_path_still_emits_override_and_precedence():
 
 
 def _gold_harness_mocks(monkeypatch, plans):
-    """
-    Configure deterministic mocks for exercising commit generation with sequential plans.
-    
-    Parameters:
-        plans: Commit plans yielded by successive mocked generation calls.
-    
-    Returns:
-        writes: Commit-message strings captured when the generation flow writes them.
+    """Drive _run_commit_generation with a mocked LLM returning `plans` in sequence.
+
+    Patches all LLM/diff/telemetry seams (no live model). Clears GIT_CG_GOLD_MODE so
+    each gold test starts from a deterministic default regardless of the ambient env.
+
+    Returns the list of written commit-message strings (`writes`).
     """
     import git_cg.main as main_mod
 
@@ -932,7 +929,7 @@ def _gold_plan(body: str | None = None):
 
 
 def test_gold_warn_mode_writes_and_does_not_block(monkeypatch, capsys, tmp_path):
-    """Verify that warn mode writes a gold-failing commit message without raising a non-zero exit."""
+    """Hook/warn default: a gold-failing body still writes; no non-zero exit."""
     writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
     import git_cg.main as main_mod
 

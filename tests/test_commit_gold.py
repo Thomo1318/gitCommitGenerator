@@ -52,18 +52,7 @@ def _plan(
     body: str | None = None,
     split: bool = False,
 ) -> CommitPlan:
-    """
-    Constructs a commit plan fixture without applying model validation or canonicalisation.
-    
-    Parameters:
-        primary (CommitIntent): Primary commit intent.
-        secondaries (list[CommitIntent] | None): Optional secondary commit intents.
-        body (str | None): Optional body summary.
-        split (bool): Whether the plan recommends splitting the changes.
-    
-    Returns:
-        CommitPlan: A structured commit plan populated with fixture defaults.
-    """
+    """Construct a structured plan WITHOUT model validators (direct fixture)."""
     return CommitPlan.model_construct(
         primary_intent=primary,
         secondary_intents=secondaries or [],

@@ -86,16 +86,22 @@ class GoldReport:
         return frozenset(finding.code for finding in self.findings)
 
     def ok_for_mode(self, mode: str) -> bool:
-        """
-        Determines whether the findings permit generation under the specified gold mode.
-        
+        """Map findings to a pass/fail decision for a resolved gold mode.
+
+        Normative behaviour (locked):
+            * ``off``: always passes (findings suppressed by orchestration).
+            * ``warn`` / ``surface``: always passes; findings are still emitted.
+            * ``strict``: passes iff no finding code is in ``STRICT_FAIL_CODES``.
+
+        ``GOLD_CONTRACT_SMOKE`` is an assert/smoke class that may hard-fail
+        independently of mode; it is not ordinary product ranking policy and is
+        excluded from the ``STRICT_FAIL_CODES`` pass/fail source.
+
         Parameters:
-            mode (str): Resolved gold mode.
-        
+            mode (str): Resolved gold mode (``off``/``warn``/``surface``/``strict``).
+
         Returns:
-            bool: ``True`` for ``off``, ``warn``, ``surface``, or unrecognised modes; for
-                ``strict``, ``True`` only when no finding code is in
-                ``STRICT_FAIL_CODES``.
+            bool: ``True`` when generation may proceed under ``mode``.
         """
         if mode in ("off", "warn", "surface"):
             return True
@@ -165,11 +171,12 @@ def _check_body_inventory(plan: CommitPlan) -> list[GoldFinding]:
 
 
 def _file_groups(path: str) -> frozenset[str]:
-    """
-    Classifies a file path into its applicable coverage groups.
-    
-    Returns:
-        frozenset[str]: The coverage groups assigned to the path.
+    """Return every coverage group a single path classifies into (may be >1).
+
+    A file can legitimately carry more than one role (e.g. ``CHANGELOG.md`` is both
+    ``docs`` and ``release``; ``pyproject.toml`` is ``config_ci``/``build`` and
+    ``release``). Callers that count *distinct surfaces* must therefore count files,
+    not roles — see ``_distinct_surface_count``.
     """
     groups: set[str] = set()
     if _is_test_path(path):
@@ -207,12 +214,22 @@ def _distinct_surface_count(signals: DiffSignals) -> int:
 
 
 def _coverage_groups(signals: DiffSignals) -> set[str]:
-    """
-    Derive active coverage groups from diff signals and touched file paths.
-    
+    """Derive active coverage groups from signal flags and real path helpers.
+
+    Normative v1 path-group mapping (no fictional classifiers):
+
+        * ``tests``: ``touches_tests`` or any ``_is_test_path``
+        * ``docs``: ``touches_docs``/``only_docs`` or any ``_is_docs_path``
+        * ``config_ci``: ``touches_ci``/``touches_config``/``touches_hooks``/
+          ``touches_build`` or ``_is_ci_path``/``_is_config_path``/``_is_hook_path``/
+          ``_is_build_path``
+        * ``release``: ``touches_release`` or any ``_is_release_path``
+        * ``product_src``: remaining non-grouped product/source paths, or strong
+          product-surface evidence (``adds_public_api``) when path helpers under-specify.
+
     Parameters:
-        signals (DiffSignals): Deterministic diff signals, including touched files.
-    
+        signals (DiffSignals): Deterministic diff signals including ``files``.
+
     Returns:
         set[str]: Active coverage group names.
     """
@@ -290,16 +307,14 @@ def _check_included_changes(plan: CommitPlan, signals: DiffSignals, ranked_inten
 
 
 def _check_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
-    """
-    Check whether the primary intent and changelog group form a coherent combination.
-    
-    Parameters:
-        plan (CommitPlan): Commit plan whose primary and secondary intents are inspected.
-    
-    Returns:
-        list[GoldFinding]: Findings for fix-shaped product groups without an
-            explaining secondary intent or matrix-incoherent primary type/group
-            combinations.
+    """Emit ``GOLD_GROUP_PRIMARY_MISMATCH`` / ``GOLD_TYPE_GROUP_INCOHERENT``.
+
+    Operates on structured plan fields only (never re-parses rendered trailers):
+        * ``GOLD_GROUP_PRIMARY_MISMATCH``: product feat/perf primary whose primary
+          changelog group is a fix-explaining group (e.g. ``Fixed``) with no
+          fix/error-handling secondary to explain it.
+        * ``GOLD_TYPE_GROUP_INCOHERENT``: smoke for matrix-impossible combinations
+          (e.g. docs primary in a ``Fixed`` group post-enforce).
     """
     findings: list[GoldFinding] = []
     primary = plan.primary_intent
@@ -341,16 +356,11 @@ def _check_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
 
 
 def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | None) -> list[GoldFinding]:
-    """Check whether the plan's primary intent fields match the enforced contract.
-    
-    Parameters:
-        plan (CommitPlan): Commit plan whose primary intent is checked.
-        contract (ResolvedCommitContract | None): Enforced contract to compare, or
-            ``None`` to skip the check.
-    
-    Returns:
-        list[GoldFinding]: A contract-smoke finding describing any mismatches, or an
-            empty list when the values match or no contract is provided.
+    """Emit ``GOLD_CONTRACT_SMOKE`` when primary fields disagree with the contract.
+
+    This is a bug-class smoke (enforce should make it impossible); it may hard-fail
+    independently of mode. Skipped entirely when ``contract`` is ``None`` (direct
+    structured fixtures — F4).
     """
     if contract is None:
         return []
@@ -388,20 +398,24 @@ def check_commit_gold(
     ranked_intents: list | None = None,
     path_summary: object | None = None,
 ) -> GoldReport:
-    """
-    Run deterministic gold checks on a structured commit plan.
-    
+    """Run the pure gold checks over a structured, post-enforce commit plan.
+
+    Production call sites always pass ``contract`` + ``ranked_intents``. ``None``
+    exists for direct structured B2 fixtures: ``contract=None`` skips only
+    ``GOLD_CONTRACT_SMOKE``; ``ranked_intents=None`` skips only coverage findings.
+
     Parameters:
-        plan (CommitPlan): Structured commit plan to evaluate.
-        contract (ResolvedCommitContract | None): Enforced contract used for
-            contract-consistency checks; ``None`` skips those checks.
-        signals (DiffSignals): Deterministic signals describing the change.
-        ranked_intents (list | None): Ranked intent candidates used for coverage
-            checks; ``None`` skips those checks.
-        path_summary (object | None): Optional precomputed path summary.
-    
+        plan (CommitPlan): Structured plan (post-enforce or a direct fixture).
+        contract (ResolvedCommitContract | None): Enforced contract, or ``None`` to
+            skip the contract smoke.
+        signals (DiffSignals): Deterministic diff signals (path-group authority).
+        ranked_intents (list | None): Ranked candidates for coverage scoring, or
+            ``None`` to skip coverage findings.
+        path_summary (object | None): Optional precomputed cache only — never
+            treated as a second source of truth (O-P1.5).
+
     Returns:
-        GoldReport: Immutable findings produced by the checks.
+        GoldReport: Immutable findings; the plan/contract are never mutated.
     """
     del path_summary  # optional cache only; coverage authority is signals.files + helpers
 
