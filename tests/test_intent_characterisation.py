@@ -207,11 +207,21 @@ def test_characterisation_case_matches_golden(
         # Mechanical red→green refresh (F6): rewrite this case's golden entry from live
         # engine output. Re-read from disk so parametrized sibling writes accumulate
         # (the module-scope fixture holds a stale in-memory snapshot).
+        live_hash = _sop_matrix_sha256(sop_matrix)
+        row_count = len(sop_matrix)
         current = _load_json(GOLDENS_PATH)
         current["cases"][case_id] = live_entry
-        current["sop_matrix_sha256"] = _sop_matrix_sha256(sop_matrix)
-        current["sop_matrix_row_count"] = len(sop_matrix)
+        current["sop_matrix_sha256"] = live_hash
+        current["sop_matrix_row_count"] = row_count
         GOLDENS_PATH.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # Sync the corpus SOP pin too (finding 4): the pin test requires corpus.json and
+        # goldens.json to agree on the live matrix hash/row-count, so refreshing only the
+        # golden would leave the corpus pin stale after a matrix change. Case definitions
+        # are untouched — only the shared matrix metadata is refreshed.
+        corpus_current = _load_json(CORPUS_PATH)
+        corpus_current["sop_matrix_sha256"] = live_hash
+        corpus_current["sop_matrix_row_count"] = row_count
+        CORPUS_PATH.write_text(json.dumps(corpus_current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         return
 
     expected = goldens["cases"][case_id]
@@ -238,7 +248,10 @@ def test_b1_top_intent_semantic_on_invariant(case_id: str, sop_matrix: list[dict
     case = next(item for item in corpus["cases"] if item["id"] == case_id)
     signals = DiffSignals(**case["signals"])
 
-    semantic_off = rank_commit_intents(signals, sop_matrix)
+    # Pin the OFF side explicitly: rank_commit_intents defaults enable_semantic from the
+    # GIT_CG_ENABLE_SEMANTIC env, so an ambient ON would silently make both sides ON and
+    # vacuate the ON/OFF invariance comparison.
+    semantic_off = rank_commit_intents(signals, sop_matrix, enable_semantic=False)
     semantic_on = rank_commit_intents(signals, sop_matrix, enrichment=B1_SEMANTIC_FACTS, enable_semantic=True)
 
     assert semantic_on[0].intent_id == semantic_off[0].intent_id

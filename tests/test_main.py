@@ -757,6 +757,8 @@ def test_release_command_rejects_publish_with_skip_github_notes():
             repo_slug=None,
             github_target=None,
         )
+
+
 # --- Issue #182 Slice 2: GOLD RUBRIC + three-channel prompt assembly ---
 
 
@@ -844,14 +846,17 @@ def test_user_directive_path_still_emits_override_and_precedence():
 # --- Issue #182 Slice 3b: gold wiring integration (mocked generation path) ---
 
 
-def _gold_harness_mocks(monkeypatch, plans, capsys):
+def _gold_harness_mocks(monkeypatch, plans):
     """Drive _run_commit_generation with a mocked LLM returning `plans` in sequence.
 
-    Returns (result, stdout, writes). Patches all LLM/diff/telemetry seams; no live model.
+    Patches all LLM/diff/telemetry seams (no live model). Clears GIT_CG_GOLD_MODE so
+    each gold test starts from a deterministic default regardless of the ambient env.
+
+    Returns the list of written commit-message strings (`writes`).
     """
     import git_cg.main as main_mod
-    from git_cg.models import CommitPlan
 
+    monkeypatch.delenv("GIT_CG_GOLD_MODE", raising=False)
     writes: list[str] = []
     plans_iter = iter(plans)
 
@@ -893,17 +898,10 @@ def _gold_harness_mocks(monkeypatch, plans, capsys):
     monkeypatch.setattr(main_mod, "_write_commit_message", lambda f, s, strict, verbose: writes.append(s))
     monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", lambda **k: None)
 
-    import opik
-
-    class _Noop:
-        def __call__(self, *a, **k):
-            return None
-
     monkeypatch.setattr(main_mod.opik_context, "update_current_trace", lambda *a, **k: None)
     monkeypatch.setattr(main_mod.opik_context, "get_current_trace_data", lambda: None)
     monkeypatch.setattr(main_mod.opik, "flush_tracker", lambda: None)
     monkeypatch.setattr(main_mod.sentry_sdk, "flush", lambda *a, **k: None)
-    _ = CommitPlan, opik, _Noop, capsys
     return writes
 
 
@@ -932,7 +930,7 @@ def _gold_plan(body: str | None = None):
 
 def test_gold_warn_mode_writes_and_does_not_block(monkeypatch, capsys, tmp_path):
     """Hook/warn default: a gold-failing body still writes; no non-zero exit."""
-    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")], capsys)
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
     import git_cg.main as main_mod
 
     result = main_mod._run_commit_generation(
@@ -959,7 +957,6 @@ def test_gold_strict_mode_blocks_with_nonzero_exit(monkeypatch, capsys, tmp_path
     writes = _gold_harness_mocks(
         monkeypatch,
         [_gold_plan(body="This commit adds a helper."), _gold_plan(body="This commit adds a helper.")],
-        capsys,
     )
     import git_cg.main as main_mod
 
@@ -990,7 +987,6 @@ def test_gold_strict_regen_recovers_and_writes(monkeypatch, capsys, tmp_path):
     writes = _gold_harness_mocks(
         monkeypatch,
         [_gold_plan(body="This commit adds a helper."), _gold_plan(body=None)],
-        capsys,
     )
     import git_cg.main as main_mod
 
@@ -1011,7 +1007,7 @@ def test_gold_strict_regen_recovers_and_writes(monkeypatch, capsys, tmp_path):
 
 def test_gold_dry_run_runs_but_does_not_write(monkeypatch, capsys, tmp_path):
     """--dry-run: gold runs on the generation path; no commit-msg write occurs."""
-    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body=None)], capsys)
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body=None)])
     import git_cg.main as main_mod
 
     result = main_mod._run_commit_generation(
@@ -1031,8 +1027,9 @@ def test_gold_dry_run_runs_but_does_not_write(monkeypatch, capsys, tmp_path):
 
 def test_gold_off_mode_suppresses_findings(monkeypatch, capsys, tmp_path):
     """GIT_CG_GOLD_MODE=off: findings suppressed; generation proceeds silently."""
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    # Harness clears GIT_CG_GOLD_MODE for determinism; apply the off-mode override after.
     monkeypatch.setenv("GIT_CG_GOLD_MODE", "off")
-    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")], capsys)
     import git_cg.main as main_mod
 
     result = main_mod._run_commit_generation(
@@ -1067,8 +1064,6 @@ def test_recover_path_skips_gold(monkeypatch, tmp_path):
     monkeypatch.setattr(gold_mod, "check_commit_gold", _no_gold)
     monkeypatch.setattr(main_mod, "_apply_standalone_commit", lambda f, strict: called.__setitem__("applied", True))
 
-    import typer
-
     from git_cg.main import app
 
     msg_file = tmp_path / "COMMIT_EDITMSG"
@@ -1091,7 +1086,6 @@ def test_recover_path_skips_gold(monkeypatch, tmp_path):
     # Recover applied the standalone commit and exited; gold was never consulted.
     assert called["applied"] is True
     assert called["gold"] is False
-    _ = typer
 
 
 def test_a01_gold_guidance_bypasses_directive_extraction():
@@ -1115,3 +1109,30 @@ def test_a01_gold_guidance_bypasses_directive_extraction():
 
     state = ReviewState(commit_plan=_gold_plan(body=None))
     assert state.active_directives == {}  # gold does not touch ReviewState guidance
+
+
+def test_previous_plan_shown_with_user_directives() -> None:
+    """Finding 3: user-guided regeneration retains the prior plan as delta context.
+
+    When user directives (or residual guidance) are active, the previous commit plan
+    must still be emitted (channel 2, neutral) so the regeneration updates the plan
+    rather than rewriting from scratch — while the override channel keeps its own
+    authoritative framing.
+    """
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            description="add thing",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        ),
+        rationale="test",
+    )
+    prompt = build_system_prompt(_minimal_diff(), previous_plan=plan, active_directives={"preferred_scope": "core"})
+    # User-override channel active AND previous plan still present as neutral delta context.
+    assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" in prompt
+    assert "PREVIOUS COMMIT PLAN (DELTA CONTEXT):" in prompt

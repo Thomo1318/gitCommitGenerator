@@ -8,6 +8,7 @@ and Issue #161 (Phase 3 SOP-marker intent engine hardening):
   - README.md                                        (Issue Auto-Detection tip)
 """
 
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -631,9 +632,12 @@ class TestChangelogUnreleasedIssue177Entries:
         content = self._content()
         section = content.split("## v0.6.0", 1)[1].split("## v0.5.0", 1)[0]
         bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ") and "(#177)" in line]
+        # Non-tautological: assert the claimed invariant directly — each #177 bullet is a
+        # well-formed conventional-commit line and no longer carries the epic (#158) tag.
         assert bullet_lines
         for line in bullet_lines:
-            assert "(#177)" in line, line
+            assert "(#158)" not in line, line
+            assert re.match(r"^- \S+ [a-z]+\([a-z][a-z0-9-]*\)?: .+ \(#177\)$", line.strip()), line
 
     def test_v0_5_0_section_still_follows_with_features_heading(self):
         """The pre-existing v0.5.0 release section must be preserved unchanged below Unreleased."""
