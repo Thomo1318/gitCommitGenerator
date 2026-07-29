@@ -32,7 +32,7 @@ jobs:
 
       - name: TruffleHog OSS
         # trufflesecurity/trufflehog@v3.95.9 (action SHA + scanner version pin)
-        uses: trufflesecurity/trufflehog@27b0417c16317ca9a472a9a8092acce143b49c55
+        uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11
         with:
           path: ./
           # Per-event ranges:
@@ -73,7 +73,7 @@ jobs:
 
       - name: Install mise tools
         # jdx/mise-action@v4.2.1 — installs exact syft/grype/grant from mise.toml
-        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
+        uses: jdx/mise-action@9e7f7633ff6f6d6048a9418a68d48f288f50eb14
         with:
           install: true
           cache: true
