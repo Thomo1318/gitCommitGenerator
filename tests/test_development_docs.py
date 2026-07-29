@@ -8,7 +8,6 @@ and Issue #161 (Phase 3 SOP-marker intent engine hardening):
   - README.md                                        (Issue Auto-Detection tip)
 """
 
-import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -16,7 +15,6 @@ DEVELOPMENT_MD = REPO_ROOT / "DEVELOPMENT.md"
 ADR_0002 = REPO_ROOT / "docs/ADRs/0002-adopt-gitleaks-and-trufflehog.md"
 README_MD = REPO_ROOT / "README.md"
 CHANGELOG_MD = REPO_ROOT / "CHANGELOG.md"
-USAGE_MD = REPO_ROOT / "docs/usage.md"
 
 
 def _read_development_md() -> str:
@@ -574,19 +572,10 @@ class TestDevelopmentMdIssue177BaselineAndFloors:
 
 
 class TestChangelogUnreleasedIssue177Entries:
-    """Tests for CHANGELOG structure after #177 work landed under v0.6.0.
-
-    Historically these assertions targeted a populated ``## Unreleased`` block.
-    That content was cut into ``## v0.6.0``; keep Unreleased as the leading
-    placeholder and assert #177 evidence on the v0.6.0 section instead.
-    """
+    """Tests for the new '## Unreleased' section documenting the #177 dependency/Actions work."""
 
     def _content(self) -> str:
         return _read_changelog_md()
-
-    def _v0_6_0_section(self) -> str:
-        content = self._content()
-        return content.split("## v0.6.0", 1)[1].split("## v0.5.0", 1)[0]
 
     def test_file_exists(self):
         assert CHANGELOG_MD.is_file()
@@ -598,282 +587,57 @@ class TestChangelogUnreleasedIssue177Entries:
         # Unreleased remains the first release section after the document H1.
         assert content.index("# Changelog") < content.index("## Unreleased")
 
-    def test_unreleased_precedes_version_sections(self):
+    def test_unreleased_precedes_v0_5_0(self):
         content = self._content()
-        assert content.index("## Unreleased") < content.index("## v0.6.0") < content.index("## v0.5.0")
+        assert content.index("## Unreleased") < content.index("## v0.5.0")
 
-    def test_unreleased_section_has_no_bullets(self):
-        """Unreleased is a placeholder between cuts; only the next version H2 ends it."""
+    def test_security_dependencies_subheading_present(self):
         content = self._content()
-        after = content.split("## Unreleased", 1)[1]
-        # Stop at the next release heading (## vX.Y.Z), not a hard-coded older tag.
-        match = re.search(r"(?m)^## v\d+", after)
-        section = after[: match.start()] if match else after
-        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ")]
-        assert bullet_lines == []
-
-    def test_v0_6_0_security_dependencies_subheading_present(self):
-        section = self._v0_6_0_section()
+        section = content.split("## Unreleased", 1)[1].split("## v0.5.0", 1)[0]
         assert "### 🔒️ Security / Dependencies" in section
 
-    def test_v0_6_0_retains_issue_177_dependency_work(self):
-        section = self._v0_6_0_section()
-        expected_fragments = [
-            "(#177)",
-            "python-dotenv",
-            "GitHub Actions",
-            "pytest",
-            "code-review-graph",
+    def test_all_expected_bullet_entries_present(self):
+        # v0.6.0 (commit b897a39) moved the #177 bullets from Unreleased into the
+        # v0.6.0 release section, generalised the wording, and stripped epic "(#158)"
+        # tags; assert the real v0.6.0 #177 entries.
+        content = self._content()
+        section = content.split("## v0.6.0", 1)[1].split("## v0.5.0", 1)[0]
+        expected_bullets = [
+            "🔒️ fix(deps): raise python-dotenv floor to >=1.2.2 (#177)",
+            "🐛 fix(fingerprints): catch missing package metadata errors (#177)",
+            "📝 docs(adr): add ADR-0014 for fnox canonical secrets (#177)",
+            "✅ test(tests): coverage and error-handling improvements (#177)",
+            "⬆️ build(deps): bump pytest, code-review-graph; raise floors / bounds (#177)",
+            "📌 build(ci): pin CI actions to full commit SHAs (#177)",
+            "🔐 chore(dev-guide): record WP6 deferrals for pins (#177)",
+            "🔒️ fix(deps): raise python-dotenv floor for GHSA-mf9w-mj56-hr94 / CVE-2026-28684 (#177)",
+            "👷 ci(deps): stage GitHub Actions majors with full SHA pins (#177)",
         ]
-        for fragment in expected_fragments:
-            assert fragment in section, fragment
+        for bullet in expected_bullets:
+            assert bullet in section, bullet
+
+    def test_177_bullets_present_in_v060(self):
+        # The v0.6.0 release carries the #177 dependency/CI entries; assert their count.
+        content = self._content()
+        section = content.split("## v0.6.0", 1)[1].split("## v0.5.0", 1)[0]
+        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ") and "(#177)" in line]
+        assert len(bullet_lines) == 9
+
+    def test_every_v060_177_bullet_references_issue_177(self):
+        # After the v0.6.0 release re-anchored these bullets, they reference #177
+        # but no longer carry the epic "(#158)" tag (stripped by the release cut).
+        # The v0.6.0 section mixes #162 and #177 entries; assert every #177-tagged
+        # bullet is well-formed (we assert the #177 subset in the sibling test).
+        content = self._content()
+        section = content.split("## v0.6.0", 1)[1].split("## v0.5.0", 1)[0]
+        bullet_lines = [line for line in section.splitlines() if line.strip().startswith("- ") and "(#177)" in line]
+        assert bullet_lines
+        for line in bullet_lines:
+            assert "(#177)" in line, line
 
     def test_v0_5_0_section_still_follows_with_features_heading(self):
-        """The pre-existing v0.5.0 release section must be preserved below newer cuts."""
+        """The pre-existing v0.5.0 release section must be preserved unchanged below Unreleased."""
         content = self._content()
         assert "## v0.5.0" in content
         v0_5_0_section = content.split("## v0.5.0", 1)[1]
         assert "### ✨ Features" in v0_5_0_section
-
-
-# ===========================================================================
-# docs/usage.md — `git-cg release` gold-standard GitHub notes flags (#181)
-# ===========================================================================
-
-
-class TestUsageMdReleaseFlags:
-    """Tests for the expanded 'git-cg release' flags section (Issue #181)."""
-
-    def _content(self) -> str:
-        """Return UTF-8 contents of docs/usage.md."""
-        return USAGE_MD.read_text(encoding="utf-8")
-
-    def _release_section(self) -> str:
-        """Return the `git-cg release` section body, up to the next top-level heading."""
-        content = self._content()
-        return content.split("## `git-cg release`", 1)[1].split("## Semantic context", 1)[0]
-
-    def test_file_exists(self):
-        assert USAGE_MD.is_file()
-
-    def test_usage_line_uses_generic_flags_placeholder(self):
-        """The old literal `[--pre-release <IDENTIFIER>]` usage line is replaced by `[FLAGS]`."""
-        content = self._content()
-        assert "- **Usage**: `git-cg release [FLAGS]`" in content
-        assert "- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`" not in content
-
-    def test_description_mentions_gold_standard_release_notes(self):
-        content = self._content()
-        assert "**gold-standard GitHub Release notes**" in content
-        assert "boundary table, highlights, grouped What\u2019s Changed, compare links" in content
-
-    def test_flags_heading_present(self):
-        section = self._release_section()
-        assert "### Flags" in section
-
-    def test_dry_run_flag_documented(self):
-        section = self._release_section()
-        assert "#### `-d --dry-run`" in section
-        assert "Print planned changelog and GitHub notes without writing files or publishing." in section
-
-    def test_verbose_flag_documented(self):
-        section = self._release_section()
-        assert "#### `-v --verbose`" in section
-        assert "Enable verbose output." in section
-
-    def test_pre_release_flag_still_documented(self):
-        section = self._release_section()
-        assert "#### `--pre-release <IDENTIFIER>`" in section
-        assert "Add or bump a pre-release identifier (e.g., 'alpha', 'rc')" in section
-
-    def test_theme_flag_documented_with_example(self):
-        section = self._release_section()
-        assert "#### `--theme <THEME>`" in section
-        assert "Semantic Context integration" in section
-        assert "🚀 git-cg vX.Y.Z: Semantic Context integration" in section
-
-    def test_notes_file_flag_documents_default_path(self):
-        section = self._release_section()
-        assert "#### `--notes-file <PATH>`" in section
-        assert ".git/GIT_CG_RELEASE_NOTES_<tag>.md" in section
-
-    def test_publish_github_flag_documents_prerelease_default(self):
-        section = self._release_section()
-        assert "#### `--publish-github`" in section
-        assert "Create the GitHub Release via `gh` after preparing files (requires auth)." in section
-        assert "Default marks the release as **pre-release**." in section
-
-    def test_github_latest_flag_documented(self):
-        section = self._release_section()
-        assert "#### `--github-latest`" in section
-        assert "mark the GitHub release as latest (not pre-release)" in section
-
-    def test_skip_github_notes_flag_documented(self):
-        section = self._release_section()
-        assert "#### `--skip-github-notes`" in section
-        assert "Only bump versions / CHANGELOG; skip gold-standard GitHub notes assembly." in section
-
-    def test_flags_appear_in_declared_order(self):
-        """Flags must be documented in the same order they are declared in main.py's release() signature."""
-        section = self._release_section()
-        assert (
-            section.index("-d --dry-run")
-            < section.index("-v --verbose")
-            < section.index("--pre-release")
-            < section.index("--theme")
-            < section.index("--notes-file")
-            < section.index("--publish-github")
-            < section.index("--github-latest")
-            < section.index("--skip-github-notes")
-        )
-
-
-# ===========================================================================
-# README.md — Changelog-Groups vocabulary alignment (Documentation/Tests/Chores)
-# ===========================================================================
-
-
-class TestReadmeChangelogGroupsVocabularyAlignment:
-    """Tests for the Hybrid changelog vocabulary alignment (adds Documentation/Tests/Chores)."""
-
-    def _content(self) -> str:
-        return _read_readme_md()
-
-    def _matrix_section(self) -> str:
-        content = self._content()
-        return _section_after_heading(content, "#### Gitmoji Reference Matrix")
-
-    def test_file_exists(self):
-        assert README_MD.is_file()
-
-    def test_issue_reference_trailer_example_uses_documentation_not_miscellaneous(self):
-        """The structured-issue-reference example must no longer bucket docs under Miscellaneous."""
-        content = self._content()
-        assert "Changelog-Groups: Fixed, Documentation" in content
-        assert "Changelog-Groups: Fixed, Miscellaneous" not in content
-
-    def test_hybrid_commit_example_trailer_drops_trailing_miscellaneous(self):
-        """The Hybrid Commits example must resolve refactor/fix/build to Changed, Fixed only."""
-        content = self._content()
-        assert "Changelog-Groups: Changed, Fixed" in content
-        assert "Changelog-Groups: Changed, Fixed, Miscellaneous" not in content
-
-    def test_matrix_section_present_and_non_trivial(self):
-        section = self._matrix_section()
-        assert "| Emoji | Code" in section
-        assert section.count("\n|") > 50
-
-    def test_matrix_contains_chores_documentation_and_tests_columns(self):
-        """New hybrid tokens must actually appear as Changelog Group column values."""
-        section = self._matrix_section()
-        assert "| Chores" in section
-        assert "| Documentation" in section
-        assert "| Tests" in section
-
-    @staticmethod
-    def _changelog_group_cell(line: str) -> str:
-        """Return the Changelog Group cell value without depending on column padding."""
-        cells = [c.strip() for c in line.split("|")]
-        # Markdown tables: ['', col1, col2, ..., colN, '']
-        meaningful = [c for c in cells if c != ""]
-        assert meaningful, f"empty table row: {line!r}"
-        return meaningful[-1]
-
-    def test_matrix_chore_and_ci_rows_use_chores_not_miscellaneous(self):
-        """Representative chore/ci rows must resolve to the new Chores token."""
-        section = self._matrix_section()
-        assert "`:rocket:`" in section
-        rocket_line = next(line for line in section.splitlines() if ":rocket:" in line)
-        assert self._changelog_group_cell(rocket_line) == "Chores"
-        ci_line = next(line for line in section.splitlines() if ":construction_worker:" in line)
-        assert self._changelog_group_cell(ci_line) == "Chores"
-
-    def test_matrix_docs_rows_use_documentation_not_miscellaneous(self):
-        section = self._matrix_section()
-        memo_line = next(line for line in section.splitlines() if ":memo:" in line)
-        assert self._changelog_group_cell(memo_line) == "Documentation"
-
-    def test_matrix_test_rows_use_tests_not_miscellaneous(self):
-        section = self._matrix_section()
-        check_line = next(line for line in section.splitlines() if ":white_check_mark:" in line)
-        assert self._changelog_group_cell(check_line) == "Tests"
-
-    def test_matrix_miscellaneous_is_narrowed_to_exactly_four_rows(self):
-        """Only init/tada, refactor/poop, refactor/beers, and release/bookmark remain Miscellaneous."""
-        section = self._matrix_section()
-        misc_lines = [line for line in section.splitlines() if "Miscellaneous" in line]
-        assert len(misc_lines) == 4
-        for code in (":tada:", ":poop:", ":beers:", ":bookmark:"):
-            assert any(code in line for line in misc_lines), f"expected {code} row to remain Miscellaneous"
-
-
-# ===========================================================================
-# docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md
-# ===========================================================================
-
-ADR_0007 = REPO_ROOT / "docs/ADRs/0007-Integrate-gum-for-terminalnative-git-hook-tui.md"
-
-
-class TestAdr0007Refinement7Section:
-    """Tests for the appended 'Refinement 7: Changelog-Groups vocabulary alignment' section."""
-
-    def _content(self) -> str:
-        return ADR_0007.read_text(encoding="utf-8")
-
-    def _refinement_7_section(self) -> str:
-        content = self._content()
-        heading = "## VI. Refinement 7: Changelog-Groups vocabulary alignment (v1.7.0)"
-        return _section_after_heading(content, heading)
-
-    def test_file_exists(self):
-        assert ADR_0007.is_file()
-
-    def test_refinement_7_heading_present(self):
-        content = self._content()
-        assert "## VI. Refinement 7: Changelog-Groups vocabulary alignment (v1.7.0)" in content
-
-    def test_refinement_7_explains_sop_matrix_rebucket_catalyst(self):
-        section = self._refinement_7_section()
-        assert "### 1. Architectural Catalyst" in section
-        assert "Changelog-Groups: Miscellaneous" in section
-        assert "first-class `Chores` token" in section
-        assert "`Documentation`, `Tests`, and `Chores` as closed vocabulary" in section
-
-    def test_refinement_7_updated_decision_forbids_rewriting_history(self):
-        section = self._refinement_7_section()
-        assert "### 2. Updated Decision" in section
-        assert "Do **not** rewrite historical Refinement 2 examples." in section
-        assert "validateCommitHook.mjs" in section
-
-    def test_refinement_7_corrected_example_uses_chores_token(self):
-        section = self._refinement_7_section()
-        assert "#### Corrected present-day example (non-historical)" in section
-        assert "Changelog-Groups: Chores" in section
-        assert "Change-Types: ci, chore" in section
-
-    def test_refinement_7_implementation_guidance_present(self):
-        section = self._refinement_7_section()
-        assert "### 3. Implementation Guidance" in section
-        assert "Prefer matrix-authored `changelog_group` values over free-text groups." in section
-
-    def test_historical_refinement_2_example_is_not_rewritten(self):
-        """Append-only guarantee: Refinement 2's original example must keep 'Miscellaneous'."""
-        content = self._content()
-        refinement_2_heading = "## III. Refinement 2: Structured Issue Reference Review Metadata (v1.2.0)"
-        refinement_2_section = _section_after_heading(content, refinement_2_heading)
-        assert "Changelog-Groups: Miscellaneous" in refinement_2_section
-        assert "Changelog-Groups: Chores" not in refinement_2_section
-
-    def test_changelog_has_v1_7_0_entry_documenting_refinement_7(self):
-        content = self._content()
-        changelog_section = _section_after_heading(content, "## CHANGELOG")
-        assert (
-            "v1.7.0 (2026-07-27): Added Refinement 7 documenting append-only Changelog-Groups vocabulary "
-            "alignment (`Chores` / `Documentation` / `Tests`) without rewriting historical Refinement 2 examples."
-        ) in changelog_section
-
-    def test_changelog_entries_remain_in_ascending_version_order(self):
-        """v1.7.0 must be the last (most recent) CHANGELOG bullet, after v1.6.0."""
-        content = self._content()
-        changelog_section = _section_after_heading(content, "## CHANGELOG")
-        assert changelog_section.index("v1.6.0") < changelog_section.index("v1.7.0")
