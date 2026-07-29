@@ -982,6 +982,46 @@ def test_gold_strict_mode_blocks_with_nonzero_exit(monkeypatch, capsys, tmp_path
     assert "gold lint" in out.lower() or "Gold lint" in out
 
 
+def test_gold_surface_mode_prints_findings_before_review_menu(monkeypatch, capsys, tmp_path):
+    """Surface mode: gold findings print before the interactive review menu.
+
+    Close bar (#182): in surface mode the user must see gold findings *before* the
+    existing interactive review menu renders — no new checklist, ordering only.
+    """
+    import git_cg.main as main_mod
+
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    monkeypatch.setenv("GIT_CG_GOLD_MODE", "surface")
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+    monkeypatch.setattr(main_mod, "_interactive_review", lambda *a, **k: console_print_menu_marker() or "Accept")
+
+    from git_cg.main import console
+
+    def console_print_menu_marker():
+        console.print("REVIEW-MENU-MARKER")
+        return None
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=True,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    gold_pos = out.find("Gold lint (surface)")
+    menu_pos = out.find("REVIEW-MENU-MARKER")
+    assert gold_pos != -1, "gold findings must print in surface mode"
+    assert menu_pos != -1, "interactive review menu must render in surface mode"
+    assert gold_pos < menu_pos, "gold findings must print before the interactive review menu"
+
+
 def test_gold_strict_regen_recovers_and_writes(monkeypatch, capsys, tmp_path):
     """Strict: first plan fails gold, regen (clean body) passes, message writes."""
     writes = _gold_harness_mocks(
