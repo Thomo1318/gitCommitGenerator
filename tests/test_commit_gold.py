@@ -249,10 +249,12 @@ def test_two_distinct_files_still_multi_surface(sop_matrix: list[dict]) -> None:
     )
     ranked = rank_commit_intents(signals, sop_matrix)
     report = check_commit_gold(_plan(FEAT), None, signals=signals, ranked_intents=ranked)
-    # May or may not fire depending on competitive secondary; the point is the single-file
-    # exemption above did NOT suppress a genuinely multi-file diff. Assert no crash and a
-    # deterministic codes set (finding present is acceptable and expected here).
-    assert isinstance(report.codes(), frozenset)
+    # Deterministic: the live SOP ranking of these signals always yields a competitive
+    # secondary (tests_update primary, feature_addition secondary), so the genuinely
+    # multi-file diff MUST fire the coverage finding — the single-file exemption above
+    # must not suppress it.
+    assert (ranked[0].intent_id, ranked[1].intent_id) == ("tests_update", "feature_addition")
+    assert "GOLD_INCLUDED_CHANGES_MISSING" in report.codes()
 
 
 def test_ok_for_mode_normative_behaviour() -> None:

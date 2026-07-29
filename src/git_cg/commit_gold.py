@@ -210,10 +210,7 @@ def _distinct_surface_count(signals: DiffSignals) -> int:
     # (adds_public_api) widens _coverage_groups (product_src) but does not create an
     # extra surface on its own — a lone CHANGELOG.md or pyproject.toml is one surface
     # even when the diff also adds public API.
-    files = list(signals.files or [])
-    grouped = [path for path in files if _file_groups(path)]
-    ungrouped = [path for path in files if not _file_groups(path)]
-    return len(grouped) + len(ungrouped)
+    return len(signals.files or [])
 
 
 def _coverage_groups(signals: DiffSignals) -> set[str]:
