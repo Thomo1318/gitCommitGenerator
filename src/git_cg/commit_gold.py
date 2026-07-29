@@ -113,6 +113,7 @@ class GoldReport:
 def resolve_gold_mode(
     *,
     strict: bool = False,
+    gold_strict: bool = False,
     interactive: bool = False,
     tty_available: bool = False,
     environ: dict[str, str] | None = None,
@@ -122,12 +123,14 @@ def resolve_gold_mode(
     Precedence (locked — no hook-argv sniffing; ``surface`` is interactive-derived
     only and is never an accepted env value):
         1. ``GIT_CG_GOLD_MODE`` ∈ {``off``, ``warn``, ``strict``}
-        2. ``strict=True`` → ``strict``
+        2. ``strict=True`` or ``gold_strict=True`` → ``strict``
         3. interactive TTY review path (``interactive`` and usable TTY) → ``surface``
         4. default → ``warn``
 
     Parameters:
         strict (bool): CLI/hook strict flag (``--strict``).
+        gold_strict (bool): Gold-specific strict flag (``--gold-strict``); equivalent
+            to ``strict`` for mode resolution but does not affect non-gold strictness.
         interactive (bool): Interactive review requested (``-i``).
         tty_available (bool): Whether a usable TTY is present (``can_open_tty()``).
         environ (dict[str, str] | None): Environment mapping; defaults to ``os.environ``.
@@ -139,7 +142,7 @@ def resolve_gold_mode(
     raw = env.get(_GOLD_MODE_ENV, "").strip().lower()
     if raw in _GOLD_MODES:
         return raw
-    if strict:
+    if strict or gold_strict:
         return "strict"
     if interactive and tty_available:
         return "surface"

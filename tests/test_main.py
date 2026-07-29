@@ -1059,6 +1059,39 @@ def test_gold_surface_checklist_displayed_in_review_status(monkeypatch, capsys, 
     assert "[ ] GOLD_BODY_INVENTORY:" in status
 
 
+def test_gold_strict_flag_blocks_without_general_strict(monkeypatch, capsys, tmp_path):
+    """--gold-strict: gold fails strict (non-zero exit) while strict=False for non-gold paths."""
+    import typer
+
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [_gold_plan(body="This commit adds a helper."), _gold_plan(body="This commit adds a helper.")],
+    )
+    import git_cg.main as main_mod
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,  # general strictness OFF
+            interactive=False,
+            gold_strict=True,  # gold strictness ON
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+    assert raised is not None, "--gold-strict gold fail must raise typer.Exit"
+    assert raised.exit_code != 0
+    assert len(writes) == 0
+    out = capsys.readouterr().out
+    assert "gold lint" in out.lower() or "Gold lint" in out
+
+
 def test_gold_strict_regen_recovers_and_writes(monkeypatch, capsys, tmp_path):
     """Strict: first plan fails gold, regen (clean body) passes, message writes."""
     writes = _gold_harness_mocks(

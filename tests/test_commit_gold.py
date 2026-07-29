@@ -298,6 +298,20 @@ def test_resolve_gold_mode_warn_default() -> None:
     assert resolve_gold_mode(interactive=False, tty_available=True, environ={}) == "warn"
 
 
+def test_resolve_gold_mode_gold_strict_flag() -> None:
+    """--gold-strict resolves strict like --strict, without enabling non-gold strictness."""
+    from git_cg.commit_gold import resolve_gold_mode
+
+    assert resolve_gold_mode(gold_strict=True, environ={}) == "strict"
+
+
+def test_resolve_gold_mode_env_still_beats_gold_strict() -> None:
+    """GIT_CG_GOLD_MODE env keeps top precedence over --gold-strict."""
+    from git_cg.commit_gold import resolve_gold_mode
+
+    assert resolve_gold_mode(gold_strict=True, environ={"GIT_CG_GOLD_MODE": "warn"}) == "warn"
+
+
 def test_resolve_gold_mode_surface_env_value_rejected() -> None:
     """surface is interactive-derived only; an env value of ``surface`` is invalid."""
     assert resolve_gold_mode(environ={"GIT_CG_GOLD_MODE": "surface"}, strict=False) == "warn"

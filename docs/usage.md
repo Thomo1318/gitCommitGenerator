@@ -168,9 +168,13 @@ matrix ranker remains the sole intent/SemVer authority.
 Gold runs in one of four modes. Resolution order (no hook-argv sniffing):
 
 1. `GIT_CG_GOLD_MODE` = `off` / `warn` / `strict` (env override; `surface` is **not** a valid env value)
-2. `strict=True` (standalone `git-cg --strict`) → **strict**
+2. `strict=True` (standalone `git-cg --strict`) or `--gold-strict` → **strict**
 3. interactive TTY review (`-i` with a usable TTY) → **surface**
 4. default → **warn**
+
+`--gold-strict` resolves gold to strict **without** enabling general `--strict` behaviour —
+use it on the hook path (`git-cg commit --gold-strict`) when you want gold to gate the commit
+but non-gold failures to remain non-fatal.
 
 | Mode | Behaviour |
 | --- | --- |

@@ -1608,6 +1608,7 @@ def _run_commit_generation(
     interactive: bool,
     gui_editor: bool = False,
     enable_semantic: bool | None = None,
+    gold_strict: bool = False,
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
@@ -1624,6 +1625,7 @@ def _run_commit_generation(
         interactive (bool): Present the interactive review flow when a TTY is available.
         gui_editor (bool): Prefer the GUI editor for edit actions.
         enable_semantic (bool | None): Enable or disable semantic processing, or use its configured default.
+        gold_strict (bool): Resolve gold lint to strict mode without affecting non-gold strictness.
 
     Returns:
         bool: `True` when generation completes successfully.
@@ -1840,6 +1842,7 @@ def _run_commit_generation(
 
     gold_mode = resolve_gold_mode(
         strict=strict,
+        gold_strict=gold_strict,
         interactive=interactive,
         tty_available=interactive and can_open_tty(),
     )
@@ -2212,6 +2215,11 @@ def commit(
         "-i",
         help="Enable terminal-native interactive review via gum when a TTY is available.",
     ),
+    gold_strict: bool = typer.Option(
+        False,
+        "--gold-strict",
+        help="Resolve gold lint to strict mode (fail after at most 1 wording regen) without enabling --strict.",
+    ),
     term_editor: bool = typer.Option(
         True, "--term", "-t", help="Use Terminal Editor ($EDITOR) when editing commit messages (Default)."
     ),
@@ -2237,6 +2245,7 @@ def commit(
         interactive=interactive,
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
+        gold_strict=gold_strict,
     )
 
 
