@@ -176,3 +176,83 @@ def test_unconstrained_diff_exports_empty_constraint_sets(sop_matrix):
     assert constraints.reasons == []
     assert constraints.allowed_intent_ids == []
     assert constraints.disallowed_intent_ids == []
+
+
+# --- Issue #182 Slice 1: B1 ranker close bars + keep-green + shared snapshot ---
+
+B1_SEMANTIC_FACTS = None  # lazily built in the invariance test to keep import surface small
+
+
+def test_b1_release_notes_product_ranks_feature_addition(sop_matrix):
+    """Close bar: #181-class product surface with error-handling noise ranks feat/MINOR/Added.
+
+    Locks the negatives lever: ``new_user_facing_capability``/``new_api`` in
+    ``error_handling.negative_signals`` flips the both-signals case from
+    error_handling @ 100.5 (HEAD miss) to feature_addition @ 80.0.
+    """
+    signals = DiffSignals(
+        adds_public_api=True,
+        error_handling_added=True,
+        files=["src/git_cg/release.py"],
+    )
+    ranked = rank_commit_intents(signals, sop_matrix)
+    top = ranked[0]
+    assert top.intent_id == "feature_addition"
+    assert top.cc_type == "feat"
+    assert top.semver_impact == "MINOR"
+    assert top.changelog_group == "Added"
+
+
+def test_b1_release_bugfix_pure_ranks_fix(sop_matrix):
+    """Close bar: pure repair on an existing release helper stays fix/PATCH."""
+    signals = DiffSignals(
+        error_handling_added=True,
+        validation_added=True,
+        files=["src/git_cg/release.py"],
+    )
+    ranked = rank_commit_intents(signals, sop_matrix)
+    top = ranked[0]
+    assert top.cc_type == "fix"
+    assert top.semver_impact == "PATCH"
+
+
+def test_b1_error_handling_only_does_not_flip_to_feat(sop_matrix):
+    """Close bar: error-handling-only hardening is not re-ranked as a feature."""
+    signals = DiffSignals(error_handling_added=True, files=["src/git_cg/main.py"])
+    ranked = rank_commit_intents(signals, sop_matrix)
+    top = ranked[0]
+    assert top.intent_id == "error_handling"
+    assert top.cc_type == "fix"
+    assert top.semver_impact == "PATCH"
+
+
+def test_negatives_lever_keeps_error_only_score_byte_identical(sop_matrix):
+    """Keep-green guard: the negatives lever must not move the error-only score.
+
+    ``B1_error_handling_only`` / ``bug_fix_error_handling`` have no product markers
+    active, so the new negatives never intersect; the error_handling row stays at
+    the HEAD-verified 100.5.
+    """
+    signals = DiffSignals(error_handling_added=True, files=["src/git_cg/main.py"])
+    ranked = rank_commit_intents(signals, sop_matrix)
+    error_row = next(r for r in ranked if r.intent_id == "error_handling")
+    assert error_row.score == 100.5
+
+
+def test_shared_ranked_snapshot_is_reused_for_prompt(sop_matrix):
+    """Regression: the shared ranked snapshot is passed through, not re-ranked.
+
+    Guards the ``ranked_candidates=gen_context.ranked_intents`` short-circuit: when
+    candidates are supplied, ``build_system_prompt`` must not re-run the ranker.
+    """
+    from unittest.mock import patch
+
+    from git_cg.main import build_system_prompt
+
+    diff = "diff --git a/src/git_cg/release.py b/src/git_cg/release.py\n"
+    shared = rank_commit_intents(DiffSignals(adds_public_api=True), sop_matrix)
+
+    with patch("git_cg.main.rank_commit_intents", side_effect=AssertionError("re-ranked")) as mock_rank:
+        prompt = build_system_prompt(diff, ranked_candidates=shared)
+    mock_rank.assert_not_called()
+    assert "PRIMARY CANDIDATES" in prompt
