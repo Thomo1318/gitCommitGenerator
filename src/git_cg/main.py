@@ -569,6 +569,7 @@ def build_system_prompt(
     previous_plan: CommitPlan | None = None,
     ranked_candidates: list | None = None,
     contract=None,
+    gold_guidance: str | None = None,
 ) -> str:
     """
     Compose the system prompt for generating a structured Conventional Commit plan.
@@ -581,6 +582,9 @@ def build_system_prompt(
         previous_plan (CommitPlan | None): Previously generated plan to include during regeneration.
         ranked_candidates (list | None): Precomputed intent candidates to include instead of ranking the diff.
         contract: Semantic contract whose values must be preserved in the generated plan.
+        gold_guidance (str | None): Gold-linter wording/secondary-coverage feedback. Routed
+            through a dedicated directive-free channel (Issue #182); never emits OVERRIDE
+            or ranking-precedence language and never mutates the contract.
 
     Returns:
         str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
@@ -678,6 +682,21 @@ def build_system_prompt(
         )
         context_parts.append(contract_str)
 
+    # Issue #182 Slice 2: additive GOLD RUBRIC — wording quality only. Placed after the
+    # DETERMINISTIC SEMANTIC CONTRACT block; never edits the CRITICAL field-lock sentences.
+    from git_cg.commit_gold import BANNED_BODY_OPENERS
+
+    banned = " / ".join(BANNED_BODY_OPENERS)
+    gold_rubric = (
+        "GOLD RUBRIC (WORDING QUALITY ONLY — does not change intent/semver/group):\n"
+        "- Subject: state the user-visible outcome, not an inventory of files or edits. ≤50 chars, imperative.\n"
+        "- Body: explain WHY the change is needed and the behaviour delta; note preserved invariants when relevant.\n"
+        f"- Do NOT open the body with: {banned}.\n"
+        "- Secondary intents: when the diff touches multiple distinct surfaces, include them so Included changes is complete.\n"
+        "- This rubric guides wording only. It MUST NOT change intent_id, gitmoji, cc_type, semver_impact, or changelog_group."
+    )
+    context_parts.append(gold_rubric)
+
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
 
@@ -701,14 +720,15 @@ def build_system_prompt(
 
     system_prompt += f"{gitops_matrix_str}"
 
-    if active_directives or residual_guidance or previous_plan:
+    # Issue #182 O-P0.2: three-channel assembly. The OVERRIDE + CRITICAL PRECEDENCE
+    # ranking-override language is reserved for the user/directive channel only. The
+    # previous-plan channel is neutral; the gold channel is directive-free wording feedback.
+    user_override_active = bool(active_directives) or bool(residual_guidance)
+
+    if user_override_active:
+        # Channel 1 — user/directive (authoritative steers already resolved into contract).
         system_prompt += "\n\nREGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):\n"
         system_prompt += "The developer has reviewed the initial result and provided correction guidance.\n"
-
-        if previous_plan:
-            system_prompt += "\nPREVIOUS COMMIT PLAN:\n"
-            system_prompt += "You are regenerating the following commit. You MUST treat this as a structural delta update. Do not rewrite from scratch unless the guidance demands it. Keep the original intent intact unless directed otherwise.\n"
-            system_prompt += "```json\n" + previous_plan.model_dump_json(indent=2) + "\n```\n"
 
         if active_directives:
             system_prompt += "\nDETERMINISTIC OVERRIDES (LOCKED SEMANTICS):\n"
@@ -723,6 +743,22 @@ def build_system_prompt(
 
         system_prompt += "\n\nCRITICAL PRECEDENCE RULE: The deterministic overrides and guidance above take absolute precedence over the initial deterministic ranking for intent selection and framing. "
         system_prompt += "Do not treat the guidance text itself as final commit content or trailer text.\n"
+
+    if previous_plan and not user_override_active:
+        # Channel 2 — previous plan (neutral delta context; no user-override labelling).
+        system_prompt += "\n\nPREVIOUS COMMIT PLAN (DELTA CONTEXT):\n"
+        system_prompt += "You are regenerating the following commit. Treat this as a structural delta update. Do not rewrite from scratch unless new guidance demands it.\n"
+        system_prompt += "```json\n" + previous_plan.model_dump_json(indent=2) + "\n```\n"
+
+    if gold_guidance:
+        # Channel 3 — gold feedback (directive-free; wording / secondary coverage only).
+        system_prompt += "\n\nGOLD FEEDBACK (WORDING / SECONDARY COVERAGE ONLY):\n"
+        system_prompt += f'"{gold_guidance}"\n'
+        system_prompt += (
+            "Apply this feedback to wording and secondary-intent coverage only. It MUST NOT change "
+            "intent_id, gitmoji, cc_type, semver_impact, or changelog_group, and it is not an explicit "
+            "user ranking override.\n"
+        )
 
     return system_prompt
 
@@ -1789,7 +1825,20 @@ def _run_commit_generation(
         risk_assessment=risk_assessment,
     )
 
+    # Issue #182 Slice 3b: resolve gold mode once per generation entry (flags cannot
+    # change mid-loop); gold auto-regen is bounded to 1 and tracked separately from
+    # Instructor/transport/schema retries.
+    from git_cg.commit_gold import check_commit_gold, resolve_gold_mode
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
+
+    gold_mode = resolve_gold_mode(
+        strict=strict,
+        interactive=interactive,
+        tty_available=interactive and can_open_tty(),
+    )
+    gold_regen_attempts = 0
+    gold_guidance: str | None = None
+    gold_previous_primary_id: str | None = None
 
     while True:
         regen_state = RegenerationState(
@@ -1807,6 +1856,7 @@ def _run_commit_generation(
             previous_plan=review_state.commit_plan if review_state else None,
             ranked_candidates=gen_context.ranked_intents,
             contract=contract,
+            gold_guidance=gold_guidance,
         )
 
         # Offline prompt tracking (synced asynchronously via script)
@@ -1873,12 +1923,51 @@ def _run_commit_generation(
                     "[yellow]split_prompt requested; this implementation keeps hook/default mode non-interactive. Use git-cg -i for review.[/yellow]"
                 )
 
+        # K-P0.3: a gold wording pass must re-anchor to the same primary; a differing
+        # primary after a gold pass is a bug, not a feature.
+        if gold_guidance is not None and gold_previous_primary_id is not None:
+            assert contract.primary_intent_id == gold_previous_primary_id, (
+                f"gold pass re-anchored to a different primary intent: {contract.primary_intent_id!r} "
+                f"!= {gold_previous_primary_id!r}"
+            )
+
         review_state = ReviewState(
             commit_plan=commit_plan,
             issue_references=list(issue_references),
         )
         if regeneration_guidance:
             review_state.set_regeneration_guidance(regeneration_guidance)
+
+        # Issue #182: gold runs after mixed-policy and ReviewState construction, before
+        # render/write/acceptance display. Findings print unconditionally in warn/surface/
+        # strict (never verbose-gated); pass/fail derives from STRICT_FAIL_CODES + mode.
+        gold_report = check_commit_gold(
+            commit_plan,
+            contract,
+            signals=gen_context.diff_signals,
+            ranked_intents=gen_context.ranked_intents,
+        )
+        gold_guidance = None
+        if gold_mode != "off" and gold_report.findings:
+            codes = ", ".join(sorted(gold_report.codes()))
+            console.print(f"[yellow]Gold lint ({gold_mode}): {codes}[/yellow]")
+            for finding in gold_report.findings:
+                console.print(f"  [yellow]- {finding.code}: {finding.message}[/yellow]")
+        if not gold_report.ok_for_mode(gold_mode):
+            if gold_regen_attempts < 1:
+                gold_regen_attempts += 1  # incremented immediately before the gold continue
+                gold_guidance = "; ".join(f.message for f in gold_report.findings)
+                gold_previous_primary_id = commit_plan.primary_intent.intent_id
+                console.print("[yellow]Regenerating wording from gold feedback (1 attempt)...[/yellow]")
+                continue
+            _abort(
+                "[bold red]Commit message failed gold lint in strict mode: "
+                + ", ".join(sorted(gold_report.codes()))
+                + "[/bold red]",
+                strict=True,
+                report=False,
+            )
+
         result_string = review_state.render()
         if verbose or dry_run:
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
