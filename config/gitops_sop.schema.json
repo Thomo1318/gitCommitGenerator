@@ -210,7 +210,7 @@
       },
       "changelog_group": {
         "type": "string",
-        "description": "Canonical Changelog-Groups / matrix token this intent emits. Keep-a-Changelog core groups only; chores, docs, tests, and build updates collapse into Miscellaneous per the reference matrix taxonomy. Finer render-only aliases (Style, Perf, Refactor, Documentation, Tests, Chores, …) are accepted on commit trailers by the hook/release mapper but are not matrix enum values.",
+        "description": "Canonical Changelog-Groups / matrix token this intent emits. Keep-a-Changelog core groups only. Docs and tests intents collapse into Miscellaneous; chores, CI, and build rows keep their matrix-assigned groups (e.g. Security, Added, Changed). Finer render-only aliases (Style, Perf, Refactor, Documentation, Tests, Chores, …) are accepted on commit trailers by the hook/release mapper but are not matrix enum values.",
         "enum": [
           "Added",
           "Changed",
