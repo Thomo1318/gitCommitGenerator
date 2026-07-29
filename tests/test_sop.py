@@ -207,12 +207,16 @@ def test_sop_validates_against_schema():
     )
 
 
-def test_schema_changelog_group_enum_includes_hybrid_extensions():
-    """The PR adds Documentation/Tests/Chores to the Keep-a-Changelog core enum."""
+def test_schema_changelog_group_enum_is_collapsed_taxonomy():
+    """Schema enum is the collapsed Keep-a-Changelog taxonomy only (Issue #182).
+
+    Chores/docs/tests/build intents map to Miscellaneous in the matrix; the finer
+    names (Documentation, Tests, Chores) are hook/release render-only aliases and
+    must not re-enter the matrix enum.
+    """
     enum = _schema_changelog_group_enum()
-    assert {"Documentation", "Tests", "Chores"} <= enum
-    # Keep-a-Changelog core values must still be present alongside the extensions.
-    assert {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security", "Miscellaneous"} <= enum
+    assert enum == {"Added", "Changed", "Deprecated", "Removed", "Fixed", "Security", "Miscellaneous"}
+    assert not ({"Documentation", "Tests", "Chores"} & enum)
 
 
 def test_matrix_changelog_groups_are_schema_enum_members():

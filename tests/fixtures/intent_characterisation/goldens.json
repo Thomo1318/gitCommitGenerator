@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "sop_matrix_sha256": "3fcb72e45bfac2766eb0a309eac1385581609960017f0901d624ecd62e8a2c86",
+  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
   "sop_matrix_row_count": 75,
   "cases": {
     "empty_baseline": {
@@ -3799,15 +3799,6 @@
           "cc_type": "fix"
         },
         {
-          "intent_id": "error_handling",
-          "score": 40.5,
-          "priority": 80,
-          "specificity": 85,
-          "semver_impact": "PATCH",
-          "intent_group": "bugfix",
-          "cc_type": "fix"
-        },
-        {
           "intent_id": "validation_update",
           "score": 40.5,
           "priority": 80,
@@ -4373,6 +4364,15 @@
           "semver_impact": "NONE",
           "intent_group": "miscellaneous",
           "cc_type": "refactor"
+        },
+        {
+          "intent_id": "error_handling",
+          "score": -19.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
         }
       ],
       "constraints": {
@@ -4477,15 +4477,6 @@
           "score": 40.5,
           "priority": 85,
           "specificity": 65,
-          "semver_impact": "PATCH",
-          "intent_group": "bugfix",
-          "cc_type": "fix"
-        },
-        {
-          "intent_id": "error_handling",
-          "score": 40.5,
-          "priority": 80,
-          "specificity": 85,
           "semver_impact": "PATCH",
           "intent_group": "bugfix",
           "cc_type": "fix"
@@ -5065,6 +5056,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "error_handling",
+          "score": -19.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
         }
       ],
       "constraints": {
@@ -5186,15 +5186,6 @@
           "cc_type": "fix"
         },
         {
-          "intent_id": "error_handling",
-          "score": 40.5,
-          "priority": 80,
-          "specificity": 85,
-          "semver_impact": "PATCH",
-          "intent_group": "bugfix",
-          "cc_type": "fix"
-        },
-        {
           "intent_id": "validation_update",
           "score": 40.5,
           "priority": 80,
@@ -5760,6 +5751,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "error_handling",
+          "score": -19.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
         }
       ],
       "constraints": {
@@ -9905,6 +9905,2079 @@
           "specificity": 90,
           "semver_impact": "PATCH",
           "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        }
+      ],
+      "constraints": {
+        "reasons": [],
+        "allowed_intent_ids": [],
+        "disallowed_intent_ids": []
+      }
+    },
+    "B1_error_handling_only": {
+      "markers": [
+        "error_handling_improved",
+        "exception_handling_added",
+        "try_except_added"
+      ],
+      "rank": [
+        {
+          "intent_id": "error_handling",
+          "score": 100.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "breaking_change",
+          "score": 49.0,
+          "priority": 100,
+          "specificity": 90,
+          "semver_impact": "MAJOR",
+          "intent_group": "breaking",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "security_privacy_fix",
+          "score": 46.5,
+          "priority": 95,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "security",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "critical_hotfix",
+          "score": 45.300000000000004,
+          "priority": 92,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "critical_fix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "authorization_permissions",
+          "score": 44.2,
+          "priority": 88,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "security",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "architecture_refactor",
+          "score": 44.0,
+          "priority": 90,
+          "specificity": 80,
+          "semver_impact": "MAJOR",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "secrets_update",
+          "score": 42.5,
+          "priority": 85,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "security",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "concurrency_update",
+          "score": 41.0,
+          "priority": 80,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "business_logic",
+          "score": 40.800000000000004,
+          "priority": 82,
+          "specificity": 80,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "bug_fix",
+          "score": 40.5,
+          "priority": 85,
+          "specificity": 65,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "validation_update",
+          "score": 40.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "validation_safety",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "i18n_l10n",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "feature_flags_update",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "offline_support",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "backwards_compatibility",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "feature_addition",
+          "score": 40.0,
+          "priority": 85,
+          "specificity": 60,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "performance_improvement",
+          "score": 39.5,
+          "priority": 80,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "performance",
+          "cc_type": "perf"
+        },
+        {
+          "intent_id": "revert_change",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "release_management",
+          "cc_type": "revert"
+        },
+        {
+          "intent_id": "accessibility_improvement",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "database_change",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "analytics_tracking",
+          "score": 38.5,
+          "priority": 75,
+          "specificity": 85,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "infrastructure_change",
+          "score": 38.0,
+          "priority": 75,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "package_artifact_update",
+          "score": 37.5,
+          "priority": 75,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_add",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_remove",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "external_api_update",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "healthcheck",
+          "score": 37.0,
+          "priority": 70,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "ux_usability_improvement",
+          "score": 36.8,
+          "priority": 72,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "dependency_downgrade",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_upgrade",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "types_update",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "release_version_tag",
+          "score": 36.0,
+          "priority": 70,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "release"
+        },
+        {
+          "intent_id": "dependency_pin",
+          "score": 35.7,
+          "priority": 68,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "responsive_design",
+          "score": 35.7,
+          "priority": 68,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "generic_refactor",
+          "score": 35.5,
+          "priority": 75,
+          "specificity": 55,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "ci_build_system",
+          "score": 35.5,
+          "priority": 70,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "deprecation",
+          "score": 35.0,
+          "priority": 65,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "sponsorship_financial",
+          "score": 35.0,
+          "priority": 65,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "ci_fix",
+          "score": 34.0,
+          "priority": 65,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "small_fix",
+          "score": 33.5,
+          "priority": 65,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "dead_code_removal",
+          "score": 33.0,
+          "priority": 60,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "move_rename",
+          "score": 32.5,
+          "priority": 60,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "remove_code_files",
+          "score": 31.5,
+          "priority": 60,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "seo_improvement",
+          "score": 31.0,
+          "priority": 55,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "animation_transition",
+          "score": 31.0,
+          "priority": 55,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "lint_warning_fix",
+          "score": 30.0,
+          "priority": 55,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "ui_style_update",
+          "score": 29.5,
+          "priority": 55,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "developer_experience",
+          "score": 29.5,
+          "priority": 55,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "project_initialization",
+          "score": 29.0,
+          "priority": 50,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "init"
+        },
+        {
+          "intent_id": "failing_test",
+          "score": 29.0,
+          "priority": 50,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "deployment_change",
+          "score": 28.5,
+          "priority": 55,
+          "specificity": 65,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "development_script_update",
+          "score": 27.5,
+          "priority": 50,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "asset_update",
+          "score": 27.5,
+          "priority": 50,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "license_update",
+          "score": 27.0,
+          "priority": 45,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "gitignore_update",
+          "score": 27.0,
+          "priority": 45,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "configuration_update",
+          "score": 26.5,
+          "priority": 50,
+          "specificity": 65,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "mock_update",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "snapshot_update",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "seed_data",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "tests_update",
+          "score": 26.0,
+          "priority": 50,
+          "specificity": 60,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "experiment",
+          "score": 26.0,
+          "priority": 45,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "text_literal_update",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "logging_add",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "logging_remove",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "easter_egg",
+          "score": 25.0,
+          "priority": 40,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "contributor_update",
+          "score": 22.5,
+          "priority": 35,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "data_inspection",
+          "score": 22.5,
+          "priority": 35,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "documentation_update",
+          "score": 21.5,
+          "priority": 40,
+          "specificity": 55,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "comments_update",
+          "score": 21.5,
+          "priority": 35,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "code_structure_formatting",
+          "score": 20.5,
+          "priority": 40,
+          "specificity": 45,
+          "semver_impact": "NONE",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "typo_fix",
+          "score": 20.0,
+          "priority": 30,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "merge_branch",
+          "score": 17.0,
+          "priority": 20,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "work_in_progress",
+          "score": 14.0,
+          "priority": 20,
+          "specificity": 60,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "known_bad_code",
+          "score": 12.5,
+          "priority": 10,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "low_quality_code",
+          "score": 11.0,
+          "priority": 5,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "refactor"
+        }
+      ],
+      "constraints": {
+        "reasons": [],
+        "allowed_intent_ids": [],
+        "disallowed_intent_ids": []
+      }
+    },
+    "B1_release_notes_product": {
+      "markers": [
+        "error_handling_improved",
+        "exception_handling_added",
+        "functional_code_changed",
+        "new_api",
+        "new_user_facing_capability",
+        "try_except_added"
+      ],
+      "rank": [
+        {
+          "intent_id": "feature_addition",
+          "score": 80.0,
+          "priority": 85,
+          "specificity": 60,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "breaking_change",
+          "score": 49.0,
+          "priority": 100,
+          "specificity": 90,
+          "semver_impact": "MAJOR",
+          "intent_group": "breaking",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "security_privacy_fix",
+          "score": 46.5,
+          "priority": 95,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "security",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "critical_hotfix",
+          "score": 45.300000000000004,
+          "priority": 92,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "critical_fix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "authorization_permissions",
+          "score": 44.2,
+          "priority": 88,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "security",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "architecture_refactor",
+          "score": 44.0,
+          "priority": 90,
+          "specificity": 80,
+          "semver_impact": "MAJOR",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "secrets_update",
+          "score": 42.5,
+          "priority": 85,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "security",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "concurrency_update",
+          "score": 41.0,
+          "priority": 80,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "business_logic",
+          "score": 40.800000000000004,
+          "priority": 82,
+          "specificity": 80,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "bug_fix",
+          "score": 40.5,
+          "priority": 85,
+          "specificity": 65,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "error_handling",
+          "score": 40.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "validation_update",
+          "score": 40.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "validation_safety",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "i18n_l10n",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "feature_flags_update",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "offline_support",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "backwards_compatibility",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "performance_improvement",
+          "score": 39.5,
+          "priority": 80,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "performance",
+          "cc_type": "perf"
+        },
+        {
+          "intent_id": "revert_change",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "release_management",
+          "cc_type": "revert"
+        },
+        {
+          "intent_id": "accessibility_improvement",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "database_change",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "analytics_tracking",
+          "score": 38.5,
+          "priority": 75,
+          "specificity": 85,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "infrastructure_change",
+          "score": 38.0,
+          "priority": 75,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "package_artifact_update",
+          "score": 37.5,
+          "priority": 75,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_add",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_remove",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "external_api_update",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "healthcheck",
+          "score": 37.0,
+          "priority": 70,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "ux_usability_improvement",
+          "score": 36.8,
+          "priority": 72,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "dependency_downgrade",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_upgrade",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "types_update",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "release_version_tag",
+          "score": 36.0,
+          "priority": 70,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "release"
+        },
+        {
+          "intent_id": "dependency_pin",
+          "score": 35.7,
+          "priority": 68,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "responsive_design",
+          "score": 35.7,
+          "priority": 68,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "generic_refactor",
+          "score": 35.5,
+          "priority": 75,
+          "specificity": 55,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "ci_build_system",
+          "score": 35.5,
+          "priority": 70,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "deprecation",
+          "score": 35.0,
+          "priority": 65,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "sponsorship_financial",
+          "score": 35.0,
+          "priority": 65,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "ci_fix",
+          "score": 34.0,
+          "priority": 65,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "small_fix",
+          "score": 33.5,
+          "priority": 65,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "dead_code_removal",
+          "score": 33.0,
+          "priority": 60,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "move_rename",
+          "score": 32.5,
+          "priority": 60,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "remove_code_files",
+          "score": 31.5,
+          "priority": 60,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "seo_improvement",
+          "score": 31.0,
+          "priority": 55,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "animation_transition",
+          "score": 31.0,
+          "priority": 55,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "lint_warning_fix",
+          "score": 30.0,
+          "priority": 55,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "ui_style_update",
+          "score": 29.5,
+          "priority": 55,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "developer_experience",
+          "score": 29.5,
+          "priority": 55,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "project_initialization",
+          "score": 29.0,
+          "priority": 50,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "init"
+        },
+        {
+          "intent_id": "failing_test",
+          "score": 29.0,
+          "priority": 50,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "deployment_change",
+          "score": 28.5,
+          "priority": 55,
+          "specificity": 65,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "development_script_update",
+          "score": 27.5,
+          "priority": 50,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "asset_update",
+          "score": 27.5,
+          "priority": 50,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "license_update",
+          "score": 27.0,
+          "priority": 45,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "gitignore_update",
+          "score": 27.0,
+          "priority": 45,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "configuration_update",
+          "score": 26.5,
+          "priority": 50,
+          "specificity": 65,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "mock_update",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "snapshot_update",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "seed_data",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "tests_update",
+          "score": 26.0,
+          "priority": 50,
+          "specificity": 60,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "experiment",
+          "score": 26.0,
+          "priority": 45,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "text_literal_update",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "logging_add",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "logging_remove",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "easter_egg",
+          "score": 25.0,
+          "priority": 40,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "contributor_update",
+          "score": 22.5,
+          "priority": 35,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "data_inspection",
+          "score": 22.5,
+          "priority": 35,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "comments_update",
+          "score": 21.5,
+          "priority": 35,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "code_structure_formatting",
+          "score": 20.5,
+          "priority": 40,
+          "specificity": 45,
+          "semver_impact": "NONE",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "typo_fix",
+          "score": 20.0,
+          "priority": 30,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "merge_branch",
+          "score": 17.0,
+          "priority": 20,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "work_in_progress",
+          "score": 14.0,
+          "priority": 20,
+          "specificity": 60,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "known_bad_code",
+          "score": 12.5,
+          "priority": 10,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "low_quality_code",
+          "score": 11.0,
+          "priority": 5,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "documentation_update",
+          "score": -8.5,
+          "priority": 40,
+          "specificity": 55,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        }
+      ],
+      "constraints": {
+        "reasons": [],
+        "allowed_intent_ids": [],
+        "disallowed_intent_ids": []
+      }
+    },
+    "B1_release_bugfix_pure": {
+      "markers": [
+        "error_handling_improved",
+        "exception_handling_added",
+        "schema_validation_changed",
+        "try_except_added",
+        "validation_added",
+        "validation_hardened"
+      ],
+      "rank": [
+        {
+          "intent_id": "error_handling",
+          "score": 100.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "validation_update",
+          "score": 100.5,
+          "priority": 80,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "validation_safety",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "breaking_change",
+          "score": 49.0,
+          "priority": 100,
+          "specificity": 90,
+          "semver_impact": "MAJOR",
+          "intent_group": "breaking",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "security_privacy_fix",
+          "score": 46.5,
+          "priority": 95,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "security",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "critical_hotfix",
+          "score": 45.300000000000004,
+          "priority": 92,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "critical_fix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "authorization_permissions",
+          "score": 44.2,
+          "priority": 88,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "security",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "architecture_refactor",
+          "score": 44.0,
+          "priority": 90,
+          "specificity": 80,
+          "semver_impact": "MAJOR",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "secrets_update",
+          "score": 42.5,
+          "priority": 85,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "security",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "concurrency_update",
+          "score": 41.0,
+          "priority": 80,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "business_logic",
+          "score": 40.800000000000004,
+          "priority": 82,
+          "specificity": 80,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "bug_fix",
+          "score": 40.5,
+          "priority": 85,
+          "specificity": 65,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "i18n_l10n",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "feature_flags_update",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "offline_support",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "backwards_compatibility",
+          "score": 40.2,
+          "priority": 78,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "feature_addition",
+          "score": 40.0,
+          "priority": 85,
+          "specificity": 60,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "performance_improvement",
+          "score": 39.5,
+          "priority": 80,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "performance",
+          "cc_type": "perf"
+        },
+        {
+          "intent_id": "revert_change",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "release_management",
+          "cc_type": "revert"
+        },
+        {
+          "intent_id": "accessibility_improvement",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "database_change",
+          "score": 39.0,
+          "priority": 75,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "analytics_tracking",
+          "score": 38.5,
+          "priority": 75,
+          "specificity": 85,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "infrastructure_change",
+          "score": 38.0,
+          "priority": 75,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "package_artifact_update",
+          "score": 37.5,
+          "priority": 75,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_add",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_remove",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "external_api_update",
+          "score": 37.3,
+          "priority": 72,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "healthcheck",
+          "score": 37.0,
+          "priority": 70,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "ux_usability_improvement",
+          "score": 36.8,
+          "priority": 72,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "dependency_downgrade",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "dependency_upgrade",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "types_update",
+          "score": 36.5,
+          "priority": 70,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "release_version_tag",
+          "score": 36.0,
+          "priority": 70,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "release"
+        },
+        {
+          "intent_id": "dependency_pin",
+          "score": 35.7,
+          "priority": 68,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "runtime_build_package",
+          "cc_type": "build"
+        },
+        {
+          "intent_id": "responsive_design",
+          "score": 35.7,
+          "priority": 68,
+          "specificity": 85,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "generic_refactor",
+          "score": 35.5,
+          "priority": 75,
+          "specificity": 55,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "ci_build_system",
+          "score": 35.5,
+          "priority": 70,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "deprecation",
+          "score": 35.0,
+          "priority": 65,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "sponsorship_financial",
+          "score": 35.0,
+          "priority": 65,
+          "specificity": 90,
+          "semver_impact": "MINOR",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "ci_fix",
+          "score": 34.0,
+          "priority": 65,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "ci_infra",
+          "cc_type": "ci"
+        },
+        {
+          "intent_id": "small_fix",
+          "score": 33.5,
+          "priority": 65,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "bugfix",
+          "cc_type": "fix"
+        },
+        {
+          "intent_id": "dead_code_removal",
+          "score": 33.0,
+          "priority": 60,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "move_rename",
+          "score": 32.5,
+          "priority": 60,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "remove_code_files",
+          "score": 31.5,
+          "priority": 60,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "seo_improvement",
+          "score": 31.0,
+          "priority": 55,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "animation_transition",
+          "score": 31.0,
+          "priority": 55,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "lint_warning_fix",
+          "score": 30.0,
+          "priority": 55,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "refactor_architecture",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "ui_style_update",
+          "score": 29.5,
+          "priority": 55,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "developer_experience",
+          "score": 29.5,
+          "priority": 55,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "project_initialization",
+          "score": 29.0,
+          "priority": 50,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "init"
+        },
+        {
+          "intent_id": "failing_test",
+          "score": 29.0,
+          "priority": 50,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "deployment_change",
+          "score": 28.5,
+          "priority": 55,
+          "specificity": 65,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "development_script_update",
+          "score": 27.5,
+          "priority": 50,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "asset_update",
+          "score": 27.5,
+          "priority": 50,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "license_update",
+          "score": 27.0,
+          "priority": 45,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "gitignore_update",
+          "score": 27.0,
+          "priority": 45,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "configuration_update",
+          "score": 26.5,
+          "priority": 50,
+          "specificity": 65,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "mock_update",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "snapshot_update",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "seed_data",
+          "score": 26.5,
+          "priority": 45,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "tests_update",
+          "score": 26.0,
+          "priority": 50,
+          "specificity": 60,
+          "semver_impact": "NONE",
+          "intent_group": "tests",
+          "cc_type": "test"
+        },
+        {
+          "intent_id": "experiment",
+          "score": 26.0,
+          "priority": 45,
+          "specificity": 80,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "text_literal_update",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "PATCH",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "logging_add",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "logging_remove",
+          "score": 25.5,
+          "priority": 45,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "easter_egg",
+          "score": 25.0,
+          "priority": 40,
+          "specificity": 90,
+          "semver_impact": "PATCH",
+          "intent_group": "feature",
+          "cc_type": "feat"
+        },
+        {
+          "intent_id": "contributor_update",
+          "score": 22.5,
+          "priority": 35,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "data_inspection",
+          "score": 22.5,
+          "priority": 35,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "documentation_update",
+          "score": 21.5,
+          "priority": 40,
+          "specificity": 55,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "comments_update",
+          "score": 21.5,
+          "priority": 35,
+          "specificity": 75,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "code_structure_formatting",
+          "score": 20.5,
+          "priority": 40,
+          "specificity": 45,
+          "semver_impact": "NONE",
+          "intent_group": "style_assets_text",
+          "cc_type": "style"
+        },
+        {
+          "intent_id": "typo_fix",
+          "score": 20.0,
+          "priority": 30,
+          "specificity": 80,
+          "semver_impact": "NONE",
+          "intent_group": "docs",
+          "cc_type": "docs"
+        },
+        {
+          "intent_id": "merge_branch",
+          "score": 17.0,
+          "priority": 20,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "release_management",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "work_in_progress",
+          "score": 14.0,
+          "priority": 20,
+          "specificity": 60,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "chore"
+        },
+        {
+          "intent_id": "known_bad_code",
+          "score": 12.5,
+          "priority": 10,
+          "specificity": 85,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
+          "cc_type": "refactor"
+        },
+        {
+          "intent_id": "low_quality_code",
+          "score": 11.0,
+          "priority": 5,
+          "specificity": 90,
+          "semver_impact": "NONE",
+          "intent_group": "miscellaneous",
           "cc_type": "refactor"
         }
       ],

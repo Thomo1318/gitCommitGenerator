@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "sop_matrix_sha256": "3fcb72e45bfac2766eb0a309eac1385581609960017f0901d624ecd62e8a2c86",
+  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
   "sop_matrix_row_count": 75,
   "tie_break": {
     "rank_sort_keys_desc": [
@@ -20,7 +20,7 @@
   "cases": [
     {
       "id": "empty_baseline",
-      "description": "No signals set \u2014 base priority/specificity ordering only",
+      "description": "No signals set — base priority/specificity ordering only",
       "signals": {}
     },
     {
@@ -171,6 +171,38 @@
         "files": [
           "src/new_mod.py",
           "src/old_mod.py"
+        ]
+      }
+    },
+    {
+      "id": "B1_release_notes_product",
+      "description": "#181-class: net-new product/CLI/API surface with error-handling noise (small diff, total_impacted < 25 under --enable-semantic)",
+      "signals": {
+        "adds_public_api": true,
+        "error_handling_added": true,
+        "files": [
+          "src/git_cg/release.py"
+        ]
+      }
+    },
+    {
+      "id": "B1_release_bugfix_pure",
+      "description": "Pure repair on an existing release helper; no new public API or capability",
+      "signals": {
+        "error_handling_added": true,
+        "validation_added": true,
+        "files": [
+          "src/git_cg/release.py"
+        ]
+      }
+    },
+    {
+      "id": "B1_error_handling_only",
+      "description": "Error-handling-only hardening (try/except); must not flip to feat",
+      "signals": {
+        "error_handling_added": true,
+        "files": [
+          "src/git_cg/main.py"
         ]
       }
     }

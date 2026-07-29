@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 from itertools import pairwise
 from pathlib import Path
 
@@ -16,6 +17,8 @@ import pytest
 
 from git_cg.intent import (
     DiffSignals,
+    GraphEnrichmentFacts,
+    SemanticEnrichmentFacts,
     _generate_signal_markers,
     derive_intent_selection_constraints,
     rank_commit_intents,
@@ -25,6 +28,15 @@ from git_cg.sop import load_sop
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "intent_characterisation"
 CORPUS_PATH = FIXTURE_DIR / "corpus.json"
 GOLDENS_PATH = FIXTURE_DIR / "goldens.json"
+
+# Env-gated golden-refresh affordance (Issue #182 F6). Default off; CI runs without it.
+UPDATE_GOLDENS_ENV = "GIT_CG_UPDATE_GOLDENS"
+
+# K-P0.6: companion semantic-ON top-intent invariance for the #181-class B1 pins.
+# Small-diff bound: graph restructure markers only fire at total_impacted >= 25,
+# so a value of 4 represents the small-diff regime in which tops must be invariant.
+B1_CASE_IDS = ("B1_release_notes_product", "B1_release_bugfix_pure", "B1_error_handling_only")
+B1_SEMANTIC_FACTS = SemanticEnrichmentFacts(graph=GraphEnrichmentFacts(total_impacted=4, outcome="ok"))
 
 
 def _load_json(path: Path) -> dict:
@@ -179,16 +191,70 @@ def test_characterisation_case_matches_golden(
         goldens (dict): Expected snapshots keyed by case identifier.
     """
     case = next(item for item in corpus["cases"] if item["id"] == case_id)
-    expected = goldens["cases"][case_id]
 
     signals = DiffSignals(**case["signals"])
     markers = sorted(_generate_signal_markers(signals))
     ranked = rank_commit_intents(signals, sop_matrix)
     constraints = derive_intent_selection_constraints(signals, sop_matrix)
 
+    live_entry = {
+        "markers": markers,
+        "rank": _rank_snapshot(ranked),
+        "constraints": _constraints_snapshot(constraints),
+    }
+
+    if os.environ.get(UPDATE_GOLDENS_ENV, "").strip().lower() in {"1", "true", "yes", "on"}:
+        # Mechanical red→green refresh (F6): rewrite this case's golden entry from live
+        # engine output. Re-read from disk so parametrized sibling writes accumulate
+        # (the module-scope fixture holds a stale in-memory snapshot).
+        live_hash = _sop_matrix_sha256(sop_matrix)
+        row_count = len(sop_matrix)
+        current = _load_json(GOLDENS_PATH)
+        current["cases"][case_id] = live_entry
+        current["sop_matrix_sha256"] = live_hash
+        current["sop_matrix_row_count"] = row_count
+        GOLDENS_PATH.write_text(json.dumps(current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # Sync the corpus SOP pin too (finding 4): the pin test requires corpus.json and
+        # goldens.json to agree on the live matrix hash/row-count, so refreshing only the
+        # golden would leave the corpus pin stale after a matrix change. Case definitions
+        # are untouched — only the shared matrix metadata is refreshed.
+        corpus_current = _load_json(CORPUS_PATH)
+        corpus_current["sop_matrix_sha256"] = live_hash
+        corpus_current["sop_matrix_row_count"] = row_count
+        CORPUS_PATH.write_text(json.dumps(corpus_current, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        return
+
+    expected = goldens["cases"][case_id]
     assert markers == expected["markers"]
     assert _rank_snapshot(ranked) == expected["rank"]
     assert _constraints_snapshot(constraints) == expected["constraints"]
+
+
+@pytest.mark.parametrize("case_id", B1_CASE_IDS)
+def test_b1_top_intent_semantic_on_invariant(case_id: str, sop_matrix: list[dict], corpus: dict) -> None:
+    """
+    Verify B1 top-intent invariance between semantic-OFF and semantic-ON ranking (K-P0.6).
+
+    Production runs with ``--enable-semantic``; the corpus pins the semantic-OFF rank for CI
+    determinism. For small diffs (``total_impacted < 25``) the top intent must be identical
+    in both modes — enrichment may add markers but must not flip the B1 top. A divergence
+    within the small-diff bound is a bug, not a configuration detail.
+
+    Parameters:
+        case_id (str): B1 characterisation case identifier.
+        sop_matrix (list[dict]): Production SOP matrix.
+        corpus (dict): Characterisation corpus holding the case signals.
+    """
+    case = next(item for item in corpus["cases"] if item["id"] == case_id)
+    signals = DiffSignals(**case["signals"])
+
+    # Pin the OFF side explicitly: rank_commit_intents defaults enable_semantic from the
+    # GIT_CG_ENABLE_SEMANTIC env, so an ambient ON would silently make both sides ON and
+    # vacuate the ON/OFF invariance comparison.
+    semantic_off = rank_commit_intents(signals, sop_matrix, enable_semantic=False)
+    semantic_on = rank_commit_intents(signals, sop_matrix, enrichment=B1_SEMANTIC_FACTS, enable_semantic=True)
+
+    assert semantic_on[0].intent_id == semantic_off[0].intent_id
 
 
 def test_breaking_with_tests_accumulates_independent_marker_families(corpus: dict, goldens: dict) -> None:

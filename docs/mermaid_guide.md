@@ -12,6 +12,231 @@ For further context, libraries, and architectural guidance, refer to these canon
 - **[Beautiful Mermaid GitHub](https://github.com/lukilabs/beautiful-mermaid)**: The GitHub repository for the `beautiful-mermaid` rendering library.
 - **[Primer Theme Gist](https://gist.github.com/Thomo1318/8c6f1dc6008afee6e707dba68ff1e7b2)**: The foundational gold-standard Gist defining the GitHub Primer CSS variables and theme integrations used in this guide.
 
+<details>
+<summary>Agent prompt for generating SVG mermaid diagram with ELK layout (beautiful-mermaid)</summary>
+
+`````markdown
+Instructions: Implementing Mermaid ELK → SVG Auto-Rendering Hook
+
+Goal: Create a pre-commit hook that automatically converts complex ELK-layout Mermaid diagrams to external SVG files while leaving simple diagrams as raw Mermaid.
+
+Requirements
+
+Core Behavior:
+
+- Only process Mermaid diagrams with layout: elk in their config
+- Leave non-ELK diagrams (sequence, gantt, etc.) as raw Mermaid blocks
+- Generate hash-based SVG filenames for stability (MD5 of Mermaid source)
+- Store SVGs in ./diagrams/ subdirectory relative to each markdown file
+- Preserve original Mermaid source in collapsible <details> blocks
+- Track hash in data-diagram-hash attribute for fast comparison
+- Auto-stage all changes (SVGs + markdown) to continue commit seamlessly
+- Implement garbage collection to remove unused SVG files
+
+Implementation Steps
+
+1. Create Main Processing Script
+
+File: .git-hooks/process-diagrams.js
+
+Core Functions Needed:
+// Get staged markdown files from git
+function getStagedMarkdownFiles()
+
+// Generate MD5 hash of diagram code
+function hashDiagram(code)
+
+// Check if diagram uses ELK layout (regex: /layout:\s\*elk/)
+function usesElkLayout(code)
+
+// Validate Mermaid syntax before rendering
+function validateMermaidSyntax(code, filePath)
+
+// Render Mermaid to SVG using beautiful-mermaid-cli (bm)
+function renderMermaidToSVG(code, outputPath)
+
+// Get diagram directory for markdown file (dirname + "/diagrams")
+function getDiagramDir(mdFile)
+
+// Ensure diagram directory exists
+function ensureDiagramDir(mdFile)
+
+// Track referenced SVGs per directory for garbage collection
+function trackReferencedSvg(diagramDir, svgName)
+
+// Process a single markdown file
+function processFile(mdFile)
+
+// Garbage collection: delete unused SVGs
+function cleanupUnused()
+
+Processing Logic:
+
+1. Get all staged markdown files from git diff --cached --name-only --diff-filter=ACM
+2. For each markdown file:
+
+
+    - Create ./diagrams/ subdirectory if needed
+    - Find all patterns (using regex):
+      - Pattern A: Already processed with ![Diagram] + <details data-diagram-hash="...">
+      - Pattern B: Raw ````mermaid` blocks (new diagrams)
+
+3. For Pattern A (already processed):
+
+
+    - Extract hash from data-diagram-hash attribute
+    - Extract Mermaid code from <details> block
+    - Calculate new hash from code
+    - Check if ELK diagram:
+        - If not ELK: convert back to raw Mermaid
+      - If ELK: check if hash changed OR path wrong OR file missing
+            - If needs update: validate, render SVG, update markdown
+        - Track SVG reference
+
+4. For Pattern B (raw Mermaid):
+
+
+    - Skip if inside <details> block (already processed)
+    - Skip if inside ````markdown` code block (examples)
+    - Check if uses ELK layout:
+        - If not ELK: skip (leave as raw Mermaid)
+      - If ELK: validate, render SVG, replace with ![Diagram] + <details> format
+      - Track SVG reference
+
+5. Apply all replacements to file content
+6. If changed: write file, stage with git add
+7. Run garbage collection on each diagram directory
+
+Regex Patterns:
+// Already processed with ![Diagram]
+/!\[Diagram\]\(([^)]+\/([a-f0-9]+)\.svg)\)\s*\n\s*<details data-diagram-hash="([a-f0-9]+)">\s*<summary>Original Mermaid Diagram \(for AI\)<\/summary>\s*\n\s*```mermaid\s*([\s\S]_?)```\s_\n\s\*<\/details>/gm
+
+// Raw Mermaid blocks
+/`mermaid[\w-]*\s*([\s\S]*?)`/gm
+
+Output Format (for ELK diagrams):
+![Diagram](./diagrams/abc123hash.svg)
+
+  <details data-diagram-hash="abc123hash">
+  <summary>Original Mermaid Diagram (for AI)</summary>
+
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TB
+    A --> B
+
+Skip Conditions:
+- Mermaid block preceded by "Original Mermaid Diagram" without closing </details>
+- Mermaid block followed immediately by </details>
+- Mermaid block inside markdown` or html` code blocks
+
+Garbage Collection:
+- Track all SVG references per directory in a Map
+- For each diagram directory:
+  - List all .svg files
+  - Delete files not in reference set
+  - Stage directory with git add
+
+2. Integrate with Pre-Commit
+
+File: .pre-commit-config.yaml
+
+Add hook before mermaid-syntax-check:
+- repo: local
+  hooks:
+    - id: mermaid-to-svg
+      name: Render Mermaid diagrams to SVG
+      entry: .git-hooks/process-diagrams.js
+      language: system
+      types: [markdown]
+      files: \.md$
+      exclude: ^(frontend/node_modules|api/venv|\.git)/
+      pass_filenames: false
+
+3. Update Markdown Link Check Config
+
+File: .markdown-link-check.json
+
+Add pattern to ignore SVG links:
+{
+  "ignorePatterns": [
+    { "pattern": "^\\./diagrams/.*\\.svg$" }
+  ]
+}
+
+4. Validation Integration
+
+beautiful-mermaid validates natively during render — no separate syntax-check step:
+- Write Mermaid to temp file
+- Call bm "${tmpFile}" -o "${outputPath}" (validation + render in one pass)
+- If bm exits non-zero or emits no SVG: skip diagram, log error
+- If succeeds: proceed with markdown replacement
+
+5. SVG Generation Command
+
+Use npx to auto-install and run beautiful-mermaid-cli (bm):
+npx -y beautiful-mermaid-cli@latest "${tmpFile}" -o "${outputPath}"
+
+beautiful-mermaid renders ultra-fast, fully themeable SVG (and ASCII) with
+built-in syntax validation — a single tool replaces mermaid-cli plus the
+separate check-mermaid-syntax.py validator.
+
+Error Handling:
+- Catch rendering errors
+- Skip diagram if fails
+- Log clear error message
+- Don't block commit for other diagrams
+
+6. Testing Requirements
+
+Test Cases:
+1. Raw ELK diagram → should convert to SVG
+2. Raw non-ELK diagram → should leave as-is
+3. Already processed ELK diagram with hash match → no change
+4. Already processed ELK diagram with hash mismatch → regenerate
+5. Already processed with wrong path → fix path
+6. Missing SVG file → regenerate
+7. Mermaid in code block example → skip
+8. Non-ELK changed to ELK → convert to SVG
+9. ELK changed to non-ELK → convert back to raw Mermaid
+10. Unused SVG files → delete
+
+Success Criteria
+
+- ELK diagrams automatically converted to SVG on commit
+- Non-ELK diagrams unchanged (raw Mermaid)
+- Hash tracking enables fast comparison
+- Missing files regenerated automatically
+- Unused files cleaned up
+- All changes auto-staged
+- Commit proceeds without manual intervention
+- LLMs can edit Mermaid source in <details> blocks
+
+Dependencies
+
+- Node.js (for running script)
+- npx (for beautiful-mermaid-cli, auto-installed)
+- Git (for staging operations)
+
+Python 3 / check-mermaid-syntax.py are no longer required — beautiful-mermaid
+validates during render.
+
+Documentation
+
+Create guide at docs/code-quality/mermaid-to-svg-guide.md explaining:
+- How the system works
+- When to use ELK layout vs raw Mermaid
+- How to edit diagrams (for humans and LLMs)
+- Directory structure
+- Troubleshooting common issues
+```
+`````
+
+</details>
+
 ---
 
 ## 1. Advanced Primer Design System Integration

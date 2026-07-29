@@ -190,6 +190,7 @@ flowchart LR
 - **Local First**: Designed to natively communicate with locally hosted models on Apple Silicon ([oMLX](https://github.com/jundot/omlx) / [MTPLX](https://github.com/youssofal/mtplx)).
 - **Spec-Driven**: Uses the [usage](https://usage.jdx.dev/) standard for automated autocompletion and help generation.
 - **Safe Dry-Runs**: Validate AI output before modifying your git message file.
+- **Commit-Message Gold Lint**: A deterministic post-enforcement linter (`git_cg.commit_gold`) checks wording quality, Included-changes coverage, and type/changelog-group coherence — without ever re-ranking intent (SOP matrix stays the SemVer authority). Modes: `off` / `warn` (hook-safe default) / `surface` (interactive) / `strict` (CI).
 
 ---
 
@@ -311,7 +312,7 @@ Resolves: #80
 Refs: #81
 SemVer-Impact: PATCH
 Change-Types: fix, docs
-Changelog-Groups: Fixed, Documentation
+Changelog-Groups: Fixed, Miscellaneous
 ```
 
 If no terminal device is available, the tool degrades cleanly and completes without trying to open the TUI.
@@ -370,25 +371,25 @@ Changelog-Groups: Changed, Fixed
 |  📦   | `:package:`                   | Add or update compiled files or packages                     |  `build`   |     PATCH     | Changed         |
 |  🔐   | `:closed_lock_with_key:`      | Add or update secrets                                        |  `chore`   |     PATCH     | Security        |
 |  🍱   | `:bento:`                     | Add or update assets                                         |  `chore`   |     PATCH     | Added           |
-|  🚀   | `:rocket:`                    | Deploy stuff                                                 |  `chore`   |     NONE      | Chores          |
-|  🚧   | `:construction:`              | Work in progress                                             |  `chore`   |     NONE      | Chores          |
-|  🔧   | `:wrench:`                    | Add or update configuration files                            |  `chore`   |     NONE      | Chores          |
-|  🔨   | `:hammer:`                    | Add or update development scripts                            |  `chore`   |     NONE      | Chores          |
-|  🔀   | `:twisted_rightwards_arrows:` | Merge branches                                               |  `chore`   |     NONE      | Chores          |
-|  🔊   | `:loud_sound:`                | Add or update logs                                           |  `chore`   |     NONE      | Chores          |
-|  🔇   | `:mute:`                      | Remove logs                                                  |  `chore`   |     NONE      | Chores          |
-|  👥   | `:busts_in_silhouette:`       | Add or update contributor(s)                                 |  `chore`   |     NONE      | Chores          |
-|  🙈   | `:see_no_evil:`               | Add or update a .gitignore file                              |  `chore`   |     NONE      | Chores          |
-|  🌱   | `:seedling:`                  | Add or update seed files                                     |  `chore`   |     NONE      | Chores          |
-|  🧐   | `:monocle_face:`              | Data exploration/inspection                                  |  `chore`   |     NONE      | Chores          |
-|  🧑‍💻   | `:technologist:`              | Improve developer experience                                 |  `chore`   |     NONE      | Chores          |
+|  🚀   | `:rocket:`                    | Deploy stuff                                                 |  `chore`   |     NONE      | Miscellaneous          |
+|  🚧   | `:construction:`              | Work in progress                                             |  `chore`   |     NONE      | Miscellaneous          |
+|  🔧   | `:wrench:`                    | Add or update configuration files                            |  `chore`   |     NONE      | Miscellaneous          |
+|  🔨   | `:hammer:`                    | Add or update development scripts                            |  `chore`   |     NONE      | Miscellaneous          |
+|  🔀   | `:twisted_rightwards_arrows:` | Merge branches                                               |  `chore`   |     NONE      | Miscellaneous          |
+|  🔊   | `:loud_sound:`                | Add or update logs                                           |  `chore`   |     NONE      | Miscellaneous          |
+|  🔇   | `:mute:`                      | Remove logs                                                  |  `chore`   |     NONE      | Miscellaneous          |
+|  👥   | `:busts_in_silhouette:`       | Add or update contributor(s)                                 |  `chore`   |     NONE      | Miscellaneous          |
+|  🙈   | `:see_no_evil:`               | Add or update a .gitignore file                              |  `chore`   |     NONE      | Miscellaneous          |
+|  🌱   | `:seedling:`                  | Add or update seed files                                     |  `chore`   |     NONE      | Miscellaneous          |
+|  🧐   | `:monocle_face:`              | Data exploration/inspection                                  |  `chore`   |     NONE      | Miscellaneous          |
+|  🧑‍💻   | `:technologist:`              | Improve developer experience                                 |  `chore`   |     NONE      | Miscellaneous          |
 |  🧱   | `:bricks:`                    | Infrastructure related changes                               |    `ci`    |     PATCH     | Changed         |
-|  💚   | `:green_heart:`               | Fix CI Build                                                 |    `ci`    |     NONE      | Chores          |
-|  👷   | `:construction_worker:`       | Add or update CI build system                                |    `ci`    |     NONE      | Chores          |
-|  📝   | `:memo:`                      | Add or update documentation                                  |   `docs`   |     NONE      | Documentation   |
-|  ✏️   | `:pencil2:`                   | Fix typos                                                    |   `docs`   |     NONE      | Documentation   |
-|  📄   | `:page_facing_up:`            | Add or update license                                        |   `docs`   |     NONE      | Documentation   |
-|  💡   | `:bulb:`                      | Add or update comments in source code                        |   `docs`   |     NONE      | Documentation   |
+|  💚   | `:green_heart:`               | Fix CI Build                                                 |    `ci`    |     NONE      | Miscellaneous          |
+|  👷   | `:construction_worker:`       | Add or update CI build system                                |    `ci`    |     NONE      | Miscellaneous          |
+|  📝   | `:memo:`                      | Add or update documentation                                  |   `docs`   |     NONE      | Miscellaneous   |
+|  ✏️   | `:pencil2:`                   | Fix typos                                                    |   `docs`   |     NONE      | Miscellaneous   |
+|  📄   | `:page_facing_up:`            | Add or update license                                        |   `docs`   |     NONE      | Miscellaneous   |
+|  💡   | `:bulb:`                      | Add or update comments in source code                        |   `docs`   |     NONE      | Miscellaneous   |
 |  💥   | `:boom:`                      | Introduce breaking changes                                   |   `feat`   |     MAJOR     | Changed         |
 |  ✨   | `:sparkles:`                  | Introduce new features                                       |   `feat`   |     MINOR     | Added           |
 |  📈   | `:chart_with_upwards_trend:`  | Add or update analytics or track code                        |   `feat`   |     MINOR     | Added           |
@@ -433,10 +434,10 @@ Changelog-Groups: Changed, Fixed
 |  💄   | `:lipstick:`                  | Add or update the UI and style files                         |  `style`   |     PATCH     | Changed         |
 |  💬   | `:speech_balloon:`            | Add or update text and literals                              |  `style`   |     PATCH     | Changed         |
 |  🎨   | `:art:`                       | Improve structure/format of the code                         |  `style`   |     NONE      | Changed         |
-|  ✅   | `:white_check_mark:`          | Add, update, or pass tests                                   |   `test`   |     NONE      | Tests           |
-|  🤡   | `:clown_face:`                | Mock things                                                  |   `test`   |     NONE      | Tests           |
-|  📸   | `:camera_flash:`              | Add or update snapshots                                      |   `test`   |     NONE      | Tests           |
-|  🧪   | `:test_tube:`                 | Add a failing test                                           |   `test`   |     NONE      | Tests           |
+|  ✅   | `:white_check_mark:`          | Add, update, or pass tests                                   |   `test`   |     NONE      | Miscellaneous           |
+|  🤡   | `:clown_face:`                | Mock things                                                  |   `test`   |     NONE      | Miscellaneous           |
+|  📸   | `:camera_flash:`              | Add or update snapshots                                      |   `test`   |     NONE      | Miscellaneous           |
+|  🧪   | `:test_tube:`                 | Add a failing test                                           |   `test`   |     NONE      | Miscellaneous           |
 
 ---
 

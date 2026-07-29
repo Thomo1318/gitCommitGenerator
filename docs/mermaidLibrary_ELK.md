@@ -9,6 +9,23 @@ This document contains a library of advanced architectural layout strategies and
 Emphasizes separation of concerns into three vertical lanes.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart LR
   %% Styles
   classDef laneTitle fill:#eeeeee,stroke:#9e9e9e,color:#111,stroke-width:1px
@@ -113,6 +130,23 @@ flowchart LR
 Highlights the three-layer architecture and defers at the bottom.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef layer1 fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef layer2 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -226,6 +260,23 @@ flowchart TD
 Treats `GenerationContext` as the central bus, everything else as producers/consumers.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart LR
   classDef bus fill:#fffde7,stroke:#f9a825,color:#111,stroke-width:2px
   classDef producer fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -345,6 +396,23 @@ flowchart LR
 Good if you care about who owns what.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart LR
   classDef data fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
   classDef control fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
@@ -456,6 +524,23 @@ flowchart LR
 More compact, closer to your original, but re-structured and with a built-in mini-legend.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef phase7 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -563,6 +648,23 @@ flowchart TD
 Uses big boxes-within-boxes to show containment: overall pipeline → deterministic core vs semantic, with Phase 7 nested.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart LR
   classDef container fill:#fafafa,stroke:#9e9e9e,color:#111,stroke-width:1.5px
   classDef subcontainer fill:#f5f5f5,stroke:#bdbdbd,color:#111,stroke-width:1px
@@ -691,6 +793,23 @@ flowchart LR
 Good if you want a very linear “story” with small phase callouts.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart LR
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef phase7 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -795,6 +914,23 @@ flowchart LR
 Two vertical stacks side‑by‑side, meeting at `GenerationContext`.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart LR
   classDef tower fill:#fafafa,stroke:#bdbdbd,color:#111,stroke-width:1.5px
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
@@ -890,6 +1026,23 @@ flowchart LR
 Organizes by concern: deterministic, semantic, contract, telemetry.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef colTitle fill:#eeeeee,stroke:#9e9e9e,color:#111,stroke-width:1px
   classDef deterministic fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
@@ -975,6 +1128,23 @@ flowchart TD
 Very compact, more like an “exec slide” with a small legend baked in.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef phase7 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -1053,6 +1223,23 @@ flowchart TD
 Emphasizes the vertical pipeline from staged diff → deterministic → semantic → contract → telemetry → deferred.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   %% Styles
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
@@ -1149,6 +1336,23 @@ flowchart TD
 Three visual bands top‑down: Phase 3, Phase 7, Phase 14 (+ deferred block at bottom).
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef bandTitle fill:#eeeeee,stroke:#9e9e9e,color:#111,stroke-width:1px
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
@@ -1247,6 +1451,23 @@ flowchart TD
 Each rung is a phase; semantic context is rung 7.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef rung fill:#fafafa,stroke:#bdbdbd,color:#111,stroke-width:1px
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
@@ -1360,6 +1581,23 @@ flowchart TD
 Organizes top‑down but uses compact subgraphs to keep related nodes tight visually.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef phase7 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -1468,6 +1706,23 @@ flowchart TD
 Top‑down architecture with a small key at the end.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef phase7 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -1544,6 +1799,23 @@ flowchart TD
 Shows the existing path first, then the Phase 7 additions as a second vertical column.
 
 ```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
+    }
+  }
+}%%
 flowchart TD
   classDef existing fill:#e8f5e9,stroke:#2e7d32,color:#111,stroke-width:1px
   classDef phase7 fill:#e3f2fd,stroke:#1565c0,color:#111,stroke-width:1px
@@ -1632,11 +1904,13 @@ This capstone example brings together Primer styling, accessibility descriptions
       'primaryColor': '#f6f8fa',
       'primaryBorderColor': '#d0d7de',
       'primaryTextColor': '#24292f',
-      'lineColor': '#57606a',
-      'secondaryColor': '#ddf4ff',
-      'tertiaryColor': '#f3f4f6',
-      'clusterBkg': '#f3f4f6',
-      'clusterBorder': '#d0d7de'
+      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
     }
   }
 }%%
@@ -1736,6 +2010,12 @@ Template for modeling system state machines and error recovery loops.
       'primaryBorderColor': '#d0d7de',
       'primaryTextColor': '#24292f',
       'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
     }
   }
 }%%
@@ -1771,6 +2051,12 @@ Template for mapping out strict system constraints, functional requirements, and
       'primaryBorderColor': '#d0d7de',
       'primaryTextColor': '#24292f',
       'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'state': {
+      'defaultRenderer': 'elk'
     }
   }
 }%%
@@ -1810,76 +2096,9 @@ Design notes:
       'primaryBorderColor': '#d0d7de',
       'primaryTextColor': '#24292f',
       'lineColor': '#57606a'
-    }
-  }
-}%%
-stateDiagram-v2
-  accTitle: PR 188 gold mode resolution and strict regen lifecycle
-  accDescr: Gold mode resolves from env, flags, and TTY into one of four modes; strict mode drives a single-attempt regeneration lifecycle ending in write or abort.
-
-  state "Mode resolution" as RES {
-    [*] --> EnvCheck
-    EnvCheck: GIT_CG_GOLD_MODE set?
-    EnvCheck --> EnvMode: off / warn / strict
-    EnvCheck --> StrictFlag: unset
-    StrictFlag: --strict or --gold-strict?
-    StrictFlag --> Strict: yes
-    StrictFlag --> TTY: no
-    TTY: interactive + usable TTY?
-    TTY --> Surface: yes
-    TTY --> Warn: no (default)
-  }
-
-  state "Generation lifecycle" as GEN {
-    [*] --> Check: check_commit_gold
-    Check --> Clean: no findings
-    Check --> Findings: findings emitted
-
-    Clean --> Write
-
-    state Findings {
-      [*] --> ModeGate
-      ModeGate --> Suppressed: off
-      ModeGate --> PrintOnly: warn
-      ModeGate --> MenuFirst: surface
-      ModeGate --> RegenGate: strict
-    }
-
-    Suppressed --> Write
-    PrintOnly --> Write: never blocks
-    MenuFirst --> Write: user decides
-    RegenGate --> Attempt1: ≤1 attempt
-    Attempt1 --> Recheck
-    Recheck --> Write: findings cleared
-    Recheck --> Abort: still failing
-
-    Abort: _abort(strict=True, report=False)
-    Abort --> [*]: non-zero exit
-  }
-
-  Write --> [*]: message written
-
-  note right of RES
-    Precedence (locked):
-    env > flags > TTY > default.
-    surface is never a valid env value.
-  end note
-
-  note right of Abort
-    Codes/summary only.
-    Never full body or diff.
-  end note
-```
-
-```mermaid
-%%{
-  init: {
-    'theme': 'base',
-    'themeVariables': {
-      'primaryColor': '#f6f8fa',
-      'primaryBorderColor': '#d0d7de',
-      'primaryTextColor': '#24292f',
-      'lineColor': '#57606a'
+    },
+    'flowchart': {
+      'defaultRenderer': 'elk'
     },
     'state': {
       'defaultRenderer': 'elk'

@@ -757,3 +757,492 @@ def test_release_command_rejects_publish_with_skip_github_notes():
             repo_slug=None,
             github_target=None,
         )
+
+
+# --- Issue #182 Slice 2: GOLD RUBRIC + three-channel prompt assembly ---
+
+
+def _minimal_diff():
+    return "diff --git a/src/git_cg/release.py b/src/git_cg/release.py\n+def new_helper():\n"
+
+
+def test_gold_rubric_present_with_anchors():
+    """GOLD RUBRIC is additive and carries its pinned anchors."""
+    prompt = build_system_prompt(_minimal_diff())
+    assert "GOLD RUBRIC (WORDING QUALITY ONLY" in prompt
+    assert "Do NOT open the body with:" in prompt
+    assert "This commit introduces" in prompt
+    assert "MUST NOT change intent_id, gitmoji, cc_type, semver_impact, or changelog_group" in prompt
+
+
+def test_gold_rubric_does_not_weaken_contract_lock():
+    """The deterministic contract CRITICAL field-lock sentences remain intact (additive only)."""
+    from git_cg.regeneration import ResolvedCommitContract
+
+    contract = ResolvedCommitContract(
+        primary_intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type="feat",
+        semver_impact="MINOR",
+        changelog_group="Added",
+        secondary_intent_ids=[],
+    )
+    prompt = build_system_prompt(_minimal_diff(), contract=contract)
+    assert "DETERMINISTIC SEMANTIC CONTRACT (LOCKED BEFORE GENERATION)" in prompt
+    assert "MUST match this contract exactly" in prompt
+    # Rubric appears after the contract block (additive, never in place of it).
+    assert prompt.index("DETERMINISTIC SEMANTIC CONTRACT") < prompt.index("GOLD RUBRIC")
+
+
+def test_a02_gold_only_no_override_header():
+    """A_02: gold-only prompt emits no REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE) header."""
+    prompt = build_system_prompt(_minimal_diff(), gold_guidance="Lead with the outcome.")
+    assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" not in prompt
+    assert "GOLD FEEDBACK (WORDING / SECONDARY COVERAGE ONLY):" in prompt
+
+
+def test_a03_gold_only_no_critical_precedence_tail():
+    """A_03: gold-only prompt emits no CRITICAL PRECEDENCE ranking-override sentence."""
+    prompt = build_system_prompt(_minimal_diff(), gold_guidance="Lead with the outcome.")
+    assert "CRITICAL PRECEDENCE RULE" not in prompt
+
+
+def test_gold_guidance_never_introduces_type_scope_directives():
+    """A_01-adjacent: gold guidance does not surface as preferred_type/preferred_scope."""
+    prompt = build_system_prompt(_minimal_diff(), gold_guidance="make it a feat, use scope core")
+    assert "DETERMINISTIC OVERRIDES (LOCKED SEMANTICS):" not in prompt
+    assert "preferred_type" not in prompt
+    assert "preferred_scope" not in prompt
+
+
+def test_previous_plan_only_uses_neutral_header():
+    """Previous-plan-only path uses neutral delta framing, not explicit user override."""
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            description="add thing",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        ),
+        rationale="test",
+    )
+    prompt = build_system_prompt(_minimal_diff(), previous_plan=plan)
+    assert "PREVIOUS COMMIT PLAN (DELTA CONTEXT):" in prompt
+    assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" not in prompt
+    assert "CRITICAL PRECEDENCE RULE" not in prompt
+
+
+def test_user_directive_path_still_emits_override_and_precedence():
+    """User/directive channel retains OVERRIDE + CRITICAL PRECEDENCE (unchanged authority)."""
+    prompt = build_system_prompt(_minimal_diff(), active_directives={"preferred_type": "feat"})
+    assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" in prompt
+    assert "CRITICAL PRECEDENCE RULE" in prompt
+
+
+# --- Issue #182 Slice 3b: gold wiring integration (mocked generation path) ---
+
+
+def _gold_harness_mocks(monkeypatch, plans):
+    """Drive _run_commit_generation with a mocked LLM returning `plans` in sequence.
+
+    Patches all LLM/diff/telemetry seams (no live model). Clears GIT_CG_GOLD_MODE so
+    each gold test starts from a deterministic default regardless of the ambient env.
+
+    Returns the list of written commit-message strings (`writes`).
+    """
+    import git_cg.main as main_mod
+
+    monkeypatch.delenv("GIT_CG_GOLD_MODE", raising=False)
+    writes: list[str] = []
+    plans_iter = iter(plans)
+
+    monkeypatch.setattr(main_mod, "_validate_commit_source", lambda *a, **k: None)
+    monkeypatch.setattr(
+        main_mod,
+        "_collect_semantic_producer_metrics",
+        lambda *a, **k: {
+            "semantic_enabled": False,
+            "parser_latency_ms": 0.0,
+            "graph_build_latency_ms": 0.0,
+            "graph_query_latency_ms": 0.0,
+            "semantic_parser_metrics": None,
+            "body_similarity_min": None,
+            "body_similarity_avg": None,
+            "fingerprint_files_compared": 0,
+            "fingerprint_latency_ms": 0.0,
+            "fingerprint_class_counts": None,
+            "fingerprint_grammar_version": "unknown",
+            "fingerprint_markers": None,
+            "blast_radius_size": None,
+            "affected_flows_count": None,
+            "test_coverage_gap": None,
+            "test_gaps_count": None,
+            "graph_enrichment": None,
+            "risk_assessment": None,
+        },
+    )
+    monkeypatch.setattr(
+        main_mod,
+        "extract_git_diff",
+        lambda **k: "diff --git a/src/git_cg/release.py b/src/git_cg/release.py\n+def helper():\n",
+    )
+    monkeypatch.setattr(main_mod, "pack_prompt_diff", lambda d: (d, []))
+    monkeypatch.setattr(main_mod, "get_ai_client", lambda engine: object())
+    monkeypatch.setattr(main_mod, "resolve_model_name", lambda client, preferred, verbose=False: "test-model")
+    monkeypatch.setattr(main_mod, "_detect_branch_issue_reference", lambda verbose: [])
+    monkeypatch.setattr(main_mod, "generate_commit_message", lambda *a, **k: next(plans_iter))
+    monkeypatch.setattr(main_mod, "_write_commit_message", lambda f, s, strict, verbose: writes.append(s))
+    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", lambda **k: None)
+
+    monkeypatch.setattr(main_mod.opik_context, "update_current_trace", lambda *a, **k: None)
+    monkeypatch.setattr(main_mod.opik_context, "get_current_trace_data", lambda: None)
+    monkeypatch.setattr(main_mod.opik, "flush_tracker", lambda: None)
+    monkeypatch.setattr(main_mod.sentry_sdk, "flush", lambda *a, **k: None)
+    return writes
+
+
+def _gold_plan(body: str | None = None):
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    intent = CommitIntent.model_construct(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        scope=None,
+        description="add helper",
+        semver_impact=SemVerImpact.MINOR,
+        changelog_group="Added",
+    )
+    return CommitPlan.model_construct(
+        primary_intent=intent,
+        secondary_intents=[],
+        split_recommended=False,
+        rationale="r",
+        body_summary=body,
+        breaking_change=False,
+        breaking_change_description=None,
+    )
+
+
+def test_gold_warn_mode_writes_and_does_not_block(monkeypatch, capsys, tmp_path):
+    """Hook/warn default: a gold-failing body still writes; no non-zero exit."""
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1  # message written despite gold finding
+    assert "Gold lint" in capsys.readouterr().out
+
+
+def test_gold_strict_mode_blocks_with_nonzero_exit(monkeypatch, capsys, tmp_path):
+    """A_05: strict gold fail aborts non-zero via _abort(report=False); no write."""
+    import typer
+
+    # Both attempts fail gold (banned opener persists) so the single regen is exhausted.
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [_gold_plan(body="This commit adds a helper."), _gold_plan(body="This commit adds a helper.")],
+    )
+    import git_cg.main as main_mod
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=False,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+    assert raised is not None, "strict gold fail must raise typer.Exit"
+    assert raised.exit_code != 0
+    assert len(writes) == 0  # never write a gold-failing message in strict
+    out = capsys.readouterr().out
+    assert "gold lint" in out.lower() or "Gold lint" in out
+
+
+def test_gold_surface_mode_prints_findings_before_review_menu(monkeypatch, capsys, tmp_path):
+    """Surface mode: gold findings print before the interactive review menu.
+
+    Close bar (#182): in surface mode the user must see gold findings *before* the
+    existing interactive review menu renders — no new checklist, ordering only.
+    """
+    import git_cg.main as main_mod
+
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    monkeypatch.setenv("GIT_CG_GOLD_MODE", "surface")
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+    monkeypatch.setattr(main_mod, "_interactive_review", lambda *a, **k: console_print_menu_marker() or "Accept")
+
+    from git_cg.main import console
+
+    def console_print_menu_marker():
+        console.print("REVIEW-MENU-MARKER")
+        return None
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=True,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    gold_pos = out.find("Gold lint (surface)")
+    menu_pos = out.find("REVIEW-MENU-MARKER")
+    assert gold_pos != -1, "gold findings must print in surface mode"
+    assert menu_pos != -1, "interactive review menu must render in surface mode"
+    assert gold_pos < menu_pos, "gold findings must print before the interactive review menu"
+
+
+def test_gold_surface_checklist_displayed_in_review_status(monkeypatch, capsys, tmp_path):
+    """Optional -i checklist: surface mode shows gold findings as a checklist in the review status_text.
+
+    Nice-to-have (#182): the interactive review menu surfaces gold findings as a
+    "[ ] CODE: message" checklist inside status_text, so the user sees them in the
+    menu itself, not only in the pre-menu console print.
+    """
+    import git_cg.main as main_mod
+
+    captured: dict[str, str] = {}
+    _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    monkeypatch.setenv("GIT_CG_GOLD_MODE", "surface")
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+
+    def fake_prompt_with_gum(title, body, *, status_text=None):
+        captured["status_text"] = status_text or ""
+        return "Commit"
+
+    monkeypatch.setattr(main_mod, "prompt_with_gum", fake_prompt_with_gum)
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=True,
+    )
+    assert result is True
+    status = captured["status_text"]
+    assert "Gold lint checklist:" in status
+    assert "[ ] GOLD_BODY_INVENTORY:" in status
+
+
+def test_gold_strict_flag_blocks_without_general_strict(monkeypatch, capsys, tmp_path):
+    """--gold-strict: gold fails strict (non-zero exit) while strict=False for non-gold paths."""
+    import typer
+
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [_gold_plan(body="This commit adds a helper."), _gold_plan(body="This commit adds a helper.")],
+    )
+    import git_cg.main as main_mod
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,  # general strictness OFF
+            interactive=False,
+            gold_strict=True,  # gold strictness ON
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+    assert raised is not None, "--gold-strict gold fail must raise typer.Exit"
+    assert raised.exit_code != 0
+    assert len(writes) == 0
+    out = capsys.readouterr().out
+    assert "gold lint" in out.lower() or "Gold lint" in out
+
+
+def test_gold_strict_regen_recovers_and_writes(monkeypatch, capsys, tmp_path):
+    """Strict: first plan fails gold, regen (clean body) passes, message writes."""
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [_gold_plan(body="This commit adds a helper."), _gold_plan(body=None)],
+    )
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+
+
+def test_gold_dry_run_runs_but_does_not_write(monkeypatch, capsys, tmp_path):
+    """--dry-run: gold runs on the generation path; no commit-msg write occurs."""
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body=None)])
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=True,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 0  # dry-run never writes
+
+
+def test_gold_off_mode_suppresses_findings(monkeypatch, capsys, tmp_path):
+    """GIT_CG_GOLD_MODE=off: findings suppressed; generation proceeds silently."""
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    # Harness clears GIT_CG_GOLD_MODE for determinism; apply the off-mode override after.
+    monkeypatch.setenv("GIT_CG_GOLD_MODE", "off")
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    assert "Gold lint" not in capsys.readouterr().out
+
+
+def test_recover_path_skips_gold(monkeypatch, tmp_path):
+    """--recover is a gold no-op (O-P0.1): no structured plan, gold never runs."""
+    import git_cg.main as main_mod
+
+    called = {"gold": False, "applied": False}
+
+    def _no_gold(*a, **k):
+        called["gold"] = True
+        raise AssertionError("check_commit_gold must not run on the recover path")
+
+    # check_commit_gold is imported inside _run_commit_generation; patch at the source.
+    import git_cg.commit_gold as gold_mod
+
+    monkeypatch.setattr(gold_mod, "check_commit_gold", _no_gold)
+    monkeypatch.setattr(main_mod, "_apply_standalone_commit", lambda f, strict: called.__setitem__("applied", True))
+
+    from git_cg.main import app
+
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    msg_file.write_text("existing message", encoding="utf-8")
+
+    # main_callback resolves COMMIT_EDITMSG via `git rev-parse --git-dir`; force it.
+    def _fake_check_output(cmd, *a, **k):
+        if isinstance(cmd, (list, tuple)) and "git-dir" in cmd:
+            return str(tmp_path)  # --git-dir -> COMMIT_EDITMSG dir
+        if isinstance(cmd, (list, tuple)) and "--show-toplevel" in cmd:
+            return str(tmp_path)
+        return str(tmp_path)
+
+    monkeypatch.setattr(main_mod.subprocess, "check_output", _fake_check_output)
+
+    from typer.testing import CliRunner
+
+    runner = CliRunner()
+    runner.invoke(app, ["--recover"])
+    # Recover applied the standalone commit and exited; gold was never consulted.
+    assert called["applied"] is True
+    assert called["gold"] is False
+
+
+def test_a01_gold_guidance_bypasses_directive_extraction():
+    """A_01: gold-authored guidance never introduces preferred_type/preferred_scope.
+
+    The gold channel feeds ``build_system_prompt(gold_guidance=...)`` directly and
+    must not pass through ``ReviewState.set_regeneration_guidance`` / ``_extract_directives``;
+    type/scope steers embedded in gold-like text must not surface as directives.
+    """
+    # Gold-authored text containing directive-shaped phrases must not become directives.
+    prompt = build_system_prompt(
+        _minimal_diff(),
+        gold_guidance="Tighten the body. (Not a user steer: make it a feat, use scope core.)",
+    )
+    assert "DETERMINISTIC OVERRIDES (LOCKED SEMANTICS):" not in prompt
+    assert "preferred_type" not in prompt
+    assert "preferred_scope" not in prompt
+
+    # And the gold path never calls the directive-extraction machinery.
+    from git_cg.main import ReviewState
+
+    state = ReviewState(commit_plan=_gold_plan(body=None))
+    assert state.active_directives == {}  # gold does not touch ReviewState guidance
+
+
+def test_previous_plan_shown_with_user_directives() -> None:
+    """Finding 3: user-guided regeneration retains the prior plan as delta context.
+
+    When user directives (or residual guidance) are active, the previous commit plan
+    must still be emitted (channel 2, neutral) so the regeneration updates the plan
+    rather than rewriting from scratch — while the override channel keeps its own
+    authoritative framing.
+    """
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            description="add thing",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        ),
+        rationale="test",
+    )
+    prompt = build_system_prompt(_minimal_diff(), previous_plan=plan, active_directives={"preferred_scope": "core"})
+    # User-override channel active AND previous plan still present as neutral delta context.
+    assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" in prompt
+    assert "PREVIOUS COMMIT PLAN (DELTA CONTEXT):" in prompt
