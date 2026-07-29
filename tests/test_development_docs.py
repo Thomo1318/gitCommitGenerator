@@ -576,6 +576,7 @@ class TestChangelogUnreleasedIssue177Entries:
     """Tests for the new '## Unreleased' section documenting the #177 dependency/Actions work."""
 
     def _content(self) -> str:
+        """Read and return the changelog content."""
         return _read_changelog_md()
 
     def test_file_exists(self):

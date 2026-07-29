@@ -182,10 +182,12 @@ def test_characterisation_case_matches_golden(
     goldens: dict,
 ) -> None:
     """
-    Verify marker generation, intent ranking, and selection constraints against the golden snapshot for a corpus case.
-
+    Validate generated markers, ranked intents, and selection constraints for a corpus case against its golden snapshot.
+    
+    When golden refresh mode is enabled, update the case snapshot and shared SOP matrix metadata on disk instead of asserting against existing values.
+    
     Parameters:
-        case_id (str): Identifier of the corpus case to verify.
+        case_id (str): Identifier of the corpus case to validate.
         sop_matrix (list[dict]): SOP matrix used to evaluate the case.
         corpus (dict): Corpus containing the case signals.
         goldens (dict): Expected snapshots keyed by case identifier.

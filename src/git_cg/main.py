@@ -572,22 +572,20 @@ def build_system_prompt(
     gold_guidance: str | None = None,
 ) -> str:
     """
-    Compose the system prompt for generating a structured Conventional Commit plan.
-
+    Compose the system prompt used to generate a structured Conventional Commit plan.
+    
     Parameters:
-        diff_output (str): Git diff content used for language detection and intent ranking.
-        verbose (bool): Whether to enable diagnostic output while building the prompt.
+        diff_output (str): Git diff used for language detection and intent ranking.
+        verbose (bool): Whether to enable diagnostic output.
         active_directives (dict[str, str] | None): Locked regeneration overrides, such as a preferred type or scope.
-        residual_guidance (str | None): Free-text guidance to apply during regeneration.
-        previous_plan (CommitPlan | None): Previously generated plan to include during regeneration.
-        ranked_candidates (list | None): Precomputed intent candidates to include instead of ranking the diff.
-        contract: Semantic contract whose values must be preserved in the generated plan.
-        gold_guidance (str | None): Gold-linter wording/secondary-coverage feedback. Routed
-            through a dedicated directive-free channel (Issue #182); never emits OVERRIDE
-            or ranking-precedence language and never mutates the contract.
-
+        residual_guidance (str | None): Free-text guidance for regeneration.
+        previous_plan (CommitPlan | None): Previous plan supplied as regeneration context.
+        ranked_candidates (list | None): Precomputed intent candidates.
+        contract: Semantic contract whose locked values must be preserved.
+        gold_guidance (str | None): Wording and secondary-intent feedback that must not alter locked contract fields.
+    
     Returns:
-        str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
+        str: The assembled system prompt.
     """
     sop_data = load_sop()
     if not sop_data and verbose:
