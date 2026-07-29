@@ -1022,6 +1022,43 @@ def test_gold_surface_mode_prints_findings_before_review_menu(monkeypatch, capsy
     assert gold_pos < menu_pos, "gold findings must print before the interactive review menu"
 
 
+def test_gold_surface_checklist_displayed_in_review_status(monkeypatch, capsys, tmp_path):
+    """Optional -i checklist: surface mode shows gold findings as a checklist in the review status_text.
+
+    Nice-to-have (#182): the interactive review menu surfaces gold findings as a
+    "[ ] CODE: message" checklist inside status_text, so the user sees them in the
+    menu itself, not only in the pre-menu console print.
+    """
+    import git_cg.main as main_mod
+
+    captured: dict[str, str] = {}
+    _gold_harness_mocks(monkeypatch, [_gold_plan(body="This commit adds a helper.")])
+    monkeypatch.setenv("GIT_CG_GOLD_MODE", "surface")
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+
+    def fake_prompt_with_gum(title, body, *, status_text=None):
+        captured["status_text"] = status_text or ""
+        return "Commit"
+
+    monkeypatch.setattr(main_mod, "prompt_with_gum", fake_prompt_with_gum)
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=True,
+    )
+    assert result is True
+    status = captured["status_text"]
+    assert "Gold lint checklist:" in status
+    assert "[ ] GOLD_BODY_INVENTORY:" in status
+
+
 def test_gold_strict_regen_recovers_and_writes(monkeypatch, capsys, tmp_path):
     """Strict: first plan fails gold, regen (clean body) passes, message writes."""
     writes = _gold_harness_mocks(

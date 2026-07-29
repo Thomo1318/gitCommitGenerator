@@ -55,6 +55,7 @@ from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E40
 from git_cg.interaction import (  # noqa: E402
     can_open_tty,
     emit_terminal_bell,
+    format_gold_findings_status,
     format_issue_reference_status,
     format_regeneration_guidance_status,
     prompt_issue_number,
@@ -99,6 +100,7 @@ class ReviewState:
     regeneration_guidance: str | None = None
     active_directives: dict[str, str] = field(default_factory=dict)
     residual_guidance: str | None = None
+    gold_findings: list = field(default_factory=list)
 
     def render(self) -> str:
         """
@@ -843,12 +845,14 @@ def _interactive_review(
 
     while True:
         result_string = review_state.render()
-        status_text = "\n".join(
-            [
-                format_issue_reference_status(review_state.issue_references),
-                format_regeneration_guidance_status(review_state.regeneration_guidance),
-            ]
-        )
+        status_parts = [
+            format_issue_reference_status(review_state.issue_references),
+            format_regeneration_guidance_status(review_state.regeneration_guidance),
+        ]
+        gold_status = format_gold_findings_status(review_state.gold_findings or None)
+        if gold_status:
+            status_parts.append(gold_status)
+        status_text = "\n".join(status_parts)
         action = prompt_with_gum(
             title="git-cg Generated Commit",
             body=result_string,
@@ -1957,6 +1961,7 @@ def _run_commit_generation(
             signals=gen_context.diff_signals,
             ranked_intents=gen_context.ranked_intents,
         )
+        review_state.gold_findings = list(gold_report.findings)
         gold_guidance = None
         if gold_mode != "off" and gold_report.findings:
             codes = ", ".join(sorted(gold_report.codes()))

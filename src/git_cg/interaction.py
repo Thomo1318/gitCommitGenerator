@@ -266,6 +266,29 @@ def format_regeneration_guidance_status(regeneration_guidance: str | None, *, ma
     return f"Regeneration guidance: {truncated_guidance}"
 
 
+def format_gold_findings_status(findings: Sequence[object] | None) -> str:
+    """
+    Render gold lint findings as an interactive checklist for the review menu.
+
+    Parameters:
+        findings (Sequence[object] | None): Gold findings (objects with ``code`` and
+            ``message`` attributes), or None when gold did not run or passed.
+
+    Returns:
+        str: An empty string when there are no findings (no checklist shown); otherwise a
+        multi-line checklist, one ``[ ] CODE: message`` entry per finding, prefixed with a
+        "Gold lint checklist:" header.
+    """
+    if not findings:
+        return ""
+    lines = ["Gold lint checklist:"]
+    for finding in findings:
+        code = getattr(finding, "code", "GOLD")
+        message = getattr(finding, "message", "")
+        lines.append(f"[ ] {code}: {message}")
+    return "\n".join(lines)
+
+
 def format_issue_reference_status(issue_references: Sequence[IssueReference] | None) -> str:
     """
     Render a compact status line describing the current issue reference(s).
