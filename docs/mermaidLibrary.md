@@ -1790,3 +1790,83 @@ requirementDiagram
 
     AuthModule - satisfies -> AuthReq
 ```
+
+## Option 20: PR #188 State Diagram
+
+Design notes:
+
+- Two composite states — RES (mode resolution, happens once) and GEN (the generation lifecycle that runs under the resolved mode). This maps 1:1 to resolve_gold_mode → \_run_commit_generation.
+- Terminal states are explicit: Write (message lands) and Abort (non-zero exit) — the two only ways out, matching the fail-mode matrix.
+- Findings as a nested state — the four mode-specific behaviours (suppress/print/menu/regen) are sub-states, so the diagram shows that mode only gates what happens to findings, never whether the linter runs.
+- Notes carry the locked invariants (precedence order, report=False redaction) — same role the capstone's K_INV keybox plays.
+- What it deliberately omits: the three-channel prompt assembly and the B1 ranker — those are flows, not states, and the PR's existing architecture mermaid already covers them.
+
+```mermaid
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#f6f8fa',
+      'primaryBorderColor': '#d0d7de',
+      'primaryTextColor': '#24292f',
+      'lineColor': '#57606a'
+    }
+  }
+}%%
+stateDiagram-v2
+  accTitle: PR 188 gold mode resolution and strict regen lifecycle
+  accDescr: Gold mode resolves from env, flags, and TTY into one of four modes; strict mode drives a single-attempt regeneration lifecycle ending in write or abort.
+
+  state "Mode resolution" as RES {
+    [*] --> EnvCheck
+    EnvCheck: GIT_CG_GOLD_MODE set?
+    EnvCheck --> EnvMode: off / warn / strict
+    EnvCheck --> StrictFlag: unset
+    StrictFlag: --strict or --gold-strict?
+    StrictFlag --> Strict: yes
+    StrictFlag --> TTY: no
+    TTY: interactive + usable TTY?
+    TTY --> Surface: yes
+    TTY --> Warn: no (default)
+  }
+
+  state "Generation lifecycle" as GEN {
+    [*] --> Check: check_commit_gold
+    Check --> Clean: no findings
+    Check --> Findings: findings emitted
+
+    Clean --> Write
+
+    state Findings {
+      [*] --> ModeGate
+      ModeGate --> Suppressed: off
+      ModeGate --> PrintOnly: warn
+      ModeGate --> MenuFirst: surface
+      ModeGate --> RegenGate: strict
+    }
+
+    Suppressed --> Write
+    PrintOnly --> Write: never blocks
+    MenuFirst --> Write: user decides
+    RegenGate --> Attempt1: ≤1 attempt
+    Attempt1 --> Recheck
+    Recheck --> Write: findings cleared
+    Recheck --> Abort: still failing
+
+    Abort: _abort(strict=True, report=False)
+    Abort --> [*]: non-zero exit
+  }
+
+  Write --> [*]: message written
+
+  note right of RES
+    Precedence (locked):
+    env > flags > TTY > default.
+    surface is never a valid env value.
+  end note
+
+  note right of Abort
+    Codes/summary only.
+    Never full body or diff.
+  end note
+```

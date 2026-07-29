@@ -4,11 +4,11 @@
 
 ## 🗺️ Architecture / Flow
 
-<!-- Optional. Include one small Mermaid diagram when this PR introduces or changes
+<!-- Optional. Include a Mermaid diagram (or more if warranted) when this PR introduces or changes
      a multi-step flow, feature-flagged path, or external boundary.
      Delete this entire section if N/A.
      Prefer graph TD, a short legend, and clear shapes:
-     module/path, decision, external, state store. -->
+     module/path, decision, external, state store. Refer to "$HOME/dev/activeProjects/gitCommitGenerator/docs/mermaid_guide.md" and "$HOME/dev/activeProjects/gitCommitGenerator/docs/mermaidLibrary.md" for guidance on types of diagrams, style, syntax, and an example library. -->
 
 ## 🛠️ Changes Made
 
