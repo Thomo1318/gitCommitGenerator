@@ -431,6 +431,20 @@ class TestDevelopmentMdAdr0005PhaseOwnership:
         assert table_end_marker in section
         assert section.index(table_end_marker) < section.index("### Analysis vs prompt diff (interim until Phase 11)")
 
+    def test_shadow_workspace_hardlink_note_present(self):
+        content = self._content()
+        section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
+        assert "### Shadow workspace clone hardlinks (Phase 7.5)" in section
+        assert "git clone --local" in section
+        assert "graph_build_latency_ms" in section
+
+    def test_shadow_hardlink_note_appears_after_analysis_subsection(self):
+        content = self._content()
+        section = _section_after_heading(content, "## ADR-0005 phase ownership (intent engine)")
+        assert section.index("### Analysis vs prompt diff (interim until Phase 11)") < section.index(
+            "### Shadow workspace clone hardlinks (Phase 7.5)"
+        )
+
 
 # ===========================================================================
 # README.md — Issue #161 Issue Auto-Detection tip

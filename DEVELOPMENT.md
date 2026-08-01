@@ -389,6 +389,18 @@ ranking, contract resolution, and telemetry hashing.
 payload only**, preferring whole-file omission with an inventory footer over a
 mid-hunk `[:50000]` chop. This is **not** the Phase 11 packer product.
 
+### Shadow workspace clone hardlinks (Phase 7.5)
+
+Phase 7.5 opt-in CRG refresh uses `git clone --local` into a temporary shadow
+workspace. On POSIX filesystems this typically hardlinks object store files from
+the source repo, so clone cost stays low relative to a full copy. Network clones,
+cross-device paths, and environments that disable hardlinks fall back to slower
+copies — keep `GIT_CG_SEMANTIC_REFRESH_GRAPH` opt-in on large repos and prefer
+same-filesystem local checkouts when measuring refresh latency.
+
+Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
+telemetry field (no separate payload key).
+
 ## Promptfoo evaluation (offline)
 
 Offline **eval + red-team** against local MTPLX (not the live commit/hook path):
