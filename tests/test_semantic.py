@@ -852,3 +852,64 @@ def test_phase75_refresh_timeout_fail_open(monkeypatch):
     assert out["shadow_workspace_used"] is True
     assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.REFRESH_TIMEOUT.value
     assert "refresh_graph:TimeoutError" in (out.get("graph_fallback_reasons") or [])
+
+
+def test_phase75_shadow_clone_sync_latency_accumulates_into_graph_build(monkeypatch):
+    """Nice-to-have: shadow clone/sync ms folds into existing graph_build_latency_ms."""
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def timed_shadow(*a, **k):
+        yield type(
+            "Shadow",
+            (),
+            {"path": "/tmp/shadow-latency", "clone_sync_latency_ms": 12.5},
+        )()
+
+    def fake_refresh(**kwargs):
+        return GraphOperationResult(
+            ok=True,
+            operation="refresh_graph",
+            outcome=GraphOutcome.OK,
+            data={},
+            latency_ms=3.0,
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", timed_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", fake_refresh)
+    # Override base collect_graph_telemetry so build latency is known (3.0 from refresh
+    # is not used when collect_graph_telemetry is stubbed — stub returns build=4.0).
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 4.0, "graph_query_latency_ms": 0.7},
+    )
+
+    out = _collect_semantic_producer_metrics("/live/repo", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["semantic_refresh_graph"] == "ran"
+    # 4.0 (refresh/build) + 12.5 (clone/sync) — no new telemetry keys.
+    assert out["graph_build_latency_ms"] == 16.5
+    assert "clone_sync_latency_ms" not in out
+    assert "shadow_clone_sync_latency_ms" not in out
+
+
+def test_phase75_refresh_off_graph_build_latency_excludes_shadow(monkeypatch):
+    """Refresh off: graph_build_latency_ms stays at collect_graph_telemetry value only."""
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 1.25, "graph_query_latency_ms": 0.7},
+    )
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out.get("shadow_workspace_used") is False
+    assert out["graph_build_latency_ms"] == 1.25

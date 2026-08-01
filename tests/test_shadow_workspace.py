@@ -534,3 +534,17 @@ def test_index_only_cleanup_when_body_raises_mid_context(mock_repo):
         raise RuntimeError("simulated refresh failure")
     assert shadow_path is not None
     assert not os.path.exists(shadow_path)
+
+
+def test_clone_sync_latency_ms_recorded_on_successful_enter(mock_repo):
+    """Phase 7.5 nice-to-have: clone_sync_latency_ms is set after successful enter."""
+    with shadow_workspace(mock_repo, include_unstaged=False) as workspace:
+        assert isinstance(workspace.clone_sync_latency_ms, float)
+        assert workspace.clone_sync_latency_ms > 0.0
+
+
+def test_clone_sync_latency_ms_defaults_zero_before_enter(tmp_path):
+    """Attribute exists and is 0.0 before __enter__ runs clone/sync."""
+    ws = ShadowWorkspace(str(tmp_path / "source"), include_unstaged=False)
+    assert ws.clone_sync_latency_ms == 0.0
+    ws.temp_dir_obj.cleanup()

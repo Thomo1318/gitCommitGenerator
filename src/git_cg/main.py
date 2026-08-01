@@ -1546,6 +1546,8 @@ def _collect_semantic_producer_metrics(
         result.setdefault("shadow_workspace_used", False)
         result.setdefault("semantic_refresh_graph", SemanticRefreshGraph.SKIPPED.value)
         result.setdefault("shadow_fail_open_reason", ShadowFailOpenReason.NONE.value)
+        # Accumulated only on refresh-on path; folded into graph_build_latency_ms below.
+        shadow_clone_sync_latency_ms = 0.0
 
         build_result = None
         if should_refresh_graph():
@@ -1595,8 +1597,17 @@ def _collect_semantic_producer_metrics(
 
             enter_error: BaseException | None = None
             refresh_error: BaseException | None = None
+            # Phase 7.5 nice-to-have: fold shadow clone/sync ms into graph_build_latency_ms
+            # (no new telemetry keys).
+            import time as _time
+
+            _shadow_t0 = _time.perf_counter()
             try:
                 with shadow_workspace(repo_root, include_unstaged=False) as shadow:
+                    shadow_clone_sync_latency_ms = float(getattr(shadow, "clone_sync_latency_ms", 0.0) or 0.0)
+                    if shadow_clone_sync_latency_ms <= 0.0:
+                        # Fallback for test fakes that omit the attribute.
+                        shadow_clone_sync_latency_ms = round((_time.perf_counter() - _shadow_t0) * 1000.0, 3)
                     # Enter succeeded (clone + staged sync). Refresh is a separate fail-open stage.
                     try:
                         build_result = refresh_graph(repo_root=shadow.path, full_rebuild=False, postprocess="minimal")
@@ -1604,6 +1615,9 @@ def _collect_semantic_producer_metrics(
                         refresh_error = refresh_exc
             except Exception as shadow_exc:
                 enter_error = shadow_exc
+                # Enter failed before we could read workspace.clone_sync_latency_ms.
+                if shadow_clone_sync_latency_ms <= 0.0:
+                    shadow_clone_sync_latency_ms = round((_time.perf_counter() - _shadow_t0) * 1000.0, 3)
 
             if enter_error is not None:
                 parts = _cmd_parts(enter_error)
@@ -1695,7 +1709,9 @@ def _collect_semantic_producer_metrics(
             build_result=build_result,
             query_results=query_results,
         )
-        result["graph_build_latency_ms"] = float(graph_meta.get("graph_build_latency_ms") or 0.0)
+        build_ms = float(graph_meta.get("graph_build_latency_ms") or 0.0)
+        # Phase 7.5 (#180): accumulate shadow clone/sync into existing graph_build_latency_ms.
+        result["graph_build_latency_ms"] = round(build_ms + float(shadow_clone_sync_latency_ms or 0.0), 3)
         # Product query latency accumulates into existing graph_query_latency_ms.
         result["graph_query_latency_ms"] = float(graph_meta.get("graph_query_latency_ms") or 0.0)
         if stats_result.ok:
