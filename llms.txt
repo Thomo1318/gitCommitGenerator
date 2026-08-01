@@ -1,4 +1,4 @@
-# brief 0.9.4 — /Users/admin/dev/activeProjects/gitCommitGenerator
+# brief 0.9.4 — /home/runner/work/gitCommitGenerator/gitCommitGenerator
 
 **Language:** JavaScript (also: Python)
 **Package Manager:** Bun (`bun install`)
@@ -31,9 +31,9 @@ Dependencies: 20 runtime, 1 dev
 
 | Name | Command |
 |------|---------|
-| test | `echo "Error: no test specified" && exit 1` |
 | validate | `node scripts/validate_commit.mjs` |
 | release | `uv run python -m git_cg.main release` |
+| test | `echo "Error: no test specified" && exit 1` |
 
 
 ## Tools
@@ -204,10 +204,8 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
   - issue: .github/ISSUE_TEMPLATE/implementation_task.md
   - pull request: .github/PULL_REQUEST_TEMPLATE.md
 
-**Git:** branch `docs/llms-txt-brief-ci` (default: `main`) — 316 commits
-- origin: https://github.com/Thomo1318/gitCommitGenerator.git
-
-**Lines:** 81447 code, 142 files (tokei)
+**Git:** branch `main` — 1 commits
+- origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-1450.3ms | 738 files checked | 21/539 tools matched
+69.2ms | 738 files checked | 21/539 tools matched
