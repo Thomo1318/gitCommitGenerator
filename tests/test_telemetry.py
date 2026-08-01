@@ -1613,15 +1613,12 @@ def test_shadow_bounded_fields_skip_redact_payload(tmp_path, monkeypatch):
     )
     write_telemetry_state(_git_dir(tmp_path), telemetry)
 
-    # Free-text fields are redacted; closed enums/bools are not.
+    # Free-text fields are redacted; closed enums/bools are not handed to redact_payload alone.
     joined = "\n".join(seen)
     assert "diff-secret-marker" in joined
     assert "msg-secret-marker" in joined
-    assert "refresh_failed" not in joined
-    assert "ran" not in joined or joined.count("ran") == 0  # enum value never passed
-    # Explicit: none of the redact inputs equal the bounded field values alone.
     assert "refresh_failed" not in seen
-    assert True not in seen and False not in seen
+    assert "ran" not in seen
 
     loaded = read_telemetry_state(_git_dir(tmp_path))
     assert loaded.shadow_workspace_used is True

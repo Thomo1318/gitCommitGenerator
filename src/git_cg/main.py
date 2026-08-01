@@ -1392,6 +1392,33 @@ def _write_telemetry_state_safe(
             console.log(f"[yellow]Failed to write telemetry state: {e}[/yellow]")
 
 
+def _merge_graph_fallback_reasons(existing: list | None, *extra_groups: list | str | None) -> list[str]:
+    """Append, de-dupe (order-preserving), and bound graph fallback reasons.
+
+    Phase 7.5 (#180): keep one vocabulary-bound merge path for shadow/refresh
+    fail-open reasons and later product/stage fallbacks.
+    """
+    from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
+
+    merged: list[str] = []
+    seen: set[str] = set()
+
+    def _extend(group: list | str | None) -> None:
+        if group is None:
+            return
+        values = [group] if isinstance(group, str) else list(group or [])
+        for reason in values:
+            if not isinstance(reason, str) or not reason or reason in seen:
+                continue
+            seen.add(reason)
+            merged.append(reason)
+
+    _extend(existing)
+    for group in extra_groups:
+        _extend(group)
+    return _bound_str_list(merged, max_items=MAX_FALLBACK_REASONS)
+
+
 def _collect_semantic_producer_metrics(
     repo_root: str,
     *,
@@ -1554,7 +1581,6 @@ def _collect_semantic_producer_metrics(
             # Phase 7.5 (#180) Policy A: refresh runs against an index-only shadow
             # (staged content only); stats/product queries stay on the live root.
             result["semantic_refresh_graph"] = SemanticRefreshGraph.REQUESTED.value
-            from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
             from git_cg.shadow_workspace import shadow_workspace
 
             def _cmd_parts(exc: BaseException) -> list[str]:
@@ -1566,9 +1592,10 @@ def _collect_semantic_producer_metrics(
                 return []
 
             def _append_fallback(reason: str) -> None:
-                reasons = list(result.get("graph_fallback_reasons") or [])
-                reasons.append(reason)
-                result["graph_fallback_reasons"] = _bound_str_list(reasons, max_items=MAX_FALLBACK_REASONS)
+                result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+                    result.get("graph_fallback_reasons"),
+                    reason,
+                )
 
             def _fail_open_shadow(
                 *,
@@ -1673,6 +1700,8 @@ def _collect_semantic_producer_metrics(
 
         changed_files = sorted(staged_files.keys()) if staged_files else []
         result["changed_files"] = list(changed_files)
+        # Capture before product merge/empty defaults so shadow/refresh Vocab1 survives.
+        prior_graph_fallback_reasons = list(result.get("graph_fallback_reasons") or [])
         try:
             product, product_queries = collect_graph_product_bundle(
                 repo_root=repo_root,
@@ -1682,28 +1711,24 @@ def _collect_semantic_producer_metrics(
                 detail_level=COMMIT_PATH_GRAPH_DETAIL_LEVEL,
             )
             query_results.extend(product_queries)
-            # Preserve shadow/refresh fail-open reasons already recorded above.
-            prior_reasons = list(result.get("graph_fallback_reasons") or [])
             for key, value in product.items():
                 result[key] = value
-            if prior_reasons:
-                from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
-
-                merged = prior_reasons + list(result.get("graph_fallback_reasons") or [])
-                # De-dupe while preserving order.
-                seen: set[str] = set()
-                ordered: list[str] = []
-                for reason in merged:
-                    if not isinstance(reason, str) or reason in seen:
-                        continue
-                    seen.add(reason)
-                    ordered.append(reason)
-                result["graph_fallback_reasons"] = _bound_str_list(ordered, max_items=MAX_FALLBACK_REASONS)
+            # Preserve shadow/refresh fail-open reasons already recorded above.
+            result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+                prior_graph_fallback_reasons,
+                result.get("graph_fallback_reasons"),
+            )
         except Exception as product_exc:
             if verbose:
                 console.log(f"[yellow]Semantic graph product bundle failed: {product_exc}[/yellow]")
             for key, value in empty_graph_product_fields().items():
                 result[key] = value
+            # empty_graph_product_fields() resets graph_fallback_reasons to []; restore
+            # any shadow/refresh fail-open reasons recorded before the product stage.
+            result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+                prior_graph_fallback_reasons,
+                result.get("graph_fallback_reasons"),
+            )
 
         graph_meta = collect_graph_telemetry(
             build_result=build_result,
@@ -1731,31 +1756,11 @@ def _collect_semantic_producer_metrics(
         result["graph_query_latency_ms"] = 0.0
         result["crg_schema_version"] = None
 
-        from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
-
-        reasons = list(result.get("graph_fallback_reasons") or [])
-        reasons.append(f"graph_stage:{type(graph_exc).__name__}")
-        result["graph_fallback_reasons"] = _bound_str_list(reasons, max_items=MAX_FALLBACK_REASONS)
+        result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+            result.get("graph_fallback_reasons"),
+            f"graph_stage:{type(graph_exc).__name__}",
+        )
     return result
-
-
-def _resolve_llm_root(repo_root: str, semantic_shadow: str | None) -> str:
-    """
-    Resolve the effective LLM context root for commit generation.
-
-    When `semantic_shadow` is provided (Phase 7.5 #180), generation runs against an
-    index-only shadow workspace rooted at that path; otherwise the live repo root is used.
-
-    Parameters:
-        repo_root: The live repository root (from `git rev-parse --show-toplevel`).
-        semantic_shadow: Optional shadow workspace path override.
-
-    Returns:
-        The effective root path for LLM context collection.
-    """
-    if semantic_shadow is not None:
-        return str(semantic_shadow)
-    return repo_root
 
 
 @opik.track(project_name="gitCommitGenerator")
@@ -1773,7 +1778,6 @@ def _run_commit_generation(
     gui_editor: bool = False,
     enable_semantic: bool | None = None,
     gold_strict: bool = False,
-    semantic_shadow: str | None = None,
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
@@ -1812,10 +1816,6 @@ def _run_commit_generation(
     except Exception:
         repo_root = "."
         repo_name = "unknown"
-
-    # Phase 7.5 (#180): shadow workspace may override the effective root.
-    repo_root = _resolve_llm_root(repo_root, semantic_shadow)
-    repo_name = os.path.basename(repo_root)
 
     # Phase 14: Tag Sentry events with the code-review-graph schema version
     # so signal regressions can be correlated with CRG upgrades.
@@ -2168,8 +2168,8 @@ def _run_commit_generation(
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
 
         if dry_run:
-            # Phase 7.5 (#180): bounded shadow-state echo (flag-on only, quiet dry-run).
-            if enable_semantic and not verbose:
+            # Phase 7.5 (#180): bounded shadow-state echo (resolved semantic-on, quiet dry-run).
+            if semantic_enabled and not verbose:
                 from git_cg.telemetry import ShadowFailOpenReason
 
                 shadow_used = "true" if shadow_workspace_used else "false"
@@ -2371,7 +2371,6 @@ def main_callback(
         interactive=interactive,
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
-        semantic_shadow=None,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -2437,7 +2436,6 @@ def commit(
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
-        semantic_shadow=None,
     )
 
 
