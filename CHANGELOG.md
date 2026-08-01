@@ -18,6 +18,42 @@
 ### 📝 Documentation
 
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+
+## v0.9.0
+
+### Miscellaneous
+
+- 👷 ci(llms): auto-generate root llms.txt map via pinned brief
+- ✅ test(semantic): cover Phase 7.5 shadow fail-open and telemetry matrix (#180)
+- 📝 docs(semantic): note POSIX hardlinks for shadow clone --local (#180)
+- 📝 docs(semantic): record Policy A index-only refresh, R9 template guard (#180)
+- 📝 docs(llms): auto-update llms.txt
+- 📝 docs(todo): capture backlog research and integration notes
+- 📝 docs(tui): add Mermaid TUI storyboard guide for agents
+- 📝 docs(dev): document offline Promptfoo eval entrypoint
+- 📝 docs(adr): formalise Promptfoo Phase 8.5 metrics boundary
+- 📝 docs(templates): add Telemetry sections and relative mermaid paths
+- Merge pull request #199 from Thomo1318/feat/180-staged-index-shadow-isolation-for-semantic-refresh
+- Merge pull request #198 from Thomo1318/hygiene/repo-docs-telemetry-tui-guide
+- Merge pull request #197 from Thomo1318/hotfix/llms-brief-primary-language
+- Merge pull request #196 from Thomo1318/docs/llms-txt-brief-ci
+
+### Fixed
+
+- 🚑 fix(ci): drop brief -tracked so llms.txt primary language is Python
+- 🥅 fix(semantic): preserve fallback reasons, drop dead shadow root (#180)
+- 🥅 fix(semantic): shadow fail-open stages, persist Phase 7.5 telemetry (#180)
+
+### Changed
+
+- 🥅 fix(semantic): preserve fallback reasons, drop dead shadow root (#180)
+
+### Added
+
+- ✨ feat(semantic): fold shadow clone/sync latency into graph build ms (#180)
+- ✨ feat(shadow): add shadow_workspace_index_only for Policy A refresh (#180)
+- 🥅 fix(semantic): shadow fail-open stages, persist Phase 7.5 telemetry (#180)
+
 ## v0.8.0
 
 ### Added
