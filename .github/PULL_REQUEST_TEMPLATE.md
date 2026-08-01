@@ -8,7 +8,7 @@
      a multi-step flow, feature-flagged path, or external boundary.
      Delete this entire section if N/A.
      Prefer graph TD, a short legend, and clear shapes:
-     module/path, decision, external, state store. Refer to "$HOME/dev/activeProjects/gitCommitGenerator/docs/mermaid_guide.md" and "$HOME/dev/activeProjects/gitCommitGenerator/docs/mermaidLibrary.md" for guidance on types of diagrams, style, syntax, and an example library. -->
+     module/path, decision, external, state store. Refer to "docs/mermaid_guide.md" and "docs/mermaidLibrary.md" for guidance on types of diagrams, style, syntax, and an example library. -->
 
 ## 🛠️ Changes Made
 
@@ -47,6 +47,34 @@
 
 - **Change Types**: <!-- e.g., feat, fix, docs, refactor, test -->
 - **Changelog Groups**: <!-- e.g., Added, Changed, Fixed, Removed -->
+
+## 📡 Telemetry (Opik / Sentry)
+
+<!-- Required when this PR touches generation, hooks, gold, ranking, recover, evals, or observability.
+     Delete this entire section if N/A (docs-only, pure CI cosmetic, etc.).
+     Field catalogues live on the owning phase issue under the same heading; this PR must not invent
+     parallel metrics outside GenerationTelemetry / established eval lanes.
+     Boundary: Opik = closed enums/counts/scores; Sentry = failure tags only.
+     Never: diffs, commit bodies, guidance free text, sidecar JSON, secrets.
+     Promptfoo batch eval is NOT GenerationTelemetry — see ADR-0011 § Phase 8.5. -->
+
+### Field tables
+
+| Field / signal | Sink (Opik `GenerationTelemetry` / Opik eval trace / Sentry tag) | Notes |
+| --- | --- | --- |
+| <!-- e.g. gold_mode --> | <!-- Opik allowlist / Sentry tag --> | <!-- closed enum / count / bool --> |
+
+### Non-goals
+
+- [ ] No raw diffs, full commit messages, or sidecar payloads in Opik/Sentry
+- [ ] No high-cardinality Sentry “metrics” for product funnel (use Opik)
+- [ ] No Promptfoo→live-hook field bleed (batch eval stays `sync_promptfoo_to_opik.py`)
+
+### Verification
+
+- [ ] New/changed fields on allowlist + redaction tests (if `GenerationTelemetry`)
+- [ ] Owning issue `## 📡 Telemetry` DoD items addressed or explicitly deferred with link
+
 
 ## ⚠️ Risks / Things to Watch
 
