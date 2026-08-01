@@ -95,15 +95,27 @@
 
 TODO:
 
+- Determine how difficult it would be to rename the tool ACE (A.C.E) "Automatic Commit Engine"
+
+---
+
+Review [git-pkgs](https://github.com/git-pkgs) and determine if its tools could improve `git-cg`
+
+---
+
+Review [OpenLore](https://github.com/clay-good/OpenLore) and identify if there are features we should consider integrating into our tool, could we include `OpenLore` in our tool, compare it to existing similar tools, document the findings.
+
+---
+
 - Consider creating a [Gradio](https://gradio.app/) integration
+
+---
 
 - Determine a solution to integrate this action:
   - on/off/custom (`if blast radius >x` or `if review identifies risk >x`, etc.), ? Other scenarios?
   - If `git-cg` is running in `hook-mode` and it is identified that the action requires user interaction (determine use cases) alert the user (? Use `alerter` so the user can interact by clicking yes/no/other) that then pops open the TUI for the user to act, scenarios like confirming a split commit, acknowledging a high risk item or blast radius, etc.
 
-TODO:
-
-- force `sd` instead of `sed`
+---
 
 - Review [fitinprogress](https://open-vsx.org/vscode/item?itemName=YusukeAbe.gitinprogress) to identify features to include in `git-cg`
 
@@ -426,7 +438,6 @@ Your API keys sit in the hardware-backed iOS keychain and are sent only to the s
 - [ ] Look at [Janis Article](https://medium.com/@PowerUpSkills/stop-making-ai-agents-rediscover-your-codebase-and-burn-your-tokens-7943325671d4)
 
 ---
-
 
 ---
 
