@@ -38,6 +38,30 @@ class PreflightMode(enum.StrEnum):
     SKIPPED = "skipped"
 
 
+class SemanticRefreshGraph(enum.StrEnum):
+    """Whether the opt-in graph refresh ran on the generate path (Phase 7.5 #180).
+
+    Failure detail is carried by ShadowFailOpenReason, not by this enum.
+    """
+
+    SKIPPED = "skipped"
+    REQUESTED = "requested"
+    RAN = "ran"
+
+
+class ShadowFailOpenReason(enum.StrEnum):
+    """Closed telemetry category for shadow/refresh fail-open (Phase 7.5 #180).
+
+    Exactly five members — do not collapse into fewer categories.
+    """
+
+    NONE = "none"
+    SHADOW_CREATE_FAILED = "shadow_create_failed"
+    SHADOW_SYNC_STAGED = "shadow_sync_staged"
+    REFRESH_TIMEOUT = "refresh_timeout"
+    REFRESH_FAILED = "refresh_failed"
+
+
 @dataclass
 class DeterministicScoreCard:
     """Binary pass/fail structural validation results."""
@@ -99,6 +123,10 @@ class GenerationTelemetry:
     test_gaps_count: int | None = None  # optional raw count; summary/debug (Issue #162 nice-to-have)
     semantic_context_schema_version: str = ""
     semantic_context_fallback_reasons: list[str] | None = None
+    # Phase 7.5 shadow isolation (Issue #180).
+    shadow_workspace_used: bool = False
+    semantic_refresh_graph: str = SemanticRefreshGraph.SKIPPED.value
+    shadow_fail_open_reason: str = ShadowFailOpenReason.NONE.value
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -639,6 +667,10 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("test_gaps_count", None)
             data.setdefault("semantic_context_schema_version", "")
             data.setdefault("semantic_context_fallback_reasons", None)
+            # Phase 7.5 shadow isolation defaults (Issue #180).
+            data.setdefault("shadow_workspace_used", False)
+            data.setdefault("semantic_refresh_graph", SemanticRefreshGraph.SKIPPED.value)
+            data.setdefault("shadow_fail_open_reason", ShadowFailOpenReason.NONE.value)
             # Normalise enum-ish values to plain strings for dataclass storage.
             mode = data.get("preflight_mode")
             if isinstance(mode, PreflightMode):
@@ -672,6 +704,18 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["semantic_context_fallback_reasons"] = [str(item) for item in reasons if item is not None]
             else:
                 data["semantic_context_fallback_reasons"] = None
+            # Phase 7.5 normalise (Issue #180): bounded bool + closed enums.
+            data["shadow_workspace_used"] = bool(data.get("shadow_workspace_used"))
+            refresh_state = data.get("semantic_refresh_graph")
+            if isinstance(refresh_state, SemanticRefreshGraph):
+                data["semantic_refresh_graph"] = refresh_state.value
+            elif refresh_state not in {s.value for s in SemanticRefreshGraph}:
+                data["semantic_refresh_graph"] = SemanticRefreshGraph.SKIPPED.value
+            fail_reason = data.get("shadow_fail_open_reason")
+            if isinstance(fail_reason, ShadowFailOpenReason):
+                data["shadow_fail_open_reason"] = fail_reason.value
+            elif fail_reason not in {r.value for r in ShadowFailOpenReason}:
+                data["shadow_fail_open_reason"] = ShadowFailOpenReason.NONE.value
             return GenerationTelemetry(**data)
     except Exception:
         return None

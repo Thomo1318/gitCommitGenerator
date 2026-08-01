@@ -1285,6 +1285,9 @@ def _write_telemetry_state_safe(
     test_gaps_count: int | None = None,
     semantic_context_schema_version: str = "",
     semantic_context_fallback_reasons: list | None = None,
+    shadow_workspace_used: bool = False,
+    semantic_refresh_graph: str = "skipped",
+    shadow_fail_open_reason: str = "none",
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1320,6 +1323,9 @@ def _write_telemetry_state_safe(
         test_gaps_count (int | None): Optional raw test-gap count for analytics/debug.
         semantic_context_schema_version (str): SemanticDiffSummary schema version when built.
         semantic_context_fallback_reasons (list | None): Bounded redacted fallback reasons.
+        shadow_workspace_used (bool): Phase 7.5 — whether index-only shadow path engaged.
+        semantic_refresh_graph (str): Phase 7.5 — `skipped` · `requested` · `ran`.
+        shadow_fail_open_reason (str): Phase 7.5 — closed fail-open category (`none` default).
     """
     try:
         import dataclasses
@@ -1369,6 +1375,9 @@ def _write_telemetry_state_safe(
             semantic_context_fallback_reasons=(
                 list(semantic_context_fallback_reasons) if isinstance(semantic_context_fallback_reasons, list) else None
             ),
+            shadow_workspace_used=bool(shadow_workspace_used),
+            semantic_refresh_graph=str(semantic_refresh_graph or "skipped"),
+            shadow_fail_open_reason=str(shadow_fail_open_reason or "none"),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1520,6 +1529,8 @@ def _collect_semantic_producer_metrics(
     try:
         from git_cg.git_index import should_refresh_graph
         from git_cg.graph_context import (
+            GraphOperationResult,
+            GraphOutcome,
             collect_graph_product_bundle,
             collect_graph_telemetry,
             graph_stats,
@@ -1530,15 +1541,118 @@ def _collect_semantic_producer_metrics(
             COMMIT_PATH_GRAPH_MAX_DEPTH,
             empty_graph_product_fields,
         )
+        from git_cg.telemetry import SemanticRefreshGraph, ShadowFailOpenReason
+
+        result.setdefault("shadow_workspace_used", False)
+        result.setdefault("semantic_refresh_graph", SemanticRefreshGraph.SKIPPED.value)
+        result.setdefault("shadow_fail_open_reason", ShadowFailOpenReason.NONE.value)
 
         build_result = None
         if should_refresh_graph():
-            build_result = refresh_graph(repo_root=repo_root, full_rebuild=False, postprocess="minimal")
-            if (not build_result.ok) and verbose:
-                console.log(
-                    f"[yellow]Semantic refresh_graph unavailable: "
-                    f"{build_result.error_type}: {build_result.error}[/yellow]"
+            # Phase 7.5 (#180) Policy A: refresh runs against an index-only shadow
+            # (staged content only); stats/product queries stay on the live root.
+            result["semantic_refresh_graph"] = SemanticRefreshGraph.REQUESTED.value
+            from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
+            from git_cg.shadow_workspace import shadow_workspace
+
+            def _cmd_parts(exc: BaseException) -> list[str]:
+                cmd = getattr(exc, "cmd", None)
+                if isinstance(cmd, (list, tuple)):
+                    return [str(part) for part in cmd]
+                if isinstance(cmd, str):
+                    return cmd.split()
+                return []
+
+            def _append_fallback(reason: str) -> None:
+                reasons = list(result.get("graph_fallback_reasons") or [])
+                reasons.append(reason)
+                result["graph_fallback_reasons"] = _bound_str_list(reasons, max_items=MAX_FALLBACK_REASONS)
+
+            def _fail_open_shadow(
+                *,
+                category: ShadowFailOpenReason,
+                vocab1: str,
+                error_type: str,
+                error: str,
+                shadow_used: bool,
+            ) -> GraphOperationResult:
+                # Fail-open: commit generation must not fail on shadow/refresh errors.
+                result["shadow_workspace_used"] = shadow_used
+                result["shadow_fail_open_reason"] = category.value
+                _append_fallback(vocab1)
+                sentry_sdk.set_tag("shadow_fail_open_reason", category.value)
+                if verbose:
+                    console.log(
+                        f"[yellow]Shadow workspace refresh failed open: {error_type} ({category.value})[/yellow]"
+                    )
+                return GraphOperationResult(
+                    ok=False,
+                    operation="refresh_graph",
+                    outcome=GraphOutcome.ERROR,
+                    error_type=error_type,
+                    error=error[:200],
                 )
+
+            enter_error: BaseException | None = None
+            refresh_error: BaseException | None = None
+            try:
+                with shadow_workspace(repo_root, include_unstaged=False) as shadow:
+                    # Enter succeeded (clone + staged sync). Refresh is a separate fail-open stage.
+                    try:
+                        build_result = refresh_graph(repo_root=shadow.path, full_rebuild=False, postprocess="minimal")
+                    except Exception as refresh_exc:
+                        refresh_error = refresh_exc
+            except Exception as shadow_exc:
+                enter_error = shadow_exc
+
+            if enter_error is not None:
+                parts = _cmd_parts(enter_error)
+                if isinstance(enter_error, subprocess.CalledProcessError) and (
+                    "apply" in parts or ("diff" in parts and "--cached" in parts)
+                ):
+                    build_result = _fail_open_shadow(
+                        category=ShadowFailOpenReason.SHADOW_SYNC_STAGED,
+                        vocab1="shadow_sync:staged",
+                        error_type=type(enter_error).__name__,
+                        error=str(enter_error),
+                        shadow_used=False,
+                    )
+                else:
+                    build_result = _fail_open_shadow(
+                        category=ShadowFailOpenReason.SHADOW_CREATE_FAILED,
+                        vocab1=f"shadow_workspace:{type(enter_error).__name__}",
+                        error_type=type(enter_error).__name__,
+                        error=str(enter_error),
+                        shadow_used=False,
+                    )
+            elif refresh_error is not None:
+                if isinstance(refresh_error, TimeoutError):
+                    category = ShadowFailOpenReason.REFRESH_TIMEOUT
+                else:
+                    category = ShadowFailOpenReason.REFRESH_FAILED
+                build_result = _fail_open_shadow(
+                    category=category,
+                    vocab1=f"refresh_graph:{type(refresh_error).__name__}",
+                    error_type=type(refresh_error).__name__,
+                    error=str(refresh_error),
+                    shadow_used=True,
+                )
+            elif build_result is not None and not build_result.ok:
+                # refresh_graph returned a failed result without raising.
+                err_type = str(build_result.error_type or "failed")
+                build_result = _fail_open_shadow(
+                    category=ShadowFailOpenReason.REFRESH_FAILED,
+                    vocab1=f"refresh_graph:{err_type}",
+                    error_type=err_type,
+                    error=str(build_result.error or "refresh_graph failed"),
+                    shadow_used=True,
+                )
+            else:
+                result["shadow_workspace_used"] = True
+                result["semantic_refresh_graph"] = SemanticRefreshGraph.RAN.value
+                sentry_sdk.add_breadcrumb(category="lifecycle", message="shadow_workspace: used")
+        else:
+            sentry_sdk.add_breadcrumb(category="lifecycle", message="shadow_workspace: skipped")
 
         stats_result = graph_stats(repo_root=repo_root)
         query_results = [stats_result]
@@ -1554,8 +1668,23 @@ def _collect_semantic_producer_metrics(
                 detail_level=COMMIT_PATH_GRAPH_DETAIL_LEVEL,
             )
             query_results.extend(product_queries)
+            # Preserve shadow/refresh fail-open reasons already recorded above.
+            prior_reasons = list(result.get("graph_fallback_reasons") or [])
             for key, value in product.items():
                 result[key] = value
+            if prior_reasons:
+                from git_cg.semantic import MAX_FALLBACK_REASONS, _bound_str_list
+
+                merged = prior_reasons + list(result.get("graph_fallback_reasons") or [])
+                # De-dupe while preserving order.
+                seen: set[str] = set()
+                ordered: list[str] = []
+                for reason in merged:
+                    if not isinstance(reason, str) or reason in seen:
+                        continue
+                    seen.add(reason)
+                    ordered.append(reason)
+                result["graph_fallback_reasons"] = _bound_str_list(ordered, max_items=MAX_FALLBACK_REASONS)
         except Exception as product_exc:
             if verbose:
                 console.log(f"[yellow]Semantic graph product bundle failed: {product_exc}[/yellow]")
@@ -1594,6 +1723,25 @@ def _collect_semantic_producer_metrics(
     return result
 
 
+def _resolve_llm_root(repo_root: str, semantic_shadow: str | None) -> str:
+    """
+    Resolve the effective LLM context root for commit generation.
+
+    When `semantic_shadow` is provided (Phase 7.5 #180), generation runs against an
+    index-only shadow workspace rooted at that path; otherwise the live repo root is used.
+
+    Parameters:
+        repo_root: The live repository root (from `git rev-parse --show-toplevel`).
+        semantic_shadow: Optional shadow workspace path override.
+
+    Returns:
+        The effective root path for LLM context collection.
+    """
+    if semantic_shadow is not None:
+        return str(semantic_shadow)
+    return repo_root
+
+
 @opik.track(project_name="gitCommitGenerator")
 def _run_commit_generation(
     commit_msg_file: str,
@@ -1609,6 +1757,7 @@ def _run_commit_generation(
     gui_editor: bool = False,
     enable_semantic: bool | None = None,
     gold_strict: bool = False,
+    semantic_shadow: str | None = None,
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
@@ -1647,6 +1796,10 @@ def _run_commit_generation(
     except Exception:
         repo_root = "."
         repo_name = "unknown"
+
+    # Phase 7.5 (#180): shadow workspace may override the effective root.
+    repo_root = _resolve_llm_root(repo_root, semantic_shadow)
+    repo_name = os.path.basename(repo_root)
 
     # Phase 14: Tag Sentry events with the code-review-graph schema version
     # so signal regressions can be correlated with CRG upgrades.
@@ -1690,6 +1843,10 @@ def _run_commit_generation(
     if semantic_metrics.get("crg_schema_version"):
         crg_schema_version = str(semantic_metrics["crg_schema_version"])
         sentry_sdk.set_tag("crg_schema_version", crg_schema_version)
+    # Phase 7.5 (#180): shadow isolation state.
+    shadow_workspace_used = bool(semantic_metrics.get("shadow_workspace_used", False))
+    semantic_refresh_graph = str(semantic_metrics.get("semantic_refresh_graph", "skipped"))
+    shadow_fail_open_reason = str(semantic_metrics.get("shadow_fail_open_reason", "none"))
 
     opik_metadata = {
         "repo_name": repo_name,
@@ -1716,6 +1873,10 @@ def _run_commit_generation(
         "test_gaps_count": test_gaps_count,
         "semantic_context_schema_version": "",
         "semantic_context_fallback_reasons": None,
+        # Phase 7.5 (#180): shadow isolation.
+        "shadow_workspace_used": shadow_workspace_used,
+        "semantic_refresh_graph": semantic_refresh_graph,
+        "shadow_fail_open_reason": shadow_fail_open_reason,
     }
     if semantic_parser_metrics:
         # Flatten non-content parser metrics into the trace metadata.
@@ -1991,6 +2152,16 @@ def _run_commit_generation(
             console.print(Panel(result_string, title="Generated Commit Message", border_style="green"))
 
         if dry_run:
+            # Phase 7.5 (#180): bounded shadow-state echo (flag-on only, quiet dry-run).
+            if enable_semantic and not verbose:
+                from git_cg.telemetry import ShadowFailOpenReason
+
+                shadow_used = "true" if shadow_workspace_used else "false"
+                console.log(f"[dim]shadow_workspace used={shadow_used}[/dim]")
+                console.log(f"[dim]semantic_refresh_graph state={semantic_refresh_graph}[/dim]")
+                if shadow_fail_open_reason != ShadowFailOpenReason.NONE.value:
+                    console.log(f"[dim]shadow_fail_open reason={shadow_fail_open_reason}[/dim]")
+
             should_interact = interactive and can_open_tty()
             if interactive and not should_interact and verbose:
                 console.log(
@@ -2073,6 +2244,9 @@ def _run_commit_generation(
         else None,
         semantic_context_schema_version=semantic_context_schema_version,
         semantic_context_fallback_reasons=semantic_context_fallback_reasons,
+        shadow_workspace_used=shadow_workspace_used,
+        semantic_refresh_graph=semantic_refresh_graph,
+        shadow_fail_open_reason=shadow_fail_open_reason,
     )
 
     opik.flush_tracker()
@@ -2181,6 +2355,7 @@ def main_callback(
         interactive=interactive,
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
+        semantic_shadow=None,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -2246,6 +2421,7 @@ def commit(
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
+        semantic_shadow=None,
     )
 
 
