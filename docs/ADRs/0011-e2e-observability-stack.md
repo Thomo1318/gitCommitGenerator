@@ -12,10 +12,10 @@ A highly detailed cyberpunk architectural schematic showing the git-cg local CLI
 adr_number: "0011"
 title: "E2E Observability and LLMOps Stack Augmentation"
 status: "Implemented"
-version: "v3.1.0"
+version: "v3.2.0"
 date: "2026-06-17"
 created: "2026-06-17 00:00:00"
-modified: "2026-06-26 14:15:00"
+modified: "2026-08-01 15:30:00"
 risk_level: "High"
 reversibility: "Medium"
 security_scope: "Local Operations & Source Control"
@@ -394,6 +394,59 @@ sequenceDiagram
 - **Cause**: The `gitops_agent_sop.json` rules are unenforced computationally during CI, leaving vulnerability to prompt injection.
 - **Change**: Translating the SOP into Promptfoo Javascript/Regex assertions and enabling adversarial Jailbreak plugins.
 - **Effect**: Developers can now instantly run red-teaming checks and SOP assertions prior to committing logic changes.
+
+
+### Phase 8.5: Promptfoo evaluation & metrics boundary (formalised 2026-07-31)
+
+**Role.** Promptfoo is the **offline / local-first eval + red-team** lane. It is **not** on the live `git-cg` commit or hook path and must not write `GenerationTelemetry` product fields (`gold_*`, ranking confidence, hook skip, recover sidecar).
+
+**Pipeline (operator entry).**
+
+```text
+mise run eval:promptfoo
+  → npx promptfoo eval     -o promptfoo_results.json
+  → npx promptfoo redteam  -o promptfoo_redteam_results.json
+  → uv run python scripts/sync_promptfoo_to_opik.py promptfoo_results.json
+  → uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
+```
+
+| Artifact | Role |
+| --- | --- |
+| `promptfooconfig.yaml` | Prompts (`{{diff}}`), local MTPLX provider (`localhost:8000/v1`), redteam plugins, JS Hybrid-shape asserts |
+| `mise.toml` task `eval:promptfoo` | Runs eval + redteam + Opik sync |
+| `scripts/sync_promptfoo_to_opik.py` | Promptfoo JSON → Opik traces + feedback scores; Sentry breadcrumbs on latency/failure |
+| `promptfoo_*.json` | Gitignored run outputs (see `.gitignore`) |
+
+**Metrics captured today (batch eval → Opik/Sentry, not commit two-point state).**
+
+| Sink | What |
+| --- | --- |
+| **Opik** | Trace name `promptfoo_eval`; input prompt/vars; output; timing; scores `feedback_score`, `success`, optional `assertion_<type>` |
+| **Sentry** | Breadcrumbs `promptfoo_latency`, `promptfoo_evaluation_failure`; exceptions on bad JSON / sync errors — not high-cardinality product metrics |
+
+**Optional enrichments (future small evals issue — still not GenerationTelemetry).**
+
+* Trace metadata: `suite=eval|redteam`, redteam plugin id, provider/model, git SHA, promptfoo version  
+* Optional numeric Opik score `latency_ms` for dashboards without Sentry noise  
+* Optional one aggregate Opik experiment/summary row per `eval:promptfoo` run (pass rate, n)  
+* CI gate: require `eval:promptfoo` on PR only when self-hosted runner + local MTPLX policy is explicit  
+
+**Non-goals (reject in review).**
+
+* Live commit funnel fields: `gold_*`, `ranking_*`, hook skip, recover sidecar status  
+* Using Promptfoo as a second write path for hook/`record_telemetry` product metrics  
+* Shipping raw proprietary SOP dumps or full production diffs into cloud eval without the air-gap localhost provider rule  
+* Duplicating `scripts/eval_commit_message.py` / Opik GEval unless lanes are deliberately split (Promptfoo = assert/redteam; Opik GEval = LLM-judge cohort)
+
+**Deferred (no standalone issue).** Optional Promptfoo→Opik sync enrichments (suite/plugin/model metadata, optional `latency_ms` score, per-run aggregate summary row, self-hosted CI gate) remain deferred; track only if a later evals slice explicitly pulls them in. See Epic A (#158) comment and `docs/stagingADRs/ADR-0005-Complete/Cleaned_Phase_8_5.md`.
+
+**Sibling lanes.**
+
+* **Two-point commit telemetry** (`GenerationTelemetry` → betterleaks → Opik / Sentry tags): runtime product funnel — see Phase 14 backlog index and per-phase `## 📡 Telemetry` sections.  
+* **Opik GEval / dataset eval scripts** (`scripts/eval_commit_message.py`, `opik_metrics.py`): separate from Promptfoo CLI; do not merge pipelines casually.  
+* **Config pins:** `tests/test_project_config.py` (`TestPromptfooConfig`, `TestMiseTomlEvalPromptfoo`), `tests/test_sync_promptfoo_to_opik.py`.
+
+**Cross-links.** ADR-0010 § CI/CD Evaluation & Red-Teaming (Promptfoo); `docs/stagingADRs/ADR-0005-Complete/reviewOpus/implementation_plan_Phase_14-14_5.md` § Post-close field backlog (Promptfoo row); operator note in `DEVELOPMENT.md`.
 
 ### Phase 9: Sentry Architecture & Observability Expansion
 
@@ -1330,6 +1383,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - v3.0.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
 - v3.1.0 (2026-06-26): Marked status as Implemented following successful integration of Sentry and Opik telemetry across git hooks.
 - v3.1.1 (2026-06-27): Refinement - Verified that deferred tasks from Phase 4 (`sync_prompts_to_opik.py` and global trace tagging) were successfully implemented post-deferral. Phase 10 documentation refactoring tasks were also completed in a separate PR. Note: The historical implementation status in the Run Sheet and Deviations sections has been left untouched to preserve the historical record of the original sprint.
+- v3.2.0 (2026-08-01): Added Phase 8.5 Promptfoo evaluation & metrics boundary; formalised offline eval/red-team vs live GenerationTelemetry separation; recorded deferred optional Promptfoo→Opik enrichments (no standalone chore issue).
 
 <!-- ## Supporting Visual Aids
 
