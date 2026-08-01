@@ -14,7 +14,7 @@ status: "Implemented"
 version: "v1.3.0"
 date: "2026-06-14"
 created: "2026-06-14 00:00:00"
-modified: "2026-06-26 14:15:00"
+modified: "2026-08-01 15:30:00"
 risk_level: "Medium"
 reversibility: "High"
 security_scope: "Low (Data sanitization required for secret leaking)"
@@ -185,6 +185,7 @@ We decided to **keep Opik** as our incumbent unified dashboard. It provides exce
 - **The Problem:** Opik excels at runtime observability and dataset management, but we need a robust, automated "gate" in our GitHub Actions Pull Requests to catch regressions, jailbreaks, and PII leaks before code merges.
 - **The Solution:** We will integrate **Promptfoo** into our CI pipeline. Promptfoo is a stateless, CLI-first testing engine that excels at automated red-teaming and prompt assertion testing. 
 - **Self-Hosting Strategy:** Because we are utilizing a local 35B model (via oMLX/MTPLX), Promptfoo will be executed via a **Self-Hosted GitHub Actions Runner** on the developer's Mac. This allows the CI job to hit `localhost:8080` instantly, securely, and at zero cost.
+- **Batch eval sync:** Offline Promptfoo runs are synced to Opik via `scripts/sync_promptfoo_to_opik.py` (trace name `promptfoo_eval`). This is **not** the two-point commit `GenerationTelemetry` path. Boundary and optional enrichments: **ADR-0011 § Phase 8.5 (Promptfoo evaluation & metrics boundary)**.
 
 ### 3. Application Crash Reporting (Sentry SDK)
 - **The Problem:** Opik and OpenLLMetry are focused on AI/LLM tracing (prompts, tokens, latency, generation quality). However, if the `git-cg` application itself crashes due to a standard Python exception (e.g., `UnboundLocalError`, `FileNotFoundError`), these traces may drop or fail to capture the underlying stack trace properly.
@@ -198,5 +199,6 @@ We decided to **keep Opik** as our incumbent unified dashboard. It provides exce
 - v1.2.0 (2026-06-16): Added LLMOps Stack Augmentation strategy (Opik + Promptfoo + OpenLLMetry).
 - v1.2.1 (2026-06-26): Structural formatting, metadata conversion, and heading standardizations.
 - v1.3.0 (2026-06-26): Marked status as Implemented following successful E2E Sentry and Opik integration.
+- v1.3.1 (2026-07-31): Cross-link Promptfoo→Opik batch sync vs two-point commit telemetry (see ADR-0011 § 8.5).
 
 <!-- ## Supporting Visual Aids -->
