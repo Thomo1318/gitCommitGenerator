@@ -5,7 +5,7 @@ import unittest.mock as mock
 
 import pytest
 
-from git_cg.shadow_workspace import ShadowWorkspace, shadow_workspace
+from git_cg.shadow_workspace import ShadowWorkspace, shadow_workspace, shadow_workspace_index_only
 
 
 @pytest.fixture
@@ -412,3 +412,139 @@ def test_clone_and_sync_applies_patches_when_diffs_are_non_empty(monkeypatch, tm
         assert ["git", "clone", "--local", workspace.source_dir, workspace.path] in calls
     finally:
         workspace.temp_dir_obj.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Phase 7.5 (#180): index-only mode (include_unstaged=False)
+# ---------------------------------------------------------------------------
+
+
+def test_index_only_staged_edit_present(mock_repo):
+    """Matrix 1: staged content is present in an index-only shadow."""
+    with shadow_workspace(mock_repo, include_unstaged=False) as workspace:
+        staged_diff = workspace.run(["git", "diff", "--cached"], capture_output=True).stdout
+        assert "Staged change" in staged_diff
+
+
+def test_index_only_unstaged_edit_absent(mock_repo):
+    """Matrix 2 (Claim B): unstaged content is excluded in index-only mode."""
+    with shadow_workspace(mock_repo, include_unstaged=False) as workspace:
+        unstaged_diff = workspace.run(["git", "diff"], capture_output=True).stdout
+        assert "Unstaged change" not in unstaged_diff
+        assert unstaged_diff == ""
+        # Staged content still present.
+        staged_diff = workspace.run(["git", "diff", "--cached"], capture_output=True).stdout
+        assert "Staged change" in staged_diff
+
+
+def test_index_only_mode_only_change_synced(clean_repo):
+    """Matrix 10: a staged mode-only change (chmod +x, no content edit) syncs into the shadow."""
+    file1 = os.path.join(clean_repo, "file1.txt")
+    os.chmod(file1, 0o755)
+    subprocess.run(["git", "add", "file1.txt"], cwd=clean_repo, check=True)
+
+    with shadow_workspace(clean_repo, include_unstaged=False) as workspace:
+        mode_line = workspace.run(["git", "ls-files", "-s", "file1.txt"], capture_output=True).stdout.strip()
+        assert mode_line.startswith("100755")
+
+
+def test_index_only_staged_rename_survives(clean_repo):
+    """Matrix 11: a staged rename survives shadow sync (patch fidelity ahead of #163 git -M reliance)."""
+    subprocess.run(["git", "mv", "file1.txt", "renamed1.txt"], cwd=clean_repo, check=True)
+
+    with shadow_workspace(clean_repo, include_unstaged=False) as workspace:
+        assert not os.path.exists(os.path.join(workspace.path, "file1.txt"))
+        renamed = os.path.join(workspace.path, "renamed1.txt")
+        assert os.path.exists(renamed)
+        with open(renamed) as f:
+            assert f.read() == "Initial file 1\n"
+        staged_names = workspace.run(["git", "diff", "--cached", "--name-status"], capture_output=True).stdout
+        assert "renamed1.txt" in staged_names
+
+
+def test_index_only_unstaged_apply_never_invoked(monkeypatch, tmp_path):
+    """Matrix 8: with include_unstaged=False, 'git apply --index' runs for staged
+    content and plain 'git apply' (unstaged) is never invoked."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd == ["git", "diff", "--cached", "--binary"]:
+            return mock.MagicMock(stdout=b"staged patch data")
+        if cmd == ["git", "diff", "--binary"]:
+            return mock.MagicMock(stdout=b"unstaged patch data")
+        return mock.MagicMock(stdout=b"", returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    workspace = ShadowWorkspace(str(tmp_path / "source"), include_unstaged=False)
+    try:
+        workspace._clone_and_sync()
+        assert ["git", "apply", "--index"] in calls
+        assert ["git", "apply"] not in calls
+        # The unstaged diff itself must not even be computed in index-only mode.
+        assert ["git", "diff", "--binary"] not in calls
+    finally:
+        workspace.temp_dir_obj.cleanup()
+
+
+def test_default_include_unstaged_still_syncs_both(monkeypatch, tmp_path):
+    """Matrix 6: default (include_unstaged=True) preserves today's behaviour —
+    both 'git apply --index' and 'git apply' run."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd == ["git", "diff", "--cached", "--binary"]:
+            return mock.MagicMock(stdout=b"staged patch data")
+        if cmd == ["git", "diff", "--binary"]:
+            return mock.MagicMock(stdout=b"unstaged patch data")
+        return mock.MagicMock(stdout=b"", returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    workspace = ShadowWorkspace(str(tmp_path / "source"))
+    assert workspace.include_unstaged is True
+    try:
+        workspace._clone_and_sync()
+        assert ["git", "apply", "--index"] in calls
+        assert ["git", "apply"] in calls
+    finally:
+        workspace.temp_dir_obj.cleanup()
+
+
+def test_shadow_workspace_index_only_sugar(mock_repo):
+    """Nice-to-have: shadow_workspace_index_only() excludes unstaged content."""
+    with shadow_workspace_index_only(mock_repo) as workspace:
+        unstaged_diff = workspace.run(["git", "diff"], capture_output=True).stdout
+        assert "Unstaged change" not in unstaged_diff
+        staged_diff = workspace.run(["git", "diff", "--cached"], capture_output=True).stdout
+        assert "Staged change" in staged_diff
+
+
+def test_index_only_cleanup_when_body_raises_mid_context(mock_repo):
+    """Matrix 9: temp dir is cleaned up even when work inside the context raises."""
+    shadow_path = None
+    with (
+        pytest.raises(RuntimeError, match="simulated refresh failure"),
+        shadow_workspace(mock_repo, include_unstaged=False) as workspace,
+    ):
+        shadow_path = workspace.path
+        assert os.path.isdir(shadow_path)
+        raise RuntimeError("simulated refresh failure")
+    assert shadow_path is not None
+    assert not os.path.exists(shadow_path)
+
+
+def test_clone_sync_latency_ms_recorded_on_successful_enter(mock_repo):
+    """Phase 7.5 nice-to-have: clone_sync_latency_ms is set after successful enter."""
+    with shadow_workspace(mock_repo, include_unstaged=False) as workspace:
+        assert isinstance(workspace.clone_sync_latency_ms, float)
+        assert workspace.clone_sync_latency_ms > 0.0
+
+
+def test_clone_sync_latency_ms_defaults_zero_before_enter(tmp_path):
+    """Attribute exists and is 0.0 before __enter__ runs clone/sync."""
+    ws = ShadowWorkspace(str(tmp_path / "source"), include_unstaged=False)
+    assert ws.clone_sync_latency_ms == 0.0
+    ws.temp_dir_obj.cleanup()

@@ -135,7 +135,7 @@ Under `--enable-semantic`, diffs impacting **>= 25** graph nodes can rank
 
 * Does **not** use embeddings or cloud graph providers on the commit path
 * Does **not** run hub/callers fan-out or populate `complex_function_changed` / hub / callers product fields by default (Phase 9 / cheap follow-on only)
-* Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) still runs on the live worktree until **Phase 7.5** (#180) staged-index shadow isolation
+* Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) runs inside an **index-only shadow workspace** (Phase 7.5, #180, **Policy A**): only staged (index) content is synced; unstaged worktree edits are excluded. Graph stats and product queries continue to run on the **live** worktree (Policy A keeps the query root on live `repo_root`; Policy B / staged-truth query root is a follow-on).
 
 ## Commit-message gold lint (Phase 7.25)
 

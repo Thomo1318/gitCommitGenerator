@@ -559,3 +559,426 @@ def test_collect_semantic_producer_metrics_outer_graph_stage_records_fallback(mo
     reasons = out.get("graph_fallback_reasons") or []
     assert "detect_changes:ok" in reasons
     assert any(r == "graph_stage:RuntimeError" for r in reasons)
+
+
+# ---------------------------------------------------------------------------
+# Phase 7.5 (#180): generate-path shadow isolation matrix (4 / 5 / 7 / 7b)
+# ---------------------------------------------------------------------------
+
+
+def _phase75_base_monkeypatches(monkeypatch):
+    """Stub parser/fingerprint/product boundaries so only the shadow/refresh path is under test."""
+    from types import SimpleNamespace
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.semantic import empty_graph_product_fields
+
+    staged = SimpleNamespace(files={"a.py": "x = 1\n"}, errors=[], skipped=[])
+    head = SimpleNamespace(files={}, errors=[], skipped=[])
+
+    class _Metrics:
+        def to_dict(self):
+            return {
+                "semantic_files_total": 1,
+                "semantic_files_parsed": 1,
+                "parser_latency_ms": 0.1,
+                "semantic_fallback_reasons": [],
+            }
+
+    class Parsed:
+        metrics = _Metrics()
+
+    monkeypatch.setattr("git_cg.git_index.read_staged_sources", lambda *a, **k: staged)
+    monkeypatch.setattr("git_cg.ast_parser.parse_files", lambda files: Parsed())
+    monkeypatch.setattr("git_cg.git_index.read_head_sources", lambda *a, **k: head)
+    monkeypatch.setattr(
+        "git_cg.fingerprints.compare_fingerprint_sets",
+        lambda **kwargs: SimpleNamespace(
+            metrics=SimpleNamespace(
+                to_dict=lambda: {
+                    "body_similarity_min": 1.0,
+                    "body_similarity_avg": 1.0,
+                    "fingerprint_files_compared": 1,
+                    "fingerprint_latency_ms": 0.0,
+                    "class_counts": {},
+                    "grammar_version": "test",
+                    "markers": [],
+                    "reasons": [],
+                }
+            )
+        ),
+    )
+
+    product = empty_graph_product_fields()
+    product["blast_radius_size"] = 1
+    product["affected_flows_count"] = 0
+    product["test_coverage_gap"] = False
+    product["graph_fallback_reasons"] = []
+
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_product_bundle",
+        lambda **kwargs: (
+            product,
+            [
+                GraphOperationResult(
+                    ok=True,
+                    operation="detect_changes",
+                    outcome=GraphOutcome.OK,
+                    data={},
+                    latency_ms=0.5,
+                )
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        "git_cg.graph_context.graph_stats",
+        lambda **kwargs: GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.2,
+        ),
+    )
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 0.0, "graph_query_latency_ms": 0.7},
+    )
+
+
+def test_phase75_refresh_off_zero_shadow_invocations(monkeypatch):
+    """Matrix 4 + 7: refresh flag off → zero shadow construction; shadow_workspace_used False."""
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+
+    shadow_calls: list[tuple] = []
+
+    class _BoomShadow:
+        def __init__(self, *a, **k):
+            shadow_calls.append((a, k))
+            raise AssertionError("shadow_workspace must not be constructed when refresh is off")
+
+        def __enter__(self):
+            raise AssertionError("unreachable")
+
+        def __exit__(self, *a):
+            return False
+
+    def boom_shadow(*a, **k):
+        shadow_calls.append((a, k))
+        raise AssertionError("shadow_workspace must not be invoked when refresh is off")
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", boom_shadow)
+    # Also guard the class path if imported differently.
+    monkeypatch.setattr("git_cg.shadow_workspace.ShadowWorkspace", _BoomShadow)
+
+    refresh_calls: list[dict] = []
+
+    def track_refresh(**kwargs):
+        refresh_calls.append(kwargs)
+        raise AssertionError("refresh_graph must not run when refresh is off")
+
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", track_refresh)
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["semantic_enabled"] is True
+    assert out.get("shadow_workspace_used") is False
+    assert out.get("semantic_refresh_graph") == "skipped"
+    assert out.get("shadow_fail_open_reason") == "none"
+    assert shadow_calls == []
+    assert refresh_calls == []
+
+
+def test_phase75_flag_on_refresh_uses_shadow_path(monkeypatch):
+    """Matrix 7b: flag on → refresh_graph(repo_root=shadow.path); used=True; semantic_refresh_graph=ran."""
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    shadow_path = "/tmp/git-cg-shadow-test-repo"
+    enter_kwargs: list[dict] = []
+
+    @contextmanager
+    def fake_shadow(source_dir=".", include_unstaged=True):
+        enter_kwargs.append({"source_dir": source_dir, "include_unstaged": include_unstaged})
+        yield type("Shadow", (), {"path": shadow_path})()
+
+    refresh_kwargs: list[dict] = []
+
+    def fake_refresh(**kwargs):
+        refresh_kwargs.append(kwargs)
+        return GraphOperationResult(
+            ok=True,
+            operation="refresh_graph",
+            outcome=GraphOutcome.OK,
+            data={},
+            latency_ms=3.0,
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", fake_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", fake_refresh)
+
+    out = _collect_semantic_producer_metrics("/live/repo", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["semantic_refresh_graph"] == "ran"
+    assert out["shadow_fail_open_reason"] == "none"
+    assert enter_kwargs == [{"source_dir": "/live/repo", "include_unstaged": False}]
+    assert len(refresh_kwargs) == 1
+    assert refresh_kwargs[0]["repo_root"] == shadow_path
+    assert refresh_kwargs[0].get("full_rebuild") is False
+    assert refresh_kwargs[0].get("postprocess") == "minimal"
+
+
+def test_phase75_shadow_enter_failure_fail_open(monkeypatch):
+    """Matrix 5: shadow __enter__/clone failure → fail-open + both vocabularies."""
+    from contextlib import contextmanager
+
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def boom_shadow(*a, **k):
+        raise OSError("clone failed")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", boom_shadow)
+
+    refresh_calls: list[dict] = []
+    monkeypatch.setattr(
+        "git_cg.graph_context.refresh_graph",
+        lambda **kwargs: refresh_calls.append(kwargs) or (_ for _ in ()).throw(AssertionError("no refresh")),
+    )
+
+    tags: dict[str, str] = {}
+    monkeypatch.setattr("sentry_sdk.set_tag", lambda k, v: tags.__setitem__(k, v))
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is False
+    # requested stays requested on failure (ran only on success)
+    assert out["semantic_refresh_graph"] == "requested"
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.SHADOW_CREATE_FAILED.value
+    reasons = out.get("graph_fallback_reasons") or []
+    assert "shadow_workspace:OSError" in reasons
+    assert tags.get("shadow_fail_open_reason") == ShadowFailOpenReason.SHADOW_CREATE_FAILED.value
+    assert refresh_calls == []
+    # Product fields still populated (fail-open must not wipe graph product stage).
+    assert out["blast_radius_size"] == 1
+
+
+def test_phase75_shadow_sync_staged_fail_open(monkeypatch):
+    """Staged sync CalledProcessError maps to SHADOW_SYNC_STAGED + shadow_sync:staged."""
+    import subprocess
+    from contextlib import contextmanager
+
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def boom_sync(*a, **k):
+        raise subprocess.CalledProcessError(1, ["git", "apply", "--index"])
+        yield  # pragma: no cover
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", boom_sync)
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is False
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.SHADOW_SYNC_STAGED.value
+    reasons = out.get("graph_fallback_reasons") or []
+    assert "shadow_sync:staged" in reasons
+    assert out["semantic_refresh_graph"] == "requested"
+
+
+def test_phase75_refresh_raise_fail_open_marks_shadow_used(monkeypatch):
+    """Refresh raise after successful enter → REFRESH_FAILED + refresh_graph:<Type>; shadow used."""
+    from contextlib import contextmanager
+
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def ok_shadow(*a, **k):
+        yield type("Shadow", (), {"path": "/tmp/shadow-ok"})()
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", ok_shadow)
+    monkeypatch.setattr(
+        "git_cg.graph_context.refresh_graph",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("refresh boom")),
+    )
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.REFRESH_FAILED.value
+    reasons = out.get("graph_fallback_reasons") or []
+    assert "refresh_graph:RuntimeError" in reasons
+    assert out["semantic_refresh_graph"] == "requested"
+
+
+def test_phase75_refresh_timeout_fail_open(monkeypatch):
+    """TimeoutError during refresh → REFRESH_TIMEOUT."""
+    from contextlib import contextmanager
+
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def ok_shadow(*a, **k):
+        yield type("Shadow", (), {"path": "/tmp/shadow-ok"})()
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", ok_shadow)
+    monkeypatch.setattr(
+        "git_cg.graph_context.refresh_graph",
+        lambda **kwargs: (_ for _ in ()).throw(TimeoutError("deadline")),
+    )
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.REFRESH_TIMEOUT.value
+    assert "refresh_graph:TimeoutError" in (out.get("graph_fallback_reasons") or [])
+
+
+def test_phase75_refresh_result_not_ok_fail_open(monkeypatch):
+    """refresh_graph returns GraphOperationResult(ok=False) without raising → REFRESH_FAILED."""
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def ok_shadow(*a, **k):
+        yield type("Shadow", (), {"path": "/tmp/shadow-ok"})()
+
+    def failed_refresh(**kwargs):
+        return GraphOperationResult(
+            ok=False,
+            operation="refresh_graph",
+            outcome=GraphOutcome.ERROR,
+            error_type="CalledProcessError",
+            error="refresh returned not ok",
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", ok_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", failed_refresh)
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.REFRESH_FAILED.value
+    assert out["semantic_refresh_graph"] == "requested"
+    reasons = out.get("graph_fallback_reasons") or []
+    assert "refresh_graph:CalledProcessError" in reasons
+
+
+def test_phase75_product_bundle_exception_preserves_shadow_fallback_reasons(monkeypatch):
+    """Product-bundle exception must not wipe Vocab1 shadow/refresh fail-open reasons."""
+    from contextlib import contextmanager
+
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def ok_shadow(*a, **k):
+        yield type("Shadow", (), {"path": "/tmp/shadow-ok"})()
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", ok_shadow)
+    monkeypatch.setattr(
+        "git_cg.graph_context.refresh_graph",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("refresh boom")),
+    )
+
+    def boom_bundle(**kwargs):
+        raise RuntimeError("product boom")
+
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", boom_bundle)
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.REFRESH_FAILED.value
+    reasons = out.get("graph_fallback_reasons") or []
+    assert "refresh_graph:RuntimeError" in reasons
+    # Product fields fail open to empty defaults, but shadow reason survives.
+    assert out.get("blast_radius_size") is None
+
+
+def test_phase75_shadow_clone_sync_latency_accumulates_into_graph_build(monkeypatch):
+    """Nice-to-have: shadow clone/sync ms folds into existing graph_build_latency_ms."""
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    @contextmanager
+    def timed_shadow(*a, **k):
+        yield type(
+            "Shadow",
+            (),
+            {"path": "/tmp/shadow-latency", "clone_sync_latency_ms": 12.5},
+        )()
+
+    def fake_refresh(**kwargs):
+        return GraphOperationResult(
+            ok=True,
+            operation="refresh_graph",
+            outcome=GraphOutcome.OK,
+            data={},
+            latency_ms=3.0,
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", timed_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", fake_refresh)
+    # Override base collect_graph_telemetry so build latency is known (3.0 from refresh
+    # is not used when collect_graph_telemetry is stubbed — stub returns build=4.0).
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 4.0, "graph_query_latency_ms": 0.7},
+    )
+
+    out = _collect_semantic_producer_metrics("/live/repo", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["semantic_refresh_graph"] == "ran"
+    # 4.0 (refresh/build) + 12.5 (clone/sync) — no new telemetry keys.
+    assert out["graph_build_latency_ms"] == 16.5
+    assert "clone_sync_latency_ms" not in out
+    assert "shadow_clone_sync_latency_ms" not in out
+
+
+def test_phase75_refresh_off_graph_build_latency_excludes_shadow(monkeypatch):
+    """Refresh off: graph_build_latency_ms stays at collect_graph_telemetry value only."""
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 1.25, "graph_query_latency_ms": 0.7},
+    )
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
+    assert out.get("shadow_workspace_used") is False
+    assert out["graph_build_latency_ms"] == 1.25

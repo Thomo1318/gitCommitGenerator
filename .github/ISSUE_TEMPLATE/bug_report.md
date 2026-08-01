@@ -45,3 +45,10 @@ assignees: ""
 
 * Do not paste secrets, full diffs, or production commit bodies into this issue
 
+### Acceptance hooks
+
+<!-- Optional. Link DoD / PR checklist items once the fix lands. Delete if N/A. -->
+
+- [ ] Fix verified against the reported environment
+- [ ] Telemetry/redaction regression covered if observability was involved
+
