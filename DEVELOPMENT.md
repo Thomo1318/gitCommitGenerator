@@ -388,3 +388,19 @@ ranking, contract resolution, and telemetry hashing.
 `pack_prompt_diff()` may apply an interim character ceiling to the **LLM user
 payload only**, preferring whole-file omission with an inventory footer over a
 mid-hunk `[:50000]` chop. This is **not** the Phase 11 packer product.
+
+## Promptfoo evaluation (offline)
+
+Offline **eval + red-team** against local MTPLX (not the live commit/hook path):
+
+```bash
+mise run eval:promptfoo
+```
+
+Produces gitignored `promptfoo_results.json` / `promptfoo_redteam_results.json`, then syncs to Opik via `scripts/sync_promptfoo_to_opik.py` (trace name `promptfoo_eval`).
+
+* **Architecture / metrics boundary:** `docs/ADRs/0011-e2e-observability-stack.md` § Phase 8.5  
+* **Field backlog index:** `docs/stagingADRs/ADR-0005-Complete/reviewOpus/implementation_plan_Phase_14-14_5.md` § Post-close field backlog (Promptfoo row)  
+* **Not** `GenerationTelemetry` product fields (gold/ranking/hooks) — those stay on per-phase `## 📡 Telemetry` issues  
+
+
