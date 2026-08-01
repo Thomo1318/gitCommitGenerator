@@ -1,0 +1,213 @@
+# brief 0.9.4 — /Users/admin/dev/activeProjects/gitCommitGenerator
+
+**Language:** JavaScript (also: Python)
+**Package Manager:** Bun (`bun install`)
+Lockfile: bun.lock
+**Package Manager:** npm (`npm install`)
+Lockfile: package-lock.json
+**Package Manager:** Hatch (`hatch env create`)
+**Package Manager:** uv (`uv sync`)
+Lockfile: uv.lock
+Dependencies: 20 runtime, 1 dev
+
+## Scripts (Justfile)
+
+| Name | Command |
+|------|---------|
+| default | `just default` |
+| install | `just install` |
+| install-binary | `just install-binary` |
+| install-completions | `just install-completions` |
+| lint | `just lint` |
+| gen-docs | `just gen-docs` |
+| gen-completions | `just gen-completions` |
+| completions | `just completions` |
+| docs-hook | `just docs-hook` |
+| all | `just all` |
+| test | `just test` |
+| uninstall | `just uninstall` |
+
+## Scripts (package.json)
+
+| Name | Command |
+|------|---------|
+| test | `echo "Error: no test specified" && exit 1` |
+| validate | `node scripts/validate_commit.mjs` |
+| release | `uv run python -m git_cg.main release` |
+
+
+## Tools
+
+| Category | Tool | Command | Config |
+|----------|------|---------|--------|
+| Test | pytest | `echo "Error: no test specified" && exit 1` | pyproject.toml |
+| Lint | Ruff | `just lint` | pyproject.toml |
+| Typecheck | Pyright | `pyright` |  |
+| Docs | Zensical | `zensical serve` | zensical.toml |
+| Build | Just | `just --list` | justfile |
+| Library | httpx |  |  |
+| Security | npm audit | `npm audit` |  |
+| CI | GitHub Actions |  | .github/workflows/ |
+| Environment | dotenv |  | .env.example |
+| Environment | Mise | `mise install` | mise.toml |
+| Environment | VS Code |  | .vscode/settings.json, .vscode/extensions.json |
+| Coverage | Codecov |  | codecov.yml |
+| Coverage | Sentry |  |  |
+| Coverage | coverage.py | `coverage run -m pytest` | pyproject.toml |
+| Dep Updates | Dependabot |  | .github/dependabot.yml |
+
+**Style:** 4-space (inferred) | LF
+**Layout:** source: src/ | test: tests/
+
+- mise.toml: # Mise git commit generator Configuration
+# Save to: $PROJECT_DIR/mise.toml
+# Documentation: https://mise.jdx.dev/configuration.html
+# Version: 1.0.0
+
+# ============================================================================ #
+# SETTINGS                                                                     #
+# ============================================================================ #
+
+[settings]
+experimental = true                           # Required for advanced uv features
+jobs = 8                                      # Parallel job count for faster installs
+env_cache = true                              # Cache environment evaluations for speed
+not_found_auto_install = true                 # Auto-install tools when entering directory
+plugin_autoupdate_last_check_duration = "1d"  # Check for plugin updates daily
+
+idiomatic_version_file_enable_tools = [
+  "node",
+  "python",
+  "ruby",
+  "go",
+  "java",
+  "yarn",
+  "terraform",
+  "packer"
+]                                        # Read .nvmrc, .python-version, etc.
+
+[settings.python]
+uv_venv_auto = "create|source"  # create .venv if missing, then source (legacy true deprecated)
+
+[settings.pipx]
+uvx = true  # Use uvx instead of pipx
+
+[env]
+PYTHONPATH = "src"
+HK_LOG = "trace"
+HK_MISE = "1"
+HK_LOG_FILE = "logs/hk.log"
+
+# ============================================================================ #
+# TOOLS                                                                        #
+# ============================================================================ #
+
+[tools]
+fnox = "1.25.0"                # Hybrid secrets orchestration
+age = "1.3.1"                  # File encryption fallback for fnox
+gum = "0.17.0"                 # Terminal-native TUI for interactive git-cg review
+hk = "1.51.0"                  # git hook manager (https://github.com/jdx/hk) (https://hk.jdx.dev/) — exact pin aligned with hk.pkl amend
+pkl = "0.31.1"                 # embeddable configuration language (https://pkl-lang.org)
+python = "3.14"                # Python runtime (https://python.org)
+usage = "3.3.0"                # Usage is a spec and CLI for defining CLI tools. (https://github.com/jdx/usage) (https://usage.jdx.dev/)
+uv = "0.11.26"                 # Fast Python package and environment manager (https://uv.astral.sh)
+rtk = "0.43.0"                 # High-performance CLI proxy that reduces LLM token consumption by 60-90% (https://github.com/rtk-ai/rtk)
+node = "24.15.0"               # JS runtime for validation hook (https://nodejs.org)
+# "npm:promptfoo" = "0.121.17"             # Moved to Brewfile due to Node shimming conflicts
+just = "1.51.0"                # Task runner for project automation (https://just.systems)
+betterleaks = "1.4.1"          # Next-gen secret scanner with active verification (https://github.com/betterleaks/betterleaks)
+trufflehog = "3.95.9"          # Local deep secret scan CLI (matches CI TruffleHog scanner version)
+syft = "1.48.0"                # Multi-language SBOM generator for CycloneDX format (https://github.com/anchore/syft)
+grype = "0.116.0"              # Vulnerability scanner for SBOMs (https://github.com/anchore/grype)
+"ubi:anchore/grant" = "0.6.8"  # License compliance checker for SBOMs (https://github.com/anchore/grant)
+# 1password-cli is omitted here to fall back to the Homebrew-managed `1password-cli@beta` global installation, which is required for `op environment`.
+# 1password-cli = "latest"
+
+# ============================================================================ #
+# TASKS                                                                        #
+# ============================================================================ #
+
+[tasks.lint]
+description = "Read-only fast lint (CI-shaped hk check; skips slow cov, secrets, doc gens)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+export HK_SKIP_STEPS="${HK_SKIP_STEPS:-pytest-cov,betterleaks,gen-docs,gen-toc}"
+hk validate
+hk check --check --no-stage --all --fail-fast --no-progress
+"""
+
+[tasks.test]
+description = "Canonical full project pytest suite (does not replace `just test` smoke)"
+run = "uv run pytest"
+
+[tasks.cov]
+description = "Slow coverage verification (pytest-cov / hk --slow profile)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+uv run pytest --cov=src/git_cg --cov-branch --cov-report=xml --cov-report=term-missing:skip-covered
+"""
+
+[tasks.security]
+description = "Optional local SBOM + license + vulnerability verification"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+syft . -o cyclonedx-json=bom.json
+syft . -o syft-json=bom.syft.json
+grant check bom.syft.json --dry-run
+grype sbom:bom.json --fail-on high
+"""
+
+[tasks."test:cli"]
+description = "Test the git-cg CLI scaffolding (Zero-Plaintext via 1Password SDK)"
+run = "uv run python -m git_cg.main --help"
+
+[tasks.pre-commit]
+run = "hk run pre-commit"
+
+[tasks."docs:build"]
+description = "Build the Zensical documentation site locally"
+run = "uv run zensical build --clean"
+
+[tasks."docs:serve"]
+description = "Serve the Zensical documentation site locally with live-reload"
+run = "uv run zensical serve -a localhost:8082"
+
+[tasks."setup:brew"]
+description = "Install system-level dependencies required by the project"
+run = "brew bundle --file=Brewfile"
+
+[tasks."eval:promptfoo"]
+description = "Evaluate and red-team GitOps commit generation, then sync to Opik"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+npx promptfoo eval -o promptfoo_results.json
+npx promptfoo redteam run -o promptfoo_redteam_results.json
+uv run python scripts/sync_promptfoo_to_opik.py promptfoo_results.json
+uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
+"""
+
+**Resources:**
+- README.md
+- CHANGELOG.md
+- LICENSE (MIT)
+- Agents:
+  - AGENTS.md
+  - GEMINI.md
+- Templates:
+  - issue: .github/ISSUE_TEMPLATE/architectural_task.md
+  - issue: .github/ISSUE_TEMPLATE/bug_report.md
+  - issue: .github/ISSUE_TEMPLATE/feature_request.md
+  - issue: .github/ISSUE_TEMPLATE/implementation_task.md
+  - pull request: .github/PULL_REQUEST_TEMPLATE.md
+
+**Git:** branch `docs/llms-txt-brief-ci` (default: `main`) — 316 commits
+- origin: https://github.com/Thomo1318/gitCommitGenerator.git
+
+**Lines:** 81447 code, 142 files (tokei)
+---
+
+1450.3ms | 738 files checked | 21/539 tools matched

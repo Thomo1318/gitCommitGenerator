@@ -1,0 +1,87 @@
+# Generate root llms.txt (agent entry map) via brief.
+# Plan: scratch/llms-txt-Generators.md — lightweight index per https://llmstxt.org/
+#
+# Security notes:
+# - brief emits structure/tool names only; committed output is still covered by the
+#   existing Security workflow (TruffleHog / betterleaks on tree).
+# - Binary is version-pinned + checksum-verified (no floating /latest).
+# - Auto-commit only on main push or workflow_dispatch (never on pull_request / forks).
+# - paths-ignore on llms.txt breaks the push→commit→push loop.
+
+name: Generate llms.txt
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "llms.txt"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BRIEF_VERSION: "0.9.4"
+  # sha256 from https://github.com/git-pkgs/brief/releases/download/v0.9.4/checksums.txt
+  BRIEF_LINUX_AMD64_SHA256: "f20a58e2658b5b47b10f611446a74e2f59a727519d2c497fe834d88fe4dc30a6"
+
+jobs:
+  generate:
+    name: Generate llms.txt
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        # actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          persist-credentials: true
+
+      - name: Install brief (pinned + checksum)
+        run: |
+          set -euo pipefail
+          asset="brief_${BRIEF_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/git-pkgs/brief/releases/download/v${BRIEF_VERSION}/${asset}"
+          curl -sSL "$url" -o "/tmp/${asset}"
+          echo "${BRIEF_LINUX_AMD64_SHA256}  /tmp/${asset}" | sha256sum -c -
+          tar -xzf "/tmp/${asset}" -C /tmp
+          install -m 0755 /tmp/brief /usr/local/bin/brief
+          brief -version
+
+      - name: Generate llms.txt
+        run: |
+          set -euo pipefail
+          brief -markdown -depth 0 -tracked > llms.txt
+          wc -c llms.txt
+          # Fail closed if the map is empty or suspiciously tiny.
+          test "$(wc -c < llms.txt)" -gt 500
+
+      - name: Commit llms.txt (main / dispatch only)
+        if: >
+          github.event_name == 'workflow_dispatch'
+          || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        # stefanzweifel/git-auto-commit-action@v7.2.0
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d  # v7.2.0
+        with:
+          commit_message: "📝 docs(llms): auto-update llms.txt"
+          file_pattern: "llms.txt"
+          commit_user_name: github-actions[bot]
+          commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
+
+      - name: Upload llms.txt artifact
+        # actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: llms-txt
+          path: llms.txt
+          if-no-files-found: error
