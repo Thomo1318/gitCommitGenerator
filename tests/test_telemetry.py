@@ -1451,3 +1451,235 @@ def test_reverse_parse_resolves_intent_id_from_emoji():
     plan = reverse_parse_commit_message("✨ feat(core): add endpoint\n\nBody.\n\nSemVer-Impact: MINOR\n")
     assert plan["primary_intent"]["intent_id"] == expected
     assert plan["_partial"] is True  # rationale/split still unrecoverable
+
+
+# ---------------------------------------------------------------------------
+# Phase 7.5 (#180): shadow isolation telemetry fields
+# ---------------------------------------------------------------------------
+
+
+def _git_dir(tmp_path):
+    """Return the tmp_path as a git_dir (telemetry state lives at GIT_CG_OPIK_STATE.json inside it)."""
+    return str(tmp_path)
+
+
+def test_shadow_fields_default_off(tmp_path):
+    """Shadow fields default to off/skipped/none when not provided."""
+    from git_cg.telemetry import read_telemetry_state, write_telemetry_state
+
+    telemetry = _minimal_telemetry()
+    write_telemetry_state(_git_dir(tmp_path), telemetry)
+
+    loaded = read_telemetry_state(_git_dir(tmp_path))
+    assert loaded.shadow_workspace_used is False
+    assert loaded.semantic_refresh_graph == "skipped"
+    assert loaded.shadow_fail_open_reason == "none"
+
+
+def test_shadow_fields_roundtrip(tmp_path):
+    """Shadow fields survive write → read round-trip."""
+    from git_cg.telemetry import read_telemetry_state, write_telemetry_state
+
+    telemetry = _minimal_telemetry(
+        shadow_workspace_used=True,
+        semantic_refresh_graph="ran",
+        shadow_fail_open_reason="none",
+    )
+    write_telemetry_state(_git_dir(tmp_path), telemetry)
+
+    loaded = read_telemetry_state(_git_dir(tmp_path))
+    assert loaded.shadow_workspace_used is True
+    assert loaded.semantic_refresh_graph == "ran"
+    assert loaded.shadow_fail_open_reason == "none"
+
+
+def test_shadow_fields_enum_coercion(tmp_path):
+    """Enum members are coerced to plain strings on write/read."""
+    from git_cg.telemetry import (
+        SemanticRefreshGraph,
+        ShadowFailOpenReason,
+        read_telemetry_state,
+        write_telemetry_state,
+    )
+
+    telemetry = _minimal_telemetry(
+        shadow_workspace_used=True,
+        semantic_refresh_graph=SemanticRefreshGraph.RAN,
+        shadow_fail_open_reason=ShadowFailOpenReason.REFRESH_FAILED,
+    )
+    write_telemetry_state(_git_dir(tmp_path), telemetry)
+
+    loaded = read_telemetry_state(_git_dir(tmp_path))
+    assert isinstance(loaded.semantic_refresh_graph, str)
+    assert loaded.semantic_refresh_graph == "ran"
+    assert isinstance(loaded.shadow_fail_open_reason, str)
+    assert loaded.shadow_fail_open_reason == "refresh_failed"
+
+
+def test_shadow_fields_invalid_values_normalised(tmp_path):
+    """Invalid shadow field values are normalised to safe defaults on read."""
+    import json
+
+    from git_cg.telemetry import read_telemetry_state
+
+    state_path = tmp_path / "GIT_CG_OPIK_STATE.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "trace_id": None,
+                "diff_hash": "abc123",
+                "diff_output": "diff",
+                "repo_name": "test",
+                "engine": "mtplx",
+                "model_name": "m",
+                "system_prompt_hash": "h",
+                "generated_message": "msg",
+                "commit_plan_json": {},
+                "score_card": {},
+                "shadow_workspace_used": "yes",
+                "semantic_refresh_graph": "bogus",
+                "shadow_fail_open_reason": "also_bogus",
+            }
+        )
+    )
+
+    loaded = read_telemetry_state(_git_dir(tmp_path))
+    assert loaded.shadow_workspace_used is True  # bool() coerces truthy string
+    assert loaded.semantic_refresh_graph == "skipped"
+    assert loaded.shadow_fail_open_reason == "none"
+
+
+def test_shadow_fields_backward_compat_missing(tmp_path):
+    """State files written before Phase 7.5 (missing shadow keys) default safely."""
+    import json
+
+    from git_cg.telemetry import read_telemetry_state
+
+    state_path = tmp_path / "GIT_CG_OPIK_STATE.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "trace_id": None,
+                "diff_hash": "abc123",
+                "diff_output": "diff",
+                "repo_name": "test",
+                "engine": "mtplx",
+                "model_name": "m",
+                "system_prompt_hash": "h",
+                "generated_message": "msg",
+                "commit_plan_json": {},
+                "score_card": {},
+                "semantic_enabled": True,
+            }
+        )
+    )
+
+    loaded = read_telemetry_state(_git_dir(tmp_path))
+    assert loaded.shadow_workspace_used is False
+    assert loaded.semantic_refresh_graph == "skipped"
+    assert loaded.shadow_fail_open_reason == "none"
+
+
+def test_shadow_fail_open_all_reasons_valid(tmp_path):
+    """All five ShadowFailOpenReason values survive round-trip."""
+    from git_cg.telemetry import ShadowFailOpenReason, read_telemetry_state, write_telemetry_state
+
+    for reason in ShadowFailOpenReason:
+        telemetry = _minimal_telemetry(shadow_fail_open_reason=reason)
+        write_telemetry_state(_git_dir(tmp_path), telemetry)
+        loaded = read_telemetry_state(_git_dir(tmp_path))
+        assert loaded.shadow_fail_open_reason == reason.value
+
+
+def test_shadow_bounded_fields_skip_redact_payload(tmp_path, monkeypatch):
+    """T4 — bounded Phase 7.5 fields are not sent through redact_payload on write."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import read_telemetry_state, write_telemetry_state
+
+    seen: list[str] = []
+
+    def tracking_redact(payload):
+        seen.append(payload if isinstance(payload, str) else str(payload))
+        return payload
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", tracking_redact)
+
+    telemetry = _minimal_telemetry(
+        shadow_workspace_used=True,
+        semantic_refresh_graph="ran",
+        shadow_fail_open_reason="refresh_failed",
+        diff_output="diff-secret-marker",
+        generated_message="msg-secret-marker",
+    )
+    write_telemetry_state(_git_dir(tmp_path), telemetry)
+
+    # Free-text fields are redacted; closed enums/bools are not.
+    joined = "\n".join(seen)
+    assert "diff-secret-marker" in joined
+    assert "msg-secret-marker" in joined
+    assert "refresh_failed" not in joined
+    assert "ran" not in joined or joined.count("ran") == 0  # enum value never passed
+    # Explicit: none of the redact inputs equal the bounded field values alone.
+    assert "refresh_failed" not in seen
+    assert True not in seen and False not in seen
+
+    loaded = read_telemetry_state(_git_dir(tmp_path))
+    assert loaded.shadow_workspace_used is True
+    assert loaded.semantic_refresh_graph == "ran"
+    assert loaded.shadow_fail_open_reason == "refresh_failed"
+
+
+def test_write_telemetry_state_safe_accepts_shadow_kwargs(tmp_path, monkeypatch):
+    """_write_telemetry_state_safe must accept and persist the three Phase 7.5 fields."""
+    import git_cg.main as main_mod
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.telemetry import read_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            scope="core",
+            description="shadow kwargs",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        ),
+        rationale="test",
+        body_summary="test body",
+    )
+    review_state = main_mod.ReviewState(commit_plan=plan)
+
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+
+    def fake_check_output(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and "--git-dir" in cmd:
+            return str(git_dir) if kwargs.get("text") else str(git_dir).encode()
+        return "." if kwargs.get("text") else b"."
+
+    monkeypatch.setattr(main_mod.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(main_mod, "LAST_OPIK_TRACE_ID", "trace-shadow")
+
+    main_mod._write_telemetry_state_safe(
+        review_state=review_state,
+        diff_output="diff --git a/x.py b/x.py\n",
+        engine="mtplx",
+        model_name="test-model",
+        system_prompt="sys",
+        repo_name="repo",
+        thread_id="thread-1",
+        verbose=False,
+        shadow_workspace_used=True,
+        semantic_refresh_graph="ran",
+        shadow_fail_open_reason="none",
+    )
+
+    loaded = read_telemetry_state(str(git_dir))
+    assert loaded is not None
+    assert loaded.shadow_workspace_used is True
+    assert loaded.semantic_refresh_graph == "ran"
+    assert loaded.shadow_fail_open_reason == "none"
