@@ -7,6 +7,9 @@
 # - Binary is version-pinned + checksum-verified (no floating /latest).
 # - Auto-commit only on main push or workflow_dispatch (never on pull_request / forks).
 # - paths-ignore on llms.txt breaks the push→commit→push loop.
+# - Do not pass -tracked: brief 0.9.4 can rank JavaScript over Python on this
+#   polyglot tree despite tokei LOC (package.json/bun/npm signals). Full scan
+#   keeps primary Language: Python.
 
 name: Generate llms.txt
 
@@ -61,7 +64,7 @@ jobs:
       - name: Generate llms.txt
         run: |
           set -euo pipefail
-          brief -markdown -depth 0 -tracked > llms.txt
+          brief -markdown -depth 0 > llms.txt
           wc -c llms.txt
           # Fail closed if the map is empty or suspiciously tiny.
           test "$(wc -c < llms.txt)" -gt 500
