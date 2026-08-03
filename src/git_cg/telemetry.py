@@ -62,6 +62,51 @@ class ShadowFailOpenReason(enum.StrEnum):
     REFRESH_FAILED = "refresh_failed"
 
 
+class RankingConfidenceLevel(enum.StrEnum):
+    """Closed ranking-confidence levels (Issue #195)."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class RankingChoicePath(enum.StrEnum):
+    """Terminal ranking arbitration choice paths (Issue #195).
+
+    Assign exactly one final value at terminal decision / final auto-continue.
+    Intermediate Back / guidance-save / submenu navigation is not a path.
+    """
+
+    PICK_A = "pick_a"
+    PICK_B = "pick_b"
+    PICK_CANDIDATE = "pick_candidate"
+    SPECIFY_FUZZY = "specify_fuzzy"
+    SPECIFY_BROWSE = "specify_browse"
+    CANCEL_CONTINUE_A = "cancel_continue_a"
+    CANCEL_ABORT = "cancel_abort"
+    NI_TOP_RANK = "ni_top_rank"
+    SKIPPED_HIGH_MEDIUM = "skipped_high_medium"
+    RE_RANK_AUTO_CONTINUE = "re_rank_auto_continue"
+
+
+class RankingArbitrateEffective(enum.StrEnum):
+    """Closed gate result for whether the arbitration menu was shown (Issue #195)."""
+
+    MENU_SHOWN = "menu_shown"
+    SKIPPED_NI = "skipped_ni"
+    SKIPPED_HIGH_MEDIUM = "skipped_high_medium"
+    FLAG_OFF = "flag_off"
+
+
+class LockResolution(enum.StrEnum):
+    """Closed lock-resolution observability codes (Issue #195)."""
+
+    ACCEPTED = "accepted"
+    REJECTED_NOT_ALLOWED = "rejected_not_allowed"
+    REJECTED_HARD_VETO = "rejected_hard_veto"
+    ABSENT = "absent"
+
+
 @dataclass
 class DeterministicScoreCard:
     """Binary pass/fail structural validation results."""
@@ -127,6 +172,20 @@ class GenerationTelemetry:
     shadow_workspace_used: bool = False
     semantic_refresh_graph: str = SemanticRefreshGraph.SKIPPED.value
     shadow_fail_open_reason: str = ShadowFailOpenReason.NONE.value
+    # Phase 7.29 ranking confidence + arbitration (Issue #195).
+    ranking_confidence_level: str | None = None
+    ranking_confidence_margin: float | None = None
+    ranking_confidence_reasons: list[str] | None = None
+    ranking_choice_path: str | None = None
+    ranking_override: bool = False  # metadata bool — never store 1.0/0.0 here
+    ranking_arbitrate_effective: str | None = None
+    lock_resolution: str = LockResolution.ABSENT.value
+    # Phase 7.25 gold telemetry parity (absorbed from #191 into #195 Slice 2).
+    gold_mode: str = "off"
+    gold_findings_count: int = 0
+    gold_finding_codes: list[str] | None = None
+    gold_blocked: bool = False
+    gold_regen_attempts: int = 0
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -142,6 +201,16 @@ def compute_prompt_hash(prompt: str) -> str:
 def compute_diff_hash(diff_output: str) -> str:
     """SHA-256 hash of the git diff."""
     return hashlib.sha256(diff_output.encode()).hexdigest()[:16]
+
+
+def ranking_override_feedback_score(ranking_override: bool) -> float:
+    """Derive the Opik ``ranking_override`` feedback score from the metadata bool.
+
+    Type boundary (Issue #195): ``GenerationTelemetry.ranking_override`` is a
+    **bool**; the Opik feedback score is a **float** ``1.0`` / ``0.0`` derived
+    only at this score boundary.
+    """
+    return 1.0 if ranking_override else 0.0
 
 
 def run_deterministic_checks(commit_plan: CommitPlan) -> DeterministicScoreCard:
@@ -716,6 +785,74 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["shadow_fail_open_reason"] = fail_reason.value
             elif fail_reason not in {r.value for r in ShadowFailOpenReason}:
                 data["shadow_fail_open_reason"] = ShadowFailOpenReason.NONE.value
+            # Phase 7.29 ranking confidence defaults (Issue #195).
+            data.setdefault("ranking_confidence_level", None)
+            data.setdefault("ranking_confidence_margin", None)
+            data.setdefault("ranking_confidence_reasons", None)
+            data.setdefault("ranking_choice_path", None)
+            data.setdefault("ranking_override", False)
+            data.setdefault("ranking_arbitrate_effective", None)
+            data.setdefault("lock_resolution", LockResolution.ABSENT.value)
+            data.setdefault("gold_mode", "off")
+            data.setdefault("gold_findings_count", 0)
+            data.setdefault("gold_finding_codes", None)
+            data.setdefault("gold_blocked", False)
+            data.setdefault("gold_regen_attempts", 0)
+            # Normalise ranking fields.
+            level = data.get("ranking_confidence_level")
+            if level is not None and level not in {m.value for m in RankingConfidenceLevel}:
+                data["ranking_confidence_level"] = None
+            margin = data.get("ranking_confidence_margin")
+            if margin is None or margin == "":
+                data["ranking_confidence_margin"] = None
+            else:
+                try:
+                    data["ranking_confidence_margin"] = float(margin)
+                except TypeError, ValueError:
+                    data["ranking_confidence_margin"] = None
+            reasons = data.get("ranking_confidence_reasons")
+            if reasons is None:
+                data["ranking_confidence_reasons"] = None
+            elif isinstance(reasons, list):
+                data["ranking_confidence_reasons"] = [str(item) for item in reasons if item is not None]
+            else:
+                data["ranking_confidence_reasons"] = None
+            choice = data.get("ranking_choice_path")
+            if choice is not None and choice not in {m.value for m in RankingChoicePath}:
+                data["ranking_choice_path"] = None
+            # ranking_override is metadata bool — coerce legacy 1.0/0.0 if present.
+            raw_override = data.get("ranking_override", False)
+            if isinstance(raw_override, bool):
+                data["ranking_override"] = raw_override
+            elif isinstance(raw_override, (int, float)):
+                data["ranking_override"] = bool(raw_override)
+            elif isinstance(raw_override, str):
+                data["ranking_override"] = raw_override.strip().lower() in {"1", "true", "yes", "on"}
+            else:
+                data["ranking_override"] = False
+            arb = data.get("ranking_arbitrate_effective")
+            if arb is not None and arb not in {m.value for m in RankingArbitrateEffective}:
+                data["ranking_arbitrate_effective"] = None
+            lock_res = data.get("lock_resolution")
+            if lock_res not in {m.value for m in LockResolution}:
+                data["lock_resolution"] = LockResolution.ABSENT.value
+            data["gold_mode"] = str(data.get("gold_mode") or "off")
+            try:
+                data["gold_findings_count"] = int(data.get("gold_findings_count") or 0)
+            except TypeError, ValueError:
+                data["gold_findings_count"] = 0
+            codes = data.get("gold_finding_codes")
+            if codes is None:
+                data["gold_finding_codes"] = None
+            elif isinstance(codes, list):
+                data["gold_finding_codes"] = sorted({str(c) for c in codes if c is not None})
+            else:
+                data["gold_finding_codes"] = None
+            data["gold_blocked"] = bool(data.get("gold_blocked"))
+            try:
+                data["gold_regen_attempts"] = int(data.get("gold_regen_attempts") or 0)
+            except TypeError, ValueError:
+                data["gold_regen_attempts"] = 0
             return GenerationTelemetry(**data)
     except Exception:
         return None

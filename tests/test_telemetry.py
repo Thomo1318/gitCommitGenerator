@@ -8,6 +8,8 @@ Tests for git_cg.telemetry covering the PR changes:
 
 import json
 
+import pytest
+
 from git_cg.telemetry import GenerationTelemetry, get_state_file_path, read_telemetry_state, write_telemetry_state
 
 # ---------------------------------------------------------------------------
@@ -1680,3 +1682,110 @@ def test_write_telemetry_state_safe_accepts_shadow_kwargs(tmp_path, monkeypatch)
     assert loaded.shadow_workspace_used is True
     assert loaded.semantic_refresh_graph == "ran"
     assert loaded.shadow_fail_open_reason == "none"
+
+
+# ---------------------------------------------------------------------------
+# Issue #195 ranking confidence telemetry (Slice 2)
+# ---------------------------------------------------------------------------
+
+
+def test_ranking_override_is_bool_not_float():
+    """A_07 type boundary: metadata field is bool; never store 1.0/0.0 here."""
+    tel = _minimal_telemetry(ranking_override=True)
+    assert tel.ranking_override is True
+    assert isinstance(tel.ranking_override, bool)
+
+
+def test_ranking_override_feedback_score_derived_at_boundary():
+    from git_cg.telemetry import ranking_override_feedback_score
+
+    assert ranking_override_feedback_score(True) == 1.0
+    assert ranking_override_feedback_score(False) == 0.0
+
+
+def test_write_then_read_preserves_ranking_confidence_fields(tmp_path, monkeypatch):
+    """A_07: ranking fields round-trip through write/read with redaction gateway."""
+    import git_cg.telemetry as telemetry_mod
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    tel = _minimal_telemetry(
+        ranking_confidence_level="low",
+        ranking_confidence_margin=6.2,
+        ranking_confidence_reasons=["margin_below_low_threshold", "mixed_intent"],
+        ranking_choice_path="ni_top_rank",
+        ranking_override=False,
+        ranking_arbitrate_effective="skipped_ni",
+        lock_resolution="absent",
+        gold_mode="warn",
+        gold_findings_count=1,
+        gold_finding_codes=["GOLD_BODY_INVENTORY"],
+        gold_blocked=False,
+        gold_regen_attempts=0,
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+
+    assert result is not None
+    assert result.ranking_confidence_level == "low"
+    assert result.ranking_confidence_margin == pytest.approx(6.2)
+    assert result.ranking_confidence_reasons == ["margin_below_low_threshold", "mixed_intent"]
+    assert result.ranking_choice_path == "ni_top_rank"
+    assert result.ranking_override is False
+    assert isinstance(result.ranking_override, bool)
+    assert result.ranking_arbitrate_effective == "skipped_ni"
+    assert result.lock_resolution == "absent"
+    assert result.gold_mode == "warn"
+    assert result.gold_findings_count == 1
+    assert result.gold_finding_codes == ["GOLD_BODY_INVENTORY"]
+    assert result.gold_blocked is False
+    assert result.gold_regen_attempts == 0
+
+
+def test_read_telemetry_state_defaults_ranking_fields_for_legacy_payload(tmp_path):
+    """Legacy state files without ranking fields load with safe defaults."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.ranking_confidence_level is None
+    assert result.ranking_override is False
+    assert result.lock_resolution == "absent"
+    assert result.gold_mode == "off"
+
+
+def test_read_telemetry_state_coerces_legacy_float_override(tmp_path):
+    """If a legacy payload stored 1.0/0.0, coerce to bool metadata."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+        "ranking_override": 1.0,
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.ranking_override is True
+    assert isinstance(result.ranking_override, bool)
