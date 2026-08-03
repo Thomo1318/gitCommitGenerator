@@ -18,6 +18,30 @@
 ### 📝 Documentation
 
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+## v0.11.0
+
+### ✨ Features
+
+- ✨ feat(commit_gold): add subject inventory and P6 split guidance (#191)
+- ✨ feat(main): bound gold self-correction and add v1.1 telemetry (#191)
+
+### 🐛 Bug Fixes & Refactors
+
+- 🦺 fix(gold): address PR #202 review findings (#191)
+
+### 📝 Documentation
+
+- 📝 docs(usage): document gold linter v1.1 behaviour (#191)
+
+### ✅ Tests
+
+- ✅ test(test_main): add split_preferred flag to gold split test (#191)
+
+### 🔧 Chores & Internal
+
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #202 from Thomo1318/feat/191-gold-linter-v1.1
+
 ## v0.10.0
 
 ### Miscellaneous
