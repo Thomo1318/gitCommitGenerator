@@ -1059,6 +1059,93 @@ def test_gold_surface_checklist_displayed_in_review_status(monkeypatch, capsys, 
     assert "[ ] GOLD_BODY_INVENTORY:" in status
 
 
+def test_medium_ranking_confidence_status_in_post_gold_review(monkeypatch, tmp_path):
+    """Issue #195 nice-to-have: Medium confidence appears on post-gold review status_text."""
+    import git_cg.main as main_mod
+    from git_cg.intent import RankedIntent
+    from git_cg.ranking_confidence import RankingConfidence
+
+    captured: dict[str, str] = {}
+    _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for ranking confidence status.")])
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+
+    def fake_prompt_with_gum(title, body, *, status_text=None):
+        captured["status_text"] = status_text or ""
+        return "Commit"
+
+    monkeypatch.setattr(main_mod, "prompt_with_gum", fake_prompt_with_gum)
+
+    # Force a Medium confidence snapshot through GenerationContext construction.
+    real_build = main_mod._build_generation_context
+
+    def fake_build(*args, **kwargs):
+        from dataclasses import replace
+
+        ctx = real_build(*args, **kwargs)
+        medium = RankingConfidence(
+            level="medium",
+            margin=12.0,
+            top_intent_id="feature_addition",
+            runner_up_intent_id="feature_refinement",
+            reasons=[],
+        )
+        # Preserve ranked list shape if empty so contract still works.
+        ranked = (
+            list(ctx.ranked_intents)
+            if ctx.ranked_intents
+            else [
+                RankedIntent(
+                    intent_id="feature_addition",
+                    emoji="✨",
+                    code=":sparkles:",
+                    cc_type="feat",
+                    description="feature",
+                    semver_impact="MINOR",
+                    changelog_group="Added",
+                    intent_group="feature",
+                    score=100.0,
+                    priority=100,
+                    specificity=100,
+                    split_weight=100,
+                ),
+                RankedIntent(
+                    intent_id="feature_refinement",
+                    emoji="✨",
+                    code=":sparkles:",
+                    cc_type="feat",
+                    description="refine",
+                    semver_impact="PATCH",
+                    changelog_group="Changed",
+                    intent_group="feature",
+                    score=88.0,
+                    priority=90,
+                    specificity=90,
+                    split_weight=90,
+                ),
+            ]
+        )
+        return replace(ctx, ranking_confidence=medium, ranked_intents=ranked)
+
+    monkeypatch.setattr(main_mod, "_build_generation_context", fake_build)
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=True,
+    )
+    assert result is True
+    status = captured["status_text"]
+    assert "Ranking confidence: medium" in status
+    assert "margin=12.0" in status
+    assert "top=feature_addition vs feature_refinement" in status
+
+
 def test_gold_strict_flag_blocks_without_general_strict(monkeypatch, capsys, tmp_path):
     """--gold-strict: gold fails strict (non-zero exit) while strict=False for non-gold paths."""
     import typer
@@ -1196,6 +1283,63 @@ def test_recover_path_skips_gold(monkeypatch, tmp_path):
     # Recover applied the standalone commit and exited; gold was never consulted.
     assert called["applied"] is True
     assert called["gold"] is False
+
+
+def test_root_help_includes_usage_kdl_flags():
+    """Root `git-cg --help` must surface every root flag declared in usage.kdl.
+
+    usage.kdl is the completion/docs source of truth for the public CLI surface.
+    Typer help must not lag behind it (regression: --gold-strict was documented
+    and completable but missing from main_callback / --help).
+    """
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    # Keep this list aligned with root-level flags in usage.kdl (not subcommands).
+    required = [
+        "--interactive",
+        "--engine",
+        "--dry-run",
+        "--verbose",
+        "--strict",
+        "--enable-semantic",
+        "--no-enable-semantic",
+        "--rank-arbitrate",
+        "--no-rank-arbitrate",
+        "--gold-strict",
+        "--recover",
+    ]
+
+    result = CliRunner().invoke(app, ["--help"])
+    assert result.exit_code == 0, result.output
+    missing = [flag for flag in required if flag not in result.output]
+    assert not missing, f"root --help missing usage.kdl flags: {missing}\n{result.output}"
+
+
+def test_commit_help_includes_usage_kdl_flags():
+    """`git-cg commit --help` must surface every commit flag declared in usage.kdl."""
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    required = [
+        "--rank-arbitrate",
+        "--no-rank-arbitrate",
+        "--enable-semantic",
+        "--no-enable-semantic",
+        "--gold-strict",
+        "--interactive",
+        "--strict",
+        "--dry-run",
+        "--verbose",
+        "--engine",
+    ]
+
+    result = CliRunner().invoke(app, ["commit", "--help"])
+    assert result.exit_code == 0, result.output
+    missing = [flag for flag in required if flag not in result.output]
+    assert not missing, f"commit --help missing usage.kdl flags: {missing}\n{result.output}"
 
 
 def test_a01_gold_guidance_bypasses_directive_extraction():
