@@ -1248,6 +1248,7 @@ def test_v11_a08d_gold_split_recommendation_telemetry_true(monkeypatch, tmp_path
                             "diff. Matrix-legal secondary intents (Included changes) remain "
                             "acceptable if a single commit is retained."
                         ),
+                        split_preferred=True,
                     )
                 ]
             ),
