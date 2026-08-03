@@ -263,6 +263,7 @@ def _apply_issue195_sentry_tags(
     ranking_confidence_level: str | None = None,
     ranking_choice_path: str | None = None,
     gold_mode: str | None = None,
+    gold_self_correction_outcome: str | None = None,
 ) -> None:
     """Attach Issue #195 / gold-parity Sentry tags on error and abort paths only.
 
@@ -274,6 +275,9 @@ def _apply_issue195_sentry_tags(
         sentry_sdk.set_tag("ranking_choice_path", str(ranking_choice_path))
     if gold_mode is not None and gold_mode != "":
         sentry_sdk.set_tag("gold_mode", str(gold_mode))
+    if gold_self_correction_outcome:
+        # Issue #191: closed outcome on gold-path strict aborts only.
+        sentry_sdk.set_tag("gold_self_correction_outcome", str(gold_self_correction_outcome))
 
 
 def resolve_model_name(
@@ -1343,6 +1347,9 @@ def _write_telemetry_state_safe(
     gold_finding_codes: list | None = None,
     gold_blocked: bool = False,
     gold_regen_attempts: int = 0,
+    gold_self_correction_attempts: int = 0,
+    gold_self_correction_outcome: str = "not_needed",
+    gold_split_recommendation: bool = False,
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1392,7 +1399,10 @@ def _write_telemetry_state_safe(
         gold_findings_count (int): Count of gold findings.
         gold_finding_codes (list | None): Sorted closed gold finding codes only.
         gold_blocked (bool): Whether gold blocked under the resolved mode.
-        gold_regen_attempts (int): Bounded gold wording regen attempts.
+        gold_regen_attempts (int): Bounded gold wording regen attempts (0..2).
+        gold_self_correction_attempts (int): Issue #191 self-correction depth (0..2).
+        gold_self_correction_outcome (str): Issue #191 closed outcome enum value.
+        gold_split_recommendation (bool): Issue #191 P6 ≥3-group split-prefer path fired.
     """
     try:
         import dataclasses
@@ -1472,6 +1482,9 @@ def _write_telemetry_state_safe(
             ),
             gold_blocked=bool(gold_blocked),
             gold_regen_attempts=int(gold_regen_attempts or 0),
+            gold_self_correction_attempts=int(gold_self_correction_attempts or 0),
+            gold_self_correction_outcome=str(gold_self_correction_outcome or "not_needed"),
+            gold_split_recommendation=bool(gold_split_recommendation),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -2107,11 +2120,12 @@ def _run_commit_generation(
         risk_assessment=risk_assessment,
     )
 
-    # Issue #182 Slice 3b: resolve gold mode once per generation entry (flags cannot
-    # change mid-loop); gold auto-regen is bounded to 1 and tracked separately from
-    # Instructor/transport/schema retries.
+    # Issue #182 / #191: resolve gold mode once per generation entry (flags cannot
+    # change mid-loop); gold auto-regen is bounded to 2 attempts with monotonic
+    # code-set shrinkage (Option B) and tracked separately from Instructor retries.
     from git_cg.commit_gold import check_commit_gold, resolve_gold_mode
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
+    from git_cg.telemetry import GoldSelfCorrectionOutcome
 
     gold_mode = resolve_gold_mode(
         strict=strict,
@@ -2123,6 +2137,9 @@ def _run_commit_generation(
     gold_regen_attempts = 0
     gold_guidance: str | None = None
     gold_previous_primary_id: str | None = None
+    gold_previous_codes: frozenset[str] | None = None
+    gold_self_correction_outcome = GoldSelfCorrectionOutcome.NOT_NEEDED.value
+    gold_split_recommendation = False
     # Issue #195: contract lock + arbitration telemetry (Slices 2-4).
     last_lock_resolution = "absent"
     locked_intent_id: str | None = None
@@ -2452,9 +2469,11 @@ def _run_commit_generation(
         if regeneration_guidance:
             review_state.set_regeneration_guidance(regeneration_guidance)
 
-        # Issue #182: gold runs after mixed-policy and ReviewState construction, before
-        # render/write/acceptance display. Findings print unconditionally in warn/surface/
-        # strict (never verbose-gated); pass/fail derives from STRICT_FAIL_CODES + mode.
+        # Issue #182 / #191: gold runs after mixed-policy and ReviewState construction,
+        # before render/write/acceptance display. Findings print unconditionally in
+        # warn/surface/strict (never verbose-gated); pass/fail derives from
+        # STRICT_FAIL_CODES + mode. Bounded self-correction (max 2) with monotonic
+        # code-set shrinkage — never re-enters #195 arbitration.
         gold_report = check_commit_gold(
             commit_plan,
             contract,
@@ -2462,6 +2481,9 @@ def _run_commit_generation(
             ranked_intents=gen_context.ranked_intents,
         )
         review_state.gold_findings = list(gold_report.findings)
+        # P6 telemetry: structured signal from GoldFinding.split_preferred (not message prose).
+        if gold_report.has_split_recommendation():
+            gold_split_recommendation = True
         gold_guidance = None
         if gold_mode != "off" and gold_report.findings:
             codes = ", ".join(sorted(gold_report.codes()))
@@ -2469,18 +2491,101 @@ def _run_commit_generation(
             for finding in gold_report.findings:
                 console.print(f"  [yellow]- {finding.code}: {finding.message}[/yellow]")
         if not gold_report.ok_for_mode(gold_mode):
-            if gold_regen_attempts < 1:
+            # Issue #191 lock: compare ALL emitted finding codes for shrinkage
+            # (not only STRICT_FAIL_CODES). Pass/fail still uses ok_for_mode.
+            current_codes = gold_report.codes()
+            abort_outcome: str | None = None
+            # Option B (Issue #191): after 2 completed regens any remaining fail is exhausted.
+            # Stall/growth apply only when fewer than 2 regens have completed.
+            if gold_regen_attempts >= 2:
+                abort_outcome = GoldSelfCorrectionOutcome.EXHAUSTED.value
+            elif gold_previous_codes is not None:
+                if current_codes == gold_previous_codes:
+                    abort_outcome = GoldSelfCorrectionOutcome.ABORTED_STALL.value
+                elif not current_codes < gold_previous_codes:
+                    # Grew, disjoint, or non-strict-subset.
+                    abort_outcome = GoldSelfCorrectionOutcome.ABORTED_GROWTH.value
+            if abort_outcome is None:
                 gold_regen_attempts += 1  # incremented immediately before the gold continue
                 gold_guidance = "; ".join(f.message for f in gold_report.findings)
                 gold_previous_primary_id = commit_plan.primary_intent.intent_id
-                console.print("[yellow]Regenerating wording from gold feedback (1 attempt)...[/yellow]")
+                gold_previous_codes = current_codes
+                console.print(
+                    f"[yellow]Regenerating wording from gold feedback (attempt {gold_regen_attempts}/2)...[/yellow]"
+                )
                 continue
+            # Strict gold abort — codes/summary only; Sentry-visible (report=True).
+            gold_self_correction_outcome = abort_outcome
             _apply_issue195_sentry_tags(
                 ranking_confidence_level=(
                     gen_context.ranking_confidence.level if gen_context.ranking_confidence else None
                 ),
                 ranking_choice_path=ranking_choice_path,
                 gold_mode=gold_mode,
+                gold_self_correction_outcome=gold_self_correction_outcome,
+            )
+            # Persist v1.1 outcome before abort so Opik state captures the fail mode.
+            _write_telemetry_state_safe(
+                review_state=review_state,
+                diff_output=analysis_diff,
+                engine=engine,
+                model_name=model_name,
+                system_prompt=system_prompt,
+                repo_name=repo_name,
+                thread_id=thread_id,
+                verbose=verbose,
+                graph_schema_version=crg_schema_version,
+                semantic_enabled=semantic_enabled,
+                parser_latency_ms=parser_latency_ms,
+                graph_build_latency_ms=graph_build_latency_ms,
+                graph_query_latency_ms=graph_query_latency_ms,
+                semantic_parser_metrics=semantic_parser_metrics,
+                body_similarity_min=body_similarity_min,
+                body_similarity_avg=body_similarity_avg,
+                fingerprint_files_compared=fingerprint_files_compared,
+                fingerprint_latency_ms=fingerprint_latency_ms,
+                fingerprint_class_counts=fingerprint_class_counts,
+                fingerprint_grammar_version=fingerprint_grammar_version,
+                fingerprint_markers=fingerprint_markers,
+                preflight_mode="skipped",
+                preflight_groups_count=0,
+                preflight_fallback_reason="",
+                blast_radius_size=blast_radius_size
+                if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
+                else None,
+                affected_flows_count=affected_flows_count
+                if isinstance(affected_flows_count, int) and not isinstance(affected_flows_count, bool)
+                else None,
+                test_coverage_gap=bool(test_coverage_gap) if test_coverage_gap is not None else None,
+                test_gaps_count=test_gaps_count
+                if isinstance(test_gaps_count, int) and not isinstance(test_gaps_count, bool)
+                else None,
+                semantic_context_schema_version=semantic_context_schema_version,
+                semantic_context_fallback_reasons=semantic_context_fallback_reasons,
+                shadow_workspace_used=shadow_workspace_used,
+                semantic_refresh_graph=semantic_refresh_graph,
+                shadow_fail_open_reason=shadow_fail_open_reason,
+                ranking_confidence_level=(
+                    gen_context.ranking_confidence.level if gen_context.ranking_confidence else None
+                ),
+                ranking_confidence_margin=(
+                    gen_context.ranking_confidence.margin if gen_context.ranking_confidence else None
+                ),
+                ranking_confidence_reasons=(
+                    list(gen_context.ranking_confidence.reasons) if gen_context.ranking_confidence else None
+                ),
+                ranking_choice_path=ranking_choice_path,
+                ranking_override=bool(ranking_override),
+                ranking_arbitrate_effective=ranking_arbitrate_effective,
+                lock_resolution=last_lock_resolution,
+                gold_mode=gold_mode,
+                gold_findings_count=len(gold_report.findings),
+                gold_finding_codes=sorted(gold_report.codes()),
+                gold_blocked=True,
+                gold_regen_attempts=gold_regen_attempts,
+                gold_self_correction_attempts=gold_regen_attempts,
+                gold_self_correction_outcome=gold_self_correction_outcome,
+                gold_split_recommendation=bool(gold_split_recommendation),
             )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
@@ -2489,6 +2594,9 @@ def _run_commit_generation(
                 strict=True,
                 report=True,
             )
+        elif gold_regen_attempts > 0:
+            # Clean after one or more wording regens.
+            gold_self_correction_outcome = GoldSelfCorrectionOutcome.CLEARED.value
 
         result_string = review_state.render()
         if verbose or dry_run:
@@ -2606,6 +2714,9 @@ def _run_commit_generation(
         ),
         gold_blocked=bool(gold_mode == "strict" and gold_report is not None and not gold_report.ok_for_mode("strict")),
         gold_regen_attempts=gold_regen_attempts,
+        gold_self_correction_attempts=gold_regen_attempts,
+        gold_self_correction_outcome=gold_self_correction_outcome,
+        gold_split_recommendation=bool(gold_split_recommendation),
     )
 
     opik.flush_tracker()

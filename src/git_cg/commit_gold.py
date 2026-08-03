@@ -1,4 +1,4 @@
-"""Deterministic post-enforce commit-message gold linter (Issue #182 Phase 7.25).
+"""Deterministic post-enforce commit-message gold linter (Issues #182 / #191).
 
 Gold checks content quality of a structured ``CommitPlan`` *after*
 ``enforce_semantic_contract`` and the mixed-policy handle. The checker is pure:
@@ -160,8 +160,114 @@ STRICT_FAIL_CODES: frozenset[str] = frozenset(
         "GOLD_SEMVER_MATRIX_MISMATCH",
         "GOLD_SCOPE_FILENAME",
         "GOLD_SUBJECT_TITLE_CASE",
+        "GOLD_SUBJECT_INVENTORY",
     }
 )
+
+# Closed imperative-verb allowlist for GOLD_SUBJECT_INVENTORY (Issue #191).
+# Matching is case-insensitive on the first alphabetic token of a clause.
+# Amend the issue + this constant together — do not invent fuzzy verbs at runtime.
+SUBJECT_INVENTORY_VERBS: frozenset[str] = frozenset(
+    {
+        "add",
+        "adds",
+        "added",
+        "update",
+        "updates",
+        "updated",
+        "fix",
+        "fixes",
+        "fixed",
+        "remove",
+        "removes",
+        "removed",
+        "delete",
+        "deletes",
+        "deleted",
+        "implement",
+        "implements",
+        "implemented",
+        "introduce",
+        "introduces",
+        "introduced",
+        "ensure",
+        "ensures",
+        "ensured",
+        "create",
+        "creates",
+        "created",
+        "refactor",
+        "refactors",
+        "refactored",
+        "document",
+        "documents",
+        "documented",
+        "test",
+        "tests",
+        "tested",
+        "wire",
+        "wires",
+        "wired",
+        "align",
+        "aligns",
+        "aligned",
+        "enforce",
+        "enforces",
+        "enforced",
+        "harden",
+        "hardens",
+        "hardened",
+        "migrate",
+        "migrates",
+        "migrated",
+        "rename",
+        "renames",
+        "renamed",
+        "replace",
+        "replaces",
+        "replaced",
+        "support",
+        "supports",
+        "supported",
+        "improve",
+        "improves",
+        "improved",
+        "optimize",
+        "optimizes",
+        "optimized",
+        "optimise",
+        "optimises",
+        "optimised",
+        "clean",
+        "cleans",
+        "cleaned",
+        "drop",
+        "drops",
+        "dropped",
+        "handle",
+        "handles",
+        "handled",
+        "validate",
+        "validates",
+        "validated",
+        "parse",
+        "parses",
+        "parsed",
+        "render",
+        "renders",
+        "rendered",
+        "sync",
+        "syncs",
+        "synced",
+        "port",
+        "ports",
+        "ported",
+    }
+)
+
+_SUBJECT_CLAUSE_LEAD_RE = re.compile(r"^(?:and|or)\s+", re.IGNORECASE)
+_SUBJECT_ALPHA_TOKEN_RE = re.compile(r"[A-Za-z]+")
+_SUBJECT_AND_SPLIT_RE = re.compile(r"\s+and\s+", re.IGNORECASE)
 
 _GOLD_MODE_ENV = "GIT_CG_GOLD_MODE"
 _GOLD_MODES: frozenset[str] = frozenset({"off", "warn", "strict"})
@@ -174,6 +280,9 @@ class GoldFinding:
     code: str
     message: str
     severity: str = "info"  # always informational at emission; mode decides pass/fail
+    # Structured P6 signal (≥3 coverage groups prefer split). Telemetry must read this
+    # field — never substring-match ``message`` prose across the main.py boundary.
+    split_preferred: bool = False
 
 
 @dataclass(frozen=True)
@@ -185,6 +294,10 @@ class GoldReport:
     def codes(self) -> frozenset[str]:
         """Return the set of finding codes present in this report."""
         return frozenset(finding.code for finding in self.findings)
+
+    def has_split_recommendation(self) -> bool:
+        """True when any finding carries the structured P6 split-prefer signal."""
+        return any(finding.split_preferred for finding in self.findings)
 
     def ok_for_mode(self, mode: str) -> bool:
         """Map findings to a pass/fail decision for a resolved gold mode.
@@ -272,6 +385,67 @@ def _check_body_inventory(plan: CommitPlan) -> list[GoldFinding]:
                 )
             ]
     return []
+
+
+def _first_alpha_token(text: str) -> str:
+    """Return the first alphabetic token lowercased, or ``""`` if none."""
+    match = _SUBJECT_ALPHA_TOKEN_RE.search(text)
+    return match.group(0).lower() if match else ""
+
+
+def _clause_is_verb_initial(clause: str) -> bool:
+    """True when the clause's first alphabetic token is in the closed verb allowlist.
+
+    Leading coordinating ``and``/``or`` (Oxford-comma tails) are stripped before the
+    verb check so ``add X, update Y, and fix Z`` still counts three verb-initial clauses.
+    """
+    cleaned = _SUBJECT_CLAUSE_LEAD_RE.sub("", clause.strip())
+    token = _first_alpha_token(cleaned)
+    return bool(token) and token in SUBJECT_INVENTORY_VERBS
+
+
+def _subject_inventory_pattern_a(description: str) -> bool:
+    """PATTERN A: ≥3 comma-separated clauses with ≥3 verb-initial allowlist hits."""
+    parts = [part.strip() for part in description.split(",") if part.strip()]
+    if len(parts) < 3:
+        return False
+    return sum(1 for part in parts if _clause_is_verb_initial(part)) >= 3
+
+
+def _subject_inventory_pattern_b(description: str) -> bool:
+    """PATTERN B: ≥2 bare coordinating ``and`` connectors joining verb-initial clauses.
+
+    Example hit: ``add X and update Y and fix Z`` (two ``and``s, three verb clauses).
+    A single ``and`` (``add X and update Y``) does not fire.
+    """
+    parts = [part.strip(" ,") for part in _SUBJECT_AND_SPLIT_RE.split(description) if part.strip(" ,")]
+    if len(parts) < 3:
+        return False
+    # Require every coordinated clause to be verb-initial under the allowlist.
+    return all(_clause_is_verb_initial(part) for part in parts)
+
+
+def _check_subject_inventory(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_SUBJECT_INVENTORY`` for multi-action primary descriptions (Issue #191).
+
+    Match target is ``plan.primary_intent.description`` only — never emoji, cc_type,
+    scope, or the rendered subject line. Exactly two deterministic patterns over the
+    closed ``SUBJECT_INVENTORY_VERBS`` allowlist (no NLP / embeddings).
+    """
+    description = str(plan.primary_intent.description or "").strip()
+    if not description:
+        return []
+    if not (_subject_inventory_pattern_a(description) or _subject_inventory_pattern_b(description)):
+        return []
+    return [
+        GoldFinding(
+            code="GOLD_SUBJECT_INVENTORY",
+            message=(
+                f"Primary subject description looks like an action inventory ({description!r}); "
+                "lead with the outcome, not the action list."
+            ),
+        )
+    ]
 
 
 def _file_groups(path: str) -> frozenset[str]:
@@ -398,14 +572,28 @@ def _check_included_changes(plan: CommitPlan, signals: DiffSignals, ranked_inten
     if not competitive:
         return []
 
+    group_list = ", ".join(sorted(groups))
+    n_groups = len(groups)
+    # P6 (Issue #191): message-only branch — same finding code; ≥3 groups prefer split.
+    if n_groups >= 3:
+        message = (
+            f"Diff spans {n_groups} coverage groups ({group_list}) with a competitive ranked "
+            "secondary and no secondaries/split; recommend splitting this diff. Matrix-legal "
+            "secondary intents (Included changes) remain acceptable if a single commit is retained."
+        )
+        split_preferred = True
+    else:
+        message = (
+            f"Diff spans {n_groups} coverage groups ({group_list}) with a "
+            "competitive ranked secondary, but the plan has no secondary intents and no split "
+            "recommendation; include matrix-legal secondary intents (Included changes) or split."
+        )
+        split_preferred = False
     return [
         GoldFinding(
             code="GOLD_INCLUDED_CHANGES_MISSING",
-            message=(
-                f"Diff spans {len(groups)} coverage groups ({', '.join(sorted(groups))}) with a "
-                "competitive ranked secondary, but the plan has no secondary intents and no split "
-                "recommendation; include matrix-legal secondary intents (Included changes) or split."
-            ),
+            message=message,
+            split_preferred=split_preferred,
         )
     ]
 
@@ -659,6 +847,7 @@ def check_commit_gold(
 
     findings: list[GoldFinding] = []
     findings.extend(_check_body_inventory(plan))
+    findings.extend(_check_subject_inventory(plan))
     findings.extend(_check_group_coherence(plan))
     findings.extend(_check_type_group_coherence(plan))
     findings.extend(_check_semver_matrix(plan))

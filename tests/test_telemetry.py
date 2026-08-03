@@ -1722,6 +1722,9 @@ def test_write_then_read_preserves_ranking_confidence_fields(tmp_path, monkeypat
         gold_finding_codes=["GOLD_BODY_INVENTORY"],
         gold_blocked=False,
         gold_regen_attempts=0,
+        gold_self_correction_attempts=0,
+        gold_self_correction_outcome="not_needed",
+        gold_split_recommendation=False,
     )
     write_telemetry_state(str(tmp_path), tel)
     result = read_telemetry_state(str(tmp_path))
@@ -1740,6 +1743,9 @@ def test_write_then_read_preserves_ranking_confidence_fields(tmp_path, monkeypat
     assert result.gold_finding_codes == ["GOLD_BODY_INVENTORY"]
     assert result.gold_blocked is False
     assert result.gold_regen_attempts == 0
+    assert result.gold_self_correction_attempts == 0
+    assert result.gold_self_correction_outcome == "not_needed"
+    assert result.gold_split_recommendation is False
 
 
 def test_read_telemetry_state_defaults_ranking_fields_for_legacy_payload(tmp_path):
@@ -1765,6 +1771,9 @@ def test_read_telemetry_state_defaults_ranking_fields_for_legacy_payload(tmp_pat
     assert result.ranking_override is False
     assert result.lock_resolution == "absent"
     assert result.gold_mode == "off"
+    assert result.gold_self_correction_attempts == 0
+    assert result.gold_self_correction_outcome == "not_needed"
+    assert result.gold_split_recommendation is False
 
 
 def test_read_telemetry_state_coerces_legacy_float_override(tmp_path):
@@ -1789,3 +1798,102 @@ def test_read_telemetry_state_coerces_legacy_float_override(tmp_path):
     assert result is not None
     assert result.ranking_override is True
     assert isinstance(result.ranking_override, bool)
+
+
+def test_v11_gold_self_correction_fields_round_trip(tmp_path, monkeypatch):
+    """Issue #191: v1.1 self-correction + P6 fields round-trip with closed outcome enum."""
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GoldSelfCorrectionOutcome
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    tel = _minimal_telemetry(
+        gold_mode="strict",
+        gold_findings_count=2,
+        gold_finding_codes=["GOLD_BODY_INVENTORY", "GOLD_SUBJECT_INVENTORY"],
+        gold_blocked=True,
+        gold_regen_attempts=1,
+        gold_self_correction_attempts=1,
+        gold_self_correction_outcome=GoldSelfCorrectionOutcome.ABORTED_STALL.value,
+        gold_split_recommendation=True,
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.gold_self_correction_attempts == 1
+    assert result.gold_self_correction_outcome == "aborted_stall"
+    assert result.gold_split_recommendation is True
+    assert result.gold_finding_codes == ["GOLD_BODY_INVENTORY", "GOLD_SUBJECT_INVENTORY"]
+
+
+def test_v11_gold_self_correction_invalid_outcome_defaults(tmp_path):
+    """Unknown outcome values coerce to not_needed on read."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+        "gold_self_correction_outcome": "not_a_real_outcome",
+        "gold_self_correction_attempts": "2",
+        "gold_split_recommendation": 1,
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.gold_self_correction_outcome == "not_needed"
+    assert result.gold_self_correction_attempts == 2
+    assert result.gold_split_recommendation is True
+
+
+def test_v11_gold_self_correction_non_numeric_attempts_defaults(tmp_path):
+    """Non-numeric attempt counts coerce to 0 on read."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+        "gold_self_correction_attempts": "not-a-number",
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.gold_self_correction_attempts == 0
+
+
+def test_v11_gold_split_recommendation_string_false_coerces(tmp_path):
+    """Legacy string \"false\" must not become True via bare bool()."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+        "gold_split_recommendation": "false",
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.gold_split_recommendation is False
