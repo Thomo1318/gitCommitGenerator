@@ -1,0 +1,88 @@
+%%{
+  init: {
+    'theme': 'base',
+    'themeVariables': {
+      'primaryColor': '#1e1e2e',
+      'primaryBorderColor': '#cba6f7',
+      'primaryTextColor': '#cdd6f4',
+      'lineColor': '#89b4fa'
+    }
+  }
+}%%
+flowchart LR
+    classDef panel fill:#1e1e2e,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4,font-family:monospace,text-align:left,white-space:nowrap;
+    classDef status fill:#313244,stroke:#89b4fa,stroke-width:2px,color:#cdd6f4,font-family:monospace,text-align:left,white-space:nowrap;
+
+    MAIN["Low confidence — pick primary intent<br/>────────────────────────────────────<br/>Top score margin is only +6.2 (threshold 12.0). Confirm the primary<br/>contract before generation.<br/><br/>  A  ✨ feat(core) — feature_addition          84.0  (+6.2)<br/>  B  🥅 fix(core) — error_handling           77.8<br/><br/>Markers (shared): adds_public_api, error_handling_added, tests_updated<br/>SemVer if A: MINOR · if B: PATCH<br/><br/>▸ Use A: ✨ feat(core) — feature_addition     score 84.0  (+6.2)<br/>  Use B: 🥅 fix(core) — error_handling      score 77.8<br/>  See more candidates…<br/>  Add regeneration guidance…<br/>  Specify from matrix…<br/>  Cancel"]:::panel
+
+    LOCK_A["Lock primary intent — Option A<br/>────────────────────────────────────<br/>Contract to lock (wording generated after this):<br/><br/>  ✨ feat(core): &lt;subject — model fills&gt;<br/>  intent_id:     feature_addition<br/>  score:         84.0  (margin +6.2 over B)<br/>  SemVer-Impact: MINOR<br/>  Changelog:     Added<br/><br/>Why A ranked first:<br/>  • new_user_facing_capability / adds_public_api<br/>  • product_src surface dominant<br/>  • error_handling markers present but negative-weighted for this row<br/><br/>Runner-up you are not choosing:<br/>  🥅 fix(core) — error_handling  77.8<br/><br/>▸ Lock A and generate message<br/>  ← Back"]:::panel
+
+    STATUS_A["Primary locked: feature_addition (user confirmed A)<br/>Generating commit message…"]:::status
+
+    LOCK_B["Lock primary intent — Option B<br/>────────────────────────────────────<br/>Contract to lock (wording generated after this):<br/><br/>  🥅 fix(core): &lt;subject — model fills&gt;<br/>  intent_id:     error_handling<br/>  score:         77.8  (−6.2 under A)<br/>  SemVer-Impact: PATCH<br/>  Changelog:     Fixed<br/><br/>Why B is competitive:<br/>  • error_handling_added / try_except_wiring<br/>  • fix-shaped diff hunks in core paths<br/><br/>You are overriding the top rank (A: feature_addition 84.0).<br/><br/>▸ Lock B and generate message<br/>  ← Back"]:::panel
+
+    STATUS_B["Primary locked: error_handling (user overrode top rank → B)<br/>Generating commit message…"]:::status
+
+    CANDIDATES["Top candidates (5) — this diff only<br/>────────────────────────────────────<br/>Ranked intents for the current staged diff. Pick one to lock, or go back.<br/><br/>▸ 1. ✨ feat(core) — feature_addition           84.0  ← current A<br/>  2. 🥅 fix(core) — error_handling            77.8  ← current B<br/>  3. ♻️ refactor(core) — internal_restructure  71.2<br/>  4. ✅ test(core) — tests_update               64.0<br/>  5. 📝 docs(core) — docs_update                41.5<br/>  ← Back"]:::panel
+
+    LOCK_3["Lock primary intent — candidate #3<br/>────────────────────────────────────<br/>  ♻️ refactor(core): &lt;subject — model fills&gt;<br/>  intent_id:     internal_restructure<br/>  score:         71.2<br/>  SemVer-Impact: PATCH<br/>  Changelog:     Changed<br/><br/>This is not A/B; you selected a lower-ranked matrix row for this diff.<br/><br/>▸ Lock #3 and generate message<br/>  ← Back to candidates"]:::panel
+
+    GUIDANCE["Add regeneration guidance<br/>────────────────────────────────────<br/>Optional notes for the next generation pass. Does not lock intent by itself.<br/>Primary stays A (feature_addition) unless you go back and pick another path.<br/><br/>Examples:<br/>  • Prefer feat; body should stress API surface not try/except<br/>  • Treat this as a fix; de-emphasize feature wording<br/>  • Split tests out; primary is product only<br/><br/>Guidance:<br/>▸ [ gum input / write ]<br/>  (empty to clear)<br/><br/>▸ Save guidance and return<br/>  Save guidance and regenerate ranking<br/>  ← Back without saving"]:::panel
+
+    GUIDANCE_SAVED["Low confidence — pick primary intent<br/>────────────────────────────────────<br/>…same A/B block…<br/><br/>Regeneration guidance: Prefer feat; stress API surface not try/except<br/><br/>▸ Use A: …<br/>  …"]:::panel
+
+    REGEN_RUNNING["Guidance saved. Re-running deterministic rank with guidance hints…<br/>(Then either new Low menu or auto-continue if margin becomes High/Medium.)"]:::status
+
+    SPECIFY["Specify primary from SOP matrix<br/>────────────────────────────────────<br/>Choose how to find a legal intent. Free-typed types are not allowed;<br/>every selection is a matrix row.<br/><br/>▸ Fuzzy search matrix…<br/>  Browse all intents (with explanations)…<br/>  ← Back"]:::panel
+
+    FUZZY["Fuzzy search — SOP matrix<br/>────────────────────────────────────<br/>Filter by type, intent id, emoji, or description.<br/>Enter selects a row; Esc / empty cancel returns.<br/><br/>Filter: feat_<br/>────────────────────────────────────<br/>▸ ✨ feat — feature_addition<br/>    Net-new user-facing capability or API surface. SemVer: MINOR · Added<br/>  ✨ feat — feature_flag<br/>    Introduce or wire a feature flag. SemVer: MINOR · Added<br/>  ✨ feat — ui_feature<br/>    User-visible UI behaviour. SemVer: MINOR · Added<br/>  ← Back"]:::panel
+
+    BROWSE["Browse SOP matrix<br/>────────────────────────────────────<br/>Scroll and select. Each row is a legal primary contract.<br/><br/>▸ ✨ feat — feature_addition<br/>    Net-new product capability or public API. Use when the diff’s main<br/>    outcome is something users/callers can take dependency on.<br/>    SemVer: MINOR · Changelog: Added<br/><br/>  🥅 fix — error_handling<br/>    Correct handling of errors/failures without a new capability.<br/>    SemVer: PATCH · Changelog: Fixed<br/><br/>  ♻️ refactor — internal_restructure<br/>    Internal structure change; behaviour should stay equivalent.<br/>    SemVer: PATCH · Changelog: Changed<br/><br/>  … (full matrix) …<br/><br/>  ← Back"]:::panel
+
+    LOCK_MATRIX["Lock primary intent — matrix selection<br/>────────────────────────────────────<br/>  ✨ feat(core): &lt;subject — model fills&gt;<br/>  intent_id:     feature_addition<br/>  source:        matrix fuzzy search (not ranker top)<br/>  SemVer-Impact: MINOR<br/>  Changelog:     Added<br/><br/>Ranker top was: feature_addition 84.0 (same row)   # or “differs from A” if override<br/><br/>▸ Lock and generate message<br/>  ← Back to search"]:::panel
+
+    CANCEL_MENU["Cancel intent arbitration?<br/>────────────────────────────────────<br/>No contract lock from this menu.<br/><br/>▸ Continue with top rank (A) non-interactively<br/>  Abort commit message generation<br/>  ← Back"]:::panel
+
+    STATUS_CANCEL_A["Arbitration cancelled — using top rank feature_addition (84.0).<br/>Generating commit message…"]:::status
+
+    STATUS_ABORT["Commit message generation aborted (user cancelled low-confidence arbitration)."]:::status
+    
+    STATUS_GENERATE["Primary locked: &lt;intent_id&gt;<br/>Generating commit message…"]:::status
+
+    MAIN -->|Use A| LOCK_A
+    LOCK_A -->|Lock A and generate message| STATUS_A
+    MAIN <.-|← Back| LOCK_A
+
+    MAIN -->|Use B| LOCK_B
+    LOCK_B -->|Lock B and generate message| STATUS_B
+    MAIN <.-|← Back| LOCK_B
+
+    MAIN -->|See more candidates…| CANDIDATES
+    CANDIDATES -->|Select #3| LOCK_3
+    LOCK_3 -->|Lock #3 and generate message| STATUS_GENERATE
+    CANDIDATES <.-|← Back to candidates| LOCK_3
+    MAIN <.-|← Back| CANDIDATES
+
+    MAIN -->|Add regeneration guidance…| GUIDANCE
+    GUIDANCE -->|Save guidance and return| GUIDANCE_SAVED
+    GUIDANCE -->|Save guidance and regenerate ranking| REGEN_RUNNING
+    MAIN <.-|← Back without saving| GUIDANCE
+
+    MAIN -->|Specify from matrix…| SPECIFY
+    SPECIFY -->|Fuzzy search matrix…| FUZZY
+    SPECIFY -->|Browse all intents…| BROWSE
+    MAIN <.-|← Back| SPECIFY
+
+    FUZZY -->|Select row| LOCK_MATRIX
+    SPECIFY <.-|← Back| FUZZY
+    
+    BROWSE -->|Select row| LOCK_MATRIX
+    SPECIFY <.-|← Back| BROWSE
+    
+    LOCK_MATRIX -->|Lock and generate message| STATUS_GENERATE
+    FUZZY <.-|← Back to search| LOCK_MATRIX
+
+    MAIN -->|Cancel| CANCEL_MENU
+    CANCEL_MENU -->|Continue with top rank| STATUS_CANCEL_A
+    CANCEL_MENU -->|Abort commit message generation| STATUS_ABORT
+    MAIN <.-|← Back| CANCEL_MENU

@@ -129,9 +129,157 @@ Display the GitOps SOP matrices and workflows.
 - **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
 
 Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
+Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto).
 
 ### Flags
 
 #### `--pre-release <IDENTIFIER>`
+
+Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
+
+#### `--no-rank-arbitrate`
+
+Disable Low-confidence intent arbitration; keep top rank + telemetry.
+
+#### `--enable-semantic`
+
+Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).
+
+#### `--no-enable-semantic`
+
+Disable Phase 1 semantic producers for this run.
+
+#### `--gold-strict`
+
+Resolve gold lint to strict mode without enabling general --strict.
+
+#### `-i --interactive`
+
+Enable terminal-native interactive review via gum when a TTY is available.
+
+#### `--strict`
+
+Exit non-zero on failure. Leave OFF for git hooks so a failed generation never blocks the commit.
+
+#### `-d --dry-run`
+
+Do not write the commit message, just print it.
+
+#### `-v --verbose`
+
+Enable verbose output.
+
+#### `-e --engine <ENGINE>`
+
+AI engine to use (e.g. omlx, mtplx).
+
+**Default:** `mtplx`
+
+## `git-cg sop`
+
+- **Usage**: `git-cg sop`
+
+Display the GitOps SOP matrices and workflows.
+
+## `git-cg release`
+
+- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
+
+Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
+
+### Flags
+
+#### `--pre-release <IDENTIFIER>`
+
+## Ranking confidence + intent arbitration (Phase 7.29)
+
+When `rank_commit_intents` produces a shaky primary (near-tie, mixed-intent, or other
+closed conflict reasons), `git-cg` computes a deterministic **`RankingConfidence`**
+(`high` / `medium` / `low`) from score margin and closed reason codes.
+
+**Only** when confidence is **Low**, interactive mode is on (`-i`), a usable TTY is
+available, and arbitration is not disabled, `git-cg` opens a **pre-LLM** intent
+arbitration menu so you can lock a matrix-legal primary before generation.
+
+```text
+diff → signals → rank → RankingConfidence
+  High / Medium → contract → LLM → gold → review
+  Low + -i + TTY + auto → arbitration TUI → lock → contract → LLM → gold → review
+  Low + non-interactive / hook / flag off → top rank + telemetry → contract → …
+```
+
+### Enable / disable
+
+| Control | Behaviour |
+| --- | --- |
+| `GIT_CG_RANK_ARBITRATE=auto` (**default**) | Menu when Low + `-i` + usable TTY |
+| `GIT_CG_RANK_ARBITRATE=off` | Never open the menu; keep top rank |
+| CLI: `--rank-arbitrate` / `--no-rank-arbitrate` | Explicit override (mirrors semantic-flag DX; wins over env) |
+| Non-interactive / no TTY / hook path | Never opens gum; top rank + telemetry |
+
+CLI flags are optional convenience over the env default. Hook paths should usually leave
+arbitration on `auto` and rely on non-TTY / non-`-i` to skip the menu safely.
+
+### What the menu can do
+
+| Action | Result |
+| --- | --- |
+| **Use A** | Lock top rank |
+| **Use B** | Lock runner-up (override) |
+| **See more candidates…** | Top **5** for this diff; pick → confirm |
+| **Add regeneration guidance…** | Notes only (no lock alone); optional re-rank |
+| **Specify from matrix…** | Fuzzy search **or** browse; **matrix row only** |
+| **Cancel** | Continue with A, abort generation, or Back |
+
+Every lock is an SOP matrix `intent_id`. Confidence does **not** choose SemVer, invent
+`cc_type`, or re-rank via the LLM. Hard vetoes / `IntentSelectionConstraints` stay
+inviolate (ADR-0009).
+
+### What it does **not** do
+
+* Open on High/Medium confidence (no arbitration fatigue by default)
+* Block `prepare-commit-msg` or non-TTY hooks waiting for a human
+* Allow free-typed Conventional Commit types as primary
+* Mutate ranker weights or act as a second SemVer authority
+* Replace the post-gold interactive review menu (arbitration is **pre-LLM** only)
+
+### Post-gold review status (display only)
+
+When interactive review opens **after** gold, a compact status line may show residual
+ranking uncertainty:
+
+* **Medium** — always shown (e.g. `Ranking confidence: medium · margin=12.0 · top=… vs …`)
+* **Low** — shown when the pre-LLM menu was skipped (NI/hook/`flag_off`) so the operator still sees why the primary was shaky
+* **High** — silent (no status noise)
+
+This line is **display only**. It does not open arbitration, change locks, or alter the
+flat post-gold `Action` menu.
+
+### Claim B near-tie corpus
+
+Deterministic margin / near-tie ladders live at
+[`tests/fixtures/ranking_confidence_near_tie/corpus.json`](../tests/fixtures/ranking_confidence_near_tie/corpus.json)
+and are exercised by `tests/test_ranking_confidence_claim_b_corpus.py` (no live LLM).
+
+### Telemetry
+
+Product fields (Opik / `GenerationTelemetry`, redacted allowlist):  
+`ranking_confidence_level`, `ranking_confidence_margin`, `ranking_confidence_reasons`,
+`ranking_choice_path`, `ranking_override` (bool), `ranking_arbitrate_effective`,
+`lock_resolution`, plus gold parity fields.  
+
+`lock_resolution` is a closed enum: `accepted` · `rejected_not_allowed` ·
+`rejected_hard_veto` · `absent`. When a human lock is rejected, generation falls through
+to normal contract precedence and interactive/verbose runs print a short safe notice
+(closed code only — no matrix dump).
+Opik feedback score `ranking_override` is a **derived** float `1.0` / `0.0` at the score
+boundary only. Sentry receives closed tags on error paths (`ranking_confidence_level`,
+`ranking_choice_path`, `gold_mode`) — never full ranked matrices or guidance text.
+
+### Diagrams
+
+* Storyboard product: [`docs/diagrams/ranking-confidence/TUI-flow.mmd`](diagrams/ranking-confidence/TUI-flow.mmd)
+* GitHub-safe PNG: [`docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.png`](diagrams/ranking-confidence/TUI-flow-elk-darkbg.png)
+* Authoring method + worked menus: [`docs/tui_mermaid_guide.md`](tui_mermaid_guide.md) §1–5
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')

@@ -81,6 +81,9 @@ classDef panel fill:#1e1e2e,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4,font-f
     'flowchart': {
       'defaultRenderer': 'elk'
     },
+    'elk': {
+      'layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
+    },
     'state': {
       'defaultRenderer': 'elk'
     }
@@ -103,7 +106,61 @@ flowchart LR
     HELP -->|Esc| HOME
 ```
 
-> **Note:** Mermaid is excellent for structure, but it is not perfect for pixel-level layout. If you need exact character-by-character composition of a terminal screen, consider a dedicated wireframing tool in conjunction with Mermaid.
+### Controlling Menu & Node Ordering (Dagre & ELK)
+
+In terminal storyboards, menu options must appear in exact vertical sequence (e.g. `Option 1` above `Option 2`, `Option 3`, etc.) to match the physical terminal UI. By default, automated layout engines (both Dagre and ELK) prioritize minimizing edge crossings over source declaration order, which can scramble menu items.
+
+Here are the 4 complementary techniques to ensure exact vertical and column ordering:
+
+#### Technique 1: ELK Model Order Strategy (`NODES_AND_EDGES`)
+When using ELK, add `layered.considerModelOrder.strategy` to the `init.elk` configuration block:
+```yaml
+%%{
+  init: {
+    'flowchart': {
+      'defaultRenderer': 'elk'
+    },
+    'elk': {
+      'layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
+    }
+  }
+}%%
+```
+This instructs ELK's layered algorithm to preserve source declaration order when assigning vertical ranks within a column layer.
+
+#### Technique 2: Subgraph Lanes with `direction TB`
+Group columns into discrete lane subgraphs (`L1`, `L2`, `L3`...) and declare `direction TB` inside each lane:
+```mermaid
+subgraph L2["2 · First chooser"]
+  direction TB
+  LOCK_A["1. Use A"]
+  LOCK_B["2. Use B"]
+  CANDIDATES["3. See more candidates…"]
+  GUIDANCE["4. Add regeneration guidance…"]
+  SPECIFY["5. Specify from matrix…"]
+  CANCEL_MENU["6. Cancel"]
+end
+```
+
+#### Technique 3: Invisible Structural Constraints (`~~~`)
+If cross-column transitions or back-edges pull nodes out of vertical order in complex graphs, chain sibling nodes with invisible constraint edges (`~~~`):
+```mermaid
+%% Hard vertical constraint chain (rendered invisibly)
+LOCK_A ~~~ LOCK_B ~~~ CANDIDATES ~~~ GUIDANCE ~~~ SPECIFY ~~~ CANCEL_MENU
+```
+
+#### Technique 4: Sequential Forward Edge Declarations
+Declare forward transitions from the parent menu strictly in menu sequence:
+```mermaid
+MAIN -->|1. Use A| LOCK_A
+MAIN -->|2. Use B| LOCK_B
+MAIN -->|3. See more…| CANDIDATES
+MAIN -->|4. Guidance…| GUIDANCE
+MAIN -->|5. Specify…| SPECIFY
+MAIN -->|6. Cancel| CANCEL_MENU
+```
+
+> **Note:** Mermaid is excellent for structure, but it is not intended for character-grid terminal emulation. If you need exact character-by-character composition of a terminal screen, consider a dedicated wireframing tool in conjunction with Mermaid.
 
 ---
 
@@ -848,6 +905,9 @@ Same graph with ELK enabled. Use for local SVG export and Zensical. On GitHub is
     'flowchart': {
       'defaultRenderer': 'elk'
     },
+    'elk': {
+      'layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
+    },
     'state': {
       'defaultRenderer': 'elk'
     }
@@ -1068,6 +1128,9 @@ flowchart LR
     'flowchart': {
       'defaultRenderer': 'elk'
     },
+    'elk': {
+      'layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
+    },
     'state': {
       'defaultRenderer': 'elk'
     }
@@ -1167,10 +1230,16 @@ ELK is **not banned** — GitHub’s issue/PR Mermaid renderer simply **does not
 ```markdown
 ### Intent arbitration (detailed storyboard)
 
-ELK layout lives in the `.mmd` source. GitHub ignores ELK on inline mermaid,
-so embed the pre-rendered SVG:
+**Canonical product paths (Issue #195):**
 
-![Detailed TUI storyboard](docs/diagrams/ranking-confidence/tui-detailed.svg)
+* Source: `docs/diagrams/ranking-confidence/TUI-flow.mmd`
+* GitHub embed (PNG): `docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.png`
+* Transparent PNG: `docs/diagrams/ranking-confidence/TUI-flow-elk-transparent.png`
+
+ELK layout lives in the `.mmd` source. GitHub ignores ELK on inline mermaid,
+so embed the pre-rendered **PNG** on GitHub (SVG with `<foreignObject>` may strip):
+
+![Detailed TUI storyboard](docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.png)
 
 <details>
 <summary>Mermaid source (ELK) — editors / Zensical / CI</summary>
@@ -1187,11 +1256,20 @@ so embed the pre-rendered SVG:
 </details>
 ```
 
-**Local render** (beautiful-mermaid / `bm`, or mermaid-cli):
+**Local render commands** (mermaid-cli / `mmdc`):
 
 ```bash
-bm docs/diagrams/ranking-confidence/tui-detailed.mmd -o docs/diagrams/ranking-confidence/tui-detailed.svg
-# or: npx -y @mermaid-js/mermaid-cli -i tui-detailed.mmd -o tui-detailed.svg
+# 1. Transparent background (recommended for markdown & dark/light themes)
+PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+mmdc -i docs/diagrams/ranking-confidence/TUI-flow.mmd \
+     -o docs/diagrams/ranking-confidence/TUI-flow-elk-transparent.svg \
+     -b transparent
+
+# 2. Solid Catppuccin Mocha canvas background (#1e1e2e)
+PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+mmdc -i docs/diagrams/ranking-confidence/TUI-flow.mmd \
+     -o docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.svg \
+     -b "#1e1e2e"
 ```
 
 **CI / GitHub Action (optional automation)**
@@ -1355,6 +1433,9 @@ flowchart LR
     },
     'flowchart': {
       'defaultRenderer': 'elk'
+    },
+    'elk': {
+      'layered.considerModelOrder.strategy': 'NODES_AND_EDGES'
     },
     'state': {
       'defaultRenderer': 'elk'
