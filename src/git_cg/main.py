@@ -2110,7 +2110,7 @@ def _run_commit_generation(
     # Issue #182 Slice 3b: resolve gold mode once per generation entry (flags cannot
     # change mid-loop); gold auto-regen is bounded to 1 and tracked separately from
     # Instructor/transport/schema retries.
-    from git_cg.commit_gold import check_commit_gold, resolve_gold_mode
+    from git_cg.commit_gold import STRICT_FAIL_CODES, check_commit_gold, resolve_gold_mode
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
 
     gold_mode = resolve_gold_mode(
@@ -2238,7 +2238,11 @@ def _run_commit_generation(
                     gold_regen_attempts=0,
                 )
                 opik.flush_tracker()
-                _abort("\n[bold red]Commit aborted during intent arbitration.[/bold red]", strict=strict, report=False)
+                _abort(
+                    "\n[bold red]Commit aborted during intent arbitration.[/bold red]",
+                    strict=True,  # user Abort must always fail the hook/CLI (never exit 0)
+                    report=False,
+                )
 
             if arb.action == "re_rank" and arb.re_rank_requested:
                 # Apply mapped directives and rebuild sole rank-pass pair (REGEN).
@@ -2598,13 +2602,7 @@ def _run_commit_generation(
         gold_blocked=bool(
             gold_mode == "strict"
             and any(
-                getattr(f, "code", None)
-                in {
-                    "GOLD_BODY_INVENTORY",
-                    "GOLD_INCLUDED_CHANGES_MISSING",
-                    "GOLD_GROUP_PRIMARY_MISMATCH",
-                    "GOLD_TYPE_GROUP_INCOHERENT",
-                }
+                getattr(f, "code", None) in STRICT_FAIL_CODES
                 for f in (getattr(review_state, "gold_findings", []) or [])
             )
         ),

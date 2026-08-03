@@ -1059,6 +1059,202 @@ def test_gold_surface_checklist_displayed_in_review_status(monkeypatch, capsys, 
     assert "[ ] GOLD_BODY_INVENTORY:" in status
 
 
+def test_arbitration_abort_exits_nonzero_when_strict_false(monkeypatch, capsys, tmp_path):
+    """Issue #195 / Qodo: Cancel→Abort must exit non-zero even when CLI strict=False.
+
+    Hook mode defaults to strict=False so _abort(... strict=strict) would otherwise
+    raise typer.Exit(0) and let git complete the commit after an explicit Abort.
+    """
+    from dataclasses import replace
+
+    import typer
+
+    import git_cg.main as main_mod
+    from git_cg.intent import RankedIntent
+    from git_cg.intent_arbitrate import ArbitrationResult
+    from git_cg.ranking_confidence import RankingConfidence
+
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper after arbitration abort.")])
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+
+    real_build = main_mod._build_generation_context
+
+    def fake_build(*args, **kwargs):
+        ctx = real_build(*args, **kwargs)
+        low = RankingConfidence(
+            level="low",
+            margin=2.0,
+            top_intent_id="feature_addition",
+            runner_up_intent_id="feature_refinement",
+            reasons=["margin_below_low_threshold"],
+        )
+        ranked = [
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="feature",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=100,
+            ),
+            RankedIntent(
+                intent_id="feature_refinement",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="refine",
+                semver_impact="PATCH",
+                changelog_group="Changed",
+                intent_group="feature",
+                score=98.0,
+                priority=90,
+                specificity=90,
+                split_weight=90,
+            ),
+        ]
+        return replace(ctx, ranking_confidence=low, ranked_intents=ranked)
+
+    monkeypatch.setattr(main_mod, "_build_generation_context", fake_build)
+    monkeypatch.setattr(
+        "git_cg.intent_arbitrate.run_intent_arbitration",
+        lambda **kwargs: ArbitrationResult(
+            action="aborted",
+            locked_intent_id=None,
+            guidance=None,
+            re_rank_requested=False,
+            choice_path="cancel_abort",
+            override=False,
+            aborted=True,
+        ),
+    )
+
+    telemetry: dict = {}
+
+    def capture_telemetry(**kwargs):
+        telemetry.update(kwargs)
+
+    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", capture_telemetry)
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,  # hook default — Abort must still fail closed
+            interactive=True,
+            rank_arbitrate=True,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+
+    assert raised is not None, "arbitration Abort must raise typer.Exit"
+    assert raised.exit_code == 1
+    assert len(writes) == 0
+    assert telemetry.get("ranking_choice_path") == "cancel_abort"
+    out = capsys.readouterr().out
+    assert "aborted during intent arbitration" in out.lower()
+
+
+def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
+    """gold_blocked must track commit_gold.STRICT_FAIL_CODES, not a local subset.
+
+    Integration regression for Qodo observability drift: when gold_mode is strict
+    and review_state carries a NEW strict-fail code (SEMVER/SCOPE/TITLE_CASE),
+    final telemetry must report gold_blocked=True.
+    """
+    import inspect
+
+    import git_cg.main as main_mod
+    from git_cg.commit_gold import STRICT_FAIL_CODES, GoldFinding, GoldReport
+
+    # Source contract: gold_blocked must reference STRICT_FAIL_CODES.
+    src = inspect.getsource(main_mod._run_commit_generation)
+    blocked_expr = src.split("gold_blocked=bool(", 1)[1].split("),", 1)[0]
+    assert "STRICT_FAIL_CODES" in blocked_expr
+    for legacy_code in (
+        "GOLD_BODY_INVENTORY",
+        "GOLD_INCLUDED_CHANGES_MISSING",
+        "GOLD_GROUP_PRIMARY_MISMATCH",
+        "GOLD_TYPE_GROUP_INCOHERENT",
+    ):
+        assert legacy_code not in blocked_expr
+
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for gold_blocked telemetry.")])
+    telemetry: dict = {}
+    review_states: list = []
+
+    real_init = main_mod.ReviewState.__init__
+
+    def tracking_init(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        review_states.append(self)
+
+    monkeypatch.setattr(main_mod.ReviewState, "__init__", tracking_init)
+
+    # Keep generation unblocked; inject expanded-code findings after gold assignment.
+    monkeypatch.setattr(
+        "git_cg.commit_gold.check_commit_gold",
+        lambda *a, **k: GoldReport(findings=[]),
+    )
+
+    original_write = main_mod._write_commit_message
+
+    def write_and_inject(commit_msg_file, result_string, strict, verbose):
+        original_write(commit_msg_file, result_string, strict, verbose)
+        # Final telemetry runs after write; arm findings on the live review_state.
+        assert review_states, "expected ReviewState instance"
+        review_states[-1].gold_findings = [
+            GoldFinding(code="GOLD_SEMVER_MATRIX_MISMATCH", message="semver drift"),
+            GoldFinding(code="GOLD_SCOPE_FILENAME", message="scope is filename"),
+            GoldFinding(code="GOLD_SUBJECT_TITLE_CASE", message="title case"),
+        ]
+
+    monkeypatch.setattr(main_mod, "_write_commit_message", write_and_inject)
+
+    def capture_telemetry(**kwargs):
+        telemetry.update(kwargs)
+
+    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", capture_telemetry)
+
+    for code in (
+        "GOLD_SEMVER_MATRIX_MISMATCH",
+        "GOLD_SCOPE_FILENAME",
+        "GOLD_SUBJECT_TITLE_CASE",
+    ):
+        assert code in STRICT_FAIL_CODES
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,  # gold_mode=strict
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    assert telemetry.get("gold_mode") == "strict"
+    assert telemetry.get("gold_blocked") is True
+    codes = set(telemetry.get("gold_finding_codes") or [])
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" in codes
+    assert "GOLD_SCOPE_FILENAME" in codes
+    assert "GOLD_SUBJECT_TITLE_CASE" in codes
+
+
 def test_medium_ranking_confidence_status_in_post_gold_review(monkeypatch, tmp_path):
     """Issue #195 nice-to-have: Medium confidence appears on post-gold review status_text."""
     import git_cg.main as main_mod
