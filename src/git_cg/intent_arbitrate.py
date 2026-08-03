@@ -254,7 +254,9 @@ def narrow_eligible_by_directives(
     if not narrowed:
         return list(eligible), "guidance filter emptied list — showing full rank"
 
-    note = "Re-ranked view: " + ", ".join(notes) if notes else None
+    # Short closed note for status composition (avoid "Re-ranked view:" —
+    # the still-Low presentation_note already owns the REGEN narrative).
+    note = "filtered: " + ", ".join(notes) if notes else None
     return narrowed, note
 
 
@@ -378,6 +380,69 @@ def format_regen_still_low_note(
     else:
         bits.append("· scores unchanged")
     return " ".join(bits)
+
+
+def compose_arbitration_status_strip(
+    *,
+    presentation_note: str | None = None,
+    guidance: str | None = None,
+    directive_note: str | None = None,
+    extra: Sequence[str] | None = None,
+) -> str | None:
+    """Build MAIN status strip without repeating preferred_type / re-rank facts.
+
+    Priority / ownership:
+    1. ``presentation_note`` — still-Low REGEN banner (authoritative after REGEN)
+    2. guidance retained-draft status (once)
+    3. ``directive_note`` — only if it adds facts not already in presentation_note
+    4. optional extras (e.g. saved-without-re-rank)
+    """
+    parts: list[str] = []
+    seen_norm: set[str] = set()
+
+    def _norm(s: str) -> str:
+        return " ".join(s.lower().split())
+
+    def _add(piece: str | None) -> None:
+        if not piece:
+            return
+        cleaned = " ".join(str(piece).split()).strip()
+        if not cleaned:
+            return
+        key = _norm(cleaned)
+        if key in seen_norm:
+            return
+        # Drop directive fragments already covered by an earlier banner.
+        for prior in parts:
+            prior_n = _norm(prior)
+            if key in prior_n or prior_n in key:
+                return
+            # preferred_type=feat already stated → skip "filtered: preferred_type=feat"
+            if "preferred_type=" in key and "preferred_type=" in prior_n:
+                # extract values
+                import re as _re
+
+                vals_new = set(_re.findall(r"preferred_type=([a-z0-9_-]+)", key))
+                vals_old = set(_re.findall(r"preferred_type=([a-z0-9_-]+)", prior_n))
+                if vals_new and vals_new <= vals_old:
+                    return
+            if "preferred_scope=" in key and "preferred_scope=" in prior_n:
+                import re as _re
+
+                vals_new = set(_re.findall(r"preferred_scope=([a-z0-9_-]+)", key))
+                vals_old = set(_re.findall(r"preferred_scope=([a-z0-9_-]+)", prior_n))
+                if vals_new and vals_new <= vals_old:
+                    return
+        seen_norm.add(key)
+        parts.append(cleaned)
+
+    _add(presentation_note)
+    if guidance:
+        _add(format_regeneration_guidance_status(guidance))
+    _add(directive_note)
+    for item in extra or ():
+        _add(item)
+    return " · ".join(parts) if parts else None
 
 
 # ---------------------------------------------------------------------------
@@ -610,14 +675,11 @@ def run_intent_arbitration(
     if runner is None and len(eligible) >= 2:
         runner = next((e for e in eligible if e.intent_id != top.intent_id), None)
 
-    status_parts: list[str] = []
-    if presentation_note:
-        status_parts.append(presentation_note)
-    if guidance:
-        status_parts.append(format_regeneration_guidance_status(guidance))
-    if directive_note:
-        status_parts.append(directive_note)
-    status_strip: str | None = " · ".join(status_parts) if status_parts else None
+    status_strip: str | None = compose_arbitration_status_strip(
+        presentation_note=presentation_note,
+        guidance=guidance,
+        directive_note=directive_note,
+    )
     # One-shot: after REGEN still-Low, ring bell so the banner cannot be missed.
     if presentation_note and "still Low" in presentation_note:
         with contextlib.suppress(Exception):
@@ -901,22 +963,31 @@ def run_intent_arbitration(
 
             if mode.status == "selected" and mode.value == save_return:
                 # Non-terminal — no choice_path. Refresh A/B presentation if mapped.
-                status_parts = [format_regeneration_guidance_status(guidance)]
+                extras: list[str] = []
+                local_directive_note: str | None = None
                 if parsed.status == "mapped":
                     base_eligible = filter_eligible_ranked(ranked_intents, constraints)
-                    eligible, directive_note = narrow_eligible_by_directives(base_eligible, directives)
+                    eligible, local_directive_note = narrow_eligible_by_directives(base_eligible, directives)
                     if eligible:
-                        top = next((e for e in eligible if e.intent_id == original_top_id), eligible[0])
-                        runner = next((e for e in eligible if e.intent_id != top.intent_id), None)
+                        top = next(
+                            (e for e in eligible if e.intent_id == original_top_id),
+                            eligible[0],
+                        )
+                        runner = next(
+                            (e for e in eligible if e.intent_id != top.intent_id),
+                            None,
+                        )
                         candidates = eligible[:5]
-                    if directive_note:
-                        status_parts.append(directive_note)
-                    status_parts.append("saved without re-rank")
+                    extras.append("saved without re-rank")
                 else:
                     if subject_hint:
-                        status_parts.append(subject_hint)
-                    status_parts.append("saved without re-rank (unparseable — no rank change)")
-                status_strip = " · ".join(status_parts)
+                        extras.append(subject_hint)
+                    extras.append("saved without re-rank (unparseable — no rank change)")
+                status_strip = compose_arbitration_status_strip(
+                    guidance=guidance,
+                    directive_note=local_directive_note,
+                    extra=extras,
+                )
                 frame = "MAIN"
                 continue
 

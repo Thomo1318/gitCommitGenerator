@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from git_cg.intent import IntentSelectionConstraints, RankedIntent
 from git_cg.intent_arbitrate import (
     ArbitrationDeps,
+    compose_arbitration_status_strip,
     filter_eligible_matrix_rows,
     filter_eligible_ranked,
     format_regen_still_low_note,
@@ -1148,3 +1149,30 @@ def test_format_regen_still_low_note_copy():
     note2 = format_regen_still_low_note(preferred_type="fix", preferred_scope="tui", narrowed=True)
     assert "preferred_scope=tui" in note2
     assert "presentation filtered" in note2
+
+
+def test_compose_arbitration_status_strip_dedupes_preferred_type():
+    note = format_regen_still_low_note(preferred_type="feat", narrowed=True)
+    strip = compose_arbitration_status_strip(
+        presentation_note=note,
+        guidance="this is a feat",
+        directive_note="filtered: preferred_type=feat",
+    )
+    assert strip is not None
+    assert "still Low" in strip
+    assert "preferred_type=feat" in strip
+    # preferred_type must appear once (banner owns it; directive dropped)
+    assert strip.count("preferred_type=feat") == 1
+    # guidance retained once
+    assert "this is a feat" in strip
+    assert "filtered: preferred_type=feat" not in strip
+
+
+def test_compose_arbitration_status_strip_keeps_unique_directive():
+    strip = compose_arbitration_status_strip(
+        guidance="use scope tui",
+        directive_note="filtered: preferred_scope=tui",
+    )
+    assert strip is not None
+    assert "preferred_scope=tui" in strip
+    assert "use scope tui" in strip
