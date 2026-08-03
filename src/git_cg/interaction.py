@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Literal, cast
 
 from rich.console import Console
@@ -287,6 +288,265 @@ def format_gold_findings_status(findings: Sequence[object] | None) -> str:
         message = getattr(finding, "message", "")
         lines.append(f"[ ] {code}: {message}")
     return "\n".join(lines)
+
+
+def format_ranking_confidence_status(
+    level: str | None,
+    margin: float | None = None,
+    reasons: Sequence[str] | None = None,
+    *,
+    top_intent_id: str | None = None,
+    runner_up_intent_id: str | None = None,
+) -> str:
+    """
+    Render a display-only ranking-confidence status line for post-gold review.
+
+    Issue #195 nice-to-have: surface **Medium** confidence on the post-gold interactive
+    review menu so operators see residual ranking uncertainty without opening the
+    pre-LLM arbitration TUI. High is silent (no noise). Low is also shown when present
+    (e.g. NI/hook path that skipped the menu) as a compact heads-up — still display only.
+
+    Parameters:
+        level: Closed confidence level (``high`` / ``medium`` / ``low``), or None.
+        margin: Top-minus-runner-up margin when known.
+        reasons: Closed reason codes (may be empty on Medium/High).
+        top_intent_id: Optional top intent id for compact context.
+        runner_up_intent_id: Optional runner-up intent id.
+
+    Returns:
+        str: Empty string when there is nothing useful to show (missing/high);
+        otherwise a single status line.
+    """
+    if not level:
+        return ""
+    normalized = str(level).strip().lower()
+    if normalized == "high":
+        return ""
+    if normalized not in {"medium", "low"}:
+        return ""
+
+    parts = [f"Ranking confidence: {normalized}"]
+    if margin is not None:
+        parts.append(f"margin={float(margin):.1f}")
+    if top_intent_id:
+        if runner_up_intent_id:
+            parts.append(f"top={top_intent_id} vs {runner_up_intent_id}")
+        else:
+            parts.append(f"top={top_intent_id}")
+    if reasons:
+        closed = [str(r) for r in reasons if r]
+        if closed:
+            parts.append("reasons=" + ",".join(closed))
+    return " · ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Issue #195 — discriminated gum outcomes for pre-LLM arbitration
+# ---------------------------------------------------------------------------
+
+GumStatus = Literal["selected", "cancelled", "unavailable", "failed"]
+
+
+@dataclass(frozen=True)
+class GumOutcome:
+    """Discriminated result from a gum subprocess (never collapse to bare None)."""
+
+    status: GumStatus
+    value: str | None = None
+
+
+_GUM_FILTER_AVAILABLE: bool | None = None
+_GUM_FILTER_PROBE_TIMEOUT_S = 2.0
+
+
+def gum_filter_available(*, force_refresh: bool = False) -> bool:
+    """
+    Feature-detect ``gum filter`` once per process (G4).
+
+    Probe is non-interactive: ``gum filter --help`` with a short timeout and no
+    ``/dev/tty`` attach. Cache the boolean for the execution.
+    """
+    global _GUM_FILTER_AVAILABLE
+    if _GUM_FILTER_AVAILABLE is not None and not force_refresh:
+        return _GUM_FILTER_AVAILABLE
+
+    if shutil.which("gum") is None:
+        _GUM_FILTER_AVAILABLE = False
+        return False
+
+    try:
+        result = subprocess.run(
+            ["gum", "filter", "--help"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+            timeout=_GUM_FILTER_PROBE_TIMEOUT_S,
+        )
+        _GUM_FILTER_AVAILABLE = result.returncode == 0
+    except FileNotFoundError, OSError, subprocess.TimeoutExpired:
+        _GUM_FILTER_AVAILABLE = False
+    return _GUM_FILTER_AVAILABLE
+
+
+def reset_gum_filter_capability_cache() -> None:
+    """Test helper: clear the process-level gum-filter capability cache."""
+    global _GUM_FILTER_AVAILABLE
+    _GUM_FILTER_AVAILABLE = None
+
+
+def _run_gum_command_outcome(
+    command: list[str],
+    *,
+    title: str | None = None,
+    body: str | None = None,
+    status_text: str | None = None,
+    prompt_text: str | None = None,
+    input_text: str | None = None,
+) -> GumOutcome:
+    """
+    Run a gum command bound to the controlling TTY and return a discriminated outcome.
+
+    Unlike ``_run_gum_command``, this never collapses cancel / unavailable / failed
+    into a single ``None``.
+    """
+    if shutil.which("gum") is None:
+        return GumOutcome(status="unavailable")
+
+    if not can_open_tty():
+        return GumOutcome(status="unavailable")
+
+    try:
+        with (
+            open("/dev/tty", encoding="utf-8", errors="ignore") as tty_in,
+            open("/dev/tty", "w", encoding="utf-8", errors="ignore") as tty_out,
+        ):
+            tty_console = Console(file=tty_out, force_terminal=True)
+            if body is not None:
+                tty_console.print(Panel(body, title=title, border_style="green"))
+            elif title:
+                tty_console.print(f"[bold green]{title}[/bold green]")
+
+            if status_text:
+                tty_console.print(f"[bold magenta]{status_text}[/bold magenta]")
+
+            if prompt_text:
+                tty_console.print(prompt_text)
+
+            run_kwargs: dict = {
+                "stdin": tty_in if input_text is None else subprocess.PIPE,
+                "stdout": subprocess.PIPE,
+                "stderr": tty_out,
+                "text": True,
+                "check": False,
+            }
+            if input_text is not None:
+                result = subprocess.run(
+                    command, input=input_text, **{k: v for k, v in run_kwargs.items() if k != "stdin"}
+                )
+            else:
+                result = subprocess.run(command, **run_kwargs)
+
+            # gum conventions: 0 = ok, 130/1 often cancel/Esc depending on version
+            if result.returncode in {130, 1} and not (result.stdout or "").strip():
+                return GumOutcome(status="cancelled")
+            if result.returncode != 0:
+                # Non-zero with empty stdout → treat as cancel when interactive dismiss
+                if not (result.stdout or "").strip():
+                    return GumOutcome(status="cancelled")
+                return GumOutcome(status="failed")
+
+            stripped = (result.stdout or "").strip()
+            if not stripped:
+                return GumOutcome(status="cancelled")
+            return GumOutcome(status="selected", value=stripped)
+    except FileNotFoundError:
+        return GumOutcome(status="unavailable")
+    except OSError:
+        return GumOutcome(status="failed")
+
+
+def gum_choose(
+    options: Sequence[str],
+    *,
+    title: str | None = None,
+    body: str | None = None,
+    status_text: str | None = None,
+    prompt_text: str | None = None,
+    header: str | None = None,
+) -> GumOutcome:
+    """Interactive single-select via ``gum choose`` with discriminated outcome."""
+    if not options:
+        return GumOutcome(status="failed", value=None)
+    command = ["gum", "choose", *options]
+    if header:
+        command.extend(["--header", header])
+    return _run_gum_command_outcome(
+        command,
+        title=title,
+        body=body,
+        status_text=status_text,
+        prompt_text=prompt_text,
+    )
+
+
+def gum_input(
+    *,
+    title: str | None = None,
+    body: str | None = None,
+    status_text: str | None = None,
+    prompt_text: str | None = None,
+    placeholder: str = "",
+    prompt: str = "> ",
+    value: str = "",
+) -> GumOutcome:
+    """Interactive text input via ``gum input`` with discriminated outcome."""
+    command = ["gum", "input", "--placeholder", placeholder, "--prompt", prompt]
+    if value:
+        command.extend(["--value", value])
+    return _run_gum_command_outcome(
+        command,
+        title=title,
+        body=body,
+        status_text=status_text,
+        prompt_text=prompt_text,
+    )
+
+
+def gum_filter(
+    options: Sequence[str],
+    *,
+    title: str | None = None,
+    body: str | None = None,
+    status_text: str | None = None,
+    prompt_text: str | None = None,
+    placeholder: str = "Type to filter…",
+    header: str | None = None,
+) -> GumOutcome:
+    """
+    Interactive fuzzy filter via ``gum filter``.
+
+    Callers should gate on ``gum_filter_available()`` first (G4). Options are
+    fed on stdin; selection is a single line from the option list.
+    """
+    if not options:
+        return GumOutcome(status="failed", value=None)
+    if not gum_filter_available():
+        return GumOutcome(status="unavailable")
+
+    command = ["gum", "filter", "--placeholder", placeholder, "--limit", "1"]
+    if header:
+        command.extend(["--header", header])
+    input_text = "\n".join(options) + "\n"
+    return _run_gum_command_outcome(
+        command,
+        title=title,
+        body=body,
+        status_text=status_text,
+        prompt_text=prompt_text,
+        input_text=input_text,
+    )
 
 
 def format_issue_reference_status(issue_references: Sequence[IssueReference] | None) -> str:
