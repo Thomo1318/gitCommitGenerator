@@ -1,8 +1,9 @@
 """
-Phase 7.5 (#180) R9 — template-drift guard for issue templates.
+Template-drift guards for GitHub issue + PR templates.
 
 Heading-presence only (not body prose). Prevents silent section drift of the
-📡 Telemetry (Opik / Sentry) contract blocks across `.github/ISSUE_TEMPLATE/*.md`.
+📡 Telemetry (Opik / Sentry) contract blocks across `.github/ISSUE_TEMPLATE/*.md`,
+and locks the PR template's required Architecture / Flow state diagram.
 """
 
 from pathlib import Path
@@ -44,3 +45,29 @@ def test_issue_templates_exist():
         "implementation_task.md",
     ):
         assert required in names
+
+
+PR_TEMPLATE = REPO_ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md"
+
+
+def test_pr_template_exists():
+    """Guard against accidental deletion of the PR template."""
+    assert PR_TEMPLATE.is_file()
+
+
+def test_pr_template_requires_state_diagram():
+    """PR Architecture / Flow must always require a Mermaid stateDiagram-v2."""
+    text = PR_TEMPLATE.read_text(encoding="utf-8")
+    assert "## 🗺️ Architecture / Flow" in text
+    start = text.index("## 🗺️ Architecture / Flow")
+    # Next top-level section after Architecture / Flow
+    rest = text[start + 1 :]
+    next_heading_idx = rest.find("\n## ")
+    section = text[start : start + 1 + next_heading_idx] if next_heading_idx != -1 else text[start:]
+    assert "stateDiagram-v2" in section
+    assert "```mermaid" in section
+    fence_body = section.split("```mermaid", 1)[1].split("```", 1)[0]
+    assert "stateDiagram-v2" in fence_body
+    lowered = section.lower()
+    assert "delete this entire section if n/a" not in lowered
+    assert "optional." not in lowered

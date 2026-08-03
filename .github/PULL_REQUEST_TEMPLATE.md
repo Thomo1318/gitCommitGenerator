@@ -4,11 +4,21 @@
 
 ## 🗺️ Architecture / Flow
 
-<!-- Optional. Include a Mermaid diagram (or more if warranted) when this PR introduces or changes
-     a multi-step flow, feature-flagged path, or external boundary.
-     Delete this entire section if N/A.
-     Prefer graph TD, a short legend, and clear shapes:
-     module/path, decision, external, state store. Refer to "docs/mermaid_guide.md" and "docs/mermaidLibrary.md" for guidance on types of diagrams, style, syntax, and an example library. -->
+<!-- REQUIRED — do not delete this section.
+     Every PR must include at least one Mermaid **state diagram** (`stateDiagram-v2`)
+     that models the control/state transitions this change introduces or touches
+     (menus, modes, flags, fail-open/closed paths, regen loops, hook vs interactive, etc.).
+     Additional flowcharts (`flowchart TD` / sequence diagrams) are welcome when they
+     clarify multi-step pipelines, but they do **not** replace the state diagram.
+     Prefer a short legend, closed transition labels, and explicit terminal states.
+     Guidance: docs/mermaid_guide.md · docs/mermaidLibrary.md · docs/tui_mermaid_guide.md -->
+
+```mermaid
+stateDiagram-v2
+  [*] --> TODO_entry
+  TODO_entry --> TODO_done: replace with real transitions
+  TODO_done --> [*]
+```
 
 ## 🛠️ Changes Made
 
