@@ -133,3 +133,25 @@ def test_generation_context_reused_across_regeneration_iterations(monkeypatch):
     assert ctx.semantic_summary is summary
     assert c1.primary_intent_id
     assert c2.primary_intent_id
+
+
+def test_build_generation_context_attaches_ranking_confidence(monkeypatch):
+    """A_20: sole rank-pass owner attaches RankingConfidence to the context pair."""
+    monkeypatch.delenv("GIT_CG_ENABLE_SEMANTIC", raising=False)
+    ctx = _build_generation_context("diff --git a/x b/x\n", enable_semantic=False)
+    assert isinstance(ctx, GenerationContext)
+    if ctx.ranked_intents:
+        assert ctx.ranking_confidence is not None
+        assert ctx.ranking_confidence.top_intent_id == ctx.ranked_intents[0].intent_id
+        assert ctx.ranking_confidence.level in {"high", "medium", "low"}
+    else:
+        assert ctx.ranking_confidence is None
+
+
+def test_build_generation_context_does_not_recompute_on_contract(monkeypatch):
+    """A_20: contract resolution consumes cached snapshot; does not recompute confidence."""
+    monkeypatch.setenv("GIT_CG_ENABLE_SEMANTIC", "1")
+    ctx = _build_generation_context("diff --git a/x b/x\n", enable_semantic=True)
+    conf_before = ctx.ranking_confidence
+    _ = resolve_semantic_contract(ctx, RegenerationState())
+    assert ctx.ranking_confidence is conf_before

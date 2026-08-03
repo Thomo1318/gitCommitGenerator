@@ -57,6 +57,7 @@ from git_cg.interaction import (  # noqa: E402
     emit_terminal_bell,
     format_gold_findings_status,
     format_issue_reference_status,
+    format_ranking_confidence_status,
     format_regeneration_guidance_status,
     prompt_issue_number,
     prompt_issue_reference_type,
@@ -101,6 +102,12 @@ class ReviewState:
     active_directives: dict[str, str] = field(default_factory=dict)
     residual_guidance: str | None = None
     gold_findings: list = field(default_factory=list)
+    # Issue #195 nice-to-have: display-only ranking confidence on post-gold review.
+    ranking_confidence_level: str | None = None
+    ranking_confidence_margin: float | None = None
+    ranking_confidence_reasons: list[str] = field(default_factory=list)
+    ranking_confidence_top_intent_id: str | None = None
+    ranking_confidence_runner_up_intent_id: str | None = None
 
     def render(self) -> str:
         """
@@ -249,6 +256,24 @@ def _abort(message: str, *, strict: bool, code: int = 1, report: bool = True) ->
         sentry_sdk.flush(timeout=2.0)
     opik.flush_tracker()
     raise typer.Exit(code=code if strict else 0)
+
+
+def _apply_issue195_sentry_tags(
+    *,
+    ranking_confidence_level: str | None = None,
+    ranking_choice_path: str | None = None,
+    gold_mode: str | None = None,
+) -> None:
+    """Attach Issue #195 / gold-parity Sentry tags on error and abort paths only.
+
+    Tags are closed enums / short codes — never ranked matrices, diffs, or guidance.
+    """
+    if ranking_confidence_level:
+        sentry_sdk.set_tag("ranking_confidence_level", str(ranking_confidence_level))
+    if ranking_choice_path:
+        sentry_sdk.set_tag("ranking_choice_path", str(ranking_choice_path))
+    if gold_mode is not None and gold_mode != "":
+        sentry_sdk.set_tag("gold_mode", str(gold_mode))
 
 
 def resolve_model_name(
@@ -849,6 +874,15 @@ def _interactive_review(
             format_issue_reference_status(review_state.issue_references),
             format_regeneration_guidance_status(review_state.regeneration_guidance),
         ]
+        conf_status = format_ranking_confidence_status(
+            review_state.ranking_confidence_level,
+            review_state.ranking_confidence_margin,
+            review_state.ranking_confidence_reasons or None,
+            top_intent_id=review_state.ranking_confidence_top_intent_id,
+            runner_up_intent_id=review_state.ranking_confidence_runner_up_intent_id,
+        )
+        if conf_status:
+            status_parts.append(conf_status)
         gold_status = format_gold_findings_status(review_state.gold_findings or None)
         if gold_status:
             status_parts.append(gold_status)
@@ -1163,6 +1197,11 @@ def _build_generation_context(
     """
     Build the deterministic context used for commit generation.
 
+    Sole rank-pass owner (Issue #195): constructs the authoritative
+    ``ranked_intents`` snapshot and its paired ``ranking_confidence`` exactly
+    once. Downstream consumers (prompt, contract, TUI, telemetry) must receive
+    this pair and must not re-run ranking or confidence on the normal path.
+
     Parameters:
         diff_output (str): The staged diff to analyse.
         enable_semantic (bool | None): Whether semantic enrichment is enabled.
@@ -1171,9 +1210,10 @@ def _build_generation_context(
         risk_assessment: Optional Phase 7 ``RiskAssessment`` (flag-on only).
 
     Returns:
-        GenerationContext: Diff signals, ranked intents, constraints, and optional semantic context.
+        GenerationContext: Diff signals, ranked intents, confidence, constraints, and optional semantic context.
     """
     from git_cg.intent import IntentSelectionConstraints, derive_intent_selection_constraints
+    from git_cg.ranking_confidence import compute_ranking_confidence
     from git_cg.regeneration import GenerationContext
     from git_cg.semantic_flags import is_semantic_enabled
 
@@ -1193,12 +1233,15 @@ def _build_generation_context(
     constraints = (
         derive_intent_selection_constraints(signals, gitops_matrix) if gitops_matrix else IntentSelectionConstraints()
     )
+    # Confidence is bound to this rank pass only; empty rank → no confidence object.
+    ranking_confidence = compute_ranking_confidence(ranked_candidates) if ranked_candidates else None
     return GenerationContext(
         diff_signals=signals,
         ranked_intents=ranked_candidates,
         constraints=constraints,
         semantic_summary=semantic_summary if semantic_on else None,
         risk_assessment=risk_assessment if semantic_on else None,
+        ranking_confidence=ranking_confidence,
     )
 
 
@@ -1254,7 +1297,7 @@ def _build_semantic_enrichment_facts(
 
 
 def _write_telemetry_state_safe(
-    review_state: ReviewState,
+    review_state: ReviewState | None,
     diff_output: str,
     engine: str,
     model_name: str,
@@ -1288,6 +1331,18 @@ def _write_telemetry_state_safe(
     shadow_workspace_used: bool = False,
     semantic_refresh_graph: str = "skipped",
     shadow_fail_open_reason: str = "none",
+    ranking_confidence_level: str | None = None,
+    ranking_confidence_margin: float | None = None,
+    ranking_confidence_reasons: list | None = None,
+    ranking_choice_path: str | None = None,
+    ranking_override: bool = False,
+    ranking_arbitrate_effective: str | None = None,
+    lock_resolution: str = "absent",
+    gold_mode: str = "off",
+    gold_findings_count: int = 0,
+    gold_finding_codes: list | None = None,
+    gold_blocked: bool = False,
+    gold_regen_attempts: int = 0,
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1326,6 +1381,18 @@ def _write_telemetry_state_safe(
         shadow_workspace_used (bool): Phase 7.5 — whether index-only shadow path engaged.
         semantic_refresh_graph (str): Phase 7.5 — `skipped` · `requested` · `ran`.
         shadow_fail_open_reason (str): Phase 7.5 — closed fail-open category (`none` default).
+        ranking_confidence_level (str | None): Issue #195 closed level (`high`/`medium`/`low`).
+        ranking_confidence_margin (float | None): Issue #195 top-minus-runner-up margin.
+        ranking_confidence_reasons (list | None): Issue #195 closed reason codes only.
+        ranking_choice_path (str | None): Issue #195 terminal choice path.
+        ranking_override (bool): Issue #195 metadata bool (never 1.0/0.0 here).
+        ranking_arbitrate_effective (str | None): Issue #195 gate result enum.
+        lock_resolution (str): Issue #195 lock observability code.
+        gold_mode (str): Phase 7.25 gold mode for the run.
+        gold_findings_count (int): Count of gold findings.
+        gold_finding_codes (list | None): Sorted closed gold finding codes only.
+        gold_blocked (bool): Whether gold blocked under the resolved mode.
+        gold_regen_attempts (int): Bounded gold wording regen attempts.
     """
     try:
         import dataclasses
@@ -1337,7 +1404,16 @@ def _write_telemetry_state_safe(
             write_telemetry_state,
         )
 
-        score_card = run_deterministic_checks(review_state.commit_plan)
+        if review_state is not None:
+            score_card = run_deterministic_checks(review_state.commit_plan)
+            generated_message = review_state.render()
+            commit_plan_json = review_state.commit_plan.model_dump()
+            score_card_dict = dataclasses.asdict(score_card)
+        else:
+            # Pre-LLM abort (e.g. arbitration cancel) — no plan yet; still emit funnel telemetry.
+            generated_message = ""
+            commit_plan_json = {}
+            score_card_dict = {}
 
         telemetry = GenerationTelemetry(
             trace_id=LAST_OPIK_TRACE_ID,
@@ -1347,9 +1423,9 @@ def _write_telemetry_state_safe(
             engine=engine,
             model_name=model_name,
             system_prompt_hash=compute_prompt_hash(system_prompt),
-            generated_message=review_state.render(),
-            commit_plan_json=review_state.commit_plan.model_dump(),
-            score_card=dataclasses.asdict(score_card),
+            generated_message=generated_message,
+            commit_plan_json=commit_plan_json,
+            score_card=score_card_dict,
             thread_id=thread_id,
             graph_schema_version=graph_schema_version,
             semantic_enabled=semantic_enabled,
@@ -1378,6 +1454,24 @@ def _write_telemetry_state_safe(
             shadow_workspace_used=bool(shadow_workspace_used),
             semantic_refresh_graph=str(semantic_refresh_graph or "skipped"),
             shadow_fail_open_reason=str(shadow_fail_open_reason or "none"),
+            ranking_confidence_level=ranking_confidence_level,
+            ranking_confidence_margin=ranking_confidence_margin,
+            ranking_confidence_reasons=(
+                list(ranking_confidence_reasons) if isinstance(ranking_confidence_reasons, list) else None
+            ),
+            ranking_choice_path=ranking_choice_path,
+            ranking_override=bool(ranking_override),
+            ranking_arbitrate_effective=ranking_arbitrate_effective,
+            lock_resolution=str(lock_resolution or "absent"),
+            gold_mode=str(gold_mode or "off"),
+            gold_findings_count=int(gold_findings_count or 0),
+            gold_finding_codes=(
+                sorted({str(c) for c in gold_finding_codes if c is not None})
+                if isinstance(gold_finding_codes, list)
+                else None
+            ),
+            gold_blocked=bool(gold_blocked),
+            gold_regen_attempts=int(gold_regen_attempts or 0),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1778,6 +1872,7 @@ def _run_commit_generation(
     gui_editor: bool = False,
     enable_semantic: bool | None = None,
     gold_strict: bool = False,
+    rank_arbitrate: bool | None = None,
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
@@ -1795,6 +1890,7 @@ def _run_commit_generation(
         gui_editor (bool): Prefer the GUI editor for edit actions.
         enable_semantic (bool | None): Enable or disable semantic processing, or use its configured default.
         gold_strict (bool): Resolve gold lint to strict mode without affecting non-gold strictness.
+        rank_arbitrate (bool | None): Enable or disable Low-confidence intent arbitration, or use env/default.
 
     Returns:
         bool: `True` when generation completes successfully.
@@ -2023,17 +2119,230 @@ def _run_commit_generation(
         interactive=interactive,
         tty_available=interactive and can_open_tty(),
     )
+    gold_report = None
     gold_regen_attempts = 0
     gold_guidance: str | None = None
     gold_previous_primary_id: str | None = None
+    # Issue #195: contract lock + arbitration telemetry (Slices 2-4).
+    last_lock_resolution = "absent"
+    locked_intent_id: str | None = None
+    ranking_choice_path: str | None = None
+    ranking_override = False
+    ranking_arbitrate_effective: str | None = None
+
+    # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
+    # Sole insertion seam: after rank/confidence owner, before contract/LLM.
+    from git_cg.ranking_arbitrate_flags import is_rank_arbitrate_enabled
+
+    conf = gen_context.ranking_confidence
+    tty_ok = interactive and can_open_tty()
+    if conf is None:
+        ranking_arbitrate_effective = None
+        ranking_choice_path = None
+    elif conf.level != "low":
+        ranking_arbitrate_effective = "skipped_high_medium"
+        ranking_choice_path = "skipped_high_medium"
+    elif not is_rank_arbitrate_enabled(rank_arbitrate):
+        ranking_arbitrate_effective = "flag_off"
+        ranking_choice_path = "ni_top_rank"
+    elif not tty_ok:
+        ranking_arbitrate_effective = "skipped_ni"
+        ranking_choice_path = "ni_top_rank"
+    else:
+        from git_cg.intent_arbitrate import run_intent_arbitration
+
+        ranking_arbitrate_effective = "menu_shown"
+        sentry_sdk.add_breadcrumb(
+            category="lifecycle",
+            message="arbitrate: low confidence menu",
+            level="info",
+            data={
+                "ranking_confidence_level": conf.level if conf else None,
+                "ranking_confidence_margin": conf.margin if conf else None,
+            },
+        )
+        # Guidance REGEN may loop here with a rebuilt gen_context.
+        # Presentation-only views (directive-narrowed A/B) must not mutate the
+        # authoritative rank-pass snapshot on gen_context.
+        arbitrate_presentation_note: str | None = None
+        present_pair_ranked = list(gen_context.ranked_intents)
+        present_pair_conf = gen_context.ranking_confidence
+        while True:
+            arb = run_intent_arbitration(
+                ranked_intents=present_pair_ranked,
+                ranking_confidence=present_pair_conf,
+                constraints=gen_context.constraints,
+                existing_guidance=regeneration_guidance,
+                existing_directives=active_directives,
+                existing_residual=residual_guidance,
+                presentation_note=arbitrate_presentation_note,
+            )
+            # Consume one-shot REGEN banner after it has been shown once.
+            arbitrate_presentation_note = None
+            if arb.aborted or arb.action == "aborted":
+                ranking_choice_path = "cancel_abort"
+                ranking_override = False
+                locked_intent_id = None
+                _apply_issue195_sentry_tags(
+                    ranking_confidence_level=conf.level if conf else None,
+                    ranking_choice_path="cancel_abort",
+                    gold_mode=gold_mode,
+                )
+                # Emit safe telemetry then abort without writing COMMIT_EDITMSG (A_06/A_21).
+                _write_telemetry_state_safe(
+                    review_state=None,
+                    diff_output=analysis_diff,
+                    engine=engine,
+                    model_name=model_name,
+                    system_prompt="",
+                    repo_name=repo_name,
+                    thread_id=thread_id,
+                    verbose=verbose,
+                    graph_schema_version=crg_schema_version,
+                    semantic_enabled=semantic_enabled,
+                    parser_latency_ms=parser_latency_ms,
+                    graph_build_latency_ms=graph_build_latency_ms,
+                    graph_query_latency_ms=graph_query_latency_ms,
+                    semantic_parser_metrics=semantic_parser_metrics,
+                    body_similarity_min=body_similarity_min,
+                    body_similarity_avg=body_similarity_avg,
+                    fingerprint_files_compared=fingerprint_files_compared,
+                    fingerprint_latency_ms=fingerprint_latency_ms,
+                    fingerprint_class_counts=fingerprint_class_counts,
+                    fingerprint_grammar_version=fingerprint_grammar_version,
+                    fingerprint_markers=fingerprint_markers,
+                    preflight_mode="skipped",
+                    preflight_groups_count=0,
+                    preflight_fallback_reason="",
+                    blast_radius_size=blast_radius_size
+                    if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
+                    else None,
+                    affected_flows_count=affected_flows_count
+                    if isinstance(affected_flows_count, int) and not isinstance(affected_flows_count, bool)
+                    else None,
+                    test_coverage_gap=bool(test_coverage_gap) if test_coverage_gap is not None else None,
+                    test_gaps_count=test_gaps_count
+                    if isinstance(test_gaps_count, int) and not isinstance(test_gaps_count, bool)
+                    else None,
+                    semantic_context_schema_version=semantic_context_schema_version,
+                    semantic_context_fallback_reasons=semantic_context_fallback_reasons,
+                    shadow_workspace_used=shadow_workspace_used,
+                    semantic_refresh_graph=semantic_refresh_graph,
+                    shadow_fail_open_reason=shadow_fail_open_reason,
+                    ranking_confidence_level=conf.level if conf else None,
+                    ranking_confidence_margin=conf.margin if conf else None,
+                    ranking_confidence_reasons=list(conf.reasons) if conf else None,
+                    ranking_choice_path="cancel_abort",
+                    ranking_override=False,
+                    ranking_arbitrate_effective="menu_shown",
+                    lock_resolution="absent",
+                    gold_mode=gold_mode,
+                    gold_findings_count=0,
+                    gold_finding_codes=None,
+                    gold_blocked=False,
+                    gold_regen_attempts=0,
+                )
+                opik.flush_tracker()
+                _abort(
+                    "\n[bold red]Commit aborted during intent arbitration.[/bold red]",
+                    strict=True,  # user Abort must always fail the hook/CLI (never exit 0)
+                    report=False,
+                )
+
+            if arb.action == "re_rank" and arb.re_rank_requested:
+                # Apply mapped directives and rebuild sole rank-pass pair (REGEN).
+                if arb.active_directives:
+                    active_directives = dict(arb.active_directives)
+                if arb.guidance:
+                    regeneration_guidance = arb.guidance
+                residual_guidance = arb.residual_guidance
+                locked_intent_id = None  # guidance REGEN starts with no lock
+                gen_context = _build_generation_context(
+                    analysis_diff,
+                    enable_semantic=semantic_enabled,
+                    enrichment_facts=enrichment_facts,
+                    semantic_summary=semantic_summary,
+                    risk_assessment=risk_assessment,
+                )
+                # Presentation narrowing: preferred_type/scope select among the new
+                # authoritative ranked snapshot without mutating SOP weights (G1).
+                from git_cg.intent_arbitrate import ranked_intents_for_directives
+                from git_cg.ranking_confidence import compute_ranking_confidence
+
+                present_ranked, present_note = ranked_intents_for_directives(
+                    gen_context.ranked_intents,
+                    active_directives,
+                )
+                # Identity check is insufficient (helper always returns a new list).
+                # Narrow only when the filtered set is a proper subset with hits.
+                original_ids = [r.intent_id for r in gen_context.ranked_intents]
+                present_ids = [r.intent_id for r in present_ranked]
+                narrowed = present_ids != original_ids and bool(present_ranked)
+                if narrowed:
+                    # Presentation-only: pass narrowed pair to the next MAIN without
+                    # mutating gen_context (authoritative rank-pass snapshot).
+                    present_pair_ranked = list(present_ranked)
+                    present_pair_conf = compute_ranking_confidence(present_ranked)
+                    conf = present_pair_conf
+                else:
+                    present_pair_ranked = list(gen_context.ranked_intents)
+                    present_pair_conf = gen_context.ranking_confidence
+                    conf = present_pair_conf
+                if present_note and verbose:
+                    console.print(
+                        f"[cyan]Guidance REGEN view:[/cyan] {present_note} ({len(present_ranked)} candidate(s))"
+                    )
+                if conf is not None and conf.level != "low":
+                    ranking_choice_path = "re_rank_auto_continue"
+                    ranking_override = False
+                    locked_intent_id = None
+                    break
+                # Still Low → MAIN again with narrowed A/B + explicit still-Low banner.
+                from git_cg.intent_arbitrate import format_regen_still_low_note
+
+                preferred_type = (active_directives or {}).get("preferred_type")
+                preferred_scope = (active_directives or {}).get("preferred_scope")
+                arbitrate_presentation_note = format_regen_still_low_note(
+                    preferred_type=preferred_type,
+                    preferred_scope=preferred_scope,
+                    narrowed=narrowed,
+                )
+                if verbose:
+                    console.print(f"[yellow]{arbitrate_presentation_note}[/yellow]")
+                continue
+
+            # locked | continue_top
+            locked_intent_id = arb.locked_intent_id
+            ranking_choice_path = arb.choice_path
+            ranking_override = bool(arb.override)
+            if arb.guidance:
+                regeneration_guidance = arb.guidance
+            if arb.active_directives:
+                active_directives = dict(arb.active_directives)
+            if arb.residual_guidance is not None or arb.action in {"locked", "continue_top"}:
+                residual_guidance = arb.residual_guidance
+            break
 
     while True:
         regen_state = RegenerationState(
             previous_plan=review_state.commit_plan if review_state else None,
             active_directives=active_directives,
             residual_guidance=residual_guidance,
+            locked_intent_id=locked_intent_id,
         )
         contract = resolve_semantic_contract(gen_context, regen_state)
+        last_lock_resolution = getattr(contract, "lock_resolution", "absent")
+        if last_lock_resolution in {"rejected_not_allowed", "rejected_hard_veto"} and (verbose or interactive):
+            # Safe UX notice only — closed code, no matrix dump / free text (Issue #195).
+            reason = (
+                "not in the allowed intent set"
+                if last_lock_resolution == "rejected_not_allowed"
+                else "hard-vetoed or otherwise ineligible"
+            )
+            console.print(
+                f"[yellow]Intent lock not applied ({last_lock_resolution}): "
+                f"requested lock was {reason}; falling through to normal contract precedence.[/yellow]"
+            )
 
         system_prompt = build_system_prompt(
             analysis_diff,
@@ -2073,6 +2382,11 @@ def _run_commit_generation(
             with sentry_sdk.new_scope() as scope:
                 scope.set_tag("engine", engine)
                 scope.set_tag("model_name", model_name)
+                if conf is not None:
+                    scope.set_tag("ranking_confidence_level", conf.level)
+                if ranking_choice_path:
+                    scope.set_tag("ranking_choice_path", ranking_choice_path)
+                scope.set_tag("gold_mode", str(gold_mode or "off"))
                 scope.set_context(
                     "git_cg",
                     {
@@ -2125,9 +2439,15 @@ def _run_commit_generation(
                 strict=True,
             )
 
+        conf_snap = gen_context.ranking_confidence
         review_state = ReviewState(
             commit_plan=commit_plan,
             issue_references=list(issue_references),
+            ranking_confidence_level=(conf_snap.level if conf_snap else None),
+            ranking_confidence_margin=(conf_snap.margin if conf_snap else None),
+            ranking_confidence_reasons=(list(conf_snap.reasons) if conf_snap else []),
+            ranking_confidence_top_intent_id=(conf_snap.top_intent_id if conf_snap else None),
+            ranking_confidence_runner_up_intent_id=(conf_snap.runner_up_intent_id if conf_snap else None),
         )
         if regeneration_guidance:
             review_state.set_regeneration_guidance(regeneration_guidance)
@@ -2155,12 +2475,19 @@ def _run_commit_generation(
                 gold_previous_primary_id = commit_plan.primary_intent.intent_id
                 console.print("[yellow]Regenerating wording from gold feedback (1 attempt)...[/yellow]")
                 continue
+            _apply_issue195_sentry_tags(
+                ranking_confidence_level=(
+                    gen_context.ranking_confidence.level if gen_context.ranking_confidence else None
+                ),
+                ranking_choice_path=ranking_choice_path,
+                gold_mode=gold_mode,
+            )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
                 + ", ".join(sorted(gold_report.codes()))
                 + "[/bold red]",
                 strict=True,
-                report=False,
+                report=True,
             )
 
         result_string = review_state.render()
@@ -2263,6 +2590,22 @@ def _run_commit_generation(
         shadow_workspace_used=shadow_workspace_used,
         semantic_refresh_graph=semantic_refresh_graph,
         shadow_fail_open_reason=shadow_fail_open_reason,
+        ranking_confidence_level=(gen_context.ranking_confidence.level if gen_context.ranking_confidence else None),
+        ranking_confidence_margin=(gen_context.ranking_confidence.margin if gen_context.ranking_confidence else None),
+        ranking_confidence_reasons=(
+            list(gen_context.ranking_confidence.reasons) if gen_context.ranking_confidence else None
+        ),
+        ranking_choice_path=ranking_choice_path,
+        ranking_override=bool(ranking_override),
+        ranking_arbitrate_effective=ranking_arbitrate_effective,
+        lock_resolution=last_lock_resolution,
+        gold_mode=gold_mode,
+        gold_findings_count=len(getattr(review_state, "gold_findings", []) or []),
+        gold_finding_codes=sorted(
+            {getattr(f, "code", str(f)) for f in (getattr(review_state, "gold_findings", []) or [])}
+        ),
+        gold_blocked=bool(gold_mode == "strict" and gold_report is not None and not gold_report.ok_for_mode("strict")),
+        gold_regen_attempts=gold_regen_attempts,
     )
 
     opik.flush_tracker()
@@ -2305,6 +2648,19 @@ def main_callback(
         None,
         "--enable-semantic/--no-enable-semantic",
         help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).",
+    ),
+    rank_arbitrate: bool | None = typer.Option(
+        None,
+        "--rank-arbitrate/--no-rank-arbitrate",
+        help=(
+            "Allow Low-confidence pre-LLM intent arbitration when -i + TTY "
+            "(default: GIT_CG_RANK_ARBITRATE env or auto)."
+        ),
+    ),
+    gold_strict: bool = typer.Option(
+        False,
+        "--gold-strict",
+        help="Resolve gold lint to strict mode without enabling general --strict.",
     ),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx",
@@ -2371,6 +2727,8 @@ def main_callback(
         interactive=interactive,
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
+        gold_strict=gold_strict,
+        rank_arbitrate=rank_arbitrate,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -2408,7 +2766,7 @@ def commit(
     gold_strict: bool = typer.Option(
         False,
         "--gold-strict",
-        help="Resolve gold lint to strict mode (fail after at most 1 wording regen) without enabling --strict.",
+        help="Resolve gold lint to strict mode without enabling general --strict.",
     ),
     term_editor: bool = typer.Option(
         True, "--term", "-t", help="Use Terminal Editor ($EDITOR) when editing commit messages (Default)."
@@ -2420,6 +2778,14 @@ def commit(
         None,
         "--enable-semantic/--no-enable-semantic",
         help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).",
+    ),
+    rank_arbitrate: bool | None = typer.Option(
+        None,
+        "--rank-arbitrate/--no-rank-arbitrate",
+        help=(
+            "Allow Low-confidence pre-LLM intent arbitration when -i + TTY "
+            "(default: GIT_CG_RANK_ARBITRATE env or auto)."
+        ),
     ),
 ) -> None:
     """Generate an AI commit message based on staged changes."""
@@ -2436,6 +2802,7 @@ def commit(
         gui_editor=gui_editor,
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
+        rank_arbitrate=rank_arbitrate,
     )
 
 
@@ -2711,8 +3078,30 @@ def record_telemetry(
                     "test_gaps_count": telemetry_state.get("test_gaps_count"),
                     "semantic_context_schema_version": telemetry_state.get("semantic_context_schema_version", ""),
                     "semantic_context_fallback_reasons": telemetry_state.get("semantic_context_fallback_reasons"),
+                    # Phase 7.29 ranking confidence + arbitration (Issue #195).
+                    "ranking_confidence_level": telemetry_state.get("ranking_confidence_level"),
+                    "ranking_confidence_margin": telemetry_state.get("ranking_confidence_margin"),
+                    "ranking_confidence_reasons": telemetry_state.get("ranking_confidence_reasons"),
+                    "ranking_choice_path": telemetry_state.get("ranking_choice_path"),
+                    "ranking_override": bool(telemetry_state.get("ranking_override", False)),
+                    "ranking_arbitrate_effective": telemetry_state.get("ranking_arbitrate_effective"),
+                    "lock_resolution": telemetry_state.get("lock_resolution", "absent"),
+                    # Phase 7.25 gold parity (absorbed into #195).
+                    "gold_mode": telemetry_state.get("gold_mode", "off"),
+                    "gold_findings_count": telemetry_state.get("gold_findings_count", 0),
+                    "gold_finding_codes": telemetry_state.get("gold_finding_codes"),
+                    "gold_blocked": bool(telemetry_state.get("gold_blocked", False)),
+                    "gold_regen_attempts": telemetry_state.get("gold_regen_attempts", 0),
                 },
-                feedback_scores=[{"name": "user_acceptance", "value": feedback_score, "reason": provenance}],
+                feedback_scores=[
+                    {"name": "user_acceptance", "value": feedback_score, "reason": provenance},
+                    # Issue #195: derived float at score boundary only — metadata bool remains source of truth.
+                    {
+                        "name": "ranking_override",
+                        "value": 1.0 if bool(telemetry_state.get("ranking_override")) else 0.0,
+                        "reason": "ranking_override",
+                    },
+                ],
                 thread_id=thread_id,
             )
             return {"status": "recorded", "provenance": provenance}

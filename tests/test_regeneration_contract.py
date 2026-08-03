@@ -375,3 +375,254 @@ def test_resolve_semantic_contract_nonempty_matrix_falls_back_to_first_row():
     assert contract.semver_impact == "MINOR"
     assert contract.changelog_group == "Added"
     assert contract.secondary_intent_ids == []
+
+
+def test_resolve_semantic_contract_locked_intent_wins_when_allowed():
+    """A_11/A_15: eligible locked_intent_id is selected over ranked top."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="bug_fix",
+                emoji="🐛",
+                code=":bug:",
+                cc_type="fix",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+                intent_group="bugfix",
+                score=10.0,
+                priority=50,
+                specificity=50,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={}, locked_intent_id="bug_fix")
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "bug_fix"
+    assert contract.cc_type == "fix"
+    assert contract.lock_resolution == "accepted"
+
+
+def test_resolve_semantic_contract_locked_intent_beats_previous_plan():
+    """A_15: lock sits before previous_plan (regen retry hazard)."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="documentation_update",
+                emoji="📝",
+                code=":memo:",
+                cc_type="docs",
+                description="",
+                semver_impact="NONE",
+                changelog_group="Documentation",
+                intent_group="docs",
+                score=40.0,
+                priority=40,
+                specificity=40,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(
+        previous_plan=_make_commit_plan(intent_id="bug_fix", cc_type=CommitType.FIX),
+        active_directives={},
+        locked_intent_id="documentation_update",
+    )
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "documentation_update"
+    assert contract.lock_resolution == "accepted"
+
+
+def test_resolve_semantic_contract_locked_intent_ignored_when_not_allowed():
+    """A_11: lock outside allowed_ids falls through; never widens eligible set."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(only_docs=True),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="documentation_update",
+                emoji="📝",
+                code=":memo:",
+                cc_type="docs",
+                description="",
+                semver_impact="NONE",
+                changelog_group="Documentation",
+                intent_group="docs",
+                score=40.0,
+                priority=40,
+                specificity=40,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(allowed_intent_ids=["documentation_update"]),
+    )
+    state = RegenerationState(
+        previous_plan=None,
+        active_directives={},
+        locked_intent_id="feature_addition",
+    )
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "documentation_update"
+    assert contract.lock_resolution == "rejected_not_allowed"
+
+
+def test_resolve_semantic_contract_locked_intent_unknown_is_hard_veto():
+    """A_22: lock id absent from SOP matrix falls through with lock_resolution=rejected_hard_veto."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(
+        previous_plan=None,
+        active_directives={},
+        locked_intent_id="not_a_real_matrix_intent",
+    )
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "feature_addition"
+    assert contract.lock_resolution == "rejected_hard_veto"
+
+
+def test_resolve_semantic_contract_preferred_type_cannot_discard_eligible_lock():
+    """A_17: preferred_type must not silently discard an eligible human lock."""
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="bug_fix",
+                emoji="🐛",
+                code=":bug:",
+                cc_type="fix",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+                intent_group="bugfix",
+                score=80.0,
+                priority=50,
+                specificity=50,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(
+        previous_plan=None,
+        active_directives={"preferred_type": "feat"},
+        locked_intent_id="bug_fix",
+    )
+
+    contract = resolve_semantic_contract(context, state)
+
+    assert contract.primary_intent_id == "bug_fix"
+    assert contract.cc_type == "fix"
+    assert contract.lock_resolution == "accepted"
+
+
+def test_resolve_semantic_contract_absent_lock_resolution_when_unset():
+    context = GenerationContext(
+        diff_signals=DiffSignals(),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            )
+        ],
+        constraints=IntentSelectionConstraints(),
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+    contract = resolve_semantic_contract(context, state)
+    assert contract.primary_intent_id == "feature_addition"
+    assert contract.lock_resolution == "absent"

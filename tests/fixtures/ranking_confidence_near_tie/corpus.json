@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "issue": 195,
+  "claim": "B",
+  "description": "Deterministic near-tie / margin corpus for RankingConfidence (Issue #195). Pure score ladders only — no live LLM, no SOP mutation.",
+  "thresholds": {
+    "T_low": 12.0,
+    "T_high": 25.0,
+    "T_near": 12.0
+  },
+  "cases": [
+    {
+      "id": "B_01_single_row_high",
+      "title": "Single ranked row is High with zero margin",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 84.0, "intent_group": "feature"}
+      ],
+      "expected": {
+        "level": "high",
+        "margin": 0.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": null,
+        "reasons": []
+      }
+    },
+    {
+      "id": "B_02_margin_below_low",
+      "title": "Top−runner-up margin 6.2 → Low + margin_below_low_threshold",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 93.8, "intent_group": "feature"}
+      ],
+      "expected": {
+        "level": "low",
+        "margin": 6.2,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": ["margin_below_low_threshold"]
+      }
+    },
+    {
+      "id": "B_03_margin_at_t_low_medium",
+      "title": "margin == T_low (12.0) is Medium (exclusive Low boundary)",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 88.0, "intent_group": "feature"}
+      ],
+      "expected": {
+        "level": "medium",
+        "margin": 12.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": []
+      }
+    },
+    {
+      "id": "B_04_margin_between_low_and_high_medium",
+      "title": "T_low ≤ margin < T_high → Medium",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 75.1, "intent_group": "feature"}
+      ],
+      "expected": {
+        "level": "medium",
+        "margin": 24.9,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": []
+      }
+    },
+    {
+      "id": "B_05_margin_at_t_high_high",
+      "title": "margin == T_high (25.0) is High (exclusive Medium boundary)",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 75.0, "intent_group": "feature"}
+      ],
+      "expected": {
+        "level": "high",
+        "margin": 25.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": []
+      }
+    },
+    {
+      "id": "B_06_exact_tie_top",
+      "title": "len≥2 and margin==0.0 → Low + exact_tie_top (G2)",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 90.0, "intent_group": "feature"},
+        {"intent_id": "bug_fix", "score": 90.0, "intent_group": "fix"}
+      ],
+      "expected": {
+        "level": "low",
+        "margin": 0.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "bug_fix",
+        "reasons": ["margin_below_low_threshold", "exact_tie_top", "mixed_intent"]
+      }
+    },
+    {
+      "id": "B_07_near_tie_top3",
+      "title": "Three close candidates: (top−3rd) < T_near → near_tie_top3",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 96.0, "intent_group": "feature"},
+        {"intent_id": "docs_update", "score": 89.0, "intent_group": "docs"}
+      ],
+      "expected": {
+        "level": "low",
+        "margin": 4.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": ["margin_below_low_threshold", "near_tie_top3"]
+      }
+    },
+    {
+      "id": "B_08_top_to_third_at_t_near_no_near_tie",
+      "title": "(top−3rd) == T_near must NOT emit near_tie_top3 (exclusive <)",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 94.0, "intent_group": "feature"},
+        {"intent_id": "docs_update", "score": 88.0, "intent_group": "docs"}
+      ],
+      "expected": {
+        "level": "low",
+        "margin": 6.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": ["margin_below_low_threshold"]
+      }
+    },
+    {
+      "id": "B_09_mixed_intent_close_groups",
+      "title": "Close top-two with distinct intent_group → mixed_intent",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "bug_fix", "score": 95.0, "intent_group": "fix"}
+      ],
+      "expected": {
+        "level": "low",
+        "margin": 5.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "bug_fix",
+        "reasons": ["margin_below_low_threshold", "mixed_intent"]
+      }
+    },
+    {
+      "id": "B_10_distinct_groups_high_margin_no_mixed",
+      "title": "Distinct groups with margin ≥ T_low → no mixed_intent (A_18)",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "bug_fix", "score": 88.0, "intent_group": "fix"}
+      ],
+      "expected": {
+        "level": "medium",
+        "margin": 12.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "bug_fix",
+        "reasons": []
+      }
+    },
+    {
+      "id": "B_11_len_two_never_near_tie",
+      "title": "len < 3 never emits near_tie_top3 even with tiny margin",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 99.0, "intent_group": "feature"}
+      ],
+      "expected": {
+        "level": "low",
+        "margin": 1.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": ["margin_below_low_threshold"]
+      }
+    },
+    {
+      "id": "B_12_wide_margin_high",
+      "title": "Comfortable separation → High, empty reasons",
+      "ranked": [
+        {"intent_id": "feature_addition", "score": 100.0, "intent_group": "feature"},
+        {"intent_id": "feature_refinement", "score": 60.0, "intent_group": "feature"},
+        {"intent_id": "docs_update", "score": 40.0, "intent_group": "docs"}
+      ],
+      "expected": {
+        "level": "high",
+        "margin": 40.0,
+        "top_intent_id": "feature_addition",
+        "runner_up_intent_id": "feature_refinement",
+        "reasons": []
+      }
+    }
+  ]
+}

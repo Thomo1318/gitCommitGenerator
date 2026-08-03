@@ -191,6 +191,7 @@ flowchart LR
 - **Spec-Driven**: Uses the [usage](https://usage.jdx.dev/) standard for automated autocompletion and help generation.
 - **Safe Dry-Runs**: Validate AI output before modifying your git message file.
 - **Commit-Message Gold Lint**: A deterministic post-enforcement linter (`git_cg.commit_gold`) checks wording quality, Included-changes coverage, and type/changelog-group coherence — without ever re-ranking intent (SOP matrix stays the SemVer authority). Modes: `off` / `warn` (hook-safe default) / `surface` (interactive) / `strict` (CI).
+- **Ranking Confidence + Intent Arbitration**: When the deterministic ranker is **Low** confidence (near-tie / mixed-intent / closed reasons), interactive TTY sessions can lock a matrix-legal primary **before** the LLM. Non-interactive and hook paths never block. Control with `GIT_CG_RANK_ARBITRATE=auto|off` or CLI `--rank-arbitrate` / `--no-rank-arbitrate`. See `docs/usage.md` and `docs/diagrams/ranking-confidence/`.
 
 ---
 

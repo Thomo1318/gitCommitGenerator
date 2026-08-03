@@ -1,6 +1,7 @@
 # Environment & Secrets
 .env
 .env.local
+manual.env
 .env.*.local
 *.pem
 *.key

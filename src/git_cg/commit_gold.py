@@ -15,6 +15,7 @@ Authority boundary (locked):
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 
 from git_cg.intent import (
@@ -38,6 +39,14 @@ BANNED_BODY_OPENERS: tuple[str, ...] = (
     "This commit updates",
     "This PR",
     "We have",
+    # F3 marketing / inventory first-line openers (matched case-sensitively).
+    "Adds ",
+    "Introduces ",
+    "Ensures ",
+    "This change ",
+    "This change introduces",
+    "This change adds",
+    "This change updates",
 )
 
 # Coverage scoring constants (change only with B2 fixture updates).
@@ -51,6 +60,95 @@ _PRODUCT_CC_TYPES: frozenset[str] = frozenset({"feat", "fix", "perf"})
 # is a product feat/perf.
 _FIX_EXPLAINING_GROUPS: frozenset[str] = frozenset({"Fixed"})
 
+# Normative gitmoji -> (cc_type, frozenset[coherent changelog groups], semver_impact)
+# for the closed gitmoji vocabulary (Issue #195 Phase 7.29 F2/F7). Mirrors the SOP
+# ``gitmoji_reference_matrix``; keys are normalised (variation selector U+FE0F stripped)
+# because the matrix encodes some emoji with and without the selector. Assert-tested
+# against the live SOP so it cannot drift.
+GITMOJI_CC_GROUPS: dict[str, tuple[str, frozenset[str], str]] = {
+    "⏪": ("revert", frozenset({"Changed"}), "PATCH"),
+    "♻": ("refactor", frozenset({"Changed"}), "PATCH"),
+    "♿": ("feat", frozenset({"Changed"}), "PATCH"),
+    "⚗": ("feat", frozenset({"Changed"}), "PATCH"),
+    "⚡": ("perf", frozenset({"Changed"}), "PATCH"),
+    "⚰": ("refactor", frozenset({"Removed"}), "PATCH"),
+    "✅": ("test", frozenset({"Miscellaneous"}), "NONE"),
+    "✈": ("feat", frozenset({"Added"}), "MINOR"),
+    "✏": ("docs", frozenset({"Miscellaneous"}), "NONE"),
+    "✨": ("feat", frozenset({"Added"}), "MINOR"),
+    "\u2795": ("build", frozenset({"Changed"}), "PATCH"),
+    "\u2796": ("build", frozenset({"Changed"}), "PATCH"),
+    "⬆": ("build", frozenset({"Changed"}), "PATCH"),
+    "⬇": ("build", frozenset({"Changed"}), "PATCH"),
+    "🌐": ("feat", frozenset({"Added"}), "MINOR"),
+    "🌱": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🍱": ("chore", frozenset({"Added"}), "PATCH"),
+    "🍻": ("refactor", frozenset({"Miscellaneous"}), "NONE"),
+    "🎉": ("init", frozenset({"Miscellaneous"}), "NONE"),
+    "🎨": ("style", frozenset({"Changed"}), "NONE"),
+    "🏗": ("refactor", frozenset({"Changed"}), "MAJOR"),
+    "🏷": ("refactor", frozenset({"Changed"}), "PATCH"),
+    "🐛": ("fix", frozenset({"Fixed"}), "PATCH"),
+    "👔": ("feat", frozenset({"Added"}), "MINOR"),
+    "👥": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "👷": ("ci", frozenset({"Miscellaneous"}), "NONE"),
+    "👽": ("refactor", frozenset({"Changed"}), "PATCH"),
+    "💄": ("style", frozenset({"Changed"}), "PATCH"),
+    "💚": ("ci", frozenset({"Miscellaneous"}), "NONE"),
+    "💡": ("docs", frozenset({"Miscellaneous"}), "NONE"),
+    "💥": ("feat", frozenset({"Changed"}), "MAJOR"),
+    "💩": ("refactor", frozenset({"Miscellaneous"}), "NONE"),
+    "💫": ("feat", frozenset({"Changed"}), "PATCH"),
+    "💬": ("style", frozenset({"Changed"}), "PATCH"),
+    "💸": ("feat", frozenset({"Added"}), "MINOR"),
+    "📄": ("docs", frozenset({"Miscellaneous"}), "NONE"),
+    "📈": ("feat", frozenset({"Added"}), "MINOR"),
+    "📌": ("build", frozenset({"Changed"}), "PATCH"),
+    "📝": ("docs", frozenset({"Miscellaneous"}), "NONE"),
+    "📦": ("build", frozenset({"Changed"}), "PATCH"),
+    "📱": ("feat", frozenset({"Changed"}), "PATCH"),
+    "📸": ("test", frozenset({"Miscellaneous"}), "NONE"),
+    "🔀": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🔇": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🔊": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🔍": ("feat", frozenset({"Changed"}), "PATCH"),
+    "🔐": ("chore", frozenset({"Security"}), "PATCH"),
+    "🔒": ("fix", frozenset({"Security"}), "PATCH"),
+    "🔖": ("release", frozenset({"Miscellaneous"}), "NONE"),
+    "🔥": ("refactor", frozenset({"Removed"}), "PATCH"),
+    "🔧": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🔨": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🗃": ("feat", frozenset({"Changed"}), "PATCH"),
+    "🗑": ("refactor", frozenset({"Deprecated"}), "PATCH"),
+    "🙈": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🚀": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🚑": ("fix", frozenset({"Fixed"}), "PATCH"),
+    "🚚": ("refactor", frozenset({"Changed"}), "NONE"),
+    "🚧": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🚨": ("refactor", frozenset({"Changed"}), "PATCH"),
+    "🚩": ("feat", frozenset({"Added"}), "MINOR"),
+    "🚸": ("feat", frozenset({"Changed"}), "PATCH"),
+    "🛂": ("feat", frozenset({"Security"}), "MINOR"),
+    "🤡": ("test", frozenset({"Miscellaneous"}), "NONE"),
+    "🥅": ("fix", frozenset({"Fixed"}), "PATCH"),
+    "🥚": ("feat", frozenset({"Added"}), "PATCH"),
+    "🦖": ("fix", frozenset({"Changed"}), "PATCH"),
+    "🦺": ("fix", frozenset({"Changed"}), "PATCH"),
+    "🧐": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🧑\u200d💻": ("chore", frozenset({"Miscellaneous"}), "NONE"),
+    "🧪": ("test", frozenset({"Miscellaneous"}), "NONE"),
+    "🧱": ("ci", frozenset({"Changed"}), "PATCH"),
+    "🧵": ("refactor", frozenset({"Changed"}), "MINOR"),
+    "🩹": ("fix", frozenset({"Fixed"}), "PATCH"),
+    "🩺": ("feat", frozenset({"Added"}), "PATCH"),
+}
+
+# SemVer rank for multi-intent max() checks (NONE < PATCH < MINOR < MAJOR).
+_SEMVER_RANK: dict[str, int] = {"NONE": 0, "PATCH": 1, "MINOR": 2, "MAJOR": 3}
+
+# Filename-like scope pattern (F4/F5 light): rejects scopes that look like paths or files.
+_FILENAME_SCOPE_RE = re.compile(r"[/\\]|\.[A-Za-z0-9]+$")
+
 # Finding codes that fail generation in ``strict`` mode. Single pass/fail source;
 # orchestration never re-derives severity from anything else.
 STRICT_FAIL_CODES: frozenset[str] = frozenset(
@@ -59,6 +157,9 @@ STRICT_FAIL_CODES: frozenset[str] = frozenset(
         "GOLD_INCLUDED_CHANGES_MISSING",
         "GOLD_GROUP_PRIMARY_MISMATCH",
         "GOLD_TYPE_GROUP_INCOHERENT",
+        "GOLD_SEMVER_MATRIX_MISMATCH",
+        "GOLD_SCOPE_FILENAME",
+        "GOLD_SUBJECT_TITLE_CASE",
     }
 )
 
@@ -358,6 +459,140 @@ def _check_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
     return findings
 
 
+def _norm_gitmoji(emoji: str) -> str:
+    """Normalise a gitmoji by stripping variation selectors (U+FE0F, U+FE0E).
+
+    The SOP matrix encodes some emoji both with and without the variation selector
+    (e.g. ``\u26a1`` and ``\u26a1\ufe0f``); normalising makes lookup selector-insensitive.
+    """
+    return emoji.replace("\ufe0f", "").replace("\ufe0e", "")
+
+
+def _check_type_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_TYPE_GROUP_INCOHERENT`` for F7 group-unreachable trailer sets.
+
+    F7: every declared type (primary + secondaries) must be coherent with *every*
+    declared ``Changelog-Groups`` entry under the SOP matrix. An unknown gitmoji is
+    skipped (enforce owns vocabulary), never failed here. Per-gitmoji coherent
+    groups come from the static normative mapping (assert-tested against the SOP).
+    """
+    incoherent: list[str] = []
+    for intent in (plan.primary_intent, *plan.secondary_intents):
+        entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
+        if entry is None:
+            continue  # enforce owns vocabulary; unknown emoji is out of scope here
+        cc_type, coherent_groups, _semver = entry
+        group = str(intent.changelog_group or "")
+        if group and group not in coherent_groups:
+            incoherent.append(f"{intent.gitmoji} ({cc_type}) -> {group}")
+
+    if not incoherent:
+        return []
+    return [
+        GoldFinding(
+            code="GOLD_TYPE_GROUP_INCOHERENT",
+            message=(
+                "Changelog-Groups unreachable from declared Change-Types per SOP matrix (F7): "
+                + "; ".join(incoherent)
+                + "; re-declare coherent groups/types (e.g. test/docs -> Miscellaneous)."
+            ),
+        )
+    ]
+
+
+def _intent_semver(intent) -> str:
+    """Return the plan intent's SemVer as an uppercase string."""
+    raw = intent.semver_impact.value if hasattr(intent.semver_impact, "value") else str(intent.semver_impact)
+    return str(raw or "").strip().upper()
+
+
+def _check_semver_matrix(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_SEMVER_MATRIX_MISMATCH`` when an intent's SemVer disagrees with the SOP (F2).
+
+    Each primary/secondary gitmoji has exactly one matrix ``semver_impact``. Gold never
+    invents SemVer from type names or issue drama — it only checks the structured plan
+    against the static matrix. Unknown gitmojis are skipped (enforce owns vocabulary).
+    """
+    mismatches: list[str] = []
+    for intent in (plan.primary_intent, *plan.secondary_intents):
+        entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
+        if entry is None:
+            continue
+        _cc, _groups, matrix_semver = entry
+        plan_semver = _intent_semver(intent)
+        if plan_semver and plan_semver != matrix_semver:
+            mismatches.append(f"{intent.gitmoji} plan={plan_semver} matrix={matrix_semver}")
+
+    if not mismatches:
+        return []
+    return [
+        GoldFinding(
+            code="GOLD_SEMVER_MATRIX_MISMATCH",
+            message=(
+                "SemVer-Impact disagrees with the SOP matrix for a declared gitmoji (F2): "
+                + "; ".join(mismatches)
+                + "; use the matrix-keyed impact (then max across primary+secondaries for the trailer)."
+            ),
+        )
+    ]
+
+
+def _check_scope_filename(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_SCOPE_FILENAME`` when a scope looks like a path or filename (F4/F5 light).
+
+    Scopes must be product areas (``commit``, ``tui``, ``cli``), never basenames
+    (``usage.kdl``) or paths (``docs/usage``).
+    """
+    bad: list[str] = []
+    for intent in (plan.primary_intent, *plan.secondary_intents):
+        scope = (intent.scope or "").strip()
+        if not scope:
+            continue
+        if _FILENAME_SCOPE_RE.search(scope):
+            bad.append(scope)
+
+    if not bad:
+        return []
+    return [
+        GoldFinding(
+            code="GOLD_SCOPE_FILENAME",
+            message=(
+                "Scope looks like a filename or path (F4/F5): "
+                + ", ".join(repr(s) for s in bad)
+                + "; use a product-area scope (module/area), not a basename or path."
+            ),
+        )
+    ]
+
+
+def _is_title_case_subject(description: str) -> bool:
+    """Return True when a subject description is Title Case (F5 light).
+
+    Heuristic: >=2 alphabetic words and every alphabetic word starts uppercase.
+    Acronym-only tokens (e.g. ``F7``, ``API``) still count as uppercase-leading.
+    """
+    words = [w for w in description.strip().split() if any(ch.isalpha() for ch in w)]
+    if len(words) < 2:
+        return False
+    return all(next(ch for ch in w if ch.isalpha()).isupper() for w in words)
+
+
+def _check_subject_title_case(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_SUBJECT_TITLE_CASE`` when the primary description is Title Case (F5)."""
+    description = str(plan.primary_intent.description or "")
+    if not _is_title_case_subject(description):
+        return []
+    return [
+        GoldFinding(
+            code="GOLD_SUBJECT_TITLE_CASE",
+            message=(
+                f"Primary subject description looks Title Case ({description!r}); "
+                "use imperative lowercase (e.g. 'enforce F7 group reachability')."
+            ),
+        )
+    ]
+
+
 def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | None) -> list[GoldFinding]:
     """Emit ``GOLD_CONTRACT_SMOKE`` when primary fields disagree with the contract.
 
@@ -425,6 +660,10 @@ def check_commit_gold(
     findings: list[GoldFinding] = []
     findings.extend(_check_body_inventory(plan))
     findings.extend(_check_group_coherence(plan))
+    findings.extend(_check_type_group_coherence(plan))
+    findings.extend(_check_semver_matrix(plan))
+    findings.extend(_check_scope_filename(plan))
+    findings.extend(_check_subject_title_case(plan))
     findings.extend(_check_included_changes(plan, signals, ranked_intents))
     findings.extend(_check_contract_smoke(plan, contract))
     return GoldReport(findings=tuple(findings))

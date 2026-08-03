@@ -1,3 +1,4 @@
+import re
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -1059,6 +1060,284 @@ def test_gold_surface_checklist_displayed_in_review_status(monkeypatch, capsys, 
     assert "[ ] GOLD_BODY_INVENTORY:" in status
 
 
+def test_arbitration_abort_exits_nonzero_when_strict_false(monkeypatch, capsys, tmp_path):
+    """Issue #195 / Qodo: Cancel→Abort must exit non-zero even when CLI strict=False.
+
+    Hook mode defaults to strict=False so _abort(... strict=strict) would otherwise
+    raise typer.Exit(0) and let git complete the commit after an explicit Abort.
+    """
+    from dataclasses import replace
+
+    import typer
+
+    import git_cg.main as main_mod
+    from git_cg.intent import RankedIntent
+    from git_cg.intent_arbitrate import ArbitrationResult
+    from git_cg.ranking_confidence import RankingConfidence
+
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper after arbitration abort.")])
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+
+    real_build = main_mod._build_generation_context
+
+    def fake_build(*args, **kwargs):
+        ctx = real_build(*args, **kwargs)
+        low = RankingConfidence(
+            level="low",
+            margin=2.0,
+            top_intent_id="feature_addition",
+            runner_up_intent_id="feature_refinement",
+            reasons=["margin_below_low_threshold"],
+        )
+        ranked = [
+            RankedIntent(
+                intent_id="feature_addition",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="feature",
+                semver_impact="MINOR",
+                changelog_group="Added",
+                intent_group="feature",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=100,
+            ),
+            RankedIntent(
+                intent_id="feature_refinement",
+                emoji="✨",
+                code=":sparkles:",
+                cc_type="feat",
+                description="refine",
+                semver_impact="PATCH",
+                changelog_group="Changed",
+                intent_group="feature",
+                score=98.0,
+                priority=90,
+                specificity=90,
+                split_weight=90,
+            ),
+        ]
+        return replace(ctx, ranking_confidence=low, ranked_intents=ranked)
+
+    monkeypatch.setattr(main_mod, "_build_generation_context", fake_build)
+    monkeypatch.setattr(
+        "git_cg.intent_arbitrate.run_intent_arbitration",
+        lambda **kwargs: ArbitrationResult(
+            action="aborted",
+            locked_intent_id=None,
+            guidance=None,
+            re_rank_requested=False,
+            choice_path="cancel_abort",
+            override=False,
+            aborted=True,
+        ),
+    )
+
+    telemetry: dict = {}
+
+    def capture_telemetry(**kwargs):
+        telemetry.update(kwargs)
+
+    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", capture_telemetry)
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,  # hook default — Abort must still fail closed
+            interactive=True,
+            rank_arbitrate=True,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+
+    assert raised is not None, "arbitration Abort must raise typer.Exit"
+    assert raised.exit_code == 1
+    assert len(writes) == 0
+    assert telemetry.get("ranking_choice_path") == "cancel_abort"
+    out = capsys.readouterr().out
+    assert "aborted during intent arbitration" in out.lower()
+
+
+def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
+    """gold_blocked must track commit_gold via gold_report.ok_for_mode("strict").
+
+    Integration regression for Qodo observability drift: final telemetry must not
+    hardcode a local finding-code subset. Strict failure membership stays
+    single-sourced in ``STRICT_FAIL_CODES`` inside ``GoldReport.ok_for_mode``.
+    """
+    import inspect
+
+    import typer
+
+    import git_cg.main as main_mod
+    from git_cg.commit_gold import STRICT_FAIL_CODES, GoldFinding, GoldReport
+
+    # Source contract: final gold_blocked uses gold_report.ok_for_mode("strict").
+    src = inspect.getsource(main_mod._run_commit_generation)
+    parts = src.split("gold_blocked=bool(")
+    assert len(parts) >= 2
+    blocked_expr = parts[-1].split("),", 1)[0]
+    assert "gold_report" in blocked_expr
+    assert 'ok_for_mode("strict")' in blocked_expr or "ok_for_mode('strict')" in blocked_expr
+    for legacy_code in (
+        "GOLD_BODY_INVENTORY",
+        "GOLD_INCLUDED_CHANGES_MISSING",
+        "GOLD_GROUP_PRIMARY_MISMATCH",
+        "GOLD_TYPE_GROUP_INCOHERENT",
+    ):
+        assert legacy_code not in blocked_expr
+    assert "STRICT_FAIL_CODES" in inspect.getsource(GoldReport.ok_for_mode)
+
+    for code in (
+        "GOLD_SEMVER_MATRIX_MISMATCH",
+        "GOLD_SCOPE_FILENAME",
+        "GOLD_SUBJECT_TITLE_CASE",
+    ):
+        assert code in STRICT_FAIL_CODES
+
+    # Behavioral: expanded strict-fail codes from gold_report block generation.
+    _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for gold_blocked telemetry.")])
+    telemetry: dict = {}
+
+    def capture_telemetry(**kwargs):
+        telemetry.update(kwargs)
+
+    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", capture_telemetry)
+    monkeypatch.setattr(
+        "git_cg.commit_gold.check_commit_gold",
+        lambda *a, **k: GoldReport(
+            findings=[
+                GoldFinding(code="GOLD_SEMVER_MATRIX_MISMATCH", message="semver drift"),
+                GoldFinding(code="GOLD_SCOPE_FILENAME", message="scope is filename"),
+                GoldFinding(code="GOLD_SUBJECT_TITLE_CASE", message="title case"),
+            ]
+        ),
+    )
+
+    raised: typer.Exit | None = None
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,  # gold_mode=strict
+            interactive=False,
+        )
+    except typer.Exit as e:
+        raised = e
+
+    assert raised is not None, "strict gold failures must abort generation"
+    assert raised.exit_code == 1
+    # ok_for_mode("strict") is False for these codes (single-sourced STRICT_FAIL_CODES).
+    assert not GoldReport(
+        findings=[
+            GoldFinding(code="GOLD_SEMVER_MATRIX_MISMATCH", message="semver drift"),
+            GoldFinding(code="GOLD_SCOPE_FILENAME", message="scope is filename"),
+            GoldFinding(code="GOLD_SUBJECT_TITLE_CASE", message="title case"),
+        ]
+    ).ok_for_mode("strict")
+
+
+def test_medium_ranking_confidence_status_in_post_gold_review(monkeypatch, tmp_path):
+    """Issue #195 nice-to-have: Medium confidence appears on post-gold review status_text."""
+    import git_cg.main as main_mod
+    from git_cg.intent import RankedIntent
+    from git_cg.ranking_confidence import RankingConfidence
+
+    captured: dict[str, str] = {}
+    _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for ranking confidence status.")])
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+
+    def fake_prompt_with_gum(title, body, *, status_text=None):
+        captured["status_text"] = status_text or ""
+        return "Commit"
+
+    monkeypatch.setattr(main_mod, "prompt_with_gum", fake_prompt_with_gum)
+
+    # Force a Medium confidence snapshot through GenerationContext construction.
+    real_build = main_mod._build_generation_context
+
+    def fake_build(*args, **kwargs):
+        from dataclasses import replace
+
+        ctx = real_build(*args, **kwargs)
+        medium = RankingConfidence(
+            level="medium",
+            margin=12.0,
+            top_intent_id="feature_addition",
+            runner_up_intent_id="feature_refinement",
+            reasons=[],
+        )
+        # Preserve ranked list shape if empty so contract still works.
+        ranked = (
+            list(ctx.ranked_intents)
+            if ctx.ranked_intents
+            else [
+                RankedIntent(
+                    intent_id="feature_addition",
+                    emoji="✨",
+                    code=":sparkles:",
+                    cc_type="feat",
+                    description="feature",
+                    semver_impact="MINOR",
+                    changelog_group="Added",
+                    intent_group="feature",
+                    score=100.0,
+                    priority=100,
+                    specificity=100,
+                    split_weight=100,
+                ),
+                RankedIntent(
+                    intent_id="feature_refinement",
+                    emoji="✨",
+                    code=":sparkles:",
+                    cc_type="feat",
+                    description="refine",
+                    semver_impact="PATCH",
+                    changelog_group="Changed",
+                    intent_group="feature",
+                    score=88.0,
+                    priority=90,
+                    specificity=90,
+                    split_weight=90,
+                ),
+            ]
+        )
+        return replace(ctx, ranking_confidence=medium, ranked_intents=ranked)
+
+    monkeypatch.setattr(main_mod, "_build_generation_context", fake_build)
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=False,
+        interactive=True,
+    )
+    assert result is True
+    status = captured["status_text"]
+    assert "Ranking confidence: medium" in status
+    assert "margin=12.0" in status
+    assert "top=feature_addition vs feature_refinement" in status
+
+
 def test_gold_strict_flag_blocks_without_general_strict(monkeypatch, capsys, tmp_path):
     """--gold-strict: gold fails strict (non-zero exit) while strict=False for non-gold paths."""
     import typer
@@ -1196,6 +1475,102 @@ def test_recover_path_skips_gold(monkeypatch, tmp_path):
     # Recover applied the standalone commit and exited; gold was never consulted.
     assert called["applied"] is True
     assert called["gold"] is False
+
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove SGR/color codes so help text can be matched as plain flags.
+
+    Rich-rendered Typer help splits long options across style spans
+    (e.g. ``\\x1b[1;36m-\\x1b[0m\\x1b[1;36m-interactive\\x1b[0m``), so a plain
+    ``"--interactive" in output`` check fails under FORCE_COLOR/CI even when
+    the flag is present.
+    """
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
+def _usage_kdl_flags(section: str) -> list[str]:
+    """Parse flag long-names from usage.kdl for the root app or a named cmd.
+
+    section:
+      - "root" → top-level flags before the first nested ``cmd`` block
+      - any other string → flags under ``cmd "<section>" { ... }``
+    """
+    from pathlib import Path
+
+    usage_path = Path(__file__).resolve().parent.parent / "usage.kdl"
+    text = usage_path.read_text(encoding="utf-8")
+    if section == "root":
+        # Root flags sit at file scope before the first `cmd "..."` block.
+        nested = re.search(r'^cmd\s+"', text, flags=re.M)
+        body = text[: nested.start()] if nested else text
+    else:
+        m = re.search(
+            rf'^cmd\s+"{re.escape(section)}"\s*\{{(.*?)\n\}}',
+            text,
+            flags=re.M | re.S,
+        )
+        body = m.group(1) if m else ""
+
+    flags: list[str] = []
+    for raw in re.findall(r'flag\s+"([^"]+)"', body):
+        # usage.kdl may use "-i --interactive" or "--engine"
+        parts = raw.split()
+        long_flags = [p for p in parts if p.startswith("--")]
+        if long_flags:
+            flags.extend(long_flags)
+        elif raw.startswith("-") and not raw.startswith("--"):
+            continue
+        else:
+            flags.append(raw if raw.startswith("--") else f"--{raw}")
+    seen: set[str] = set()
+    out: list[str] = []
+    for f in flags:
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
+
+
+def test_root_help_includes_usage_kdl_flags():
+    """Root `git-cg --help` must surface every root flag declared in usage.kdl.
+
+    usage.kdl is the completion/docs source of truth for the public CLI surface.
+    Typer help must not lag behind it (regression: --gold-strict was documented
+    and completable but missing from main_callback / --help).
+    """
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    required = _usage_kdl_flags("root")
+    assert required, "usage.kdl root flags failed to parse"
+    assert "--engine" in required
+
+    result = CliRunner().invoke(app, ["--help"])
+    assert result.exit_code == 0, result.output
+    help_text = _strip_ansi(result.output)
+    missing = [flag for flag in required if flag not in help_text]
+    assert not missing, f"root --help missing usage.kdl flags: {missing}\n{help_text}"
+
+
+def test_commit_help_includes_usage_kdl_flags():
+    """`git-cg commit --help` must surface every commit flag declared in usage.kdl."""
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    required = _usage_kdl_flags("commit")
+    assert required, "usage.kdl commit flags failed to parse"
+    assert "--engine" in required
+
+    result = CliRunner().invoke(app, ["commit", "--help"])
+    assert result.exit_code == 0, result.output
+    help_text = _strip_ansi(result.output)
+    missing = [flag for flag in required if flag not in help_text]
+    assert not missing, f"commit --help missing usage.kdl flags: {missing}\n{help_text}"
 
 
 def test_a01_gold_guidance_bypasses_directive_extraction():
