@@ -218,10 +218,99 @@ to normal contract precedence and interactive/verbose runs print a short safe no
 (closed code only — no matrix dump).
 Opik feedback score `ranking_override` is a **derived** float `1.0` / `0.0` at the score
 boundary only. Sentry receives closed tags on error paths (`ranking_confidence_level`,
-`ranking_choice_path`, `gold_mode`) — never full ranked matrices or guidance text.
+`ranking_choice_path`, `gold_mode`, `gold_self_correction_outcome`) — never full ranked matrices or guidance text.
 
-### Diagrams
+## Gold lint (Phase 7.25 / 7.26)
+
+After the matrix contract is enforced (and after mixed-policy handling), `git-cg` runs a
+**pure** gold linter over the structured `CommitPlan`. Gold may reject wording / secondary
+coverage and request regeneration; it never rewrites `intent_id`, Conventional Commit type,
+SemVer, or changelog group, and it never emits `preferred_type` / `preferred_scope` steers.
+
+### Modes
+
+| Mode | How resolved | Behaviour |
+| --- | --- | --- |
+| `off` | `GIT_CG_GOLD_MODE=off` | Findings suppressed |
+| `warn` | default for non-interactive / hook | Print findings; never block |
+| `surface` | interactive + TTY (when env unset) | Print findings before review menu; never block |
+| `strict` | `--strict`, `--gold-strict`, or `GIT_CG_GOLD_MODE=strict` | Block on `STRICT_FAIL_CODES` |
+
+`--gold-strict` resolves gold to strict **without** enabling general `--strict`.  
+`GIT_CG_GOLD_MODE` wins over flags when set to a known value (`off` / `warn` / `strict`).
+
+### Finding codes (strict-fail set)
+
+| Code | Intent |
+| --- | --- |
+| `GOLD_BODY_INVENTORY` | Banned inventory / marketing body openers |
+| `GOLD_SUBJECT_INVENTORY` | Multi-action primary **description** inventory (v1.1) |
+| `GOLD_SUBJECT_TITLE_CASE` | Title Case primary description |
+| `GOLD_INCLUDED_CHANGES_MISSING` | Multi-surface diff lacks secondaries / split |
+| `GOLD_GROUP_PRIMARY_MISMATCH` | Product primary vs fix-explaining group |
+| `GOLD_TYPE_GROUP_INCOHERENT` | Matrix-impossible type/group pairing |
+| `GOLD_SEMVER_MATRIX_MISMATCH` | SemVer disagrees with matrix row |
+| `GOLD_SCOPE_FILENAME` | Scope looks like a filename/path |
+| `GOLD_CONTRACT_SMOKE` | Bug-class contract drift (hard fail independent of mode) |
+
+### Subject inventory (v1.1)
+
+Match target is **`plan.primary_intent.description` only** (not emoji / type / scope / full
+subject line). Exactly two deterministic patterns over a closed imperative-verb allowlist:
+
+* **PATTERN A** — ≥3 comma-separated clauses with ≥3 verb-initial allowlist hits  
+  (`add helper, update docs, fix edge case`)
+* **PATTERN B** — ≥2 bare coordinating `and` connectors joining verb-initial clauses  
+  (`add helper and update docs and fix edge case`)
+
+Non-triggers: two-clause lists; one verb + noun tail (`enforce SemVer, scope, and title checks`);
+allowlist misses (no fuzzy verbs).
+
+### Bounded self-correction (strict, Option B)
+
+When strict gold fails, `git-cg` may regenerate wording up to **2** times on the same primary
+(K-P0.3 re-anchor). Gold regen **does not** re-enter pre-LLM ranking arbitration.
+
+| After a regen | Rule | Outcome |
+| --- | --- | --- |
+| Codes became ∅ | Write | `cleared` |
+| Codes are a **strict subset** of the previous fail set | Allow another regen (max 2) | — |
+| Codes **unchanged** | Abort immediately | `aborted_stall` |
+| Codes **grew** / non-subset | Abort immediately | `aborted_growth` |
+| Still failing after 2 regens | Abort | `exhausted` |
+
+Strict gold aborts use `_abort(strict=True, report=True)` and carry **codes/summary only**
+(no body/diff leakage). User cancel paths remain `report=False`.
+
+### Coverage-aware split message (P6)
+
+`GOLD_INCLUDED_CHANGES_MISSING` fire preconditions are unchanged (≥2 coverage groups, ≥2
+distinct surfaces, competitive secondary, no secondaries/split). Message branch only:
+
+* **2 groups** — prefer matrix-legal secondary intents (`Included changes`); split still allowed  
+* **≥3 groups** — prefer **splitting** the diff; secondaries remain acceptable if one commit is kept  
+
+`split_recommended=true` or any secondaries still pass (no finding).
+
+### Telemetry (v1.1 fields)
+
+Baseline gold fields (`gold_mode`, counts, codes, `gold_blocked`, `gold_regen_attempts`) shipped
+with Phase 7.29. v1.1 adds:
+
+| Field | Notes |
+| --- | --- |
+| `gold_self_correction_attempts` | `0`..`2` — wording-regen depth |
+| `gold_self_correction_outcome` | `not_needed` · `cleared` · `aborted_stall` · `aborted_growth` · `exhausted` |
+| `gold_split_recommendation` | `true` when the ≥3-group split-preferring message path fired |
+
+Sentry may tag `gold_self_correction_outcome` on gold-path strict aborts (closed enum only).
+
+### Related surfaces
+
+Gold v1.1 has no separate TUI storyboard. Ranking-confidence arbitration (Phase 7.29) owns:
 
 * Storyboard product: [`docs/diagrams/ranking-confidence/TUI-flow.mmd`](diagrams/ranking-confidence/TUI-flow.mmd)
 * GitHub-safe PNG: [`docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.png`](diagrams/ranking-confidence/TUI-flow-elk-darkbg.png)
 * Authoring method + worked menus: [`docs/tui_mermaid_guide.md`](tui_mermaid_guide.md) §1–5
+
+Subject-inventory finding messages include a suggested-fix hint: *lead with the outcome, not the action list.*
