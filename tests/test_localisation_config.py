@@ -760,6 +760,25 @@ class TestPullRequestTemplate:
         assert "MINOR" in content
         assert "MAJOR" in content
 
+    def test_has_architecture_flow_section(self):
+        """Template must include a required Architecture / Flow section."""
+        assert "## 🗺️ Architecture / Flow" in self._content()
+
+    def test_architecture_flow_requires_state_diagram(self):
+        """Architecture / Flow must require a Mermaid stateDiagram-v2 (not optional)."""
+        content = self._content()
+        start = content.index("## 🗺️ Architecture / Flow")
+        end = content.index("## 🛠️ Changes Made")
+        section = content[start:end]
+        assert "stateDiagram-v2" in section
+        assert "REQUIRED" in section or "required" in section.lower()
+        assert "Delete this entire section if N/A" not in section
+        assert "Optional." not in section
+        # Placeholder fence must model a state diagram, not only a flowchart.
+        assert "```mermaid" in section
+        fence_body = section.split("```mermaid", 1)[1].split("```", 1)[0]
+        assert "stateDiagram-v2" in fence_body
+
     def test_has_breaking_change_section(self):
         """Template must include a breaking change heading."""
         assert "## 💥 BREAKING CHANGE 💥" in self._content()
