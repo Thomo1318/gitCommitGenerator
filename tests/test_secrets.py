@@ -178,6 +178,12 @@ def test_sentry_dsn_is_in_env_export_allowlist():
     assert "SENTRY_DSN" in ENV_EXPORT_ALLOWLIST
 
 
+def test_git_cg_sentry_dsn_is_in_env_export_allowlist():
+    from git_cg.secrets import ENV_EXPORT_ALLOWLIST
+
+    assert "GIT_CG_SENTRY_DSN" in ENV_EXPORT_ALLOWLIST
+
+
 def test_sentry_environment_is_in_env_export_allowlist():
     """SENTRY_ENVIRONMENT must be in the ENV_EXPORT_ALLOWLIST."""
     from git_cg.secrets import ENV_EXPORT_ALLOWLIST
