@@ -1486,7 +1486,8 @@ def _usage_kdl_flags(section: str) -> list[str]:
     """
     from pathlib import Path
 
-    text = Path("usage.kdl").read_text(encoding="utf-8")
+    usage_path = Path(__file__).resolve().parent.parent / "usage.kdl"
+    text = usage_path.read_text(encoding="utf-8")
     if section == "root":
         # Root flags sit at file scope before the first `cmd "..."` block.
         nested = re.search(r'^cmd\s+"', text, flags=re.M)

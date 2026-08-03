@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from git_cg.intent import IntentSelectionConstraints, RankedIntent
 from git_cg.intent_arbitrate import (
     ArbitrationDeps,
@@ -94,51 +92,6 @@ def _low_pair() -> tuple[list[RankedIntent], object]:
     return ranked, conf
 
 
-@dataclass
-class ScriptedGum:
-    """Queue of GumOutcome values consumed by choose/input/filter."""
-
-    choose_queue: list[GumOutcome]
-    input_queue: list[GumOutcome] | None = None
-    filter_queue: list[GumOutcome] | None = None
-    filter_ok: bool = True
-    choose_calls: int = 0
-    input_calls: int = 0
-    filter_calls: int = 0
-
-    def choose(self, options, **kwargs) -> GumOutcome:
-        self.choose_calls += 1
-        if not self.choose_queue:
-            raise AssertionError(f"choose exhausted; options={list(options)}")
-        return self.choose_queue.pop(0)
-
-    def input(self, **kwargs) -> GumOutcome:
-        self.input_calls += 1
-        q = self.input_queue or []
-        if not q:
-            raise AssertionError("input exhausted")
-        return q.pop(0)
-
-    def filter(self, options, **kwargs) -> GumOutcome:
-        self.filter_calls += 1
-        q = self.filter_queue or []
-        if not q:
-            raise AssertionError("filter exhausted")
-        return q.pop(0)
-
-    def filter_available(self, **kwargs) -> bool:
-        return self.filter_ok
-
-    def deps(self) -> ArbitrationDeps:
-        return ArbitrationDeps(
-            choose=self.choose,
-            input=self.input,
-            filter=self.filter,
-            filter_available=self.filter_available,
-            can_open_tty=lambda: True,
-        )
-
-
 def _sel(value: str) -> GumOutcome:
     return GumOutcome(status="selected", value=value)
 
@@ -167,7 +120,7 @@ def test_filter_eligible_ranked_excludes_disallowed():
     assert [e.intent_id for e in eligible] == ["tests_update", "docs_update"]
 
 
-def test_filter_eligible_matrix_rows_respects_constraints(monkeypatch):
+def test_filter_eligible_matrix_rows_respects_constraints():
     matrix = [
         {
             "intent_id": "feature_addition",
@@ -215,16 +168,11 @@ def test_parse_guidance_unparseable_is_noop_g1():
 
 def test_pick_a_locks_top_no_override():
     ranked, conf = _low_pair()
-    script = ScriptedGum(
-        choose_queue=[
-            _sel("Use A: ✨ feat(core) — feature_addition  84.0"),
-            _sel("Lock and generate message"),
-        ]
-    )
+    choose_calls = {"n": 0}
 
     # Labels are built dynamically — match by prefix via custom choose
     def choose(options, **kwargs):
-        script.choose_calls += 1
+        choose_calls["n"] += 1
         opts = list(options)
         if any(o.startswith("Use A:") for o in opts):
             return _sel(next(o for o in opts if o.startswith("Use A:")))
