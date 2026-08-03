@@ -847,13 +847,16 @@ def test_user_directive_path_still_emits_override_and_precedence():
 # --- Issue #182 Slice 3b: gold wiring integration (mocked generation path) ---
 
 
-def _gold_harness_mocks(monkeypatch, plans):
+def _gold_harness_mocks(monkeypatch, plans, *, telemetry_events: list | None = None):
     """Drive _run_commit_generation with a mocked LLM returning `plans` in sequence.
 
     Patches all LLM/diff/telemetry seams (no live model). Clears GIT_CG_GOLD_MODE so
     each gold test starts from a deterministic default regardless of the ambient env.
 
     Returns the list of written commit-message strings (`writes`).
+
+    When ``telemetry_events`` is provided, each ``_write_telemetry_state_safe`` call
+    appends a shallow copy of its kwargs (Issue #191 outcome / split-bool capture).
     """
     import git_cg.main as main_mod
 
@@ -897,7 +900,14 @@ def _gold_harness_mocks(monkeypatch, plans):
     monkeypatch.setattr(main_mod, "_detect_branch_issue_reference", lambda verbose: [])
     monkeypatch.setattr(main_mod, "generate_commit_message", lambda *a, **k: next(plans_iter))
     monkeypatch.setattr(main_mod, "_write_commit_message", lambda f, s, strict, verbose: writes.append(s))
-    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", lambda **k: None)
+    if telemetry_events is None:
+        monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", lambda **k: None)
+    else:
+
+        def _capture_telemetry(**kwargs):
+            telemetry_events.append(dict(kwargs))
+
+        monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", _capture_telemetry)
 
     monkeypatch.setattr(main_mod.opik_context, "update_current_trace", lambda *a, **k: None)
     monkeypatch.setattr(main_mod.opik_context, "get_current_trace_data", lambda: None)
@@ -951,10 +961,10 @@ def test_gold_warn_mode_writes_and_does_not_block(monkeypatch, capsys, tmp_path)
 
 
 def test_gold_strict_mode_blocks_with_nonzero_exit(monkeypatch, capsys, tmp_path):
-    """A_05: strict gold fail aborts non-zero via _abort(report=False); no write."""
+    """A_05: strict gold fail aborts non-zero via _abort(report=True); no write."""
     import typer
 
-    # Both attempts fail gold (banned opener persists) so the single regen is exhausted.
+    # First pass fails gold; second pass stalls (same codes) so Option B aborts after attempt 1.
     writes = _gold_harness_mocks(
         monkeypatch,
         [_gold_plan(body="This commit adds a helper."), _gold_plan(body="This commit adds a helper.")],
@@ -981,6 +991,481 @@ def test_gold_strict_mode_blocks_with_nonzero_exit(monkeypatch, capsys, tmp_path
     assert len(writes) == 0  # never write a gold-failing message in strict
     out = capsys.readouterr().out
     assert "gold lint" in out.lower() or "Gold lint" in out
+
+
+# ---------------------------------------------------------------------------
+# Issue #191 — bounded gold self-correction (V11-A04..A07, A09)
+# ---------------------------------------------------------------------------
+
+
+def test_v11_a04_gold_strict_regen_clears_within_two_attempts(monkeypatch, capsys, tmp_path):
+    """V11-A04: shrink-to-clean within 2 attempts writes; outcome path cleared."""
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="This commit adds a helper."),
+            _gold_plan(body="Add a focused helper for release packaging."),
+        ],
+        telemetry_events=telemetry_events,
+    )
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    assert "attempt 1/2" in out
+    assert telemetry_events, "success path must persist telemetry"
+    final = telemetry_events[-1]
+    assert final.get("gold_self_correction_outcome") == "cleared"
+    assert final.get("gold_self_correction_attempts") == 1
+    assert final.get("gold_regen_attempts") == 1
+    assert final.get("gold_blocked") is False
+
+
+def test_v11_a05_gold_strict_stall_aborts_after_attempt_one(monkeypatch, capsys, tmp_path):
+    """V11-A05: identical fail codes after regen → aborted_stall, no 2nd regen."""
+    import typer
+
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="This commit adds a helper."),
+            _gold_plan(body="This commit adds a helper."),
+            _gold_plan(body="This commit adds a helper."),  # must not be consumed
+        ],
+        telemetry_events=telemetry_events,
+    )
+    import git_cg.main as main_mod
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=False,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+    assert raised is not None and raised.exit_code != 0
+    assert len(writes) == 0
+    out = capsys.readouterr().out
+    assert "attempt 1/2" in out
+    assert "attempt 2/2" not in out
+    assert telemetry_events, "strict gold abort must persist telemetry before exit"
+    final = telemetry_events[-1]
+    assert final.get("gold_self_correction_outcome") == "aborted_stall"
+    assert final.get("gold_self_correction_attempts") == 1
+    assert final.get("gold_blocked") is True
+    assert "GOLD_BODY_INVENTORY" in (final.get("gold_finding_codes") or [])
+
+
+def test_v11_a06_gold_strict_growth_aborts_after_attempt_one(monkeypatch, capsys, tmp_path):
+    """V11-A06: growing / non-subset codes after regen → aborted_growth."""
+    import typer
+
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    def _plan_with(*, body: str | None = None, description: str = "add helper") -> CommitPlan:
+        intent = CommitIntent.model_construct(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            scope=None,
+            description=description,
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        )
+        return CommitPlan.model_construct(
+            primary_intent=intent,
+            secondary_intents=[],
+            split_recommended=False,
+            rationale="r",
+            body_summary=body,
+            breaking_change=False,
+            breaking_change_description=None,
+        )
+
+    # Pass 1: body inventory only.
+    # Pass 2: body inventory + subject inventory (growth / non-subset).
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _plan_with(body="This commit adds a helper.", description="add helper"),
+            _plan_with(
+                body="This commit adds a helper.",
+                description="add helper, update docs, fix edge case",
+            ),
+            _plan_with(body="clean body", description="add helper"),  # must not be consumed
+        ],
+        telemetry_events=telemetry_events,
+    )
+    import git_cg.main as main_mod
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=False,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+    assert raised is not None and raised.exit_code != 0
+    assert len(writes) == 0
+    out = capsys.readouterr().out
+    assert "attempt 1/2" in out
+    assert "attempt 2/2" not in out
+    assert telemetry_events, "strict gold abort must persist telemetry before exit"
+    final = telemetry_events[-1]
+    assert final.get("gold_self_correction_outcome") == "aborted_growth"
+    assert final.get("gold_self_correction_attempts") == 1
+    assert final.get("gold_blocked") is True
+    codes = set(final.get("gold_finding_codes") or [])
+    assert "GOLD_BODY_INVENTORY" in codes
+    assert "GOLD_SUBJECT_INVENTORY" in codes
+
+
+def test_v11_a07_gold_strict_exhausted_after_two_regens(monkeypatch, capsys, tmp_path):
+    """V11-A07: shrinking then still failing after attempt 2 → exhausted."""
+    import typer
+
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    def _plan_with(*, body: str | None = None, description: str = "add helper", scope=None) -> CommitPlan:
+        intent = CommitIntent.model_construct(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            scope=scope,
+            description=description,
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        )
+        return CommitPlan.model_construct(
+            primary_intent=intent,
+            secondary_intents=[],
+            split_recommended=False,
+            rationale="r",
+            body_summary=body,
+            breaking_change=False,
+            breaking_change_description=None,
+        )
+
+    # Pass 0: BODY + SCOPE (2 codes)
+    # Pass 1 after regen1: BODY only (strict subset) → allow second regen
+    # Pass 2 after regen2: BODY only → exhausted
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _plan_with(body="This commit adds a helper.", description="add helper", scope="release.py"),
+            _plan_with(body="This commit adds a helper.", description="add helper", scope="release"),
+            _plan_with(body="This commit adds a helper.", description="add helper", scope="release"),
+        ],
+        telemetry_events=telemetry_events,
+    )
+    import git_cg.main as main_mod
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=False,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+    assert raised is not None and raised.exit_code != 0
+    assert len(writes) == 0
+    out = capsys.readouterr().out
+    assert "attempt 1/2" in out
+    assert "attempt 2/2" in out
+    # Abort text is codes/summary only — finding printouts may quote the banned opener,
+    # but the final strict abort line must not embed the body payload.
+    assert "failed gold lint in strict mode" in out.lower()
+    abort_lines = [line for line in out.splitlines() if "failed gold lint in strict mode" in line.lower()]
+    assert abort_lines, "expected a strict gold abort line"
+    abort_blob = "\n".join(abort_lines).lower()
+    assert "this commit adds" not in abort_blob
+    assert "gold_body_inventory" in abort_blob or "gold_scope_filename" in abort_blob
+    assert telemetry_events, "strict gold abort must persist telemetry before exit"
+    final = telemetry_events[-1]
+    assert final.get("gold_self_correction_outcome") == "exhausted"
+    assert final.get("gold_self_correction_attempts") == 2
+    assert final.get("gold_regen_attempts") == 2
+    assert final.get("gold_blocked") is True
+
+
+def test_v11_a04b_gold_clean_first_pass_outcome_not_needed(monkeypatch, tmp_path):
+    """Clean strict first pass records outcome=not_needed and attempts=0."""
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [_gold_plan(body="Add a focused helper for release packaging.")],
+        telemetry_events=telemetry_events,
+    )
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    assert telemetry_events, "success path must persist telemetry"
+    final = telemetry_events[-1]
+    assert final.get("gold_self_correction_outcome") == "not_needed"
+    assert final.get("gold_self_correction_attempts") == 0
+    assert final.get("gold_regen_attempts") == 0
+    assert final.get("gold_split_recommendation") is False
+    assert final.get("gold_blocked") is False
+
+
+def test_v11_a08d_gold_split_recommendation_telemetry_true(monkeypatch, tmp_path):
+    """P6 ≥3-group split-preferring finding sets gold_split_recommendation on write path."""
+    import git_cg.main as main_mod
+    from git_cg.commit_gold import GoldFinding, GoldReport
+
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="Add helper across surfaces."),
+            _gold_plan(body="Add a focused helper for release packaging."),
+        ],
+        telemetry_events=telemetry_events,
+    )
+
+    responses = iter(
+        [
+            GoldReport(
+                findings=[
+                    GoldFinding(
+                        code="GOLD_INCLUDED_CHANGES_MISSING",
+                        message=(
+                            "Diff spans 3 coverage groups (src, tests, docs) with a competitive "
+                            "ranked secondary and no secondaries/split; recommend splitting this "
+                            "diff. Matrix-legal secondary intents (Included changes) remain "
+                            "acceptable if a single commit is retained."
+                        ),
+                    )
+                ]
+            ),
+            GoldReport(findings=[]),
+        ]
+    )
+    monkeypatch.setattr("git_cg.commit_gold.check_commit_gold", lambda *a, **k: next(responses))
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    assert telemetry_events, "success path must persist telemetry"
+    final = telemetry_events[-1]
+    assert final.get("gold_split_recommendation") is True
+    assert final.get("gold_self_correction_outcome") == "cleared"
+    assert final.get("gold_self_correction_attempts") == 1
+    assert final.get("gold_blocked") is False
+
+
+def test_v11_a05b_gold_strict_stall_sets_sentry_outcome_tag(monkeypatch, capsys, tmp_path):
+    """Strict stall abort tags Sentry with gold_self_correction_outcome=aborted_stall."""
+    import typer
+
+    import git_cg.main as main_mod
+
+    tags: dict[str, str] = {}
+
+    def _capture_tag(key, value):
+        tags[str(key)] = str(value)
+
+    monkeypatch.setattr(main_mod.sentry_sdk, "set_tag", _capture_tag)
+
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="This commit adds a helper."),
+            _gold_plan(body="This commit adds a helper."),
+        ],
+    )
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=False,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+
+    assert raised is not None and raised.exit_code != 0
+    assert len(writes) == 0
+    assert tags.get("gold_self_correction_outcome") == "aborted_stall"
+    assert tags.get("gold_mode") == "strict"
+
+
+def test_v11_a09_gold_regen_does_not_reenter_arbitration(monkeypatch, capsys, tmp_path):
+    """V11-A09: gold continue must not call run_intent_arbitration again."""
+    import git_cg.main as main_mod
+
+    calls = {"arb": 0}
+
+    def _count_arb(*a, **k):
+        calls["arb"] += 1
+        raise AssertionError("arbitration must not run on gold regen path")
+
+    # Force high/medium confidence path so pre-loop arbitration is skipped, then
+    # ensure any accidental import still fails loudly if invoked.
+    monkeypatch.setattr("git_cg.intent_arbitrate.run_intent_arbitration", _count_arb)
+
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="This commit adds a helper."),
+            _gold_plan(body="Add a focused helper for release packaging."),
+        ],
+    )
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=False,
+        amend_regenerate=False,
+        strict=True,
+        interactive=False,
+        rank_arbitrate=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    assert calls["arb"] == 0
+
+
+def test_v11_a09b_gold_regen_primary_reanchor_aborts(monkeypatch, capsys, tmp_path):
+    """V11-A09: gold wording pass must re-anchor the same primary (K-P0.3).
+
+    If the post-regen contract primary differs from ``gold_previous_primary_id``,
+    abort immediately — do not accept the plan or re-enter arbitration.
+    """
+    import dataclasses
+
+    import typer
+
+    import git_cg.main as main_mod
+    import git_cg.regeneration as regen_mod
+
+    real_resolve = regen_mod.resolve_semantic_contract
+    calls = {"resolve": 0, "arb": 0}
+
+    def _count_arb(*a, **k):
+        calls["arb"] += 1
+        raise AssertionError("arbitration must not run on gold regen path")
+
+    def _flip_primary_on_second_resolve(context, state):
+        contract = real_resolve(context, state)
+        calls["resolve"] += 1
+        # First cycle keeps matrix primary; second cycle (gold regen) forces drift.
+        if calls["resolve"] >= 2:
+            return dataclasses.replace(
+                contract,
+                primary_intent_id="bug_fix",
+                gitmoji="🐛",
+                cc_type="fix",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+            )
+        return contract
+
+    monkeypatch.setattr(regen_mod, "resolve_semantic_contract", _flip_primary_on_second_resolve)
+    monkeypatch.setattr("git_cg.intent_arbitrate.run_intent_arbitration", _count_arb)
+
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="This commit adds a helper."),
+            _gold_plan(body="Add a focused helper for release packaging."),
+        ],
+    )
+
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=False,
+            rank_arbitrate=False,
+        )
+        raised = None
+    except typer.Exit as e:
+        raised = e
+
+    assert raised is not None and raised.exit_code != 0
+    assert len(writes) == 0
+    out = capsys.readouterr().out
+    assert "re-anchored to a different primary intent" in out
+    assert calls["arb"] == 0
+    assert calls["resolve"] >= 2
 
 
 def test_gold_surface_mode_prints_findings_before_review_menu(monkeypatch, capsys, tmp_path):
@@ -1201,11 +1686,19 @@ def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
         "GOLD_SEMVER_MATRIX_MISMATCH",
         "GOLD_SCOPE_FILENAME",
         "GOLD_SUBJECT_TITLE_CASE",
+        "GOLD_SUBJECT_INVENTORY",
     ):
         assert code in STRICT_FAIL_CODES
 
     # Behavioral: expanded strict-fail codes from gold_report block generation.
-    _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for gold_blocked telemetry.")])
+    # Two identical failing gold reports → Option B stall abort after attempt 1.
+    _gold_harness_mocks(
+        monkeypatch,
+        [
+            _gold_plan(body="Add helper for gold_blocked telemetry."),
+            _gold_plan(body="Add helper for gold_blocked telemetry."),
+        ],
+    )
     telemetry: dict = {}
 
     def capture_telemetry(**kwargs):

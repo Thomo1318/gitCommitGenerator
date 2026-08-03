@@ -107,6 +107,19 @@ class LockResolution(enum.StrEnum):
     ABSENT = "absent"
 
 
+class GoldSelfCorrectionOutcome(enum.StrEnum):
+    """Closed gold self-correction outcomes (Issue #191 Option B).
+
+    Do not split ``cleared`` by attempt depth — use ``gold_self_correction_attempts``.
+    """
+
+    NOT_NEEDED = "not_needed"
+    CLEARED = "cleared"
+    ABORTED_STALL = "aborted_stall"
+    ABORTED_GROWTH = "aborted_growth"
+    EXHAUSTED = "exhausted"
+
+
 @dataclass
 class DeterministicScoreCard:
     """Binary pass/fail structural validation results."""
@@ -186,6 +199,10 @@ class GenerationTelemetry:
     gold_finding_codes: list[str] | None = None
     gold_blocked: bool = False
     gold_regen_attempts: int = 0
+    # Phase 7.26 gold linter v1.1 (Issue #191) — self-correction + P6 only.
+    gold_self_correction_attempts: int = 0
+    gold_self_correction_outcome: str = GoldSelfCorrectionOutcome.NOT_NEEDED.value
+    gold_split_recommendation: bool = False
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -798,6 +815,9 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("gold_finding_codes", None)
             data.setdefault("gold_blocked", False)
             data.setdefault("gold_regen_attempts", 0)
+            data.setdefault("gold_self_correction_attempts", 0)
+            data.setdefault("gold_self_correction_outcome", GoldSelfCorrectionOutcome.NOT_NEEDED.value)
+            data.setdefault("gold_split_recommendation", False)
             # Normalise ranking fields.
             level = data.get("ranking_confidence_level")
             if level is not None and level not in {m.value for m in RankingConfidenceLevel}:
@@ -853,6 +873,16 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["gold_regen_attempts"] = int(data.get("gold_regen_attempts") or 0)
             except TypeError, ValueError:
                 data["gold_regen_attempts"] = 0
+            try:
+                data["gold_self_correction_attempts"] = int(data.get("gold_self_correction_attempts") or 0)
+            except TypeError, ValueError:
+                data["gold_self_correction_attempts"] = 0
+            outcome = data.get("gold_self_correction_outcome")
+            if outcome not in {m.value for m in GoldSelfCorrectionOutcome}:
+                data["gold_self_correction_outcome"] = GoldSelfCorrectionOutcome.NOT_NEEDED.value
+            else:
+                data["gold_self_correction_outcome"] = str(outcome)
+            data["gold_split_recommendation"] = bool(data.get("gold_split_recommendation"))
             return GenerationTelemetry(**data)
     except Exception:
         return None
