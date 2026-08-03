@@ -18,6 +18,59 @@
 ### 📝 Documentation
 
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+## v0.10.0
+
+### Miscellaneous
+
+- ✅ test(main): strip ANSI before usage.kdl help flag checks (#195)
+- 📝 docs(tui): correct back-edge direction and harden review tests (#195)
+- 📝 docs(tui): document ranking-confidence arbitration flow (#195)
+- 📝 docs(cli): surface rank-arbitrate and gold-strict flags (#195)
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #200 from Thomo1318/feat/195-ranking-confidence-arbitration-tui
+
+### Documentation
+
+- 📝 docs(tui): correct back-edge direction and harden review tests (#195)
+- 📝 docs(tui): sync arbitration storyboard labels and usage reference (#195)
+
+### Fixed
+
+- ✨ feat(interaction): add GumOutcome probes and confidence status lines (#195)
+- 🦺 fix(flags): align empty rank-arbitrate and Sentry DSN precedence (#195)
+- 🦺 fix(main): isolate REGEN presentation and gold_blocked source (#195)
+- 🥅 fix(interaction): narrow gum cancel and end options with -- (#195)
+- 🦺 fix(arbitrate): bound cancel thrash and drop lock asserts (#195)
+- 🦺 fix(main): force arbitration abort exit and sync gold_blocked codes (#195)
+- 🥅 fix(sentry): ignore host-injected ambient DSN pollution (#195)
+- 🥅 fix(tui): dedupe still-Low arbitration status strip (#195)
+- 🥅 fix(regeneration): honour locked intent with closed lock_resolution (#195)
+
+### Changed
+
+- 🦺 fix(flags): align empty rank-arbitrate and Sentry DSN precedence (#195)
+- 🦺 fix(main): isolate REGEN presentation and gold_blocked source (#195)
+- 🦺 fix(arbitrate): bound cancel thrash and drop lock asserts (#195)
+- 🦺 fix(main): force arbitration abort exit and sync gold_blocked codes (#195)
+- 🦺 fix(commit_gold): enforce SemVer, scope, and title checks (#195)
+- 🦺 fix(commit): enforce F7 changelog-group reachability in gold lint (#195)
+- ♻️ refactor(ranking): freeze RankingConfidence.reasons as tuple (#195)
+
+### Added
+
+- 🔐 chore(secrets): allowlist GIT_CG_SENTRY_DSN for export (#195)
+- ✨ feat(main): wire ranking confidence into generate-path arbitration (#195)
+- ✨ feat(arbitrate): add pre-LLM intent arbitration stack (#195)
+- ✨ feat(interaction): add GumOutcome probes and confidence status lines (#195)
+- ✨ feat(telemetry): persist ranking confidence and gold-mode fields (#195)
+- ✨ feat(flags): add ranking arbitration mode resolver (#195)
+- ✨ feat(intent): add RankingConfidence policy module (#195)
+- 🥅 fix(sentry): ignore host-injected ambient DSN pollution (#195)
+- 🥅 fix(regeneration): honour locked intent with closed lock_resolution (#195)
+
+### Security
+
+- 🔐 chore(secrets): allowlist GIT_CG_SENTRY_DSN for export (#195)
 
 ## v0.9.0
 
