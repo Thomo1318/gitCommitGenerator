@@ -160,7 +160,7 @@ def _unavail() -> GumOutcome:
 # ---------------------------------------------------------------------------
 
 
-def test_filter_eligible_ranked_excludes_disallowed(a24=None):
+def test_filter_eligible_ranked_excludes_disallowed():
     ranked, _ = _low_pair()
     constraints = IntentSelectionConstraints(allowed_intent_ids=["docs_update", "tests_update"])
     eligible = filter_eligible_ranked(ranked, constraints)
@@ -821,9 +821,12 @@ def test_lock_m_back_to_specify_hub_a09(monkeypatch):
                 phase["p"] = "back_from_lock"
                 return _sel("← Back")
         if p == "back_from_lock":
-            # Must be SPECIFY hub again (A_09)
+            # Must be SPECIFY hub again (A_09) — not MAIN and not nested browse.
+            # filter_available=False → browse-only hub (G4); Fuzzy is optional.
             assert "Browse matrix catalogue…" in opts
-            assert "Specify from matrix…" not in opts or "Fuzzy" in str(opts) or True
+            assert "← Back" in opts
+            assert "Specify from matrix…" not in opts
+            assert not any(o.startswith("Use A:") for o in opts)
             saw_specify_hub_again = True
             phase["p"] = "main_lock"
             return _sel("← Back")
@@ -951,6 +954,12 @@ def test_arbitration_does_not_recompute_confidence(monkeypatch):
         raise AssertionError("compute_ranking_confidence must not be called during arbitration")
 
     monkeypatch.setattr("git_cg.ranking_confidence.compute_ranking_confidence", boom)
+    # Also patch the arbitration module namespace if a direct binding is ever added.
+    monkeypatch.setattr(
+        "git_cg.intent_arbitrate.compute_ranking_confidence",
+        boom,
+        raising=False,
+    )
 
     def choose(options, **kwargs):
         opts = list(options)

@@ -282,8 +282,6 @@ def parse_guidance_text(text: str) -> GuidanceParseResult:
     Reuses the same high-confidence heuristics as ``ReviewState._extract_directives``:
     preferred_type / preferred_scope only. Unparseable text is a declared no-op.
     """
-    import re
-
     normalized = " ".join((text or "").split()).strip()
     if not normalized:
         return GuidanceParseResult(
@@ -420,17 +418,13 @@ def compose_arbitration_status_strip(
             # preferred_type=feat already stated → skip "filtered: preferred_type=feat"
             if "preferred_type=" in key and "preferred_type=" in prior_n:
                 # extract values
-                import re as _re
-
-                vals_new = set(_re.findall(r"preferred_type=([a-z0-9_-]+)", key))
-                vals_old = set(_re.findall(r"preferred_type=([a-z0-9_-]+)", prior_n))
+                vals_new = set(re.findall(r"preferred_type=([a-z0-9_-]+)", key))
+                vals_old = set(re.findall(r"preferred_type=([a-z0-9_-]+)", prior_n))
                 if vals_new and vals_new <= vals_old:
                     return
             if "preferred_scope=" in key and "preferred_scope=" in prior_n:
-                import re as _re
-
-                vals_new = set(_re.findall(r"preferred_scope=([a-z0-9_-]+)", key))
-                vals_old = set(_re.findall(r"preferred_scope=([a-z0-9_-]+)", prior_n))
+                vals_new = set(re.findall(r"preferred_scope=([a-z0-9_-]+)", key))
+                vals_old = set(re.findall(r"preferred_scope=([a-z0-9_-]+)", prior_n))
                 if vals_new and vals_new <= vals_old:
                     return
         seen_norm.add(key)
@@ -694,6 +688,9 @@ def run_intent_arbitration(
     candidates = eligible[:5]
 
     ranked_by_id = {r.intent_id: r for r in ranked_intents}
+    # Bound Esc/cancel thrashing between MAIN and CANCEL_MENU (fail closed → top).
+    cancel_streak = 0
+    cancel_streak_limit = 8
 
     while True:
         if frame == "MAIN":
@@ -736,8 +733,22 @@ def run_intent_arbitration(
                 prompt_text="[bold cyan]Select action[/bold cyan]",
             )
             if outcome.status == "cancelled":
+                cancel_streak += 1
+                if cancel_streak >= cancel_streak_limit:
+                    return ArbitrationResult(
+                        action="continue_top",
+                        locked_intent_id=top.intent_id,
+                        guidance=guidance,
+                        re_rank_requested=False,
+                        choice_path="ni_top_rank",
+                        override=False,
+                        aborted=False,
+                        active_directives=directives,
+                        residual_guidance=residual,
+                    )
                 frame = "CANCEL_MENU"
                 continue
+            cancel_streak = 0
             if outcome.status in {"unavailable", "failed"}:
                 # Infrastructure failure — not user abort (A_21).
                 return ArbitrationResult(
@@ -777,7 +788,9 @@ def run_intent_arbitration(
             continue
 
         if frame in {"LOCK_A", "LOCK_B", "LOCK_N", "LOCK_M"}:
-            assert lock_target is not None and lock_path is not None
+            if lock_target is None or lock_path is None:
+                frame = "MAIN"
+                continue
             override = lock_target.intent_id != original_top_id
             option_label = {
                 "LOCK_A": "A",
@@ -1141,8 +1154,23 @@ def run_intent_arbitration(
                 prompt_text="[bold cyan]Cancel options[/bold cyan]",
             )
             if outcome.status == "cancelled" or (outcome.status == "selected" and outcome.value == back):
+                cancel_streak += 1
+                if cancel_streak >= cancel_streak_limit:
+                    return ArbitrationResult(
+                        action="continue_top",
+                        locked_intent_id=top.intent_id,
+                        guidance=guidance,
+                        re_rank_requested=False,
+                        choice_path="ni_top_rank",
+                        override=False,
+                        aborted=False,
+                        active_directives=directives,
+                        residual_guidance=residual,
+                    )
                 frame = "MAIN"
                 continue
+            # Explicit cancel-menu choice resets thrash counter.
+            cancel_streak = 0
             if outcome.status in {"unavailable", "failed"}:
                 # Infra failure on cancel menu — fail closed without user abort label.
                 return ArbitrationResult(
