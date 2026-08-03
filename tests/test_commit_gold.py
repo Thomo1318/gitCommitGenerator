@@ -95,12 +95,12 @@ def test_b2_03_feat_primary_fixed_only_group_fails() -> None:
 
     Direct structured fixture (no enforce round-trip): matrix-canonicalisation would
     repair ``changelog_group`` to ``Added``, so the illegal combination is built via
-    ``model_construct``. Asserts the exact finding set — only the target product
-    finding, never GOLD_CONTRACT_SMOKE (F3).
+    ``model_construct``. Asserts the exact finding set — the product primary-mismatch
+    plus the F7 type/group-incoherence, never GOLD_CONTRACT_SMOKE (F3).
     """
     feat_fixed = _intent("feature_addition", "✨", "feat", "MINOR", "Fixed")
     report = check_commit_gold(_plan(feat_fixed), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
-    assert report.codes() == frozenset({"GOLD_GROUP_PRIMARY_MISMATCH"})
+    assert report.codes() == frozenset({"GOLD_GROUP_PRIMARY_MISMATCH", "GOLD_TYPE_GROUP_INCOHERENT"})
     assert "GOLD_CONTRACT_SMOKE" not in report.codes()
 
 
@@ -222,6 +222,59 @@ def test_type_group_incoherent_fires_on_docs_primary_fixed_group() -> None:
     report = check_commit_gold(_plan(docs_fixed), None, signals=DiffSignals(files=["docs/usage.md"]))
     assert "GOLD_TYPE_GROUP_INCOHERENT" in report.codes()
     assert "GOLD_TYPE_GROUP_INCOHERENT" in STRICT_FAIL_CODES
+
+
+def test_gitmoji_cc_groups_matches_sop(sop_matrix: list[dict]) -> None:
+    """Static GITMOJI_CC_GROUPS must stay in sync with the live SOP matrix (F7 drift guard).
+
+    Every SOP row's emoji must map to its cc_type, and the SOP's declared
+    changelog_group must be a member of the static coherent-group frozenset.
+    """
+    from git_cg.commit_gold import GITMOJI_CC_GROUPS
+
+    def _norm(e: str) -> str:
+        return e.replace("\ufe0f", "").replace("\ufe0e", "")
+
+    assert len(GITMOJI_CC_GROUPS) == len({_norm(row["emoji"]) for row in sop_matrix})
+    for row in sop_matrix:
+        emoji = _norm(row["emoji"])
+        assert emoji in GITMOJI_CC_GROUPS, f"SOP emoji {emoji!r} missing from GITMOJI_CC_GROUPS"
+        cc_type, groups = GITMOJI_CC_GROUPS[emoji]
+        assert cc_type == row["cc_type"], f"{emoji!r}: cc_type {cc_type!r} != SOP {row['cc_type']!r}"
+        assert row["changelog_group"] in groups, (
+            f"{emoji!r}: SOP changelog_group {row['changelog_group']!r} not in static {sorted(groups)}"
+        )
+
+
+def test_f7_secondary_incoherent_group_fails() -> None:
+    """F7: a secondary whose changelog_group is unreachable from its type fails.
+
+    feat/Added primary + test/Changed secondary is matrix-incoherent (test ->
+    Miscellaneous only). Fires GOLD_TYPE_GROUP_INCOHERENT and blocks strict mode.
+    """
+    test_changed = _intent("test_update", "✅", "test", "NONE", "Changed")
+    plan = _plan(FEAT, [test_changed])
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_TYPE_GROUP_INCOHERENT" in report.codes()
+    assert not report.ok_for_mode("strict")
+
+
+def test_f7_coherent_mixed_plan_passes() -> None:
+    """F7: feat/Added + test/Miscellaneous + docs/Miscellaneous is fully coherent."""
+    test_misc = _intent("test_update", "✅", "test", "NONE", "Miscellaneous")
+    docs_misc = _intent("documentation", "📝", "docs", "NONE", "Miscellaneous")
+    plan = _plan(FEAT, [test_misc, docs_misc])
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert report.codes() == frozenset()
+    assert report.ok_for_mode("strict")
+
+
+def test_f7_unknown_gitmoji_skipped_not_failed() -> None:
+    """F7: an out-of-vocabulary gitmoji is skipped (enforce owns it), never failed here."""
+    weird = _intent("mystery", "🛸", "chore", "NONE", "Fixed")
+    plan = _plan(FEAT, [weird])
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_TYPE_GROUP_INCOHERENT" not in report.codes()
 
 
 def test_single_file_changelog_not_multi_surface(sop_matrix: list[dict]) -> None:

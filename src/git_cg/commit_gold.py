@@ -51,6 +51,90 @@ _PRODUCT_CC_TYPES: frozenset[str] = frozenset({"feat", "fix", "perf"})
 # is a product feat/perf.
 _FIX_EXPLAINING_GROUPS: frozenset[str] = frozenset({"Fixed"})
 
+# Normative gitmoji -> (cc_type, frozenset[coherent changelog groups]) for the closed
+# gitmoji vocabulary (Issue #195 Phase 7.29 F7). Mirrors the SOP
+# ``gitmoji_reference_matrix``; keys are normalised (variation selector U+FE0F stripped)
+# because the matrix encodes some emoji with and without the selector. Assert-tested
+# against the live SOP so it cannot drift.
+GITMOJI_CC_GROUPS: dict[str, tuple[str, frozenset[str]]] = {
+    "⏪": ("revert", frozenset({"Changed"})),
+    "♻": ("refactor", frozenset({"Changed"})),
+    "♿": ("feat", frozenset({"Changed"})),
+    "⚗": ("feat", frozenset({"Changed"})),
+    "⚡": ("perf", frozenset({"Changed"})),
+    "⚰": ("refactor", frozenset({"Removed"})),
+    "✅": ("test", frozenset({"Miscellaneous"})),
+    "✈": ("feat", frozenset({"Added"})),
+    "✏": ("docs", frozenset({"Miscellaneous"})),
+    "✨": ("feat", frozenset({"Added"})),
+    "\u2795": ("build", frozenset({"Changed"})),
+    "\u2796": ("build", frozenset({"Changed"})),
+    "⬆": ("build", frozenset({"Changed"})),
+    "⬇": ("build", frozenset({"Changed"})),
+    "🌐": ("feat", frozenset({"Added"})),
+    "🌱": ("chore", frozenset({"Miscellaneous"})),
+    "🍱": ("chore", frozenset({"Added"})),
+    "🍻": ("refactor", frozenset({"Miscellaneous"})),
+    "🎉": ("init", frozenset({"Miscellaneous"})),
+    "🎨": ("style", frozenset({"Changed"})),
+    "🏗": ("refactor", frozenset({"Changed"})),
+    "🏷": ("refactor", frozenset({"Changed"})),
+    "🐛": ("fix", frozenset({"Fixed"})),
+    "👔": ("feat", frozenset({"Added"})),
+    "👥": ("chore", frozenset({"Miscellaneous"})),
+    "👷": ("ci", frozenset({"Miscellaneous"})),
+    "👽": ("refactor", frozenset({"Changed"})),
+    "💄": ("style", frozenset({"Changed"})),
+    "💚": ("ci", frozenset({"Miscellaneous"})),
+    "💡": ("docs", frozenset({"Miscellaneous"})),
+    "💥": ("feat", frozenset({"Changed"})),
+    "💩": ("refactor", frozenset({"Miscellaneous"})),
+    "💫": ("feat", frozenset({"Changed"})),
+    "💬": ("style", frozenset({"Changed"})),
+    "💸": ("feat", frozenset({"Added"})),
+    "📄": ("docs", frozenset({"Miscellaneous"})),
+    "📈": ("feat", frozenset({"Added"})),
+    "📌": ("build", frozenset({"Changed"})),
+    "📝": ("docs", frozenset({"Miscellaneous"})),
+    "📦": ("build", frozenset({"Changed"})),
+    "📱": ("feat", frozenset({"Changed"})),
+    "📸": ("test", frozenset({"Miscellaneous"})),
+    "🔀": ("chore", frozenset({"Miscellaneous"})),
+    "🔇": ("chore", frozenset({"Miscellaneous"})),
+    "🔊": ("chore", frozenset({"Miscellaneous"})),
+    "🔍": ("feat", frozenset({"Changed"})),
+    "🔐": ("chore", frozenset({"Security"})),
+    "🔒": ("fix", frozenset({"Security"})),
+    "🔖": ("release", frozenset({"Miscellaneous"})),
+    "🔥": ("refactor", frozenset({"Removed"})),
+    "🔧": ("chore", frozenset({"Miscellaneous"})),
+    "🔨": ("chore", frozenset({"Miscellaneous"})),
+    "🗃": ("feat", frozenset({"Changed"})),
+    "🗑": ("refactor", frozenset({"Deprecated"})),
+    "🙈": ("chore", frozenset({"Miscellaneous"})),
+    "🚀": ("chore", frozenset({"Miscellaneous"})),
+    "🚑": ("fix", frozenset({"Fixed"})),
+    "🚚": ("refactor", frozenset({"Changed"})),
+    "🚧": ("chore", frozenset({"Miscellaneous"})),
+    "🚨": ("refactor", frozenset({"Changed"})),
+    "🚩": ("feat", frozenset({"Added"})),
+    "🚸": ("feat", frozenset({"Changed"})),
+    "🛂": ("feat", frozenset({"Security"})),
+    "🤡": ("test", frozenset({"Miscellaneous"})),
+    "🥅": ("fix", frozenset({"Fixed"})),
+    "🥚": ("feat", frozenset({"Added"})),
+    "🦖": ("fix", frozenset({"Changed"})),
+    "🦺": ("fix", frozenset({"Changed"})),
+    "🧐": ("chore", frozenset({"Miscellaneous"})),
+    "🧑\u200d💻": ("chore", frozenset({"Miscellaneous"})),
+    "🧪": ("test", frozenset({"Miscellaneous"})),
+    "🧱": ("ci", frozenset({"Changed"})),
+    "🧵": ("refactor", frozenset({"Changed"})),
+    "🩹": ("fix", frozenset({"Fixed"})),
+    "🩺": ("feat", frozenset({"Added"})),
+}
+
+
 # Finding codes that fail generation in ``strict`` mode. Single pass/fail source;
 # orchestration never re-derives severity from anything else.
 STRICT_FAIL_CODES: frozenset[str] = frozenset(
@@ -358,6 +442,47 @@ def _check_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
     return findings
 
 
+def _norm_gitmoji(emoji: str) -> str:
+    """Normalise a gitmoji by stripping variation selectors (U+FE0F, U+FE0E).
+
+    The SOP matrix encodes some emoji both with and without the variation selector
+    (e.g. ``\u26a1`` and ``\u26a1\ufe0f``); normalising makes lookup selector-insensitive.
+    """
+    return emoji.replace("\ufe0f", "").replace("\ufe0e", "")
+
+
+def _check_type_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_TYPE_GROUP_INCOHERENT`` for F7 group-unreachable trailer sets.
+
+    F7: every declared type (primary + secondaries) must be coherent with *every*
+    declared ``Changelog-Groups`` entry under the SOP matrix. An unknown gitmoji is
+    skipped (enforce owns vocabulary), never failed here. Per-gitmoji coherent
+    groups come from the static normative mapping (assert-tested against the SOP).
+    """
+    incoherent: list[str] = []
+    for intent in (plan.primary_intent, *plan.secondary_intents):
+        entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
+        if entry is None:
+            continue  # enforce owns vocabulary; unknown emoji is out of scope here
+        cc_type, coherent_groups = entry
+        group = str(intent.changelog_group or "")
+        if group and group not in coherent_groups:
+            incoherent.append(f"{intent.gitmoji} ({cc_type}) -> {group}")
+
+    if not incoherent:
+        return []
+    return [
+        GoldFinding(
+            code="GOLD_TYPE_GROUP_INCOHERENT",
+            message=(
+                "Changelog-Groups unreachable from declared Change-Types per SOP matrix (F7): "
+                + "; ".join(incoherent)
+                + "; re-declare coherent groups/types (e.g. test/docs -> Miscellaneous)."
+            ),
+        )
+    ]
+
+
 def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | None) -> list[GoldFinding]:
     """Emit ``GOLD_CONTRACT_SMOKE`` when primary fields disagree with the contract.
 
@@ -425,6 +550,7 @@ def check_commit_gold(
     findings: list[GoldFinding] = []
     findings.extend(_check_body_inventory(plan))
     findings.extend(_check_group_coherence(plan))
+    findings.extend(_check_type_group_coherence(plan))
     findings.extend(_check_included_changes(plan, signals, ranked_intents))
     findings.extend(_check_contract_smoke(plan, contract))
     return GoldReport(findings=tuple(findings))
