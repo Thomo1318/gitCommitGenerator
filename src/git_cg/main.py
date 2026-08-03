@@ -2110,7 +2110,7 @@ def _run_commit_generation(
     # Issue #182 Slice 3b: resolve gold mode once per generation entry (flags cannot
     # change mid-loop); gold auto-regen is bounded to 1 and tracked separately from
     # Instructor/transport/schema retries.
-    from git_cg.commit_gold import STRICT_FAIL_CODES, check_commit_gold, resolve_gold_mode
+    from git_cg.commit_gold import check_commit_gold, resolve_gold_mode
     from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
 
     gold_mode = resolve_gold_mode(
@@ -2119,6 +2119,7 @@ def _run_commit_generation(
         interactive=interactive,
         tty_available=interactive and can_open_tty(),
     )
+    gold_report = None
     gold_regen_attempts = 0
     gold_guidance: str | None = None
     gold_previous_primary_id: str | None = None
@@ -2161,11 +2162,15 @@ def _run_commit_generation(
             },
         )
         # Guidance REGEN may loop here with a rebuilt gen_context.
+        # Presentation-only views (directive-narrowed A/B) must not mutate the
+        # authoritative rank-pass snapshot on gen_context.
         arbitrate_presentation_note: str | None = None
+        present_pair_ranked = list(gen_context.ranked_intents)
+        present_pair_conf = gen_context.ranking_confidence
         while True:
             arb = run_intent_arbitration(
-                ranked_intents=gen_context.ranked_intents,
-                ranking_confidence=gen_context.ranking_confidence,
+                ranked_intents=present_pair_ranked,
+                ranking_confidence=present_pair_conf,
                 constraints=gen_context.constraints,
                 existing_guidance=regeneration_guidance,
                 existing_directives=active_directives,
@@ -2274,15 +2279,15 @@ def _run_commit_generation(
                 present_ids = [r.intent_id for r in present_ranked]
                 narrowed = present_ids != original_ids and bool(present_ranked)
                 if narrowed:
-                    # Replace the in-memory pair used by the next MAIN with the
-                    # directive-narrowed view so A/B/See more match user guidance.
-                    # SOP scores are unchanged; this is presentation/selection order only.
-                    present_conf = compute_ranking_confidence(present_ranked)
-                    gen_context.ranked_intents = list(present_ranked)
-                    gen_context.ranking_confidence = present_conf
-                    conf = present_conf
+                    # Presentation-only: pass narrowed pair to the next MAIN without
+                    # mutating gen_context (authoritative rank-pass snapshot).
+                    present_pair_ranked = list(present_ranked)
+                    present_pair_conf = compute_ranking_confidence(present_ranked)
+                    conf = present_pair_conf
                 else:
-                    conf = gen_context.ranking_confidence
+                    present_pair_ranked = list(gen_context.ranked_intents)
+                    present_pair_conf = gen_context.ranking_confidence
+                    conf = present_pair_conf
                 if present_note and verbose:
                     console.print(
                         f"[cyan]Guidance REGEN view:[/cyan] {present_note} ({len(present_ranked)} candidate(s))"
@@ -2599,13 +2604,7 @@ def _run_commit_generation(
         gold_finding_codes=sorted(
             {getattr(f, "code", str(f)) for f in (getattr(review_state, "gold_findings", []) or [])}
         ),
-        gold_blocked=bool(
-            gold_mode == "strict"
-            and any(
-                getattr(f, "code", None) in STRICT_FAIL_CODES
-                for f in (getattr(review_state, "gold_findings", []) or [])
-            )
-        ),
+        gold_blocked=bool(gold_mode == "strict" and gold_report is not None and not gold_report.ok_for_mode("strict")),
         gold_regen_attempts=gold_regen_attempts,
     )
 

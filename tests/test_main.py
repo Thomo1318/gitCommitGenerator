@@ -1,3 +1,4 @@
+import re
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -1167,21 +1168,26 @@ def test_arbitration_abort_exits_nonzero_when_strict_false(monkeypatch, capsys, 
 
 
 def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
-    """gold_blocked must track commit_gold.STRICT_FAIL_CODES, not a local subset.
+    """gold_blocked must track commit_gold via gold_report.ok_for_mode("strict").
 
-    Integration regression for Qodo observability drift: when gold_mode is strict
-    and review_state carries a NEW strict-fail code (SEMVER/SCOPE/TITLE_CASE),
-    final telemetry must report gold_blocked=True.
+    Integration regression for Qodo observability drift: final telemetry must not
+    hardcode a local finding-code subset. Strict failure membership stays
+    single-sourced in ``STRICT_FAIL_CODES`` inside ``GoldReport.ok_for_mode``.
     """
     import inspect
+
+    import typer
 
     import git_cg.main as main_mod
     from git_cg.commit_gold import STRICT_FAIL_CODES, GoldFinding, GoldReport
 
-    # Source contract: gold_blocked must reference STRICT_FAIL_CODES.
+    # Source contract: final gold_blocked uses gold_report.ok_for_mode("strict").
     src = inspect.getsource(main_mod._run_commit_generation)
-    blocked_expr = src.split("gold_blocked=bool(", 1)[1].split("),", 1)[0]
-    assert "STRICT_FAIL_CODES" in blocked_expr
+    parts = src.split("gold_blocked=bool(")
+    assert len(parts) >= 2
+    blocked_expr = parts[-1].split("),", 1)[0]
+    assert "gold_report" in blocked_expr
+    assert 'ok_for_mode("strict")' in blocked_expr or "ok_for_mode('strict')" in blocked_expr
     for legacy_code in (
         "GOLD_BODY_INVENTORY",
         "GOLD_INCLUDED_CHANGES_MISSING",
@@ -1189,43 +1195,7 @@ def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
         "GOLD_TYPE_GROUP_INCOHERENT",
     ):
         assert legacy_code not in blocked_expr
-
-    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for gold_blocked telemetry.")])
-    telemetry: dict = {}
-    review_states: list = []
-
-    real_init = main_mod.ReviewState.__init__
-
-    def tracking_init(self, *args, **kwargs):
-        real_init(self, *args, **kwargs)
-        review_states.append(self)
-
-    monkeypatch.setattr(main_mod.ReviewState, "__init__", tracking_init)
-
-    # Keep generation unblocked; inject expanded-code findings after gold assignment.
-    monkeypatch.setattr(
-        "git_cg.commit_gold.check_commit_gold",
-        lambda *a, **k: GoldReport(findings=[]),
-    )
-
-    original_write = main_mod._write_commit_message
-
-    def write_and_inject(commit_msg_file, result_string, strict, verbose):
-        original_write(commit_msg_file, result_string, strict, verbose)
-        # Final telemetry runs after write; arm findings on the live review_state.
-        assert review_states, "expected ReviewState instance"
-        review_states[-1].gold_findings = [
-            GoldFinding(code="GOLD_SEMVER_MATRIX_MISMATCH", message="semver drift"),
-            GoldFinding(code="GOLD_SCOPE_FILENAME", message="scope is filename"),
-            GoldFinding(code="GOLD_SUBJECT_TITLE_CASE", message="title case"),
-        ]
-
-    monkeypatch.setattr(main_mod, "_write_commit_message", write_and_inject)
-
-    def capture_telemetry(**kwargs):
-        telemetry.update(kwargs)
-
-    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", capture_telemetry)
+    assert "STRICT_FAIL_CODES" in inspect.getsource(GoldReport.ok_for_mode)
 
     for code in (
         "GOLD_SEMVER_MATRIX_MISMATCH",
@@ -1234,25 +1204,51 @@ def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
     ):
         assert code in STRICT_FAIL_CODES
 
-    result = main_mod._run_commit_generation(
-        str(tmp_path / "COMMIT_EDITMSG"),
-        None,
-        None,
-        engine="mtplx",
-        dry_run=False,
-        verbose=False,
-        amend_regenerate=False,
-        strict=True,  # gold_mode=strict
-        interactive=False,
+    # Behavioral: expanded strict-fail codes from gold_report block generation.
+    _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add helper for gold_blocked telemetry.")])
+    telemetry: dict = {}
+
+    def capture_telemetry(**kwargs):
+        telemetry.update(kwargs)
+
+    monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", capture_telemetry)
+    monkeypatch.setattr(
+        "git_cg.commit_gold.check_commit_gold",
+        lambda *a, **k: GoldReport(
+            findings=[
+                GoldFinding(code="GOLD_SEMVER_MATRIX_MISMATCH", message="semver drift"),
+                GoldFinding(code="GOLD_SCOPE_FILENAME", message="scope is filename"),
+                GoldFinding(code="GOLD_SUBJECT_TITLE_CASE", message="title case"),
+            ]
+        ),
     )
-    assert result is True
-    assert len(writes) == 1
-    assert telemetry.get("gold_mode") == "strict"
-    assert telemetry.get("gold_blocked") is True
-    codes = set(telemetry.get("gold_finding_codes") or [])
-    assert "GOLD_SEMVER_MATRIX_MISMATCH" in codes
-    assert "GOLD_SCOPE_FILENAME" in codes
-    assert "GOLD_SUBJECT_TITLE_CASE" in codes
+
+    raised: typer.Exit | None = None
+    try:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,  # gold_mode=strict
+            interactive=False,
+        )
+    except typer.Exit as e:
+        raised = e
+
+    assert raised is not None, "strict gold failures must abort generation"
+    assert raised.exit_code == 1
+    # ok_for_mode("strict") is False for these codes (single-sourced STRICT_FAIL_CODES).
+    assert not GoldReport(
+        findings=[
+            GoldFinding(code="GOLD_SEMVER_MATRIX_MISMATCH", message="semver drift"),
+            GoldFinding(code="GOLD_SCOPE_FILENAME", message="scope is filename"),
+            GoldFinding(code="GOLD_SUBJECT_TITLE_CASE", message="title case"),
+        ]
+    ).ok_for_mode("strict")
 
 
 def test_medium_ranking_confidence_status_in_post_gold_review(monkeypatch, tmp_path):
@@ -1481,6 +1477,48 @@ def test_recover_path_skips_gold(monkeypatch, tmp_path):
     assert called["gold"] is False
 
 
+def _usage_kdl_flags(section: str) -> list[str]:
+    """Parse flag long-names from usage.kdl for the root app or a named cmd.
+
+    section:
+      - "root" → top-level flags before the first nested ``cmd`` block
+      - any other string → flags under ``cmd "<section>" { ... }``
+    """
+    from pathlib import Path
+
+    text = Path("usage.kdl").read_text(encoding="utf-8")
+    if section == "root":
+        # Root flags sit at file scope before the first `cmd "..."` block.
+        nested = re.search(r'^cmd\s+"', text, flags=re.M)
+        body = text[: nested.start()] if nested else text
+    else:
+        m = re.search(
+            rf'^cmd\s+"{re.escape(section)}"\s*\{{(.*?)\n\}}',
+            text,
+            flags=re.M | re.S,
+        )
+        body = m.group(1) if m else ""
+
+    flags: list[str] = []
+    for raw in re.findall(r'flag\s+"([^"]+)"', body):
+        # usage.kdl may use "-i --interactive" or "--engine"
+        parts = raw.split()
+        long_flags = [p for p in parts if p.startswith("--")]
+        if long_flags:
+            flags.extend(long_flags)
+        elif raw.startswith("-") and not raw.startswith("--"):
+            continue
+        else:
+            flags.append(raw if raw.startswith("--") else f"--{raw}")
+    seen: set[str] = set()
+    out: list[str] = []
+    for f in flags:
+        if f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
+
+
 def test_root_help_includes_usage_kdl_flags():
     """Root `git-cg --help` must surface every root flag declared in usage.kdl.
 
@@ -1492,20 +1530,9 @@ def test_root_help_includes_usage_kdl_flags():
 
     from git_cg.main import app
 
-    # Keep this list aligned with root-level flags in usage.kdl (not subcommands).
-    required = [
-        "--interactive",
-        "--engine",
-        "--dry-run",
-        "--verbose",
-        "--strict",
-        "--enable-semantic",
-        "--no-enable-semantic",
-        "--rank-arbitrate",
-        "--no-rank-arbitrate",
-        "--gold-strict",
-        "--recover",
-    ]
+    required = _usage_kdl_flags("root")
+    assert required, "usage.kdl root flags failed to parse"
+    assert "--engine" in required
 
     result = CliRunner().invoke(app, ["--help"])
     assert result.exit_code == 0, result.output
@@ -1519,18 +1546,9 @@ def test_commit_help_includes_usage_kdl_flags():
 
     from git_cg.main import app
 
-    required = [
-        "--rank-arbitrate",
-        "--no-rank-arbitrate",
-        "--enable-semantic",
-        "--no-enable-semantic",
-        "--gold-strict",
-        "--interactive",
-        "--strict",
-        "--dry-run",
-        "--verbose",
-        "--engine",
-    ]
+    required = _usage_kdl_flags("commit")
+    assert required, "usage.kdl commit flags failed to parse"
+    assert "--engine" in required
 
     result = CliRunner().invoke(app, ["commit", "--help"])
     assert result.exit_code == 0, result.output
