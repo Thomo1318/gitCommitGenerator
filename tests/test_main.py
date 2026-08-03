@@ -1477,6 +1477,20 @@ def test_recover_path_skips_gold(monkeypatch, tmp_path):
     assert called["gold"] is False
 
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove SGR/color codes so help text can be matched as plain flags.
+
+    Rich-rendered Typer help splits long options across style spans
+    (e.g. ``\\x1b[1;36m-\\x1b[0m\\x1b[1;36m-interactive\\x1b[0m``), so a plain
+    ``"--interactive" in output`` check fails under FORCE_COLOR/CI even when
+    the flag is present.
+    """
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
 def _usage_kdl_flags(section: str) -> list[str]:
     """Parse flag long-names from usage.kdl for the root app or a named cmd.
 
@@ -1537,8 +1551,9 @@ def test_root_help_includes_usage_kdl_flags():
 
     result = CliRunner().invoke(app, ["--help"])
     assert result.exit_code == 0, result.output
-    missing = [flag for flag in required if flag not in result.output]
-    assert not missing, f"root --help missing usage.kdl flags: {missing}\n{result.output}"
+    help_text = _strip_ansi(result.output)
+    missing = [flag for flag in required if flag not in help_text]
+    assert not missing, f"root --help missing usage.kdl flags: {missing}\n{help_text}"
 
 
 def test_commit_help_includes_usage_kdl_flags():
@@ -1553,8 +1568,9 @@ def test_commit_help_includes_usage_kdl_flags():
 
     result = CliRunner().invoke(app, ["commit", "--help"])
     assert result.exit_code == 0, result.output
-    missing = [flag for flag in required if flag not in result.output]
-    assert not missing, f"commit --help missing usage.kdl flags: {missing}\n{result.output}"
+    help_text = _strip_ansi(result.output)
+    missing = [flag for flag in required if flag not in help_text]
+    assert not missing, f"commit --help missing usage.kdl flags: {missing}\n{help_text}"
 
 
 def test_a01_gold_guidance_bypasses_directive_extraction():
