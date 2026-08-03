@@ -1851,3 +1851,49 @@ def test_v11_gold_self_correction_invalid_outcome_defaults(tmp_path):
     assert result.gold_self_correction_outcome == "not_needed"
     assert result.gold_self_correction_attempts == 2
     assert result.gold_split_recommendation is True
+
+
+def test_v11_gold_self_correction_non_numeric_attempts_defaults(tmp_path):
+    """Non-numeric attempt counts coerce to 0 on read."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+        "gold_self_correction_attempts": "not-a-number",
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.gold_self_correction_attempts == 0
+
+
+def test_v11_gold_split_recommendation_string_false_coerces(tmp_path):
+    """Legacy string \"false\" must not become True via bare bool()."""
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "feat: x",
+        "commit_plan_json": {},
+        "score_card": {},
+        "gold_split_recommendation": "false",
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.gold_split_recommendation is False

@@ -2481,11 +2481,8 @@ def _run_commit_generation(
             ranked_intents=gen_context.ranked_intents,
         )
         review_state.gold_findings = list(gold_report.findings)
-        # P6 telemetry: true when a ≥3-group split-preferring coverage finding fired.
-        if any(
-            f.code == "GOLD_INCLUDED_CHANGES_MISSING" and "recommend splitting" in f.message
-            for f in gold_report.findings
-        ):
+        # P6 telemetry: structured signal from GoldFinding.split_preferred (not message prose).
+        if gold_report.has_split_recommendation():
             gold_split_recommendation = True
         gold_guidance = None
         if gold_mode != "off" and gold_report.findings:

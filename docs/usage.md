@@ -239,7 +239,9 @@ SemVer, or changelog group, and it never emits `preferred_type` / `preferred_sco
 `--gold-strict` resolves gold to strict **without** enabling general `--strict`.  
 `GIT_CG_GOLD_MODE` wins over flags when set to a known value (`off` / `warn` / `strict`).
 
-### Finding codes (strict-fail set)
+### Finding codes
+
+All codes below are in `STRICT_FAIL_CODES` unless marked otherwise.
 
 | Code | Intent |
 | --- | --- |
@@ -251,7 +253,7 @@ SemVer, or changelog group, and it never emits `preferred_type` / `preferred_sco
 | `GOLD_TYPE_GROUP_INCOHERENT` | Matrix-impossible type/group pairing |
 | `GOLD_SEMVER_MATRIX_MISMATCH` | SemVer disagrees with matrix row |
 | `GOLD_SCOPE_FILENAME` | Scope looks like a filename/path |
-| `GOLD_CONTRACT_SMOKE` | Bug-class contract drift (hard fail independent of mode) |
+| `GOLD_CONTRACT_SMOKE` | Bug-class contract drift; **not** in `STRICT_FAIL_CODES` (hard fail independent of mode) |
 
 ### Subject inventory (v1.1)
 

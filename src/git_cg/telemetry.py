@@ -882,7 +882,16 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["gold_self_correction_outcome"] = GoldSelfCorrectionOutcome.NOT_NEEDED.value
             else:
                 data["gold_self_correction_outcome"] = str(outcome)
-            data["gold_split_recommendation"] = bool(data.get("gold_split_recommendation"))
+            # Mirror ranking_override string/legacy coercion — bare bool("false") is True.
+            raw_split = data.get("gold_split_recommendation", False)
+            if isinstance(raw_split, bool):
+                data["gold_split_recommendation"] = raw_split
+            elif isinstance(raw_split, (int, float)) and not isinstance(raw_split, bool):
+                data["gold_split_recommendation"] = raw_split == 1
+            elif isinstance(raw_split, str):
+                data["gold_split_recommendation"] = raw_split.strip().lower() in {"1", "true", "yes", "on"}
+            else:
+                data["gold_split_recommendation"] = False
             return GenerationTelemetry(**data)
     except Exception:
         return None

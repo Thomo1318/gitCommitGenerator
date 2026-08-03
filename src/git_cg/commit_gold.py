@@ -280,6 +280,9 @@ class GoldFinding:
     code: str
     message: str
     severity: str = "info"  # always informational at emission; mode decides pass/fail
+    # Structured P6 signal (≥3 coverage groups prefer split). Telemetry must read this
+    # field — never substring-match ``message`` prose across the main.py boundary.
+    split_preferred: bool = False
 
 
 @dataclass(frozen=True)
@@ -291,6 +294,10 @@ class GoldReport:
     def codes(self) -> frozenset[str]:
         """Return the set of finding codes present in this report."""
         return frozenset(finding.code for finding in self.findings)
+
+    def has_split_recommendation(self) -> bool:
+        """True when any finding carries the structured P6 split-prefer signal."""
+        return any(finding.split_preferred for finding in self.findings)
 
     def ok_for_mode(self, mode: str) -> bool:
         """Map findings to a pass/fail decision for a resolved gold mode.
@@ -574,16 +581,19 @@ def _check_included_changes(plan: CommitPlan, signals: DiffSignals, ranked_inten
             "secondary and no secondaries/split; recommend splitting this diff. Matrix-legal "
             "secondary intents (Included changes) remain acceptable if a single commit is retained."
         )
+        split_preferred = True
     else:
         message = (
             f"Diff spans {n_groups} coverage groups ({group_list}) with a "
             "competitive ranked secondary, but the plan has no secondary intents and no split "
             "recommendation; include matrix-legal secondary intents (Included changes) or split."
         )
+        split_preferred = False
     return [
         GoldFinding(
             code="GOLD_INCLUDED_CHANGES_MISSING",
             message=message,
+            split_preferred=split_preferred,
         )
     ]
 

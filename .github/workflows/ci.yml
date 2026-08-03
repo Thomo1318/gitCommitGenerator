@@ -112,6 +112,8 @@ jobs:
         # actions/checkout@v7.0.1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # Full history: gold FP-budget guard (test_v11_a03) samples recent subjects.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install uv

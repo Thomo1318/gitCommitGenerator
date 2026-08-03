@@ -916,15 +916,20 @@ def _gold_harness_mocks(monkeypatch, plans, *, telemetry_events: list | None = N
     return writes
 
 
-def _gold_plan(body: str | None = None):
+def _gold_plan(
+    body: str | None = None,
+    *,
+    description: str = "add helper",
+    scope: str | None = None,
+):
     from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
 
     intent = CommitIntent.model_construct(
         intent_id="feature_addition",
         gitmoji="✨",
         cc_type=CommitType.FEAT,
-        scope=None,
-        description="add helper",
+        scope=scope,
+        description=description,
         semver_impact=SemVerImpact.MINOR,
         changelog_group="Added",
     )
@@ -1082,40 +1087,18 @@ def test_v11_a06_gold_strict_growth_aborts_after_attempt_one(monkeypatch, capsys
     """V11-A06: growing / non-subset codes after regen → aborted_growth."""
     import typer
 
-    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
-
-    def _plan_with(*, body: str | None = None, description: str = "add helper") -> CommitPlan:
-        intent = CommitIntent.model_construct(
-            intent_id="feature_addition",
-            gitmoji="✨",
-            cc_type=CommitType.FEAT,
-            scope=None,
-            description=description,
-            semver_impact=SemVerImpact.MINOR,
-            changelog_group="Added",
-        )
-        return CommitPlan.model_construct(
-            primary_intent=intent,
-            secondary_intents=[],
-            split_recommended=False,
-            rationale="r",
-            body_summary=body,
-            breaking_change=False,
-            breaking_change_description=None,
-        )
-
     # Pass 1: body inventory only.
     # Pass 2: body inventory + subject inventory (growth / non-subset).
     telemetry_events: list[dict] = []
     writes = _gold_harness_mocks(
         monkeypatch,
         [
-            _plan_with(body="This commit adds a helper.", description="add helper"),
-            _plan_with(
+            _gold_plan(body="This commit adds a helper.", description="add helper"),
+            _gold_plan(
                 body="This commit adds a helper.",
                 description="add helper, update docs, fix edge case",
             ),
-            _plan_with(body="clean body", description="add helper"),  # must not be consumed
+            _gold_plan(body="clean body", description="add helper"),  # must not be consumed
         ],
         telemetry_events=telemetry_events,
     )
@@ -1155,28 +1138,6 @@ def test_v11_a07_gold_strict_exhausted_after_two_regens(monkeypatch, capsys, tmp
     """V11-A07: shrinking then still failing after attempt 2 → exhausted."""
     import typer
 
-    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
-
-    def _plan_with(*, body: str | None = None, description: str = "add helper", scope=None) -> CommitPlan:
-        intent = CommitIntent.model_construct(
-            intent_id="feature_addition",
-            gitmoji="✨",
-            cc_type=CommitType.FEAT,
-            scope=scope,
-            description=description,
-            semver_impact=SemVerImpact.MINOR,
-            changelog_group="Added",
-        )
-        return CommitPlan.model_construct(
-            primary_intent=intent,
-            secondary_intents=[],
-            split_recommended=False,
-            rationale="r",
-            body_summary=body,
-            breaking_change=False,
-            breaking_change_description=None,
-        )
-
     # Pass 0: BODY + SCOPE (2 codes)
     # Pass 1 after regen1: BODY only (strict subset) → allow second regen
     # Pass 2 after regen2: BODY only → exhausted
@@ -1184,9 +1145,9 @@ def test_v11_a07_gold_strict_exhausted_after_two_regens(monkeypatch, capsys, tmp
     writes = _gold_harness_mocks(
         monkeypatch,
         [
-            _plan_with(body="This commit adds a helper.", description="add helper", scope="release.py"),
-            _plan_with(body="This commit adds a helper.", description="add helper", scope="release"),
-            _plan_with(body="This commit adds a helper.", description="add helper", scope="release"),
+            _gold_plan(body="This commit adds a helper.", description="add helper", scope="release.py"),
+            _gold_plan(body="This commit adds a helper.", description="add helper", scope="release"),
+            _gold_plan(body="This commit adds a helper.", description="add helper", scope="release"),
         ],
         telemetry_events=telemetry_events,
     )

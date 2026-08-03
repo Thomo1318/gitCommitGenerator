@@ -650,15 +650,46 @@ def test_v11_a08c_split_recommended_still_passes(sop_matrix: list[dict]) -> None
     assert "GOLD_INCLUDED_CHANGES_MISSING" not in report.codes()
 
 
+def test_v11_a08d_split_preferred_structured_flag(sop_matrix: list[dict]) -> None:
+    """≥3-group coverage finding sets GoldFinding.split_preferred (not message-only)."""
+    signals = DiffSignals(
+        adds_public_api=True,
+        touches_tests=True,
+        touches_docs=True,
+        files=["src/git_cg/release.py", "tests/test_release.py", "docs/usage.md"],
+    )
+    ranked = rank_commit_intents(signals, sop_matrix)
+    report = check_commit_gold(_plan(FEAT), None, signals=signals, ranked_intents=ranked)
+    assert "GOLD_INCLUDED_CHANGES_MISSING" in report.codes()
+    assert report.has_split_recommendation() is True
+    finding = next(f for f in report.findings if f.code == "GOLD_INCLUDED_CHANGES_MISSING")
+    assert finding.split_preferred is True
+
+
 def test_v11_a03_repo_history_fp_budget() -> None:
-    """V11-A03: ≥95/100 recent subjects clean under the real subject-inventory patterns."""
+    """V11-A03: ≥95/100 recent subjects clean under the real subject-inventory patterns.
+
+    Integration guard over live history (not a pure unit test). Skips when git is
+    unavailable or the checkout is too shallow to sample a meaningful corpus —
+    CI Run Tests uses ``fetch-depth: 0`` so this path is exercised there.
+    """
     import subprocess
+
+    import pytest
 
     from git_cg.commit_gold import _subject_inventory_pattern_a, _subject_inventory_pattern_b
 
-    raw = subprocess.check_output(["git", "log", "--format=%s", "-100"], text=True)
+    try:
+        raw = subprocess.check_output(
+            ["git", "log", "--format=%s", "-100"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError) as exc:
+        pytest.skip(f"git history unavailable for FP-budget guard: {exc}")
     subjects = [line.strip() for line in raw.splitlines() if line.strip()]
-    assert len(subjects) >= 50  # sanity — repo has history
+    if len(subjects) < 50:
+        pytest.skip(f"shallow/insufficient git history for FP-budget guard ({len(subjects)} subjects; need ≥50)")
 
     def _description_from_subject(subject: str) -> str:
         # Hybrid: "<emoji> <type>(scope): description" or "<emoji> <type>: description"
