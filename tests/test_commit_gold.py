@@ -1,4 +1,4 @@
-"""Pure gold-linter tables for Issue #182 Phase 7.25 (Slice 3a).
+"""Pure gold-linter tables for Issues #182 / #191 (Phase 7.25 + 7.26).
 
 Covers the B2 fixture set (B2_01-B2_06 + B2_04b), Claim A purity properties
 (A_04 no-mutation), the empty-matrix exemption, ``ok_for_mode`` normative
@@ -14,6 +14,7 @@ import pytest
 from git_cg.commit_gold import (
     BANNED_BODY_OPENERS,
     STRICT_FAIL_CODES,
+    SUBJECT_INVENTORY_VERBS,
     GoldReport,
     check_commit_gold,
     resolve_gold_mode,
@@ -31,7 +32,14 @@ def sop_matrix() -> list[dict]:
 
 
 def _intent(
-    intent_id: str, emoji: str, cc_type: str, semver: str, group: str, scope: str | None = None
+    intent_id: str,
+    emoji: str,
+    cc_type: str,
+    semver: str,
+    group: str,
+    scope: str | None = None,
+    *,
+    description: str = "do the thing",
 ) -> CommitIntent:
     """Construct a structured intent WITHOUT matrix canonicalisation (direct fixture)."""
     return CommitIntent.model_construct(
@@ -39,7 +47,7 @@ def _intent(
         gitmoji=emoji,
         cc_type=CommitType(cc_type),
         scope=scope,
-        description="do the thing",
+        description=description,
         semver_impact=SemVerImpact(semver),
         changelog_group=group,
     )
@@ -487,3 +495,182 @@ def test_resolve_gold_mode_env_still_beats_gold_strict() -> None:
 def test_resolve_gold_mode_surface_env_value_rejected() -> None:
     """surface is interactive-derived only; an env value of ``surface`` is invalid."""
     assert resolve_gold_mode(environ={"GIT_CG_GOLD_MODE": "surface"}, strict=False) == "warn"
+
+
+# ---------------------------------------------------------------------------
+# Issue #191 — GOLD_SUBJECT_INVENTORY + P6 coverage messages (V11-A)
+# ---------------------------------------------------------------------------
+
+
+def test_v11_a01_subject_inventory_pattern_a_fires() -> None:
+    """V11-A01: PATTERN A fires on description `add X, update Y, fix Z`."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "MINOR",
+        "Added",
+        description="add helper, update docs, fix edge case",
+    )
+    report = check_commit_gold(_plan(primary), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SUBJECT_INVENTORY" in report.codes()
+    assert "GOLD_SUBJECT_INVENTORY" in STRICT_FAIL_CODES
+    assert not report.ok_for_mode("strict")
+    assert "lead with the outcome" in report.findings[0].message.lower() or any(
+        "lead with the outcome" in f.message.lower() for f in report.findings
+    )
+
+
+def test_v11_a01b_two_comma_clauses_pass() -> None:
+    """Exactly 2 comma-separated clauses must not fire subject inventory."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "MINOR",
+        "Added",
+        description="add helper, update docs",
+    )
+    report = check_commit_gold(_plan(primary), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SUBJECT_INVENTORY" not in report.codes()
+
+
+def test_v11_a02_subject_inventory_pattern_b_fires() -> None:
+    """V11-A02: PATTERN B fires on description `add X and update Y and fix Z`."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "MINOR",
+        "Added",
+        description="add helper and update docs and fix edge case",
+    )
+    report = check_commit_gold(_plan(primary), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SUBJECT_INVENTORY" in report.codes()
+    inv = next(f for f in report.findings if f.code == "GOLD_SUBJECT_INVENTORY")
+    assert "lead with the outcome" in inv.message.lower()
+
+
+def test_v11_a03_noun_tail_non_trigger() -> None:
+    """V11-A03: one verb + noun list must pass (no false inventory)."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "MINOR",
+        "Added",
+        description="enforce SemVer, scope, and title checks",
+    )
+    report = check_commit_gold(_plan(primary), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SUBJECT_INVENTORY" not in report.codes()
+
+
+def test_v11_a03b_single_and_coordination_passes() -> None:
+    """A single coordinating `and` is not PATTERN B."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "MINOR",
+        "Added",
+        description="add helper and update docs",
+    )
+    report = check_commit_gold(_plan(primary), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SUBJECT_INVENTORY" not in report.codes()
+
+
+def test_v11_a03c_verb_allowlist_is_closed() -> None:
+    """Allowlist miss must not invent fuzzy verbs."""
+    assert len(SUBJECT_INVENTORY_VERBS) == 93
+    assert "ship" not in SUBJECT_INVENTORY_VERBS
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "MINOR",
+        "Added",
+        description="ship helper, ship docs, ship tests",
+    )
+    report = check_commit_gold(_plan(primary), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SUBJECT_INVENTORY" not in report.codes()
+
+
+@pytest.mark.parametrize("verb", sorted(SUBJECT_INVENTORY_VERBS))
+def test_v11_a03d_verb_allowlist_clause_is_verb_initial(verb: str) -> None:
+    """Each closed-allowlist verb is recognized as verb-initial (case-insensitive)."""
+    from git_cg.commit_gold import _clause_is_verb_initial
+
+    assert _clause_is_verb_initial(verb)
+    assert _clause_is_verb_initial(verb.upper())
+    assert _clause_is_verb_initial(f"{verb} helper module")
+
+
+def test_v11_a08_p6_three_group_split_preferring_message(sop_matrix: list[dict]) -> None:
+    """V11-A08: ≥3 coverage groups prefer split wording; code unchanged."""
+    signals = DiffSignals(
+        adds_public_api=True,
+        touches_tests=True,
+        touches_docs=True,
+        files=["src/git_cg/release.py", "tests/test_release.py", "docs/usage.md"],
+    )
+    ranked = rank_commit_intents(signals, sop_matrix)
+    report = check_commit_gold(_plan(FEAT), None, signals=signals, ranked_intents=ranked)
+    assert report.codes() == frozenset({"GOLD_INCLUDED_CHANGES_MISSING"})
+    msg = next(f.message for f in report.findings if f.code == "GOLD_INCLUDED_CHANGES_MISSING")
+    assert "recommend splitting" in msg
+    assert "Included changes" in msg
+
+
+def test_v11_a08b_p6_two_group_secondary_preferring_message(sop_matrix: list[dict]) -> None:
+    """V11-A08: 2 coverage groups prefer secondary fill wording."""
+    signals = DiffSignals(
+        adds_public_api=True,
+        touches_tests=True,
+        files=["src/git_cg/release.py", "tests/test_release.py"],
+    )
+    ranked = rank_commit_intents(signals, sop_matrix)
+    report = check_commit_gold(_plan(FEAT), None, signals=signals, ranked_intents=ranked)
+    assert "GOLD_INCLUDED_CHANGES_MISSING" in report.codes()
+    msg = next(f.message for f in report.findings if f.code == "GOLD_INCLUDED_CHANGES_MISSING")
+    assert "secondary intents" in msg
+    assert "recommend splitting" not in msg
+    assert "Included changes" in msg
+
+
+def test_v11_a08c_split_recommended_still_passes(sop_matrix: list[dict]) -> None:
+    """split_recommended alone still suppresses coverage finding."""
+    signals = DiffSignals(
+        adds_public_api=True,
+        touches_tests=True,
+        touches_docs=True,
+        files=["src/git_cg/release.py", "tests/test_release.py", "docs/usage.md"],
+    )
+    ranked = rank_commit_intents(signals, sop_matrix)
+    report = check_commit_gold(_plan(FEAT, split=True), None, signals=signals, ranked_intents=ranked)
+    assert "GOLD_INCLUDED_CHANGES_MISSING" not in report.codes()
+
+
+def test_v11_a03_repo_history_fp_budget() -> None:
+    """V11-A03: ≥95/100 recent subjects clean under the real subject-inventory patterns."""
+    import subprocess
+
+    from git_cg.commit_gold import _subject_inventory_pattern_a, _subject_inventory_pattern_b
+
+    raw = subprocess.check_output(["git", "log", "--format=%s", "-100"], text=True)
+    subjects = [line.strip() for line in raw.splitlines() if line.strip()]
+    assert len(subjects) >= 50  # sanity — repo has history
+
+    def _description_from_subject(subject: str) -> str:
+        # Hybrid: "<emoji> <type>(scope): description" or "<emoji> <type>: description"
+        if ": " in subject:
+            return subject.split(": ", 1)[1].strip()
+        return subject
+
+    hits = []
+    for subject in subjects:
+        desc = _description_from_subject(subject)
+        if _subject_inventory_pattern_a(desc) or _subject_inventory_pattern_b(desc):
+            hits.append((subject, desc))
+    clean = len(subjects) - len(hits)
+    ratio = clean / len(subjects)
+    assert ratio >= 0.95, f"FP budget failed: {clean}/{len(subjects)} clean; hits={hits}"
