@@ -6,7 +6,8 @@ Covers:
   - init_sentry: calls sentry_sdk.init with expected kwargs when enabled
   - init_sentry: version falls back to "dev" when package metadata is not found
   - init_sentry: suppresses exceptions raised by sentry_sdk.init
-  - init_sentry: reads SENTRY_DSN from environment
+  - init_sentry: reads SENTRY_DSN / GIT_CG_SENTRY_DSN via resolve_sentry_dsn
+  - resolve_sentry_dsn: prefers GIT_CG_SENTRY_DSN; ignores host-injected ambient DSN
   - init_sentry: reads SENTRY_ENVIRONMENT from environment, defaulting to "local"
   - scrub_data: redacts diff_output inside event["contexts"]["git_cg"]
   - scrub_data: leaves events without diff_output untouched
@@ -103,14 +104,36 @@ class TestInitSentryKwargs:
 
         return captured_kwargs
 
-    def test_dsn_is_read_from_env(self, monkeypatch):
-        """init_sentry must pass SENTRY_DSN from env to sentry_sdk.init."""
-        kwargs = self._call_init_sentry_and_capture_kwargs(monkeypatch, SENTRY_DSN="https://example@sentry.io/123")
+    def test_dsn_is_read_from_env(self, monkeypatch, tmp_path):
+        # Isolate from the real project .env / host-injection markers.
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("GIT_CG_SENTRY_DSN", raising=False)
+        for key in (
+            "SENTRY_DISTRIBUTION",
+            "SENTRY_STARTUP_TRACE_ID",
+            "SENTRY_STARTUP_BAGGAGE",
+            "SENTRY_PROFILER_BINARY_DIR",
+            "SENTRY_USER_ID",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv("SENTRY_DSN", "https://example@sentry.io/123")
+        kwargs = self._call_init_sentry_and_capture_kwargs(monkeypatch)
         assert kwargs.get("dsn") == "https://example@sentry.io/123"
 
-    def test_dsn_is_none_when_env_absent(self, monkeypatch):
-        """init_sentry passes None as dsn when SENTRY_DSN is not set."""
-        kwargs = self._call_init_sentry_and_capture_kwargs(monkeypatch, SENTRY_DSN=None)
+    def test_dsn_is_none_when_env_absent(self, monkeypatch, tmp_path):
+        # Isolate from the real project .env so dotenv fallback cannot supply a DSN.
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("GIT_CG_SENTRY_DSN", raising=False)
+        monkeypatch.delenv("SENTRY_DSN", raising=False)
+        for key in (
+            "SENTRY_DISTRIBUTION",
+            "SENTRY_STARTUP_TRACE_ID",
+            "SENTRY_STARTUP_BAGGAGE",
+            "SENTRY_PROFILER_BINARY_DIR",
+            "SENTRY_USER_ID",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        kwargs = self._call_init_sentry_and_capture_kwargs(monkeypatch)
         assert kwargs.get("dsn") is None
 
     def test_environment_is_read_from_env(self, monkeypatch):
@@ -226,6 +249,112 @@ class TestInitSentryExceptionSuppression:
             from git_cg.sentry_config import init_sentry
 
             init_sentry()
+
+
+# ===========================================================================
+# resolve_sentry_dsn - host-injection guard
+# ===========================================================================
+
+
+class TestResolveSentryDsn:
+    def test_explicit_git_cg_dsn_wins_over_ambient_and_injection(self, monkeypatch):
+        monkeypatch.setenv("GIT_CG_SENTRY_DSN", "https://explicit@o1.ingest.sentry.io/111")
+        monkeypatch.setenv("SENTRY_DSN", "https://ambient@o2.ingest.sentry.io/222")
+        monkeypatch.setenv("SENTRY_DISTRIBUTION", "raycast")
+        from git_cg.sentry_config import resolve_sentry_dsn
+
+        assert resolve_sentry_dsn() == "https://explicit@o1.ingest.sentry.io/111"
+
+    def test_ambient_dsn_used_when_not_host_injected(self, monkeypatch):
+        monkeypatch.delenv("GIT_CG_SENTRY_DSN", raising=False)
+        monkeypatch.setenv("SENTRY_DSN", "https://ambient@o2.ingest.sentry.io/222")
+        for key in (
+            "SENTRY_DISTRIBUTION",
+            "SENTRY_STARTUP_TRACE_ID",
+            "SENTRY_STARTUP_BAGGAGE",
+            "SENTRY_PROFILER_BINARY_DIR",
+            "SENTRY_USER_ID",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        from git_cg.sentry_config import resolve_sentry_dsn
+
+        assert resolve_sentry_dsn() == "https://ambient@o2.ingest.sentry.io/222"
+
+    def test_host_injected_ambient_dsn_ignored_without_dotenv(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("GIT_CG_SENTRY_DSN", raising=False)
+        monkeypatch.setenv("SENTRY_DSN", "https://raycast@o379433.ingest.us.sentry.io/4511613514285056")
+        monkeypatch.setenv("SENTRY_DISTRIBUTION", "com.raycast")
+        monkeypatch.chdir(tmp_path)
+        from git_cg.sentry_config import resolve_sentry_dsn
+
+        assert resolve_sentry_dsn() is None
+
+    def test_host_injected_falls_back_to_dotenv_file(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("GIT_CG_SENTRY_DSN", raising=False)
+        monkeypatch.setenv("SENTRY_DSN", "https://raycast@o379433.ingest.us.sentry.io/4511613514285056")
+        monkeypatch.setenv("SENTRY_USER_ID", "C07543A5-C3FE-4FE8-8663-D002F94F1F74")
+        (tmp_path / ".env").write_text(
+            "SENTRY_DSN=https://project@o4509950333550592.ingest.us.sentry.io/4509950397775872\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        from git_cg.sentry_config import resolve_sentry_dsn
+
+        assert resolve_sentry_dsn() == "https://project@o4509950333550592.ingest.us.sentry.io/4509950397775872"
+
+    def test_init_sentry_uses_resolved_dsn(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("GIT_CG_DISABLE_SENTRY", "0")
+        monkeypatch.delenv("GIT_CG_SENTRY_DSN", raising=False)
+        monkeypatch.setenv("SENTRY_DSN", "https://raycast@o379433.ingest.us.sentry.io/4511613514285056")
+        monkeypatch.setenv("SENTRY_DISTRIBUTION", "raycast")
+        (tmp_path / ".env").write_text(
+            "SENTRY_DSN=https://project@o4509950333550592.ingest.us.sentry.io/4509950397775872\n",
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+
+        captured = {}
+
+        def fake_init(**kwargs):
+            captured.update(kwargs)
+
+        from unittest.mock import patch
+
+        with patch("sentry_sdk.init", fake_init):
+            from git_cg.sentry_config import init_sentry
+
+            init_sentry()
+
+        assert captured.get("dsn") == "https://project@o4509950333550592.ingest.us.sentry.io/4509950397775872"
+
+
+class TestHostInjectedSentryEnv:
+    def test_detects_distribution_marker(self, monkeypatch):
+        for key in (
+            "SENTRY_DISTRIBUTION",
+            "SENTRY_STARTUP_TRACE_ID",
+            "SENTRY_STARTUP_BAGGAGE",
+            "SENTRY_PROFILER_BINARY_DIR",
+            "SENTRY_USER_ID",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv("SENTRY_DISTRIBUTION", "x")
+        from git_cg.sentry_config import host_injected_sentry_env
+
+        assert host_injected_sentry_env() is True
+
+    def test_clean_env_not_injected(self, monkeypatch):
+        for key in (
+            "SENTRY_DISTRIBUTION",
+            "SENTRY_STARTUP_TRACE_ID",
+            "SENTRY_STARTUP_BAGGAGE",
+            "SENTRY_PROFILER_BINARY_DIR",
+            "SENTRY_USER_ID",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        from git_cg.sentry_config import host_injected_sentry_env
+
+        assert host_injected_sentry_env() is False
 
 
 # ===========================================================================
