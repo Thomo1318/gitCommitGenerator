@@ -15,7 +15,7 @@ def resolve_rank_arbitrate_mode(explicit: bool | str | None = None) -> RankArbit
     Precedence:
     1. Explicit CLI / caller override
        - ``True`` / ``"auto"`` → auto
-       - ``False`` / ``"off"`` (and falsey tokens) → off
+       - ``False`` / ``"off"`` / ``""`` (and falsey tokens) → off
     2. ``GIT_CG_RANK_ARBITRATE`` env var
     3. Default ``auto``
     """
@@ -24,10 +24,15 @@ def resolve_rank_arbitrate_mode(explicit: bool | str | None = None) -> RankArbit
     if explicit is False:
         return "off"
     if isinstance(explicit, str):
+        # Explicit empty string is a falsey token → off (not env fallback).
         raw = explicit.strip().lower()
-    else:
-        raw = os.environ.get("GIT_CG_RANK_ARBITRATE", "auto").strip().lower()
-    if raw in {"0", "false", "no", "off"}:
+        if raw == "" or raw in {"0", "false", "no", "off"}:
+            return "off"
+        if raw in {"1", "true", "yes", "auto", "on"}:
+            return "auto"
+        return "auto"
+    raw = os.environ.get("GIT_CG_RANK_ARBITRATE", "auto").strip().lower()
+    if raw in {"0", "false", "no", "off", ""}:
         return "off"
     return "auto"
 

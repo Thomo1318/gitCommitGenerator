@@ -63,9 +63,10 @@ def dsn_from_dotenv_files(
     """Read GIT_CG_SENTRY_DSN / SENTRY_DSN from local dotenv files (gitignored)."""
     root = cwd if cwd is not None else Path.cwd()
     wanted = {"GIT_CG_SENTRY_DSN", "SENTRY_DSN"}
-    for name in filenames:
-        parsed = _parse_dotenv_keys(root / name, wanted)
-        for key in ("GIT_CG_SENTRY_DSN", "SENTRY_DSN"):
+    # Prefer product key across all candidate files before ambient SENTRY_DSN.
+    for key in ("GIT_CG_SENTRY_DSN", "SENTRY_DSN"):
+        for name in filenames:
+            parsed = _parse_dotenv_keys(root / name, wanted)
             value = _strip_env(parsed.get(key))
             if value:
                 return value

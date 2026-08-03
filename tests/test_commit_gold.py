@@ -227,24 +227,44 @@ def test_type_group_incoherent_fires_on_docs_primary_fixed_group() -> None:
 def test_gitmoji_cc_groups_matches_sop(sop_matrix: list[dict]) -> None:
     """Static GITMOJI_CC_GROUPS must stay in sync with the live SOP matrix (F7 drift guard).
 
-    Every SOP row's emoji must map to its cc_type, and the SOP's declared
-    changelog_group must be a member of the static coherent-group frozenset.
+    Every SOP row's emoji must map to its cc_type/semver, and the static
+    changelog-group frozenset must equal the set of groups declared on SOP rows
+    that share that normalized emoji.
     """
+    from collections import defaultdict
+
     from git_cg.commit_gold import GITMOJI_CC_GROUPS
 
     def _norm(e: str) -> str:
         return e.replace("\ufe0f", "").replace("\ufe0e", "")
 
-    assert len(GITMOJI_CC_GROUPS) == len({_norm(row["emoji"]) for row in sop_matrix})
+    expected_groups: dict[str, set[str]] = defaultdict(set)
+    expected_cc: dict[str, str] = {}
+    expected_semver: dict[str, str] = {}
     for row in sop_matrix:
         emoji = _norm(row["emoji"])
-        assert emoji in GITMOJI_CC_GROUPS, f"SOP emoji {emoji!r} missing from GITMOJI_CC_GROUPS"
+        expected_groups[emoji].add(row["changelog_group"])
+        # SOP may list multiple rows per emoji; cc_type/semver must be stable.
+        if emoji in expected_cc:
+            assert expected_cc[emoji] == row["cc_type"], f"{emoji!r}: mixed cc_type in SOP"
+            assert expected_semver[emoji] == row["semver_impact"], f"{emoji!r}: mixed semver in SOP"
+        else:
+            expected_cc[emoji] = row["cc_type"]
+            expected_semver[emoji] = row["semver_impact"]
+
+    assert set(GITMOJI_CC_GROUPS) == set(expected_groups), (
+        f"emoji key drift: static-only={set(GITMOJI_CC_GROUPS) - set(expected_groups)!r} "
+        f"sop-only={set(expected_groups) - set(GITMOJI_CC_GROUPS)!r}"
+    )
+    for emoji, sop_groups in expected_groups.items():
         cc_type, groups, semver = GITMOJI_CC_GROUPS[emoji]
-        assert cc_type == row["cc_type"], f"{emoji!r}: cc_type {cc_type!r} != SOP {row['cc_type']!r}"
-        assert row["changelog_group"] in groups, (
-            f"{emoji!r}: SOP changelog_group {row['changelog_group']!r} not in static {sorted(groups)}"
+        assert cc_type == expected_cc[emoji], f"{emoji!r}: cc_type {cc_type!r} != SOP {expected_cc[emoji]!r}"
+        assert set(groups) == sop_groups, (
+            f"{emoji!r}: static groups {sorted(groups)} != SOP groups {sorted(sop_groups)}"
         )
-        assert semver == row["semver_impact"], f"{emoji!r}: SOP semver {row['semver_impact']!r} != static {semver!r}"
+        assert semver == expected_semver[emoji], (
+            f"{emoji!r}: SOP semver {expected_semver[emoji]!r} != static {semver!r}"
+        )
 
 
 def test_f7_secondary_incoherent_group_fails() -> None:
