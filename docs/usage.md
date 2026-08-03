@@ -30,9 +30,33 @@ Enable verbose output.
 
 Exit non-zero on failure for standalone CLI use.
 
+### `--enable-semantic`
+
+Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).
+
+### `--no-enable-semantic`
+
+Disable Phase 1 semantic producers for this run.
+
+### `--rank-arbitrate`
+
+Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto).
+
+### `--no-rank-arbitrate`
+
+Disable Low-confidence intent arbitration; keep top rank + telemetry.
+
+### `--gold-strict`
+
+Resolve gold lint to strict mode without enabling general --strict.
+
+### `-r --recover`
+
+Recover and retry the last generated commit message without querying the AI.
+
 ## `git-cg commit`
 
-- **Usage**: `git-cg commit [COMMIT_MSG_FILE] [COMMIT_SOURCE]`
+- **Usage**: `git-cg commit [FLAGS] [COMMIT_MSG_FILE] [COMMIT_SOURCE]`
 
 Generate an AI commit message based on staged changes.
 
@@ -50,6 +74,50 @@ Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'c
 
 **Default:** ``
 
+### Flags
+
+#### `--rank-arbitrate`
+
+Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto).
+
+#### `--no-rank-arbitrate`
+
+Disable Low-confidence intent arbitration; keep top rank + telemetry.
+
+#### `--enable-semantic`
+
+Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).
+
+#### `--no-enable-semantic`
+
+Disable Phase 1 semantic producers for this run.
+
+#### `--gold-strict`
+
+Resolve gold lint to strict mode without enabling general --strict.
+
+#### `-i --interactive`
+
+Enable terminal-native interactive review via gum when a TTY is available.
+
+#### `--strict`
+
+Exit non-zero on failure. Leave OFF for git hooks so a failed generation never blocks the commit.
+
+#### `-d --dry-run`
+
+Do not write the commit message, just print it.
+
+#### `-v --verbose`
+
+Enable verbose output.
+
+#### `-e --engine <ENGINE>`
+
+AI engine to use (e.g. omlx, mtplx).
+
+**Default:** `mtplx`
+
 ## `git-cg sop`
 
 - **Usage**: `git-cg sop`
@@ -58,146 +126,12 @@ Display the GitOps SOP matrices and workflows.
 
 ## `git-cg release`
 
-- **Usage**: `git-cg release [FLAGS]`
+- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
 
-Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, update Changelog, and assemble **gold-standard GitHub Release notes** (boundary table, highlights, grouped What’s Changed, compare links).
+Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
 
 ### Flags
-
-#### `-d --dry-run`
-
-Print planned changelog and GitHub notes without writing files or publishing.
-
-#### `-v --verbose`
-
-Enable verbose output.
 
 #### `--pre-release <IDENTIFIER>`
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
-
-#### `--theme <THEME>`
-
-GitHub release title theme after the version (e.g. `Semantic Context integration` → `🚀 git-cg vX.Y.Z: Semantic Context integration`).
-
-#### `--notes-file <PATH>`
-
-Write gold-standard GitHub release notes markdown to this path (default: `.git/GIT_CG_RELEASE_NOTES_<tag>.md`).
-
-#### `--publish-github`
-
-Create the GitHub Release via `gh` after preparing files (requires auth). Default marks the release as **pre-release**.
-
-#### `--github-latest`
-
-When publishing, mark the GitHub release as latest (not pre-release).
-
-#### `--skip-github-notes`
-
-Only bump versions / CHANGELOG; skip gold-standard GitHub notes assembly. Cannot be combined with `--publish-github`.
-
-#### `--repo-slug <OWNER/REPO>`
-
-Override the GitHub repository used for compare links and optional `gh` publish. When omitted, `git-cg` detects `owner/repo` from `git remote get-url origin` (then `gh repo view`). Publishing refuses to fall back to a hardcoded default if detection fails.
-
-#### `--github-target <REF>`
-
-Optional git ref passed to `gh release create --target`. By default, publish requires the release tag to already exist locally and omits `--target` so GitHub attaches notes to that tag (avoids tagging the wrong branch tip).
-
-
-## Semantic context (Phase 7)
-
-`git-cg` can optionally collect **semantic context** from staged blobs, fingerprints, and local code-review-graph product queries.
-
-### Enable
-
-* CLI: `--enable-semantic` / `--no-enable-semantic`
-* Env: `GIT_CG_ENABLE_SEMANTIC=1` (also `true` / `yes` / `on`)
-* Default: **off** (dark launch)
-
-### What it does
-
-* Builds a versioned `SemanticDiffSummary` on `GenerationContext` when semantic mode is **on** — both when producers succeed and on **fail-open fallback** paths (partial summary + explicit `fallback_reasons` when graph/parser/fingerprint producers are unavailable or error)
-* May add **closed-vocabulary** ranking markers from graph/fingerprint facts (SOP matrix remains the only SemVer/intent authority)
-* Emits non-content telemetry: `blast_radius_size`, `affected_flows_count`, `test_coverage_gap` (bool), optional `test_gaps_count` (int raw count for analytics/debug), plus `semantic_context_*` fields via Opik state / `record-telemetry`
-
-### What it does **not** do (current MVP)
-
-* Does **not** inject a semantic summary evidence block into the LLM prompt (Phase 11 owns packing / optional bounded evidence)
-* Does **not** promise better commit prose under flag-on; message text may be unchanged vs flag-off (**Claim C** is follow-on)
-
-### Large-diff semantic tripwire (`--enable-semantic`)
-
-Under `--enable-semantic`, diffs impacting **>= 25** graph nodes can rank
-`architecture_refactor` even when genuinely additive (verified bound). Small diffs
-(`< 25` impacted nodes) are unaffected. For large additive commits, inspect ranking with
-`--dry-run --verbose` until the restructure-marker gate (follow-on P7) lands.
-
-* Does **not** use embeddings or cloud graph providers on the commit path
-* Does **not** run hub/callers fan-out or populate `complex_function_changed` / hub / callers product fields by default (Phase 9 / cheap follow-on only)
-* Opt-in graph refresh (`GIT_CG_SEMANTIC_REFRESH_GRAPH`) runs inside an **index-only shadow workspace** (Phase 7.5, #180, **Policy A**): only staged (index) content is synced; unstaged worktree edits are excluded. Graph stats and product queries continue to run on the **live** worktree (Policy A keeps the query root on live `repo_root`; Policy B / staged-truth query root is a follow-on).
-
-## Commit-message gold lint (Phase 7.25)
-
-`git-cg` runs a deterministic **gold linter** (`git_cg.commit_gold`) over the structured
-commit plan **after** contract enforcement and the mixed-policy handle, and **before**
-the message is written or shown as final. It checks content quality only — the SOP
-matrix ranker remains the sole intent/SemVer authority.
-
-### What gold checks
-
-* **Banned body openers** (`GOLD_BODY_INVENTORY`): the first line of each body bullet is
-  checked against the authoritative `BANNED_BODY_OPENERS` constant in
-  `src/git_cg/commit_gold.py` (currently `This commit introduces` / `This commit adds` /
-  `This commit updates` / `This PR` / `We have`) — lead with the user-visible outcome
-  and the why/behaviour delta instead.
-* **Included-changes coverage** (`GOLD_INCLUDED_CHANGES_MISSING`): a multi-surface diff
-  (>=2 path groups among `tests` / `docs` / `config_ci` / `release` / `product_src`) with a
-  competitive ranked secondary should carry matrix-legal secondary intents (Included
-  changes) or recommend a split. A split recommendation alone passes coverage.
-* **Type/group coherence** (`GOLD_GROUP_PRIMARY_MISMATCH`, `GOLD_TYPE_GROUP_INCOHERENT`):
-  structured type ↔ changelog-group stories that read as incoherent (e.g. a `feat`
-  primary in a `Fixed`-only group with no explaining fix secondary). A legitimate
-  `fix` primary + `feat` secondary that escalates the trailer to MINOR **passes** — this
-  is render-correct, not a gold fail.
-* **Contract smoke** (`GOLD_CONTRACT_SMOKE`): primary fields disagreeing with the
-  enforced contract (a bug; may hard-fail independent of mode).
-
-### Gold modes and resolution order
-
-Gold runs in one of four modes. Resolution order (no hook-argv sniffing):
-
-1. `GIT_CG_GOLD_MODE` = `off` / `warn` / `strict` (env override; `surface` is **not** a valid env value)
-2. `strict=True` (standalone `git-cg --strict`) or `--gold-strict` → **strict**
-3. interactive TTY review (`-i` with a usable TTY) → **surface**
-4. default → **warn**
-
-`--gold-strict` resolves gold to strict **without** enabling general `--strict` behaviour —
-use it on the hook path (`git-cg commit --gold-strict`) when you want gold to gate the commit
-but non-gold failures to remain non-fatal.
-
-| Mode | Behaviour |
-| --- | --- |
-| `off` | No-op. |
-| `warn` | Print findings; never block the commit (hook-safe default). |
-| `surface` | Show findings before the existing interactive review menu; user decides. |
-| `strict` | Findings in `STRICT_FAIL_CODES` fail; at most **1** automatic wording regeneration, then a non-zero exit. |
-
-Findings print unconditionally in `warn` / `surface` / `strict` (never verbose-gated).
-
-### Rank bugs vs wording bugs
-
-Gold never re-ranks. A wrong **primary intent** is a ranker/SOP/signals bug fixed with
-characterisation fixtures (Slice 1); gold only requests **wording** / **secondary-coverage**
-regeneration through a dedicated, directive-free `gold_guidance` channel (no
-`preferred_type`, no OVERRIDE / ranking-precedence language).
-
-### `--dry-run` and `--recover`
-
-* `--dry-run` runs gold on the generation path (findings visible); no message is written.
-* `--recover` is a **gold no-op** (no structured plan exists on the recover path).
-
-### Measurement
-
-Phase work is gated by **Claim A** (plumbing/safety) and **Claim B** (deterministic ranking/context before-after fixtures). Final-message quality uplift (**Claim C**) is a follow-on / post-merge concern. Future phases should define A/B/C the same way.
-

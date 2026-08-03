@@ -25,7 +25,25 @@ flag "-e --engine" help="AI engine to use when running git-cg directly." default
 flag "-d --dry-run" help="Generate and print the commit message without applying a commit."
 flag "-v --verbose" help="Enable verbose output."
 flag --strict help="Exit non-zero on failure for standalone CLI use."
+flag --enable-semantic help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off)."
+flag --no-enable-semantic help="Disable Phase 1 semantic producers for this run."
+flag --rank-arbitrate help="Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto)."
+flag --no-rank-arbitrate help="Disable Low-confidence intent arbitration; keep top rank + telemetry."
+flag --gold-strict help="Resolve gold lint to strict mode without enabling general --strict."
+flag "-r --recover" help="Recover and retry the last generated commit message without querying the AI."
 cmd commit help="Generate an AI commit message based on staged changes." {
+    flag --rank-arbitrate help="Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto)."
+    flag --no-rank-arbitrate help="Disable Low-confidence intent arbitration; keep top rank + telemetry."
+    flag --enable-semantic help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off)."
+    flag --no-enable-semantic help="Disable Phase 1 semantic producers for this run."
+    flag --gold-strict help="Resolve gold lint to strict mode without enabling general --strict."
+    flag "-i --interactive" help="Enable terminal-native interactive review via gum when a TTY is available."
+    flag --strict help="Exit non-zero on failure. Leave OFF for git hooks so a failed generation never blocks the commit."
+    flag "-d --dry-run" help="Do not write the commit message, just print it."
+    flag "-v --verbose" help="Enable verbose output."
+    flag "-e --engine" help="AI engine to use (e.g. omlx, mtplx)." default=mtplx {
+        arg <ENGINE>
+    }
     arg "[COMMIT_MSG_FILE]" help="Path to the commit message file" required=#false default=".git/COMMIT_EDITMSG"
     arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')" required=#false default=""
 }
