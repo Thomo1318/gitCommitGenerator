@@ -239,11 +239,12 @@ def test_gitmoji_cc_groups_matches_sop(sop_matrix: list[dict]) -> None:
     for row in sop_matrix:
         emoji = _norm(row["emoji"])
         assert emoji in GITMOJI_CC_GROUPS, f"SOP emoji {emoji!r} missing from GITMOJI_CC_GROUPS"
-        cc_type, groups = GITMOJI_CC_GROUPS[emoji]
+        cc_type, groups, semver = GITMOJI_CC_GROUPS[emoji]
         assert cc_type == row["cc_type"], f"{emoji!r}: cc_type {cc_type!r} != SOP {row['cc_type']!r}"
         assert row["changelog_group"] in groups, (
             f"{emoji!r}: SOP changelog_group {row['changelog_group']!r} not in static {sorted(groups)}"
         )
+        assert semver == row["semver_impact"], f"{emoji!r}: SOP semver {row['semver_impact']!r} != static {semver!r}"
 
 
 def test_f7_secondary_incoherent_group_fails() -> None:
@@ -275,6 +276,104 @@ def test_f7_unknown_gitmoji_skipped_not_failed() -> None:
     plan = _plan(FEAT, [weird])
     report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
     assert "GOLD_TYPE_GROUP_INCOHERENT" not in report.codes()
+
+
+def test_f2_semver_matrix_mismatch_fails() -> None:
+    """F2: plan SemVer that disagrees with the matrix gitmoji row fails strict."""
+    # ✨ is MINOR in the matrix; inflate to MAJOR.
+    inflated = _intent("feature_addition", "✨", "feat", "MAJOR", "Added")
+    report = check_commit_gold(_plan(inflated), None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" in report.codes()
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" in STRICT_FAIL_CODES
+    assert not report.ok_for_mode("strict")
+
+
+def test_f2_semver_matrix_coherent_passes() -> None:
+    """F2: matrix-keyed SemVer on primary + secondary passes."""
+    test_misc = _intent("test_update", "✅", "test", "NONE", "Miscellaneous")
+    plan = _plan(FEAT, [test_misc])  # FEAT is MINOR/Added; test is NONE/Misc
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" not in report.codes()
+
+
+def test_f2_semver_secondary_mismatch_fails() -> None:
+    """F2: a secondary with inflated SemVer fails even when primary is coherent."""
+    test_inflated = _intent("test_update", "✅", "test", "MINOR", "Miscellaneous")
+    plan = _plan(FEAT, [test_inflated])
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" in report.codes()
+
+
+def test_f3_expanded_openers_flagged() -> None:
+    """F3: expanded marketing/inventory first-line openers fire GOLD_BODY_INVENTORY."""
+    for opener in ("Adds ", "Introduces ", "Ensures ", "This change "):
+        plan = _plan(FEAT, body=f"{opener}a validation check for F7.")
+        report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+        assert "GOLD_BODY_INVENTORY" in report.codes(), opener
+        assert not report.ok_for_mode("strict")
+
+
+def test_f3_mid_body_adds_not_flagged() -> None:
+    """F3: 'Adds' mid-body (not first line) must not fire inventory."""
+    body = "Close the F7 audit gap at generation time.\n\nAdds a drift guard for the SOP matrix."
+    plan = _plan(FEAT, body=body)
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/git_cg/release.py"]))
+    assert "GOLD_BODY_INVENTORY" not in report.codes()
+
+
+def test_f4_filename_scope_fails() -> None:
+    """F4/F5 light: filename-like scopes fail GOLD_SCOPE_FILENAME."""
+    bad = _intent("documentation", "📝", "docs", "NONE", "Miscellaneous", scope="usage.kdl")
+    report = check_commit_gold(_plan(bad), None, signals=DiffSignals(files=["docs/usage.md"]))
+    assert "GOLD_SCOPE_FILENAME" in report.codes()
+    assert "GOLD_SCOPE_FILENAME" in STRICT_FAIL_CODES
+    assert not report.ok_for_mode("strict")
+
+
+def test_f4_path_scope_fails() -> None:
+    """F4/F5 light: path-like scopes fail GOLD_SCOPE_FILENAME."""
+    bad = _intent("documentation", "📝", "docs", "NONE", "Miscellaneous", scope="docs/usage")
+    report = check_commit_gold(_plan(bad), None, signals=DiffSignals(files=["docs/usage.md"]))
+    assert "GOLD_SCOPE_FILENAME" in report.codes()
+
+
+def test_f4_product_area_scope_passes() -> None:
+    """F4/F5 light: product-area scopes (commit, tui, cli) pass."""
+    ok = _intent("feature_addition", "✨", "feat", "MINOR", "Added", scope="commit")
+    report = check_commit_gold(_plan(ok), None, signals=DiffSignals(files=["src/git_cg/commit_gold.py"]))
+    assert "GOLD_SCOPE_FILENAME" not in report.codes()
+
+
+def test_f5_title_case_subject_fails() -> None:
+    """F5 light: Title Case primary description fails GOLD_SUBJECT_TITLE_CASE."""
+    titled = CommitIntent.model_construct(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType("feat"),
+        scope="commit",
+        description="Enforce Group Reachability Now",
+        semver_impact=SemVerImpact("MINOR"),
+        changelog_group="Added",
+    )
+    report = check_commit_gold(_plan(titled), None, signals=DiffSignals(files=["src/git_cg/commit_gold.py"]))
+    assert "GOLD_SUBJECT_TITLE_CASE" in report.codes()
+    assert "GOLD_SUBJECT_TITLE_CASE" in STRICT_FAIL_CODES
+    assert not report.ok_for_mode("strict")
+
+
+def test_f5_imperative_lowercase_subject_passes() -> None:
+    """F5 light: imperative lowercase description passes."""
+    ok = CommitIntent.model_construct(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType("feat"),
+        scope="commit",
+        description="enforce F7 group reachability",
+        semver_impact=SemVerImpact("MINOR"),
+        changelog_group="Added",
+    )
+    report = check_commit_gold(_plan(ok), None, signals=DiffSignals(files=["src/git_cg/commit_gold.py"]))
+    assert "GOLD_SUBJECT_TITLE_CASE" not in report.codes()
 
 
 def test_single_file_changelog_not_multi_surface(sop_matrix: list[dict]) -> None:
