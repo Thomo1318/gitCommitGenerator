@@ -448,18 +448,16 @@ def _run_gum_command_outcome(
             else:
                 result = subprocess.run(command, **run_kwargs)
 
-            # gum conventions: 0 = ok, 130/1 often cancel/Esc depending on version
-            if result.returncode in {130, 1} and not (result.stdout or "").strip():
+            # gum conventions: 0 = ok; 130 + empty stdout = user cancel/Esc.
+            # Other non-zero exits (including 1) are infrastructure/failed so
+            # arbitration can fail closed to top-rank without a cancel_abort label.
+            stripped = (result.stdout or "").strip()
+            if result.returncode == 130 and not stripped:
                 return GumOutcome(status="cancelled")
             if result.returncode != 0:
-                # Non-zero with empty stdout → treat as cancel when interactive dismiss
-                if not (result.stdout or "").strip():
-                    return GumOutcome(status="cancelled")
                 return GumOutcome(status="failed")
-
-            stripped = (result.stdout or "").strip()
             if not stripped:
-                return GumOutcome(status="cancelled")
+                return GumOutcome(status="failed")
             return GumOutcome(status="selected", value=stripped)
     except FileNotFoundError:
         return GumOutcome(status="unavailable")
@@ -479,9 +477,12 @@ def gum_choose(
     """Interactive single-select via ``gum choose`` with discriminated outcome."""
     if not options:
         return GumOutcome(status="failed", value=None)
-    command = ["gum", "choose", *options]
+    command = ["gum", "choose"]
     if header:
         command.extend(["--header", header])
+    # POSIX end-of-options so labels beginning with "-" are not parsed as flags.
+    command.append("--")
+    command.extend(options)
     return _run_gum_command_outcome(
         command,
         title=title,
@@ -538,6 +539,8 @@ def gum_filter(
     command = ["gum", "filter", "--placeholder", placeholder, "--limit", "1"]
     if header:
         command.extend(["--header", header])
+    # Options are supplied on stdin (not argv); trailing "--" keeps flag parsing closed.
+    command.append("--")
     input_text = "\n".join(options) + "\n"
     return _run_gum_command_outcome(
         command,
