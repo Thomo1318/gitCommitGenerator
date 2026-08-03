@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from git_cg.intent import DiffSignals, IntentSelectionConstraints, RankedIntent, matrix_row_intent_id
 from git_cg.models import CommitPlan
+from git_cg.ranking_confidence import RankingConfidence
 from git_cg.sop import get_gitmoji_matrix
+
+LockResolution = Literal[
+    "accepted",
+    "rejected_not_allowed",
+    "rejected_hard_veto",
+    "absent",
+]
 
 
 @dataclass
@@ -16,6 +24,10 @@ class GenerationContext:
 
     Phase 7 optional fields (``semantic_summary``, ``risk_assessment``) are ignored by
     ``resolve_semantic_contract`` / ``enforce_semantic_contract`` — matrix authority only.
+
+    Issue #195: ``ranked_intents`` + ``ranking_confidence`` form an immutable pair owned
+    by the sole rank-pass seam (``_build_generation_context``). Downstream consumers
+    must receive this snapshot and must not re-run ranking or confidence.
     """
 
     diff_signals: DiffSignals
@@ -25,6 +37,7 @@ class GenerationContext:
     risk_assessment: Any | None = None  # RiskAssessment | None
     scope_priors: Any | None = None  # Phase 8.5 placeholder
     preflight_groups: Any | None = None  # Phase 0.5 placeholder
+    ranking_confidence: RankingConfidence | None = None  # Issue #195 — same rank-pass
 
 
 @dataclass
@@ -34,6 +47,8 @@ class RegenerationState:
     previous_plan: CommitPlan | None = None
     active_directives: dict[str, str] = field(default_factory=dict)
     residual_guidance: str | None = None
+    # Issue #195: human / cancel→A lock. First-class field — do not overload preferred_type.
+    locked_intent_id: str | None = None
 
 
 @dataclass
@@ -46,22 +61,55 @@ class ResolvedCommitContract:
     semver_impact: str
     changelog_group: str
     secondary_intent_ids: list[str]
+    # Issue #195: closed observability for lock acceptance / rejection.
+    lock_resolution: LockResolution = "absent"
+
+
+def _row_is_eligible(intent_id: str, allowed_ids: set[str] | None) -> bool:
+    """Return whether ``intent_id`` is inside the constrained eligible set."""
+    if allowed_ids is None:
+        return True
+    return intent_id in allowed_ids
+
+
+def _classify_lock_rejection(
+    locked_intent_id: str,
+    *,
+    allowed_ids: set[str] | None,
+    matrix_ids: set[str],
+) -> LockResolution:
+    """Classify why a lock was not selected (closed codes only)."""
+    if allowed_ids is not None and locked_intent_id not in allowed_ids:
+        return "rejected_not_allowed"
+    if locked_intent_id not in matrix_ids:
+        return "rejected_hard_veto"
+    # Present on matrix and allowed, but still not selected (e.g. preferred_type
+    # path already chose something else without an eligible lock — should not
+    # happen when lock is eligible). Treat as hard veto for observability.
+    return "rejected_hard_veto"
+
+
+def _matrix_row_for_intent(matrix: list[dict], intent_id: str) -> dict | None:
+    return next((r for r in matrix if matrix_row_intent_id(r) == intent_id), None)
 
 
 def resolve_semantic_contract(context: GenerationContext, state: RegenerationState) -> ResolvedCommitContract:
     """
     Resolve the semantic commit contract for the next generation cycle.
 
-    Selects a primary intent using active directives, allowed-intent constraints, ranked
-    intents, and the previous plan when available. Uses a graceful fallback contract when
-    the gitmoji matrix is unavailable.
+    Selection order over the already-constrained eligible set (Issue #195):
+    ``locked_intent_id`` (if still eligible) → ``previous_plan`` (if eligible) →
+    ranked/default fallback. ``preferred_type`` narrows inside eligible but must
+    not discard an eligible human lock and must not select outside eligible.
 
     Parameters:
         context (GenerationContext): Inputs containing ranked intents and selection constraints.
-        state (RegenerationState): Steering state containing active directives and an optional previous plan.
+        state (RegenerationState): Steering state containing active directives, optional previous plan,
+            and optional ``locked_intent_id``.
 
     Returns:
-        ResolvedCommitContract: The selected primary intent metadata and secondary intent identifiers.
+        ResolvedCommitContract: The selected primary intent metadata, secondary intent identifiers,
+            and closed ``lock_resolution`` observability.
     """
     matrix = get_gitmoji_matrix()
     if not matrix:
@@ -73,60 +121,78 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
             semver_impact="NONE",
             changelog_group="Miscellaneous",
             secondary_intent_ids=[],
+            lock_resolution="absent",
         )
 
     preferred_type = state.active_directives.get("preferred_type")
-    resolved_row = None
+    locked_intent_id = state.locked_intent_id
     allowed_ids = set(context.constraints.allowed_intent_ids) if context.constraints.allowed_intent_ids else None
+    matrix_ids = {matrix_row_intent_id(r) for r in matrix}
 
-    if preferred_type:
-        for ranked in context.ranked_intents:
-            if ranked.cc_type == preferred_type:
-                if allowed_ids and ranked.intent_id not in allowed_ids:
-                    continue
-                resolved_row = next(
-                    (r for r in matrix if matrix_row_intent_id(r) == ranked.intent_id),
-                    None,
-                )
-                if resolved_row:
-                    break
+    resolved_row: dict | None = None
+    lock_resolution: LockResolution = "absent"
 
-        if not resolved_row:
-            # Fallback to the first matrix row matching the type if no ranked candidates work
-            if allowed_ids:
-                resolved_row = next(
-                    (
-                        r
-                        for r in matrix
-                        if r.get("cc_type") == preferred_type and matrix_row_intent_id(r) in allowed_ids
-                    ),
-                    None,
-                )
-            else:
-                resolved_row = next((r for r in matrix if r.get("cc_type") == preferred_type), None)
-
-    if not resolved_row and state.previous_plan is not None:
-        # Stable anchor to the previous plan only when still allowed by constraints.
-        prev_intent_id = state.previous_plan.primary_intent.intent_id
-        if not allowed_ids or prev_intent_id in allowed_ids:
-            resolved_row = next(
-                (r for r in matrix if matrix_row_intent_id(r) == prev_intent_id),
-                None,
+    def _try_lock() -> dict | None:
+        nonlocal lock_resolution
+        if locked_intent_id is None:
+            lock_resolution = "absent"
+            return None
+        if not _row_is_eligible(locked_intent_id, allowed_ids):
+            lock_resolution = _classify_lock_rejection(
+                locked_intent_id,
+                allowed_ids=allowed_ids,
+                matrix_ids=matrix_ids,
             )
+            return None
+        row = _matrix_row_for_intent(matrix, locked_intent_id)
+        if row is None:
+            lock_resolution = "rejected_hard_veto"
+            return None
+        lock_resolution = "accepted"
+        return row
 
-    if not resolved_row:
-        # First-pass / disallowed previous plan: lock to top ranked intent (constraints-aware)
+    def _try_previous_plan() -> dict | None:
+        if state.previous_plan is None:
+            return None
+        prev_intent_id = state.previous_plan.primary_intent.intent_id
+        if not _row_is_eligible(prev_intent_id, allowed_ids):
+            return None
+        return _matrix_row_for_intent(matrix, prev_intent_id)
+
+    def _try_ranked_or_matrix(*, cc_type_filter: str | None = None) -> dict | None:
         for ranked in context.ranked_intents:
             if allowed_ids and ranked.intent_id not in allowed_ids:
                 continue
-            resolved_row = next(
-                (r for r in matrix if matrix_row_intent_id(r) == ranked.intent_id),
-                None,
-            )
-            if resolved_row:
-                break
+            if cc_type_filter is not None and ranked.cc_type != cc_type_filter:
+                continue
+            row = _matrix_row_for_intent(matrix, ranked.intent_id)
+            if row is not None:
+                return row
+        # Matrix fallback inside eligible (+ optional preferred_type).
+        for row in matrix:
+            intent_id = matrix_row_intent_id(row)
+            if allowed_ids and intent_id not in allowed_ids:
+                continue
+            if cc_type_filter is not None and row.get("cc_type") != cc_type_filter:
+                continue
+            return row
+        return None
 
-    if not resolved_row:
+    # Normative algorithm (Issue #195 contract lock):
+    # preferred_type narrows inside eligible; eligible lock still beats preferred drift.
+    if preferred_type:
+        preferred_hit = _try_ranked_or_matrix(cc_type_filter=preferred_type)
+        if preferred_hit is not None:
+            locked_row = _try_lock()
+            # Lock absent or rejected - preferred_type may select among eligible.
+            resolved_row = locked_row if locked_row is not None else preferred_hit
+        else:
+            # No preferred_type hit inside eligible → lock → previous_plan → ranked/default.
+            resolved_row = _try_lock() or _try_previous_plan() or _try_ranked_or_matrix()
+    else:
+        resolved_row = _try_lock() or _try_previous_plan() or _try_ranked_or_matrix()
+
+    if resolved_row is None:
         if allowed_ids:
             resolved_row = next(
                 (r for r in matrix if matrix_row_intent_id(r) in allowed_ids),
@@ -134,6 +200,24 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
             )
         else:
             resolved_row = matrix[0]
+        if locked_intent_id is not None and lock_resolution == "absent":
+            lock_resolution = _classify_lock_rejection(
+                locked_intent_id,
+                allowed_ids=allowed_ids,
+                matrix_ids=matrix_ids,
+            )
+
+    # If a lock was supplied but we did not accept it, ensure rejection is classified.
+    if locked_intent_id is not None and lock_resolution == "absent":
+        selected_id = matrix_row_intent_id(resolved_row)
+        if selected_id == locked_intent_id:
+            lock_resolution = "accepted"
+        else:
+            lock_resolution = _classify_lock_rejection(
+                locked_intent_id,
+                allowed_ids=allowed_ids,
+                matrix_ids=matrix_ids,
+            )
 
     primary_id = matrix_row_intent_id(resolved_row)
 
@@ -146,6 +230,7 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
         secondary_intent_ids=(
             [sec.intent_id for sec in state.previous_plan.secondary_intents] if state.previous_plan else []
         ),
+        lock_resolution=lock_resolution,
     )
 
 
