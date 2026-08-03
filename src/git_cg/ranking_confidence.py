@@ -59,7 +59,7 @@ class RankingConfidence(BaseModel):
     margin: float
     top_intent_id: str
     runner_up_intent_id: str | None
-    reasons: list[ReasonCode] = Field(default_factory=list)
+    reasons: tuple[ReasonCode, ...] = Field(default_factory=tuple)
 
 
 def _has_exact_tie_top(ranked: list[RankedIntent], margin: float) -> bool:
@@ -119,18 +119,19 @@ def compute_ranking_confidence(
             margin=margin,
             top_intent_id=top.intent_id,
             runner_up_intent_id=None,
-            reasons=[],
+            reasons=(),
         )
 
-    reasons: list[ReasonCode] = []
+    reasons_list: list[ReasonCode] = []
     if margin < LOW_CONFIDENCE_MARGIN:
-        reasons.append(REASON_MARGIN_BELOW_LOW_THRESHOLD)
+        reasons_list.append(REASON_MARGIN_BELOW_LOW_THRESHOLD)
     if _has_exact_tie_top(ranked, margin):
-        reasons.append(REASON_EXACT_TIE_TOP)
+        reasons_list.append(REASON_EXACT_TIE_TOP)
     if _has_near_tie_top3(ranked):
-        reasons.append(REASON_NEAR_TIE_TOP3)
+        reasons_list.append(REASON_NEAR_TIE_TOP3)
     if _has_mixed_intent(ranked, margin):
-        reasons.append(REASON_MIXED_INTENT)
+        reasons_list.append(REASON_MIXED_INTENT)
+    reasons = tuple(reasons_list)
 
     if reasons:
         level: ConfidenceLevel = "low"

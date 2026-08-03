@@ -3,19 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
 from git_cg.intent import DiffSignals, IntentSelectionConstraints, RankedIntent, matrix_row_intent_id
 from git_cg.models import CommitPlan
 from git_cg.ranking_confidence import RankingConfidence
 from git_cg.sop import get_gitmoji_matrix
-
-LockResolution = Literal[
-    "accepted",
-    "rejected_not_allowed",
-    "rejected_hard_veto",
-    "absent",
-]
+from git_cg.telemetry import LockResolution
 
 
 @dataclass

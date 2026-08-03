@@ -49,23 +49,23 @@ def test_single_ranked_row_is_high_with_zero_margin() -> None:
     assert confidence.margin == 0.0
     assert confidence.top_intent_id == "feature_addition"
     assert confidence.runner_up_intent_id is None
-    assert confidence.reasons == []
+    assert confidence.reasons == ()
 
 
 @pytest.mark.parametrize(
     ("runner_up_score", "expected_level", "expected_reasons"),
     [
-        (93.8, "low", [REASON_MARGIN_BELOW_LOW_THRESHOLD]),
-        (88.0, "medium", []),  # margin == T_low → not Low
-        (75.1, "medium", []),
-        (75.0, "high", []),  # margin == T_high → not Medium
+        (93.8, "low", (REASON_MARGIN_BELOW_LOW_THRESHOLD,)),
+        (88.0, "medium", ()),  # margin == T_low → not Low
+        (75.1, "medium", ()),
+        (75.0, "high", ()),  # margin == T_high → not Medium
     ],
     ids=["below-low", "at-low", "below-high", "at-high"],
 )
 def test_margin_boundaries_are_exclusive(
     runner_up_score: float,
     expected_level: str,
-    expected_reasons: list[str],
+    expected_reasons: tuple[str, ...],
 ) -> None:
     """A_01: exclusive T_low / T_high boundaries."""
     confidence = compute_ranking_confidence(
@@ -93,7 +93,7 @@ def test_low_margin_exposes_runner_up_and_exact_margin() -> None:
     assert confidence.margin == pytest.approx(6.2)
     assert confidence.top_intent_id == "feature_addition"
     assert confidence.runner_up_intent_id == "feature_refinement"
-    assert confidence.reasons == [REASON_MARGIN_BELOW_LOW_THRESHOLD]
+    assert confidence.reasons == (REASON_MARGIN_BELOW_LOW_THRESHOLD,)
 
 
 def test_exact_tie_is_low_and_distinct_from_single_row_fallback() -> None:
@@ -107,7 +107,7 @@ def test_exact_tie_is_low_and_distinct_from_single_row_fallback() -> None:
 
     assert confidence.level == "low"
     assert confidence.margin == 0.0
-    assert confidence.reasons == [REASON_MARGIN_BELOW_LOW_THRESHOLD, REASON_EXACT_TIE_TOP]
+    assert confidence.reasons == (REASON_MARGIN_BELOW_LOW_THRESHOLD, REASON_EXACT_TIE_TOP)
 
 
 def test_near_tie_top3_is_reported_for_three_close_candidates() -> None:
@@ -120,7 +120,7 @@ def test_near_tie_top3_is_reported_for_three_close_candidates() -> None:
     )
 
     assert confidence.level == "low"
-    assert confidence.reasons == [REASON_MARGIN_BELOW_LOW_THRESHOLD, REASON_NEAR_TIE_TOP3]
+    assert confidence.reasons == (REASON_MARGIN_BELOW_LOW_THRESHOLD, REASON_NEAR_TIE_TOP3)
 
 
 def test_mixed_intent_is_reported_for_close_top_two_groups() -> None:
@@ -132,7 +132,7 @@ def test_mixed_intent_is_reported_for_close_top_two_groups() -> None:
     )
 
     assert confidence.level == "low"
-    assert confidence.reasons == [REASON_MARGIN_BELOW_LOW_THRESHOLD, REASON_MIXED_INTENT]
+    assert confidence.reasons == (REASON_MARGIN_BELOW_LOW_THRESHOLD, REASON_MIXED_INTENT)
 
 
 def test_conflicts_compound_without_mutating_ranked_rows() -> None:
@@ -145,12 +145,12 @@ def test_conflicts_compound_without_mutating_ranked_rows() -> None:
     confidence = compute_ranking_confidence(ranked)
 
     assert confidence.level == "low"
-    assert confidence.reasons == [
+    assert confidence.reasons == (
         REASON_MARGIN_BELOW_LOW_THRESHOLD,
         REASON_EXACT_TIE_TOP,
         REASON_NEAR_TIE_TOP3,
         REASON_MIXED_INTENT,
-    ]
+    )
     assert [row.score for row in ranked] == [100.0, 100.0, 89.0]
 
 
@@ -165,7 +165,7 @@ def test_semantic_lexical_disagreement_is_ignored_in_v1() -> None:
     )
 
     assert confidence.level == "high"
-    assert confidence.reasons == []
+    assert confidence.reasons == ()
     assert "semantic_lexical_disagreement" not in confidence.reasons
 
 
@@ -192,7 +192,7 @@ def test_distinct_groups_high_margin_does_not_emit_mixed_intent() -> None:
     assert confidence.margin == pytest.approx(LOW_CONFIDENCE_MARGIN)
     assert confidence.level == "medium"
     assert REASON_MIXED_INTENT not in confidence.reasons
-    assert confidence.reasons == []
+    assert confidence.reasons == ()
 
 
 def test_top_to_third_exactly_t_near_does_not_emit_near_tie() -> None:
@@ -208,7 +208,7 @@ def test_top_to_third_exactly_t_near_does_not_emit_near_tie() -> None:
     assert confidence.margin == pytest.approx(6.0)
     assert confidence.level == "low"
     assert REASON_NEAR_TIE_TOP3 not in confidence.reasons
-    assert confidence.reasons == [REASON_MARGIN_BELOW_LOW_THRESHOLD]
+    assert confidence.reasons == (REASON_MARGIN_BELOW_LOW_THRESHOLD,)
 
 
 def test_len_less_than_three_never_emits_near_tie_top3() -> None:
@@ -235,7 +235,7 @@ def test_mixed_intent_kwarg_does_not_force_low_on_high_margin_same_group() -> No
     )
 
     assert confidence.level == "high"
-    assert confidence.reasons == []
+    assert confidence.reasons == ()
     assert REASON_MIXED_INTENT not in confidence.reasons
 
 
