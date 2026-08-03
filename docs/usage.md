@@ -129,67 +129,11 @@ Display the GitOps SOP matrices and workflows.
 - **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
 
 Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
-Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto).
 
 ### Flags
 
 #### `--pre-release <IDENTIFIER>`
 
-Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
-
-#### `--no-rank-arbitrate`
-
-Disable Low-confidence intent arbitration; keep top rank + telemetry.
-
-#### `--enable-semantic`
-
-Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off).
-
-#### `--no-enable-semantic`
-
-Disable Phase 1 semantic producers for this run.
-
-#### `--gold-strict`
-
-Resolve gold lint to strict mode without enabling general --strict.
-
-#### `-i --interactive`
-
-Enable terminal-native interactive review via gum when a TTY is available.
-
-#### `--strict`
-
-Exit non-zero on failure. Leave OFF for git hooks so a failed generation never blocks the commit.
-
-#### `-d --dry-run`
-
-Do not write the commit message, just print it.
-
-#### `-v --verbose`
-
-Enable verbose output.
-
-#### `-e --engine <ENGINE>`
-
-AI engine to use (e.g. omlx, mtplx).
-
-**Default:** `mtplx`
-
-## `git-cg sop`
-
-- **Usage**: `git-cg sop`
-
-Display the GitOps SOP matrices and workflows.
-
-## `git-cg release`
-
-- **Usage**: `git-cg release [--pre-release <IDENTIFIER>]`
-
-Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog.
-
-### Flags
-
-#### `--pre-release <IDENTIFIER>`
 
 ## Ranking confidence + intent arbitration (Phase 7.29)
 
@@ -281,5 +225,3 @@ boundary only. Sentry receives closed tags on error paths (`ranking_confidence_l
 * Storyboard product: [`docs/diagrams/ranking-confidence/TUI-flow.mmd`](diagrams/ranking-confidence/TUI-flow.mmd)
 * GitHub-safe PNG: [`docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.png`](diagrams/ranking-confidence/TUI-flow-elk-darkbg.png)
 * Authoring method + worked menus: [`docs/tui_mermaid_guide.md`](tui_mermaid_guide.md) §1–5
-
-Add or bump a pre-release identifier (e.g., 'alpha', 'rc')

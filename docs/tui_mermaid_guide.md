@@ -113,8 +113,10 @@ In terminal storyboards, menu options must appear in exact vertical sequence (e.
 Here are the 4 complementary techniques to ensure exact vertical and column ordering:
 
 #### Technique 1: ELK Model Order Strategy (`NODES_AND_EDGES`)
+
 When using ELK, add `layered.considerModelOrder.strategy` to the `init.elk` configuration block:
-```yaml
+
+```text
 %%{
   init: {
     'flowchart': {
@@ -126,11 +128,14 @@ When using ELK, add `layered.considerModelOrder.strategy` to the `init.elk` conf
   }
 }%%
 ```
+
 This instructs ELK's layered algorithm to preserve source declaration order when assigning vertical ranks within a column layer.
 
 #### Technique 2: Subgraph Lanes with `direction TB`
+
 Group columns into discrete lane subgraphs (`L1`, `L2`, `L3`...) and declare `direction TB` inside each lane:
-```mermaid
+
+```text
 subgraph L2["2 · First chooser"]
   direction TB
   LOCK_A["1. Use A"]
@@ -143,15 +148,19 @@ end
 ```
 
 #### Technique 3: Invisible Structural Constraints (`~~~`)
+
 If cross-column transitions or back-edges pull nodes out of vertical order in complex graphs, chain sibling nodes with invisible constraint edges (`~~~`):
-```mermaid
+
+```text
 %% Hard vertical constraint chain (rendered invisibly)
 LOCK_A ~~~ LOCK_B ~~~ CANDIDATES ~~~ GUIDANCE ~~~ SPECIFY ~~~ CANCEL_MENU
 ```
 
 #### Technique 4: Sequential Forward Edge Declarations
+
 Declare forward transitions from the parent menu strictly in menu sequence:
-```mermaid
+
+```text
 MAIN -->|1. Use A| LOCK_A
 MAIN -->|2. Use B| LOCK_B
 MAIN -->|3. See more…| CANDIDATES
@@ -1225,7 +1234,7 @@ flowchart LR
 
 #### Embed pattern (issues / docs)
 
-ELK is **not banned** — GitHub’s issue/PR Mermaid renderer simply **does not apply** `defaultRenderer: 'elk'`. For ELK (or any layout-sensitive diagram) on GitHub, convert Mermaid → **SVG** (preferred over PNG for scaling) and embed the image. Keep the raw `.mmd` beside it.
+ELK is **not banned** — GitHub’s issue/PR Mermaid renderer simply **does not apply** `defaultRenderer: 'elk'`. For ELK (or any layout-sensitive diagram) on GitHub, convert Mermaid → **PNG** (authoritative embed format for this repo; SVG with `<foreignObject>` may strip on GitHub) and embed the image. Keep the raw `.mmd` beside it.
 
 ```markdown
 ### Intent arbitration (detailed storyboard)
@@ -1262,22 +1271,22 @@ so embed the pre-rendered **PNG** on GitHub (SVG with `<foreignObject>` may stri
 # 1. Transparent background (recommended for markdown & dark/light themes)
 PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 mmdc -i docs/diagrams/ranking-confidence/TUI-flow.mmd \
-     -o docs/diagrams/ranking-confidence/TUI-flow-elk-transparent.svg \
+     -o docs/diagrams/ranking-confidence/TUI-flow-elk-transparent.png \
      -b transparent
 
-# 2. Solid Catppuccin Mocha canvas background (#1e1e2e)
+# 2. Solid Catppuccin Mocha canvas background (#1e1e2e) — canonical GitHub embed
 PUPPETEER_EXECUTABLE_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 mmdc -i docs/diagrams/ranking-confidence/TUI-flow.mmd \
-     -o docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.svg \
+     -o docs/diagrams/ranking-confidence/TUI-flow-elk-darkbg.png \
      -b "#1e1e2e"
 ```
 
 **CI / GitHub Action (optional automation)**
 
-A workflow can convert raw Mermaid (including ELK) to SVG on push/PR so issues and docs always embed fresh assets:
+A workflow can convert raw Mermaid (including ELK) to PNG on push/PR so issues and docs always embed fresh assets:
 
 1. Glob `docs/**/*.mmd` (or only files whose source contains `elk` / `defaultRenderer`).
-2. Render each to a sibling `.svg` with `bm`, mermaid-cli, or a container image that includes a browser for mermaid-cli.
+2. Render each to a sibling `.png` with `bm`, mermaid-cli, or a container image that includes a browser for mermaid-cli.
 3. Commit the SVG (bot PR) **or** upload as a workflow artifact; prefer committing under `docs/diagrams/` so GitHub issue markdown can link stable paths.
 4. Fail the job if `.mmd` is newer than `.svg` without a regen (drift gate).
 
