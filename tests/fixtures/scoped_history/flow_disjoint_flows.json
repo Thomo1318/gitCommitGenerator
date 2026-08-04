@@ -1,0 +1,6 @@
+{
+  "flows": [
+    {"id": "flow_auth", "name": "auth_login", "files": ["src/auth/login.py", "src/auth/session.py"]},
+    {"id": "flow_billing", "name": "billing_charge", "files": ["src/billing/charge.py", "src/billing/invoice.py"]}
+  ]
+}
