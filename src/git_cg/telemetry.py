@@ -203,6 +203,17 @@ class GenerationTelemetry:
     gold_self_correction_attempts: int = 0
     gold_self_correction_outcome: str = GoldSelfCorrectionOutcome.NOT_NEEDED.value
     gold_split_recommendation: bool = False
+    # Phase 9 scoped-history producers (Issue #163). Allowlisted non-content + redacted free-text.
+    scoped_history_fallback_reason: str = "none"
+    scoped_history_latency_ms: float = 0.0
+    rename_confidence: str = "none"
+    scoped_history_split_high_confidence: bool = False
+    scoped_history_guidance: str | None = None
+    scoped_history_split_rationale: str = ""
+    scoped_history_rename_rationale: str = ""
+    structural_error_handling: bool = False
+    structural_public_api: bool = False
+    structural_new_command: bool = False
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -702,6 +713,40 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
                 redacted_ctx.append(redacted)
         telemetry.semantic_context_fallback_reasons = redacted_ctx
 
+    # Phase 9: redact free-text scoped-history guidance/rationales only.
+    # Closed enums (fallback_reason / rename_confidence) and bool markers stay as-is
+    # and are coerced to the closed vocabulary without betterleaks.
+    for attr in (
+        "scoped_history_guidance",
+        "scoped_history_split_rationale",
+        "scoped_history_rename_rationale",
+    ):
+        value = getattr(telemetry, attr, None)
+        if not value:
+            if attr == "scoped_history_guidance":
+                setattr(telemetry, attr, None)
+            else:
+                setattr(telemetry, attr, "")
+            continue
+        redacted = redact_payload(str(value))
+        if redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+            if attr == "scoped_history_guidance":
+                setattr(telemetry, attr, None)
+            else:
+                setattr(telemetry, attr, "[REDACTED]")
+        else:
+            setattr(telemetry, attr, redacted)
+
+    # Coerce closed Phase 9 enums on write (no free-text gateway).
+    try:
+        from git_cg.scoped_history import coerce_fallback_reason, coerce_rename_confidence
+
+        telemetry.scoped_history_fallback_reason = coerce_fallback_reason(telemetry.scoped_history_fallback_reason)
+        telemetry.rename_confidence = coerce_rename_confidence(telemetry.rename_confidence)
+    except Exception:
+        telemetry.scoped_history_fallback_reason = "none"
+        telemetry.rename_confidence = "none"
+
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
         json.dump(asdict(telemetry), f, indent=2)
@@ -818,6 +863,17 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("gold_self_correction_attempts", 0)
             data.setdefault("gold_self_correction_outcome", GoldSelfCorrectionOutcome.NOT_NEEDED.value)
             data.setdefault("gold_split_recommendation", False)
+            # Phase 9 scoped-history defaults (Issue #163).
+            data.setdefault("scoped_history_fallback_reason", "none")
+            data.setdefault("scoped_history_latency_ms", 0.0)
+            data.setdefault("rename_confidence", "none")
+            data.setdefault("scoped_history_split_high_confidence", False)
+            data.setdefault("scoped_history_guidance", None)
+            data.setdefault("scoped_history_split_rationale", "")
+            data.setdefault("scoped_history_rename_rationale", "")
+            data.setdefault("structural_error_handling", False)
+            data.setdefault("structural_public_api", False)
+            data.setdefault("structural_new_command", False)
             # Normalise ranking fields.
             level = data.get("ranking_confidence_level")
             if level is not None and level not in {m.value for m in RankingConfidenceLevel}:
@@ -892,6 +948,43 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
                 data["gold_split_recommendation"] = raw_split.strip().lower() in {"1", "true", "yes", "on"}
             else:
                 data["gold_split_recommendation"] = False
+            # Phase 9 normalise (Issue #163): closed enums + bounded free-text + bools.
+            try:
+                from git_cg.scoped_history import coerce_fallback_reason, coerce_rename_confidence
+
+                data["scoped_history_fallback_reason"] = coerce_fallback_reason(
+                    data.get("scoped_history_fallback_reason")
+                )
+                data["rename_confidence"] = coerce_rename_confidence(data.get("rename_confidence"))
+            except Exception:
+                data["scoped_history_fallback_reason"] = "none"
+                data["rename_confidence"] = "none"
+            try:
+                data["scoped_history_latency_ms"] = float(data.get("scoped_history_latency_ms") or 0.0)
+            except TypeError, ValueError:
+                data["scoped_history_latency_ms"] = 0.0
+            for bkey in (
+                "scoped_history_split_high_confidence",
+                "structural_error_handling",
+                "structural_public_api",
+                "structural_new_command",
+            ):
+                raw_b = data.get(bkey, False)
+                if isinstance(raw_b, bool):
+                    data[bkey] = raw_b
+                elif isinstance(raw_b, (int, float)) and not isinstance(raw_b, bool):
+                    data[bkey] = raw_b == 1
+                elif isinstance(raw_b, str):
+                    data[bkey] = raw_b.strip().lower() in {"1", "true", "yes", "on"}
+                else:
+                    data[bkey] = False
+            guidance = data.get("scoped_history_guidance")
+            if guidance is None or guidance == "":
+                data["scoped_history_guidance"] = None
+            else:
+                data["scoped_history_guidance"] = str(guidance)
+            data["scoped_history_split_rationale"] = str(data.get("scoped_history_split_rationale") or "")
+            data["scoped_history_rename_rationale"] = str(data.get("scoped_history_rename_rationale") or "")
             return GenerationTelemetry(**data)
     except Exception:
         return None
