@@ -2076,3 +2076,39 @@ def test_previous_plan_shown_with_user_directives() -> None:
     # User-override channel active AND previous plan still present as neutral delta context.
     assert "REGENERATION GUIDANCE (EXPLICIT USER OVERRIDE):" in prompt
     assert "PREVIOUS COMMIT PLAN (DELTA CONTEXT):" in prompt
+
+
+def test_scoped_history_guidance_channel_emits_directive_free_block():
+    """Channel 4 must quote guidance and ban authority overrides (Issue #163)."""
+    from git_cg.main import build_system_prompt
+
+    prompt = build_system_prompt(
+        _minimal_diff(),
+        scoped_history_guidance="Split evidence: disjoint flows across auth and billing.",
+    )
+    assert "SCOPED-HISTORY FEEDBACK (SPLIT/RENAME RATIONALE ONLY):" in prompt
+    assert "Split evidence: disjoint flows across auth and billing." in prompt
+    assert "MUST NOT change" in prompt
+    assert "preferred_type" in prompt  # ban language present
+    assert "not an explicit user ranking override" in prompt
+
+
+def test_scoped_history_guidance_omitted_when_absent():
+    from git_cg.main import build_system_prompt
+
+    prompt = build_system_prompt(_minimal_diff())
+    assert "SCOPED-HISTORY FEEDBACK" not in prompt
+
+
+def test_scoped_history_guidance_never_uses_user_override_channel():
+    """Channel 4 must not emit OVERRIDE / CRITICAL PRECEDENCE ranking language."""
+    from git_cg.main import build_system_prompt
+
+    prompt = build_system_prompt(
+        _minimal_diff(),
+        scoped_history_guidance="Rename evidence: corroborated rename pairs=1/1.",
+    )
+    # User-override channel markers must be absent when only Channel 4 is active.
+    assert "EXPLICIT USER OVERRIDE" not in prompt
+    assert "CRITICAL PRECEDENCE RULE" not in prompt
+    assert "SCOPED-HISTORY FEEDBACK" in prompt
