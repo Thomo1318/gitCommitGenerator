@@ -190,6 +190,117 @@ def test_a04_check_commit_gold_does_not_mutate_primary_fields() -> None:
     assert before == after
 
 
+def test_presentation_overlay_gold_accepts_legal_semver_and_group_divergence() -> None:
+    """After #204 overlay, gold keeps identity checks but allows presentation fields."""
+    contract = ResolvedCommitContract(
+        primary_intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type="feat",
+        semver_impact="MINOR",
+        changelog_group="Added",
+        secondary_intent_ids=[],
+    )
+    # Direct fixtures: bypass matrix canonicalisation so presentation fields stick.
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "PATCH",  # presentation ceiling below matrix MINOR
+        "Added",
+        scope="commit-quality",
+        description="apply path-class presentation overlay",
+    )
+    secondary = _intent(
+        "tests_update",
+        "✅",
+        "test",
+        "NONE",
+        "Tests",  # D19 presentation group (matrix row is Miscellaneous)
+        scope="commit-quality",
+        description="lock overlay cases",
+    )
+    plan = _plan(
+        primary,
+        [secondary],
+        body="Path-class overlay clamps SemVer and repairs changelog groups.",
+    )
+    report = check_commit_gold(
+        plan,
+        contract,
+        signals=DiffSignals(files=["src/git_cg/commit_quality.py", "tests/test_commit_quality.py"]),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_CONTRACT_SMOKE" not in report.codes()
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" not in report.codes()
+    assert "GOLD_TYPE_GROUP_INCOHERENT" not in report.codes()
+
+
+def test_presentation_overlay_gold_still_rejects_identity_drift() -> None:
+    """Even with overlay flag, intent_id/gitmoji drift remains GOLD_CONTRACT_SMOKE."""
+    contract = ResolvedCommitContract(
+        primary_intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type="feat",
+        semver_impact="MINOR",
+        changelog_group="Added",
+        secondary_intent_ids=[],
+    )
+    drifted = _intent(
+        "bug_fix",  # identity drift
+        "🐛",
+        "fix",
+        "PATCH",
+        "Fixed",
+        scope="commit-quality",
+        description="wrong identity after overlay",
+    )
+    plan = _plan(drifted, body="Identity must remain locked to the enforced contract.")
+    report = check_commit_gold(
+        plan,
+        contract,
+        signals=DiffSignals(files=["src/git_cg/commit_quality.py"]),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_CONTRACT_SMOKE" in report.codes()
+    msg = next(f.message for f in report.findings if f.code == "GOLD_CONTRACT_SMOKE")
+    assert "intent_id" in msg
+    assert "gitmoji" in msg
+
+
+def test_presentation_overlay_flag_default_keeps_legacy_matrix_strictness() -> None:
+    """Default callers still fail matrix SemVer/group mismatches (no silent relaxation)."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "NONE",  # matrix says MINOR
+        "Added",
+        scope="api",
+        description="clamp semver illegally without overlay flag",
+    )
+    secondary = _intent(
+        "tests_update",
+        "✅",
+        "test",
+        "NONE",
+        "Tests",  # matrix says Miscellaneous
+        scope="test",
+        description="bad group",
+    )
+    plan = _plan(
+        primary,
+        [secondary],
+        body="Legacy gold path remains strict without the overlay flag.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["src/git_cg/release.py", "tests/test_release.py"]),
+    )
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" in report.codes()
+    assert "GOLD_TYPE_GROUP_INCOHERENT" in report.codes()
+
+
 def test_contract_smoke_fires_on_diverged_primary() -> None:
     """GOLD_CONTRACT_SMOKE fires when primary fields disagree with the contract."""
     contract = ResolvedCommitContract(

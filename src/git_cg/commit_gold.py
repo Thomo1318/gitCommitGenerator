@@ -1,14 +1,19 @@
-"""Deterministic post-enforce commit-message gold linter (Issues #182 / #191).
+"""Deterministic post-enforce commit-message gold linter (Issues #182 / #191 / #204).
 
 Gold checks content quality of a structured ``CommitPlan`` *after*
 ``enforce_semantic_contract`` and the mixed-policy handle. The checker is pure:
 no I/O, no model calls, no SOP mutation, and no mutation of the plan/contract.
 
 Authority boundary (locked):
-    * The matrix ranker remains the sole ranking / ``semver_impact`` authority.
+    * The matrix ranker remains the sole ranking / identity authority
+      (``intent_id`` + matrix ``gitmoji``).
+    * Issue #204 presentation overlay may legally rewrite rendered presentation
+      fields (``cc_type``, scope, SemVer presentation, changelog group, inventory)
+      after enforce. When ``presentation_overlay_applied=True``, gold keeps
+      identity/wording checks but does not treat those presentation fields as
+      matrix-contract smoke failures.
     * Gold never emits ``preferred_type``/``preferred_scope`` steers and never
-      rewrites ``intent_id``/``gitmoji``/``cc_type``/``semver_impact``/
-      ``changelog_group``. It may only request *wording* / *secondary-coverage*
+      rewrites plan fields. It may only request *wording* / *secondary-coverage*
       regeneration via the dedicated ``gold_guidance`` channel.
 """
 
@@ -656,14 +661,26 @@ def _norm_gitmoji(emoji: str) -> str:
     return emoji.replace("\ufe0f", "").replace("\ufe0e", "")
 
 
-def _check_type_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
+def _check_type_group_coherence(
+    plan: CommitPlan,
+    *,
+    presentation_overlay_applied: bool = False,
+) -> list[GoldFinding]:
     """Emit ``GOLD_TYPE_GROUP_INCOHERENT`` for F7 group-unreachable trailer sets.
 
     F7: every declared type (primary + secondaries) must be coherent with *every*
     declared ``Changelog-Groups`` entry under the SOP matrix. An unknown gitmoji is
     skipped (enforce owns vocabulary), never failed here. Per-gitmoji coherent
     groups come from the static normative mapping (assert-tested against the SOP).
+
+    When ``presentation_overlay_applied`` is True (Issue #204), presentation may
+    legally emit D19 groups such as ``Tests`` / ``Documentation`` that the static
+    matrix row maps only to ``Miscellaneous``. In that mode, skip the gitmoji→group
+    matrix reachability check and rely on presentation allowlist + identity smoke.
     """
+    if presentation_overlay_applied:
+        return []
+
     incoherent: list[str] = []
     for intent in (plan.primary_intent, *plan.secondary_intents):
         entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
@@ -694,13 +711,24 @@ def _intent_semver(intent) -> str:
     return str(raw or "").strip().upper()
 
 
-def _check_semver_matrix(plan: CommitPlan) -> list[GoldFinding]:
+def _check_semver_matrix(
+    plan: CommitPlan,
+    *,
+    presentation_overlay_applied: bool = False,
+) -> list[GoldFinding]:
     """Emit ``GOLD_SEMVER_MATRIX_MISMATCH`` when an intent's SemVer disagrees with the SOP (F2).
 
     Each primary/secondary gitmoji has exactly one matrix ``semver_impact``. Gold never
     invents SemVer from type names or issue drama — it only checks the structured plan
     against the static matrix. Unknown gitmojis are skipped (enforce owns vocabulary).
+
+    When ``presentation_overlay_applied`` is True (Issue #204), presentation may clamp
+    rendered SemVer below the matrix row (e.g. ✨ MINOR → PATCH/NONE ceiling). Skip the
+    exact matrix equality check in that mode; identity smoke still guards intent/gitmoji.
     """
+    if presentation_overlay_applied:
+        return []
+
     mismatches: list[str] = []
     for intent in (plan.primary_intent, *plan.secondary_intents):
         entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
@@ -781,12 +809,21 @@ def _check_subject_title_case(plan: CommitPlan) -> list[GoldFinding]:
     ]
 
 
-def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | None) -> list[GoldFinding]:
+def _check_contract_smoke(
+    plan: CommitPlan,
+    contract: ResolvedCommitContract | None,
+    *,
+    presentation_overlay_applied: bool = False,
+) -> list[GoldFinding]:
     """Emit ``GOLD_CONTRACT_SMOKE`` when primary fields disagree with the contract.
 
     This is a bug-class smoke (enforce should make it impossible); it may hard-fail
     independently of mode. Skipped entirely when ``contract`` is ``None`` (direct
     structured fixtures — F4).
+
+    With ``presentation_overlay_applied=True`` (Issue #204), only identity fields
+    (``intent_id``, ``gitmoji``) are smoke-checked. Presentation-owned ``cc_type``,
+    ``semver_impact``, and ``changelog_group`` may legally diverge after overlay.
     """
     if contract is None:
         return []
@@ -797,15 +834,16 @@ def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | N
         mismatches.append(f"intent_id {primary.intent_id!r} != contract {contract.primary_intent_id!r}")
     if primary.gitmoji != contract.gitmoji:
         mismatches.append(f"gitmoji {primary.gitmoji!r} != contract {contract.gitmoji!r}")
-    if primary_type != contract.cc_type:
-        mismatches.append(f"cc_type {primary_type!r} != contract {contract.cc_type!r}")
-    primary_semver = (
-        primary.semver_impact.value if hasattr(primary.semver_impact, "value") else str(primary.semver_impact)
-    )
-    if primary_semver != contract.semver_impact:
-        mismatches.append(f"semver_impact {primary_semver!r} != contract {contract.semver_impact!r}")
-    if str(primary.changelog_group) != str(contract.changelog_group):
-        mismatches.append(f"changelog_group {primary.changelog_group!r} != contract {contract.changelog_group!r}")
+    if not presentation_overlay_applied:
+        if primary_type != contract.cc_type:
+            mismatches.append(f"cc_type {primary_type!r} != contract {contract.cc_type!r}")
+        primary_semver = (
+            primary.semver_impact.value if hasattr(primary.semver_impact, "value") else str(primary.semver_impact)
+        )
+        if primary_semver != contract.semver_impact:
+            mismatches.append(f"semver_impact {primary_semver!r} != contract {contract.semver_impact!r}")
+        if str(primary.changelog_group) != str(contract.changelog_group):
+            mismatches.append(f"changelog_group {primary.changelog_group!r} != contract {contract.changelog_group!r}")
     if not mismatches:
         return []
     return [
@@ -823,6 +861,7 @@ def check_commit_gold(
     signals: DiffSignals,
     ranked_intents: list | None = None,
     path_summary: object | None = None,
+    presentation_overlay_applied: bool = False,
 ) -> GoldReport:
     """Run the pure gold checks over a structured, post-enforce commit plan.
 
@@ -839,6 +878,11 @@ def check_commit_gold(
             ``None`` to skip coverage findings.
         path_summary (object | None): Optional precomputed cache only — never
             treated as a second source of truth (O-P1.5).
+        presentation_overlay_applied (bool): When True, Issue #204 presentation
+            overlay has already adjusted rendered presentation fields. Gold keeps
+            identity + wording checks, but skips matrix equality on presentation-
+            owned SemVer/type/group fields. Default False preserves legacy strict
+            behaviour for direct callers/tests.
 
     Returns:
         GoldReport: Immutable findings; the plan/contract are never mutated.
@@ -849,10 +893,16 @@ def check_commit_gold(
     findings.extend(_check_body_inventory(plan))
     findings.extend(_check_subject_inventory(plan))
     findings.extend(_check_group_coherence(plan))
-    findings.extend(_check_type_group_coherence(plan))
-    findings.extend(_check_semver_matrix(plan))
+    findings.extend(_check_type_group_coherence(plan, presentation_overlay_applied=presentation_overlay_applied))
+    findings.extend(_check_semver_matrix(plan, presentation_overlay_applied=presentation_overlay_applied))
     findings.extend(_check_scope_filename(plan))
     findings.extend(_check_subject_title_case(plan))
     findings.extend(_check_included_changes(plan, signals, ranked_intents))
-    findings.extend(_check_contract_smoke(plan, contract))
+    findings.extend(
+        _check_contract_smoke(
+            plan,
+            contract,
+            presentation_overlay_applied=presentation_overlay_applied,
+        )
+    )
     return GoldReport(findings=tuple(findings))
