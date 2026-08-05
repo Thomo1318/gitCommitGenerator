@@ -177,6 +177,12 @@ def init_sentry():
                                 "new_bytes",
                                 "staged_files",
                                 "analysis_diff",
+                                "evidence",
+                                "evidence_dict",
+                                "_scoped_history_file_to_flow_ids",
+                                "renamed_paths",
+                                "changed_files",
+                                "parser_batch_results",
                             ]:
                                 if var_name in frame["vars"]:
                                     frame["vars"][var_name] = "[SCRUBBED]"

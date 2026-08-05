@@ -1637,6 +1637,7 @@ def _collect_semantic_producer_metrics(
     # Parser stage — isolated so later producer failures keep parse metrics.
     semantic_parser_metrics: dict | None = None
     staged_files: dict = {}
+    parser_batch_results = None  # reused by Phase 9 structural markers (no second parse)
     try:
         from git_cg.ast_parser import parse_files
         from git_cg.git_index import read_staged_sources
@@ -1645,6 +1646,7 @@ def _collect_semantic_producer_metrics(
         staged_files = dict(staged.files)
         if staged.files:
             batch = parse_files(staged.files)
+            parser_batch_results = getattr(batch, "results", None)
             semantic_parser_metrics = batch.metrics.to_dict()
             result["parser_latency_ms"] = float(semantic_parser_metrics.get("parser_latency_ms") or 0.0)
             if staged.skipped:
@@ -1974,39 +1976,26 @@ def _collect_semantic_producer_metrics(
             new_bytes: dict[str, bytes] = {}
             try:
                 from git_cg.git_index import read_head_sources
-                from git_cg.intent import extract_diff_file_summary
 
                 new_bytes = dict(staged_files)
-                # Prefer caller-supplied pairs, else derive from staged diff text when available.
-                raw_renames = result.get("renamed_paths")
-                if isinstance(raw_renames, list):
-                    for item in raw_renames[:32]:
-                        if isinstance(item, (list, tuple)) and len(item) == 2:
-                            renamed_paths.append((str(item[0]), str(item[1])))
-                if not renamed_paths:
-                    diff_text = result.get("analysis_diff") or result.get("diff_output")
-                    if isinstance(diff_text, str) and diff_text.strip():
-                        summary = extract_diff_file_summary(diff_text)
-                        for old_p, new_p in list(summary.renamed_paths or [])[:32]:
-                            renamed_paths.append((str(old_p), str(new_p)))
-                if not renamed_paths:
-                    # Last-resort: git status rename detection (no worktree mutation).
-                    try:
-                        import subprocess as _sp
+                # Rename pairs are not populated on the metrics dict today; discover
+                # staged renames via cached name-status (no worktree mutation).
+                try:
+                    import subprocess as _sp
 
-                        status = _sp.check_output(
-                            ["git", "-C", repo_root, "diff", "--cached", "--name-status", "-M"],
-                            text=True,
-                            timeout=5,
-                        )
-                        for line in status.splitlines():
-                            parts = line.split("	")
-                            if len(parts) >= 3 and parts[0].startswith("R"):
-                                renamed_paths.append((parts[1].strip(), parts[2].strip()))
-                            if len(renamed_paths) >= 32:
-                                break
-                    except Exception:
-                        pass
+                    status = _sp.check_output(
+                        ["git", "-C", repo_root, "diff", "--cached", "--name-status", "-M"],
+                        text=True,
+                        timeout=5,
+                    )
+                    for line in status.splitlines():
+                        parts = line.split("\t")
+                        if len(parts) >= 3 and parts[0].startswith("R"):
+                            renamed_paths.append((parts[1].strip(), parts[2].strip()))
+                        if len(renamed_paths) >= 32:
+                            break
+                except Exception:
+                    pass
                 if renamed_paths:
                     head = read_head_sources(repo_root, paths=[old for old, _ in renamed_paths])
                     old_bytes = dict(head.files)
@@ -2015,10 +2004,8 @@ def _collect_semantic_producer_metrics(
                 old_bytes = {}
                 new_bytes = dict(staged_files)
 
-            if not file_to_flow_ids and flows_payload_for_evidence is None and scoped_fallback == "none":
-                # Graph product may simply have no flows — not necessarily an error.
-                pass
-
+            # Empty flow map is not an error; the graph product may simply have no flows.
+            # preflight_groups_count is owned by the commit-generation path, not this producer.
             evidence = evaluate_scoped_history(
                 enable_semantic=True,
                 file_to_flow_ids=file_to_flow_ids,
@@ -2027,7 +2014,8 @@ def _collect_semantic_producer_metrics(
                 old_bytes_by_path=old_bytes,
                 new_bytes_by_path=new_bytes,
                 staged_sources=staged_files,
-                preflight_groups_count=int(result.get("preflight_groups_count") or 0),
+                parse_results=parser_batch_results,
+                preflight_groups_count=0,
                 fallback_reason=scoped_fallback,
             )
             evidence_dict = evidence.to_dict()
@@ -2064,12 +2052,8 @@ def _collect_semantic_producer_metrics(
             if verbose:
                 console.log(f"[yellow]Scoped-history producers failed open: {scoped_exc}[/yellow]")
             result["scoped_history_fallback_reason"] = ScopedHistoryFallbackReason.ERROR.value
-            try:
-                from git_cg.telemetry import redact_payload
-
-                redacted = redact_payload(ScopedHistoryFallbackReason.ERROR.value)
-                sentry_sdk.set_tag("scoped_history_fallback_reason", redacted)
-            except Exception:
+            with contextlib.suppress(Exception):
+                # Closed enum — coerced vocabulary only; never through the free-text gateway.
                 sentry_sdk.set_tag(
                     "scoped_history_fallback_reason",
                     ScopedHistoryFallbackReason.ERROR.value,
@@ -2087,7 +2071,10 @@ def _collect_semantic_producer_metrics(
             result.get("graph_fallback_reasons"),
             f"graph_stage:{type(graph_exc).__name__}",
         )
-        result.setdefault("scoped_history_fallback_reason", "error")
+        # Override the pre-populated "none" default — setdefault would mask the error.
+        current_fb = result.get("scoped_history_fallback_reason")
+        if current_fb in (None, "", ScopedHistoryFallbackReason.NONE.value, "none"):
+            result["scoped_history_fallback_reason"] = ScopedHistoryFallbackReason.ERROR.value
     return result
 
 

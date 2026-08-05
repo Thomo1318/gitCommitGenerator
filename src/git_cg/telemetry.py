@@ -730,10 +730,8 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
             continue
         redacted = redact_payload(str(value))
         if redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
-            if attr == "scoped_history_guidance":
-                setattr(telemetry, attr, None)
-            else:
-                setattr(telemetry, attr, "[REDACTED]")
+            # Keep failure distinguishable from "no guidance produced" (None).
+            setattr(telemetry, attr, "[REDACTED]")
         else:
             setattr(telemetry, attr, redacted)
 
