@@ -4,26 +4,64 @@
 
 ### ✨ Features
 
-- ✨ feat(scoped-history): Phase 9 scoped reasoning history — flow-disjoint split evidence, rename confidence bands, Channel-4 guidance, and structural markers under `--enable-semantic` (#163)
 - ✨ feat(core): Phase 7.25 gold-standard commit-message content quality — deterministic `commit_gold` linter (wording/coverage/coherence findings) with three-channel prompt assembly and an additive GOLD RUBRIC (#182)
 
 ### 🐛 Bug Fixes & Refactors
 
-- 🔒 fix(telemetry): redact scoped-history text; coerce enums (#163)
-- ♻️ refactor(semantic): Policy B — stats/product queries use live `shadow.path` inside the shadow context (#163)
 - 🥅 fix(intent): close #181-class mis-rank by adding product markers to `error_handling` negative signals (feature_addition now outranks error_handling on product+error diffs) (#182)
 
 ### ✅ Tests
 
-- ✅ test(scoped-history): producer matrix, Policy B claims (P9-A/B), Channel-4 guidance, and telemetry redaction (#163)
 - ✅ test(intent): B1 characterisation fixtures (release-notes product, bugfix-pure, error-only) + golden cascade refresh via `GIT_CG_UPDATE_GOLDENS` (#182)
 - ✅ test(core): B2 gold-linter tables, Claim A purity tests (A_01-A_05), and generation-path gold wiring integration (#182)
 
 ### 📝 Documentation
 
-- 📝 docs(adr): accept ADR-0163 scoped reasoning history (#163)
-- 📝 docs(usage): Policy B shadow lifetime and scoped-history advisory DX (#163)
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+
+## v0.12.0
+
+### ✨ Features
+
+- ✨ feat(scoped-hist): add scoped history producers for split and rename (#163)
+- ✨ feat(main): wire scoped-history Policy B, Channel-4, and OR-merge (#163)
+- ✨ feat(intent): allow Phase 9 structural enrichment markers (#163)
+- ✨ feat(semantic): harvest hub and complex callers from payloads (#163)
+- ✨ feat(scoped-history): thread preflight group count into split evidence (#163)
+
+### 🐛 Bug Fixes & Refactors
+
+- 🔒 fix(telemetry): redact scoped-history text; coerce enums (#163)
+- 🐛 fix(telemetry): preserve scoped-history error signals (#163)
+- ♻️ refactor(scoped-history): harden bands and CLI markers (#163)
+- 🐛 fix(scoped-history): lock NUL rename parse and fail-open fallbacks (#163)
+- 🐛 fix(scoped-history): drop directive verbs from split guidance (#163)
+- 🔒️ fix(security): raise SBOM floors for Grype high CVEs (#163)
+
+### 📝 Documentation
+
+- 📝 docs(adr): record scoped reasoning history decisions (#163)
+- 📝 docs(adr): accept and index ADR-0163 scoped history (#163)
+- 📝 docs(phase9): document Policy B and scoped-history DX (#163)
+- 📝 docs(adr): diagram Policy B scoped-history architecture (#163)
+- 📝 docs(fixtures): add scoped-history behavior matrix (#163)
+- 📝 docs(pr-template): require Mermaid state diagram on every PR
+
+### ✅ Tests
+
+- ✅ test(scoped-history): cover split, rename, structural, fixtures (#163)
+- ✅ test(semantic): claim Policy B shadow lifetime and flag-off defaults (#163)
+- ✅ test(scoped-history): close Phase 9 coverage and claim gaps (#163)
+- ✅ test(scoped-history): lock Phase 9 claims and ADR path (#163)
+- ✅ test(scoped-history): lock CLI, public-api, and authority claims (#163)
+- ✅ test(config): lock raised SBOM security floors (#163)
+- ✅ test(config): parse UV security floors by specifier (#163)
+
+### 🔧 Chores & Internal
+
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #205 from Thomo1318/refactor/163-scoped-reasoning-history-removal-of-legacy-hacks
+- Merge pull request #203 from Thomo1318/docs/pr-template-require-state-diagram
 
 ## v0.11.0
 
