@@ -22,6 +22,10 @@ class GenerationContext:
     Issue #195: ``ranked_intents`` + ``ranking_confidence`` form an immutable pair owned
     by the sole rank-pass seam (``_build_generation_context``). Downstream consumers
     must receive this snapshot and must not re-run ranking or confidence.
+
+    Issue #204: ``scope_priors`` carries frozen ``TrailerPriors`` (edge-typed as Any to
+    avoid a regeneration → commit_quality import cycle). Presentation only — never a
+    second ranker.
     """
 
     diff_signals: DiffSignals
@@ -29,7 +33,8 @@ class GenerationContext:
     constraints: IntentSelectionConstraints
     semantic_summary: Any | None = None  # SemanticDiffSummary | None (typed at edges)
     risk_assessment: Any | None = None  # RiskAssessment | None
-    scope_priors: Any | None = None  # Phase 8.5 placeholder
+    scope_priors: Any | None = None  # Issue #204 TrailerPriors (edge-typed; D25)
+    presentation_constraints: Any | None = None  # Issue #204 DiffClass constraints (D25)
     preflight_groups: Any | None = None  # Phase 0.5 placeholder
     ranking_confidence: RankingConfidence | None = None  # Issue #195 — same rank-pass
 
@@ -251,8 +256,11 @@ def enforce_semantic_contract(
     plan.primary_intent.semver_impact = SemVerImpact(contract.semver_impact)
     plan.primary_intent.changelog_group = contract.changelog_group
 
-    # 2. Lock scope if a preferred_scope directive is active
+    # 2. Lock scope if a preferred_scope directive is active.
+    # I-12 / #204 §J: always route through normalize_scope (never assign raw token).
     if active_directives and "preferred_scope" in active_directives:
-        plan.primary_intent.scope = active_directives["preferred_scope"]
+        from git_cg.scope_canon import normalize_scope
+
+        plan.primary_intent.scope = normalize_scope(active_directives["preferred_scope"])
 
     return plan

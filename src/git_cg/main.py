@@ -540,7 +540,10 @@ def generate_commit_message(
         if "preferred_type" in active_directives:
             commit_result.primary_intent.cc_type = CommitType(active_directives["preferred_type"])
         if "preferred_scope" in active_directives:
-            commit_result.primary_intent.scope = active_directives["preferred_scope"]
+            # I-12 / #204 §J: always route through normalize_scope (never assign raw token).
+            from git_cg.scope_canon import normalize_scope
+
+            commit_result.primary_intent.scope = normalize_scope(active_directives["preferred_scope"])
     return commit_result
 
 
@@ -1253,12 +1256,21 @@ def _build_generation_context(
     )
     # Confidence is bound to this rank pass only; empty rank → no confidence object.
     ranking_confidence = compute_ranking_confidence(ranked_candidates) if ranked_candidates else None
+    # Issue #204 Slice 2/2b: TrailerPriors + DiffClass constraints (D25).
+    # Must not feed rank_commit_intents — presentation only.
+    from git_cg.commit_quality import constraints_from_paths, derive_trailer_priors
+
+    staged = list(signals.files or [])
+    scope_priors = derive_trailer_priors(staged, signals=signals)
+    presentation_constraints = constraints_from_paths(staged, signals=signals)
     return GenerationContext(
         diff_signals=signals,
         ranked_intents=ranked_candidates,
         constraints=constraints,
         semantic_summary=semantic_summary if semantic_on else None,
         risk_assessment=risk_assessment if semantic_on else None,
+        scope_priors=scope_priors,
+        presentation_constraints=presentation_constraints,
         ranking_confidence=ranking_confidence,
     )
 
