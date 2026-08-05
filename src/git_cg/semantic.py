@@ -142,6 +142,11 @@ def empty_graph_product_fields() -> dict[str, Any]:
         "graph_fallback_reasons": [],
         "impacts_tests": None,
         "impacts_production_code": None,
+        # Optional Phase 7 nice-to-haves: populated only when already present in
+        # detect/impact payloads (no extra graph queries).
+        "impacts_hub_node": None,
+        "complex_function_changed": None,
+        "notable_callers": [],
     }
 
 
@@ -281,6 +286,140 @@ def _impact_flags(data: dict[str, Any]) -> tuple[bool | None, bool | None]:
     return has_test, has_prod
 
 
+def _truthy_flag(value: Any) -> bool | None:
+    """Coerce common payload flag shapes to bool; None when absent/unknown."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "y", "hub", "complex"}:
+            return True
+        if text in {"0", "false", "no", "n"}:
+            return False
+    return None
+
+
+def _harvest_hub_complex_callers(
+    *payloads: dict[str, Any],
+) -> tuple[bool | None, bool | None, list[str]]:
+    """
+    Best-effort hub/complex/callers from already-fetched detect/impact dicts.
+
+    Never issues graph queries. Missing keys leave flags None and callers empty.
+    """
+    hub: bool | None = None
+    complex_changed: bool | None = None
+    callers: list[str] = []
+
+    def _or_true(current: bool | None, flag: bool | None) -> bool | None:
+        if flag is True:
+            return True
+        if current is True:
+            return True
+        if flag is False and current is None:
+            return False
+        return current
+
+    for data in payloads:
+        if not isinstance(data, dict) or not data:
+            continue
+
+        for key in (
+            "impacts_hub_node",
+            "impacts_hub",
+            "hub_impacted",
+            "touches_hub",
+            "is_hub",
+        ):
+            hub = _or_true(hub, _truthy_flag(data.get(key)))
+
+        for key in (
+            "complex_function_changed",
+            "complex_functions_changed",
+            "has_complex_function",
+            "complex_change",
+        ):
+            complex_changed = _or_true(complex_changed, _truthy_flag(data.get(key)))
+
+        # Non-empty large/complex function lists imply complex_function_changed.
+        for key in ("large_functions", "complex_functions", "complex_nodes", "oversized_functions"):
+            value = data.get(key)
+            if (isinstance(value, list | tuple | set) and len(value) > 0) or (
+                isinstance(value, int | float) and not isinstance(value, bool) and value > 0
+            ):
+                complex_changed = True
+
+        # Priority labels often include hub-ish review items from detect_changes.
+        for label in _priority_labels(data):
+            low = label.lower()
+            if "hub" in low:
+                hub = True
+            if "complex" in low or "large function" in low:
+                complex_changed = True
+
+        # Node scans: hub/complex flags on impacted entities.
+        for key in ("impacted_nodes", "nodes", "changed_functions", "entities", "key_entities", "hub_nodes"):
+            value = data.get(key)
+            if not isinstance(value, list):
+                continue
+            for node in value:
+                if not isinstance(node, dict):
+                    continue
+                if _truthy_flag(node.get("is_hub")) is True or _truthy_flag(node.get("hub")) is True:
+                    hub = True
+                kind = str(node.get("kind") or node.get("type") or "").lower()
+                name = str(node.get("name") or node.get("qualified_name") or "").lower()
+                if "hub" in kind or name.endswith("_hub") or ".hub." in name:
+                    hub = True
+                lines = node.get("lines") or node.get("line_count") or node.get("nloc")
+                complexity = node.get("complexity") or node.get("cyclomatic_complexity")
+                try:
+                    if lines is not None and int(lines) >= 50:
+                        complex_changed = True
+                    if complexity is not None and float(complexity) >= 10:
+                        complex_changed = True
+                except TypeError, ValueError:
+                    pass
+
+        # Callers already present on the payload (bounded later by summary).
+        for key in ("notable_callers", "callers", "top_callers", "caller_names", "notable_caller_names"):
+            value = data.get(key)
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str) and item.strip():
+                        callers.append(item.strip())
+                    elif isinstance(item, dict):
+                        for label_key in ("name", "qualified_name", "id", "symbol", "caller"):
+                            label = item.get(label_key)
+                            if isinstance(label, str) and label.strip():
+                                callers.append(label.strip())
+                                break
+            elif isinstance(value, dict):
+                for label_key in ("names", "items", "callers"):
+                    nested = value.get(label_key)
+                    if isinstance(nested, list):
+                        for item in nested:
+                            if isinstance(item, str) and item.strip():
+                                callers.append(item.strip())
+
+    # Dedupe callers preserving order.
+    seen: set[str] = set()
+    unique_callers: list[str] = []
+    for name in callers:
+        if name in seen:
+            continue
+        seen.add(name)
+        unique_callers.append(name)
+        if len(unique_callers) >= MAX_NOTABLE_CALLERS:
+            break
+
+    return hub, complex_changed, unique_callers
+
+
 def map_graph_product_results(
     *,
     detect_result: Any | None = None,
@@ -360,6 +499,11 @@ def map_graph_product_results(
         has_test, has_prod = _impact_flags(impact_data)
     fields["impacts_tests"] = has_test
     fields["impacts_production_code"] = has_prod
+
+    hub, complex_changed, callers = _harvest_hub_complex_callers(detect_data, impact_data)
+    fields["impacts_hub_node"] = hub
+    fields["complex_function_changed"] = complex_changed
+    fields["notable_callers"] = callers
 
     enrichment_outcome: GraphFactOutcome = "unavailable"
     if impact_outcome == "ok" or detect_outcome == "ok":

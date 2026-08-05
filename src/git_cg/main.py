@@ -601,6 +601,7 @@ def build_system_prompt(
     ranked_candidates: list | None = None,
     contract=None,
     gold_guidance: str | None = None,
+    scoped_history_guidance: str | None = None,
 ) -> str:
     """
     Compose the system prompt for generating a structured Conventional Commit plan.
@@ -616,6 +617,9 @@ def build_system_prompt(
         gold_guidance (str | None): Gold-linter wording/secondary-coverage feedback. Routed
             through a dedicated directive-free channel (Issue #182); never emits OVERRIDE
             or ranking-precedence language and never mutates the contract.
+        scoped_history_guidance (str | None): Phase 9 split/rename rationale feedback. Routed
+            through Channel 4 (Issue #163); directive-free; never sets preferred_type or
+            authority fields.
 
     Returns:
         str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
@@ -792,6 +796,16 @@ def build_system_prompt(
             "Apply this feedback to wording and secondary-intent coverage only. It MUST NOT change "
             "intent_id, gitmoji, cc_type, semver_impact, or changelog_group, and it is not an explicit "
             "user ranking override.\n"
+        )
+
+    if scoped_history_guidance:
+        # Channel 4 — scoped-history feedback (directive-free; split/rename rationale only).
+        system_prompt += "\n\nSCOPED-HISTORY FEEDBACK (SPLIT/RENAME RATIONALE ONLY):\n"
+        system_prompt += f'"{scoped_history_guidance}"\n'
+        system_prompt += (
+            "Apply this feedback to split/rename rationale and wording only. It MUST NOT change "
+            "intent_id, gitmoji, cc_type, semver_impact, or changelog_group, MUST NOT set or imply "
+            "preferred_type, and it is not an explicit user ranking override.\n"
         )
 
     return system_prompt
@@ -1350,6 +1364,16 @@ def _write_telemetry_state_safe(
     gold_self_correction_attempts: int = 0,
     gold_self_correction_outcome: str = "not_needed",
     gold_split_recommendation: bool = False,
+    scoped_history_fallback_reason: str = "none",
+    scoped_history_latency_ms: float = 0.0,
+    rename_confidence: str = "none",
+    scoped_history_split_high_confidence: bool = False,
+    scoped_history_guidance: str | None = None,
+    scoped_history_split_rationale: str = "",
+    scoped_history_rename_rationale: str = "",
+    structural_error_handling: bool = False,
+    structural_public_api: bool = False,
+    structural_new_command: bool = False,
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1403,6 +1427,16 @@ def _write_telemetry_state_safe(
         gold_self_correction_attempts (int): Issue #191 self-correction depth (0..2).
         gold_self_correction_outcome (str): Issue #191 closed outcome enum value.
         gold_split_recommendation (bool): Issue #191 P6 ≥3-group split-prefer path fired.
+        scoped_history_fallback_reason (str): Phase 9 closed fallback reason.
+        scoped_history_latency_ms (float): Phase 9 producer latency in milliseconds.
+        rename_confidence (str): Phase 9 rename confidence band (`none`/`low`/`medium`/`high`).
+        scoped_history_split_high_confidence (bool): Phase 9 flow-disjoint split evidence.
+        scoped_history_guidance (str | None): Phase 9 Channel-4 guidance (redacted on write).
+        scoped_history_split_rationale (str): Phase 9 split rationale (redacted on write).
+        scoped_history_rename_rationale (str): Phase 9 rename rationale (redacted on write).
+        structural_error_handling (bool): Phase 9 structural error-handling marker.
+        structural_public_api (bool): Phase 9 structural public-API marker.
+        structural_new_command (bool): Phase 9 structural new-command marker.
     """
     try:
         import dataclasses
@@ -1485,6 +1519,16 @@ def _write_telemetry_state_safe(
             gold_self_correction_attempts=int(gold_self_correction_attempts or 0),
             gold_self_correction_outcome=str(gold_self_correction_outcome or "not_needed"),
             gold_split_recommendation=bool(gold_split_recommendation),
+            scoped_history_fallback_reason=str(scoped_history_fallback_reason or "none"),
+            scoped_history_latency_ms=float(scoped_history_latency_ms or 0.0),
+            rename_confidence=str(rename_confidence or "none"),
+            scoped_history_split_high_confidence=bool(scoped_history_split_high_confidence),
+            scoped_history_guidance=scoped_history_guidance if isinstance(scoped_history_guidance, str) else None,
+            scoped_history_split_rationale=str(scoped_history_split_rationale or ""),
+            scoped_history_rename_rationale=str(scoped_history_rename_rationale or ""),
+            structural_error_handling=bool(structural_error_handling),
+            structural_public_api=bool(structural_public_api),
+            structural_new_command=bool(structural_new_command),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -1531,6 +1575,7 @@ def _collect_semantic_producer_metrics(
     *,
     enable_semantic: bool | None,
     verbose: bool = False,
+    preflight_groups_count: int = 0,
 ) -> dict:
     """
     Run dark-launched Phase 1/2 semantic producers and return telemetry fields.
@@ -1538,6 +1583,9 @@ def _collect_semantic_producer_metrics(
     Flag-off returns zero-safe defaults without touching git/graph/parser I/O.
     Flag-on collects staged parse metrics, HEAD/index fingerprint aggregates, and
     optional graph latencies. Never raises; failures degrade to empty metrics.
+
+    ``preflight_groups_count`` is carry-through only (Phase 0.5 product owns
+    grouping). When already >1 it elevates scoped-history split confidence.
     """
     from git_cg.ast_parser import empty_parser_metrics
     from git_cg.semantic_flags import is_semantic_enabled
@@ -1554,6 +1602,9 @@ def _collect_semantic_producer_metrics(
         "graph_fallback_reasons": [],
         "impacts_tests": None,
         "impacts_production_code": None,
+        "impacts_hub_node": None,
+        "complex_function_changed": None,
+        "notable_callers": [],
     }
 
     result: dict = {
@@ -1574,6 +1625,18 @@ def _collect_semantic_producer_metrics(
         "changed_files": [],
     }
     if not semantic_enabled:
+        # Phase 9 flag-off defaults (safe; no producer side effects).
+        result.setdefault("scoped_history_fallback_reason", "none")
+        result.setdefault("scoped_history_latency_ms", 0.0)
+        result.setdefault("rename_confidence", "none")
+        result.setdefault("split_recommended", False)
+        result.setdefault("scoped_history_guidance", None)
+        result.setdefault("scoped_history_split_rationale", "")
+        result.setdefault("scoped_history_rename_rationale", "")
+        result.setdefault("structural_error_handling", False)
+        result.setdefault("structural_public_api", False)
+        result.setdefault("structural_new_command", False)
+        result.setdefault("scoped_history_evidence", None)
         return result
 
     from git_cg.semantic import empty_graph_product_fields
@@ -1581,6 +1644,7 @@ def _collect_semantic_producer_metrics(
     # Parser stage — isolated so later producer failures keep parse metrics.
     semantic_parser_metrics: dict | None = None
     staged_files: dict = {}
+    parser_batch_results = None  # reused by Phase 9 structural markers (no second parse)
     try:
         from git_cg.ast_parser import parse_files
         from git_cg.git_index import read_staged_sources
@@ -1589,6 +1653,7 @@ def _collect_semantic_producer_metrics(
         staged_files = dict(staged.files)
         if staged.files:
             batch = parse_files(staged.files)
+            parser_batch_results = getattr(batch, "results", None)
             semantic_parser_metrics = batch.metrics.to_dict()
             result["parser_latency_ms"] = float(semantic_parser_metrics.get("parser_latency_ms") or 0.0)
             if staged.skipped:
@@ -1659,7 +1724,8 @@ def _collect_semantic_producer_metrics(
         result["fingerprint_markers"] = None
         # Keep parser metrics already populated.
 
-    # Graph stage — stats/refresh + Phase 7 product queries; failures clear graph fields only.
+    # Graph stage — stats/refresh + Phase 7 product queries + Phase 9 Policy B.
+    # Failures clear graph fields only; never hard-fail the commit path.
     try:
         from git_cg.git_index import should_refresh_graph
         from git_cg.graph_context import (
@@ -1669,6 +1735,12 @@ def _collect_semantic_producer_metrics(
             collect_graph_telemetry,
             graph_stats,
             refresh_graph,
+        )
+        from git_cg.scoped_history import (
+            ScopedHistoryFallbackReason,
+            empty_scoped_history_evidence,
+            evaluate_scoped_history,
+            extract_file_to_flow_ids,
         )
         from git_cg.semantic import (
             COMMIT_PATH_GRAPH_DETAIL_LEVEL,
@@ -1680,59 +1752,119 @@ def _collect_semantic_producer_metrics(
         result.setdefault("shadow_workspace_used", False)
         result.setdefault("semantic_refresh_graph", SemanticRefreshGraph.SKIPPED.value)
         result.setdefault("shadow_fail_open_reason", ShadowFailOpenReason.NONE.value)
+        result.setdefault("scoped_history_fallback_reason", ScopedHistoryFallbackReason.NONE.value)
+        result.setdefault("scoped_history_latency_ms", 0.0)
+        result.setdefault("rename_confidence", "none")
+        result.setdefault("split_recommended", False)
+        result.setdefault("scoped_history_guidance", None)
+        result.setdefault("scoped_history_evidence", empty_scoped_history_evidence().to_dict())
         # Accumulated only on refresh-on path; folded into graph_build_latency_ms below.
         shadow_clone_sync_latency_ms = 0.0
 
         build_result = None
+        stats_result = None
+        query_results: list = []
+        changed_files = sorted(staged_files.keys()) if staged_files else []
+        result["changed_files"] = list(changed_files)
+        # Raw flows payload retained in-process for scoped-history evaluators (not Opik).
+        flows_payload_for_evidence: dict | None = None
+        policy_b_query_root: str | None = None
+        scoped_fallback = ScopedHistoryFallbackReason.NONE.value
+
+        def _cmd_parts(exc: BaseException) -> list[str]:
+            cmd = getattr(exc, "cmd", None)
+            if isinstance(cmd, (list, tuple)):
+                return [str(part) for part in cmd]
+            if isinstance(cmd, str):
+                return cmd.split()
+            return []
+
+        def _append_fallback(reason: str) -> None:
+            result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+                result.get("graph_fallback_reasons"),
+                reason,
+            )
+
+        def _fail_open_shadow(
+            *,
+            category: ShadowFailOpenReason,
+            vocab1: str,
+            error_type: str,
+            error: str,
+            shadow_used: bool,
+        ) -> GraphOperationResult:
+            # Fail-open: commit generation must not fail on shadow/refresh errors.
+            result["shadow_workspace_used"] = shadow_used
+            result["shadow_fail_open_reason"] = category.value
+            _append_fallback(vocab1)
+            sentry_sdk.set_tag("shadow_fail_open_reason", category.value)
+            if verbose:
+                console.log(f"[yellow]Shadow workspace refresh failed open: {error_type} ({category.value})[/yellow]")
+            return GraphOperationResult(
+                ok=False,
+                operation="refresh_graph",
+                outcome=GraphOutcome.ERROR,
+                error_type=error_type,
+                error=error[:200],
+            )
+
+        def _run_stats_and_product(query_root: str) -> None:
+            """Run stats + product bundle against query_root; merge into result."""
+            nonlocal stats_result, query_results, flows_payload_for_evidence
+            stats_result = graph_stats(repo_root=query_root)
+            query_results = [stats_result]
+            prior_graph_fallback_reasons = list(result.get("graph_fallback_reasons") or [])
+            try:
+                product, product_queries = collect_graph_product_bundle(
+                    repo_root=query_root,
+                    changed_files=changed_files or None,
+                    base="HEAD",
+                    max_depth=COMMIT_PATH_GRAPH_MAX_DEPTH,
+                    detail_level=COMMIT_PATH_GRAPH_DETAIL_LEVEL,
+                )
+                query_results.extend(product_queries)
+                for key, value in product.items():
+                    result[key] = value
+                result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+                    prior_graph_fallback_reasons,
+                    result.get("graph_fallback_reasons"),
+                )
+                # Retain bounded raw flows payload for Phase 9 evaluators (in-process only).
+                for qr in product_queries:
+                    op = getattr(qr, "operation", "") or ""
+                    if "flow" in str(op).lower() and getattr(qr, "ok", False):
+                        data = getattr(qr, "data", None)
+                        if isinstance(data, dict):
+                            flows_payload_for_evidence = dict(data)
+                            break
+                if flows_payload_for_evidence is None:
+                    # Fallback: scan any query result with flow-shaped data.
+                    for qr in product_queries:
+                        data = getattr(qr, "data", None)
+                        if isinstance(data, dict) and (
+                            "flows" in data or "affected_flows" in data or "file_to_flows" in data
+                        ):
+                            flows_payload_for_evidence = dict(data)
+                            break
+            except Exception as product_exc:
+                if verbose:
+                    console.log(f"[yellow]Semantic graph product bundle failed: {product_exc}[/yellow]")
+                for key, value in empty_graph_product_fields().items():
+                    result[key] = value
+                result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
+                    prior_graph_fallback_reasons,
+                    result.get("graph_fallback_reasons"),
+                )
+
         if should_refresh_graph():
-            # Phase 7.5 (#180) Policy A: refresh runs against an index-only shadow
-            # (staged content only); stats/product queries stay on the live root.
+            # Phase 7.5 (#180) Policy A + Phase 9 (#163) Policy B:
+            # refresh AND stats/product run inside the same index-only shadow `with`
+            # when enter ok and refresh ran. Never query shadow.path after exit.
             result["semantic_refresh_graph"] = SemanticRefreshGraph.REQUESTED.value
             from git_cg.shadow_workspace import shadow_workspace
 
-            def _cmd_parts(exc: BaseException) -> list[str]:
-                cmd = getattr(exc, "cmd", None)
-                if isinstance(cmd, (list, tuple)):
-                    return [str(part) for part in cmd]
-                if isinstance(cmd, str):
-                    return cmd.split()
-                return []
-
-            def _append_fallback(reason: str) -> None:
-                result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
-                    result.get("graph_fallback_reasons"),
-                    reason,
-                )
-
-            def _fail_open_shadow(
-                *,
-                category: ShadowFailOpenReason,
-                vocab1: str,
-                error_type: str,
-                error: str,
-                shadow_used: bool,
-            ) -> GraphOperationResult:
-                # Fail-open: commit generation must not fail on shadow/refresh errors.
-                result["shadow_workspace_used"] = shadow_used
-                result["shadow_fail_open_reason"] = category.value
-                _append_fallback(vocab1)
-                sentry_sdk.set_tag("shadow_fail_open_reason", category.value)
-                if verbose:
-                    console.log(
-                        f"[yellow]Shadow workspace refresh failed open: {error_type} ({category.value})[/yellow]"
-                    )
-                return GraphOperationResult(
-                    ok=False,
-                    operation="refresh_graph",
-                    outcome=GraphOutcome.ERROR,
-                    error_type=error_type,
-                    error=error[:200],
-                )
-
             enter_error: BaseException | None = None
             refresh_error: BaseException | None = None
-            # Phase 7.5 nice-to-have: fold shadow clone/sync ms into graph_build_latency_ms
-            # (no new telemetry keys).
             import time as _time
 
             _shadow_t0 = _time.perf_counter()
@@ -1747,6 +1879,20 @@ def _collect_semantic_producer_metrics(
                         build_result = refresh_graph(repo_root=shadow.path, full_rebuild=False, postprocess="minimal")
                     except Exception as refresh_exc:
                         refresh_error = refresh_exc
+                        build_result = None
+
+                    refresh_ran = (
+                        refresh_error is None and build_result is not None and bool(getattr(build_result, "ok", False))
+                    )
+                    if refresh_ran:
+                        # Policy B: stats + product against shadow.path WHILE context is active.
+                        result["shadow_workspace_used"] = True
+                        result["semantic_refresh_graph"] = SemanticRefreshGraph.RAN.value
+                        policy_b_query_root = shadow.path
+                        sentry_sdk.add_breadcrumb(category="lifecycle", message="shadow_workspace: used")
+                        _run_stats_and_product(shadow.path)
+                    # On refresh failure, do not claim staged-truth product inside shadow.
+                    # Live-root queries run after the with-block (fail-open).
             except Exception as shadow_exc:
                 enter_error = shadow_exc
                 # Enter failed before we could read workspace.clone_sync_latency_ms.
@@ -1773,6 +1919,7 @@ def _collect_semantic_producer_metrics(
                         error=str(enter_error),
                         shadow_used=False,
                     )
+                scoped_fallback = ScopedHistoryFallbackReason.SHADOW_UNAVAILABLE.value
             elif refresh_error is not None:
                 if isinstance(refresh_error, TimeoutError):
                     category = ShadowFailOpenReason.REFRESH_TIMEOUT
@@ -1785,6 +1932,7 @@ def _collect_semantic_producer_metrics(
                     error=str(refresh_error),
                     shadow_used=True,
                 )
+                scoped_fallback = ScopedHistoryFallbackReason.GRAPH_UNAVAILABLE.value
             elif build_result is not None and not build_result.ok:
                 # refresh_graph returned a failed result without raising.
                 err_type = str(build_result.error_type or "failed")
@@ -1795,47 +1943,14 @@ def _collect_semantic_producer_metrics(
                     error=str(build_result.error or "refresh_graph failed"),
                     shadow_used=True,
                 )
-            else:
-                result["shadow_workspace_used"] = True
-                result["semantic_refresh_graph"] = SemanticRefreshGraph.RAN.value
-                sentry_sdk.add_breadcrumb(category="lifecycle", message="shadow_workspace: used")
+                scoped_fallback = ScopedHistoryFallbackReason.GRAPH_UNAVAILABLE.value
+
+            # Fail-open / non-Policy-B: query live root (never a destroyed shadow path).
+            if policy_b_query_root is None:
+                _run_stats_and_product(repo_root)
         else:
             sentry_sdk.add_breadcrumb(category="lifecycle", message="shadow_workspace: skipped")
-
-        stats_result = graph_stats(repo_root=repo_root)
-        query_results = [stats_result]
-
-        changed_files = sorted(staged_files.keys()) if staged_files else []
-        result["changed_files"] = list(changed_files)
-        # Capture before product merge/empty defaults so shadow/refresh Vocab1 survives.
-        prior_graph_fallback_reasons = list(result.get("graph_fallback_reasons") or [])
-        try:
-            product, product_queries = collect_graph_product_bundle(
-                repo_root=repo_root,
-                changed_files=changed_files or None,
-                base="HEAD",
-                max_depth=COMMIT_PATH_GRAPH_MAX_DEPTH,
-                detail_level=COMMIT_PATH_GRAPH_DETAIL_LEVEL,
-            )
-            query_results.extend(product_queries)
-            for key, value in product.items():
-                result[key] = value
-            # Preserve shadow/refresh fail-open reasons already recorded above.
-            result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
-                prior_graph_fallback_reasons,
-                result.get("graph_fallback_reasons"),
-            )
-        except Exception as product_exc:
-            if verbose:
-                console.log(f"[yellow]Semantic graph product bundle failed: {product_exc}[/yellow]")
-            for key, value in empty_graph_product_fields().items():
-                result[key] = value
-            # empty_graph_product_fields() resets graph_fallback_reasons to []; restore
-            # any shadow/refresh fail-open reasons recorded before the product stage.
-            result["graph_fallback_reasons"] = _merge_graph_fallback_reasons(
-                prior_graph_fallback_reasons,
-                result.get("graph_fallback_reasons"),
-            )
+            _run_stats_and_product(repo_root)
 
         graph_meta = collect_graph_telemetry(
             build_result=build_result,
@@ -1846,14 +1961,137 @@ def _collect_semantic_producer_metrics(
         result["graph_build_latency_ms"] = round(build_ms + float(shadow_clone_sync_latency_ms or 0.0), 3)
         # Product query latency accumulates into existing graph_query_latency_ms.
         result["graph_query_latency_ms"] = float(graph_meta.get("graph_query_latency_ms") or 0.0)
-        if stats_result.ok:
+        if stats_result is not None and stats_result.ok:
             maybe_schema = stats_result.data.get("schema_version") or stats_result.data.get("graph_schema_version")
             if maybe_schema is not None:
                 result["crg_schema_version"] = str(maybe_schema)
-        elif verbose:
+        elif stats_result is not None and verbose:
             console.log(
                 f"[yellow]Semantic graph_stats unavailable: {stats_result.error_type}: {stats_result.error}[/yellow]"
             )
+
+        # --- Phase 9 scoped-history producers (advisory; gated; fail-open) ---
+        sentry_sdk.add_breadcrumb(category="lifecycle", message="scoped_history: entered")
+        try:
+            file_to_flow_ids = extract_file_to_flow_ids(
+                flows_payload_for_evidence,
+                staged_files=changed_files,
+            )
+            # Cross-path rename bytes: HEAD old path + staged new path.
+            renamed_paths: list[tuple[str, str]] = []
+            old_bytes: dict[str, bytes] = {}
+            new_bytes: dict[str, bytes] = {}
+            try:
+                from git_cg.git_index import read_head_sources
+
+                new_bytes = dict(staged_files)
+                # Rename pairs are not populated on the metrics dict today; discover
+                # staged renames via cached name-status (no worktree mutation).
+                try:
+                    import subprocess as _sp
+
+                    # NUL-delimited records avoid tab/newline path-splitting hazards.
+                    status = _sp.check_output(
+                        [
+                            "git",
+                            "-C",
+                            repo_root,
+                            "diff",
+                            "--cached",
+                            "--name-status",
+                            "-z",
+                            "-M",
+                        ],
+                        timeout=5,
+                    )
+                    fields = status.split(b"\0")
+                    idx = 0
+                    while idx < len(fields) and len(renamed_paths) < 32:
+                        raw_status = fields[idx]
+                        if not raw_status:
+                            idx += 1
+                            continue
+                        status_token = raw_status.decode("utf-8", errors="replace")
+                        if status_token.startswith("R") and idx + 2 < len(fields):
+                            old_path = fields[idx + 1].decode("utf-8", errors="replace").strip()
+                            new_path = fields[idx + 2].decode("utf-8", errors="replace").strip()
+                            if old_path and new_path:
+                                renamed_paths.append((old_path, new_path))
+                            idx += 3
+                            continue
+                        # Non-rename: status + path (+ optional unused fields)
+                        idx += 2 if idx + 1 < len(fields) else 1
+                except Exception:
+                    pass
+                if renamed_paths:
+                    head = read_head_sources(repo_root, paths=[old for old, _ in renamed_paths])
+                    old_bytes = dict(head.files)
+            except Exception:
+                renamed_paths = []
+                old_bytes = {}
+                new_bytes = dict(staged_files)
+
+            # Empty flow map is not an error; the graph product may simply have no flows.
+            # preflight_groups_count is carry-through from the commit path (Phase 0.5 product
+            # owns grouping; default 0 keeps behaviour identical until preflight runs).
+            try:
+                pf_groups = int(preflight_groups_count or 0)
+            except TypeError, ValueError:
+                pf_groups = 0
+            if pf_groups < 0:
+                pf_groups = 0
+            evidence = evaluate_scoped_history(
+                enable_semantic=True,
+                file_to_flow_ids=file_to_flow_ids,
+                staged_files=changed_files,
+                renamed_paths=renamed_paths,
+                old_bytes_by_path=old_bytes,
+                new_bytes_by_path=new_bytes,
+                staged_sources=staged_files,
+                parse_results=parser_batch_results,
+                preflight_groups_count=pf_groups,
+                fallback_reason=scoped_fallback,
+            )
+            evidence_dict = evidence.to_dict()
+            # Strip in-process-only map before any telemetry-facing copy.
+            result["scoped_history_evidence"] = {k: v for k, v in evidence_dict.items() if k != "file_to_flow_ids"}
+            # Keep flow map only on a private key for the post-enforce merge (in-process).
+            result["_scoped_history_file_to_flow_ids"] = evidence.file_to_flow_ids
+            result["scoped_history_fallback_reason"] = evidence.fallback_reason
+            result["scoped_history_latency_ms"] = float(evidence.latency_ms or 0.0)
+            result["rename_confidence"] = evidence.rename_confidence
+            result["split_recommended"] = bool(evidence.split_high_confidence)
+            result["scoped_history_guidance"] = evidence.guidance
+            result["scoped_history_split_rationale"] = evidence.split_rationale
+            result["scoped_history_rename_rationale"] = evidence.rename_rationale
+            result["structural_error_handling"] = bool(evidence.structural_error_handling)
+            result["structural_public_api"] = bool(evidence.structural_public_api)
+            result["structural_new_command"] = bool(evidence.structural_new_command)
+            # P1/P2: fold structural closed-vocab markers into enrichment channel.
+            # Additive only; never mutates DiffSignals. Semantic-off path untouched.
+            structural_markers: list[str] = []
+            if evidence.structural_error_handling:
+                structural_markers.extend(["exception_handling_added", "error_handling_improved", "try_except_added"])
+            if evidence.structural_public_api:
+                structural_markers.extend(["new_api", "new_user_facing_capability", "functional_code_changed"])
+            if evidence.structural_new_command:
+                structural_markers.append("new_command")
+            if structural_markers:
+                existing = list(result.get("fingerprint_markers") or [])
+                for marker in structural_markers:
+                    if marker not in existing:
+                        existing.append(marker)
+                result["fingerprint_markers"] = existing
+        except Exception as scoped_exc:
+            if verbose:
+                console.log(f"[yellow]Scoped-history producers failed open: {scoped_exc}[/yellow]")
+            result["scoped_history_fallback_reason"] = ScopedHistoryFallbackReason.ERROR.value
+            with contextlib.suppress(Exception):
+                # Closed enum — coerced vocabulary only; never through the free-text gateway.
+                sentry_sdk.set_tag(
+                    "scoped_history_fallback_reason",
+                    ScopedHistoryFallbackReason.ERROR.value,
+                )
     except Exception as graph_exc:
         if verbose:
             console.log(f"[yellow]Semantic graph producers failed: {graph_exc}[/yellow]")
@@ -1867,6 +2105,11 @@ def _collect_semantic_producer_metrics(
             result.get("graph_fallback_reasons"),
             f"graph_stage:{type(graph_exc).__name__}",
         )
+        # Override the pre-populated "none" default — setdefault would mask the error.
+        # Use literals here: ScopedHistoryFallbackReason may be unbound if graph imports failed.
+        current_fb = result.get("scoped_history_fallback_reason")
+        if current_fb in (None, "", "none"):
+            result["scoped_history_fallback_reason"] = "error"
     return result
 
 
@@ -1942,10 +2185,17 @@ def _run_commit_generation(
     # Phase 1/2/7: semantic producers (parser, fingerprints, graph product bundle).
     # Flag-on may enrich closed-vocab ranking markers and attach SemanticDiffSummary context.
     # Prompt MVP ships no summary evidence block (Phase 11 owns packing).
+    # Phase 0.5 preflight product is not built here. Carry-through only: when a
+    # future grouping product (or test injection) sets groups >1, scoped-history
+    # elevates split confidence. Defaults keep today's skipped behaviour.
+    preflight_mode = "skipped"
+    preflight_groups_count = 0
+    preflight_fallback_reason = ""
     semantic_metrics = _collect_semantic_producer_metrics(
         repo_root,
         enable_semantic=enable_semantic,
         verbose=verbose,
+        preflight_groups_count=preflight_groups_count,
     )
     semantic_enabled = bool(semantic_metrics["semantic_enabled"])
     parser_latency_ms = float(semantic_metrics["parser_latency_ms"] or 0.0)
@@ -1972,6 +2222,30 @@ def _run_commit_generation(
     shadow_workspace_used = bool(semantic_metrics.get("shadow_workspace_used", False))
     semantic_refresh_graph = str(semantic_metrics.get("semantic_refresh_graph", "skipped"))
     shadow_fail_open_reason = str(semantic_metrics.get("shadow_fail_open_reason", "none"))
+    # Phase 9 scoped-history (Issue #163) — advisory only; default-off via semantic gate.
+    scoped_history_fallback_reason = str(semantic_metrics.get("scoped_history_fallback_reason") or "none")
+    scoped_history_latency_ms = float(semantic_metrics.get("scoped_history_latency_ms") or 0.0)
+    rename_confidence = str(semantic_metrics.get("rename_confidence") or "none")
+    scoped_history_split_high_confidence = bool(semantic_metrics.get("split_recommended") or False)
+    scoped_history_guidance = semantic_metrics.get("scoped_history_guidance")
+    if not isinstance(scoped_history_guidance, str):
+        scoped_history_guidance = None
+    scoped_history_split_rationale = str(semantic_metrics.get("scoped_history_split_rationale") or "")
+    scoped_history_rename_rationale = str(semantic_metrics.get("scoped_history_rename_rationale") or "")
+    structural_error_handling = bool(semantic_metrics.get("structural_error_handling") or False)
+    structural_public_api = bool(semantic_metrics.get("structural_public_api") or False)
+    structural_new_command = bool(semantic_metrics.get("structural_new_command") or False)
+    scoped_history_evidence = semantic_metrics.get("scoped_history_evidence")
+    if not isinstance(scoped_history_evidence, dict):
+        scoped_history_evidence = None
+    # Closed-vocab Sentry tags only (no free-text rationales / paths).
+    with contextlib.suppress(Exception):
+        sentry_sdk.set_tag("scoped_history_fallback_reason", scoped_history_fallback_reason)
+        sentry_sdk.set_tag("rename_confidence", rename_confidence)
+        sentry_sdk.set_tag(
+            "scoped_history_split_high_confidence",
+            "true" if scoped_history_split_high_confidence else "false",
+        )
 
     opik_metadata = {
         "repo_name": repo_name,
@@ -1988,9 +2262,9 @@ def _run_commit_generation(
         "fingerprint_grammar_version": fingerprint_grammar_version,
         "fingerprint_markers": fingerprint_markers,
         # Phase 3 preflight hooks (default skipped until Phase 0.5 grouping product).
-        "preflight_mode": "skipped",
-        "preflight_groups_count": 0,
-        "preflight_fallback_reason": "",
+        "preflight_mode": preflight_mode,
+        "preflight_groups_count": preflight_groups_count,
+        "preflight_fallback_reason": preflight_fallback_reason,
         # Phase 7 semantic context product metrics (Issue #162).
         "blast_radius_size": blast_radius_size,
         "affected_flows_count": affected_flows_count,
@@ -2002,6 +2276,14 @@ def _run_commit_generation(
         "shadow_workspace_used": shadow_workspace_used,
         "semantic_refresh_graph": semantic_refresh_graph,
         "shadow_fail_open_reason": shadow_fail_open_reason,
+        # Phase 9 scoped-history (Issue #163) — allowlisted non-content only.
+        "scoped_history_fallback_reason": scoped_history_fallback_reason,
+        "scoped_history_latency_ms": scoped_history_latency_ms,
+        "rename_confidence": rename_confidence,
+        "scoped_history_split_high_confidence": scoped_history_split_high_confidence,
+        "structural_error_handling": structural_error_handling,
+        "structural_public_api": structural_public_api,
+        "structural_new_command": structural_new_command,
     }
     if semantic_parser_metrics:
         # Flatten non-content parser metrics into the trace metadata.
@@ -2228,9 +2510,9 @@ def _run_commit_generation(
                     fingerprint_class_counts=fingerprint_class_counts,
                     fingerprint_grammar_version=fingerprint_grammar_version,
                     fingerprint_markers=fingerprint_markers,
-                    preflight_mode="skipped",
-                    preflight_groups_count=0,
-                    preflight_fallback_reason="",
+                    preflight_mode=preflight_mode,
+                    preflight_groups_count=preflight_groups_count,
+                    preflight_fallback_reason=preflight_fallback_reason,
                     blast_radius_size=blast_radius_size
                     if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
                     else None,
@@ -2258,6 +2540,16 @@ def _run_commit_generation(
                     gold_finding_codes=None,
                     gold_blocked=False,
                     gold_regen_attempts=0,
+                    scoped_history_fallback_reason=scoped_history_fallback_reason,
+                    scoped_history_latency_ms=scoped_history_latency_ms,
+                    rename_confidence=rename_confidence,
+                    scoped_history_split_high_confidence=scoped_history_split_high_confidence,
+                    scoped_history_guidance=scoped_history_guidance,
+                    scoped_history_split_rationale=scoped_history_split_rationale,
+                    scoped_history_rename_rationale=scoped_history_rename_rationale,
+                    structural_error_handling=structural_error_handling,
+                    structural_public_api=structural_public_api,
+                    structural_new_command=structural_new_command,
                 )
                 opik.flush_tracker()
                 _abort(
@@ -2370,6 +2662,7 @@ def _run_commit_generation(
             ranked_candidates=gen_context.ranked_intents,
             contract=contract,
             gold_guidance=gold_guidance,
+            scoped_history_guidance=scoped_history_guidance,
         )
 
         # Offline prompt tracking (synced asynchronously via script)
@@ -2416,6 +2709,22 @@ def _run_commit_generation(
 
         # Always enforce the pre-resolved SOP contract after model render.
         commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
+        # Phase 9: advisory OR-merge for split_recommended + rationale notes only.
+        # Never mutates intent_id / gitmoji / cc_type / semver / changelog authority.
+        try:
+            from git_cg.scoped_history import apply_scoped_history_to_plan
+
+            evidence_for_merge = scoped_history_evidence
+            if evidence_for_merge is None:
+                evidence_for_merge = {
+                    "split_high_confidence": scoped_history_split_high_confidence,
+                    "split_rationale": scoped_history_split_rationale,
+                    "rename_confidence": rename_confidence,
+                    "rename_rationale": scoped_history_rename_rationale,
+                }
+            commit_plan = apply_scoped_history_to_plan(commit_plan, evidence_for_merge)
+        except Exception:
+            pass
         if verbose:
             console.log(f"Resolved and Enforced Semantic Contract: {contract.primary_intent_id} ({contract.cc_type})")
 
@@ -2547,9 +2856,9 @@ def _run_commit_generation(
                 fingerprint_class_counts=fingerprint_class_counts,
                 fingerprint_grammar_version=fingerprint_grammar_version,
                 fingerprint_markers=fingerprint_markers,
-                preflight_mode="skipped",
-                preflight_groups_count=0,
-                preflight_fallback_reason="",
+                preflight_mode=preflight_mode,
+                preflight_groups_count=preflight_groups_count,
+                preflight_fallback_reason=preflight_fallback_reason,
                 blast_radius_size=blast_radius_size
                 if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
                 else None,
@@ -2586,6 +2895,16 @@ def _run_commit_generation(
                 gold_self_correction_attempts=gold_regen_attempts,
                 gold_self_correction_outcome=gold_self_correction_outcome,
                 gold_split_recommendation=bool(gold_split_recommendation),
+                scoped_history_fallback_reason=scoped_history_fallback_reason,
+                scoped_history_latency_ms=scoped_history_latency_ms,
+                rename_confidence=rename_confidence,
+                scoped_history_split_high_confidence=scoped_history_split_high_confidence,
+                scoped_history_guidance=scoped_history_guidance,
+                scoped_history_split_rationale=scoped_history_split_rationale,
+                scoped_history_rename_rationale=scoped_history_rename_rationale,
+                structural_error_handling=structural_error_handling,
+                structural_public_api=structural_public_api,
+                structural_new_command=structural_new_command,
             )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
@@ -2680,9 +2999,9 @@ def _run_commit_generation(
         fingerprint_class_counts=fingerprint_class_counts,
         fingerprint_grammar_version=fingerprint_grammar_version,
         fingerprint_markers=fingerprint_markers,
-        preflight_mode="skipped",
-        preflight_groups_count=0,
-        preflight_fallback_reason="",
+        preflight_mode=preflight_mode,
+        preflight_groups_count=preflight_groups_count,
+        preflight_fallback_reason=preflight_fallback_reason,
         blast_radius_size=blast_radius_size
         if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
         else None,
@@ -2717,6 +3036,16 @@ def _run_commit_generation(
         gold_self_correction_attempts=gold_regen_attempts,
         gold_self_correction_outcome=gold_self_correction_outcome,
         gold_split_recommendation=bool(gold_split_recommendation),
+        scoped_history_fallback_reason=scoped_history_fallback_reason,
+        scoped_history_latency_ms=scoped_history_latency_ms,
+        rename_confidence=rename_confidence,
+        scoped_history_split_high_confidence=scoped_history_split_high_confidence,
+        scoped_history_guidance=scoped_history_guidance,
+        scoped_history_split_rationale=scoped_history_split_rationale,
+        scoped_history_rename_rationale=scoped_history_rename_rationale,
+        structural_error_handling=structural_error_handling,
+        structural_public_api=structural_public_api,
+        structural_new_command=structural_new_command,
     )
 
     opik.flush_tracker()

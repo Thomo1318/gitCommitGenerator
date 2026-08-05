@@ -667,6 +667,14 @@ CLOSED_ENRICHMENT_MARKERS: frozenset[str] = frozenset(
         "comments_only",
         "inline_comment_changed",
         "source_comments_added",
+        # Phase 9 (#163) P1/P2 structural markers (semantic-ON enrichment only).
+        "exception_handling_added",
+        "error_handling_improved",
+        "try_except_added",
+        "new_api",
+        "new_user_facing_capability",
+        "functional_code_changed",
+        "new_command",
     }
 )
 

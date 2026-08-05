@@ -1,0 +1,6 @@
+{
+  "flows": [
+    {"id": "flow_shared", "name": "shared_pipeline", "files": ["src/a.py", "src/b.py"]},
+    {"id": "flow_a_only", "name": "a_only", "files": ["src/a.py"]}
+  ]
+}

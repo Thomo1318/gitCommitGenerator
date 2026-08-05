@@ -18,6 +18,7 @@ Decision log for `gitCommitGenerator`. Files live alongside this index as `NNNN-
 | [0012](./0012-adopt-coderabbit-and-qodo.md)                                       | CodeRabbit / Qodo                                | See file                           |
 | [0013](./0013-formalise-ide-boundaries-for-1password-mounted-local-env-files.md)  | IDE boundaries for 1Password FIFO `.env`         | **Accepted** (companion to 0014)   |
 | [0014](./0014-fnox-canonical-secrets-demote-1password-sdk-and-fifo-dotenv.md)     | fnox-canonical secrets; demote SDK & FIFO dotenv | **Accepted** (not yet Implemented) |
+| [0163](./0163-scoped-reasoning-history.md)                                         | Scoped Reasoning History (Phase 9)                    | **Accepted** (Implemented)     |
 
 ## Secrets path (normative)
 

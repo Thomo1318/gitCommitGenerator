@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from git_cg.intent import GraphEnrichmentFacts
 from git_cg.semantic import (
     MAX_FALLBACK_REASONS,
@@ -145,6 +147,51 @@ def test_empty_graph_product_fields_defaults():
     assert fields["graph_fallback_reasons"] == []
 
 
+def test_empty_graph_product_fields_includes_hub_complex_callers_defaults():
+    fields = empty_graph_product_fields()
+    assert fields["impacts_hub_node"] is None
+    assert fields["complex_function_changed"] is None
+    assert fields["notable_callers"] == []
+
+
+def test_map_graph_product_harvests_hub_complex_callers():
+    """Free harvest only: hub/complex/callers from already-fetched payloads."""
+    detect = _FakeResult(
+        True,
+        {
+            "risk_score": 0.4,
+            "priorities": [{"name": "hub: main_callback"}],
+            "large_functions": [{"name": "too_big", "lines": 120}],
+            "notable_callers": ["caller_a", "caller_a", "caller_b"],
+            "nodes": [
+                {"name": "core_hub", "is_hub": True, "is_test": False},
+                {"name": "helper", "lines": 12, "is_test": False},
+            ],
+        },
+        outcome="ok",
+    )
+    impact = _FakeResult(
+        True,
+        {
+            "total_impacted": 9,
+            "callers": [{"name": "caller_c"}, "caller_b"],
+        },
+        outcome="ok",
+    )
+    product = map_graph_product_results(detect_result=detect, impact_result=impact, flows_result=None)
+    assert product["impacts_hub_node"] is True
+    assert product["complex_function_changed"] is True
+    assert product["notable_callers"][:3] == ["caller_a", "caller_b", "caller_c"]
+
+
+def test_map_graph_product_hub_complex_absent_stays_none():
+    detect = _FakeResult(True, {"risk_score": 0.1, "nodes": [{"name": "x", "is_test": False}]}, outcome="ok")
+    product = map_graph_product_results(detect_result=detect, impact_result=None, flows_result=None)
+    assert product["impacts_hub_node"] is None
+    assert product["complex_function_changed"] is None
+    assert product["notable_callers"] == []
+
+
 def test_collect_graph_product_bundle_maps_monkeypatched_results(monkeypatch):
     from git_cg import graph_context as gc
     from git_cg.graph_context import GraphOperationResult, GraphOutcome, collect_graph_product_bundle
@@ -209,6 +256,26 @@ def test_collect_semantic_producer_metrics_flag_off_skips_graph_product(monkeypa
     assert out["blast_radius_size"] is None
     assert out["test_coverage_gap"] is None
     assert called["n"] == 0
+
+
+def test_collect_semantic_producer_metrics_preflight_groups_elevates_split(monkeypatch):
+    """Carry-through: preflight_groups_count>1 elevates scoped-history split confidence."""
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+
+    out = _collect_semantic_producer_metrics(
+        "/tmp",
+        enable_semantic=True,
+        verbose=False,
+        preflight_groups_count=3,
+    )
+    assert out.get("split_recommended") is True
+    rationale = str(out.get("scoped_history_split_rationale") or "")
+    assert "preflight_groups_count=3" in rationale
+    evidence = out.get("scoped_history_evidence") or {}
+    assert evidence.get("split_high_confidence") is True
 
 
 def test_collect_semantic_producer_metrics_flag_off_does_not_import_semantic(monkeypatch):
@@ -503,6 +570,8 @@ def test_collect_semantic_producer_metrics_outer_graph_stage_records_fallback(mo
     head = SimpleNamespace(files={}, errors=[], skipped=[])
 
     class Parsed:
+        results: ClassVar[list] = []
+
         def to_metrics_dict(self):
             return {"semantic_files_total": 1, "semantic_files_parsed": 1}
 
@@ -587,6 +656,7 @@ def _phase75_base_monkeypatches(monkeypatch):
 
     class Parsed:
         metrics = _Metrics()
+        results: ClassVar[list] = []
 
     monkeypatch.setattr("git_cg.git_index.read_staged_sources", lambda *a, **k: staged)
     monkeypatch.setattr("git_cg.ast_parser.parse_files", lambda files: Parsed())
@@ -982,3 +1052,365 @@ def test_phase75_refresh_off_graph_build_latency_excludes_shadow(monkeypatch):
     out = _collect_semantic_producer_metrics("/tmp", enable_semantic=True, verbose=False)
     assert out.get("shadow_workspace_used") is False
     assert out["graph_build_latency_ms"] == 1.25
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 (#163): Policy B claim tests (P9-A) + scoped-history flag-off (P9-A06)
+# ---------------------------------------------------------------------------
+
+
+def test_p9_a01_a02_a07_policy_b_stats_and_product_use_live_shadow(monkeypatch):
+    """P9-A01/A02/A07: refresh-on + ran → stats+product called with shadow.path inside with."""
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.semantic import empty_graph_product_fields
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    shadow_path = "/tmp/git-cg-shadow-policy-b"
+    active = {"inside": False}
+    stats_roots: list[str] = []
+    product_roots: list[str] = []
+    stats_inside: list[bool] = []
+    product_inside: list[bool] = []
+
+    @contextmanager
+    def fake_shadow(source_dir=".", include_unstaged=True):
+        active["inside"] = True
+        try:
+            yield type("Shadow", (), {"path": shadow_path, "clone_sync_latency_ms": 1.5})()
+        finally:
+            active["inside"] = False
+
+    def fake_refresh(**kwargs):
+        assert active["inside"] is True
+        assert kwargs.get("repo_root") == shadow_path
+        return GraphOperationResult(
+            ok=True,
+            operation="refresh_graph",
+            outcome=GraphOutcome.OK,
+            data={},
+            latency_ms=2.0,
+        )
+
+    def fake_stats(*, repo_root=None, **kwargs):
+        stats_roots.append(repo_root)
+        stats_inside.append(active["inside"])
+        return GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.2,
+        )
+
+    def fake_bundle(**kwargs):
+        product_roots.append(kwargs.get("repo_root"))
+        product_inside.append(active["inside"])
+        product = empty_graph_product_fields()
+        product["blast_radius_size"] = 2
+        product["affected_flows_count"] = 2
+        product["graph_fallback_reasons"] = []
+        return (
+            product,
+            [
+                GraphOperationResult(
+                    ok=True,
+                    operation="affected_flows",
+                    outcome=GraphOutcome.OK,
+                    data={
+                        "flows": [
+                            {"id": "flow_a", "files": ["a.py"]},
+                            {"id": "flow_b", "files": ["b.py"]},
+                        ]
+                    },
+                    latency_ms=0.4,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", fake_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", fake_refresh)
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", fake_stats)
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", fake_bundle)
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 2.0, "graph_query_latency_ms": 0.6},
+    )
+
+    out = _collect_semantic_producer_metrics("/live/repo", enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["semantic_refresh_graph"] == "ran"
+    assert stats_roots == [shadow_path]
+    assert product_roots == [shadow_path]
+    # P9-A07: queries ran while shadow context was active (not after exit).
+    assert stats_inside == [True]
+    assert product_inside == [True]
+    assert out.get("scoped_history_fallback_reason", "none") == "none"
+
+
+def test_p9_a03_refresh_off_uses_live_repo_root(monkeypatch):
+    """P9-A03: refresh-off → live repo_root queries (baseline parity)."""
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.semantic import empty_graph_product_fields
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+
+    live = "/live/repo-off"
+    stats_roots: list[str] = []
+    product_roots: list[str] = []
+
+    def fake_stats(*, repo_root=None, **kwargs):
+        stats_roots.append(repo_root)
+        return GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.1,
+        )
+
+    def fake_bundle(**kwargs):
+        product_roots.append(kwargs.get("repo_root"))
+        product = empty_graph_product_fields()
+        product["blast_radius_size"] = 1
+        return (
+            product,
+            [
+                GraphOperationResult(
+                    ok=True,
+                    operation="detect_changes",
+                    outcome=GraphOutcome.OK,
+                    data={},
+                    latency_ms=0.2,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", fake_stats)
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", fake_bundle)
+
+    out = _collect_semantic_producer_metrics(live, enable_semantic=True, verbose=False)
+    assert out.get("shadow_workspace_used") is False
+    assert out.get("semantic_refresh_graph") == "skipped"
+    assert stats_roots == [live]
+    assert product_roots == [live]
+
+
+def test_p9_a04_refresh_fail_open_does_not_claim_staged_truth(monkeypatch):
+    """P9-A04: refresh fail-open → live queries; scoped fallback set; no hard-fail."""
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.semantic import empty_graph_product_fields
+    from git_cg.telemetry import ShadowFailOpenReason
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    live = "/live/repo-fail"
+    stats_roots: list[str] = []
+
+    @contextmanager
+    def ok_shadow(*a, **k):
+        yield type("Shadow", (), {"path": "/tmp/shadow-dead", "clone_sync_latency_ms": 1.0})()
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", ok_shadow)
+    monkeypatch.setattr(
+        "git_cg.graph_context.refresh_graph",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("refresh boom")),
+    )
+
+    def fake_stats(*, repo_root=None, **kwargs):
+        stats_roots.append(repo_root)
+        return GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.1,
+        )
+
+    def fake_bundle(**kwargs):
+        product = empty_graph_product_fields()
+        product["blast_radius_size"] = 1
+        return (
+            product,
+            [
+                GraphOperationResult(
+                    ok=True,
+                    operation="detect_changes",
+                    outcome=GraphOutcome.OK,
+                    data={},
+                    latency_ms=0.1,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", fake_stats)
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", fake_bundle)
+
+    out = _collect_semantic_producer_metrics(live, enable_semantic=True, verbose=False)
+    assert out["shadow_workspace_used"] is True
+    assert out["shadow_fail_open_reason"] == ShadowFailOpenReason.REFRESH_FAILED.value
+    # Must not query destroyed shadow path after fail-open.
+    assert stats_roots == [live]
+    assert out.get("scoped_history_fallback_reason") == "graph_unavailable"
+
+
+def test_p9_a06_semantic_off_no_scoped_history_side_effects(monkeypatch):
+    """P9-A06: semantic-off → no new producer side effects vs baseline snapshot."""
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    monkeypatch.setattr(
+        "git_cg.shadow_workspace.shadow_workspace",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no shadow on flag-off")),
+    )
+    monkeypatch.setattr(
+        "git_cg.graph_context.refresh_graph",
+        lambda **k: (_ for _ in ()).throw(AssertionError("no refresh on flag-off")),
+    )
+    monkeypatch.setattr(
+        "git_cg.git_index.read_staged_sources",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no staged read on flag-off")),
+    )
+
+    out = _collect_semantic_producer_metrics("/tmp", enable_semantic=False, verbose=False)
+    assert out["semantic_enabled"] is False
+    assert out.get("scoped_history_fallback_reason", "none") == "none"
+    assert out.get("rename_confidence", "none") == "none"
+    assert out.get("split_recommended", False) is False
+    assert out.get("structural_error_handling", False) is False
+    assert out.get("structural_public_api", False) is False
+    assert out.get("structural_new_command", False) is False
+    assert out.get("scoped_history_guidance") in (None, "")
+
+
+def test_p9_b07_policy_b_producers_do_not_contaminate_worktree_or_index(monkeypatch, tmp_path):
+    """P9-B07: Policy B / scoped-history path must not dirty worktree or index.
+
+    Captures `git status --porcelain` before and after
+    `_collect_semantic_producer_metrics` and asserts equality. Producers may
+    only touch an ephemeral shadow workspace, never the live repo index/worktree.
+    """
+    import subprocess
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.semantic import empty_graph_product_fields
+
+    repo = tmp_path / "live-repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=repo, check=True, capture_output=True)
+    # Local fixtures must not inherit global commit.gpgsign / 1Password SSH signing.
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=repo, check=True, capture_output=True)
+    tracked = repo / "tracked.py"
+    tracked.write_text("x = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.py"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "--no-gpg-sign", "-m", "init"], cwd=repo, check=True, capture_output=True)
+    # Staged change present (index dirty relative to HEAD is OK and stable).
+    tracked.write_text("x = 2\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.py"], cwd=repo, check=True, capture_output=True)
+
+    def porcelain() -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(repo), "status", "--porcelain"],
+            text=True,
+        )
+
+    before = porcelain()
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    shadow_path = str(tmp_path / "shadow-policy-b")
+
+    @contextmanager
+    def fake_shadow(source_dir=".", include_unstaged=True):
+        # Ephemeral shadow only — must not touch live repo paths.
+        yield type("Shadow", (), {"path": shadow_path, "clone_sync_latency_ms": 0.5})()
+
+    def fake_refresh(**kwargs):
+        assert kwargs.get("repo_root") == shadow_path
+        return GraphOperationResult(
+            ok=True,
+            operation="refresh_graph",
+            outcome=GraphOutcome.OK,
+            data={},
+            latency_ms=1.0,
+        )
+
+    def fake_stats(*, repo_root=None, **kwargs):
+        assert repo_root == shadow_path
+        return GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.1,
+        )
+
+    def fake_bundle(**kwargs):
+        assert kwargs.get("repo_root") == shadow_path
+        product = empty_graph_product_fields()
+        product["blast_radius_size"] = 1
+        product["affected_flows_count"] = 2
+        product["graph_fallback_reasons"] = []
+        return (
+            product,
+            [
+                GraphOperationResult(
+                    ok=True,
+                    operation="affected_flows",
+                    outcome=GraphOutcome.OK,
+                    data={
+                        "flows": [
+                            {"id": "flow_a", "files": ["tracked.py"]},
+                            {"id": "flow_b", "files": ["other.py"]},
+                        ]
+                    },
+                    latency_ms=0.2,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", fake_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", fake_refresh)
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", fake_stats)
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", fake_bundle)
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 1.0, "graph_query_latency_ms": 0.3},
+    )
+    # Avoid real staged-source IO side effects beyond git status snapshot.
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "git_cg.git_index.read_staged_sources",
+        lambda *a, **k: SimpleNamespace(
+            files={"tracked.py": b"x = 2\n"},
+            changed_files=["tracked.py"],
+            errors=[],
+            skipped=[],
+        ),
+    )
+    monkeypatch.setattr(
+        "git_cg.git_index.read_head_sources",
+        lambda *a, **k: SimpleNamespace(files={}, errors=[], skipped=[]),
+    )
+
+    out = _collect_semantic_producer_metrics(str(repo), enable_semantic=True, verbose=False)
+    after = porcelain()
+
+    assert before == after, f"live worktree/index contaminated:\nBEFORE:\n{before!r}\nAFTER:\n{after!r}"
+    assert out.get("shadow_workspace_used") is True
+    assert out.get("semantic_refresh_graph") == "ran"

@@ -373,7 +373,7 @@ contract boundary. Related work is intentionally split across later phases:
 | Preflight multi-group product / cheap-LLM grouping UX                                   | **Phase 0.5**                                                |
 | Semantic summary object / graph product metrics / Phase 7 telemetry (`blast_radius_*`, `test_coverage_gap`, optional `test_gaps_count`) | **Phase 7** (#162)                                           |
 | Staged-index shadow isolation for opt-in CRG refresh (`include_unstaged=False`)         | **Phase 7.5** (#180; see `docs/stagingADRs/ADR-0005-Complete/Cleaned_Phase_7_5.md`) |
-| Hub / bridge / community split product; complex-function / callers population when not free on detect_changes | **Phase 9** (#163)                                           |
+| Scoped reasoning history (`scoped_history`): Policy B shadow lifetime, flow-disjoint split evidence, rename confidence bands, Channel-4 guidance, structural markers; hub/bridge/community split product remains follow-on | **Phase 9** (#163; see `docs/ADRs/0163-scoped-reasoning-history.md`) |
 | Post-render fact/description veto                                                       | **Phase 10** (#164)                                          |
 | Token-budget prompt assembly (`prompt_budget.py`), hierarchical packer, optional bounded `SemanticDiffSummary` prompt evidence | **Phase 11** (#165)                                          |
 | diskcache fingerprint/cache substrate                                                   | **Phase 11.5** (Epic C / cleaned plan)                       |

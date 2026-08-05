@@ -167,6 +167,22 @@ def init_sentry():
                                 "git_dir",
                                 "cwd",
                                 "file_path",
+                                # Phase 9 free-text / path-bearing locals (Issue #163).
+                                "scoped_history_guidance",
+                                "scoped_history_split_rationale",
+                                "scoped_history_rename_rationale",
+                                "flows_payload_for_evidence",
+                                "file_to_flow_ids",
+                                "old_bytes",
+                                "new_bytes",
+                                "staged_files",
+                                "analysis_diff",
+                                "evidence",
+                                "evidence_dict",
+                                "_scoped_history_file_to_flow_ids",
+                                "renamed_paths",
+                                "changed_files",
+                                "parser_batch_results",
                             ]:
                                 if var_name in frame["vars"]:
                                     frame["vars"][var_name] = "[SCRUBBED]"
