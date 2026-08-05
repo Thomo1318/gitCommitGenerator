@@ -503,8 +503,12 @@ class TestMiseQualityPinsAndTasks:
         text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         assert "constraint-dependencies" in text
         assert "pillow>=12.3.0" in text
-        assert "aiohttp>=3.14.1" in text
+        assert "aiohttp>=3.14.3" in text
+        assert "cryptography>=50.0.0" in text
+        assert "pymdown-extensions>=11.0.0" in text
         assert "pydantic-settings>=2.14.2" in text
+        # Stale pre-bump floors must not return.
+        assert "aiohttp>=3.14.1" not in text
 
     def test_dependency_floor_constraints(self):
         """Issue #177 WP1 floors must stay declared (pytest/tslp/tree-sitter/rich)."""
