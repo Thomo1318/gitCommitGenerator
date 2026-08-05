@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CommitType(enum.StrEnum):
@@ -31,6 +31,46 @@ class SemVerImpact(enum.StrEnum):
     MINOR = "MINOR"
     PATCH = "PATCH"
     NONE = "NONE"
+
+
+# Closed path-role vocabulary for presentation TrailerPriors (Issue #204 · Slice 2).
+TrailerRole = str  # runtime-validated via TrailerPriors.role pattern / Literal below
+
+_TRAILER_ROLES = (
+    "tests",
+    "docs",
+    "adr",
+    "fixtures",
+    "config_ci",
+    "release",
+    "product_src",
+    "mixed",
+)
+
+
+class TrailerPriors(BaseModel):
+    """Frozen path-role presentation priors (Issue #204 · Phase 7.30 · Slice 2).
+
+    Serialisable shared model only — policy algorithms live in ``commit_quality``.
+    Does **not** override matrix ranking or SemVer authority.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    cc_type: CommitType = Field(description="Presentation-default Conventional Commit type")
+    semver_impact: SemVerImpact = Field(description="Presentation-default SemVer impact")
+    changelog_group: str = Field(description="Presentation-default changelog group")
+    scope_hint: str | None = Field(
+        default=None,
+        description="Canonical scope hint derived from dominant path role",
+    )
+    role: str = Field(description="Closed path-role label for the staged set")
+
+    @model_validator(mode="after")
+    def _validate_role(self) -> TrailerPriors:
+        if self.role not in _TRAILER_ROLES:
+            raise ValueError(f"role must be one of {list(_TRAILER_ROLES)}; got {self.role!r}")
+        return self
 
 
 class IssueReferenceKind(enum.StrEnum):
