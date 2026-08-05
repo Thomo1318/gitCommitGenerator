@@ -316,3 +316,67 @@ Gold v1.1 has no separate TUI storyboard. Ranking-confidence arbitration (Phase 
 * Authoring method + worked menus: [`docs/tui_mermaid_guide.md`](tui_mermaid_guide.md) §1–5
 
 Subject-inventory finding messages include a suggested-fix hint: *lead with the outcome, not the action list.*
+
+
+---
+
+## Phase 9 scoped reasoning history (manual)
+
+> [!NOTE]
+> The flag reference above is generated from the usage CLI spec. This section is
+> **hand-maintained** operator documentation for Issue #163 / ADR-0163. When
+> regenerating `docs/usage.md` via `hk` / `usage-cli`, re-append or preserve this
+> block (it is not emitted by the generator).
+
+### When it runs
+
+Scoped-history producers activate only when semantic mode is on:
+
+* CLI: `--enable-semantic` (or env `GIT_CG_ENABLE_SEMANTIC`)
+* Disabled by `--no-enable-semantic` → **zero** scoped-history side effects; telemetry enums stay at safe defaults (`none` / `false` / `0`)
+
+Producers are **advisory**. The deterministic ranker + SOP remain the sole authority for `intent_id`, gitmoji, conventional type, SemVer impact, and changelog group.
+
+### Policy B — shadow query root & lifetime
+
+When graph refresh is opted in (`GIT_CG_SEMANTIC_REFRESH_GRAPH` / refresh-on path):
+
+| Stage | Query root | Lifetime rule |
+| --- | --- | --- |
+| Shadow enter + staged sync | ephemeral shadow | Index-only (`include_unstaged=False`); live worktree dirt is excluded |
+| `refresh_graph` | `shadow.path` | Runs inside the `with shadow_workspace(...)` block |
+| `graph_stats` + product bundle | `shadow.path` | **Policy B:** must run **while the shadow context is still active** |
+| After context exit | **live** `repo_root` only | Never query a destroyed `shadow.path` |
+| Refresh / enter fail-open | live `repo_root` | Staged-truth is not claimed; `scoped_history_fallback_reason` records `graph_unavailable` / `shadow_unavailable` |
+
+Refresh-off keeps baseline parity: stats/product query the live repo root (no shadow).
+
+### Advisory outputs
+
+| Signal | Effect |
+| --- | --- |
+| Flow-disjoint split evidence | May OR-merge `split_recommended=True` and append a bounded rationale note |
+| Rename confidence (`none`/`low`/`medium`/`high`) | Telemetry + optional Channel-4 rename framing guidance |
+| Structural markers | Closed-vocab enrichment only (`structural_error_handling`, `structural_public_api`, `structural_new_command`) folded into fingerprint markers |
+| Channel 4 prompt block | `SCOPED-HISTORY FEEDBACK (SPLIT/RENAME RATIONALE ONLY)` — directive-free; must not act as a user ranking override |
+
+### Telemetry (Phase 9 fields)
+
+| Field | Notes |
+| --- | --- |
+| `scoped_history_fallback_reason` | Closed enum: `none`, `flag_off`, `graph_unavailable`, `shadow_unavailable`, `partial`, `error` |
+| `scoped_history_latency_ms` | Producer wall time (ms) |
+| `rename_confidence` | Closed band enum (not a float) |
+| `scoped_history_split_high_confidence` | Bool split evidence |
+| `scoped_history_guidance` | Channel-4 text; **redacted** on telemetry write |
+| `scoped_history_split_rationale` / `scoped_history_rename_rationale` | Free text; **redacted** on write |
+| `structural_*` | Closed bool markers |
+
+Sentry scrub lists treat guidance/rationale keys as free-text; closed enums are coerced, not scrubbed.
+
+### Related
+
+* ADR: [`docs/ADRs/ADR-0163-scoped-reasoning-history.md`](ADRs/ADR-0163-scoped-reasoning-history.md)
+* Fixtures / behavior matrix: [`tests/fixtures/scoped_history/README.md`](../tests/fixtures/scoped_history/README.md)
+* Phase 7.5 Policy A shadow isolation: Issue #180
+

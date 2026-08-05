@@ -4,20 +4,27 @@
 
 ### ✨ Features
 
+- ✨ feat(scoped-history): Phase 9 scoped reasoning history — flow-disjoint split evidence, rename confidence bands, Channel-4 guidance, and structural markers under `--enable-semantic` (#163)
 - ✨ feat(core): Phase 7.25 gold-standard commit-message content quality — deterministic `commit_gold` linter (wording/coverage/coherence findings) with three-channel prompt assembly and an additive GOLD RUBRIC (#182)
 
 ### 🐛 Bug Fixes & Refactors
 
+- 🔒 fix(telemetry): redact scoped-history text; coerce enums (#163)
+- ♻️ refactor(semantic): Policy B — stats/product queries use live `shadow.path` inside the shadow context (#163)
 - 🥅 fix(intent): close #181-class mis-rank by adding product markers to `error_handling` negative signals (feature_addition now outranks error_handling on product+error diffs) (#182)
 
 ### ✅ Tests
 
+- ✅ test(scoped-history): producer matrix, Policy B claims (P9-A/B), Channel-4 guidance, and telemetry redaction (#163)
 - ✅ test(intent): B1 characterisation fixtures (release-notes product, bugfix-pure, error-only) + golden cascade refresh via `GIT_CG_UPDATE_GOLDENS` (#182)
 - ✅ test(core): B2 gold-linter tables, Claim A purity tests (A_01-A_05), and generation-path gold wiring integration (#182)
 
 ### 📝 Documentation
 
+- 📝 docs(adr): accept ADR-0163 scoped reasoning history (#163)
+- 📝 docs(usage): Policy B shadow lifetime and scoped-history advisory DX (#163)
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
+
 ## v0.11.0
 
 ### ✨ Features
