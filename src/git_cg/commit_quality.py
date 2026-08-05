@@ -251,14 +251,16 @@ def classify_diff_class(paths: list[str]) -> DiffClass:
 
     roles = _classify_path_roles(clean)
     # Prefer ADR over generic docs when exclusive.
-    if roles == {"adr"}:
+    # ADR + usage/docs is still a pure documentation family (TIP-G12), not product mixed.
+    if roles == {"adr"} or roles == {"adr", "release"}:
         name = DIFF_CLASS_ADR
+    elif roles <= {"adr", "docs", "release"} and roles & {"docs", "adr"}:
+        # docs-only, docs+adr, docs+release, docs+adr+release
+        name = DIFF_CLASS_DOCS
     elif roles == {"fixtures"}:
         name = DIFF_CLASS_FIXTURES
     elif roles == {"tests"}:
         name = DIFF_CLASS_TESTS
-    elif roles == {"docs"} or roles == {"docs", "release"}:
-        name = DIFF_CLASS_DOCS
     elif roles == {"config_ci"} or roles == {"config_ci", "release"}:
         name = DIFF_CLASS_CONFIG_CI
     elif roles == {"release"}:
@@ -298,7 +300,8 @@ def presentation_constraints(diff_class: DiffClass) -> PresentationConstraints:
         force_cc = CommitType.TEST
         force_semver = SemVerImpact.NONE
         force_group = "Tests"
-        force_scope = "test"
+        # Prefer behaviour slug (scoped-history) over generic "test" when paths imply it.
+        force_scope = _behaviour_scope_hint(list(diff_class.paths)) or "test"
         forbid_cc.update({"feat", "fix"})
         forbid_security = True
         forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
@@ -344,6 +347,22 @@ def presentation_constraints(diff_class: DiffClass) -> PresentationConstraints:
             force_semver = SemVerImpact.NONE
             forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
             notes.append("mixed_no_runtime_semver_none")
+            path_list = list(diff_class.paths)
+            has_tests = any(_is_meaningful_test_path(p) for p in path_list)
+            has_docs = any((_is_docs_path(p) or _is_adr_path(p) or _is_fixtures_path(p)) for p in path_list)
+            # Test-dominant non-runtime mixed (tests+ADR/docs/fixtures): never invent feat.
+            if has_tests:
+                force_cc = CommitType.TEST
+                force_group = "Tests"
+                force_scope = _behaviour_scope_hint(path_list)
+                forbid_cc.update({"feat", "fix"})
+                notes.append("mixed_no_runtime_test_primary")
+            elif has_docs:
+                force_cc = CommitType.DOCS
+                force_group = "Documentation"
+                force_scope = _docs_scope_hint(path_list)
+                forbid_cc.update({"feat", "fix"})
+                notes.append("mixed_no_runtime_docs_primary")
         forbid_security = not diff_class.has_security_path_evidence
 
     # Global D11: no runtime surface ⇒ NONE
@@ -394,6 +413,23 @@ def _is_adr_path(path: str) -> bool:
         return True
     name = PurePosixPath(path).name.lower()
     return name.startswith("adr-") or "/adrs/" in lowered or "/adr/" in lowered
+
+
+def _is_meaningful_test_path(path: str) -> bool:
+    """Return whether *path* is a real test module (not fixtures corpus)."""
+    return _is_test_path(path) and not _is_fixtures_path(path)
+
+
+def _behaviour_scope_hint(paths: list[str]) -> str | None:
+    """Infer behaviour-first scope from staged paths (e.g. scoped-history)."""
+    if not paths:
+        return None
+    blob = " ".join(_norm_path(p) for p in paths)
+    if "scoped_history" in blob or "scoped-history" in blob or "scoped_hist" in blob:
+        return normalize_scope("scoped-history")
+    if "phase9" in blob:
+        return normalize_scope("phase9")
+    return None
 
 
 def _classify_path_roles(paths: list[str]) -> set[str]:
@@ -531,7 +567,7 @@ def derive_trailer_priors(
             cc_type=CommitType.TEST,
             semver_impact=SemVerImpact.NONE,
             changelog_group="Tests",
-            scope_hint=normalize_scope("test"),
+            scope_hint=_behaviour_scope_hint(paths) or normalize_scope("test"),
             role="tests",
         )
 
@@ -553,8 +589,17 @@ def derive_trailer_priors(
             role="adr",
         )
 
-    if roles == {"docs"} or roles == {"docs", "release"}:
-        # docs-only, including CHANGELOG-as-docs (+ release dual-label)
+    if roles <= {"adr", "docs", "release"} and roles & {"docs", "adr"} and "product_src" not in roles:
+        # docs-only / ADR family, including CHANGELOG-as-docs (+ release dual-label)
+        # and ADR+usage (TIP-G12). Exclusive ADR keeps role=adr.
+        if roles == {"adr"} or roles == {"adr", "release"}:
+            return TrailerPriors(
+                cc_type=CommitType.DOCS,
+                semver_impact=SemVerImpact.NONE,
+                changelog_group="Documentation",
+                scope_hint=normalize_scope("adr"),
+                role="adr",
+            )
         return TrailerPriors(
             cc_type=CommitType.DOCS,
             semver_impact=SemVerImpact.NONE,
@@ -629,11 +674,20 @@ CORRECTNESS_CONCERN_TAGS: frozenset[str] = frozenset(
         "fail_open",
         "scrub_sentinel",
         "redaction_sentinel",
+        "redacted_sentinel",
         "fallback_none_overwrite",
         "closed_enum",
         "rename_harden",
         "error_signal",
         "masking_none",
+        "scrub_vars",
+        "parser_batch_results",
+        "nul_rename_parse",
+        "fallback_enum",
+        "cli_hint_reject",
+        "directive_free_wording",
+        "directive_verb_drop",
+        "authority_leakage_ban",
     }
 )
 
@@ -645,6 +699,18 @@ DARK_LAUNCH_TAGS: frozenset[str] = frozenset(
         "free_harvest",
         "carry_through",
         "preflight_carry",
+        "preflight_carry_through",
+        "elevation",
+    }
+)
+
+# Carry-through / stub-wiring feat presentation uses Changed (not Added-led) (TIP-G11).
+CARRY_THROUGH_TAGS: frozenset[str] = frozenset(
+    {
+        "carry_through",
+        "preflight_carry",
+        "preflight_carry_through",
+        "elevation",
     }
 )
 
@@ -780,7 +846,15 @@ def changelog_groups_allowlisted(
     primary = str(primary_cc_type).lower() if primary_cc_type is not None else None
     if primary == "fix" and groups == ["Added"]:
         return False
-    return all(req in groups for req in required)
+    for req in required:
+        if req == "Added" and ("feat" in {str(t).lower() for t in change_types} or primary == "feat"):
+            # feat may present as Added (capability) or Changed (carry-through/plumbing).
+            if "Added" not in groups and "Changed" not in groups:
+                return False
+            continue
+        if req not in groups:
+            return False
+    return True
 
 
 def min_included_change_bullets(
@@ -797,20 +871,23 @@ def min_included_change_bullets(
         return 0
 
     tags = {t.lower() for t in (concern_tags or set())}
+    has_test = any(_is_meaningful_test_path(p) for p in clean)
+    has_docs = any((_is_docs_path(p) or _is_adr_path(p)) and not _is_fixtures_path(p) for p in clean)
+    has_fixtures = any(_is_fixtures_path(p) for p in clean)
+    has_prod = any(not _is_test_path(p) and not _is_docs_path(p) and not _is_fixtures_path(p) for p in clean)
     surfaces = 0
-    if any(_is_test_path(p) for p in clean):
+    if has_test:
         surfaces += 1
-    if any(_is_docs_path(p) or _is_adr_path(p) for p in clean):
+    if has_docs or has_fixtures:
         surfaces += 1
-    if any(not _is_test_path(p) and not _is_docs_path(p) and not _is_fixtures_path(p) for p in clean):
+    if has_prod:
         surfaces += 1
 
     concern_count = len(tags) if tags else 0
     # Multi-concern product diffs: required_bullets = max(surfaces, concern_count)
+    # Slice 3 freezes the floor only; Slice 4 materialises included-change stubs.
     floor = max(surfaces, concern_count, 1 if clean else 0)
     # tests with product → at least 2 (prod + test)
-    has_test = any(_is_test_path(p) for p in clean)
-    has_prod = any(not _is_test_path(p) and not _is_docs_path(p) and not _is_fixtures_path(p) for p in clean)
     if has_test and has_prod:
         floor = max(floor, 2)
     return floor
@@ -988,6 +1065,13 @@ def apply_presentation_overlay(
             mapped = _TYPE_CHANGELOG_REQUIREMENTS.get(forced_type.value)
             if mapped:
                 primary.changelog_group = mapped
+        # Carry-through / stub-wiring feat is Changed-led, not Added-led (TIP-G11).
+        if forced_type == CommitType.FEAT and tags & CARRY_THROUGH_TAGS:
+            primary.changelog_group = "Changed"
+
+    # Carry-through feat without a forced type still uses Changed presentation group.
+    if primary.cc_type == CommitType.FEAT and tags & CARRY_THROUGH_TAGS:
+        primary.changelog_group = "Changed"
 
     # Forbid illegal primary types (path-class).
     if primary.cc_type.value in cons.forbid_cc_types:
@@ -1044,7 +1128,10 @@ def apply_presentation_overlay(
     groups = [primary.changelog_group, *(s.changelog_group for s in plan.secondary_intents)]
     if not changelog_groups_allowlisted(change_types, groups, primary_cc_type=primary.cc_type):
         primary_req = _TYPE_CHANGELOG_REQUIREMENTS.get(primary.cc_type.value)
-        if primary_req:
+        if primary_req and not (
+            primary.cc_type == CommitType.FEAT and primary.changelog_group == "Changed" and tags & CARRY_THROUGH_TAGS
+        ):
+            # Preserve carry-through Changed presentation for feat plumbing.
             primary.changelog_group = primary_req
         for sec in plan.secondary_intents:
             sec_req = _TYPE_CHANGELOG_REQUIREMENTS.get(sec.cc_type.value)
@@ -1074,62 +1161,45 @@ def apply_presentation_overlay(
     if cons.force_changelog_group is not None and cons.force_cc_type is not None:
         primary.changelog_group = cons.force_changelog_group
 
+    # Re-assert carry-through Changed after allowlist/force repairs (TIP-G11).
+    if primary.cc_type == CommitType.FEAT and tags & CARRY_THROUGH_TAGS:
+        primary.changelog_group = "Changed"
+
     # --- 5. Light cardinality floor (D18) ---
-    # Included-changes bullets == secondary_intents in render().
-    # Floor counts surfaces represented by primary + secondaries.
+    # Slice 3 only ensures required presentation types/groups for surfaces.
+    # Full included-change stubs land in Slice 4; do not synthesise repeated
+    # concern secondaries here (TIP-G5/G7 junk inventory).
     min_bullets = min_included_change_bullets(clean, concern_tags=tags)
-    has_test = any(_is_test_path(p) for p in clean)
-    has_docs = any(_is_docs_path(p) or _is_adr_path(p) for p in clean)
+    has_test = any(_is_meaningful_test_path(p) for p in clean)
+    has_docs = any((_is_docs_path(p) or _is_adr_path(p)) and not _is_fixtures_path(p) for p in clean)
+    has_fixtures = any(_is_fixtures_path(p) for p in clean)
     present_types = {primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
 
     if has_test and "test" not in present_types:
+        test_scope = _behaviour_scope_hint(clean) or "test"
         _ensure_secondary_for_type(
             plan,
             cc_type=CommitType.TEST,
             changelog_group="Tests",
-            scope="test",
+            scope=test_scope,
             description="cover behaviour with tests",
             semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
         )
         present_types.add("test")
-    if has_docs and "docs" not in present_types and primary.cc_type != CommitType.DOCS:
+    if (has_docs or has_fixtures) and "docs" not in present_types and primary.cc_type != CommitType.DOCS:
         _ensure_secondary_for_type(
             plan,
             cc_type=CommitType.DOCS,
             changelog_group="Documentation",
-            scope=_docs_scope_hint(clean) or "docs",
+            scope=_docs_scope_hint(clean) or ("fixtures" if has_fixtures else "docs"),
             description="document the change",
             semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
         )
         present_types.add("docs")
 
-    # Multi-concern pad: add distinct concern bullets until floor met.
-    # Avoid inventing product claims — reuse primary type/group with concern labels.
-    guard = 0
-    while 1 + len(plan.secondary_intents) < min_bullets and tags and guard < 8:
-        guard += 1
-        tag = sorted(tags)[(guard - 1) % len(tags)]
-        from git_cg.models import CommitIntent
-
-        seed_id = _CC_TYPE_SEED_INTENT.get(primary.cc_type.value, "configuration_update")
-        extra = CommitIntent(
-            intent_id=seed_id,
-            gitmoji=primary.gitmoji,
-            cc_type=primary.cc_type,
-            scope=primary.scope,
-            description=f"address {tag.replace('_', ' ')}"[:50],
-            semver_impact=primary.semver_impact,
-            changelog_group=primary.changelog_group,
-        )
-        extra.cc_type = primary.cc_type
-        extra.semver_impact = (
-            cons.force_semver if cons.force_semver is not None else _clamp_semver(primary.semver_impact, ceiling)
-        )
-        extra.changelog_group = primary.changelog_group
-        extra.gitmoji = primary.gitmoji
-        if primary.scope:
-            extra.scope = normalize_scope(primary.scope)
-        plan.secondary_intents.append(extra)
+    # min_bullets is recorded for Slice 4 stub generation; presentation inventory
+    # here stays type/group coverage only.
+    _ = min_bullets
 
     # Final SemVer re-clamp after any secondary injection.
     if cons.force_semver is not None:

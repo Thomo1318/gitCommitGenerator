@@ -1,0 +1,1350 @@
+{
+  "schema_version": 1,
+  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
+  "sop_matrix_row_count": 75,
+  "cases": {
+    "P9-G1": {
+      "diff_class": {
+        "name": "product_src",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 1
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": "scoped-history",
+        "role": "product_src"
+      },
+      "constraints": {
+        "diff_class": "product_src",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": null,
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "scoped-history",
+        "preferred_scope": "scoped-history"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "feat",
+        "scope": "scoped-history",
+        "semver_impact": "PATCH",
+        "changelog_group": "Added",
+        "secondary_intents": [],
+        "types": [
+          "feat"
+        ],
+        "groups": [
+          "Added"
+        ],
+        "scopes": [
+          "scoped-history"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "P9-G2": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 3
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": null,
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": null,
+      "min_included_change_bullets": 2,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "feat",
+        "scope": "git_cg",
+        "semver_impact": "PATCH",
+        "changelog_group": "Added",
+        "secondary_intents": [
+          {
+            "intent_id": "tests_update",
+            "cc_type": "test",
+            "scope": "scoped-history",
+            "semver_impact": "NONE",
+            "changelog_group": "Tests"
+          }
+        ],
+        "types": [
+          "feat",
+          "test"
+        ],
+        "groups": [
+          "Added",
+          "Tests"
+        ],
+        "scopes": [
+          "git_cg",
+          "scoped-history"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": true
+    },
+    "P9-G3": {
+      "diff_class": {
+        "name": "product_src",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 1
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": "intent",
+        "role": "product_src"
+      },
+      "constraints": {
+        "diff_class": "product_src",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": null,
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "intent",
+        "preferred_scope": "intent"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "feat",
+        "scope": "intent",
+        "semver_impact": "PATCH",
+        "changelog_group": "Added",
+        "secondary_intents": [],
+        "types": [
+          "feat"
+        ],
+        "groups": [
+          "Added"
+        ],
+        "scopes": [
+          "intent"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "P9-G4": {
+      "diff_class": {
+        "name": "product_src",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 1
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": "main",
+        "role": "product_src"
+      },
+      "constraints": {
+        "diff_class": "product_src",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": null,
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "main",
+        "preferred_scope": "main"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "feat",
+        "scope": "main",
+        "semver_impact": "PATCH",
+        "changelog_group": "Added",
+        "secondary_intents": [],
+        "types": [
+          "feat"
+        ],
+        "groups": [
+          "Added"
+        ],
+        "scopes": [
+          "main"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": true
+    },
+    "P9-G5": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 10
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": null,
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": "test",
+        "force_semver": "NONE",
+        "force_changelog_group": "Tests",
+        "force_scope": "scoped-history",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "mixed_no_runtime_semver_none",
+          "mixed_no_runtime_test_primary",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "test",
+      "min_included_change_bullets": 2,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "secondary_intents": [
+          {
+            "intent_id": "documentation_update",
+            "cc_type": "docs",
+            "scope": "fixtures",
+            "semver_impact": "NONE",
+            "changelog_group": "Documentation"
+          }
+        ],
+        "types": [
+          "test",
+          "docs"
+        ],
+        "groups": [
+          "Tests",
+          "Documentation"
+        ],
+        "scopes": [
+          "scoped-history",
+          "fixtures"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "P9-G6": {
+      "diff_class": {
+        "name": "tests_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "test",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "scope_hint": "test",
+        "role": "tests"
+      },
+      "constraints": {
+        "diff_class": "tests_only",
+        "force_cc_type": "test",
+        "force_semver": "NONE",
+        "force_changelog_group": "Tests",
+        "force_scope": "test",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "tests_only_force_test_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "test",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "test",
+        "scope": "test",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "secondary_intents": [],
+        "types": [
+          "test"
+        ],
+        "groups": [
+          "Tests"
+        ],
+        "scopes": [
+          "test"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "P9-G7": {
+      "diff_class": {
+        "name": "adr_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 1
+      },
+      "priors": {
+        "cc_type": "docs",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "scope_hint": "adr",
+        "role": "adr"
+      },
+      "constraints": {
+        "diff_class": "adr_only",
+        "force_cc_type": "docs",
+        "force_semver": "NONE",
+        "force_changelog_group": "Documentation",
+        "force_scope": "adr",
+        "forbid_cc_types": [
+          "chore",
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "adr_only_force_docs_adr_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "docs",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "docs",
+        "scope": "adr",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "secondary_intents": [],
+        "types": [
+          "docs"
+        ],
+        "groups": [
+          "Documentation"
+        ],
+        "scopes": [
+          "adr"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G1": {
+      "diff_class": {
+        "name": "tests_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 4
+      },
+      "priors": {
+        "cc_type": "test",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "scope_hint": "scoped-history",
+        "role": "tests"
+      },
+      "constraints": {
+        "diff_class": "tests_only",
+        "force_cc_type": "test",
+        "force_semver": "NONE",
+        "force_changelog_group": "Tests",
+        "force_scope": "scoped-history",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "tests_only_force_test_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "test",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "scoped-history",
+        "preferred_scope": "scoped-history"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "secondary_intents": [],
+        "types": [
+          "test"
+        ],
+        "groups": [
+          "Tests"
+        ],
+        "scopes": [
+          "scoped-history"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G2": {
+      "diff_class": {
+        "name": "fixtures_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 1
+      },
+      "priors": {
+        "cc_type": "docs",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "scope_hint": "fixtures",
+        "role": "fixtures"
+      },
+      "constraints": {
+        "diff_class": "fixtures_only",
+        "force_cc_type": "docs",
+        "force_semver": "NONE",
+        "force_changelog_group": "Documentation",
+        "force_scope": "fixtures",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "fixtures_only_force_docs_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "docs",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "docs",
+        "scope": "fixtures",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "secondary_intents": [],
+        "types": [
+          "docs"
+        ],
+        "groups": [
+          "Documentation"
+        ],
+        "scopes": [
+          "fixtures"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G3": {
+      "diff_class": {
+        "name": "adr_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "docs",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "scope_hint": "adr",
+        "role": "adr"
+      },
+      "constraints": {
+        "diff_class": "adr_only",
+        "force_cc_type": "docs",
+        "force_semver": "NONE",
+        "force_changelog_group": "Documentation",
+        "force_scope": "adr",
+        "forbid_cc_types": [
+          "chore",
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "adr_only_force_docs_adr_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "docs",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "docs",
+        "scope": "adr",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "secondary_intents": [],
+        "types": [
+          "docs"
+        ],
+        "groups": [
+          "Documentation"
+        ],
+        "scopes": [
+          "adr"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G4": {
+      "diff_class": {
+        "name": "docs_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [
+          "CHANGELOG.md"
+        ],
+        "path_count": 3
+      },
+      "priors": {
+        "cc_type": "docs",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "scope_hint": "usage",
+        "role": "docs"
+      },
+      "constraints": {
+        "diff_class": "docs_only",
+        "force_cc_type": "docs",
+        "force_semver": "NONE",
+        "force_changelog_group": "Documentation",
+        "force_scope": "usage",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": true,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "changelog_antisignal_exclude_from_signals",
+          "docs_only_force_docs_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "docs",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "docs",
+        "scope": "usage",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "secondary_intents": [],
+        "types": [
+          "docs"
+        ],
+        "groups": [
+          "Documentation"
+        ],
+        "scopes": [
+          "usage"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G5": {
+      "diff_class": {
+        "name": "product_src",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 3
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": null,
+        "role": "product_src"
+      },
+      "constraints": {
+        "diff_class": "product_src",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": "fix",
+      "min_included_change_bullets": 6,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "fix",
+        "scope": "git_cg",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "secondary_intents": [],
+        "types": [
+          "fix"
+        ],
+        "groups": [
+          "Fixed"
+        ],
+        "scopes": [
+          "git_cg"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": true
+    },
+    "TIP-G6": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 9
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": null,
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": "test",
+        "force_semver": "NONE",
+        "force_changelog_group": "Tests",
+        "force_scope": "scoped-history",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "mixed_no_runtime_semver_none",
+          "mixed_no_runtime_test_primary",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "test",
+      "min_included_change_bullets": 2,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "secondary_intents": [
+          {
+            "intent_id": "documentation_update",
+            "cc_type": "docs",
+            "scope": "adr",
+            "semver_impact": "NONE",
+            "changelog_group": "Documentation"
+          }
+        ],
+        "types": [
+          "test",
+          "docs"
+        ],
+        "groups": [
+          "Tests",
+          "Documentation"
+        ],
+        "scopes": [
+          "scoped-history",
+          "adr"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G7": {
+      "diff_class": {
+        "name": "product_src",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": null,
+        "role": "product_src"
+      },
+      "constraints": {
+        "diff_class": "product_src",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": "fix",
+      "min_included_change_bullets": 5,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": "scoped-history"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "fix",
+        "scope": "scoped-history",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "secondary_intents": [],
+        "types": [
+          "fix"
+        ],
+        "groups": [
+          "Fixed"
+        ],
+        "scopes": [
+          "scoped-history"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": true
+    },
+    "TIP-G8": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": null,
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": "test",
+        "force_semver": "NONE",
+        "force_changelog_group": "Tests",
+        "force_scope": "scoped-history",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "mixed_no_runtime_semver_none",
+          "mixed_no_runtime_test_primary",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "test",
+      "min_included_change_bullets": 2,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "secondary_intents": [
+          {
+            "intent_id": "documentation_update",
+            "cc_type": "docs",
+            "scope": "adr",
+            "semver_impact": "NONE",
+            "changelog_group": "Documentation"
+          }
+        ],
+        "types": [
+          "test",
+          "docs"
+        ],
+        "groups": [
+          "Tests",
+          "Documentation"
+        ],
+        "scopes": [
+          "scoped-history",
+          "adr"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G9": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": "scoped-history",
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": "fix",
+      "min_included_change_bullets": 3,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "scoped-history",
+        "preferred_scope": "scoped-history"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "fix",
+        "scope": "scoped-history",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "secondary_intents": [
+          {
+            "intent_id": "tests_update",
+            "cc_type": "test",
+            "scope": "scoped-history",
+            "semver_impact": "NONE",
+            "changelog_group": "Tests"
+          }
+        ],
+        "types": [
+          "fix",
+          "test"
+        ],
+        "groups": [
+          "Fixed",
+          "Tests"
+        ],
+        "scopes": [
+          "scoped-history",
+          "scoped-history"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G10": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": "semantic",
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": null,
+      "min_included_change_bullets": 2,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "semantic",
+        "preferred_scope": null
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "feat",
+        "scope": "semantic",
+        "semver_impact": "PATCH",
+        "changelog_group": "Added",
+        "secondary_intents": [
+          {
+            "intent_id": "tests_update",
+            "cc_type": "test",
+            "scope": "test",
+            "semver_impact": "NONE",
+            "changelog_group": "Tests"
+          }
+        ],
+        "types": [
+          "feat",
+          "test"
+        ],
+        "groups": [
+          "Added",
+          "Tests"
+        ],
+        "scopes": [
+          "semantic",
+          "test"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    },
+    "TIP-G11": {
+      "diff_class": {
+        "name": "mixed",
+        "has_runtime_surface": true,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "chore",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "scope_hint": "main",
+        "role": "mixed"
+      },
+      "constraints": {
+        "diff_class": "mixed",
+        "force_cc_type": null,
+        "force_semver": null,
+        "force_changelog_group": null,
+        "force_scope": null,
+        "forbid_cc_types": [],
+        "forbid_semver": [],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "PATCH",
+      "dominant_cc_type": null,
+      "min_included_change_bullets": 2,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "semantic",
+        "preferred_scope": "scoped-history"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "feat",
+        "scope": "scoped-history",
+        "semver_impact": "PATCH",
+        "changelog_group": "Changed",
+        "secondary_intents": [
+          {
+            "intent_id": "tests_update",
+            "cc_type": "test",
+            "scope": "test",
+            "semver_impact": "NONE",
+            "changelog_group": "Tests"
+          }
+        ],
+        "types": [
+          "feat",
+          "test"
+        ],
+        "groups": [
+          "Changed",
+          "Tests"
+        ],
+        "scopes": [
+          "scoped-history",
+          "test"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": true
+    },
+    "TIP-G12": {
+      "diff_class": {
+        "name": "docs_only",
+        "has_runtime_surface": false,
+        "has_security_path_evidence": false,
+        "changelog_paths": [],
+        "path_count": 2
+      },
+      "priors": {
+        "cc_type": "docs",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "scope_hint": "adr",
+        "role": "docs"
+      },
+      "constraints": {
+        "diff_class": "docs_only",
+        "force_cc_type": "docs",
+        "force_semver": "NONE",
+        "force_changelog_group": "Documentation",
+        "force_scope": "adr",
+        "forbid_cc_types": [
+          "feat",
+          "fix"
+        ],
+        "forbid_semver": [
+          "MAJOR",
+          "MINOR",
+          "PATCH"
+        ],
+        "forbid_security_primary": true,
+        "changelog_antisignal_applied": false,
+        "security_requires_path_evidence": true,
+        "notes": [
+          "docs_only_force_docs_none",
+          "security_primary_forbidden_without_path_evidence"
+        ]
+      },
+      "semver_ceiling": "NONE",
+      "dominant_cc_type": "docs",
+      "min_included_change_bullets": 1,
+      "scope_canon": {
+        "scoped_history": "scoped-history",
+        "scoped_hist": "scoped-history",
+        "main.py": "main",
+        "seed_scope": "git_cg",
+        "preferred_scope": "adr"
+      },
+      "overlay": {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": "docs",
+        "scope": "adr",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "secondary_intents": [],
+        "types": [
+          "docs"
+        ],
+        "groups": [
+          "Documentation"
+        ],
+        "scopes": [
+          "adr"
+        ],
+        "preserved_ranked_intent_id": "feature_addition",
+        "preserved_ranked_gitmoji": "✨"
+      },
+      "high_risk_path": false
+    }
+  }
+}
