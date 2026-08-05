@@ -258,6 +258,26 @@ def test_collect_semantic_producer_metrics_flag_off_skips_graph_product(monkeypa
     assert called["n"] == 0
 
 
+def test_collect_semantic_producer_metrics_preflight_groups_elevates_split(monkeypatch):
+    """Carry-through: preflight_groups_count>1 elevates scoped-history split confidence."""
+    from git_cg.main import _collect_semantic_producer_metrics
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: False)
+
+    out = _collect_semantic_producer_metrics(
+        "/tmp",
+        enable_semantic=True,
+        verbose=False,
+        preflight_groups_count=3,
+    )
+    assert out.get("split_recommended") is True
+    rationale = str(out.get("scoped_history_split_rationale") or "")
+    assert "preflight_groups_count=3" in rationale
+    evidence = out.get("scoped_history_evidence") or {}
+    assert evidence.get("split_high_confidence") is True
+
+
 def test_collect_semantic_producer_metrics_flag_off_does_not_import_semantic(monkeypatch):
     """Flag-off must not import git_cg.semantic (keeps zero-safe path isolated)."""
     import builtins

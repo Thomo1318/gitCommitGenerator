@@ -1575,6 +1575,7 @@ def _collect_semantic_producer_metrics(
     *,
     enable_semantic: bool | None,
     verbose: bool = False,
+    preflight_groups_count: int = 0,
 ) -> dict:
     """
     Run dark-launched Phase 1/2 semantic producers and return telemetry fields.
@@ -1582,6 +1583,9 @@ def _collect_semantic_producer_metrics(
     Flag-off returns zero-safe defaults without touching git/graph/parser I/O.
     Flag-on collects staged parse metrics, HEAD/index fingerprint aggregates, and
     optional graph latencies. Never raises; failures degrade to empty metrics.
+
+    ``preflight_groups_count`` is carry-through only (Phase 0.5 product owns
+    grouping). When already >1 it elevates scoped-history split confidence.
     """
     from git_cg.ast_parser import empty_parser_metrics
     from git_cg.semantic_flags import is_semantic_enabled
@@ -1598,6 +1602,9 @@ def _collect_semantic_producer_metrics(
         "graph_fallback_reasons": [],
         "impacts_tests": None,
         "impacts_production_code": None,
+        "impacts_hub_node": None,
+        "complex_function_changed": None,
+        "notable_callers": [],
     }
 
     result: dict = {
@@ -2025,7 +2032,14 @@ def _collect_semantic_producer_metrics(
                 new_bytes = dict(staged_files)
 
             # Empty flow map is not an error; the graph product may simply have no flows.
-            # preflight_groups_count is owned by the commit-generation path, not this producer.
+            # preflight_groups_count is carry-through from the commit path (Phase 0.5 product
+            # owns grouping; default 0 keeps behaviour identical until preflight runs).
+            try:
+                pf_groups = int(preflight_groups_count or 0)
+            except TypeError, ValueError:
+                pf_groups = 0
+            if pf_groups < 0:
+                pf_groups = 0
             evidence = evaluate_scoped_history(
                 enable_semantic=True,
                 file_to_flow_ids=file_to_flow_ids,
@@ -2035,7 +2049,7 @@ def _collect_semantic_producer_metrics(
                 new_bytes_by_path=new_bytes,
                 staged_sources=staged_files,
                 parse_results=parser_batch_results,
-                preflight_groups_count=0,
+                preflight_groups_count=pf_groups,
                 fallback_reason=scoped_fallback,
             )
             evidence_dict = evidence.to_dict()
@@ -2171,10 +2185,17 @@ def _run_commit_generation(
     # Phase 1/2/7: semantic producers (parser, fingerprints, graph product bundle).
     # Flag-on may enrich closed-vocab ranking markers and attach SemanticDiffSummary context.
     # Prompt MVP ships no summary evidence block (Phase 11 owns packing).
+    # Phase 0.5 preflight product is not built here. Carry-through only: when a
+    # future grouping product (or test injection) sets groups >1, scoped-history
+    # elevates split confidence. Defaults keep today's skipped behaviour.
+    preflight_mode = "skipped"
+    preflight_groups_count = 0
+    preflight_fallback_reason = ""
     semantic_metrics = _collect_semantic_producer_metrics(
         repo_root,
         enable_semantic=enable_semantic,
         verbose=verbose,
+        preflight_groups_count=preflight_groups_count,
     )
     semantic_enabled = bool(semantic_metrics["semantic_enabled"])
     parser_latency_ms = float(semantic_metrics["parser_latency_ms"] or 0.0)
@@ -2241,9 +2262,9 @@ def _run_commit_generation(
         "fingerprint_grammar_version": fingerprint_grammar_version,
         "fingerprint_markers": fingerprint_markers,
         # Phase 3 preflight hooks (default skipped until Phase 0.5 grouping product).
-        "preflight_mode": "skipped",
-        "preflight_groups_count": 0,
-        "preflight_fallback_reason": "",
+        "preflight_mode": preflight_mode,
+        "preflight_groups_count": preflight_groups_count,
+        "preflight_fallback_reason": preflight_fallback_reason,
         # Phase 7 semantic context product metrics (Issue #162).
         "blast_radius_size": blast_radius_size,
         "affected_flows_count": affected_flows_count,
@@ -2489,9 +2510,9 @@ def _run_commit_generation(
                     fingerprint_class_counts=fingerprint_class_counts,
                     fingerprint_grammar_version=fingerprint_grammar_version,
                     fingerprint_markers=fingerprint_markers,
-                    preflight_mode="skipped",
-                    preflight_groups_count=0,
-                    preflight_fallback_reason="",
+                    preflight_mode=preflight_mode,
+                    preflight_groups_count=preflight_groups_count,
+                    preflight_fallback_reason=preflight_fallback_reason,
                     blast_radius_size=blast_radius_size
                     if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
                     else None,
@@ -2835,9 +2856,9 @@ def _run_commit_generation(
                 fingerprint_class_counts=fingerprint_class_counts,
                 fingerprint_grammar_version=fingerprint_grammar_version,
                 fingerprint_markers=fingerprint_markers,
-                preflight_mode="skipped",
-                preflight_groups_count=0,
-                preflight_fallback_reason="",
+                preflight_mode=preflight_mode,
+                preflight_groups_count=preflight_groups_count,
+                preflight_fallback_reason=preflight_fallback_reason,
                 blast_radius_size=blast_radius_size
                 if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
                 else None,
@@ -2978,9 +2999,9 @@ def _run_commit_generation(
         fingerprint_class_counts=fingerprint_class_counts,
         fingerprint_grammar_version=fingerprint_grammar_version,
         fingerprint_markers=fingerprint_markers,
-        preflight_mode="skipped",
-        preflight_groups_count=0,
-        preflight_fallback_reason="",
+        preflight_mode=preflight_mode,
+        preflight_groups_count=preflight_groups_count,
+        preflight_fallback_reason=preflight_fallback_reason,
         blast_radius_size=blast_radius_size
         if isinstance(blast_radius_size, int) and not isinstance(blast_radius_size, bool)
         else None,
