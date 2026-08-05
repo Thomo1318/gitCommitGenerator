@@ -1897,3 +1897,54 @@ def test_v11_gold_split_recommendation_string_false_coerces(tmp_path):
     result = read_telemetry_state(str(tmp_path))
     assert result is not None
     assert result.gold_split_recommendation is False
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 5 presentation_fallback_reason
+# ---------------------------------------------------------------------------
+
+
+def test_presentation_fallback_reason_defaults_to_none():
+    tel = _minimal_telemetry()
+    assert tel.presentation_fallback_reason == "none"
+
+
+def test_write_then_read_preserves_presentation_fallback_reason(tmp_path, monkeypatch):
+    import git_cg.telemetry as telemetry_mod
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    tel = _minimal_telemetry(presentation_fallback_reason="low_confidence")
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.presentation_fallback_reason == "low_confidence"
+
+
+def test_read_telemetry_state_defaults_presentation_fallback_for_legacy(tmp_path):
+    state_path = get_state_file_path(str(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "diff",
+        "repo_name": "r",
+        "engine": "mtplx",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "msg",
+        "commit_plan_json": {},
+        "score_card": {},
+    }
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.presentation_fallback_reason == "none"
+
+
+def test_coerce_unknown_presentation_fallback_to_none():
+    from git_cg.telemetry import coerce_presentation_fallback_reason
+
+    assert coerce_presentation_fallback_reason("not-real") == "none"
+    assert coerce_presentation_fallback_reason("LOW_CONFIDENCE") == "low_confidence"
+    assert coerce_presentation_fallback_reason(None) == "none"

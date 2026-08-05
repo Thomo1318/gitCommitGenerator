@@ -183,6 +183,10 @@ def init_sentry():
                                 "renamed_paths",
                                 "changed_files",
                                 "parser_batch_results",
+                                # Phase 7.30 presentation locals (Issue #204) — closed
+                                # enums are safe as tags, but scrub free-text guidance.
+                                "low_confidence_guidance",
+                                "body_skeleton",
                             ]:
                                 if var_name in frame["vars"]:
                                     frame["vars"][var_name] = "[SCRUBBED]"

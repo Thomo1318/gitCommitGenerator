@@ -107,6 +107,25 @@ class LockResolution(enum.StrEnum):
     ABSENT = "absent"
 
 
+class PresentationFallbackReason(enum.StrEnum):
+    """Closed presentation fallback reasons (Issue #204 · Phase 7.30).
+
+    Single primary reason per run. Precedence is owned by presentation policy;
+    this enum is vocabulary only.
+    """
+
+    NONE = "none"
+    ERROR = "error"
+    BLUEPRINT = "blueprint"
+    PATH_CLASS_GATE = "path_class_gate"
+    SEMVER_CEILING = "semver_ceiling"
+    TYPE_DOMINANCE = "type_dominance"
+    HALLUCINATION_GUARD = "hallucination_guard"
+    CRAFT_GUARD = "craft_guard"
+    INVENTORY_GUARD = "inventory_guard"
+    LOW_CONFIDENCE = "low_confidence"
+
+
 class GoldSelfCorrectionOutcome(enum.StrEnum):
     """Closed gold self-correction outcomes (Issue #191 Option B).
 
@@ -214,6 +233,8 @@ class GenerationTelemetry:
     structural_error_handling: bool = False
     structural_public_api: bool = False
     structural_new_command: bool = False
+    # Issue #204 Phase 7.30 presentation fallback (closed vocab; default none).
+    presentation_fallback_reason: str = PresentationFallbackReason.NONE.value
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -656,6 +677,17 @@ def get_state_file_path(git_dir: str) -> Path:
     return Path(git_dir) / "GIT_CG_OPIK_STATE.json"
 
 
+def coerce_presentation_fallback_reason(value: object) -> str:
+    """Coerce unknown presentation fallback reasons to ``none`` (D9/D26)."""
+    if isinstance(value, PresentationFallbackReason):
+        return value.value
+    text = str(value or "").strip().lower()
+    allowed = {m.value for m in PresentationFallbackReason}
+    if text in allowed:
+        return text
+    return PresentationFallbackReason.NONE.value
+
+
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     """
     Persist redacted telemetry state in the repository's Git directory for retrieval by a later hook.
@@ -744,6 +776,11 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     except Exception:
         telemetry.scoped_history_fallback_reason = "none"
         telemetry.rename_confidence = "none"
+
+    # Issue #204: closed presentation fallback reason (no free-text gateway).
+    telemetry.presentation_fallback_reason = coerce_presentation_fallback_reason(
+        getattr(telemetry, "presentation_fallback_reason", PresentationFallbackReason.NONE.value)
+    )
 
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
@@ -872,6 +909,11 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("structural_error_handling", False)
             data.setdefault("structural_public_api", False)
             data.setdefault("structural_new_command", False)
+            # Issue #204 presentation fallback default (Phase 7.30).
+            data.setdefault("presentation_fallback_reason", PresentationFallbackReason.NONE.value)
+            data["presentation_fallback_reason"] = coerce_presentation_fallback_reason(
+                data.get("presentation_fallback_reason")
+            )
             # Normalise ranking fields.
             level = data.get("ranking_confidence_level")
             if level is not None and level not in {m.value for m in RankingConfidenceLevel}:
