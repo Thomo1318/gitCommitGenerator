@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from typing import TYPE_CHECKING
 
 from git_cg.commit_gold import _file_groups
 from git_cg.intent import (
@@ -30,6 +31,9 @@ from git_cg.intent import (
 )
 from git_cg.models import CommitType, SemVerImpact, TrailerPriors
 from git_cg.scope_canon import normalize_scope
+
+if TYPE_CHECKING:
+    from git_cg.models import CommitPlan
 
 
 def _norm_path(path: str) -> str:
@@ -810,3 +814,334 @@ def min_included_change_bullets(
     if has_test and has_prod:
         floor = max(floor, 2)
     return floor
+
+
+# ---------------------------------------------------------------------------
+# Presentation overlay — post-rank / post-LLM (presentation fields only)
+# ---------------------------------------------------------------------------
+
+_SEMVER_RANK: dict[str, int] = {
+    SemVerImpact.NONE.value: 0,
+    SemVerImpact.PATCH.value: 1,
+    SemVerImpact.MINOR.value: 2,
+    SemVerImpact.MAJOR.value: 3,
+}
+
+# Default gitmoji for presentation-forced cc_types when matrix row is unavailable.
+_CC_TYPE_GITMOJI: dict[str, str] = {
+    "test": "✅",
+    "docs": "📝",
+    "fix": "🐛",
+    "feat": "✨",
+    "chore": "🔧",
+    "ci": "👷",
+    "build": "📦",
+    "refactor": "♻️",
+    "perf": "⚡️",
+    "style": "🎨",
+    "revert": "⏪️",
+}
+
+
+def _clamp_semver(current: SemVerImpact | str, ceiling: SemVerImpact) -> SemVerImpact:
+    """Return *current* capped at *ceiling* (presentation only)."""
+    cur = SemVerImpact(str(current))
+    if _SEMVER_RANK[cur.value] > _SEMVER_RANK[ceiling.value]:
+        return ceiling
+    return cur
+
+
+def _presentation_gitmoji_for(cc_type: CommitType | str, current: str) -> str:
+    """Return gitmoji for *new* presentation secondaries only.
+
+    Existing ranked/enforced intents keep their matrix gitmoji (D1 / identity).
+    This helper is intentionally unused for primary/secondary rewrites.
+    """
+    key = str(cc_type).lower()
+    return _CC_TYPE_GITMOJI.get(key, current)
+
+
+# Stable matrix intent_ids used only as construction seeds for presentation
+# secondaries. Matrix validator may rewrite changelog_group on init; callers
+# always re-assign presentation fields after construction.
+_CC_TYPE_SEED_INTENT: dict[str, str] = {
+    "test": "tests_update",
+    "docs": "documentation_update",
+    "fix": "bug_fix",
+    "feat": "feature_addition",
+    "chore": "configuration_update",
+    "ci": "configuration_update",
+    "build": "configuration_update",
+    "refactor": "configuration_update",
+    "perf": "configuration_update",
+    "style": "configuration_update",
+    "revert": "configuration_update",
+}
+
+
+def _ensure_secondary_for_type(
+    plan: CommitPlan,
+    *,
+    cc_type: CommitType,
+    changelog_group: str,
+    scope: str | None,
+    description: str,
+    semver: SemVerImpact = SemVerImpact.NONE,
+) -> None:
+    """Append a minimal secondary intent when a required type/group is missing."""
+    from git_cg.models import CommitIntent
+
+    existing_types = {plan.primary_intent.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
+    if cc_type.value in existing_types:
+        # Repair changelog group on the matching intent if needed.
+        if plan.primary_intent.cc_type == cc_type:
+            plan.primary_intent.changelog_group = changelog_group
+        for sec in plan.secondary_intents:
+            if sec.cc_type == cc_type:
+                sec.changelog_group = changelog_group
+                sec.semver_impact = semver
+        return
+
+    seed_id = _CC_TYPE_SEED_INTENT.get(cc_type.value, "configuration_update")
+    sec = CommitIntent(
+        intent_id=seed_id,
+        gitmoji=_CC_TYPE_GITMOJI.get(cc_type.value, "🔧"),
+        cc_type=cc_type,
+        scope=normalize_scope(scope) if scope else scope,
+        description=description[:50],
+        semver_impact=semver,
+        changelog_group=changelog_group,
+    )
+    # Matrix validator may reset presentation fields to SOP row defaults —
+    # re-assert presentation fields. New secondaries may use type-default gitmoji
+    # (they are presentation inventory, not ranked identity). Existing matched
+    # secondaries keep their gitmoji above.
+    sec.cc_type = cc_type
+    sec.semver_impact = semver
+    sec.changelog_group = changelog_group
+    if scope:
+        sec.scope = normalize_scope(scope)
+    plan.secondary_intents.append(sec)
+
+
+def apply_presentation_overlay(
+    plan: CommitPlan,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    priors: TrailerPriors | None = None,
+    constraints: PresentationConstraints | None = None,
+    concern_tags: frozenset[str] | set[str] | None = None,
+    evidence_text: str = "",
+    active_directives: dict[str, str] | None = None,
+) -> CommitPlan:
+    """Apply path-class / SemVer / type / changelog presentation overlays to *plan*.
+
+    Presentation-only. **Never** mutates ``primary_intent.intent_id`` (D1) and must
+    not call ``rank_commit_intents``. Safe to run after ``enforce_semantic_contract``.
+
+    Precedence (D4 / Approval locks):
+    path-class force/forbid → SemVer ceiling → type dominance → scope hints →
+    changelog↔types allowlist repair → cardinality floor (light; stubs in Slice 4).
+    """
+    clean = _resolve_paths(list(paths or []), signals)
+    tags = {t.lower() for t in (concern_tags or set())}
+    base_priors = priors or derive_trailer_priors(clean, signals=signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    ceiling = semver_presentation_ceiling(
+        clean,
+        signals,
+        concern_tags=tags,
+        evidence_text=evidence_text,
+    )
+    # Path-class force_semver is a hard presentation lock (usually NONE).
+    if cons.force_semver is not None:
+        # Take the more restrictive of force_semver and computed ceiling.
+        if _SEMVER_RANK[cons.force_semver.value] <= _SEMVER_RANK[ceiling.value]:
+            ceiling = cons.force_semver
+        else:
+            # force asks higher than evidence ceiling — still honour evidence ceiling.
+            pass
+
+    primary = plan.primary_intent
+    # Preserve ranked/locked identity — never rewrite intent_id or gitmoji.
+    preserved_intent_id = primary.intent_id
+    preserved_gitmoji = primary.gitmoji
+
+    # --- 1. Primary type force / dominance (D11 / D17) ---
+    forced_type = cons.force_cc_type
+    if forced_type is None:
+        forced_type = dominant_presentation_cc_type(
+            clean,
+            signals=signals,
+            concern_tags=tags,
+            priors=base_priors,
+        )
+
+    if forced_type is not None:
+        primary.cc_type = forced_type
+        # Identity lock: never rewrite ranked/enforced gitmoji (presentation owns
+        # cc_type/SemVer/changelog/scope only).
+        if cons.force_changelog_group is not None:
+            primary.changelog_group = cons.force_changelog_group
+        else:
+            mapped = _TYPE_CHANGELOG_REQUIREMENTS.get(forced_type.value)
+            if mapped:
+                primary.changelog_group = mapped
+
+    # Forbid illegal primary types (path-class).
+    if primary.cc_type.value in cons.forbid_cc_types:
+        fallback = cons.force_cc_type or base_priors.cc_type
+        primary.cc_type = fallback
+        if cons.force_changelog_group is not None:
+            primary.changelog_group = cons.force_changelog_group
+        else:
+            mapped = _TYPE_CHANGELOG_REQUIREMENTS.get(fallback.value)
+            if mapped:
+                primary.changelog_group = mapped
+
+    # Security primary forbid without path evidence (D13) — demote framing only.
+    if cons.forbid_security_primary and (
+        primary.changelog_group.lower() == "security" or primary.gitmoji in {"🔐", "🔒️"}
+    ):
+        if cons.force_cc_type is not None:
+            primary.cc_type = cons.force_cc_type
+        primary.changelog_group = cons.force_changelog_group or _TYPE_CHANGELOG_REQUIREMENTS.get(
+            primary.cc_type.value, "Miscellaneous"
+        )
+        # Keep matrix gitmoji even when demoting Security framing; presentation
+        # may change changelog_group/cc_type only.
+
+    # --- 2. SemVer ceiling on primary + secondaries (D16) ---
+    if cons.force_semver is not None:
+        primary.semver_impact = cons.force_semver
+    else:
+        primary.semver_impact = _clamp_semver(primary.semver_impact, ceiling)
+    for sec in plan.secondary_intents:
+        if cons.force_semver is not None:
+            sec.semver_impact = cons.force_semver
+        else:
+            sec.semver_impact = _clamp_semver(sec.semver_impact, ceiling)
+
+    # --- 3. Scope (D11 force_scope / priors hint / directive) ---
+    # Order (Approval locks §J simplified): force_scope > preferred_scope >
+    # existing normalised scope > priors.scope_hint
+    if cons.force_scope is not None:
+        primary.scope = normalize_scope(cons.force_scope)
+    elif active_directives and "preferred_scope" in active_directives:
+        primary.scope = normalize_scope(active_directives["preferred_scope"])
+    elif primary.scope:
+        primary.scope = normalize_scope(primary.scope)
+    elif base_priors.scope_hint:
+        primary.scope = normalize_scope(base_priors.scope_hint)
+
+    for sec in plan.secondary_intents:
+        if sec.scope:
+            sec.scope = normalize_scope(sec.scope)
+
+    # --- 4. Changelog ↔ Change-Types allowlist repair (D19) ---
+    change_types = [primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)]
+    groups = [primary.changelog_group, *(s.changelog_group for s in plan.secondary_intents)]
+    if not changelog_groups_allowlisted(change_types, groups, primary_cc_type=primary.cc_type):
+        primary_req = _TYPE_CHANGELOG_REQUIREMENTS.get(primary.cc_type.value)
+        if primary_req:
+            primary.changelog_group = primary_req
+        for sec in plan.secondary_intents:
+            sec_req = _TYPE_CHANGELOG_REQUIREMENTS.get(sec.cc_type.value)
+            if sec_req:
+                sec.changelog_group = sec_req
+        # Recompute and inject missing required groups as secondaries.
+        change_types = [primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)]
+        groups = [primary.changelog_group, *(s.changelog_group for s in plan.secondary_intents)]
+        still_required = [
+            g for g in required_changelog_groups(change_types, primary_cc_type=primary.cc_type) if g not in groups
+        ]
+        for group in still_required:
+            type_for_group = next(
+                (t for t, g in _TYPE_CHANGELOG_REQUIREMENTS.items() if g == group),
+                "chore",
+            )
+            _ensure_secondary_for_type(
+                plan,
+                cc_type=CommitType(type_for_group),
+                changelog_group=group,
+                scope="test" if type_for_group == "test" else primary.scope,
+                description=f"cover {group.lower()} surface",
+                semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
+            )
+
+    # Pure tests/docs force_group always wins on primary.
+    if cons.force_changelog_group is not None and cons.force_cc_type is not None:
+        primary.changelog_group = cons.force_changelog_group
+
+    # --- 5. Light cardinality floor (D18) ---
+    # Included-changes bullets == secondary_intents in render().
+    # Floor counts surfaces represented by primary + secondaries.
+    min_bullets = min_included_change_bullets(clean, concern_tags=tags)
+    has_test = any(_is_test_path(p) for p in clean)
+    has_docs = any(_is_docs_path(p) or _is_adr_path(p) for p in clean)
+    present_types = {primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
+
+    if has_test and "test" not in present_types:
+        _ensure_secondary_for_type(
+            plan,
+            cc_type=CommitType.TEST,
+            changelog_group="Tests",
+            scope="test",
+            description="cover behaviour with tests",
+            semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
+        )
+        present_types.add("test")
+    if has_docs and "docs" not in present_types and primary.cc_type != CommitType.DOCS:
+        _ensure_secondary_for_type(
+            plan,
+            cc_type=CommitType.DOCS,
+            changelog_group="Documentation",
+            scope=_docs_scope_hint(clean) or "docs",
+            description="document the change",
+            semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
+        )
+        present_types.add("docs")
+
+    # Multi-concern pad: add distinct concern bullets until floor met.
+    # Avoid inventing product claims — reuse primary type/group with concern labels.
+    guard = 0
+    while 1 + len(plan.secondary_intents) < min_bullets and tags and guard < 8:
+        guard += 1
+        tag = sorted(tags)[(guard - 1) % len(tags)]
+        from git_cg.models import CommitIntent
+
+        seed_id = _CC_TYPE_SEED_INTENT.get(primary.cc_type.value, "configuration_update")
+        extra = CommitIntent(
+            intent_id=seed_id,
+            gitmoji=primary.gitmoji,
+            cc_type=primary.cc_type,
+            scope=primary.scope,
+            description=f"address {tag.replace('_', ' ')}"[:50],
+            semver_impact=primary.semver_impact,
+            changelog_group=primary.changelog_group,
+        )
+        extra.cc_type = primary.cc_type
+        extra.semver_impact = (
+            cons.force_semver if cons.force_semver is not None else _clamp_semver(primary.semver_impact, ceiling)
+        )
+        extra.changelog_group = primary.changelog_group
+        extra.gitmoji = primary.gitmoji
+        if primary.scope:
+            extra.scope = normalize_scope(primary.scope)
+        plan.secondary_intents.append(extra)
+
+    # Final SemVer re-clamp after any secondary injection.
+    if cons.force_semver is not None:
+        primary.semver_impact = cons.force_semver
+        for sec in plan.secondary_intents:
+            sec.semver_impact = cons.force_semver
+    else:
+        primary.semver_impact = _clamp_semver(primary.semver_impact, ceiling)
+        for sec in plan.secondary_intents:
+            sec.semver_impact = _clamp_semver(sec.semver_impact, ceiling)
+
+    # Identity invariant (D1): ranked intent_id + matrix gitmoji stay put.
+    primary.intent_id = preserved_intent_id
+    primary.gitmoji = preserved_gitmoji
+    return plan

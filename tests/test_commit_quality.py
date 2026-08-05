@@ -31,7 +31,7 @@ from git_cg.commit_quality import (
     semver_presentation_ceiling,
 )
 from git_cg.intent import DiffSignals
-from git_cg.models import CommitType, SemVerImpact, TrailerPriors
+from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact, TrailerPriors
 from git_cg.scope_canon import normalize_scope
 
 # ---------------------------------------------------------------------------
@@ -498,3 +498,264 @@ def test_min_bullets_multi_concern_matches_concern_count() -> None:
         concern_tags={"scrub_sentinel", "fallback_none_overwrite", "closed_enum"},
     )
     assert n >= 3
+
+
+# ---------------------------------------------------------------------------
+# Presentation overlay wiring (post-rank / post-LLM, presentation-only)
+# ---------------------------------------------------------------------------
+
+
+def _plan(
+    *,
+    intent_id: str = "feature_addition",
+    gitmoji: str = "✨",
+    cc_type: CommitType = CommitType.FEAT,
+    scope: str | None = "api",
+    description: str = "add something big",
+    semver: SemVerImpact = SemVerImpact.MINOR,
+    changelog: str = "Added",
+    secondaries: list | None = None,
+) -> CommitPlan:
+
+    return CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id=intent_id,
+            gitmoji=gitmoji,
+            cc_type=cc_type,
+            scope=scope,
+            description=description,
+            semver_impact=semver,
+            changelog_group=changelog,
+        ),
+        secondary_intents=secondaries or [],
+        rationale="test",
+        body_summary="test body",
+    )
+
+
+def test_apply_presentation_overlay_tests_only_forces_test_none_tests() -> None:
+    from git_cg.commit_quality import apply_presentation_overlay
+    from git_cg.models import CommitPlan
+
+    paths = ["tests/test_foo.py", "tests/test_bar.py"]
+    plan = _plan()
+    ranked_intent_id = plan.primary_intent.intent_id
+    out = apply_presentation_overlay(plan, paths=paths)
+
+    assert isinstance(out, CommitPlan)
+    assert out.primary_intent.intent_id == ranked_intent_id  # D1: identity preserved
+    assert out.primary_intent.cc_type == CommitType.TEST
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Tests"
+    assert out.primary_intent.scope == "test"
+    rendered = out.render()
+    assert "SemVer-Impact: NONE" in rendered
+    assert "Change-Types: test" in rendered
+    assert "Changelog-Groups: Tests" in rendered
+
+
+def test_apply_presentation_overlay_docs_adr_only() -> None:
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    paths = ["docs/ADRs/0163-phase9.md"]
+    plan = _plan(cc_type=CommitType.FIX, semver=SemVerImpact.PATCH, changelog="Fixed", scope="main")
+    intent_id = plan.primary_intent.intent_id
+    out = apply_presentation_overlay(plan, paths=paths)
+
+    assert out.primary_intent.intent_id == intent_id
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Documentation"
+    assert out.primary_intent.scope == "adr"
+
+
+def test_apply_presentation_overlay_correctness_caps_patch_and_fix() -> None:
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    paths = ["src/git_cg/telemetry.py", "src/git_cg/main.py", "tests/test_telemetry.py"]
+    plan = _plan(
+        intent_id="feature_addition",
+        cc_type=CommitType.FEAT,
+        semver=SemVerImpact.MINOR,
+        changelog="Added",
+        scope="telemetry",
+    )
+    out = apply_presentation_overlay(
+        plan,
+        paths=paths,
+        concern_tags={"correctness", "scrub_sentinel"},
+    )
+
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.cc_type == CommitType.FIX
+    assert out.primary_intent.semver_impact == SemVerImpact.PATCH
+    assert out.primary_intent.changelog_group == "Fixed"
+    # prod + test inventory must keep Fixed + Tests when a test secondary exists or is required
+    groups = {out.primary_intent.changelog_group, *(s.changelog_group for s in out.secondary_intents)}
+    assert "Fixed" in groups
+    # Ceiling must never leave MINOR/MAJOR on correctness
+    assert out.primary_intent.semver_impact != SemVerImpact.MINOR
+    assert out.primary_intent.semver_impact != SemVerImpact.MAJOR
+
+
+def test_apply_presentation_overlay_clamps_secondary_semver() -> None:
+    from git_cg.commit_quality import apply_presentation_overlay
+    from git_cg.models import CommitIntent
+
+    secondary = CommitIntent(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        scope="api",
+        description="extra feat",
+        semver_impact=SemVerImpact.MAJOR,
+        changelog_group="Added",
+    )
+    plan = _plan(secondaries=[secondary])
+    out = apply_presentation_overlay(plan, paths=["docs/usage.md"])
+
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.secondary_intents[0].semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.intent_id == "feature_addition"
+
+
+def test_apply_presentation_overlay_scope_hint_when_missing() -> None:
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    plan = _plan(scope=None, cc_type=CommitType.CHORE, semver=SemVerImpact.NONE, changelog="Miscellaneous")
+    out = apply_presentation_overlay(plan, paths=["src/git_cg/telemetry.py"])
+    # product_src soft priors may supply dominant module scope
+    assert out.primary_intent.scope in {None, "telemetry"}
+    if out.primary_intent.scope:
+        assert out.primary_intent.scope == normalize_scope(out.primary_intent.scope)
+
+
+def test_apply_presentation_overlay_preferred_scope_already_normalised_wins_soft_hint() -> None:
+    """Directive scope (already applied pre-overlay) is kept unless path-class force_scope exists."""
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    plan = _plan(
+        scope="scoped-history",
+        cc_type=CommitType.FIX,
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+        intent_id="bug_fix",
+        gitmoji="🐛",
+    )
+    out = apply_presentation_overlay(
+        plan,
+        paths=["src/git_cg/scoped_history.py", "tests/test_scoped_history.py"],
+        concern_tags={"correctness"},
+    )
+    # mixed/product has no force_scope — keep directive/canonical scope
+    assert out.primary_intent.scope == "scoped-history"
+    assert out.primary_intent.cc_type == CommitType.FIX
+    assert out.primary_intent.semver_impact == SemVerImpact.PATCH
+
+
+def test_apply_presentation_overlay_does_not_call_ranker(monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg import intent as intent_mod
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    def _boom(*_a, **_k):
+        raise AssertionError("rank_commit_intents must not be called")
+
+    monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
+    plan = _plan()
+    apply_presentation_overlay(plan, paths=["tests/test_x.py"])
+
+
+def test_apply_presentation_overlay_preserves_intent_id_and_gitmoji() -> None:
+    """Presentation may change type/SemVer/group, never ranked identity fields."""
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    plan = _plan(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        semver=SemVerImpact.MINOR,
+        changelog="Added",
+        scope="commit-quality",
+    )
+    paths = ["src/git_cg/commit_quality.py", "tests/test_commit_quality.py"]
+    out = apply_presentation_overlay(plan, paths=paths)
+
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.gitmoji == "✨"
+    # Mixed product+test ceiling clamps presentation SemVer without identity drift.
+    assert out.primary_intent.semver_impact == SemVerImpact.PATCH
+    groups = {out.primary_intent.changelog_group, *(s.changelog_group for s in out.secondary_intents)}
+    assert "Tests" in groups or any(s.cc_type == CommitType.TEST for s in out.secondary_intents)
+
+
+def test_apply_presentation_overlay_forced_type_keeps_matrix_gitmoji() -> None:
+    """Pure tests force presentation type/group but keep the ranked gitmoji."""
+    from git_cg.commit_quality import apply_presentation_overlay
+
+    plan = _plan(intent_id="feature_addition", gitmoji="✨")
+    out = apply_presentation_overlay(plan, paths=["tests/test_foo.py"])
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.gitmoji == "✨"
+    assert out.primary_intent.cc_type == CommitType.TEST
+    assert out.primary_intent.changelog_group == "Tests"
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+
+
+def test_apply_presentation_overlay_changelog_allowlist_fix_test() -> None:
+    from git_cg.commit_quality import apply_presentation_overlay
+    from git_cg.models import CommitIntent
+
+    secondary = CommitIntent(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="test",
+        description="cover overlay",
+        semver_impact=SemVerImpact.NONE,
+        changelog_group="Miscellaneous",
+    )
+    plan = _plan(
+        intent_id="bug_fix",
+        gitmoji="🐛",
+        cc_type=CommitType.FIX,
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+        scope="telemetry",
+        secondaries=[secondary],
+    )
+    out = apply_presentation_overlay(
+        plan,
+        paths=["src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+        concern_tags={"correctness"},
+    )
+    types = [out.primary_intent.cc_type.value, *(s.cc_type.value for s in out.secondary_intents)]
+    groups = [out.primary_intent.changelog_group, *(s.changelog_group for s in out.secondary_intents)]
+    assert changelog_groups_allowlisted(types, groups, primary_cc_type=out.primary_intent.cc_type)
+
+
+def test_changelog_antisignal_excludes_prose_from_content_signals() -> None:
+    """D12: CHANGELOG.md prose must not feed security/fix content markers."""
+    from git_cg.intent import extract_diff_signals
+
+    diff = """diff --git a/docs/usage.md b/docs/usage.md
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -1,3 +1,4 @@
++# Usage
++See docs.
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,3 +1,6 @@
++# Changelog
++### Fixed
++- fix(telemetry): secret scanning password token credential leak
++- BREAKING CHANGE: public API removed
+"""
+    signals = extract_diff_signals(diff)
+    # paths still include changelog for docs coverage
+    assert any(p.lower().endswith("changelog.md") for p in signals.files)
+    assert signals.touches_docs is True
+    # prose-driven content markers must not fire from changelog alone
+    assert signals.secret_scanning_changed is False
+    assert signals.has_breaking_change is False
