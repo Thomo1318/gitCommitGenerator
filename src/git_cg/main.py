@@ -605,6 +605,9 @@ def build_system_prompt(
     contract=None,
     gold_guidance: str | None = None,
     scoped_history_guidance: str | None = None,
+    staged_paths: list[str] | None = None,
+    concern_tags: frozenset[str] | set[str] | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
 ) -> str:
     """
     Compose the system prompt for generating a structured Conventional Commit plan.
@@ -734,6 +737,41 @@ def build_system_prompt(
         "- This rubric guides wording only. It MUST NOT change intent_id, gitmoji, cc_type, semver_impact, or changelog_group."
     )
     context_parts.append(gold_rubric)
+
+    # Issue #204 Slice 4 — included-change stub inventory (D5/D18). Prompt pressure
+    # only; LLM may rephrase. Never mutates ranked intent authority.
+    try:
+        from git_cg.commit_quality import (
+            build_included_change_stubs,
+            format_included_change_stub_inventory,
+        )
+        from git_cg.intent import extract_diff_signals as _extract_diff_signals_for_stubs
+
+        stub_paths = [p for p in (staged_paths or []) if p and str(p).strip()]
+        stub_signals = None
+        if not stub_paths:
+            try:
+                stub_signals = _extract_diff_signals_for_stubs(diff_output)
+                stub_paths = list(getattr(stub_signals, "files", None) or [])
+            except Exception:
+                stub_signals = None
+                stub_paths = []
+        elif ranked_candidates is not None:
+            # Prefer caller paths; still allow signals=None.
+            stub_signals = None
+        stubs = build_included_change_stubs(
+            stub_paths,
+            stub_signals,
+            ranked_candidates,
+            concern_tags=concern_tags,
+            claim_tags=claim_tags,
+        )
+        inventory = format_included_change_stub_inventory(stubs)
+        if inventory:
+            context_parts.append(inventory)
+    except Exception:
+        # Inventory is best-effort presentation aid; never brick prompt build.
+        pass
 
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
@@ -2675,6 +2713,7 @@ def _run_commit_generation(
             contract=contract,
             gold_guidance=gold_guidance,
             scoped_history_guidance=scoped_history_guidance,
+            staged_paths=list(getattr(gen_context.diff_signals, "files", None) or []),
         )
 
         # Offline prompt tracking (synced asynchronously via script)

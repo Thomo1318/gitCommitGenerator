@@ -149,6 +149,190 @@ class PresentationConstraints:
     notes: tuple[str, ...] = ()
 
 
+# Closed stub role vocabulary (internal policy; BlueprintStub serialises a subset later).
+STUB_ROLES: frozenset[str] = frozenset(
+    {
+        "prod",
+        "test",
+        "docs",
+        "adr",
+        "fixtures",
+        "telemetry",
+        "sentry",
+        "perf",
+        "refactor",
+        "security",
+        "other",
+    }
+)
+
+# Deterministic concern-tag → inventory seed notes (D18 / D20 / §K).
+# Keys are lower-case concern tags; values are short description seeds (≤80).
+_CONCERN_STUB_SEEDS: dict[str, tuple[str, str, str]] = {
+    # role, surface, note
+    "fallback_none_overwrite": (
+        "prod",
+        "telemetry",
+        "preserve scoped_history_fallback_reason=none",
+    ),
+    "parser_batch_results": (
+        "prod",
+        "telemetry",
+        "reuse parser_batch_results for markers",
+    ),
+    "rename_harden": (
+        "prod",
+        "main",
+        "discover staged renames via name-status",
+    ),
+    "nul_rename_parse": (
+        "prod",
+        "scoped-history",
+        "parse NUL -z rename pairs correctly",
+    ),
+    "scrub_vars": (
+        "sentry",
+        "sentry",
+        "expand Sentry scrub vars for evidence",
+    ),
+    "scrub_sentinel": (
+        "telemetry",
+        "telemetry",
+        "preserve [REDACTED] sentinel on scrub fail",
+    ),
+    "redacted_sentinel": (
+        "telemetry",
+        "telemetry",
+        "preserve [REDACTED] sentinel not None",
+    ),
+    "redaction_sentinel": (
+        "telemetry",
+        "telemetry",
+        "preserve [REDACTED] sentinel not None",
+    ),
+    "closed_enum": (
+        "prod",
+        "telemetry",
+        "coerce closed-enum telemetry tags safely",
+    ),
+    "fallback_enum": (
+        "prod",
+        "scoped-history",
+        "keep graph-stage none/error fallback enums",
+    ),
+    "cli_hint_reject": (
+        "prod",
+        "scoped-history",
+        "reject bare-command CLI hint tokens",
+    ),
+    "directive_free_wording": (
+        "prod",
+        "scoped-history",
+        "keep Channel-4 wording directive-free",
+    ),
+    "directive_verb_drop": (
+        "prod",
+        "scoped-history",
+        "drop directive verbs from guidance text",
+    ),
+    "authority_leakage_ban": (
+        "test",
+        "scoped-history",
+        "ban authority-leakage claim wording",
+    ),
+    "correctness": (
+        "prod",
+        "scoped-history",
+        "fix internal correctness failure mode",
+    ),
+    "safety": (
+        "prod",
+        "scoped-history",
+        "harden safety-critical failure path",
+    ),
+    "parse_harden": (
+        "prod",
+        "scoped-history",
+        "harden parse path against bad input",
+    ),
+    "fail_open": (
+        "prod",
+        "scoped-history",
+        "preserve fail-open classification path",
+    ),
+    "error_signal": (
+        "prod",
+        "telemetry",
+        "preserve error-signal telemetry fields",
+    ),
+    "masking_none": (
+        "telemetry",
+        "telemetry",
+        "avoid masking failed redaction to None",
+    ),
+    "dark_launch": (
+        "prod",
+        "semantic",
+        "thread dark-launch harvest helpers",
+    ),
+    "free_harvest": (
+        "prod",
+        "semantic",
+        "harvest free hub/complex/callers maps",
+    ),
+    "flag_default_off": (
+        "prod",
+        "semantic",
+        "keep flag-default-off harvest optional",
+    ),
+    "carry_through": (
+        "prod",
+        "scoped-history",
+        "carry preflight counters through plan",
+    ),
+    "preflight_carry": (
+        "prod",
+        "scoped-history",
+        "carry preflight counters through plan",
+    ),
+    "preflight_carry_through": (
+        "prod",
+        "scoped-history",
+        "carry preflight counters through plan",
+    ),
+    "elevation": (
+        "prod",
+        "scoped-history",
+        "wire preflight into split elevation",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class Stub:
+    """Internal included-change inventory seed (Issue #204 · Slice 4 · D5/D18).
+
+    Prompt inventory pressure only — not a ranked intent and not a wording lock.
+    Serialisable BlueprintStub lands in models.py in a later slice.
+    """
+
+    role: str
+    surface: str
+    suggested_cc_type: CommitType
+    scope: str | None = None
+    note: str | None = None
+    claim_tags: tuple[str, ...] = ()
+    source: str = "path"  # path | concern | claim | signal
+
+    def __post_init__(self) -> None:
+        if self.role not in STUB_ROLES:
+            raise ValueError(f"stub role must be one of {sorted(STUB_ROLES)}; got {self.role!r}")
+        if self.note is not None and len(self.note) > 80:
+            object.__setattr__(self, "note", self.note[:80])
+        if len(self.claim_tags) > 8:
+            object.__setattr__(self, "claim_tags", self.claim_tags[:8])
+
+
 def _is_changelog_path(path: str) -> bool:
     return PurePosixPath(path).name.lower() in CHANGELOG_BASENAMES
 
@@ -862,9 +1046,9 @@ def min_included_change_bullets(
     *,
     concern_tags: frozenset[str] | set[str] | None = None,
 ) -> int:
-    """Minimum Included-changes bullet count from path surfaces + concerns (D18 light).
+    """Minimum Included-changes bullet count from path surfaces + concerns (D18 / §K).
 
-    Full stub generation is Slice 4; this is the cardinality floor only.
+    Floor only — concrete inventory seeds live in ``build_included_change_stubs``.
     """
     clean = [p for p in paths if p and str(p).strip()]
     if not clean:
@@ -885,12 +1069,429 @@ def min_included_change_bullets(
 
     concern_count = len(tags) if tags else 0
     # Multi-concern product diffs: required_bullets = max(surfaces, concern_count)
-    # Slice 3 freezes the floor only; Slice 4 materialises included-change stubs.
     floor = max(surfaces, concern_count, 1 if clean else 0)
     # tests with product → at least 2 (prod + test)
     if has_test and has_prod:
         floor = max(floor, 2)
+    # ≥2 test modules each count as a concern atom (§K.2)
+    test_modules = _test_module_stems(clean)
+    if len(test_modules) >= 2:
+        floor = max(floor, len(test_modules))
     return floor
+
+
+def _test_module_stems(paths: list[str]) -> list[str]:
+    """Return ordered unique test module stems (tests/test_*.py only)."""
+    stems: list[str] = []
+    seen: set[str] = set()
+    for path in paths:
+        if not _is_meaningful_test_path(path):
+            continue
+        name = PurePosixPath(path).name
+        if not (name.startswith("test_") and name.endswith(".py")):
+            # Keep non-standard test paths as stem too when under tests/
+            stem = PurePosixPath(path).stem
+        else:
+            stem = PurePosixPath(path).stem
+        key = stem.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        stems.append(stem)
+    return stems
+
+
+def _product_module_stems(paths: list[str]) -> list[str]:
+    """Return ordered unique product module stems (src/scripts/hooks, not tests/docs)."""
+    stems: list[str] = []
+    seen: set[str] = set()
+    for path in paths:
+        if _is_meaningful_test_path(path) or _is_fixtures_path(path):
+            continue
+        if _is_docs_path(path) or _is_adr_path(path):
+            continue
+        if _is_changelog_path(path):
+            continue
+        lowered = _norm_path(path)
+        # config/ci alone still surfaces as product-ish inventory when mixed
+        if (
+            not _is_runtime_surface_path(path)
+            and not lowered.startswith("src/")
+            and not lowered.startswith("scripts/")
+            and not (_is_ci_path(path) or _is_build_path(path) or _is_hook_path(path) or _is_config_path(path))
+        ):
+            continue
+        stem = PurePosixPath(path).stem
+        key = stem.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        stems.append(stem)
+    return stems
+
+
+def _doc_surface_keys(paths: list[str]) -> list[tuple[str, str, str]]:
+    """Return ordered (role, surface, note) triples for docs/ADR/fixtures surfaces."""
+    out: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for path in paths:
+        lowered = _norm_path(path)
+        name = PurePosixPath(path).name.lower()
+        if _is_fixtures_path(path):
+            key = f"fixtures:{PurePosixPath(path).as_posix().lower()}"
+            if key in seen:
+                continue
+            seen.add(key)
+            note = "document fixture corpus"
+            if any(tok in lowered for tok in ("gpg", "gpgsign", "signing", "no-gpg-sign")):
+                note = "harden fixture GPG/signing setup"
+            elif name == "readme.md":
+                note = "document fixture README"
+            out.append(("fixtures", "fixtures", note))
+            continue
+        if _is_adr_path(path):
+            key = f"adr:{name}"
+            if key in seen:
+                continue
+            seen.add(key)
+            if name in {"index.md", "readme.md"}:
+                note = "retarget ADR index links"
+            elif name.startswith("adr-") or name[:4].isdigit():
+                note = "document ADR decision path"
+            else:
+                note = "document ADR surface"
+            out.append(("adr", "adr", note))
+            continue
+        if _is_docs_path(path) or _is_changelog_path(path):
+            if name == "changelog.md":
+                key = "docs:changelog"
+                surface, note = "docs", "record changelog entry"
+            elif name == "usage.md":
+                key = "docs:usage"
+                surface, note = "usage", "document operator usage"
+            elif name == "development.md":
+                key = "docs:development"
+                surface, note = "docs", "document development guidance"
+            else:
+                key = f"docs:{name}"
+                surface, note = "docs", f"document {PurePosixPath(path).stem} surface"
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(("docs", surface, note))
+    return out
+
+
+def _path_role_for_product_stem(stem: str) -> str:
+    key = stem.lower().replace("-", "_")
+    if key in {"telemetry"}:
+        return "telemetry"
+    if key in {"sentry_config", "sentry"}:
+        return "sentry"
+    if key in {"secrets", "secret"}:
+        return "security"
+    return "prod"
+
+
+def _suggested_cc_for_role(
+    role: str,
+    *,
+    tags: set[str],
+    pure_docs_or_tests: bool,
+) -> CommitType:
+    """Pick a presentation-legal suggested cc_type for a stub role."""
+    if role in {"test"}:
+        return CommitType.TEST
+    if role in {"docs", "adr", "fixtures"}:
+        return CommitType.DOCS
+    if pure_docs_or_tests:
+        # Never seed feat/fix capability on pure test/docs/ADR inventories.
+        return CommitType.TEST if role == "test" else CommitType.DOCS
+    if tags & CORRECTNESS_CONCERN_TAGS:
+        return CommitType.FIX
+    if tags & DARK_LAUNCH_TAGS or tags & CARRY_THROUGH_TAGS:
+        return CommitType.FEAT
+    if role in {"telemetry", "sentry", "prod", "perf", "refactor", "security", "other"}:
+        return CommitType.FIX if tags & CORRECTNESS_CONCERN_TAGS else CommitType.CHORE
+    return CommitType.CHORE
+
+
+def _scope_for_stub(role: str, surface: str, paths: list[str]) -> str | None:
+    behaviour = _behaviour_scope_hint(paths)
+    # Behaviour cross-wires prefer scoped-history over leaf module alone.
+    if behaviour == "scoped-history" and role in {"prod", "test", "telemetry", "sentry", "perf", "refactor"}:
+        return behaviour
+    if role == "test":
+        return behaviour or normalize_scope(surface if surface != "test" else "test")
+    if role in {"docs", "adr", "fixtures"}:
+        if role == "adr":
+            return normalize_scope("adr")
+        if role == "fixtures":
+            return normalize_scope("fixtures")
+        return normalize_scope(surface)
+    if behaviour == "scoped-history" and surface in {
+        "main",
+        "scoped_history",
+        "scoped-history",
+        "semantic",
+        "telemetry",
+        "sentry_config",
+        "sentry",
+    }:
+        return behaviour
+    return normalize_scope(surface)
+
+
+def build_included_change_stubs(
+    paths: list[str],
+    signals: DiffSignals | None = None,
+    ranked_intents: list | None = None,
+    *,
+    concern_tags: frozenset[str] | set[str] | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
+) -> list[Stub]:
+    """Build deterministic Included-changes inventory stubs (D5 / D18 / §K).
+
+    Returns prompt-inventory seeds only. Does **not** mutate ranked intents,
+    invent feat/MINOR capability on pure tests/docs, or force junk secondaries
+    on single-surface single-concern diffs.
+
+    Thresholds (non-empty when any hold):
+    * ≥2 test modules
+    * ≥2 top-level doc/product surfaces
+    * multi-concern product_src / mixed with concern tags
+    * mixed prod+test (dual-surface)
+    """
+    del ranked_intents  # reserved for later matrix-legal secondary fill; unused in MVP
+    clean = _resolve_paths(list(paths or []), signals)
+    if not clean:
+        return []
+
+    tags = {t.lower() for t in (concern_tags or set())}
+    claims = tuple(dict.fromkeys(str(c) for c in (claim_tags or ()) if c))
+    dc = classify_diff_class(clean)
+    pure_docs_or_tests = dc.name in {
+        DIFF_CLASS_TESTS,
+        DIFF_CLASS_FIXTURES,
+        DIFF_CLASS_DOCS,
+        DIFF_CLASS_ADR,
+    } or (not dc.has_runtime_surface and dc.name != DIFF_CLASS_PRODUCT)
+
+    test_modules = _test_module_stems(clean)
+    product_modules = _product_module_stems(clean)
+    doc_surfaces = _doc_surface_keys(clean)
+    has_test = bool(test_modules)
+    has_prod = bool(product_modules)
+    has_docs = bool(doc_surfaces)
+
+    # Surface / concern pressure gates (D5 thresholds).
+    multi_test = len(test_modules) >= 2
+    multi_doc = len(doc_surfaces) >= 2
+    multi_prod = len(product_modules) >= 2
+    dual_prod_test = has_prod and has_test
+    multi_concern = len(tags) >= 2 and (has_prod or dc.name in {DIFF_CLASS_PRODUCT, DIFF_CLASS_MIXED})
+    # Single fixture/docs/ADR path alone: allow one stub only when ≥2 doc surfaces
+    # or mixed with tests; pure single-surface single-concern → empty (no junk).
+    top_level_surfaces = int(has_test) + int(has_prod) + int(has_docs)
+    pressure = multi_test or multi_doc or multi_prod or dual_prod_test or multi_concern or top_level_surfaces >= 2
+    # Still emit claim-tag inventory on multi-module tests even if gate misfires.
+    if not pressure and not (claims and multi_test):
+        return []
+
+    stubs: list[Stub] = []
+    seen_keys: set[str] = set()
+
+    def _add(stub: Stub) -> None:
+        key = f"{stub.role}|{stub.surface}|{(stub.note or '').lower()}|{stub.suggested_cc_type.value}"
+        if key in seen_keys:
+            return
+        # Dedup identical surface+role with empty note collisions
+        soft = f"{stub.role}|{stub.surface}|{stub.suggested_cc_type.value}"
+        if stub.note is None and any(k.startswith(soft + "|") for k in seen_keys):
+            return
+        seen_keys.add(key)
+        stubs.append(stub)
+
+    # --- Concern-tag seeds first (concrete D20 / correctness inventory) ---
+    # Skip generic umbrella tags when more specific seeds exist.
+    specific_tags = tags - {"correctness", "safety"}
+    ordered_tags = sorted(specific_tags) + sorted(tags & {"correctness", "safety"})
+    for tag in ordered_tags:
+        seed = _CONCERN_STUB_SEEDS.get(tag)
+        if seed is None:
+            continue
+        role, surface, note = seed
+        if pure_docs_or_tests and role in {"prod", "telemetry", "sentry", "perf", "refactor", "security"}:
+            # TIP-G8/G12: never seed runtime/fix capability on pure test/docs.
+            continue
+        # Carry-through / dark-launch must not invent Phase/product-as-actor notes.
+        if tag in CARRY_THROUGH_TAGS or tag in {"elevation"}:
+            note = "carry preflight counters through plan"
+            role = "prod"
+            surface = "scoped-history"
+        cc = _suggested_cc_for_role(role, tags=tags, pure_docs_or_tests=pure_docs_or_tests)
+        if pure_docs_or_tests and cc in {CommitType.FEAT, CommitType.FIX}:
+            cc = CommitType.TEST if has_test else CommitType.DOCS
+        scope = _scope_for_stub(role, surface, clean)
+        _add(
+            Stub(
+                role=role,
+                surface=normalize_scope(surface) or surface,
+                suggested_cc_type=cc,
+                scope=scope,
+                note=note,
+                source="concern",
+            )
+        )
+
+    # --- Product module surfaces ---
+    if has_prod and not pure_docs_or_tests:
+        for stem in product_modules:
+            role = _path_role_for_product_stem(stem)
+            surface = normalize_scope(stem) or stem
+            # Avoid duplicate generic prod stub when concern seeds already cover surface.
+            if any(s.surface == surface and s.source == "concern" for s in stubs):
+                continue
+            cc = _suggested_cc_for_role(role, tags=tags, pure_docs_or_tests=False)
+            note = f"cover {surface} behaviour"
+            if stem.lower() in {"main"} and tags & CARRY_THROUGH_TAGS:
+                note = "thread preflight groups through main"
+            elif stem.lower() in {"semantic"} and tags & DARK_LAUNCH_TAGS:
+                note = "add free-harvest semantic helpers"
+            elif stem.lower() in {"telemetry"}:
+                note = "cover telemetry producer path"
+            elif stem.lower() in {"sentry_config", "sentry"}:
+                note = "cover sentry scrub configuration"
+            elif stem.lower() in {"scoped_history"}:
+                note = "cover scoped-history producer path"
+            _add(
+                Stub(
+                    role=role,
+                    surface=surface,
+                    suggested_cc_type=cc,
+                    scope=_scope_for_stub(role, surface, clean),
+                    note=note,
+                    source="path",
+                )
+            )
+
+    # --- Test modules (each major module is a concern atom) ---
+    if has_test:
+        claim_tuple = claims
+        for stem in test_modules:
+            surface = normalize_scope(stem.removeprefix("test_")) or stem
+            # Prefer behaviour scope on scoped-history tests.
+            scope = _scope_for_stub("test", surface, clean)
+            note = f"cover {stem} suite"
+            if claim_tuple and stem in {
+                "test_scoped_history",
+                "test_scoped_history_telemetry",
+                "test_main",
+                "test_semantic",
+            }:
+                # Attach claim tags once on the first matching suite only.
+                pass
+            _add(
+                Stub(
+                    role="test",
+                    surface=surface,
+                    suggested_cc_type=CommitType.TEST,
+                    scope=scope,
+                    note=note,
+                    claim_tags=(),
+                    source="path",
+                )
+            )
+        if claim_tuple:
+            # Single claim-tag inventory stub (TIP-G1) — not one per module.
+            _add(
+                Stub(
+                    role="test",
+                    surface=_behaviour_scope_hint(clean) or "scoped-history",
+                    suggested_cc_type=CommitType.TEST,
+                    scope=_behaviour_scope_hint(clean) or "scoped-history",
+                    note="lock claim tags " + ",".join(claim_tuple[:3]),
+                    claim_tags=claim_tuple[:8],
+                    source="claim",
+                )
+            )
+
+    # --- Docs / ADR / fixtures ---
+    for role, surface, note in doc_surfaces:
+        # TIP-G12 / pure docs: docs-only inventory; never fix/runtime recovery.
+        cc = CommitType.DOCS
+        _add(
+            Stub(
+                role=role,
+                surface=normalize_scope(surface) or surface,
+                suggested_cc_type=cc,
+                scope=_scope_for_stub(role, surface, clean),
+                note=note,
+                source="path",
+            )
+        )
+
+    # Signal-driven rename hint when moves_or_renames_files and no rename concern yet.
+    if (
+        signals is not None
+        and getattr(signals, "moves_or_renames_files", False)
+        and not pure_docs_or_tests
+        and not any(s.note and "rename" in s.note for s in stubs)
+    ):
+        _add(
+            Stub(
+                role="prod",
+                surface=_behaviour_scope_hint(clean) or "main",
+                suggested_cc_type=CommitType.FIX if tags & CORRECTNESS_CONCERN_TAGS else CommitType.REFACTOR,
+                scope=_scope_for_stub("prod", "main", clean),
+                note="cover staged rename discovery",
+                source="signal",
+            )
+        )
+
+    # Final safety: strip feat/fix suggestions on pure docs/tests classes.
+    if pure_docs_or_tests:
+        safe: list[Stub] = []
+        for s in stubs:
+            cc = s.suggested_cc_type
+            if cc in {CommitType.FEAT, CommitType.FIX, CommitType.PERF}:
+                cc = CommitType.TEST if s.role == "test" else CommitType.DOCS
+            if s.role in {"prod", "telemetry", "sentry", "perf", "refactor", "security"} and not has_prod:
+                # Drop runtime stubs with no product paths.
+                continue
+            safe.append(
+                Stub(
+                    role=s.role,
+                    surface=s.surface,
+                    suggested_cc_type=cc,
+                    scope=s.scope,
+                    note=s.note,
+                    claim_tags=s.claim_tags,
+                    source=s.source,
+                )
+            )
+        stubs = safe
+
+    return stubs
+
+
+def format_included_change_stub_inventory(stubs: list[Stub]) -> str:
+    """Render stubs as a directive-free prompt inventory block (D5).
+
+    LLM may rephrase descriptions; surfaces/roles/cardinality must remain covered.
+    """
+    if not stubs:
+        return ""
+    lines = [
+        "INCLUDED-CHANGES INVENTORY (coverage expectation — rephrase freely, do not drop surfaces):",
+        "Cover these surfaces in Included changes, or justify a true single-surface commit.",
+    ]
+    for stub in stubs:
+        scope = f" scope={stub.scope}" if stub.scope else ""
+        note = stub.note or f"cover {stub.surface}"
+        claims = f" claims={','.join(stub.claim_tags)}" if stub.claim_tags else ""
+        lines.append(f"- [{stub.role}/{stub.surface}] {stub.suggested_cc_type.value}{scope}: {note}{claims}")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -1019,7 +1620,7 @@ def apply_presentation_overlay(
 
     Precedence (D4 / Approval locks):
     path-class force/forbid → SemVer ceiling → type dominance → scope hints →
-    changelog↔types allowlist repair → cardinality floor (light; stubs in Slice 4).
+    changelog↔types allowlist repair → cardinality floor + stub inventory (D5/D18).
     """
     clean = _resolve_paths(list(paths or []), signals)
     tags = {t.lower() for t in (concern_tags or set())}
@@ -1165,10 +1766,10 @@ def apply_presentation_overlay(
     if primary.cc_type == CommitType.FEAT and tags & CARRY_THROUGH_TAGS:
         primary.changelog_group = "Changed"
 
-    # --- 5. Light cardinality floor (D18) ---
-    # Slice 3 only ensures required presentation types/groups for surfaces.
-    # Full included-change stubs land in Slice 4; do not synthesise repeated
-    # concern secondaries here (TIP-G5/G7 junk inventory).
+    # --- 5. Light cardinality floor (D18) + surface type coverage ---
+    # Ensure required presentation types/groups for surfaces. Do not synthesise
+    # repeated concern secondaries (TIP-G5/G7 junk inventory). Concrete stub
+    # inventory is prompt-side via build_included_change_stubs (D5 lean default).
     min_bullets = min_included_change_bullets(clean, concern_tags=tags)
     has_test = any(_is_meaningful_test_path(p) for p in clean)
     has_docs = any((_is_docs_path(p) or _is_adr_path(p)) and not _is_fixtures_path(p) for p in clean)
@@ -1197,8 +1798,9 @@ def apply_presentation_overlay(
         )
         present_types.add("docs")
 
-    # min_bullets is recorded for Slice 4 stub generation; presentation inventory
-    # here stays type/group coverage only.
+    # Cardinality floor retained for callers/tests; stub materialisation is
+    # prompt inventory (format_included_change_stub_inventory), not silent
+    # secondary invention that fights split_recommended.
     _ = min_bullets
 
     # Final SemVer re-clamp after any secondary injection.

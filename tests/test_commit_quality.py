@@ -16,12 +16,15 @@ from git_cg.commit_quality import (
     DIFF_CLASS_PRODUCT,
     DIFF_CLASS_TESTS,
     PresentationConstraints,
+    Stub,
+    build_included_change_stubs,
     changelog_groups_allowlisted,
     classify_diff_class,
     constraints_from_paths,
     derive_trailer_priors,
     dominant_presentation_cc_type,
     filter_paths_for_content_signals,
+    format_included_change_stub_inventory,
     has_security_path_evidence,
     min_included_change_bullets,
     presentation_constraints,
@@ -759,3 +762,178 @@ diff --git a/CHANGELOG.md b/CHANGELOG.md
     # prose-driven content markers must not fire from changelog alone
     assert signals.secret_scanning_changed is False
     assert signals.has_breaking_change is False
+
+
+# ---------------------------------------------------------------------------
+# Slice 4 — Included-change stubs (D5 / D18 / §K)
+# ---------------------------------------------------------------------------
+
+
+def test_stubs_single_surface_no_pressure() -> None:
+    """Single product file, no multi-concern tags → empty stubs (no junk)."""
+    stubs = build_included_change_stubs(["src/git_cg/scoped_history.py"])
+    assert stubs == []
+
+
+def test_stubs_single_fixture_no_pressure() -> None:
+    stubs = build_included_change_stubs(["tests/fixtures/scoped_history/README.md"])
+    assert stubs == []
+
+
+def test_stubs_multi_test_modules_non_empty() -> None:
+    paths = [
+        "tests/test_scoped_history.py",
+        "tests/test_scoped_history_telemetry.py",
+        "tests/test_main.py",
+        "tests/test_semantic.py",
+    ]
+    stubs = build_included_change_stubs(paths, claim_tags=["P9-A05", "P9-B07", "P9-B10"])
+    assert stubs, "TIP-G1 multi-module tests must produce inventory pressure"
+    roles = {s.role for s in stubs}
+    assert "test" in roles
+    notes = " ".join(s.note or "" for s in stubs)
+    assert "test_scoped_history" in notes or "scoped_history" in notes
+    # claim tags attached once
+    claim_stubs = [s for s in stubs if s.claim_tags]
+    assert claim_stubs
+    assert list(claim_stubs[0].claim_tags) == ["P9-A05", "P9-B07", "P9-B10"]
+    # pure tests never seed feat/fix capability
+    assert all(s.suggested_cc_type == CommitType.TEST for s in stubs)
+
+
+def test_stubs_tip_g4_multi_doc_surfaces() -> None:
+    paths = ["docs/usage.md", "CHANGELOG.md", "DEVELOPMENT.md"]
+    stubs = build_included_change_stubs(paths)
+    assert stubs, "multi-doc surfaces must produce inventory"
+    assert all(s.suggested_cc_type == CommitType.DOCS for s in stubs)
+    surfaces = {s.surface for s in stubs}
+    assert "usage" in surfaces or any("usage" in (s.note or "") for s in stubs)
+    # no runtime recovery seeds from docs
+    blob = " ".join(f"{s.note} {s.role}" for s in stubs).lower()
+    assert "recover" not in blob
+    assert "fail-open" not in blob or "document" in blob
+
+
+def test_stubs_tip_g5_multi_concern_product() -> None:
+    paths = ["src/git_cg/main.py", "src/git_cg/telemetry.py", "src/git_cg/sentry_config.py"]
+    tags = {
+        "closed_enum",
+        "correctness",
+        "fallback_none_overwrite",
+        "parser_batch_results",
+        "redacted_sentinel",
+        "scrub_vars",
+    }
+    stubs = build_included_change_stubs(paths, concern_tags=tags)
+    assert len(stubs) >= 5
+    notes = " ".join(s.note or "" for s in stubs).lower()
+    assert "fallback_reason=none" in notes or "fallback" in notes
+    assert "parser_batch_results" in notes
+    assert "redacted" in notes
+    assert "scrub" in notes
+    # correctness → fix framing, not feat capability invention
+    assert any(s.suggested_cc_type == CommitType.FIX for s in stubs)
+    assert not any(s.suggested_cc_type == CommitType.FEAT for s in stubs)
+
+
+def test_stubs_tip_g8_tests_adr_no_feat_minor() -> None:
+    paths = [
+        "tests/test_scoped_history.py",
+        "docs/ADRs/0163-scoped-reasoning-history.md",
+    ]
+    stubs = build_included_change_stubs(paths)
+    assert stubs
+    roles = {s.role for s in stubs}
+    assert "test" in roles
+    assert "adr" in roles or "docs" in roles
+    assert all(s.suggested_cc_type in {CommitType.TEST, CommitType.DOCS} for s in stubs)
+    assert not any(s.suggested_cc_type in {CommitType.FEAT, CommitType.FIX} for s in stubs)
+
+
+def test_stubs_tip_g9_prod_plus_test() -> None:
+    paths = ["src/git_cg/scoped_history.py", "tests/test_scoped_history.py"]
+    tags = {"authority_leakage_ban", "correctness", "directive_verb_drop"}
+    stubs = build_included_change_stubs(paths, concern_tags=tags)
+    assert stubs
+    roles = {s.role for s in stubs}
+    assert "prod" in roles or any(s.role in {"prod", "telemetry"} for s in stubs)
+    assert "test" in roles
+    assert any(s.suggested_cc_type == CommitType.FIX for s in stubs)
+    assert any(s.suggested_cc_type == CommitType.TEST for s in stubs)
+    # hyphen behaviour scope preferred
+    scopes = {s.scope for s in stubs if s.scope}
+    assert "scoped-history" in scopes
+    assert "scoped_history" not in scopes
+
+
+def test_stubs_tip_g11_carry_through_no_phase_product_actor() -> None:
+    paths = ["src/git_cg/main.py", "tests/test_semantic.py"]
+    tags = {"elevation", "preflight_carry_through"}
+    stubs = build_included_change_stubs(paths, concern_tags=tags)
+    assert stubs
+    blob = " ".join(s.note or "" for s in stubs).lower()
+    assert "phase 0.5" not in blob
+    assert "product" not in blob or "preflight" in blob
+    roles = {s.role for s in stubs}
+    assert "test" in roles
+    scopes = {s.scope for s in stubs if s.scope}
+    assert "scoped-history" in scopes
+
+
+def test_stubs_tip_g12_docs_only_no_fix_runtime() -> None:
+    paths = ["docs/ADRs/0163-scoped-reasoning-history.md", "docs/usage.md"]
+    stubs = build_included_change_stubs(paths)
+    assert stubs
+    assert all(s.suggested_cc_type == CommitType.DOCS for s in stubs)
+    assert all(s.role in {"docs", "adr"} for s in stubs)
+    blob = " ".join(f"{s.note} {s.suggested_cc_type.value}" for s in stubs).lower()
+    assert "fix" not in blob
+    assert "recover" not in blob
+
+
+def test_stubs_adr_rename_and_fixture_gpg_seeds() -> None:
+    paths = [
+        "tests/test_scoped_history.py",
+        "tests/fixtures/scoped_history/README.md",
+        "docs/ADRs/0163-scoped-reasoning-history.md",
+        "docs/ADRs/index.md",
+    ]
+    stubs = build_included_change_stubs(paths)
+    notes = " ".join(s.note or "" for s in stubs).lower()
+    assert "adr" in notes or any(s.role == "adr" for s in stubs)
+    assert any(s.role == "fixtures" for s in stubs)
+    assert any(s.role == "test" for s in stubs)
+
+
+def test_format_stub_inventory_empty() -> None:
+    assert format_included_change_stub_inventory([]) == ""
+
+
+def test_format_stub_inventory_lists_surfaces() -> None:
+    stubs = build_included_change_stubs(
+        ["src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+        concern_tags={"correctness", "redacted_sentinel"},
+    )
+    text = format_included_change_stub_inventory(stubs)
+    assert "INCLUDED-CHANGES INVENTORY" in text
+    assert "test" in text.lower()
+    assert "cover" in text.lower() or "preserve" in text.lower()
+
+
+def test_stub_frozen_and_role_validated() -> None:
+    s = Stub(role="test", surface="scoped-history", suggested_cc_type=CommitType.TEST, note="x")
+    with pytest.raises(ValueError):
+        Stub(role="not-a-role", surface="x", suggested_cc_type=CommitType.TEST)
+    assert s.role == "test"
+
+
+def test_min_bullets_multi_test_modules_counts_modules() -> None:
+    n = min_included_change_bullets(
+        [
+            "tests/test_scoped_history.py",
+            "tests/test_scoped_history_telemetry.py",
+            "tests/test_main.py",
+            "tests/test_semantic.py",
+        ]
+    )
+    assert n >= 4
