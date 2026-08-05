@@ -499,16 +499,50 @@ class TestMiseQualityPinsAndTasks:
         assert tools["hk"] == "1.51.0"
 
     def test_security_floor_constraints(self):
-        """Grype high findings floors for transitive deps must stay declared."""
-        text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        assert "constraint-dependencies" in text
-        assert "pillow>=12.3.0" in text
-        assert "aiohttp>=3.14.3" in text
-        assert "cryptography>=50.0.0" in text
-        assert "pymdown-extensions>=11.0.0" in text
-        assert "pydantic-settings>=2.14.2" in text
-        # Stale pre-bump floors must not return.
-        assert "aiohttp>=3.14.1" not in text
+        """Grype high findings floors for transitive deps must stay declared.
+
+        Parse only ``tool.uv.constraint-dependencies`` (not raw TOML text) so:
+        - positive floors stay enforced via specifier lower bounds
+        - stale floors are rejected without false-failing legitimate bumps
+          (e.g. ``aiohttp>=3.14.10`` must not match a stale ``aiohttp>=3.14.1``
+          substring check)
+        """
+        from packaging.requirements import Requirement
+        from packaging.version import Version
+
+        with open(REPO_ROOT / "pyproject.toml", "rb") as f:
+            data = tomllib.load(f)
+        raw_constraints = data["tool"]["uv"]["constraint-dependencies"]
+        by_name = {Requirement(entry).name: Requirement(entry) for entry in raw_constraints}
+
+        # Minimum accepted lower-bound floors (Grype high SBOM pins).
+        floors = {
+            "pillow": Version("12.3.0"),
+            "aiohttp": Version("3.14.3"),
+            "cryptography": Version("50.0.0"),
+            "pymdown-extensions": Version("11.0.0"),
+            "pydantic-settings": Version("2.14.2"),
+        }
+        for name, floor in floors.items():
+            assert name in by_name, f"missing tool.uv constraint for {name}"
+            req = by_name[name]
+            spec = req.specifier
+            # Floor version itself must be accepted by the active constraint.
+            assert floor in spec, f"{name}: active constraint {req} rejects required floor {floor}"
+            # Active lower bound must be at least the required floor so a future
+            # bump (e.g. aiohttp>=3.14.10) still passes, while aiohttp>=3.14.1 fails.
+            lower_bounds = [
+                Version(spec_item.version) for spec_item in spec if spec_item.operator in {">=", ">", "==", "~="}
+            ]
+            assert lower_bounds, f"{name}: constraint {req} has no lower-bound operator"
+            assert min(lower_bounds) >= floor, (
+                f"{name}: active lower bound {min(lower_bounds)} is below required floor {floor}"
+            )
+
+        # Stale pre-bump aiohttp floor must not be the active constraint semantics.
+        aiohttp_spec = by_name["aiohttp"].specifier
+        assert Version("3.14.1") not in aiohttp_spec
+        assert Version("3.14.2") not in aiohttp_spec
 
     def test_dependency_floor_constraints(self):
         """Issue #177 WP1 floors must stay declared (pytest/tslp/tree-sitter/rich)."""
