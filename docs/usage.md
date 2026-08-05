@@ -376,7 +376,7 @@ Sentry scrub lists treat guidance/rationale keys as free-text; closed enums are 
 
 ### Related
 
-* ADR: [`docs/ADRs/ADR-0163-scoped-reasoning-history.md`](ADRs/ADR-0163-scoped-reasoning-history.md)
+* ADR: [`docs/ADRs/0163-scoped-reasoning-history.md`](ADRs/0163-scoped-reasoning-history.md)
 * Fixtures / behavior matrix: [`tests/fixtures/scoped_history/README.md`](../tests/fixtures/scoped_history/README.md)
 * Phase 7.5 Policy A shadow isolation: Issue #180
 

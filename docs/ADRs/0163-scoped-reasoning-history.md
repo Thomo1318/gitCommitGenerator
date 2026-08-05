@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Implemented on `refactor/163-scoped-reasoning-history-removal-of-legacy-hacks`)
+Accepted (Implemented; Issue #163)
 
 ## Context
 

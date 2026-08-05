@@ -94,7 +94,7 @@ def test_evaluate_rename_confidence_git_only_medium(monkeypatch):
         enable_semantic=True,
     )
     assert band == RenameConfidence.MEDIUM.value
-    assert "git rename" in rationale or rationale == "" or "pair" in rationale
+    assert "git rename" in rationale
 
 
 def test_evaluate_scoped_history_flag_off_is_noop():
@@ -155,8 +155,6 @@ def test_apply_scoped_history_to_plan_or_merge_and_rationale():
     assert out.split_recommended is True
     assert "scoped-history split" in out.rationale
     assert "scoped-history rename" in out.rationale
-    # Authority fields must not be invented on the plan.
-    assert not hasattr(out, "intent_id") or True
 
 
 def test_structural_markers_error_handling_from_source():
@@ -244,7 +242,7 @@ def test_fixtures_flow_disjoint_split_high_confidence():
     file_map = extract_file_to_flow_ids(flows, staged_files=staged)
     hc, rationale = evaluate_split_evidence(file_map, staged_files=staged)
     assert hc is True
-    assert "disjoint" in rationale.lower() or "component" in rationale.lower() or rationale
+    assert "flow-disjoint" in rationale.lower()
 
 
 def test_fixtures_flow_overlap_not_high_confidence():
@@ -430,7 +428,7 @@ def test_split_evidence_empty_and_single_component():
     assert hc is False
     hc2, rationale2 = evaluate_split_evidence({"a.py": ["f1"], "b.py": ["f1"]}, staged_files=["a.py", "b.py"])
     assert hc2 is False
-    assert "single connected component" in rationale2 or rationale2 == "" or "share" in rationale2
+    assert "single connected component" in rationale2
 
 
 def test_band_rename_pair_non_git_paths():
@@ -490,7 +488,7 @@ def test_evaluate_rename_confidence_per_pair_exception(monkeypatch):
         enable_semantic=True,
     )
     assert band == "medium"
-    assert "git rename" in rationale or rationale
+    assert "git rename" in rationale
 
 
 def test_evaluate_rename_confidence_low_band_rationale():
@@ -729,3 +727,60 @@ def test_evidence_from_metrics_dict_shapes():
     assert flat.guidance == "Rename evidence: weak."
     assert flat.latency_ms == 1.25
     assert flat.structural_public_api is True
+
+
+def test_coerce_fallback_reason_lowercases():
+    """Closed fallback coercion is case-insensitive (parity with rename bands)."""
+    from git_cg.scoped_history import coerce_fallback_reason
+
+    assert coerce_fallback_reason("GRAPH_UNAVAILABLE") == "graph_unavailable"
+    assert coerce_fallback_reason("Error") == "error"
+    assert coerce_fallback_reason("not-a-reason") == "none"
+
+
+def test_source_cli_hint_rejects_client_substring():
+    """Boundary-anchored CLI hints must not match client/commandeer substrings."""
+    from git_cg.scoped_history import _source_has_cli_hint
+
+    assert _source_has_cli_hint(b"from myclient import Client\n") is False
+    assert _source_has_cli_hint(b"def commandeer():\n    pass\n") is False
+    assert _source_has_cli_hint(b"cli_unrelated = 1\n") is False
+    assert _source_has_cli_hint(b"import typer\n@app.command()\ndef run():\n    pass\n") is True
+    assert _source_has_cli_hint(b"parser.add_argument('--x')\n") is True
+
+
+def test_structural_public_api_skips_private_only_defs():
+    """Private-only helpers must not set structural_public_api when names recover."""
+    from types import SimpleNamespace
+
+    from git_cg.scoped_history import evaluate_structural_markers
+
+    class _Name:
+        def __init__(self, text: bytes):
+            self.text = text
+
+    class _Node:
+        def __init__(self, type_: str, name: bytes | None = None, children=None):
+            self.type = type_
+            self._name = name
+            self.children = children or []
+
+        def child_by_field_name(self, field: str):
+            if field == "name" and self._name is not None:
+                return _Name(self._name)
+            return None
+
+    private_tree = SimpleNamespace(root_node=_Node("function_definition", name=b"_load", children=[]))
+    public_tree = SimpleNamespace(root_node=_Node("function_definition", name=b"load", children=[]))
+
+    _err, pub, _cmd = evaluate_structural_markers(
+        [SimpleNamespace(tree=private_tree, status="ok", path="priv.py", source=b"def _load():\n    pass\n")],
+        enable_semantic=True,
+    )
+    assert pub is False
+
+    _err, pub, _cmd = evaluate_structural_markers(
+        [SimpleNamespace(tree=public_tree, status="ok", path="pub.py", source=b"def load():\n    pass\n")],
+        enable_semantic=True,
+    )
+    assert pub is True

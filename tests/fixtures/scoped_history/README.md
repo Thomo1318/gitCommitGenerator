@@ -32,7 +32,8 @@ evidence only** — they never authorise `intent_id` / gitmoji / SemVer / change
 
 * Closed vocabulary only: `structural_error_handling`, `structural_public_api`, `structural_new_command`.
 * Fail-open on parser/import errors (all `False`).
-* `new_command` requires structural decorator/call evidence **and** a lexical CLI hint (e.g. `typer`, `click`, `@app.command`).
+* `structural_public_api` is true when a non-private definition name is recoverable from the tree; if names cannot be recovered, any definition node still counts (definition-present fallback).
+* `new_command` requires structural decorator/call evidence **and** a boundary-anchored lexical CLI hint (e.g. `typer`, `click`, `@app.command`). Substrings inside `client` / `commandeer` do **not** qualify.
 
 ### Disposition legend
 

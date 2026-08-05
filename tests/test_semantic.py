@@ -1246,10 +1246,12 @@ def test_p9_b07_policy_b_producers_do_not_contaminate_worktree_or_index(monkeypa
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
     subprocess.run(["git", "config", "user.name", "test"], cwd=repo, check=True, capture_output=True)
+    # Local fixtures must not inherit global commit.gpgsign / 1Password SSH signing.
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=repo, check=True, capture_output=True)
     tracked = repo / "tracked.py"
     tracked.write_text("x = 1\n", encoding="utf-8")
     subprocess.run(["git", "add", "tracked.py"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "--no-gpg-sign", "-m", "init"], cwd=repo, check=True, capture_output=True)
     # Staged change present (index dirty relative to HEAD is OK and stable).
     tracked.write_text("x = 2\n", encoding="utf-8")
     subprocess.run(["git", "add", "tracked.py"], cwd=repo, check=True, capture_output=True)
@@ -1325,13 +1327,20 @@ def test_p9_b07_policy_b_producers_do_not_contaminate_worktree_or_index(monkeypa
         lambda **kwargs: {"graph_build_latency_ms": 1.0, "graph_query_latency_ms": 0.3},
     )
     # Avoid real staged-source IO side effects beyond git status snapshot.
+    from types import SimpleNamespace
+
     monkeypatch.setattr(
         "git_cg.git_index.read_staged_sources",
-        lambda *a, **k: type("Staged", (), {"files": {"tracked.py": b"x = 2\n"}, "changed_files": ["tracked.py"]})(),
+        lambda *a, **k: SimpleNamespace(
+            files={"tracked.py": b"x = 2\n"},
+            changed_files=["tracked.py"],
+            errors=[],
+            skipped=[],
+        ),
     )
     monkeypatch.setattr(
         "git_cg.git_index.read_head_sources",
-        lambda *a, **k: type("Head", (), {"files": {}})(),
+        lambda *a, **k: SimpleNamespace(files={}, errors=[], skipped=[]),
     )
 
     out = _collect_semantic_producer_metrics(str(repo), enable_semantic=True, verbose=False)

@@ -157,3 +157,25 @@ def test_phase9_read_coerces_unknown_enums(tmp_path):
     assert loaded.rename_confidence == "none"
     assert loaded.scoped_history_split_high_confidence is True
     assert loaded.structural_error_handling is True
+
+
+def test_phase9_write_handles_redaction_failure(tmp_path, monkeypatch):
+    """P9-A05: a failed redaction must never persist raw guidance/rationale text."""
+    monkeypatch.setattr(
+        "git_cg.telemetry.redact_payload",
+        lambda payload: "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]",
+    )
+    tel = _minimal(
+        scoped_history_guidance="guidance mentioning /Users/admin/secret.py",
+        scoped_history_split_rationale="split rationale with TOKEN123",
+        scoped_history_rename_rationale="rename rationale with TOKEN123",
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    raw = get_state_file_path(str(tmp_path)).read_text(encoding="utf-8")
+    assert "/Users/admin/secret.py" not in raw
+    assert "TOKEN123" not in raw
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.scoped_history_guidance == "[REDACTED]"
+    assert loaded.scoped_history_split_rationale == "[REDACTED]"
+    assert loaded.scoped_history_rename_rationale == "[REDACTED]"
