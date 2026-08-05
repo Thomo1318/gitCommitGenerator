@@ -147,6 +147,51 @@ def test_empty_graph_product_fields_defaults():
     assert fields["graph_fallback_reasons"] == []
 
 
+def test_empty_graph_product_fields_includes_hub_complex_callers_defaults():
+    fields = empty_graph_product_fields()
+    assert fields["impacts_hub_node"] is None
+    assert fields["complex_function_changed"] is None
+    assert fields["notable_callers"] == []
+
+
+def test_map_graph_product_harvests_hub_complex_callers():
+    """Free harvest only: hub/complex/callers from already-fetched payloads."""
+    detect = _FakeResult(
+        True,
+        {
+            "risk_score": 0.4,
+            "priorities": [{"name": "hub: main_callback"}],
+            "large_functions": [{"name": "too_big", "lines": 120}],
+            "notable_callers": ["caller_a", "caller_a", "caller_b"],
+            "nodes": [
+                {"name": "core_hub", "is_hub": True, "is_test": False},
+                {"name": "helper", "lines": 12, "is_test": False},
+            ],
+        },
+        outcome="ok",
+    )
+    impact = _FakeResult(
+        True,
+        {
+            "total_impacted": 9,
+            "callers": [{"name": "caller_c"}, "caller_b"],
+        },
+        outcome="ok",
+    )
+    product = map_graph_product_results(detect_result=detect, impact_result=impact, flows_result=None)
+    assert product["impacts_hub_node"] is True
+    assert product["complex_function_changed"] is True
+    assert product["notable_callers"][:3] == ["caller_a", "caller_b", "caller_c"]
+
+
+def test_map_graph_product_hub_complex_absent_stays_none():
+    detect = _FakeResult(True, {"risk_score": 0.1, "nodes": [{"name": "x", "is_test": False}]}, outcome="ok")
+    product = map_graph_product_results(detect_result=detect, impact_result=None, flows_result=None)
+    assert product["impacts_hub_node"] is None
+    assert product["complex_function_changed"] is None
+    assert product["notable_callers"] == []
+
+
 def test_collect_graph_product_bundle_maps_monkeypatched_results(monkeypatch):
     from git_cg import graph_context as gc
     from git_cg.graph_context import GraphOperationResult, GraphOutcome, collect_graph_product_bundle
