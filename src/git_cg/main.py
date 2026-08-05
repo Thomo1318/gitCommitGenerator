@@ -2721,6 +2721,29 @@ def _run_commit_generation(
 
         # Always enforce the pre-resolved SOP contract after model render.
         commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
+        # Issue #204: presentation overlay (path-class / SemVer ceiling / type
+        # dominance / changelog allowlist). Never mutates ranked intent_id/gitmoji.
+        presentation_overlay_applied = False
+        try:
+            from git_cg.commit_quality import apply_presentation_overlay
+
+            staged_paths = list(getattr(gen_context.diff_signals, "files", None) or [])
+            commit_plan = apply_presentation_overlay(
+                commit_plan,
+                paths=staged_paths,
+                signals=gen_context.diff_signals,
+                priors=gen_context.scope_priors,
+                constraints=gen_context.presentation_constraints,
+                active_directives=active_directives,
+            )
+            presentation_overlay_applied = True
+        except Exception as overlay_exc:
+            # Presentation overlay must not brick commit generation, but do not
+            # silently swallow unexpected failures without a breadcrumb.
+            if verbose:
+                console.log(
+                    f"[yellow]Presentation overlay skipped ({type(overlay_exc).__name__}: {overlay_exc})[/yellow]"
+                )
         # Phase 9: advisory OR-merge for split_recommended + rationale notes only.
         # Never mutates intent_id / gitmoji / cc_type / semver / changelog authority.
         try:
@@ -2800,6 +2823,7 @@ def _run_commit_generation(
             contract,
             signals=gen_context.diff_signals,
             ranked_intents=gen_context.ranked_intents,
+            presentation_overlay_applied=presentation_overlay_applied,
         )
         review_state.gold_findings = list(gold_report.findings)
         # P6 telemetry: structured signal from GoldFinding.split_preferred (not message prose).

@@ -257,6 +257,30 @@ def _normalize_diff_for_content_matching(diff_output: str) -> str:
     return "\n".join(filter(None, normalized))
 
 
+def _strip_changelog_hunks_for_content_signals(diff_output: str) -> str:
+    """D12 exclude_from_signals: drop CHANGELOG.md file sections from content matching.
+
+    Path-class / docs coverage still sees changelog paths via file_summary; only
+    prose-driven content markers must ignore changelog bodies.
+    """
+    lines = diff_output.splitlines()
+    out: list[str] = []
+    skipping = False
+    for line in lines:
+        if line.startswith("diff --git "):
+            lowered = line.lower()
+            # Match a/CHANGELOG.md or b/CHANGELOG.md path tips.
+            skipping = "changelog.md" in lowered
+            if skipping:
+                continue
+            out.append(line)
+            continue
+        if skipping:
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def extract_diff_signals(diff_output: str) -> DiffSignals:
     """Extract deterministic signals from staged diff output.
 
@@ -269,14 +293,18 @@ def extract_diff_signals(diff_output: str) -> DiffSignals:
     file_summary = extract_diff_file_summary(diff_output)
     paths = file_summary.paths
 
+    # D12: changelog paths remain in file_summary for docs coverage, but their
+    # prose must not feed security/fix/feat content markers.
+    content_diff = _strip_changelog_hunks_for_content_signals(diff_output)
+
     # Normalize diff to prevent false positives from metadata lines (like file paths)
-    normalized_diff = _normalize_diff_for_content_matching(diff_output)
+    normalized_diff = _normalize_diff_for_content_matching(content_diff)
     lowered_diff = normalized_diff.lower()
 
     signals = DiffSignals(files=paths)
 
     _apply_file_signals(signals, file_summary)
-    _apply_content_signals(signals, diff_output, lowered_diff)
+    _apply_content_signals(signals, content_diff, lowered_diff)
     _apply_only_signals(signals, paths)
     _apply_diff_metrics(signals, diff_output)
 
