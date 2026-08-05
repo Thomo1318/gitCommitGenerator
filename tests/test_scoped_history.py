@@ -134,6 +134,9 @@ def test_build_guidance_bans_authority_leakage():
     )
     assert text is not None
     assert "preferred_type" not in text.lower()
+    assert "prefer " not in text.lower()
+    assert "must " not in text.lower()
+    assert "should " not in text.lower()
 
 
 def test_or_merge_never_clears_model_true():
@@ -595,6 +598,8 @@ def test_build_guidance_rename_only_and_authority_ban():
     assert text is not None
     assert "Rename evidence" in text
     assert "preferred_type" not in text.lower()
+    assert "prefer " not in text.lower()
+    assert "Path changes may reflect rename or move activity" in text
 
     # Inject banned phrase via rationale → hard ban returns None.
     banned = build_scoped_history_guidance(
@@ -739,14 +744,17 @@ def test_coerce_fallback_reason_lowercases():
 
 
 def test_source_cli_hint_rejects_client_substring():
-    """Boundary-anchored CLI hints must not match client/commandeer substrings."""
+    """Boundary-anchored CLI hints must not match client/commandeer/prose substrings."""
     from git_cg.scoped_history import _source_has_cli_hint
 
     assert _source_has_cli_hint(b"from myclient import Client\n") is False
     assert _source_has_cli_hint(b"def commandeer():\n    pass\n") is False
     assert _source_has_cli_hint(b"cli_unrelated = 1\n") is False
+    assert _source_has_cli_hint(b"# run the command\nfoo()\n") is False
+    assert _source_has_cli_hint(b"command = 'build'\n") is False
     assert _source_has_cli_hint(b"import typer\n@app.command()\ndef run():\n    pass\n") is True
     assert _source_has_cli_hint(b"parser.add_argument('--x')\n") is True
+    assert _source_has_cli_hint(b"import click\n@click.command()\ndef run():\n    pass\n") is True
 
 
 def test_structural_public_api_skips_private_only_defs():
@@ -781,6 +789,31 @@ def test_structural_public_api_skips_private_only_defs():
 
     _err, pub, _cmd = evaluate_structural_markers(
         [SimpleNamespace(tree=public_tree, status="ok", path="pub.py", source=b"def load():\n    pass\n")],
+        enable_semantic=True,
+    )
+    assert pub is True
+
+    # Grammar without a "name" field: fall back to the identifier child.
+    class _PlainNode:
+        def __init__(self, type_: str, children=None):
+            self.type = type_
+            self.children = children or []
+
+    ident = _PlainNode("identifier")
+    ident.text = b"_helper"
+    no_field_tree = SimpleNamespace(root_node=_PlainNode("function_definition", children=[ident]))
+
+    _err, pub, _cmd = evaluate_structural_markers(
+        [SimpleNamespace(tree=no_field_tree, status="ok", path="nf.py", source=b"")],
+        enable_semantic=True,
+    )
+    assert pub is False
+
+    pub_ident = _PlainNode("identifier")
+    pub_ident.text = b"load"
+    no_field_public = SimpleNamespace(root_node=_PlainNode("function_definition", children=[pub_ident]))
+    _err, pub, _cmd = evaluate_structural_markers(
+        [SimpleNamespace(tree=no_field_public, status="ok", path="nf_pub.py", source=b"")],
         enable_semantic=True,
     )
     assert pub is True

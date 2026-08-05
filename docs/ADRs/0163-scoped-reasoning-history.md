@@ -21,7 +21,7 @@ Introduce `git_cg.scoped_history` as an **advisory, default-gated, fail-open** p
 
 | Concern | Rule |
 |---|---|
-| Authority | Ranker/SOP remain sole authority for `intent_id`, gitmoji, SemVer, changelog |
+| Authority | Ranker/SOP remain sole authority for `intent_id`, `cc_type`, gitmoji, SemVer, changelog |
 | Plan merge | OR-merge only: may set `split_recommended=True` and append bounded rationale notes |
 | Prompt | Channel 4 `SCOPED-HISTORY FEEDBACK` is directive-free guidance text |
 | Shadow lifetime | **Policy B**: stats + product queries use `shadow.path` *inside* the live context |
