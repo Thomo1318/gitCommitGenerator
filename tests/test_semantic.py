@@ -1225,3 +1225,118 @@ def test_p9_a06_semantic_off_no_scoped_history_side_effects(monkeypatch):
     assert out.get("structural_public_api", False) is False
     assert out.get("structural_new_command", False) is False
     assert out.get("scoped_history_guidance") in (None, "")
+
+
+def test_p9_b07_policy_b_producers_do_not_contaminate_worktree_or_index(monkeypatch, tmp_path):
+    """P9-B07: Policy B / scoped-history path must not dirty worktree or index.
+
+    Captures `git status --porcelain` before and after
+    `_collect_semantic_producer_metrics` and asserts equality. Producers may
+    only touch an ephemeral shadow workspace, never the live repo index/worktree.
+    """
+    import subprocess
+    from contextlib import contextmanager
+
+    from git_cg.graph_context import GraphOperationResult, GraphOutcome
+    from git_cg.main import _collect_semantic_producer_metrics
+    from git_cg.semantic import empty_graph_product_fields
+
+    repo = tmp_path / "live-repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=repo, check=True, capture_output=True)
+    tracked = repo / "tracked.py"
+    tracked.write_text("x = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.py"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+    # Staged change present (index dirty relative to HEAD is OK and stable).
+    tracked.write_text("x = 2\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.py"], cwd=repo, check=True, capture_output=True)
+
+    def porcelain() -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(repo), "status", "--porcelain"],
+            text=True,
+        )
+
+    before = porcelain()
+
+    _phase75_base_monkeypatches(monkeypatch)
+    monkeypatch.setattr("git_cg.git_index.should_refresh_graph", lambda: True)
+
+    shadow_path = str(tmp_path / "shadow-policy-b")
+
+    @contextmanager
+    def fake_shadow(source_dir=".", include_unstaged=True):
+        # Ephemeral shadow only — must not touch live repo paths.
+        yield type("Shadow", (), {"path": shadow_path, "clone_sync_latency_ms": 0.5})()
+
+    def fake_refresh(**kwargs):
+        assert kwargs.get("repo_root") == shadow_path
+        return GraphOperationResult(
+            ok=True,
+            operation="refresh_graph",
+            outcome=GraphOutcome.OK,
+            data={},
+            latency_ms=1.0,
+        )
+
+    def fake_stats(*, repo_root=None, **kwargs):
+        assert repo_root == shadow_path
+        return GraphOperationResult(
+            ok=True,
+            operation="stats",
+            outcome=GraphOutcome.OK,
+            data={"schema_version": "s"},
+            latency_ms=0.1,
+        )
+
+    def fake_bundle(**kwargs):
+        assert kwargs.get("repo_root") == shadow_path
+        product = empty_graph_product_fields()
+        product["blast_radius_size"] = 1
+        product["affected_flows_count"] = 2
+        product["graph_fallback_reasons"] = []
+        return (
+            product,
+            [
+                GraphOperationResult(
+                    ok=True,
+                    operation="affected_flows",
+                    outcome=GraphOutcome.OK,
+                    data={
+                        "flows": [
+                            {"id": "flow_a", "files": ["tracked.py"]},
+                            {"id": "flow_b", "files": ["other.py"]},
+                        ]
+                    },
+                    latency_ms=0.2,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("git_cg.shadow_workspace.shadow_workspace", fake_shadow)
+    monkeypatch.setattr("git_cg.graph_context.refresh_graph", fake_refresh)
+    monkeypatch.setattr("git_cg.graph_context.graph_stats", fake_stats)
+    monkeypatch.setattr("git_cg.graph_context.collect_graph_product_bundle", fake_bundle)
+    monkeypatch.setattr(
+        "git_cg.graph_context.collect_graph_telemetry",
+        lambda **kwargs: {"graph_build_latency_ms": 1.0, "graph_query_latency_ms": 0.3},
+    )
+    # Avoid real staged-source IO side effects beyond git status snapshot.
+    monkeypatch.setattr(
+        "git_cg.git_index.read_staged_sources",
+        lambda *a, **k: type("Staged", (), {"files": {"tracked.py": b"x = 2\n"}, "changed_files": ["tracked.py"]})(),
+    )
+    monkeypatch.setattr(
+        "git_cg.git_index.read_head_sources",
+        lambda *a, **k: type("Head", (), {"files": {}})(),
+    )
+
+    out = _collect_semantic_producer_metrics(str(repo), enable_semantic=True, verbose=False)
+    after = porcelain()
+
+    assert before == after, f"live worktree/index contaminated:\nBEFORE:\n{before!r}\nAFTER:\n{after!r}"
+    assert out.get("shadow_workspace_used") is True
+    assert out.get("semantic_refresh_graph") == "ran"

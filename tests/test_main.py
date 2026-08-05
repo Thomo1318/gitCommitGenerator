@@ -2079,7 +2079,7 @@ def test_previous_plan_shown_with_user_directives() -> None:
 
 
 def test_scoped_history_guidance_channel_emits_directive_free_block():
-    """Channel 4 must quote guidance and ban authority overrides (Issue #163)."""
+    """P9-B10: Channel 4 must quote guidance and ban authority overrides (Issue #163)."""
     from git_cg.main import build_system_prompt
 
     prompt = build_system_prompt(
@@ -2094,6 +2094,7 @@ def test_scoped_history_guidance_channel_emits_directive_free_block():
 
 
 def test_scoped_history_guidance_omitted_when_absent():
+    """P9-B10: Channel 4 omitted when scoped-history guidance is absent."""
     from git_cg.main import build_system_prompt
 
     prompt = build_system_prompt(_minimal_diff())
@@ -2101,7 +2102,7 @@ def test_scoped_history_guidance_omitted_when_absent():
 
 
 def test_scoped_history_guidance_never_uses_user_override_channel():
-    """Channel 4 must not emit OVERRIDE / CRITICAL PRECEDENCE ranking language."""
+    """P9-B10: Channel 4 must not emit OVERRIDE / CRITICAL PRECEDENCE ranking language."""
     from git_cg.main import build_system_prompt
 
     prompt = build_system_prompt(

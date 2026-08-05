@@ -25,6 +25,7 @@ def _minimal(**overrides) -> GenerationTelemetry:
 
 
 def test_phase9_telemetry_defaults():
+    """P9-A05: scoped-history telemetry fields default safely."""
     tel = _minimal()
     assert tel.scoped_history_fallback_reason == "none"
     assert tel.scoped_history_latency_ms == 0.0
@@ -39,6 +40,7 @@ def test_phase9_telemetry_defaults():
 
 
 def test_phase9_telemetry_round_trip(tmp_path, monkeypatch):
+    """P9-A05: scoped-history telemetry fields persist across write/read."""
     monkeypatch.setattr("git_cg.telemetry.redact_payload", lambda payload: payload)
     tel = _minimal(
         scoped_history_fallback_reason="partial",
@@ -68,6 +70,7 @@ def test_phase9_telemetry_round_trip(tmp_path, monkeypatch):
 
 
 def test_phase9_telemetry_back_compat_missing_keys(tmp_path):
+    """P9-A05: missing Phase 9 keys coerce to safe defaults (back-compat)."""
     path = get_state_file_path(str(tmp_path))
     path.write_text(
         json.dumps(
@@ -94,6 +97,8 @@ def test_phase9_telemetry_back_compat_missing_keys(tmp_path):
 
 
 def test_phase9_write_redacts_guidance_and_rationales(tmp_path, monkeypatch):
+    """P9-A05: free-text guidance/rationales are redacted on telemetry write."""
+
     def fake_redact(payload: str) -> str:
         return (
             payload.replace("secret-path.py", "[REDACTED]")
@@ -123,6 +128,7 @@ def test_phase9_write_redacts_guidance_and_rationales(tmp_path, monkeypatch):
 
 
 def test_phase9_read_coerces_unknown_enums(tmp_path):
+    """P9-A05: unknown closed-vocab enums coerce on telemetry read."""
     path = get_state_file_path(str(tmp_path))
     path.write_text(
         json.dumps(

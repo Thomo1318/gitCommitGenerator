@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from git_cg.scoped_history import (
+    MAX_FLOWS_PER_FILE,
     RenameConfidence,
     ScopedHistoryFallbackReason,
     apply_scoped_history_to_plan,
@@ -16,6 +17,8 @@ from git_cg.scoped_history import (
     evaluate_rename_confidence,
     evaluate_scoped_history,
     evaluate_split_evidence,
+    evaluate_structural_markers,
+    evidence_from_metrics_dict,
     extract_file_to_flow_ids,
     or_merge_split_recommended,
     structural_markers_from_sources,
@@ -23,6 +26,7 @@ from git_cg.scoped_history import (
 
 
 def test_coerce_fallback_and_rename_closed_vocab():
+    """P9 closed-vocab coercion defaults (fallback + rename bands)."""
     assert coerce_fallback_reason(None) == "none"
     assert coerce_fallback_reason("graph_unavailable") == "graph_unavailable"
     assert coerce_fallback_reason("nope") == "none"
@@ -31,6 +35,7 @@ def test_coerce_fallback_and_rename_closed_vocab():
 
 
 def test_extract_file_to_flow_ids_shapes_and_bounds():
+    """P9-B01: multi-shape flow payload → bounded file→flow map."""
     payload = {
         "flows": [
             {"id": "flow_a", "files": ["a.py", "b.py"]},
@@ -44,6 +49,7 @@ def test_extract_file_to_flow_ids_shapes_and_bounds():
 
 
 def test_split_evidence_disjoint_high_confidence():
+    """P9-B01: flow-disjoint staged files → high-confidence split."""
     mapping = {
         "a.py": ["flow_a"],
         "b.py": ["flow_b"],
@@ -54,6 +60,7 @@ def test_split_evidence_disjoint_high_confidence():
 
 
 def test_split_evidence_shared_flow_is_negative():
+    """P9-B01: shared flow membership → no high-confidence split."""
     mapping = {
         "a.py": ["flow_a", "shared"],
         "b.py": ["shared"],
@@ -63,6 +70,7 @@ def test_split_evidence_shared_flow_is_negative():
 
 
 def test_split_evidence_preflight_multi_group():
+    """P9-B02: preflight multi-group count alone can recommend split."""
     hc, rationale = evaluate_split_evidence({}, staged_files=["a.py"], preflight_groups_count=3)
     assert hc is True
     assert "preflight_groups_count=3" in rationale
@@ -101,6 +109,7 @@ def test_evaluate_scoped_history_flag_off_is_noop():
 
 
 def test_evaluate_scoped_history_split_and_guidance():
+    """P9-B01/B10: evaluator emits split evidence + Channel-4 guidance."""
     evidence = evaluate_scoped_history(
         enable_semantic=True,
         file_to_flow_ids={"a.py": ["f1"], "b.py": ["f2"]},
@@ -115,6 +124,7 @@ def test_evaluate_scoped_history_split_and_guidance():
 
 
 def test_build_guidance_bans_authority_leakage():
+    """P9-B10: Channel-4 guidance is directive-free (no authority leakage)."""
     # Normal path
     text = build_scoped_history_guidance(
         split_high_confidence=True,
@@ -127,12 +137,14 @@ def test_build_guidance_bans_authority_leakage():
 
 
 def test_or_merge_never_clears_model_true():
+    """P9-B09: OR-merge may force True; never clears model True."""
     assert or_merge_split_recommended(True, False) is True
     assert or_merge_split_recommended(False, True) is True
     assert or_merge_split_recommended(False, False) is False
 
 
 def test_apply_scoped_history_to_plan_or_merge_and_rationale():
+    """P9-B09: plan OR-merge + bounded rationale notes only."""
     plan = SimpleNamespace(split_recommended=False, rationale="model note")
     evidence = empty_scoped_history_evidence()
     evidence.split_high_confidence = True
@@ -275,3 +287,445 @@ def test_fixtures_structural_error_and_cli():
     _err2, pub2, cmd2 = structural_markers_from_sources({"structural_cli.py": cli_src}, enable_semantic=True)
     assert cmd2 is True
     assert pub2 is True
+
+
+# ---------------------------------------------------------------------------
+# Coverage + claim-edge expansions (Issue #163 DoD)
+# ---------------------------------------------------------------------------
+
+
+def test_coerce_rename_confidence_none_and_blank():
+    """Coercion defaults: None/blank/unknown → none (line 74 path)."""
+    assert coerce_rename_confidence(None) == "none"
+    assert coerce_rename_confidence("") == "none"
+    assert coerce_rename_confidence("  ") == "none"
+    assert coerce_rename_confidence("MEDIUM") == "medium"
+
+
+def test_evidence_to_dict_bounds_and_defaults():
+    """ScopedHistoryEvidence.to_dict serialises allowlisted fields only."""
+    ev = empty_scoped_history_evidence(fallback_reason="partial")
+    ev.split_high_confidence = True
+    ev.split_rationale = "x" * 500
+    ev.rename_confidence = "high"
+    ev.rename_rationale = "y" * 500
+    ev.guidance = "g" * 600
+    ev.file_to_flow_ids = {"a.py": ["f1"]}
+    ev.structural_error_handling = True
+    d = ev.to_dict()
+    assert d["fallback_reason"] == "partial"
+    assert d["split_high_confidence"] is True
+    assert len(d["split_rationale"]) <= 240
+    assert len(d["rename_rationale"]) <= 240
+    assert d["guidance"] is not None and len(d["guidance"]) <= 480
+    assert d["file_to_flow_ids"] == {"a.py": ["f1"]}
+    assert d["structural_error_handling"] is True
+    assert "latency_ms" in d
+
+
+def test_as_str_list_shapes_via_extract():
+    """_as_str_list branches: None, str, dict items, scalars, max_items."""
+    # Shape A map with mixed flow value types.
+    payload = {
+        "file_to_flows": {
+            "a.py": None,
+            "b.py": "flow_str",
+            "c.py": [
+                "flow_list",
+                None,
+                "",
+                {"id": "from_dict_id"},
+                {"flow_id": "from_flow_id"},
+                {"name": "from_name"},
+                {"flow_name": "from_flow_name"},
+                {"nope": 1},
+                42,
+            ],
+            "d.py": {"id": "solo_dict_ignored_as_non_sequence_scalar_path"},
+        }
+    }
+    # dict value that is not list/str falls through _as_str_list → []
+    mapping = extract_file_to_flow_ids(payload, staged_files=["a.py", "b.py", "c.py", "d.py"])
+    assert "a.py" not in mapping or mapping.get("a.py") == []
+    assert mapping.get("b.py") == ["flow_str"]
+    assert "from_dict_id" in mapping.get("c.py", [])
+    assert "from_flow_id" in mapping["c.py"]
+    assert "from_name" in mapping["c.py"]
+    assert "from_flow_name" in mapping["c.py"]
+    assert "42" in mapping["c.py"]
+    assert "flow_list" in mapping["c.py"]
+
+
+def test_extract_file_to_flow_ids_non_mapping_and_alt_shapes():
+    """extract_file_to_flow_ids: non-mapping, shape B alt keys, shape C list/map."""
+    assert extract_file_to_flow_ids(None) == {}
+    assert extract_file_to_flow_ids("nope") == {}  # type: ignore[arg-type]
+    assert extract_file_to_flow_ids([]) == {}  # type: ignore[arg-type]
+
+    # Shape B via affected_flows + changed_files / file_paths / members + name key.
+    payload_b = {
+        "affected_flows": [
+            "skip-me",
+            {"no_id": True, "files": ["x.py"]},
+            {"name": "named_flow", "changed_files": ["n1.py"]},
+            {"flow_name": "fn", "file_paths": ["n2.py", ""]},
+            {"flow_id": "members_flow", "members": ["n3.py"]},
+            {"id": "empty_files", "files": []},
+        ]
+    }
+    m_b = extract_file_to_flow_ids(payload_b, staged_files=["n1.py", "n2.py", "n3.py", "x.py"])
+    assert m_b["n1.py"] == ["named_flow"]
+    assert m_b["n2.py"] == ["fn"]
+    assert m_b["n3.py"] == ["members_flow"]
+    assert "x.py" not in m_b  # flow without id skipped
+
+    # Shape C: files list entries.
+    payload_c_list = {
+        "files": [
+            "skip",
+            {"path": "p1.py", "flows": ["f1"]},
+            {"file": "p2.py", "flow_ids": [{"id": "f2"}]},
+            {"name": "p3.py", "affected_flows": "f3"},
+            {"path": None, "flows": ["nope"]},
+            {"no_path": True, "flows": ["x"]},
+        ]
+    }
+    m_c = extract_file_to_flow_ids(payload_c_list, staged_files=["p1.py", "p2.py", "p3.py"])
+    assert m_c["p1.py"] == ["f1"]
+    assert m_c["p2.py"] == ["f2"]
+    assert m_c["p3.py"] == ["f3"]
+
+    # Shape C: files mapping.
+    payload_c_map = {"files": {"m1.py": ["fa"], "m2.py": {"flow_id": "fb"}}}
+    m_map = extract_file_to_flow_ids(payload_c_map, staged_files=["m1.py", "m2.py"])
+    assert m_map["m1.py"] == ["fa"]
+    # dict value → _as_str_list non-list/str → []
+    assert "m2.py" not in m_map or m_map.get("m2.py") == []
+
+
+def test_extract_file_to_flow_ids_respects_max_files_and_dedupe():
+    """Bounded map size + per-file flow dedupe/cap."""
+    # max_files=2 drops later paths.
+    payload = {
+        "file_to_flow_ids": {
+            "a.py": ["f1", "f1", "f2"],
+            "b.py": ["f3"],
+            "c.py": ["f4"],
+        }
+    }
+    m = extract_file_to_flow_ids(payload, staged_files=["a.py", "b.py", "c.py"], max_files=2)
+    assert set(m) <= {"a.py", "b.py", "c.py"}
+    assert len(m) == 2
+    assert m["a.py"] == ["f1", "f2"]  # deduped
+
+    # Per-file flow cap via many unique ids.
+    many = [f"flow_{i}" for i in range(MAX_FLOWS_PER_FILE + 5)]
+    m2 = extract_file_to_flow_ids({"file_to_flows": {"z.py": many}}, staged_files=["z.py"])
+    assert len(m2["z.py"]) == MAX_FLOWS_PER_FILE
+
+
+def test_split_evidence_empty_and_single_component():
+    """Negative split paths: empty membership / single component."""
+    hc, _rationale = evaluate_split_evidence({}, staged_files=["a.py", "b.py"])
+    assert hc is False
+    hc2, rationale2 = evaluate_split_evidence({"a.py": ["f1"], "b.py": ["f1"]}, staged_files=["a.py", "b.py"])
+    assert hc2 is False
+    assert "single connected component" in rationale2 or rationale2 == "" or "share" in rationale2
+
+
+def test_band_rename_pair_non_git_paths():
+    """Rename bands without git_rename (high/medium/low/none)."""
+    assert band_rename_pair(git_rename=False, code_fp_match=True, body_sim=0.9) == RenameConfidence.HIGH
+    assert band_rename_pair(git_rename=False, code_fp_match=True, body_sim=0.1) == RenameConfidence.MEDIUM
+    assert band_rename_pair(git_rename=False, code_fp_match=None, body_sim=0.9) == RenameConfidence.MEDIUM
+    assert band_rename_pair(git_rename=False, code_fp_match=None, body_sim=0.6) == RenameConfidence.LOW
+    assert band_rename_pair(git_rename=False, code_fp_match=None, body_sim=0.3) == RenameConfidence.LOW
+    assert band_rename_pair(git_rename=True, code_fp_match=False, body_sim=0.6) == RenameConfidence.MEDIUM
+
+
+def test_evaluate_rename_confidence_flag_off_and_fingerprint_import_fail(monkeypatch):
+    """Rename evaluator: flag-off + fingerprint stack ImportError → medium."""
+    band, rat = evaluate_rename_confidence([("a", "b")], enable_semantic=False)
+    assert band == "none"
+    assert rat == ""
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def boom(name, *args, **kwargs):
+        if name.startswith("git_cg.fingerprints") or name.startswith("git_cg.similarity"):
+            raise ImportError("no fp stack")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", boom)
+    band2, rat2 = evaluate_rename_confidence(
+        [("old.py", "new.py")],
+        old_bytes_by_path={"old.py": b"x"},
+        new_bytes_by_path={"new.py": b"y"},
+        enable_semantic=True,
+    )
+    assert band2 == "medium"
+    assert "fingerprint stack unavailable" in rat2
+
+
+def test_evaluate_rename_confidence_per_pair_exception(monkeypatch):
+    """Per-pair fingerprint exception fail-open → medium via git rename."""
+
+    def boom_fp(*a, **k):
+        raise RuntimeError("fp boom")
+
+    monkeypatch.setattr("git_cg.fingerprints.collect_fingerprints_from_source", boom_fp, raising=False)
+    # Ensure imports succeed but collect raises — patch after import path inside function.
+    import git_cg.fingerprints as fp_mod
+    import git_cg.similarity as sim_mod
+
+    monkeypatch.setattr(fp_mod, "collect_fingerprints_from_source", boom_fp)
+    monkeypatch.setattr(sim_mod, "body_similarity", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sim boom")))
+
+    band, rationale = evaluate_rename_confidence(
+        [("old.py", "new.py")],
+        old_bytes_by_path={"old.py": b"abc"},
+        new_bytes_by_path={"new.py": b"xyz"},
+        enable_semantic=True,
+    )
+    assert band == "medium"
+    assert "git rename" in rationale or rationale
+
+
+def test_evaluate_rename_confidence_low_band_rationale():
+    """Weak non-git signal path surfaces low band when forced via band helper already covered;
+    git-only pairs without bytes stay medium (not low)."""
+    band, rationale = evaluate_rename_confidence(
+        [("o.py", "n.py")],
+        old_bytes_by_path={},
+        new_bytes_by_path={},
+        enable_semantic=True,
+    )
+    assert band == "medium"
+    assert "without full fingerprint" in rationale or "git rename" in rationale
+
+
+def test_evaluate_structural_markers_tree_walk_and_fail_open():
+    """evaluate_structural_markers: flag-off, empty, missing tree, walk error, CLI path."""
+    assert evaluate_structural_markers(None, enable_semantic=False) == (False, False, False)
+    assert evaluate_structural_markers([], enable_semantic=True) == (False, False, False)
+    assert evaluate_structural_markers([SimpleNamespace(tree=None)], enable_semantic=True) == (False, False, False)
+
+    class BoomTree:
+        @property
+        def root_node(self):
+            raise RuntimeError("walk boom")
+
+    assert evaluate_structural_markers([SimpleNamespace(tree=BoomTree())], enable_semantic=True) == (
+        False,
+        False,
+        False,
+    )
+
+    # Minimal fake tree with error + public def + decorator/call types.
+    class Node:
+        def __init__(self, type_, children=None):
+            self.type = type_
+            self.children = children or []
+
+    tree = SimpleNamespace(
+        root_node=Node(
+            "module",
+            [
+                Node("try_statement", [Node("except_clause"), Node("raise_statement")]),
+                Node("function_definition"),
+                Node("decorator"),
+                Node("call"),
+            ],
+        )
+    )
+    src = b"import typer\n@app.command()\ndef run():\n    pass\n"
+    err, pub, cmd = evaluate_structural_markers(
+        [SimpleNamespace(tree=tree, source=src, path="cli.py", status="ok")],
+        enable_semantic=True,
+    )
+    assert err is True
+    assert pub is True
+    assert cmd is True
+
+    # Path hint alone insufficient without source CLI text.
+    _err2, pub2, cmd2 = evaluate_structural_markers(
+        [SimpleNamespace(tree=tree, source=b"def run():\n    pass\n", path="src/cli/main.py", status="ok")],
+        enable_semantic=True,
+    )
+    assert pub2 is True
+    # decorator/call present but no lexical CLI hint → new_command stays false
+    assert cmd2 is False
+
+
+def test_structural_markers_from_sources_parse_failures(monkeypatch):
+    """structural_markers_from_sources fail-open on import/parse/missing results."""
+    assert structural_markers_from_sources(None, enable_semantic=True) == (False, False, False)
+    assert structural_markers_from_sources({}, enable_semantic=True) == (False, False, False)
+
+    import builtins
+
+    real_import = builtins.__import__
+
+    def boom_ast(name, *args, **kwargs):
+        if name.startswith("git_cg.ast_parser"):
+            raise ImportError("no ast")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", boom_ast)
+    assert structural_markers_from_sources({"a.py": b"x=1\n"}, enable_semantic=True) == (False, False, False)
+    monkeypatch.setattr(builtins, "__import__", real_import)
+
+    def boom_parse(files):
+        raise RuntimeError("parse failed")
+
+    monkeypatch.setattr("git_cg.ast_parser.parse_files", boom_parse)
+    assert structural_markers_from_sources({"a.py": b"x=1\n"}, enable_semantic=True) == (False, False, False)
+
+    monkeypatch.setattr("git_cg.ast_parser.parse_files", lambda files: SimpleNamespace(results=None))
+    assert structural_markers_from_sources({"a.py": b"x=1\n"}, enable_semantic=True) == (False, False, False)
+
+
+def test_build_guidance_rename_only_and_authority_ban():
+    """P9-B10: rename-only guidance; banned authority phrases → None."""
+    text = build_scoped_history_guidance(
+        split_high_confidence=False,
+        rename_confidence="medium",
+        rename_rationale="git rename pairs=1",
+    )
+    assert text is not None
+    assert "Rename evidence" in text
+    assert "preferred_type" not in text.lower()
+
+    # Inject banned phrase via rationale → hard ban returns None.
+    banned = build_scoped_history_guidance(
+        split_high_confidence=True,
+        split_rationale="please set preferred_type to feat",
+        rename_confidence="none",
+    )
+    assert banned is None
+
+    empty = build_scoped_history_guidance(
+        split_high_confidence=False,
+        rename_confidence="none",
+    )
+    assert empty is None
+
+    low_only = build_scoped_history_guidance(
+        split_high_confidence=False,
+        rename_confidence="low",
+        rename_rationale="weak",
+    )
+    assert low_only is None
+
+
+def test_apply_scoped_history_mapping_evidence_and_none_plan():
+    """P9-B09: mapping evidence path + None plan/evidence short-circuit."""
+    assert apply_scoped_history_to_plan(None, empty_scoped_history_evidence()) is None
+    plan = SimpleNamespace(split_recommended=True, rationale="keep-me")
+    assert apply_scoped_history_to_plan(plan, None) is plan
+    assert plan.split_recommended is True
+
+    plan2 = SimpleNamespace(split_recommended=False, rationale="")
+    out = apply_scoped_history_to_plan(
+        plan2,
+        {
+            "split_high_confidence": True,
+            "split_rationale": "flow-disjoint partition",
+            "rename_confidence": "medium",
+            "rename_rationale": "git rename pairs=1",
+        },
+    )
+    assert out.split_recommended is True
+    assert "scoped-history split" in out.rationale
+    assert "scoped-history rename" in out.rationale
+
+
+def test_apply_scoped_history_exception_fail_open():
+    """Plan merge fail-open when attribute assignment explodes."""
+
+    class BadPlan:
+        split_recommended = False
+
+        @property
+        def rationale(self):
+            return "base"
+
+        @rationale.setter
+        def rationale(self, value):
+            raise RuntimeError("cannot set")
+
+    plan = BadPlan()
+    evidence = empty_scoped_history_evidence()
+    evidence.split_high_confidence = True
+    evidence.split_rationale = "flow-disjoint"
+    out = apply_scoped_history_to_plan(plan, evidence)
+    assert out is plan
+
+
+def test_evaluate_scoped_history_error_fallback(monkeypatch):
+    """Top-level evaluator except → fallback_reason=error + latency set."""
+    monkeypatch.setattr(
+        "git_cg.scoped_history.evaluate_split_evidence",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("split boom")),
+    )
+    evidence = evaluate_scoped_history(
+        enable_semantic=True,
+        file_to_flow_ids={"a.py": ["f1"], "b.py": ["f2"]},
+        staged_files=["a.py", "b.py"],
+    )
+    assert evidence.fallback_reason == "error"
+    assert evidence.latency_ms >= 0.0
+
+
+def test_evidence_from_metrics_dict_shapes():
+    """Rehydrate evidence from nested carrier, flat metrics, or passthrough object."""
+    assert evidence_from_metrics_dict(None).fallback_reason == "none"
+    assert evidence_from_metrics_dict("x").fallback_reason == "none"  # type: ignore[arg-type]
+
+    live = empty_scoped_history_evidence(fallback_reason="partial")
+    live.split_high_confidence = True
+    assert evidence_from_metrics_dict({"scoped_history_evidence": live}) is live
+
+    nested = evidence_from_metrics_dict(
+        {
+            "scoped_history_evidence": {
+                "fallback_reason": "graph_unavailable",
+                "split_high_confidence": True,
+                "split_rationale": "disjoint",
+                "rename_confidence": "HIGH",
+                "rename_rationale": "pairs",
+                "guidance": "Split evidence: disjoint.",
+                "file_to_flow_ids": {"a.py": ["f1", 2]},
+                "structural_error_handling": True,
+                "structural_public_api": False,
+                "structural_new_command": True,
+                "latency_ms": 3.5,
+            }
+        }
+    )
+    assert nested.fallback_reason == "graph_unavailable"
+    assert nested.split_high_confidence is True
+    assert nested.rename_confidence == "high"
+    assert nested.guidance == "Split evidence: disjoint."
+    assert nested.file_to_flow_ids == {"a.py": ["f1", "2"]}
+    assert nested.structural_error_handling is True
+    assert nested.structural_new_command is True
+    assert nested.latency_ms == 3.5
+
+    flat = evidence_from_metrics_dict(
+        {
+            "scoped_history_fallback_reason": "shadow_unavailable",
+            "split_high_confidence": False,
+            "rename_confidence": "low",
+            "scoped_history_guidance": "Rename evidence: weak.",
+            "scoped_history_latency_ms": 1.25,
+            "structural_public_api": True,
+        }
+    )
+    assert flat.fallback_reason == "shadow_unavailable"
+    assert flat.rename_confidence == "low"
+    assert flat.guidance == "Rename evidence: weak."
+    assert flat.latency_ms == 1.25
+    assert flat.structural_public_api is True
