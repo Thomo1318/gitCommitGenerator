@@ -517,7 +517,7 @@ _CLI_HINT_TYPES = frozenset(
 # substrings inside ``client`` / ``commandeer`` / ``cli_unrelated``.
 _CLI_HINT_PATTERN = re.compile(
     r"(?i)(?<![A-Za-z0-9_])(?:"
-    r"app\.command|add_argument|add_parser|argparse|typer|click|command|cli"
+    r"app\.command|add_argument|add_parser|argparse|typer|click|cli"
     r")(?![A-Za-z0-9_])"
 )
 
@@ -716,7 +716,7 @@ def build_scoped_history_guidance(
     band = coerce_rename_confidence(rename_confidence)
     if band in {RenameConfidence.HIGH.value, RenameConfidence.MEDIUM.value}:
         detail = rename_rationale.strip() or f"rename confidence band={band}"
-        parts.append(f"Rename evidence: {detail}. Prefer rename/move framing when describing path changes.")
+        parts.append(f"Rename evidence: {detail}. Path changes may reflect rename or move activity.")
     if not parts:
         return None
     text = " ".join(parts)

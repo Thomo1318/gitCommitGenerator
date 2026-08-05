@@ -1983,17 +1983,37 @@ def _collect_semantic_producer_metrics(
                 try:
                     import subprocess as _sp
 
+                    # NUL-delimited records avoid tab/newline path-splitting hazards.
                     status = _sp.check_output(
-                        ["git", "-C", repo_root, "diff", "--cached", "--name-status", "-M"],
-                        text=True,
+                        [
+                            "git",
+                            "-C",
+                            repo_root,
+                            "diff",
+                            "--cached",
+                            "--name-status",
+                            "-z",
+                            "-M",
+                        ],
                         timeout=5,
                     )
-                    for line in status.splitlines():
-                        parts = line.split("\t")
-                        if len(parts) >= 3 and parts[0].startswith("R"):
-                            renamed_paths.append((parts[1].strip(), parts[2].strip()))
-                        if len(renamed_paths) >= 32:
-                            break
+                    fields = status.split(b"\0")
+                    idx = 0
+                    while idx < len(fields) and len(renamed_paths) < 32:
+                        raw_status = fields[idx]
+                        if not raw_status:
+                            idx += 1
+                            continue
+                        status_token = raw_status.decode("utf-8", errors="replace")
+                        if status_token.startswith("R") and idx + 2 < len(fields):
+                            old_path = fields[idx + 1].decode("utf-8", errors="replace").strip()
+                            new_path = fields[idx + 2].decode("utf-8", errors="replace").strip()
+                            if old_path and new_path:
+                                renamed_paths.append((old_path, new_path))
+                            idx += 3
+                            continue
+                        # Non-rename: status + path (+ optional unused fields)
+                        idx += 2 if idx + 1 < len(fields) else 1
                 except Exception:
                     pass
                 if renamed_paths:
@@ -2072,9 +2092,10 @@ def _collect_semantic_producer_metrics(
             f"graph_stage:{type(graph_exc).__name__}",
         )
         # Override the pre-populated "none" default — setdefault would mask the error.
+        # Use literals here: ScopedHistoryFallbackReason may be unbound if graph imports failed.
         current_fb = result.get("scoped_history_fallback_reason")
-        if current_fb in (None, "", ScopedHistoryFallbackReason.NONE.value, "none"):
-            result["scoped_history_fallback_reason"] = ScopedHistoryFallbackReason.ERROR.value
+        if current_fb in (None, "", "none"):
+            result["scoped_history_fallback_reason"] = "error"
     return result
 
 
