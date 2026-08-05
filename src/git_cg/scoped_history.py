@@ -9,10 +9,12 @@ or the worktree/index.
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from types import SimpleNamespace
 from typing import Any
 
 from git_cg.semantic import _bound_str
@@ -32,6 +34,13 @@ MAX_RATIONALE_LEN = 240
 RENAME_HIGH_BODY_SIMILARITY = 0.85
 RENAME_MEDIUM_BODY_SIMILARITY = 0.55
 RENAME_LOW_BODY_SIMILARITY = 0.25
+# Operator-facing band floors (high / medium / low). band_rename_pair uses HIGH+LOW
+# directly; MEDIUM remains part of the published matrix for docs and future tuning.
+RENAME_BODY_SIMILARITY_THRESHOLDS = (
+    RENAME_HIGH_BODY_SIMILARITY,
+    RENAME_MEDIUM_BODY_SIMILARITY,
+    RENAME_LOW_BODY_SIMILARITY,
+)
 
 
 class ScopedHistoryFallbackReason(StrEnum):
@@ -62,7 +71,7 @@ def coerce_fallback_reason(value: Any) -> str:
     """Coerce unknown/empty values to the closed fallback set (default ``none``)."""
     if value is None:
         return ScopedHistoryFallbackReason.NONE.value
-    text = str(value).strip()
+    text = str(value).strip().lower()
     if text in _FALLBACK_VALUES:
         return text
     return ScopedHistoryFallbackReason.NONE.value
@@ -348,19 +357,20 @@ def band_rename_pair(
     Map per-pair signals to a rename confidence band.
 
     * high — git rename AND (code_fp match OR body_sim ≥ HIGH)
-    * medium — git rename OR strong similarity without full corroboration
-    * low — weak single-signal
+    * medium — git rename without high corroboration, or strong single-signal
+      (body_sim ≥ MEDIUM is documented for operators; git-rename path bands medium
+      regardless of the medium threshold once high is ruled out)
+    * low — weak single-signal (body_sim ≥ LOW)
     * none — no usable signal
     """
     sim = float(body_sim) if body_sim is not None else None
     strong_sim = sim is not None and sim >= RENAME_HIGH_BODY_SIMILARITY
-    medium_sim = sim is not None and sim >= RENAME_MEDIUM_BODY_SIMILARITY
     weak_sim = sim is not None and sim >= RENAME_LOW_BODY_SIMILARITY
+    # Medium threshold is documented for operators; non-git LOW uses the LOW floor
+    # (MEDIUM > LOW so medium_sim ⊆ weak_sim). Keep the constant exported below.
 
     if git_rename and (code_fp_match is True or strong_sim):
         return RenameConfidence.HIGH
-    if git_rename and (code_fp_match is False or code_fp_match is None) and medium_sim:
-        return RenameConfidence.MEDIUM
     if git_rename:
         # Git rename without high corroboration still bands medium (not low/none).
         return RenameConfidence.MEDIUM
@@ -368,7 +378,7 @@ def band_rename_pair(
         return RenameConfidence.HIGH
     if code_fp_match is True or strong_sim:
         return RenameConfidence.MEDIUM
-    if medium_sim or weak_sim:
+    if weak_sim:
         return RenameConfidence.LOW
     return RenameConfidence.NONE
 
@@ -503,17 +513,12 @@ _CLI_HINT_TYPES = frozenset(
         "command",
     }
 )
-_CLI_NAME_HINTS = frozenset(
-    {
-        "command",
-        "app.command",
-        "typer",
-        "click",
-        "argparse",
-        "add_argument",
-        "add_parser",
-        "cli",
-    }
+# Identifier-boundary CLI hints. Plain ``cli`` / ``command`` must not match
+# substrings inside ``client`` / ``commandeer`` / ``cli_unrelated``.
+_CLI_HINT_PATTERN = re.compile(
+    r"(?i)(?<![A-Za-z0-9_])(?:"
+    r"app\.command|add_argument|add_parser|argparse|typer|click|command|cli"
+    r")(?![A-Za-z0-9_])"
 )
 
 
@@ -536,8 +541,48 @@ def _walk_node_types(tree: Any, *, max_nodes: int = 4000) -> set[str]:
 
 
 def _source_has_cli_hint(source: bytes) -> bool:
-    lowered = source.decode("utf-8", errors="replace").lower()
-    return any(hint in lowered for hint in _CLI_NAME_HINTS)
+    """Return True when source contains a CLI identifier (boundary-anchored)."""
+    text = source.decode("utf-8", errors="replace")
+    return bool(_CLI_HINT_PATTERN.search(text))
+
+
+def _definition_names(tree: Any, *, max_nodes: int = 4000) -> list[str]:
+    """Collect definition identifier names from a tree-sitter tree (bounded)."""
+    root = getattr(tree, "root_node", None) or tree
+    names: list[str] = []
+    stack = [root]
+    seen = 0
+    while stack and seen < max_nodes:
+        node = stack.pop()
+        seen += 1
+        node_type = getattr(node, "type", None)
+        if node_type in _PUBLIC_DEF_TYPES:
+            name_node = None
+            # tree-sitter python/js commonly expose child_by_field_name("name")
+            cbf = getattr(node, "child_by_field_name", None)
+            if callable(cbf):
+                try:
+                    name_node = cbf("name")
+                except Exception:
+                    name_node = None
+            if name_node is None:
+                for child in list(getattr(node, "children", None) or []):
+                    if getattr(child, "type", None) in {"identifier", "property_identifier", "type_identifier"}:
+                        name_node = child
+                        break
+            if name_node is not None:
+                try:
+                    raw = getattr(name_node, "text", None)
+                    if isinstance(raw, (bytes, bytearray)):
+                        names.append(raw.decode("utf-8", errors="replace"))
+                    elif isinstance(raw, str):
+                        names.append(raw)
+                except Exception:
+                    pass
+        children = getattr(node, "children", None)
+        if children:
+            stack.extend(list(children))
+    return names
 
 
 def evaluate_structural_markers(
@@ -575,28 +620,18 @@ def evaluate_structural_markers(
         if types & _PY_ERROR_TYPES or types & _JS_ERROR_TYPES:
             error_handling = True
         if types & _PUBLIC_DEF_TYPES:
-            # Prefer non-private names when source is available on the result.
-            public_api = True
+            # Public API only when a non-private definition name is present.
+            # Without recoverable names, fall back to "definition present".
+            names = _definition_names(tree)
+            if names:
+                if any(not n.startswith("_") for n in names):
+                    public_api = True
+            else:
+                public_api = True
         if types & _CLI_HINT_TYPES:
             # Require a lexical CLI hint in addition to structural call/decorator nodes.
             source = getattr(result, "source", None)
-            path = str(getattr(result, "path", "") or "")
             if isinstance(source, (bytes, bytearray)) and _source_has_cli_hint(bytes(source)):
-                new_command = True
-            elif any(h in path.lower() for h in ("cli", "command", "main.py")):
-                # Path hint alone is insufficient for new_command; need source or decorator text.
-                pass
-
-        # Source-level CLI decorator scan when tree walk is inconclusive.
-        if not new_command:
-            # ParseResult does not carry source; callers may attach .source optionally.
-            source = getattr(result, "source", None)
-            if (
-                isinstance(source, (bytes, bytearray))
-                and _source_has_cli_hint(bytes(source))
-                and (types & _CLI_HINT_TYPES or types & {"decorated_definition", "decorator"})
-            ):
-                # Only emit new_command with structural call/decorator presence.
                 new_command = True
 
     return error_handling, public_api, new_command
@@ -606,40 +641,49 @@ def structural_markers_from_sources(
     files: Mapping[str, bytes] | None,
     *,
     enable_semantic: bool | None = True,
+    parse_results: Sequence[Any] | None = None,
 ) -> tuple[bool, bool, bool]:
-    """Parse staged sources and derive P1/P2 structural markers (fail-open)."""
-    if not is_semantic_enabled(enable_semantic) or not files:
-        return False, False, False
-    try:
-        from git_cg.ast_parser import parse_files
-    except Exception:
-        return False, False, False
-    try:
-        batch = parse_files(dict(files))
-    except Exception:
+    """Derive P1/P2 structural markers from staged sources (fail-open).
+
+    When ``parse_results`` is provided (e.g. reused parser-stage batch results),
+    skip a second ``parse_files`` call. Otherwise parse ``files`` once.
+    """
+    if not is_semantic_enabled(enable_semantic):
         return False, False, False
 
-    # Fail-open when parser stub/batch lacks results (tests or degraded parser).
-    raw_results = getattr(batch, "results", None)
+    file_map = dict(files or {})
+    raw_results = list(parse_results) if parse_results is not None else None
+
     if raw_results is None:
-        return False, False, False
+        if not file_map:
+            return False, False, False
+        try:
+            from git_cg.ast_parser import parse_files
+        except Exception:
+            return False, False, False
+        try:
+            batch = parse_files(file_map)
+        except Exception:
+            return False, False, False
+        # Fail-open when parser stub/batch lacks results (tests or degraded parser).
+        raw_results = getattr(batch, "results", None)
+        if raw_results is None:
+            return False, False, False
 
-    # Attach source bytes onto results for CLI hint checks (in-memory only).
+    # Attach source bytes onto results for CLI hint / name checks (in-memory only).
     enriched = []
-    file_map = dict(files)
     for result in raw_results:
         try:
             # ParseResult is frozen — build a lightweight view.
-            view = type(
-                "ParseView",
-                (),
-                {
-                    "tree": result.tree,
-                    "status": result.status,
-                    "path": result.path,
-                    "source": file_map.get(result.path),
-                },
-            )()
+            view = SimpleNamespace(
+                tree=getattr(result, "tree", None),
+                status=getattr(result, "status", None),
+                path=getattr(result, "path", None),
+                source=file_map.get(getattr(result, "path", None)) if file_map else getattr(result, "source", None),
+            )
+            # Prefer already-attached source when file_map miss.
+            if view.source is None:
+                view.source = getattr(result, "source", None)
             enriched.append(view)
         except Exception:
             enriched.append(result)
@@ -757,6 +801,7 @@ def evaluate_scoped_history(
     old_bytes_by_path: Mapping[str, bytes] | None = None,
     new_bytes_by_path: Mapping[str, bytes] | None = None,
     staged_sources: Mapping[str, bytes] | None = None,
+    parse_results: Sequence[Any] | None = None,
     preflight_groups_count: int = 0,
     fallback_reason: str = "none",
 ) -> ScopedHistoryEvidence:
@@ -800,6 +845,7 @@ def evaluate_scoped_history(
         err_h, pub_api, new_cmd = structural_markers_from_sources(
             staged_sources,
             enable_semantic=True,
+            parse_results=parse_results,
         )
         evidence.structural_error_handling = err_h
         evidence.structural_public_api = pub_api
