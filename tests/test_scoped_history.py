@@ -137,6 +137,7 @@ def test_build_guidance_bans_authority_leakage():
     assert "prefer " not in text.lower()
     assert "must " not in text.lower()
     assert "should " not in text.lower()
+    assert "consider " not in text.lower()
 
 
 def test_or_merge_never_clears_model_true():

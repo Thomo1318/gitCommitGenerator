@@ -710,9 +710,7 @@ def build_scoped_history_guidance(
     parts: list[str] = []
     if split_high_confidence:
         detail = split_rationale.strip() or "disjoint affected-flow membership across staged files"
-        parts.append(
-            f"Split evidence: {detail}. Consider whether distinct surfaces warrant secondary intents or a split."
-        )
+        parts.append(f"Split evidence: {detail}. Distinct surfaces may indicate secondary intents or a split.")
     band = coerce_rename_confidence(rename_confidence)
     if band in {RenameConfidence.HIGH.value, RenameConfidence.MEDIUM.value}:
         detail = rename_rationale.strip() or f"rename confidence band={band}"
