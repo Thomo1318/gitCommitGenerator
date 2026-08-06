@@ -1573,9 +1573,13 @@ def is_low_confidence_posture(confidence: RankingConfidence | None) -> bool:
 
 
 def is_generic_feature_presentation(plan_or_seed: CommitPlan | None) -> bool:
-    """Return whether *plan_or_seed* is generic ``feat`` + ``MINOR`` (D7 tests).
+    """Return whether *plan_or_seed* is generic ``feat`` presentation (D7 tests).
 
-    ``None`` is treated as generic (no matrix-high presentation support yet).
+    Generic means ``feat`` paired with ``MINOR`` or ``NONE``. ``NONE`` is
+    included because the model may over-demote SemVer after reading the
+    low-confidence guidance; the presentation seed then repairs it to the
+    deterministic ``PATCH`` posture. ``None`` is treated as generic (no
+    matrix-high presentation support yet).
     """
     if plan_or_seed is None:
         return True
@@ -1586,7 +1590,10 @@ def is_generic_feature_presentation(plan_or_seed: CommitPlan | None) -> bool:
     semver = getattr(primary, "semver_impact", None)
     cc_val = cc.value if isinstance(cc, CommitType) else str(cc or "").lower()
     sem_val = semver.value if isinstance(semver, SemVerImpact) else str(semver or "").upper()
-    return cc_val == CommitType.FEAT.value and sem_val == SemVerImpact.MINOR.value
+    return cc_val == CommitType.FEAT.value and sem_val in {
+        SemVerImpact.MINOR.value,
+        SemVerImpact.NONE.value,
+    }
 
 
 def strip_included_changes_from_body_summary(body_summary: str | None) -> str | None:
@@ -1665,6 +1672,11 @@ def format_low_confidence_guidance(adjustment: PresentationAdjustment) -> str:
         "LOW-CONFIDENCE BODY SKELETON (wording structure only — does not change intent_id / gitmoji authority):",
         "Structure body_summary with Context/Changes prose only. Use staged evidence only.",
         "Do not invent generic feat+MINOR capability framing under uncertainty.",
+        "Do not choose NONE merely because ranking confidence is low; the presentation "
+        "layer applies the deterministic SemVer posture.",
+        "For every distinct evidence-backed staged responsibility (test, docs, fix, "
+        "implementation), keep a corresponding secondary_intent; do not collapse a "
+        "multi-surface diff into one intent solely because confidence is low.",
         "Emit exactly one `Included changes:` section in the final message, owned by "
         "secondary_intents (never duplicated inside body_summary).",
         "Every item under Included changes MUST be a Hybrid mini-subject: `- <emoji> <cc_type>(<scope>): <subject>`.",

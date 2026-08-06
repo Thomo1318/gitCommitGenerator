@@ -608,6 +608,7 @@ def build_system_prompt(
     staged_paths: list[str] | None = None,
     concern_tags: frozenset[str] | set[str] | None = None,
     claim_tags: list[str] | tuple[str, ...] | None = None,
+    low_confidence_guidance: str | None = None,
 ) -> str:
     """
     Compose the system prompt for generating a structured Conventional Commit plan.
@@ -626,6 +627,9 @@ def build_system_prompt(
         scoped_history_guidance (str | None): Phase 9 split/rename rationale feedback. Routed
             through Channel 4 (Issue #163); directive-free; never sets preferred_type or
             authority fields.
+        low_confidence_guidance (str | None): Issue #204 Slice 5 body-skeleton guidance.
+            Directive-free wording structure only; never sets preferred_type or mutates
+            ranked intent authority.
 
     Returns:
         str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
@@ -733,7 +737,14 @@ def build_system_prompt(
         "- Subject: state the user-visible outcome, not an inventory of files or edits. ≤50 chars, imperative.\n"
         "- Body: explain WHY the change is needed and the behaviour delta; note preserved invariants when relevant.\n"
         f"- Do NOT open the body with: {banned}.\n"
-        "- Secondary intents: when the diff touches multiple distinct surfaces, include them so Included changes is complete.\n"
+        "- Secondary intents: when the diff touches multiple distinct surfaces, put them in secondary_intents "
+        "so the renderer emits exactly one Included changes section. Preserve every distinct "
+        "evidence-backed responsibility (especially tests, docs, fixes, implementation); do not "
+        "collapse a multi-surface diff into one intent solely because ranking confidence is low.\n"
+        "- body_summary must NOT contain an `Included changes:` heading or nested bullets; "
+        "those come only from secondary_intents as Hybrid mini-subjects "
+        "(`- <emoji> <cc_type>(<scope>): <subject>`).\n"
+        "- Never copy bracketed inventory lines (`[role/surface] ...`) into the final message.\n"
         "- This rubric guides wording only. It MUST NOT change intent_id, gitmoji, cc_type, semver_impact, or changelog_group."
     )
     context_parts.append(gold_rubric)
@@ -772,6 +783,10 @@ def build_system_prompt(
     except Exception:
         # Inventory is best-effort presentation aid; never brick prompt build.
         pass
+
+    # Issue #204 Slice 5 — low-confidence body skeleton (D7). Prompt pressure only.
+    if low_confidence_guidance and str(low_confidence_guidance).strip():
+        context_parts.append(str(low_confidence_guidance).strip())
 
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
@@ -1424,6 +1439,7 @@ def _write_telemetry_state_safe(
     structural_error_handling: bool = False,
     structural_public_api: bool = False,
     structural_new_command: bool = False,
+    presentation_fallback_reason: str = "none",
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1487,6 +1503,7 @@ def _write_telemetry_state_safe(
         structural_error_handling (bool): Phase 9 structural error-handling marker.
         structural_public_api (bool): Phase 9 structural public-API marker.
         structural_new_command (bool): Phase 9 structural new-command marker.
+        presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
     """
     try:
         import dataclasses
@@ -1579,6 +1596,7 @@ def _write_telemetry_state_safe(
             structural_error_handling=bool(structural_error_handling),
             structural_public_api=bool(structural_public_api),
             structural_new_command=bool(structural_new_command),
+            presentation_fallback_reason=str(presentation_fallback_reason or "none"),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -2478,6 +2496,9 @@ def _run_commit_generation(
     ranking_choice_path: str | None = None
     ranking_override = False
     ranking_arbitrate_effective: str | None = None
+    presentation_fallback_reason: str = "none"
+    low_confidence_guidance: str | None = None
+    low_confidence_adjustment = None
 
     # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
     # Sole insertion seam: after rank/confidence owner, before contract/LLM.
@@ -2600,6 +2621,7 @@ def _run_commit_generation(
                     structural_error_handling=structural_error_handling,
                     structural_public_api=structural_public_api,
                     structural_new_command=structural_new_command,
+                    presentation_fallback_reason=presentation_fallback_reason,
                 )
                 opik.flush_tracker()
                 _abort(
@@ -2682,6 +2704,48 @@ def _run_commit_generation(
                 residual_guidance = arb.residual_guidance
             break
 
+    # Issue #204 Slice 5 — low-confidence presentation posture (D7).
+    # After ranking confidence + #195 arbitration; before prompt construction.
+    # Non-interactive: never blocks. Interactive: does not replace TUI.
+    try:
+        from git_cg.commit_quality import (
+            PRESENTATION_FALLBACK_NONE,
+            apply_low_confidence_presentation,
+            build_included_change_stubs,
+            format_low_confidence_guidance,
+        )
+        from git_cg.models import TrailerPriors as _TrailerPriors
+
+        _priors = gen_context.scope_priors
+        if not isinstance(_priors, _TrailerPriors):
+            from git_cg.commit_quality import derive_trailer_priors as _derive_trailer_priors
+
+            _priors = _derive_trailer_priors(
+                list(getattr(gen_context.diff_signals, "files", None) or []),
+                signals=gen_context.diff_signals,
+            )
+        _stubs = build_included_change_stubs(
+            list(getattr(gen_context.diff_signals, "files", None) or []),
+            gen_context.diff_signals,
+            gen_context.ranked_intents,
+        )
+        low_confidence_adjustment = apply_low_confidence_presentation(
+            None,
+            gen_context.ranking_confidence,
+            _priors,
+            stubs=_stubs,
+        )
+        if low_confidence_adjustment.active:
+            presentation_fallback_reason = low_confidence_adjustment.fallback_reason
+            low_confidence_guidance = format_low_confidence_guidance(low_confidence_adjustment)
+        else:
+            presentation_fallback_reason = PRESENTATION_FALLBACK_NONE
+            low_confidence_guidance = None
+    except Exception:
+        presentation_fallback_reason = "none"
+        low_confidence_guidance = None
+        low_confidence_adjustment = None
+
     while True:
         regen_state = RegenerationState(
             previous_plan=review_state.commit_plan if review_state else None,
@@ -2714,6 +2778,7 @@ def _run_commit_generation(
             gold_guidance=gold_guidance,
             scoped_history_guidance=scoped_history_guidance,
             staged_paths=list(getattr(gen_context.diff_signals, "files", None) or []),
+            low_confidence_guidance=low_confidence_guidance,
         )
 
         # Offline prompt tracking (synced asynchronously via script)
@@ -2767,6 +2832,31 @@ def _run_commit_generation(
             from git_cg.commit_quality import apply_presentation_overlay
 
             staged_paths = list(getattr(gen_context.diff_signals, "files", None) or [])
+            # Slice 5: seed presentation from TrailerPriors under low confidence first
+            # (identity-preserving). Path-class overlay runs after so D11 envelope wins
+            # over low-confidence priors when they disagree (locked precedence).
+            if low_confidence_adjustment is not None and getattr(low_confidence_adjustment, "active", False):
+                from git_cg.commit_quality import (
+                    apply_low_confidence_presentation,
+                    apply_presentation_seed,
+                    derive_trailer_priors,
+                )
+                from git_cg.models import TrailerPriors
+
+                seed_priors = gen_context.scope_priors
+                if not isinstance(seed_priors, TrailerPriors):
+                    seed_priors = derive_trailer_priors(
+                        staged_paths,
+                        signals=gen_context.diff_signals,
+                    )
+                seeded = apply_low_confidence_presentation(
+                    commit_plan,
+                    gen_context.ranking_confidence,
+                    seed_priors,
+                )
+                commit_plan = apply_presentation_seed(commit_plan, seeded)
+                if seeded.active:
+                    presentation_fallback_reason = seeded.fallback_reason
             commit_plan = apply_presentation_overlay(
                 commit_plan,
                 paths=staged_paths,
@@ -2980,6 +3070,7 @@ def _run_commit_generation(
                 structural_error_handling=structural_error_handling,
                 structural_public_api=structural_public_api,
                 structural_new_command=structural_new_command,
+                presentation_fallback_reason=presentation_fallback_reason,
             )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
@@ -3121,6 +3212,7 @@ def _run_commit_generation(
         structural_error_handling=structural_error_handling,
         structural_public_api=structural_public_api,
         structural_new_command=structural_new_command,
+        presentation_fallback_reason=presentation_fallback_reason,
     )
 
     opik.flush_tracker()
@@ -3601,6 +3693,8 @@ def record_telemetry(
                     "ranking_override": bool(telemetry_state.get("ranking_override", False)),
                     "ranking_arbitrate_effective": telemetry_state.get("ranking_arbitrate_effective"),
                     "lock_resolution": telemetry_state.get("lock_resolution", "absent"),
+                    # Issue #204 Slice 5 presentation fallback (closed vocab).
+                    "presentation_fallback_reason": telemetry_state.get("presentation_fallback_reason", "none"),
                     # Phase 7.25 gold parity (absorbed into #195).
                     "gold_mode": telemetry_state.get("gold_mode", "off"),
                     "gold_findings_count": telemetry_state.get("gold_findings_count", 0),

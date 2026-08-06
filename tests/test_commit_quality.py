@@ -15,9 +15,17 @@ from git_cg.commit_quality import (
     DIFF_CLASS_FIXTURES,
     DIFF_CLASS_PRODUCT,
     DIFF_CLASS_TESTS,
+    LOW_CONFIDENCE_TRIGGER_REASONS,
+    PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+    PRESENTATION_FALLBACK_NONE,
+    PresentationAdjustment,
     PresentationConstraints,
     Stub,
+    apply_low_confidence_presentation,
+    apply_presentation_overlay,
+    apply_presentation_seed,
     build_included_change_stubs,
+    build_low_confidence_body_skeleton,
     changelog_groups_allowlisted,
     classify_diff_class,
     constraints_from_paths,
@@ -25,13 +33,17 @@ from git_cg.commit_quality import (
     dominant_presentation_cc_type,
     filter_paths_for_content_signals,
     format_included_change_stub_inventory,
+    format_low_confidence_guidance,
     has_security_path_evidence,
+    is_generic_feature_presentation,
+    is_low_confidence_posture,
     min_included_change_bullets,
     presentation_constraints,
     prose_has_security_negative_markers,
     required_changelog_groups,
     security_claims_without_path_evidence,
     semver_presentation_ceiling,
+    strip_included_changes_from_body_summary,
 )
 from git_cg.intent import DiffSignals
 from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact, TrailerPriors
@@ -937,3 +949,463 @@ def test_min_bullets_multi_test_modules_counts_modules() -> None:
         ]
     )
     assert n >= 4
+
+
+# ---------------------------------------------------------------------------
+# Slice 5 — Low-confidence presentation posture (D7)
+# ---------------------------------------------------------------------------
+
+
+def _low_conf(*reasons: str, level: str = "low"):
+    from git_cg.ranking_confidence import RankingConfidence
+
+    return RankingConfidence(
+        level=level,  # type: ignore[arg-type]
+        margin=4.0,
+        top_intent_id="feature_addition",
+        runner_up_intent_id="bug_fix",
+        reasons=tuple(reasons),  # type: ignore[arg-type]
+    )
+
+
+def _lc_intent(**kwargs):
+    """Build CommitIntent without SOP matrix rewrite (presentation tests)."""
+    payload = {
+        "intent_id": "feature_addition",
+        "gitmoji": "✨",
+        "cc_type": CommitType.FEAT,
+        "scope": "api",
+        "description": "add thing",
+        "semver_impact": SemVerImpact.MINOR,
+        "changelog_group": "Added",
+    }
+    payload.update(kwargs)
+    return CommitIntent.model_construct(**payload)
+
+
+def _lc_plan(primary=None, **kwargs):
+    """Build CommitPlan without matrix rewrite on nested intents."""
+    payload = {
+        "primary_intent": primary if primary is not None else _lc_intent(),
+        "secondary_intents": [],
+        "split_recommended": False,
+        "rationale": "r",
+        "body_summary": None,
+        "breaking_change": False,
+        "breaking_change_description": None,
+    }
+    payload.update(kwargs)
+    return CommitPlan.model_construct(**payload)
+
+
+@pytest.mark.parametrize("reason", sorted(LOW_CONFIDENCE_TRIGGER_REASONS))
+def test_low_confidence_posture_triggers_on_each_v1_reason(reason: str) -> None:
+    conf = _low_conf(reason)
+    assert is_low_confidence_posture(conf) is True
+    priors = derive_trailer_priors(["tests/test_x.py"])
+    adj = apply_low_confidence_presentation(None, conf, priors)
+    assert adj.active is True
+    assert adj.fallback_reason == PRESENTATION_FALLBACK_LOW_CONFIDENCE
+    assert "Context:" in adj.body_skeleton
+    assert "Changes:" in adj.body_skeleton
+    # Skeleton teaches body_summary only; final Included changes is secondary_intents-owned.
+    assert "Included changes:" not in adj.body_skeleton.split("Do NOT put an `Included changes:`")[0]
+    assert "body_summary" in adj.body_skeleton.lower() or "BODY_SUMMARY" in adj.body_skeleton
+    assert "- cover each distinct" not in adj.body_skeleton
+    assert "[tests/" not in adj.body_skeleton
+
+
+def test_low_confidence_unknown_reason_does_not_activate() -> None:
+    conf = _low_conf()  # empty reasons
+    # Build with a non-v1 reason via model_construct if needed
+    from git_cg.ranking_confidence import RankingConfidence
+
+    conf = RankingConfidence.model_construct(
+        level="low",
+        margin=1.0,
+        top_intent_id="feature_addition",
+        runner_up_intent_id=None,
+        reasons=("not_a_v1_reason",),
+    )
+    assert is_low_confidence_posture(conf) is False
+    priors = derive_trailer_priors(["tests/test_x.py"])
+    adj = apply_low_confidence_presentation(None, conf, priors)
+    assert adj.active is False
+    assert adj.fallback_reason == PRESENTATION_FALLBACK_NONE
+
+
+def test_low_confidence_none_confidence_inactive() -> None:
+    priors = derive_trailer_priors(["docs/usage.md"])
+    adj = apply_low_confidence_presentation(None, None, priors)
+    assert adj.active is False
+
+
+def test_generic_feature_presentation_definition() -> None:
+    generic = _lc_plan(_lc_intent(semver_impact=SemVerImpact.MINOR))
+    assert is_generic_feature_presentation(generic) is True
+    assert is_generic_feature_presentation(None) is True
+    # feat+NONE is generic too: model over-demotes SemVer under low confidence.
+    none_feat = _lc_plan(_lc_intent(semver_impact=SemVerImpact.NONE))
+    assert is_generic_feature_presentation(none_feat) is True
+    non = _lc_plan(_lc_intent(semver_impact=SemVerImpact.PATCH))
+    assert is_generic_feature_presentation(non) is False
+
+
+def test_low_confidence_feat_none_repaired_to_patch() -> None:
+    # Product/mixed low confidence: the model over-demotes feat to NONE after
+    # reading the uncertainty guidance. feat+NONE must be recognised as generic
+    # so the deterministic PATCH seed repairs it instead of NONE surviving.
+    paths = ["src/git_cg/commit_quality.py", "tests/test_commit_quality.py"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("mixed_intent")
+    plan = _lc_plan(_lc_intent(scope="commit_quality", description="add posture", semver_impact=SemVerImpact.NONE))
+
+    adj = apply_low_confidence_presentation(plan, conf, priors)
+    assert adj.active and adj.seed_presentation is True
+    assert adj.semver_impact == SemVerImpact.PATCH
+
+    out = apply_presentation_seed(plan, adj)
+    out = apply_presentation_overlay(out, paths=paths, priors=priors)
+
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.gitmoji == "✨"
+    assert out.primary_intent.cc_type == CommitType.FEAT
+    assert out.primary_intent.semver_impact == SemVerImpact.PATCH
+    assert out.primary_intent.semver_impact != SemVerImpact.NONE
+
+
+def test_low_confidence_tests_only_seeds_test_none_not_feat_minor() -> None:
+    paths = ["tests/test_scope_canon.py", "tests/test_commit_quality.py"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("margin_below_low_threshold")
+    generic = _lc_plan(_lc_intent(scope="git_cg", description="add capability", semver_impact=SemVerImpact.MINOR))
+    adj = apply_low_confidence_presentation(generic, conf, priors)
+    assert adj.active and adj.seed_presentation
+    assert adj.cc_type == CommitType.TEST
+    assert adj.semver_impact == SemVerImpact.NONE
+    assert adj.changelog_group == "Tests"
+    out = apply_presentation_seed(generic, adj)
+    out = apply_presentation_overlay(out, paths=paths, priors=priors)
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.gitmoji == "✨"
+    assert out.primary_intent.cc_type == CommitType.TEST
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Tests"
+    assert not (
+        out.primary_intent.cc_type == CommitType.FEAT and out.primary_intent.semver_impact == SemVerImpact.MINOR
+    )
+
+
+def test_low_confidence_docs_adr_seeds_docs_none() -> None:
+    paths = ["docs/ADRs/ADR-0163-scoped-history.md", "docs/usage.md"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("mixed_intent")
+    generic = _lc_plan(_lc_intent(scope=None, description="add docs feature", semver_impact=SemVerImpact.MINOR))
+    adj = apply_low_confidence_presentation(generic, conf, priors)
+    out = apply_presentation_seed(generic, adj)
+    out = apply_presentation_overlay(out, paths=paths, priors=priors)
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Documentation"
+    assert out.primary_intent.intent_id == "feature_addition"
+
+
+def test_low_confidence_dark_launch_no_unearned_minor() -> None:
+    paths = ["src/git_cg/semantic.py", "tests/test_semantic.py"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("near_tie_top3")
+    plan = _lc_plan(_lc_intent(scope="semantic", description="harvest free fields", semver_impact=SemVerImpact.MINOR))
+    adj = apply_low_confidence_presentation(plan, conf, priors)
+    assert adj.active
+    # product_src/mixed: seed only when generic feat+MINOR
+    assert adj.seed_presentation is True
+    out = apply_presentation_seed(plan, adj)
+    out = apply_presentation_overlay(
+        out,
+        paths=paths,
+        priors=priors,
+        concern_tags={"dark_launch", "free_harvest"},
+    )
+    assert out.primary_intent.semver_impact != SemVerImpact.MINOR
+    assert out.primary_intent.semver_impact != SemVerImpact.MAJOR
+    assert out.primary_intent.intent_id == "feature_addition"
+
+
+def test_low_confidence_carry_through_patch_changed_scope() -> None:
+    paths = ["src/git_cg/main.py", "tests/test_main.py"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("exact_tie_top")
+    plan = _lc_plan(_lc_intent(scope="semantic", description="wire preflight carry", semver_impact=SemVerImpact.MINOR))
+    adj = apply_low_confidence_presentation(plan, conf, priors)
+    out = apply_presentation_seed(plan, adj)
+    out = apply_presentation_overlay(
+        out,
+        paths=paths,
+        priors=priors,
+        concern_tags={"carry_through", "preflight_carry"},
+    )
+    assert out.primary_intent.semver_impact == SemVerImpact.PATCH
+    assert out.primary_intent.changelog_group == "Changed"
+    assert out.primary_intent.intent_id == "feature_addition"
+
+
+def test_low_confidence_skeleton_deterministic_and_complete() -> None:
+    priors = derive_trailer_priors(["tests/test_a.py", "tests/test_b.py"])
+    stubs = build_included_change_stubs(
+        ["tests/test_a.py", "tests/test_b.py"],
+        None,
+        None,
+    )
+    sk1 = build_low_confidence_body_skeleton(priors=priors, stubs=stubs)
+    sk2 = build_low_confidence_body_skeleton(priors=priors, stubs=stubs)
+    assert sk1 == sk2
+    for heading in ("Context:", "Changes:"):
+        assert heading in sk1
+    # Must not teach a final Included-changes prose block inside body_summary.
+    assert sk1.count("Included changes:") == 0 or "Do NOT put an `Included changes:`" in sk1
+    assert not any(line.startswith("- [") or line.startswith("- cover each distinct") for line in sk1.splitlines())
+    # No inventory bullets promoted under an Included changes heading.
+    assert "INCLUDED-CHANGES INVENTORY" not in sk1
+    guidance = format_low_confidence_guidance(
+        PresentationAdjustment(
+            active=True,
+            fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+            seed_presentation=True,
+            cc_type=CommitType.TEST,
+            semver_impact=SemVerImpact.NONE,
+            changelog_group="Tests",
+            scope_hint="test",
+            body_skeleton=sk1,
+            role="tests",
+        )
+    )
+    assert "LOW-CONFIDENCE BODY SKELETON" in guidance
+    assert "preferred_type" not in guidance.split("MUST NOT set preferred_type")[0]
+    assert "Context:" in guidance
+    assert "exactly one" in guidance.lower()
+    assert "Hybrid mini-subject" in guidance
+    assert "second" in guidance.lower() and "Included changes" in guidance
+    assert "`- <emoji> <cc_type>(<scope>): <subject>`" in guidance
+    # inactive → empty
+    assert format_low_confidence_guidance(PresentationAdjustment()) == ""
+
+
+def test_low_confidence_skeleton_rejects_prose_included_changes_bullets() -> None:
+    """Regression: Slice 5 must not teach hook-illegal prose nested bullets."""
+    priors = derive_trailer_priors(["src/git_cg/commit_quality.py", "tests/test_commit_quality.py"])
+    stubs = build_included_change_stubs(
+        ["src/git_cg/commit_quality.py", "tests/test_commit_quality.py"],
+        None,
+        None,
+    )
+    skeleton = build_low_confidence_body_skeleton(priors=priors, stubs=stubs)
+    guidance = format_low_confidence_guidance(
+        PresentationAdjustment(
+            active=True,
+            fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+            body_skeleton=skeleton,
+            role=priors.role,
+        )
+    )
+    # Skeleton itself must not contain a literal Included changes section with bullets.
+    assert "\nIncluded changes:\n-" not in f"\n{skeleton}\n"
+    assert "- cover each distinct staged surface" not in skeleton
+    assert "- [" not in skeleton
+    # Guidance must forbid duplicate headings and require Hybrid shape.
+    assert "exactly one" in guidance.lower()
+    assert "Never emit plain prose bullets" in guidance or "never emit plain prose bullets" in guidance.lower()
+    assert "inventory" in guidance.lower()
+
+
+def test_strip_included_changes_from_body_summary_removes_leaked_section() -> None:
+    leaked = (
+        "Context:\n"
+        "Ranking confidence may fall below thresholds.\n"
+        "\n"
+        "Changes:\n"
+        "Implement Slice 5 logic.\n"
+        "\n"
+        "Included changes:\n"
+        "- Add `PresentationAdjustment` dataclass and confidence trigger checks\n"
+        "- Implement body skeleton builder and presentation seed applier\n"
+        "- Cover new logic with unit tests for trigger reasons\n"
+    )
+    cleaned = strip_included_changes_from_body_summary(leaked)
+    assert cleaned is not None
+    assert "Included changes:" not in cleaned
+    assert "PresentationAdjustment" not in cleaned
+    assert "Context:" in cleaned
+    assert "Implement Slice 5 logic." in cleaned
+    assert strip_included_changes_from_body_summary(None) is None
+    assert strip_included_changes_from_body_summary("plain body") == "plain body"
+
+
+def test_apply_presentation_seed_strips_leaked_included_changes_when_active() -> None:
+    plan = _lc_plan(
+        _lc_intent(scope="commit_quality", description="implement low-confidence posture"),
+        body_summary=(
+            "Context:\nUncertainty under low ranking confidence.\n\n"
+            "Changes:\nAdd presentation posture.\n\n"
+            "Included changes:\n"
+            "- Add PresentationAdjustment dataclass\n"
+            "- Cover new logic with unit tests\n"
+        ),
+        secondary_intents=[
+            _lc_intent(
+                intent_id="tests_update",
+                gitmoji="✅",
+                cc_type=CommitType.TEST,
+                scope="commit_quality",
+                description="add unit tests for Slice 5 logic",
+                semver_impact=SemVerImpact.NONE,
+                changelog_group="Tests",
+            )
+        ],
+    )
+    adj = PresentationAdjustment(
+        active=True,
+        fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+        seed_presentation=False,
+        body_skeleton="Context:\n- x\n\nChanges:\n- y",
+        role="mixed",
+    )
+    out = apply_presentation_seed(plan, adj)
+    assert out.body_summary is not None
+    assert "Included changes:" not in out.body_summary
+    rendered = out.render()
+    assert rendered.count("Included changes:") == 1
+    assert "✅ test(commit_quality): add unit tests for Slice 5 logic" in rendered
+    assert "Add PresentationAdjustment dataclass" not in rendered
+
+
+def test_low_confidence_does_not_call_ranker(monkeypatch: pytest.MonkeyPatch) -> None:
+    import git_cg.intent as intent_mod
+
+    def _boom(*_a, **_k):
+        raise AssertionError("rank_commit_intents must not be called")
+
+    monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
+    priors = derive_trailer_priors(["tests/test_x.py"])
+    conf = _low_conf("margin_below_low_threshold", "mixed_intent")
+    apply_low_confidence_presentation(None, conf, priors)
+    apply_presentation_seed(
+        _lc_plan(_lc_intent(scope=None, description="x", semver_impact=SemVerImpact.MINOR)),
+        apply_low_confidence_presentation(None, conf, priors),
+    )
+
+
+def test_low_confidence_preserves_confidence_pair_identity() -> None:
+    conf = _low_conf("margin_below_low_threshold")
+    reasons_before = conf.reasons
+    top_before = conf.top_intent_id
+    priors = derive_trailer_priors(["docs/usage.md"])
+    apply_low_confidence_presentation(None, conf, priors)
+    assert conf.reasons is reasons_before
+    assert conf.top_intent_id == top_before
+    assert conf.level == "low"
+
+
+def test_low_confidence_tip_g2_fixtures_no_security_primary() -> None:
+    """TIP-G2: fixture README under Low must not become security/feat+MINOR."""
+    paths = ["tests/fixtures/scoped_history/README.md"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("margin_below_low_threshold")
+    generic = _lc_plan(
+        _lc_intent(
+            scope="fixtures",
+            description="add or update secrets",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Security",
+        )
+    )
+    adj = apply_low_confidence_presentation(generic, conf, priors)
+    out = apply_presentation_seed(generic, adj)
+    out = apply_presentation_overlay(out, paths=paths, priors=priors)
+    assert out.primary_intent.intent_id == "feature_addition"
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Documentation"
+    assert out.primary_intent.changelog_group.lower() != "security"
+    assert out.primary_intent.cc_type != CommitType.CHORE or out.primary_intent.changelog_group != "Security"
+
+
+def test_low_confidence_tip_g3_adr_no_security_primary() -> None:
+    """TIP-G3: ADR-only under Low must not become security chore + PATCH."""
+    paths = ["docs/ADRs/ADR-0163-scoped-history.md", "docs/ADRs/index.md"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("mixed_intent")
+    generic = _lc_plan(
+        _lc_intent(
+            scope="adr",
+            description="update secrets policy",
+            cc_type=CommitType.CHORE,
+            semver_impact=SemVerImpact.PATCH,
+            changelog_group="Security",
+        )
+    )
+    # Even non-generic chore+PATCH security: forced adr role still seeds docs/NONE.
+    adj = apply_low_confidence_presentation(generic, conf, priors)
+    assert adj.active and adj.seed_presentation
+    assert adj.cc_type == CommitType.DOCS
+    out = apply_presentation_seed(generic, adj)
+    out = apply_presentation_overlay(out, paths=paths, priors=priors)
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Documentation"
+    assert out.primary_intent.changelog_group.lower() != "security"
+    assert out.primary_intent.intent_id == "feature_addition"
+
+
+def test_low_confidence_config_ci_seeds_chore_none() -> None:
+    paths = [".github/workflows/ci.yml"]
+    priors = derive_trailer_priors(paths)
+    conf = _low_conf("near_tie_top3")
+    generic = _lc_plan(_lc_intent(scope="ci", description="add pipeline", semver_impact=SemVerImpact.MINOR))
+    adj = apply_low_confidence_presentation(generic, conf, priors)
+    assert adj.active and adj.seed_presentation
+    assert adj.role == "config_ci"
+    out = apply_presentation_seed(generic, adj)
+    out = apply_presentation_overlay(out, paths=paths, priors=priors)
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.cc_type in {CommitType.CHORE, CommitType.CI}
+    assert not (
+        out.primary_intent.cc_type == CommitType.FEAT and out.primary_intent.semver_impact == SemVerImpact.MINOR
+    )
+    assert out.primary_intent.intent_id == "feature_addition"
+
+
+def test_low_confidence_medium_high_does_not_seed() -> None:
+    priors = derive_trailer_priors(["tests/test_x.py"])
+    for level in ("medium", "high"):
+        conf = _low_conf("margin_below_low_threshold", level=level)
+        # reasons alone are not enough without being the low posture owner —
+        # is_low_confidence_posture keys off reasons only (v1 codes), so medium
+        # with a low reason still activates. Guard the level-only path via empty reasons.
+        from git_cg.ranking_confidence import RankingConfidence
+
+        conf = RankingConfidence(
+            level=level,  # type: ignore[arg-type]
+            margin=20.0,
+            top_intent_id="feature_addition",
+            runner_up_intent_id="bug_fix",
+            reasons=(),
+        )
+        adj = apply_low_confidence_presentation(None, conf, priors)
+        assert adj.active is False, level
+
+
+def test_build_system_prompt_includes_low_confidence_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.main import build_system_prompt
+
+    monkeypatch.setattr("git_cg.main.load_sop", lambda: {})
+    prompt = build_system_prompt(
+        "diff --git a/x b/x\n",
+        ranked_candidates=[],
+        low_confidence_guidance=(
+            "LOW-CONFIDENCE BODY SKELETON (wording structure only — does not change "
+            "intent_id / gitmoji authority):\n"
+            "Context:\n- sample\n\nChanges:\n- sample\n\nIncluded changes:\n- sample"
+        ),
+    )
+    assert "LOW-CONFIDENCE BODY SKELETON" in prompt
+    assert "Context:" in prompt
