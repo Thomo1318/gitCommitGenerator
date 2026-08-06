@@ -1440,6 +1440,8 @@ def _write_telemetry_state_safe(
     structural_public_api: bool = False,
     structural_new_command: bool = False,
     presentation_fallback_reason: str = "none",
+    contract_lift_applied: bool = False,
+    contract_lift_from_semver: str | None = None,
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1504,6 +1506,8 @@ def _write_telemetry_state_safe(
         structural_public_api (bool): Phase 9 structural public-API marker.
         structural_new_command (bool): Phase 9 structural new-command marker.
         presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
+        contract_lift_applied (bool): Issue #204 Slice 5 — True when post-presentation SemVer was lifted to the locked contract floor.
+        contract_lift_from_semver (str | None): Issue #204 Slice 5 — pre-lift SemVer value when a lift occurred.
     """
     try:
         import dataclasses
@@ -1597,6 +1601,10 @@ def _write_telemetry_state_safe(
             structural_public_api=bool(structural_public_api),
             structural_new_command=bool(structural_new_command),
             presentation_fallback_reason=str(presentation_fallback_reason or "none"),
+            contract_lift_applied=bool(contract_lift_applied),
+            contract_lift_from_semver=(
+                str(contract_lift_from_semver) if contract_lift_from_semver is not None else None
+            ),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -2474,7 +2482,12 @@ def _run_commit_generation(
     # change mid-loop); gold auto-regen is bounded to 2 attempts with monotonic
     # code-set shrinkage (Option B) and tracked separately from Instructor retries.
     from git_cg.commit_gold import check_commit_gold, resolve_gold_mode
-    from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
+    from git_cg.regeneration import (
+        RegenerationState,
+        enforce_semantic_contract,
+        lift_plan_to_contract_semver,
+        resolve_semantic_contract,
+    )
     from git_cg.telemetry import GoldSelfCorrectionOutcome
 
     gold_mode = resolve_gold_mode(
@@ -2499,6 +2512,9 @@ def _run_commit_generation(
     presentation_fallback_reason: str = "none"
     low_confidence_guidance: str | None = None
     low_confidence_adjustment = None
+    # Slice 5 hotfix (#204): contract-lift telemetry (lift-only SemVer floor).
+    contract_lift_applied: bool = False
+    contract_lift_from_semver: str | None = None
 
     # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
     # Sole insertion seam: after rank/confidence owner, before contract/LLM.
@@ -2622,6 +2638,8 @@ def _run_commit_generation(
                     structural_public_api=structural_public_api,
                     structural_new_command=structural_new_command,
                     presentation_fallback_reason=presentation_fallback_reason,
+                    contract_lift_applied=contract_lift_applied,
+                    contract_lift_from_semver=contract_lift_from_semver,
                 )
                 opik.flush_tracker()
                 _abort(
@@ -2873,6 +2891,24 @@ def _run_commit_generation(
                 console.log(
                     f"[yellow]Presentation overlay skipped ({type(overlay_exc).__name__}: {overlay_exc})[/yellow]"
                 )
+        # Slice 5 hotfix (#204): presentation seed/overlay must never demote the
+        # locked SOP contract SemVer. Lift-only — never raise inside the hook path.
+        # enforce_semantic_contract runs *before* presentation; this re-asserts the
+        # contract as a hard lower bound after any ceiling/seed clamp.
+        try:
+            commit_plan, contract_lift_applied, contract_lift_from_semver = lift_plan_to_contract_semver(
+                commit_plan, contract
+            )
+            if contract_lift_applied and verbose:
+                console.log(
+                    f"[yellow]Contract lift: primary.semver_impact "
+                    f"{contract_lift_from_semver} → {contract.semver_impact} "
+                    f"(locked {contract.primary_intent_id}/{contract.cc_type})[/yellow]"
+                )
+        except Exception:
+            # Lift is best-effort — never brick commit generation.
+            contract_lift_applied = False
+            contract_lift_from_semver = None
         # Phase 9: advisory OR-merge for split_recommended + rationale notes only.
         # Never mutates intent_id / gitmoji / cc_type / semver / changelog authority.
         try:
@@ -3071,6 +3107,8 @@ def _run_commit_generation(
                 structural_public_api=structural_public_api,
                 structural_new_command=structural_new_command,
                 presentation_fallback_reason=presentation_fallback_reason,
+                contract_lift_applied=contract_lift_applied,
+                contract_lift_from_semver=contract_lift_from_semver,
             )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
@@ -3213,6 +3251,8 @@ def _run_commit_generation(
         structural_public_api=structural_public_api,
         structural_new_command=structural_new_command,
         presentation_fallback_reason=presentation_fallback_reason,
+        contract_lift_applied=contract_lift_applied,
+        contract_lift_from_semver=contract_lift_from_semver,
     )
 
     opik.flush_tracker()
@@ -3695,6 +3735,9 @@ def record_telemetry(
                     "lock_resolution": telemetry_state.get("lock_resolution", "absent"),
                     # Issue #204 Slice 5 presentation fallback (closed vocab).
                     "presentation_fallback_reason": telemetry_state.get("presentation_fallback_reason", "none"),
+                    # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab).
+                    "contract_lift_applied": bool(telemetry_state.get("contract_lift_applied", False)),
+                    "contract_lift_from_semver": telemetry_state.get("contract_lift_from_semver"),
                     # Phase 7.25 gold parity (absorbed into #195).
                     "gold_mode": telemetry_state.get("gold_mode", "off"),
                     "gold_findings_count": telemetry_state.get("gold_findings_count", 0),

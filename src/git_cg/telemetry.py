@@ -235,6 +235,9 @@ class GenerationTelemetry:
     structural_new_command: bool = False
     # Issue #204 Phase 7.30 presentation fallback (closed vocab; default none).
     presentation_fallback_reason: str = PresentationFallbackReason.NONE.value
+    # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab / bool).
+    contract_lift_applied: bool = False
+    contract_lift_from_semver: str | None = None
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -781,6 +784,14 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     telemetry.presentation_fallback_reason = coerce_presentation_fallback_reason(
         getattr(telemetry, "presentation_fallback_reason", PresentationFallbackReason.NONE.value)
     )
+    # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (bool + closed SemVer).
+    telemetry.contract_lift_applied = bool(getattr(telemetry, "contract_lift_applied", False))
+    from_sem = getattr(telemetry, "contract_lift_from_semver", None)
+    if from_sem is None or from_sem == "":
+        telemetry.contract_lift_from_semver = None
+    else:
+        raw = str(from_sem).upper()
+        telemetry.contract_lift_from_semver = raw if raw in {"NONE", "PATCH", "MINOR", "MAJOR"} else None
 
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
@@ -914,6 +925,17 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data["presentation_fallback_reason"] = coerce_presentation_fallback_reason(
                 data.get("presentation_fallback_reason")
             )
+            # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs.
+            data.setdefault("contract_lift_applied", False)
+            data["contract_lift_applied"] = bool(data.get("contract_lift_applied", False))
+            data.setdefault("contract_lift_from_semver", None)
+            from_sem = data.get("contract_lift_from_semver")
+            if from_sem is None or from_sem == "":
+                data["contract_lift_from_semver"] = None
+            else:
+                # Closed SemVer vocabulary only — drop free-text.
+                raw = str(from_sem).upper()
+                data["contract_lift_from_semver"] = raw if raw in {"NONE", "PATCH", "MINOR", "MAJOR"} else None
             # Normalise ranking fields.
             level = data.get("ranking_confidence_level")
             if level is not None and level not in {m.value for m in RankingConfidenceLevel}:
