@@ -316,3 +316,121 @@ def lift_plan_to_contract_semver(
         return plan, True, from_semver
     except Exception:
         return plan, False, None
+
+
+@dataclass(frozen=True)
+class ContractLifecycleSnapshot:
+    """Closed-vocabulary contract lifecycle snapshot (Issue #204 · Slice 5.5)."""
+
+    contract_locked_semver: str | None
+    llm_raw_semver: str | None
+    plan_persisted_semver: str | None
+    contract_lift_applied: bool
+    contract_lift_from_semver: str | None
+    contract_violation: bool
+    plan_normaliser_applied: bool
+    plan_normaliser_reason: str
+    contract_consistent: bool
+
+
+def _closed_semver_str(value: object) -> str | None:
+    """Normalise a SemVer-like value to the closed vocabulary or ``None``."""
+    if value is None or value == "":
+        return None
+    if hasattr(value, "value"):
+        value = value.value
+    raw = str(value).strip().upper()
+    return raw if raw in _CONTRACT_SEMVER_RANK else None
+
+
+def evaluate_contract_lifecycle(
+    *,
+    locked_semver: object,
+    llm_raw_semver: object,
+    persisted_semver: object,
+    lift_applied: bool,
+    lift_from_semver: object = None,
+    presentation_touched: bool = False,
+    residual_below_floor: bool = False,
+) -> ContractLifecycleSnapshot:
+    """Evaluate locked → LLM raw → lifted/persisted contract lifecycle fields.
+
+    Pure helper (Issue #204 · Slice 5.5). Never mutates plans. Emits only closed
+    SemVer strings / bools / ``PlanNormaliserReason`` values.
+
+    Precedence for ``plan_normaliser_reason`` (single primary):
+    1. residual_violation — persisted still below locked floor after lift
+    2. malformed_semver — locked or persisted not in closed vocab
+    3. contract_lift — Slice 5 lift repaired a demotion
+    4. presentation_clamp — presentation path touched SemVer but lift not needed
+       or lift already accounted separately; used when presentation ran and
+       raw/persisted differ without residual violation
+    5. none
+    """
+    from git_cg.telemetry import PlanNormaliserReason
+
+    locked = _closed_semver_str(locked_semver)
+    raw = _closed_semver_str(llm_raw_semver)
+    persisted = _closed_semver_str(persisted_semver)
+    from_sem = _closed_semver_str(lift_from_semver)
+    lift = bool(lift_applied)
+
+    locked_rank = _CONTRACT_SEMVER_RANK.get(locked) if locked is not None else None
+    persisted_rank = _CONTRACT_SEMVER_RANK.get(persisted) if persisted is not None else None
+
+    malformed = locked is None or persisted is None
+    below_floor = False
+    if locked_rank is not None and persisted_rank is not None:
+        below_floor = persisted_rank < locked_rank
+    # Residual violation: still below floor after the lift attempt, or explicit flag.
+    residual = bool(residual_below_floor) or below_floor
+    # contract_violation is true when locked floor is not honoured by persisted plan.
+    violation = residual or (malformed and locked is not None and persisted is not None and locked != persisted)
+
+    if residual:
+        reason = PlanNormaliserReason.RESIDUAL_VIOLATION.value
+        normaliser_applied = True
+    elif malformed and (locked is None or persisted is None):
+        reason = PlanNormaliserReason.MALFORMED_SEMVER.value
+        normaliser_applied = lift or presentation_touched
+        # Malformed alone is not a hard violation if we cannot compare ranks.
+        violation = False if locked is None or persisted is None else violation
+    elif lift:
+        reason = PlanNormaliserReason.CONTRACT_LIFT.value
+        normaliser_applied = True
+        violation = False  # lift repaired demotion; persisted should match floor
+        # Re-check: if lift claimed applied but still below, residual wins above.
+    elif presentation_touched and raw is not None and persisted is not None and raw != persisted:
+        reason = PlanNormaliserReason.PRESENTATION_CLAMP.value
+        normaliser_applied = True
+    elif (
+        presentation_touched
+        and locked is not None
+        and persisted is not None
+        and locked != persisted
+        and not below_floor
+    ):
+        # Presentation raised or changed without demoting below floor.
+        reason = PlanNormaliserReason.PRESENTATION_CLAMP.value
+        normaliser_applied = True
+    else:
+        reason = PlanNormaliserReason.NONE.value
+        normaliser_applied = False
+
+    # If lift applied, persisted is expected >= locked; treat as consistent unless residual.
+    if lift and not residual:
+        violation = False
+
+    consistent = not violation
+
+    return ContractLifecycleSnapshot(
+        contract_locked_semver=locked,
+        llm_raw_semver=raw,
+        plan_persisted_semver=persisted,
+        contract_lift_applied=lift,
+        contract_lift_from_semver=from_sem if lift else None,
+        contract_violation=bool(violation),
+        plan_normaliser_applied=bool(normaliser_applied),
+        plan_normaliser_reason=reason,
+        contract_consistent=bool(consistent),
+    )
