@@ -264,3 +264,55 @@ def enforce_semantic_contract(
         plan.primary_intent.scope = normalize_scope(active_directives["preferred_scope"])
 
     return plan
+
+
+# Closed SemVer rank for lift-only floor comparisons (presentation must not demote
+# a locked contract). Mirrors commit_quality._SEMVER_RANK without importing it
+# (avoids regeneration → commit_quality cycle).
+_CONTRACT_SEMVER_RANK: dict[str, int] = {
+    "NONE": 0,
+    "PATCH": 1,
+    "MINOR": 2,
+    "MAJOR": 3,
+}
+
+
+def lift_plan_to_contract_semver(
+    plan: CommitPlan,
+    contract: ResolvedCommitContract,
+) -> tuple[CommitPlan, bool, str | None]:
+    """Lift primary SemVer up to the locked contract floor when presentation demoted it.
+
+    Slice 5 hotfix (#204): ``enforce_semantic_contract`` runs *before* presentation
+    seed/overlay. Overlay ceilings and low-confidence seeds may clamp SemVer below
+    the locked contract. This guard re-asserts the contract as a hard lower bound.
+
+    Lift-only semantics:
+    * If plan SemVer rank < contract SemVer rank → lift plan to contract value.
+    * If plan already ≥ contract → no-op (never lower).
+    * Never mutates intent_id / gitmoji / cc_type / changelog / scope.
+    * Never raises on bad enum values — returns no-op.
+
+    Returns:
+        tuple[CommitPlan, bool, str | None]: ``(plan, lift_applied, from_semver)``.
+        ``from_semver`` is the pre-lift value when a lift occurred, else ``None``.
+    """
+    from git_cg.models import SemVerImpact
+
+    try:
+        contract_raw = str(getattr(contract, "semver_impact", "") or "").upper()
+        plan_raw = str(getattr(plan.primary_intent, "semver_impact", "") or "").upper()
+        # Normalise enum members to their value strings.
+        if hasattr(plan.primary_intent.semver_impact, "value"):
+            plan_raw = str(plan.primary_intent.semver_impact.value).upper()
+        contract_rank = _CONTRACT_SEMVER_RANK.get(contract_raw)
+        plan_rank = _CONTRACT_SEMVER_RANK.get(plan_raw)
+        if contract_rank is None or plan_rank is None:
+            return plan, False, None
+        if plan_rank >= contract_rank:
+            return plan, False, None
+        from_semver = plan_raw
+        plan.primary_intent.semver_impact = SemVerImpact(contract_raw)
+        return plan, True, from_semver
+    except Exception:
+        return plan, False, None
