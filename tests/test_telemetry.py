@@ -1948,3 +1948,46 @@ def test_coerce_unknown_presentation_fallback_to_none():
     assert coerce_presentation_fallback_reason("not-real") == "none"
     assert coerce_presentation_fallback_reason("LOW_CONFIDENCE") == "low_confidence"
     assert coerce_presentation_fallback_reason(None) == "none"
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 7 blueprint_applied
+# ---------------------------------------------------------------------------
+
+
+def test_blueprint_applied_defaults_false():
+    tel = _minimal_telemetry()
+    assert tel.blueprint_applied is False
+
+
+def test_write_then_read_preserves_blueprint_applied(tmp_path, monkeypatch):
+    monkeypatch.setattr("git_cg.telemetry.redact_payload", lambda x: x)
+    tel = _minimal_telemetry(blueprint_applied=True, presentation_fallback_reason="none")
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.blueprint_applied is True
+
+
+def test_read_telemetry_state_defaults_blueprint_applied_for_legacy(tmp_path):
+    import json
+    from pathlib import Path
+
+    state = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "d",
+        "repo_name": "r",
+        "engine": "e",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "g",
+        "commit_plan_json": {},
+        "score_card": {},
+    }
+    path = Path(tmp_path) / "GIT_CG_OPIK_STATE.json"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    # get_state_file_path uses git_dir/GIT_CG_OPIK_STATE.json
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.blueprint_applied is False

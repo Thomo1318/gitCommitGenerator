@@ -2113,3 +2113,29 @@ def test_scoped_history_guidance_never_uses_user_override_channel():
     assert "EXPLICIT USER OVERRIDE" not in prompt
     assert "CRITICAL PRECEDENCE RULE" not in prompt
     assert "SCOPED-HISTORY FEEDBACK" in prompt
+
+
+def test_blueprint_option_on_root_and_commit_help():
+    """Slice 7: --blueprint must appear on root and commit help surfaces."""
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    root = CliRunner().invoke(app, ["--help"])
+    assert root.exit_code == 0, root.output
+    assert "--blueprint" in root.output
+
+    commit = CliRunner().invoke(app, ["commit", "--help"])
+    assert commit.exit_code == 0, commit.output
+    assert "--blueprint" in commit.output
+
+
+def test_run_commit_generation_accepts_blueprint_kwarg():
+    """Slice 7: _run_commit_generation signature forwards blueprint after rank_arbitrate."""
+    import inspect
+
+    from git_cg.main import _run_commit_generation
+
+    params = list(inspect.signature(_run_commit_generation).parameters)
+    assert "blueprint" in params
+    assert params.index("blueprint") == params.index("rank_arbitrate") + 1

@@ -1529,3 +1529,205 @@ def test_high_risk_checklist_deterministic() -> None:
     b = format_high_risk_body_checklist(list(reversed(paths)))
     assert a == b
     assert build_high_risk_checklist_themes(paths) == build_high_risk_checklist_themes(list(reversed(paths)))
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 7 — CommitBlueprint parse / validate / apply
+# ---------------------------------------------------------------------------
+
+
+def test_commit_blueprint_rejects_unknown_field() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from git_cg.models import CommitBlueprint
+
+    with pytest.raises(ValidationError):
+        CommitBlueprint.model_validate({"cc_type": "docs", "unknown": 1})
+
+
+def test_commit_blueprint_rejects_unknown_enum() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from git_cg.models import CommitBlueprint
+
+    with pytest.raises(ValidationError):
+        CommitBlueprint.model_validate({"cc_type": "not-a-type"})
+
+
+def test_blueprint_stub_rejects_path_surface_and_bad_role() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from git_cg.models import BlueprintStub
+
+    with pytest.raises(ValidationError):
+        BlueprintStub(role="docs", surface="docs/ADRs/x")
+    with pytest.raises(ValidationError):
+        BlueprintStub(role="nope", surface="adr")
+
+
+def test_parse_commit_blueprint_inline_json() -> None:
+    from git_cg.commit_quality import parse_commit_blueprint
+    from git_cg.models import CommitType, SemVerImpact
+
+    bp = parse_commit_blueprint(
+        '{"cc_type":"docs","scope":"adr","semver_impact":"NONE","changelog_groups":["Documentation"]}'
+    )
+    assert bp.cc_type == CommitType.DOCS
+    assert bp.scope == "adr"
+    assert bp.semver_impact == SemVerImpact.NONE
+    assert bp.changelog_groups is not None
+    assert bp.changelog_groups[0].value == "Documentation"
+
+
+def test_parse_commit_blueprint_from_file(tmp_path, monkeypatch) -> None:
+    from git_cg.commit_quality import parse_commit_blueprint
+    from git_cg.models import CommitType
+
+    monkeypatch.chdir(tmp_path)
+    bp_path = tmp_path / "bp.json"
+    bp_path.write_text('{"cc_type":"docs","scope":"adr"}', encoding="utf-8")
+    bp = parse_commit_blueprint(f"@{bp_path.name}", repo_root=tmp_path, cwd=tmp_path)
+    assert bp.cc_type == CommitType.DOCS
+    assert bp.scope == "adr"
+
+
+def test_load_blueprint_rejects_path_escape(tmp_path, monkeypatch) -> None:
+    import pytest
+
+    from git_cg.commit_quality import BlueprintError, load_blueprint_source
+
+    monkeypatch.chdir(tmp_path)
+    outside = tmp_path.parent / "outside-bp.json"
+    outside.write_text('{"cc_type":"docs"}', encoding="utf-8")
+    with pytest.raises(BlueprintError) as ei:
+        load_blueprint_source(f"@{outside}", repo_root=tmp_path, cwd=tmp_path)
+    assert ei.value.kind == "error"
+
+
+def test_load_blueprint_rejects_oversized_inline() -> None:
+    import pytest
+
+    from git_cg.commit_quality import BLUEPRINT_MAX_BYTES, BlueprintError, load_blueprint_source
+
+    huge = '{"cc_type":"docs","subject_hint":"' + ("x" * (BLUEPRINT_MAX_BYTES + 10)) + '"}'
+    with pytest.raises(BlueprintError) as ei:
+        load_blueprint_source(huge)
+    assert ei.value.kind == "error"
+
+
+def test_load_blueprint_rejects_symlink_escape(tmp_path, monkeypatch) -> None:
+    import os
+
+    import pytest
+
+    from git_cg.commit_quality import BlueprintError, load_blueprint_source
+
+    monkeypatch.chdir(tmp_path)
+    outside = tmp_path.parent / f"outside-symlink-target-{os.getpid()}.json"
+    outside.write_text('{"cc_type":"docs"}', encoding="utf-8")
+    link = tmp_path / "escape.json"
+    try:
+        link.symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink not permitted")
+    try:
+        with pytest.raises(BlueprintError) as ei:
+            load_blueprint_source(f"@{link.name}", repo_root=tmp_path, cwd=tmp_path)
+        assert ei.value.kind == "error"
+    finally:
+        # leave outside file; do not delete without trash — tests use tmp
+        pass
+
+
+def test_validate_blueprint_rejects_illegal_adr_feat_minor() -> None:
+    import pytest
+
+    from git_cg.commit_quality import (
+        BlueprintError,
+        classify_diff_class,
+        presentation_constraints,
+        validate_blueprint_against_constraints,
+    )
+    from git_cg.models import CommitBlueprint, CommitType, SemVerImpact
+
+    paths = ["docs/ADRs/0204-slice7.md"]
+    cons = presentation_constraints(classify_diff_class(paths))
+    bp = CommitBlueprint(
+        cc_type=CommitType.FEAT,
+        scope="api",
+        semver_impact=SemVerImpact.MINOR,
+    )
+    with pytest.raises(BlueprintError) as ei:
+        validate_blueprint_against_constraints(bp, cons, ceiling=SemVerImpact.NONE)
+    assert ei.value.kind == "blueprint"
+
+
+def test_apply_blueprint_legal_adr_docs_none() -> None:
+    from git_cg.commit_quality import apply_blueprint, classify_diff_class, presentation_constraints
+    from git_cg.models import ChangelogGroup, CommitBlueprint, CommitType, SemVerImpact
+
+    paths = ["docs/ADRs/0204-slice7.md"]
+    cons = presentation_constraints(classify_diff_class(paths))
+    plan = _plan(cc_type=CommitType.FIX, semver=SemVerImpact.PATCH, changelog="Fixed", scope="main")
+    ranked_id = plan.primary_intent.intent_id
+    ranked_gitmoji = plan.primary_intent.gitmoji
+    bp = CommitBlueprint(
+        cc_type=CommitType.DOCS,
+        scope="adr",
+        semver_impact=SemVerImpact.NONE,
+        changelog_groups=[ChangelogGroup.DOCUMENTATION],
+        subject_hint="document slice 7 blueprint overlay",
+    )
+    state = apply_blueprint(plan, bp, cons, ceiling=SemVerImpact.NONE, paths=paths)
+    assert state.blueprint_applied is True
+    out = state.plan
+    assert out.primary_intent.intent_id == ranked_id
+    assert out.primary_intent.gitmoji == ranked_gitmoji
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.scope == "adr"
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.primary_intent.changelog_group == "Documentation"
+    assert "document slice 7" in out.primary_intent.description
+
+
+def test_apply_blueprint_path_class_envelope_wins_over_blueprint() -> None:
+    """Path-class force remains authoritative when blueprint agrees after validate."""
+    from git_cg.commit_quality import (
+        apply_blueprint,
+        apply_presentation_overlay,
+        classify_diff_class,
+        presentation_constraints,
+    )
+    from git_cg.models import ChangelogGroup, CommitBlueprint, CommitType, SemVerImpact
+
+    paths = ["docs/ADRs/0204-slice7.md"]
+    cons = presentation_constraints(classify_diff_class(paths))
+    plan = _plan(cc_type=CommitType.CHORE, semver=SemVerImpact.NONE, changelog="Miscellaneous")
+    ranked_id = plan.primary_intent.intent_id
+    bp = CommitBlueprint(
+        cc_type=CommitType.DOCS,
+        scope="adr",
+        semver_impact=SemVerImpact.NONE,
+        changelog_groups=[ChangelogGroup.DOCUMENTATION],
+    )
+    state = apply_blueprint(plan, bp, cons, ceiling=SemVerImpact.NONE, paths=paths)
+    out = apply_presentation_overlay(state.plan, paths=paths, constraints=cons)
+    assert out.primary_intent.intent_id == ranked_id
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.scope == "adr"
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+
+
+def test_format_blueprint_guidance_has_no_raw_json() -> None:
+    from git_cg.commit_quality import format_blueprint_guidance
+    from git_cg.models import CommitBlueprint, CommitType
+
+    bp = CommitBlueprint(cc_type=CommitType.DOCS, scope="adr", subject_hint="seed subject")
+    text = format_blueprint_guidance(bp)
+    assert "OPERATOR BLUEPRINT" in text
+    assert "docs" in text
+    assert "{" not in text  # no JSON dump
+    assert "intent_id" in text  # authority reminder present
