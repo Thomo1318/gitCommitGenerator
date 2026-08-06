@@ -63,7 +63,7 @@
         "preserved_ranked_intent_id": "feature_addition",
         "preserved_ranked_gitmoji": "\u2728"
       },
-      "high_risk_path": false
+      "high_risk_path": true
     },
     "P9-G2": {
       "diff_class": {
@@ -198,7 +198,7 @@
         "preserved_ranked_intent_id": "feature_addition",
         "preserved_ranked_gitmoji": "\u2728"
       },
-      "high_risk_path": false
+      "high_risk_path": true
     },
     "P9-G4": {
       "diff_class": {
@@ -1128,7 +1128,7 @@
         "preserved_ranked_intent_id": "feature_addition",
         "preserved_ranked_gitmoji": "\u2728"
       },
-      "high_risk_path": false
+      "high_risk_path": true
     },
     "TIP-G10": {
       "diff_class": {

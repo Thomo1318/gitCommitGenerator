@@ -24,18 +24,22 @@ from git_cg.commit_quality import (
     apply_low_confidence_presentation,
     apply_presentation_overlay,
     apply_presentation_seed,
+    build_high_risk_checklist_themes,
     build_included_change_stubs,
     build_low_confidence_body_skeleton,
     changelog_groups_allowlisted,
     classify_diff_class,
     constraints_from_paths,
     derive_trailer_priors,
+    detect_high_risk_surfaces,
     dominant_presentation_cc_type,
     filter_paths_for_content_signals,
+    format_high_risk_body_checklist,
     format_included_change_stub_inventory,
     format_low_confidence_guidance,
     has_security_path_evidence,
     is_generic_feature_presentation,
+    is_high_risk_path_set,
     is_low_confidence_posture,
     min_included_change_bullets,
     presentation_constraints,
@@ -1409,3 +1413,119 @@ def test_build_system_prompt_includes_low_confidence_guidance(monkeypatch: pytes
     )
     assert "LOW-CONFIDENCE BODY SKELETON" in prompt
     assert "Context:" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Slice 6 — Contract-aware high-risk body checklist (D6 / D20)
+# ---------------------------------------------------------------------------
+
+
+def test_detect_high_risk_surfaces_exact_and_suffix() -> None:
+    surfaces = detect_high_risk_surfaces(
+        [
+            "src/git_cg/telemetry.py",
+            "src/git_cg/sentry_config.py",
+            "docs/usage.md",
+            "tests/test_telemetry.py",
+        ]
+    )
+    assert surfaces == ("sentry_config", "telemetry")
+    assert is_high_risk_path_set(["src/git_cg/main.py"]) is True
+    assert is_high_risk_path_set(["docs/ADRs/0001.md", "tests/test_x.py"]) is False
+
+
+def test_docs_authority_prose_is_not_high_risk_path() -> None:
+    """D13: docs/ADR mentions of authority/redaction are not high-risk path evidence."""
+    paths = [
+        "docs/ADRs/0163-scoped-history.md",
+        "docs/usage.md",
+        "CHANGELOG.md",
+    ]
+    assert detect_high_risk_surfaces(paths) == ()
+    assert format_high_risk_body_checklist(paths) == ""
+
+
+def test_telemetry_themes_include_d20_must_cover() -> None:
+    themes = build_high_risk_checklist_themes(["src/git_cg/telemetry.py"])
+    for required in (
+        "telemetry_fallback_transitions",
+        "telemetry_closed_enum_tags",
+        "telemetry_scrub_list_deltas",
+        "telemetry_redaction_failure_token",
+        "telemetry_no_secret_leakage",
+    ):
+        assert required in themes, required
+
+    text = format_high_risk_body_checklist(["src/git_cg/telemetry.py"])
+    assert "HIGH-RISK BODY CHECKLIST" in text
+    assert "[REDACTED]" in text
+    assert "pre-populated `none`" in text
+    assert "preferred_type" in text  # explicit ban language
+    assert "does not set preferred_type" in text
+
+
+def test_main_and_scoped_history_themes() -> None:
+    themes = build_high_risk_checklist_themes(["src/git_cg/main.py", "src/git_cg/scoped_history.py"])
+    assert "main_channel4_directive_free" in themes
+    assert "main_fallback_error_visibility" in themes
+    assert "scoped_history_policy_b_lifetime" in themes
+    # D20 producer orchestration themes also apply via main.
+    assert "telemetry_fallback_transitions" in themes
+
+
+def test_intent_and_secrets_themes() -> None:
+    assert "intent_closed_enrichment_markers" in build_high_risk_checklist_themes(["src/git_cg/intent.py"])
+    secrets_themes = build_high_risk_checklist_themes(["src/git_cg/secrets.py"])
+    assert "secrets_path_handling" in secrets_themes
+    assert "telemetry_no_secret_leakage" in secrets_themes
+
+
+def test_high_risk_checklist_absent_for_low_risk_paths() -> None:
+    assert format_high_risk_body_checklist(["tests/test_commit_quality.py"]) == ""
+    assert format_high_risk_body_checklist([]) == ""
+    assert format_high_risk_body_checklist(None) == ""
+
+
+def test_v12_a06_high_risk_prompt_checklist_directive_free(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Checklist present for high-risk paths; directive extractor gains no preferred_type."""
+    from git_cg.main import ReviewState, build_system_prompt
+
+    monkeypatch.setattr("git_cg.main.load_sop", lambda: {})
+
+    high_risk_prompt = build_system_prompt(
+        "diff --git a/src/git_cg/telemetry.py b/src/git_cg/telemetry.py\n",
+        ranked_candidates=[],
+        staged_paths=["src/git_cg/telemetry.py", "src/git_cg/sentry_config.py"],
+    )
+    assert "HIGH-RISK BODY CHECKLIST" in high_risk_prompt
+    assert "telemetry_redaction_failure_token" in high_risk_prompt
+    assert "[REDACTED]" in high_risk_prompt
+    assert "does not set preferred_type" in high_risk_prompt
+
+    low_risk_prompt = build_system_prompt(
+        "diff --git a/docs/usage.md b/docs/usage.md\n",
+        ranked_candidates=[],
+        staged_paths=["docs/usage.md", "tests/test_x.py"],
+    )
+    assert "HIGH-RISK BODY CHECKLIST" not in low_risk_prompt
+
+    # Channel-4 invariant: feeding checklist text through directive extraction
+    # must not produce preferred_type / preferred_scope steers.
+    checklist = format_high_risk_body_checklist(
+        ["src/git_cg/main.py", "src/git_cg/telemetry.py", "src/git_cg/scoped_history.py"]
+    )
+    assert checklist
+    state = ReviewState(commit_plan=None, regeneration_guidance=None)  # type: ignore[arg-type]
+    directives, residual = state._extract_directives(checklist)
+    assert "preferred_type" not in directives
+    assert "preferred_scope" not in directives
+    # Residual may retain checklist prose; that is fine — it is not a steer.
+    assert residual is None or "preferred_type" not in (directives or {})
+
+
+def test_high_risk_checklist_deterministic() -> None:
+    paths = ["src/git_cg/sentry_config.py", "src/git_cg/telemetry.py", "src/git_cg/main.py"]
+    a = format_high_risk_body_checklist(paths)
+    b = format_high_risk_body_checklist(list(reversed(paths)))
+    assert a == b
+    assert build_high_risk_checklist_themes(paths) == build_high_risk_checklist_themes(list(reversed(paths)))

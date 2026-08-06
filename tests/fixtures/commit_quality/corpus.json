@@ -340,7 +340,7 @@
     },
     {
       "id": "TIP-G2",
-      "description": "Tip fixtures README only — no security from prose",
+      "description": "Tip fixtures README only \u2014 no security from prose",
       "staged_paths": [
         "tests/fixtures/scoped_history/README.md"
       ],
@@ -379,7 +379,7 @@
           "Security"
         ],
         "gitmoji": [
-          "🔐"
+          "\ud83d\udd10"
         ]
       }
     },
@@ -630,7 +630,7 @@
     },
     {
       "id": "TIP-G8",
-      "description": "Tip tests+ADR claim-lock — no feat invention",
+      "description": "Tip tests+ADR claim-lock \u2014 no feat invention",
       "staged_paths": [
         "tests/test_scoped_history.py",
         "docs/ADRs/0163-scoped-reasoning-history.md"
@@ -820,7 +820,7 @@
     },
     {
       "id": "TIP-G12",
-      "description": "Tip ADR + usage mermaid docs — no fix/runtime recovery",
+      "description": "Tip ADR + usage mermaid docs \u2014 no fix/runtime recovery",
       "staged_paths": [
         "docs/ADRs/0163-scoped-reasoning-history.md",
         "docs/usage.md"
@@ -866,7 +866,7 @@
           "Fixed"
         ],
         "gitmoji": [
-          "🥅"
+          "\ud83e\udd45"
         ],
         "runtime_verbs": [
           "recover",

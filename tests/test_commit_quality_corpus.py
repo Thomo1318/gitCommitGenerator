@@ -19,6 +19,7 @@ from git_cg.commit_quality import (
     classify_diff_class,
     derive_trailer_priors,
     dominant_presentation_cc_type,
+    is_high_risk_path_set,
     min_included_change_bullets,
     presentation_constraints,
     semver_presentation_ceiling,
@@ -187,20 +188,7 @@ def _compute_snapshot(case: dict[str, Any]) -> dict[str, Any]:
         *(s.scope for s in out.secondary_intents),
     ]
 
-    high_risk_suffixes = (
-        "/main.py",
-        "/telemetry.py",
-        "/sentry_config.py",
-        "/secrets.py",
-    )
-    high_risk_exact = {
-        "src/git_cg/main.py",
-        "src/git_cg/telemetry.py",
-        "src/git_cg/sentry_config.py",
-        "src/git_cg/secrets.py",
-    }
-    norm_paths = [p.replace("\\", "/") for p in paths]
-    high_risk = any(p in high_risk_exact or p.endswith(high_risk_suffixes) for p in norm_paths)
+    high_risk = is_high_risk_path_set(paths)
 
     return {
         "diff_class": {
