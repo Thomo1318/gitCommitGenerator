@@ -1442,6 +1442,12 @@ def _write_telemetry_state_safe(
     presentation_fallback_reason: str = "none",
     contract_lift_applied: bool = False,
     contract_lift_from_semver: str | None = None,
+    contract_locked_semver: str | None = None,
+    llm_raw_semver: str | None = None,
+    plan_persisted_semver: str | None = None,
+    contract_violation: bool = False,
+    plan_normaliser_applied: bool = False,
+    plan_normaliser_reason: str = "none",
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1508,6 +1514,12 @@ def _write_telemetry_state_safe(
         presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
         contract_lift_applied (bool): Issue #204 Slice 5 — True when post-presentation SemVer was lifted to the locked contract floor.
         contract_lift_from_semver (str | None): Issue #204 Slice 5 — pre-lift SemVer value when a lift occurred.
+        contract_locked_semver (str | None): Issue #204 Slice 5.5 — locked contract SemVer.
+        llm_raw_semver (str | None): Issue #204 Slice 5.5 — raw LLM SemVer pre-enforce.
+        plan_persisted_semver (str | None): Issue #204 Slice 5.5 — final primary SemVer.
+        contract_violation (bool): Issue #204 Slice 5.5 — locked vs persisted diverge.
+        plan_normaliser_applied (bool): Issue #204 Slice 5.5 — normaliser/lift touched SemVer.
+        plan_normaliser_reason (str): Issue #204 Slice 5.5 — closed normaliser reason.
     """
     try:
         import dataclasses
@@ -1605,6 +1617,12 @@ def _write_telemetry_state_safe(
             contract_lift_from_semver=(
                 str(contract_lift_from_semver) if contract_lift_from_semver is not None else None
             ),
+            contract_locked_semver=(str(contract_locked_semver) if contract_locked_semver is not None else None),
+            llm_raw_semver=str(llm_raw_semver) if llm_raw_semver is not None else None,
+            plan_persisted_semver=(str(plan_persisted_semver) if plan_persisted_semver is not None else None),
+            contract_violation=bool(contract_violation),
+            plan_normaliser_applied=bool(plan_normaliser_applied),
+            plan_normaliser_reason=str(plan_normaliser_reason or "none"),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -2485,6 +2503,7 @@ def _run_commit_generation(
     from git_cg.regeneration import (
         RegenerationState,
         enforce_semantic_contract,
+        evaluate_contract_lifecycle,
         lift_plan_to_contract_semver,
         resolve_semantic_contract,
     )
@@ -2515,6 +2534,14 @@ def _run_commit_generation(
     # Slice 5 hotfix (#204): contract-lift telemetry (lift-only SemVer floor).
     contract_lift_applied: bool = False
     contract_lift_from_semver: str | None = None
+    # Slice 5.5 (#204): contract lifecycle observability.
+    contract_locked_semver: str | None = None
+    llm_raw_semver: str | None = None
+    plan_persisted_semver: str | None = None
+    contract_violation: bool = False
+    plan_normaliser_applied: bool = False
+    plan_normaliser_reason: str = "none"
+    presentation_touched_semver: bool = False
 
     # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
     # Sole insertion seam: after rank/confidence owner, before contract/LLM.
@@ -2640,6 +2667,12 @@ def _run_commit_generation(
                     presentation_fallback_reason=presentation_fallback_reason,
                     contract_lift_applied=contract_lift_applied,
                     contract_lift_from_semver=contract_lift_from_semver,
+                    contract_locked_semver=contract_locked_semver,
+                    llm_raw_semver=llm_raw_semver,
+                    plan_persisted_semver=plan_persisted_semver,
+                    contract_violation=contract_violation,
+                    plan_normaliser_applied=plan_normaliser_applied,
+                    plan_normaliser_reason=plan_normaliser_reason,
                 )
                 opik.flush_tracker()
                 _abort(
@@ -2841,6 +2874,25 @@ def _run_commit_generation(
                 )
                 _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
+        # Slice 5.5: capture raw LLM SemVer before contract enforcement / presentation.
+        try:
+            _raw = getattr(commit_plan.primary_intent, "semver_impact", None)
+            llm_raw_semver = (
+                str(_raw.value).upper()
+                if hasattr(_raw, "value")
+                else (str(_raw).strip().upper() if _raw is not None else None)
+            )
+            if llm_raw_semver not in {"NONE", "PATCH", "MINOR", "MAJOR"}:
+                llm_raw_semver = None
+        except Exception:
+            llm_raw_semver = None
+        try:
+            contract_locked_semver = str(getattr(contract, "semver_impact", "") or "").upper() or None
+            if contract_locked_semver not in {"NONE", "PATCH", "MINOR", "MAJOR"}:
+                contract_locked_semver = None
+        except Exception:
+            contract_locked_semver = None
+
         # Always enforce the pre-resolved SOP contract after model render.
         commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
         # Issue #204: presentation overlay (path-class / SemVer ceiling / type
@@ -2875,6 +2927,7 @@ def _run_commit_generation(
                 commit_plan = apply_presentation_seed(commit_plan, seeded)
                 if seeded.active:
                     presentation_fallback_reason = seeded.fallback_reason
+                    presentation_touched_semver = True
             commit_plan = apply_presentation_overlay(
                 commit_plan,
                 paths=staged_paths,
@@ -2884,6 +2937,7 @@ def _run_commit_generation(
                 active_directives=active_directives,
             )
             presentation_overlay_applied = True
+            presentation_touched_semver = True
         except Exception as overlay_exc:
             # Presentation overlay must not brick commit generation, but do not
             # silently swallow unexpected failures without a breadcrumb.
@@ -2909,6 +2963,64 @@ def _run_commit_generation(
             # Lift is best-effort — never brick commit generation.
             contract_lift_applied = False
             contract_lift_from_semver = None
+        # Slice 5.5 residual floor: re-assert lift immediately before advisory merge /
+        # gold / persist so no later pure path can leave a demoted SemVer.
+        try:
+            commit_plan, _re_lift, _re_from = lift_plan_to_contract_semver(commit_plan, contract)
+            if _re_lift:
+                contract_lift_applied = True
+                if contract_lift_from_semver is None:
+                    contract_lift_from_semver = _re_from
+        except Exception:
+            pass
+        # Capture persisted primary SemVer + evaluate lifecycle snapshot.
+        try:
+            _pers = getattr(commit_plan.primary_intent, "semver_impact", None)
+            plan_persisted_semver = (
+                str(_pers.value).upper()
+                if hasattr(_pers, "value")
+                else (str(_pers).strip().upper() if _pers is not None else None)
+            )
+            if plan_persisted_semver not in {"NONE", "PATCH", "MINOR", "MAJOR"}:
+                plan_persisted_semver = None
+        except Exception:
+            plan_persisted_semver = None
+        try:
+            lifecycle = evaluate_contract_lifecycle(
+                locked_semver=contract_locked_semver or getattr(contract, "semver_impact", None),
+                llm_raw_semver=llm_raw_semver,
+                persisted_semver=plan_persisted_semver,
+                lift_applied=contract_lift_applied,
+                lift_from_semver=contract_lift_from_semver,
+                presentation_touched=presentation_touched_semver,
+            )
+            contract_locked_semver = lifecycle.contract_locked_semver
+            llm_raw_semver = lifecycle.llm_raw_semver
+            plan_persisted_semver = lifecycle.plan_persisted_semver
+            contract_violation = lifecycle.contract_violation
+            plan_normaliser_applied = lifecycle.plan_normaliser_applied
+            plan_normaliser_reason = lifecycle.plan_normaliser_reason
+            if contract_lift_applied:
+                contract_lift_from_semver = lifecycle.contract_lift_from_semver
+        except Exception:
+            contract_violation = False
+            plan_normaliser_applied = bool(contract_lift_applied)
+            plan_normaliser_reason = "contract_lift" if contract_lift_applied else "none"
+        if contract_violation:
+            try:
+                from git_cg.sentry_config import report_commit_plan_contract_violation
+                from git_cg.telemetry import compute_diff_hash
+
+                report_commit_plan_contract_violation(
+                    locked_semver=contract_locked_semver,
+                    persisted_semver=plan_persisted_semver,
+                    lift_applied=contract_lift_applied,
+                    lift_from_semver=contract_lift_from_semver,
+                    normaliser_reason=plan_normaliser_reason,
+                    diff_hash=compute_diff_hash(analysis_diff) if analysis_diff else None,
+                )
+            except Exception:
+                pass
         # Phase 9: advisory OR-merge for split_recommended + rationale notes only.
         # Never mutates intent_id / gitmoji / cc_type / semver / changelog authority.
         try:
@@ -3109,6 +3221,12 @@ def _run_commit_generation(
                 presentation_fallback_reason=presentation_fallback_reason,
                 contract_lift_applied=contract_lift_applied,
                 contract_lift_from_semver=contract_lift_from_semver,
+                contract_locked_semver=contract_locked_semver,
+                llm_raw_semver=llm_raw_semver,
+                plan_persisted_semver=plan_persisted_semver,
+                contract_violation=contract_violation,
+                plan_normaliser_applied=plan_normaliser_applied,
+                plan_normaliser_reason=plan_normaliser_reason,
             )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
@@ -3253,6 +3371,12 @@ def _run_commit_generation(
         presentation_fallback_reason=presentation_fallback_reason,
         contract_lift_applied=contract_lift_applied,
         contract_lift_from_semver=contract_lift_from_semver,
+        contract_locked_semver=contract_locked_semver,
+        llm_raw_semver=llm_raw_semver,
+        plan_persisted_semver=plan_persisted_semver,
+        contract_violation=contract_violation,
+        plan_normaliser_applied=plan_normaliser_applied,
+        plan_normaliser_reason=plan_normaliser_reason,
     )
 
     opik.flush_tracker()
@@ -3738,6 +3862,13 @@ def record_telemetry(
                     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab).
                     "contract_lift_applied": bool(telemetry_state.get("contract_lift_applied", False)),
                     "contract_lift_from_semver": telemetry_state.get("contract_lift_from_semver"),
+                    # Issue #204 Slice 5.5: contract lifecycle (closed vocab).
+                    "contract_locked_semver": telemetry_state.get("contract_locked_semver"),
+                    "llm_raw_semver": telemetry_state.get("llm_raw_semver"),
+                    "plan_persisted_semver": telemetry_state.get("plan_persisted_semver"),
+                    "contract_violation": bool(telemetry_state.get("contract_violation", False)),
+                    "plan_normaliser_applied": bool(telemetry_state.get("plan_normaliser_applied", False)),
+                    "plan_normaliser_reason": telemetry_state.get("plan_normaliser_reason", "none"),
                     # Phase 7.25 gold parity (absorbed into #195).
                     "gold_mode": telemetry_state.get("gold_mode", "off"),
                     "gold_findings_count": telemetry_state.get("gold_findings_count", 0),
@@ -3752,6 +3883,12 @@ def record_telemetry(
                         "name": "ranking_override",
                         "value": 1.0 if bool(telemetry_state.get("ranking_override")) else 0.0,
                         "reason": "ranking_override",
+                    },
+                    # Issue #204 Slice 5.5: contract_consistent = 1.0 when no violation.
+                    {
+                        "name": "contract_consistent",
+                        "value": (0.0 if bool(telemetry_state.get("contract_violation", False)) else 1.0),
+                        "reason": str(telemetry_state.get("plan_normaliser_reason") or "none"),
                     },
                 ],
                 thread_id=thread_id,
