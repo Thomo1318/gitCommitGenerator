@@ -1,7 +1,14 @@
 # Slice 5.5 — Contract lifecycle observability + normaliser governance
 
 ## Status
-**Implemented on working tree** (not committed). Slice 5 remains complete and unregressed.
+**Implemented and committed** on `refactor/204-commit-presentation-quality` as gold-reworded series `c6afef5`…`6823958` (message-only rewrite; trees match pre-reword tip). Slice 5 remains complete and unregressed.
+
+## Session 6 gold-miss analysis (authoritative home)
+Full cross-cutting failure analysis (why raw `git-cg` missed gold on this series, F28–F35, R21–R25, TIP-G13–G17, V12-A39–A45, operator rejects, Opik briefing orthogonality) lives in **issue #204 body** as:
+
+> 🧪 Incident evidence — Session 6 Slice 5.5 contract-lifecycle tip series (2026-08-06)
+
+Do **not** treat this plan file as a second law surface. Link only; amend #204 if the analysis evolves.
 
 ## Slice 5 confirmation
 - Low-confidence posture + `presentation_fallback_reason`
