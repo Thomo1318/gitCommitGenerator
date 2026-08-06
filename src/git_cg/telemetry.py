@@ -252,6 +252,8 @@ class GenerationTelemetry:
     presentation_fallback_reason: str = PresentationFallbackReason.NONE.value
     # Issue #204 Slice 7: operator blueprint applied (bool only — never raw JSON).
     blueprint_applied: bool = False
+    # Issue #204 Slice 8: hallucination guard fired (bool only — RF-3 asymmetry).
+    hallucination_guard_fired: bool = False
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab / bool).
     contract_lift_applied: bool = False
     contract_lift_from_semver: str | None = None
@@ -844,6 +846,8 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     )
     # Issue #204 Slice 7: blueprint_applied bool only (never raw blueprint payload).
     telemetry.blueprint_applied = bool(getattr(telemetry, "blueprint_applied", False))
+    # Issue #204 Slice 8: hallucination_guard_fired bool only (no finding payload).
+    telemetry.hallucination_guard_fired = bool(getattr(telemetry, "hallucination_guard_fired", False))
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (bool + closed SemVer).
     telemetry.contract_lift_applied = bool(getattr(telemetry, "contract_lift_applied", False))
     telemetry.contract_lift_from_semver = coerce_closed_semver(getattr(telemetry, "contract_lift_from_semver", None))
@@ -992,6 +996,9 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             # Issue #204 Slice 7: blueprint_applied default + coerce.
             data.setdefault("blueprint_applied", False)
             data["blueprint_applied"] = bool(data.get("blueprint_applied", False))
+            # Issue #204 Slice 8: hallucination_guard_fired default + coerce.
+            data.setdefault("hallucination_guard_fired", False)
+            data["hallucination_guard_fired"] = bool(data.get("hallucination_guard_fired", False))
             # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs.
             data.setdefault("contract_lift_applied", False)
             data["contract_lift_applied"] = bool(data.get("contract_lift_applied", False))
