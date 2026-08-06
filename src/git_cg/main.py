@@ -627,6 +627,8 @@ def build_system_prompt(
         scoped_history_guidance (str | None): Phase 9 split/rename rationale feedback. Routed
             through Channel 4 (Issue #163); directive-free; never sets preferred_type or
             authority fields.
+        staged_paths (list[str] | None): Staged paths for included-change stubs and
+            Slice 6 high-risk body checklist injection (D6/D20).
         low_confidence_guidance (str | None): Issue #204 Slice 5 body-skeleton guidance.
             Directive-free wording structure only; never sets preferred_type or mutates
             ranked intent authority.
@@ -749,6 +751,20 @@ def build_system_prompt(
     )
     context_parts.append(gold_rubric)
 
+    # Shared staged-path discovery for Slice 4 inventory + Slice 6 checklist.
+    # Prefer explicit staged_paths; fall back to diff signal files when omitted.
+    presentation_paths = [p for p in (staged_paths or []) if p and str(p).strip()]
+    presentation_signals = None
+    if not presentation_paths:
+        try:
+            from git_cg.intent import extract_diff_signals as _extract_diff_signals_for_paths
+
+            presentation_signals = _extract_diff_signals_for_paths(diff_output)
+            presentation_paths = list(getattr(presentation_signals, "files", None) or [])
+        except Exception:
+            presentation_signals = None
+            presentation_paths = []
+
     # Issue #204 Slice 4 — included-change stub inventory (D5/D18). Prompt pressure
     # only; LLM may rephrase. Never mutates ranked intent authority.
     try:
@@ -756,22 +772,10 @@ def build_system_prompt(
             build_included_change_stubs,
             format_included_change_stub_inventory,
         )
-        from git_cg.intent import extract_diff_signals as _extract_diff_signals_for_stubs
 
-        stub_paths = [p for p in (staged_paths or []) if p and str(p).strip()]
-        stub_signals = None
-        if not stub_paths:
-            try:
-                stub_signals = _extract_diff_signals_for_stubs(diff_output)
-                stub_paths = list(getattr(stub_signals, "files", None) or [])
-            except Exception:
-                stub_signals = None
-                stub_paths = []
-        elif ranked_candidates is not None:
-            # Prefer caller paths; still allow signals=None.
-            stub_signals = None
+        stub_signals = None if (staged_paths and ranked_candidates is not None) else presentation_signals
         stubs = build_included_change_stubs(
-            stub_paths,
+            presentation_paths,
             stub_signals,
             ranked_candidates,
             concern_tags=concern_tags,
@@ -782,6 +786,19 @@ def build_system_prompt(
             context_parts.append(inventory)
     except Exception:
         # Inventory is best-effort presentation aid; never brick prompt build.
+        pass
+
+    # Issue #204 Slice 6 — high-risk body checklist (D6/D20). Prompt pressure only.
+    # Injected only when staged high-risk product paths are present. Directive-free:
+    # never sets preferred_type / rank steers; never treats docs prose as path evidence.
+    try:
+        from git_cg.commit_quality import format_high_risk_body_checklist
+
+        checklist = format_high_risk_body_checklist(presentation_paths)
+        if checklist:
+            context_parts.append(checklist)
+    except Exception:
+        # Checklist is best-effort presentation aid; never brick prompt build.
         pass
 
     # Issue #204 Slice 5 — low-confidence body skeleton (D7). Prompt pressure only.
