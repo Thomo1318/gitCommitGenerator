@@ -15,7 +15,7 @@
       "primary_intent.intent_id",
       "primary_intent.gitmoji"
     ],
-    "notes": "Slice 3 freezes pure presentation helpers only. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
+    "notes": "Slice 3 freezes pure presentation helpers only. Slice 9 adds eval letters A–N and S9-E/S9-H gap cases on the same pure helpers. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
   },
   "cases": [
     {
@@ -336,11 +336,14 @@
           "MINOR",
           "MAJOR"
         ]
-      }
+      },
+      "eval_letters": [
+        "D"
+      ]
     },
     {
       "id": "TIP-G2",
-      "description": "Tip fixtures README only \u2014 no security from prose",
+      "description": "Tip fixtures README only — no security from prose",
       "staged_paths": [
         "tests/fixtures/scoped_history/README.md"
       ],
@@ -379,9 +382,12 @@
           "Security"
         ],
         "gitmoji": [
-          "\ud83d\udd10"
+          "🔐"
         ]
-      }
+      },
+      "eval_letters": [
+        "A"
+      ]
     },
     {
       "id": "TIP-G3",
@@ -422,7 +428,10 @@
           "MAJOR"
         ],
         "security_primary": true
-      }
+      },
+      "eval_letters": [
+        "B"
+      ]
     },
     {
       "id": "TIP-G4",
@@ -472,7 +481,10 @@
           "recover",
           "fallback errors"
         ]
-      }
+      },
+      "eval_letters": [
+        "C"
+      ]
     },
     {
       "id": "TIP-G5",
@@ -520,7 +532,10 @@
         "changelog_group_only": [
           "Added"
         ]
-      }
+      },
+      "eval_letters": [
+        "F"
+      ]
     },
     {
       "id": "TIP-G6",
@@ -580,7 +595,10 @@
         "changelog_group_only": [
           "Miscellaneous"
         ]
-      }
+      },
+      "eval_letters": [
+        "G"
+      ]
     },
     {
       "id": "TIP-G7",
@@ -626,11 +644,14 @@
           "git_cg",
           "scoped_history"
         ]
-      }
+      },
+      "eval_letters": [
+        "I"
+      ]
     },
     {
       "id": "TIP-G8",
-      "description": "Tip tests+ADR claim-lock \u2014 no feat invention",
+      "description": "Tip tests+ADR claim-lock — no feat invention",
       "staged_paths": [
         "tests/test_scoped_history.py",
         "docs/ADRs/0163-scoped-reasoning-history.md"
@@ -675,7 +696,10 @@
         "changelog_group_only": [
           "Miscellaneous"
         ]
-      }
+      },
+      "eval_letters": [
+        "J"
+      ]
     },
     {
       "id": "TIP-G9",
@@ -727,7 +751,10 @@
         "scope": [
           "scoped_history"
         ]
-      }
+      },
+      "eval_letters": [
+        "K"
+      ]
     },
     {
       "id": "TIP-G10",
@@ -769,7 +796,10 @@
           "MINOR",
           "MAJOR"
         ]
-      }
+      },
+      "eval_letters": [
+        "L"
+      ]
     },
     {
       "id": "TIP-G11",
@@ -816,11 +846,14 @@
           "MINOR",
           "MAJOR"
         ]
-      }
+      },
+      "eval_letters": [
+        "M"
+      ]
     },
     {
       "id": "TIP-G12",
-      "description": "Tip ADR + usage mermaid docs \u2014 no fix/runtime recovery",
+      "description": "Tip ADR + usage mermaid docs — no fix/runtime recovery",
       "staged_paths": [
         "docs/ADRs/0163-scoped-reasoning-history.md",
         "docs/usage.md"
@@ -866,14 +899,177 @@
           "Fixed"
         ],
         "gitmoji": [
-          "\ud83e\udd45"
+          "🥅"
         ],
         "runtime_verbs": [
           "recover",
           "handle",
           "fail-open-fix"
         ]
+      },
+      "eval_letters": [
+        "N"
+      ]
+    },
+    {
+      "id": "S9-E",
+      "description": "Slice 9 case E: docs mention graph_unavailable/redaction — still docs, never runtime fix",
+      "eval_letters": [
+        "E"
+      ],
+      "staged_paths": [
+        "docs/usage.md",
+        "docs/ADRs/0163-scoped-reasoning-history.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "docs/usage.md",
+          "docs/ADRs/0163-scoped-reasoning-history.md"
+        ],
+        "touches_docs": true,
+        "only_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": "adr",
+      "evidence_text": "Document graph_unavailable fail-open posture and redaction sentinel semantics in architecture prose only; no runtime producer changes.",
+      "must_present": {
+        "diff_class": "docs_only",
+        "cc_type": "docs",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Documentation",
+        "scope": "adr",
+        "overlay_types_include": [
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Documentation"
+        ],
+        "forbid_security_primary": true,
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "fix",
+          "feat"
+        ],
+        "cc_type_forced": [
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group": [
+          "Fixed"
+        ],
+        "gitmoji": [
+          "🥅",
+          "🔐"
+        ],
+        "runtime_verbs": [
+          "recover",
+          "handle",
+          "fail-open-fix"
+        ],
+        "security_primary": true
+      }
+    },
+    {
+      "id": "S9-H",
+      "description": "Slice 9 case H: fixture enables commit.gpgsign=false / --no-gpg-sign must surface signing harden inventory",
+      "eval_letters": [
+        "H"
+      ],
+      "staged_paths": [
+        "tests/test_scoped_history.py",
+        "tests/fixtures/scoped_history/README.md",
+        "tests/fixtures/scoped_history/no-gpg-sign.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_scoped_history.py",
+          "tests/fixtures/scoped_history/README.md",
+          "tests/fixtures/scoped_history/no-gpg-sign.md"
+        ],
+        "touches_tests": true,
+        "touches_docs": true,
+        "files_changed_count": 3
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Test fixture documents commit.gpgsign=false and --no-gpg-sign local hardening for hermetic commit tests.",
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Tests",
+        "scope": "scoped-history",
+        "overlay_types_include": [
+          "test",
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Tests",
+          "Documentation"
+        ],
+        "min_included_change_bullets_gte": 2,
+        "stub_note_tokens_any": [
+          "gpg",
+          "signing"
+        ]
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group_only": [
+          "Miscellaneous"
+        ],
+        "security_primary": true
       }
     }
-  ]
+  ],
+  "eval_harness": {
+    "schema_version": 1,
+    "slice": 9,
+    "gate_order": [
+      "path_class",
+      "type",
+      "semver",
+      "no_hallucination",
+      "inventory",
+      "craft"
+    ],
+    "letter_map": {
+      "A": "TIP-G2",
+      "B": "TIP-G3",
+      "C": "TIP-G4",
+      "D": "TIP-G1",
+      "E": "S9-E",
+      "F": "TIP-G5",
+      "G": "TIP-G6",
+      "H": "S9-H",
+      "I": "TIP-G7",
+      "J": "TIP-G8",
+      "K": "TIP-G9",
+      "L": "TIP-G10",
+      "M": "TIP-G11",
+      "N": "TIP-G12"
+    },
+    "notes": "Slice 9 pure characterisation harness. Letters A–N map onto TIP-G* plus S9-E/S9-H gap cases. No live LLM and no rank_commit_intents."
+  }
 }
