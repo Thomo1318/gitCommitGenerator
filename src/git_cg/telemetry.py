@@ -126,6 +126,21 @@ class PresentationFallbackReason(enum.StrEnum):
     LOW_CONFIDENCE = "low_confidence"
 
 
+class PlanNormaliserReason(enum.StrEnum):
+    """Closed plan-normaliser reasons (Issue #204 · Slice 5.5).
+
+    Single primary reason per run. Vocabulary only — evaluation lives in
+    ``evaluate_contract_lifecycle``.
+    """
+
+    NONE = "none"
+    CONTRACT_LIFT = "contract_lift"
+    PRESENTATION_CLAMP = "presentation_clamp"
+    MATRIX_RECONSTRUCTION = "matrix_reconstruction"
+    MALFORMED_SEMVER = "malformed_semver"
+    RESIDUAL_VIOLATION = "residual_violation"
+
+
 class GoldSelfCorrectionOutcome(enum.StrEnum):
     """Closed gold self-correction outcomes (Issue #191 Option B).
 
@@ -238,6 +253,13 @@ class GenerationTelemetry:
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab / bool).
     contract_lift_applied: bool = False
     contract_lift_from_semver: str | None = None
+    # Issue #204 Slice 5.5: contract lifecycle observability (closed vocab / bool).
+    contract_locked_semver: str | None = None
+    llm_raw_semver: str | None = None
+    plan_persisted_semver: str | None = None
+    contract_violation: bool = False
+    plan_normaliser_applied: bool = False
+    plan_normaliser_reason: str = PlanNormaliserReason.NONE.value
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -263,6 +285,40 @@ def ranking_override_feedback_score(ranking_override: bool) -> float:
     only at this score boundary.
     """
     return 1.0 if ranking_override else 0.0
+
+
+def contract_consistent_feedback_score(contract_violation: bool) -> float:
+    """Derive the Opik ``contract_consistent`` feedback score.
+
+    Type boundary (Issue #204 Slice 5.5): ``GenerationTelemetry.contract_violation``
+    is a **bool**; the Opik feedback score is a **float** ``1.0`` (consistent) /
+    ``0.0`` (violation) derived only at this score boundary.
+    """
+    return 0.0 if contract_violation else 1.0
+
+
+_CLOSED_SEMVER: frozenset[str] = frozenset({"NONE", "PATCH", "MINOR", "MAJOR"})
+
+
+def coerce_closed_semver(value: object) -> str | None:
+    """Coerce to closed SemVer vocabulary or ``None`` (no free text)."""
+    if value is None or value == "":
+        return None
+    if hasattr(value, "value"):
+        value = value.value
+    raw = str(value).strip().upper()
+    return raw if raw in _CLOSED_SEMVER else None
+
+
+def coerce_plan_normaliser_reason(value: object) -> str:
+    """Coerce unknown plan-normaliser reasons to ``none`` (D9/D26)."""
+    if isinstance(value, PlanNormaliserReason):
+        return value.value
+    text = str(value or "").strip().lower()
+    allowed = {m.value for m in PlanNormaliserReason}
+    if text in allowed:
+        return text
+    return PlanNormaliserReason.NONE.value
 
 
 def run_deterministic_checks(commit_plan: CommitPlan) -> DeterministicScoreCard:
@@ -786,12 +842,16 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     )
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (bool + closed SemVer).
     telemetry.contract_lift_applied = bool(getattr(telemetry, "contract_lift_applied", False))
-    from_sem = getattr(telemetry, "contract_lift_from_semver", None)
-    if from_sem is None or from_sem == "":
-        telemetry.contract_lift_from_semver = None
-    else:
-        raw = str(from_sem).upper()
-        telemetry.contract_lift_from_semver = raw if raw in {"NONE", "PATCH", "MINOR", "MAJOR"} else None
+    telemetry.contract_lift_from_semver = coerce_closed_semver(getattr(telemetry, "contract_lift_from_semver", None))
+    # Issue #204 Slice 5.5: contract lifecycle fields (closed vocab / bool).
+    telemetry.contract_locked_semver = coerce_closed_semver(getattr(telemetry, "contract_locked_semver", None))
+    telemetry.llm_raw_semver = coerce_closed_semver(getattr(telemetry, "llm_raw_semver", None))
+    telemetry.plan_persisted_semver = coerce_closed_semver(getattr(telemetry, "plan_persisted_semver", None))
+    telemetry.contract_violation = bool(getattr(telemetry, "contract_violation", False))
+    telemetry.plan_normaliser_applied = bool(getattr(telemetry, "plan_normaliser_applied", False))
+    telemetry.plan_normaliser_reason = coerce_plan_normaliser_reason(
+        getattr(telemetry, "plan_normaliser_reason", PlanNormaliserReason.NONE.value)
+    )
 
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
@@ -929,13 +989,20 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("contract_lift_applied", False)
             data["contract_lift_applied"] = bool(data.get("contract_lift_applied", False))
             data.setdefault("contract_lift_from_semver", None)
-            from_sem = data.get("contract_lift_from_semver")
-            if from_sem is None or from_sem == "":
-                data["contract_lift_from_semver"] = None
-            else:
-                # Closed SemVer vocabulary only — drop free-text.
-                raw = str(from_sem).upper()
-                data["contract_lift_from_semver"] = raw if raw in {"NONE", "PATCH", "MINOR", "MAJOR"} else None
+            data["contract_lift_from_semver"] = coerce_closed_semver(data.get("contract_lift_from_semver"))
+            # Issue #204 Slice 5.5: contract lifecycle defaults + closed coerce.
+            data.setdefault("contract_locked_semver", None)
+            data["contract_locked_semver"] = coerce_closed_semver(data.get("contract_locked_semver"))
+            data.setdefault("llm_raw_semver", None)
+            data["llm_raw_semver"] = coerce_closed_semver(data.get("llm_raw_semver"))
+            data.setdefault("plan_persisted_semver", None)
+            data["plan_persisted_semver"] = coerce_closed_semver(data.get("plan_persisted_semver"))
+            data.setdefault("contract_violation", False)
+            data["contract_violation"] = bool(data.get("contract_violation", False))
+            data.setdefault("plan_normaliser_applied", False)
+            data["plan_normaliser_applied"] = bool(data.get("plan_normaliser_applied", False))
+            data.setdefault("plan_normaliser_reason", PlanNormaliserReason.NONE.value)
+            data["plan_normaliser_reason"] = coerce_plan_normaliser_reason(data.get("plan_normaliser_reason"))
             # Normalise ranking fields.
             level = data.get("ranking_confidence_level")
             if level is not None and level not in {m.value for m in RankingConfidenceLevel}:
