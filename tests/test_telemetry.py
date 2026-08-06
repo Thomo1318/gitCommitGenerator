@@ -2125,3 +2125,302 @@ def test_write_redacts_and_recoerces_scope_normalised_from(tmp_path, monkeypatch
     result = read_telemetry_state(str(tmp_path))
     assert result is not None
     assert result.scope_normalised_from == "none"
+
+
+def test_presentation_telemetry_from_context_derives_d26_fields() -> None:
+    """Main helper derives closed D26 fields from constraints + preferred scope."""
+    from types import SimpleNamespace
+
+    import git_cg.main as main_mod
+    from git_cg.commit_quality import constraints_from_paths
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    # Docs + changelog → docs_only class with antisignal engaged.
+    cons = constraints_from_paths(["docs/usage.md", "CHANGELOG.md"])
+    gen_context = SimpleNamespace(presentation_constraints=cons)
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="documentation_update",
+            gitmoji="📝",
+            cc_type=CommitType.DOCS,
+            scope="usage",
+            description="document presentation quality",
+            semver_impact=SemVerImpact.NONE,
+            changelog_group="Documentation",
+        ),
+        rationale="test",
+        body_summary="test body",
+    )
+
+    path_class, antisignal, scope_from = main_mod._presentation_telemetry_from_context(
+        gen_context,
+        commit_plan=plan,
+        preferred_scope_raw="scoped_history",
+    )
+    assert path_class == "docs_only"
+    assert antisignal is True
+    assert scope_from == "scoped_history"
+
+    # Preferred-scope raw wins over plan scope; identity canonical → none.
+    path_class, antisignal, scope_from = main_mod._presentation_telemetry_from_context(
+        gen_context,
+        commit_plan=plan,
+        preferred_scope_raw="main",
+    )
+    assert path_class == "docs_only"
+    assert antisignal is True
+    assert scope_from == "none"
+
+    # Without preferred raw, fall back to plan primary scope (already canonical).
+    path_class, antisignal, scope_from = main_mod._presentation_telemetry_from_context(
+        gen_context,
+        commit_plan=plan,
+        preferred_scope_raw=None,
+    )
+    assert scope_from == "none"
+
+    # Empty context defaults.
+    path_class, antisignal, scope_from = main_mod._presentation_telemetry_from_context(None)
+    assert path_class == "none"
+    assert antisignal is False
+    assert scope_from == "none"
+
+
+def test_presentation_telemetry_from_context_plan_scope_transform() -> None:
+    """Plan primary scope alias transforms are reported when no preferred raw."""
+    from types import SimpleNamespace
+
+    import git_cg.main as main_mod
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="bug_fix",
+            gitmoji="🐛",
+            cc_type=CommitType.FIX,
+            scope="main.py",
+            description="fix scope transform breadcrumb",
+            semver_impact=SemVerImpact.PATCH,
+            changelog_group="Fixed",
+        ),
+        rationale="test",
+        body_summary="test body",
+    )
+    gen_context = SimpleNamespace(
+        presentation_constraints=SimpleNamespace(
+            diff_class="product_src",
+            changelog_antisignal_applied=False,
+        )
+    )
+    path_class, antisignal, scope_from = main_mod._presentation_telemetry_from_context(
+        gen_context,
+        commit_plan=plan,
+    )
+    assert path_class == "product_src"
+    assert antisignal is False
+    assert scope_from == "main.py"
+
+
+def test_write_telemetry_state_safe_persists_slice10_presentation_kwargs(tmp_path, monkeypatch) -> None:
+    """_write_telemetry_state_safe must accept and persist D26 presentation kwargs."""
+    import git_cg.main as main_mod
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.telemetry import read_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="documentation_update",
+            gitmoji="📝",
+            cc_type=CommitType.DOCS,
+            scope="usage",
+            description="slice10 kwargs",
+            semver_impact=SemVerImpact.NONE,
+            changelog_group="Documentation",
+        ),
+        rationale="test",
+        body_summary="test body",
+    )
+    # Stashed preferred-scope breadcrumb should not affect direct kwargs path.
+    plan._scope_normalised_from = "scoped_history"  # type: ignore[attr-defined]
+    review_state = main_mod.ReviewState(commit_plan=plan)
+
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+
+    def fake_check_output(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and "--git-dir" in cmd:
+            return str(git_dir) if kwargs.get("text") else str(git_dir).encode()
+        return "." if kwargs.get("text") else b"."
+
+    monkeypatch.setattr(main_mod.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(main_mod, "LAST_OPIK_TRACE_ID", "trace-slice10")
+
+    main_mod._write_telemetry_state_safe(
+        review_state=review_state,
+        diff_output="diff --git a/docs/usage.md b/docs/usage.md\n",
+        engine="mtplx",
+        model_name="test-model",
+        system_prompt="sys",
+        repo_name="repo",
+        thread_id="thread-1",
+        verbose=False,
+        presentation_fallback_reason="path_class_gate",
+        blueprint_applied=False,
+        hallucination_guard_fired=False,
+        path_class_gate="docs_only",
+        changelog_antisignal_applied=True,
+        scope_normalised_from="scoped_history",
+    )
+
+    loaded = read_telemetry_state(str(git_dir))
+    assert loaded is not None
+    assert loaded.path_class_gate == "docs_only"
+    assert loaded.changelog_antisignal_applied is True
+    assert loaded.scope_normalised_from == "scoped_history"
+    assert loaded.presentation_fallback_reason == "path_class_gate"
+    assert loaded.blueprint_applied is False
+    assert loaded.hallucination_guard_fired is False
+
+
+def test_write_telemetry_state_safe_recoerces_illegal_slice10_kwargs(tmp_path, monkeypatch) -> None:
+    """Illegal open values on the main write path collapse via telemetry coerce."""
+    import git_cg.main as main_mod
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.telemetry import read_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="feature_addition",
+            gitmoji="✨",
+            cc_type=CommitType.FEAT,
+            scope="core",
+            description="illegal kwargs coerce",
+            semver_impact=SemVerImpact.MINOR,
+            changelog_group="Added",
+        ),
+        rationale="test",
+        body_summary="test body",
+    )
+    review_state = main_mod.ReviewState(commit_plan=plan)
+
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+
+    def fake_check_output(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and "--git-dir" in cmd:
+            return str(git_dir) if kwargs.get("text") else str(git_dir).encode()
+        return "." if kwargs.get("text") else b"."
+
+    monkeypatch.setattr(main_mod.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(main_mod, "LAST_OPIK_TRACE_ID", "trace-slice10-coerce")
+
+    main_mod._write_telemetry_state_safe(
+        review_state=review_state,
+        diff_output="diff --git a/x.py b/x.py\n",
+        engine="mtplx",
+        model_name="test-model",
+        system_prompt="sys",
+        repo_name="repo",
+        thread_id="thread-1",
+        verbose=False,
+        path_class_gate="not-a-real-class",
+        changelog_antisignal_applied=True,
+        scope_normalised_from="/Users/admin/secret/main.py",
+        presentation_fallback_reason="totally-open-text",
+    )
+
+    loaded = read_telemetry_state(str(git_dir))
+    assert loaded is not None
+    assert loaded.path_class_gate == "none"
+    assert loaded.changelog_antisignal_applied is True
+    assert loaded.scope_normalised_from == "none"
+    assert loaded.presentation_fallback_reason == "none"
+
+
+def test_record_telemetry_opik_metadata_includes_slice10_fields(tmp_path, monkeypatch) -> None:
+    """record-telemetry Opik metadata must propagate D26 presentation fields."""
+    import subprocess as sp
+
+    import git_cg.main as main_mod
+    import git_cg.telemetry as telemetry_mod
+    from git_cg.telemetry import GenerationTelemetry, write_telemetry_state
+
+    monkeypatch.setattr(telemetry_mod, "redact_payload", lambda payload: payload)
+
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    msg_file = tmp_path / "COMMIT_EDITMSG"
+    final_msg = (
+        "📝 docs(usage): document presentation quality\n\n"
+        "Refs: #204\nSemVer-Impact: NONE\nChange-Types: docs\nChangelog-Groups: Documentation\n"
+    )
+    msg_file.write_text(final_msg, encoding="utf-8")
+
+    tel = GenerationTelemetry(
+        trace_id="trace-opik-s10",
+        diff_hash="abc",
+        diff_output="diff",
+        repo_name="repo",
+        engine="mtplx",
+        model_name="test-model",
+        system_prompt_hash="hash",
+        generated_message=final_msg,
+        commit_plan_json={},
+        score_card={},
+        thread_id="thread-opik",
+        path_class_gate="docs_only",
+        changelog_antisignal_applied=True,
+        scope_normalised_from="scoped_history",
+        presentation_fallback_reason="path_class_gate",
+        hallucination_guard_fired=False,
+        blueprint_applied=False,
+    )
+    write_telemetry_state(str(git_dir), tel)
+
+    captured: dict = {}
+
+    def fake_check_output(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and cmd[:3] == ["git", "rev-parse", "--git-dir"]:
+            return str(git_dir) if kwargs.get("text") else str(git_dir).encode()
+        if isinstance(cmd, list) and "--git-dir" in cmd:
+            return str(git_dir) if kwargs.get("text") else str(git_dir).encode()
+        return "." if kwargs.get("text") else b"."
+
+    # record_telemetry imports subprocess locally — patch both module and builtin path used inside.
+    monkeypatch.setattr(sp, "check_output", fake_check_output)
+
+    def fake_track(*_args, **_kwargs):
+        def decorator(fn):
+            return fn
+
+        return decorator
+
+    def capture_update_current_trace(**kwargs):
+        captured["metadata"] = kwargs.get("metadata") or {}
+        captured["tags"] = kwargs.get("tags") or []
+
+    monkeypatch.setattr(main_mod.opik, "track", fake_track)
+    monkeypatch.setattr(main_mod.opik_context, "update_current_trace", capture_update_current_trace)
+    monkeypatch.setattr(main_mod.opik, "flush_tracker", lambda: None)
+    monkeypatch.setattr(main_mod.sentry_sdk, "flush", lambda timeout=2.0: None)
+
+    try:
+        main_mod.record_telemetry(commit_msg_file=str(msg_file), verbose=False)
+    except main_mod.typer.Exit as exc:
+        # record-telemetry is a Typer command; success path may raise Exit(0).
+        assert exc.exit_code == 0
+
+    metadata = captured.get("metadata")
+    assert metadata is not None
+    assert metadata.get("path_class_gate") == "docs_only"
+    assert metadata.get("changelog_antisignal_applied") is True
+    assert metadata.get("scope_normalised_from") == "scoped_history"
+    assert metadata.get("presentation_fallback_reason") == "path_class_gate"
+    assert metadata.get("hallucination_guard_fired") is False
+    assert metadata.get("blueprint_applied") is False
