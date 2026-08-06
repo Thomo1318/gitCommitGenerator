@@ -1458,6 +1458,7 @@ def _write_telemetry_state_safe(
     structural_new_command: bool = False,
     presentation_fallback_reason: str = "none",
     blueprint_applied: bool = False,
+    hallucination_guard_fired: bool = False,
     contract_lift_applied: bool = False,
     contract_lift_from_semver: str | None = None,
     contract_locked_semver: str | None = None,
@@ -1531,6 +1532,7 @@ def _write_telemetry_state_safe(
         structural_new_command (bool): Phase 9 structural new-command marker.
         presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
         blueprint_applied (bool): Issue #204 Slice 7 — True when a legal operator blueprint overlay was applied.
+        hallucination_guard_fired (bool): Issue #204 Slice 8 — True when hallucination guard rejected unevidenced claims.
         contract_lift_applied (bool): Issue #204 Slice 5 — True when post-presentation SemVer was lifted to the locked contract floor.
         contract_lift_from_semver (str | None): Issue #204 Slice 5 — pre-lift SemVer value when a lift occurred.
         contract_locked_semver (str | None): Issue #204 Slice 5.5 — locked contract SemVer.
@@ -1633,6 +1635,7 @@ def _write_telemetry_state_safe(
             structural_new_command=bool(structural_new_command),
             presentation_fallback_reason=str(presentation_fallback_reason or "none"),
             blueprint_applied=bool(blueprint_applied),
+            hallucination_guard_fired=bool(hallucination_guard_fired),
             contract_lift_applied=bool(contract_lift_applied),
             contract_lift_from_semver=(
                 str(contract_lift_from_semver) if contract_lift_from_semver is not None else None
@@ -2553,6 +2556,10 @@ def _run_commit_generation(
     presentation_fallback_reason: str = "none"
     low_confidence_guidance: str | None = None
     low_confidence_adjustment = None
+    # Slice 8 (#204): claim-tag harvest + hallucination/craft guards (shared regen budget).
+    harvested_claim_tags: list[str] = []
+    hallucination_guard_fired: bool = False
+    guard_guidance: str | None = None
     # Slice 5 hotfix (#204): contract-lift telemetry (lift-only SemVer floor).
     contract_lift_applied: bool = False
     contract_lift_from_semver: str | None = None
@@ -2692,6 +2699,7 @@ def _run_commit_generation(
                     structural_new_command=structural_new_command,
                     presentation_fallback_reason=presentation_fallback_reason,
                     blueprint_applied=blueprint_applied,
+                    hallucination_guard_fired=hallucination_guard_fired,
                     contract_lift_applied=contract_lift_applied,
                     contract_lift_from_semver=contract_lift_from_semver,
                     contract_locked_semver=contract_locked_semver,
@@ -2782,6 +2790,38 @@ def _run_commit_generation(
                 residual_guidance = arb.residual_guidance
             break
 
+    # Issue #204 Slice 8 — harvest P9-A##/P9-B## claim tags from staged evidence (D14).
+    # Pure text harvest from analysis/prompt diffs + staged test blobs (index, not worktree).
+    # Runs before low-confidence stubs so claim tags can seed inventory pressure.
+    try:
+        from git_cg.commit_quality import harvest_claim_tags
+        from git_cg.git_index import read_staged_sources
+
+        _claim_texts: list[str] = [analysis_diff or "", prompt_diff or ""]
+        _staged_for_claims = [str(p) for p in (getattr(gen_context.diff_signals, "files", None) or []) if p]
+        _test_claim_paths: list[str] = []
+        for _cp in _staged_for_claims:
+            _low = _cp.replace("\\", "/").lower()
+            if (
+                "/test" in f"/{_low}"
+                or _low.startswith("tests/")
+                or _low.endswith("_test.py")
+                or _low.endswith("test.py")
+            ):
+                _test_claim_paths.append(_cp)
+        if _test_claim_paths:
+            _staged_claim_read = read_staged_sources(
+                paths=_test_claim_paths,
+                max_file_bytes=256_000,
+            )
+            for _blob in (_staged_claim_read.files or {}).values():
+                if not _blob:
+                    continue
+                _claim_texts.append(_blob.decode("utf-8", errors="replace")[:200_000])
+        harvested_claim_tags = harvest_claim_tags(_claim_texts)
+    except Exception:
+        harvested_claim_tags = []
+
     # Issue #204 Slice 5 — low-confidence presentation posture (D7).
     # After ranking confidence + #195 arbitration; before prompt construction.
     # Non-interactive: never blocks. Interactive: does not replace TUI.
@@ -2806,6 +2846,7 @@ def _run_commit_generation(
             list(getattr(gen_context.diff_signals, "files", None) or []),
             gen_context.diff_signals,
             gen_context.ranked_intents,
+            claim_tags=harvested_claim_tags,
         )
         low_confidence_adjustment = apply_low_confidence_presentation(
             None,
@@ -2912,6 +2953,12 @@ def _run_commit_generation(
                 _presentation_guidance = f"{blueprint_guidance}\n\n{_presentation_guidance}"
             else:
                 _presentation_guidance = blueprint_guidance
+        # Slice 8: fold guard findings into presentation guidance on shared regen.
+        if guard_guidance:
+            if _presentation_guidance:
+                _presentation_guidance = f"{guard_guidance}\n\n{_presentation_guidance}"
+            else:
+                _presentation_guidance = guard_guidance
         system_prompt = build_system_prompt(
             analysis_diff,
             verbose,
@@ -2923,6 +2970,8 @@ def _run_commit_generation(
             gold_guidance=gold_guidance,
             scoped_history_guidance=scoped_history_guidance,
             staged_paths=list(getattr(gen_context.diff_signals, "files", None) or []),
+            concern_tags=None,
+            claim_tags=harvested_claim_tags,
             low_confidence_guidance=_presentation_guidance,
         )
 
@@ -3228,6 +3277,75 @@ def _run_commit_generation(
         if regeneration_guidance:
             review_state.set_regeneration_guidance(regeneration_guidance)
 
+        # Issue #204 Slice 8 — hallucination / craft guards (D14/D21).
+        # Shares gold_regen_attempts ceiling (I-14); non-blocking on hooks after exhaustion
+        # via deterministic priors/skeleton fallback.
+        try:
+            from git_cg.commit_quality import (
+                apply_guard_skeleton_fallback,
+                evaluate_presentation_guards,
+                format_guard_guidance,
+                merge_presentation_fallback_reason,
+            )
+
+            _guard_paths = list(getattr(gen_context.diff_signals, "files", None) or [])
+            _guard_report = evaluate_presentation_guards(
+                commit_plan,
+                paths=_guard_paths,
+                signals=gen_context.diff_signals,
+                evidence_text=analysis_diff or "",
+                constraints=getattr(gen_context, "presentation_constraints", None),
+            )
+            if _guard_report.hallucination_guard_fired:
+                hallucination_guard_fired = True
+            if _guard_report.dirty:
+                presentation_fallback_reason = merge_presentation_fallback_reason(
+                    presentation_fallback_reason,
+                    _guard_report.fallback_reason,
+                )
+                if gold_regen_attempts >= 2:
+                    # Exhausted shared wording budget → deterministic skeleton (D14).
+                    commit_plan = apply_guard_skeleton_fallback(
+                        commit_plan,
+                        paths=_guard_paths,
+                        signals=gen_context.diff_signals,
+                        priors=gen_context.scope_priors,
+                        constraints=gen_context.presentation_constraints,
+                        claim_tags=harvested_claim_tags,
+                        report=_guard_report,
+                    )
+                    review_state.commit_plan = commit_plan
+                    guard_guidance = None
+                    # Fresh gold evaluation against the skeleton; do not inherit prior gold codes.
+                    gold_guidance = None
+                    gold_previous_codes = None
+                    if verbose:
+                        console.log(
+                            "[yellow]Presentation guards exhausted shared regen budget; "
+                            "applied deterministic skeleton fallback.[/yellow]"
+                        )
+                else:
+                    # Shared wording budget with gold (I-14). Clear gold guidance/codes so a
+                    # guard retry does not re-anchor on stale gold findings.
+                    gold_regen_attempts += 1
+                    guard_guidance = format_guard_guidance(_guard_report)
+                    gold_guidance = None
+                    gold_previous_codes = None
+                    gold_previous_primary_id = commit_plan.primary_intent.intent_id
+                    if verbose or gold_mode != "off":
+                        codes = ", ".join(sorted(_guard_report.codes()))
+                        console.print(
+                            f"[yellow]Presentation guard ({_guard_report.fallback_reason}): {codes} "
+                            f"(shared regen {gold_regen_attempts}/2)[/yellow]"
+                        )
+                    continue
+            else:
+                guard_guidance = None
+        except Exception as _guard_exc:
+            # Guards must never brick commit generation.
+            if verbose:
+                console.log(f"[yellow]Presentation guards skipped ({type(_guard_exc).__name__}: {_guard_exc})[/yellow]")
+
         # Issue #182 / #191: gold runs after mixed-policy and ReviewState construction,
         # before render/write/acceptance display. Findings print unconditionally in
         # warn/surface/strict (never verbose-gated); pass/fail derives from
@@ -3358,6 +3476,7 @@ def _run_commit_generation(
                 structural_new_command=structural_new_command,
                 presentation_fallback_reason=presentation_fallback_reason,
                 blueprint_applied=blueprint_applied,
+                hallucination_guard_fired=hallucination_guard_fired,
                 contract_lift_applied=contract_lift_applied,
                 contract_lift_from_semver=contract_lift_from_semver,
                 contract_locked_semver=contract_locked_semver,
@@ -3509,6 +3628,7 @@ def _run_commit_generation(
         structural_new_command=structural_new_command,
         presentation_fallback_reason=presentation_fallback_reason,
         blueprint_applied=blueprint_applied,
+        hallucination_guard_fired=hallucination_guard_fired,
         contract_lift_applied=contract_lift_applied,
         contract_lift_from_semver=contract_lift_from_semver,
         contract_locked_semver=contract_locked_semver,
@@ -4019,6 +4139,7 @@ def record_telemetry(
                     "presentation_fallback_reason": telemetry_state.get("presentation_fallback_reason", "none"),
                     # Issue #204 Slice 7: blueprint applied (bool only).
                     "blueprint_applied": bool(telemetry_state.get("blueprint_applied", False)),
+                    "hallucination_guard_fired": bool(telemetry_state.get("hallucination_guard_fired", False)),
                     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab).
                     "contract_lift_applied": bool(telemetry_state.get("contract_lift_applied", False)),
                     "contract_lift_from_semver": telemetry_state.get("contract_lift_from_semver"),
