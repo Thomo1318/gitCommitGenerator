@@ -1500,6 +1500,236 @@ def format_included_change_stub_inventory(stubs: list[Stub]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Slice 6 — Contract-aware high-risk body checklist (D6 / D20)
+# ---------------------------------------------------------------------------
+
+# Exact high-risk product paths (Slice 6 MVP). Basename/suffix matchers below
+# keep fixtures and nested copies aligned without treating docs prose as evidence.
+HIGH_RISK_PATH_EXACT: frozenset[str] = frozenset(
+    {
+        "src/git_cg/main.py",
+        "src/git_cg/telemetry.py",
+        "src/git_cg/sentry_config.py",
+        "src/git_cg/scoped_history.py",
+        "src/git_cg/intent.py",
+        "src/git_cg/regeneration.py",
+        "src/git_cg/secrets.py",
+    }
+)
+
+HIGH_RISK_PATH_SUFFIXES: tuple[str, ...] = (
+    "/main.py",
+    "/telemetry.py",
+    "/sentry_config.py",
+    "/scoped_history.py",
+    "/intent.py",
+    "/regeneration.py",
+    "/secrets.py",
+)
+
+# Closed surface keys used for theme selection (presentation-only).
+HIGH_RISK_SURFACE_MAIN = "main"
+HIGH_RISK_SURFACE_TELEMETRY = "telemetry"
+HIGH_RISK_SURFACE_SENTRY = "sentry_config"
+HIGH_RISK_SURFACE_SCOPED_HISTORY = "scoped_history"
+HIGH_RISK_SURFACE_INTENT = "intent"
+HIGH_RISK_SURFACE_REGENERATION = "regeneration"
+HIGH_RISK_SURFACE_SECRETS = "secrets"
+
+_HIGH_RISK_BASENAME_TO_SURFACE: dict[str, str] = {
+    "main.py": HIGH_RISK_SURFACE_MAIN,
+    "telemetry.py": HIGH_RISK_SURFACE_TELEMETRY,
+    "sentry_config.py": HIGH_RISK_SURFACE_SENTRY,
+    "scoped_history.py": HIGH_RISK_SURFACE_SCOPED_HISTORY,
+    "intent.py": HIGH_RISK_SURFACE_INTENT,
+    "regeneration.py": HIGH_RISK_SURFACE_REGENERATION,
+    "secrets.py": HIGH_RISK_SURFACE_SECRETS,
+}
+
+# Stable theme ids → directive-free must-cover bullets (D6/D20).
+# Wording deliberately avoids preferred_type / rank steers and Channel-4
+# directive verbs (consider whether / prefer / must / should as steers).
+_HIGH_RISK_THEME_BULLETS: dict[str, str] = {
+    "telemetry_fallback_transitions": (
+        "fallback-reason transitions, including overwrite of a pre-populated `none` "
+        "when a later stage observes a real error or presentation fallback"
+    ),
+    "telemetry_closed_enum_tags": (
+        "closed-enum / closed-vocabulary tags skip free-text redaction paths; "
+        "hash-only or enum tags stay in the closed set"
+    ),
+    "telemetry_scrub_list_deltas": ("scrub allow/deny and frame-variable list deltas when redaction coverage changes"),
+    "telemetry_redaction_failure_token": (
+        "redaction failure yields the literal token `[REDACTED]`, never Python `None` or an empty stand-in"
+    ),
+    "telemetry_no_secret_leakage": (
+        "no secret material, tokens, or raw plan-bearing locals in telemetry/Sentry payloads"
+    ),
+    "main_channel4_directive_free": (
+        "Channel-4 / scoped-history guidance stays directive-free: no `consider whether`, "
+        "prefer/must/should steers, and no `preferred_type` from the scoped-history channel"
+    ),
+    "main_fallback_error_visibility": (
+        "graph/outer-stage fallback does not mask real errors as presentation fallback reason `none`"
+    ),
+    "scoped_history_policy_b_lifetime": (
+        "Policy B shadow lifetime spans refresh and stats/product collection; flag-off defaults remain explicit"
+    ),
+    "intent_closed_enrichment_markers": (
+        "intent enrichment uses closed markers only; presentation pressure is not a second ranker"
+    ),
+    "regeneration_contract_lock_visibility": (
+        "regeneration / contract-lock fallthrough remains visible; lock rejection is not silent success"
+    ),
+    "secrets_path_handling": (
+        "secrets-path handling never treats docs/ADR mentions of authority or redaction as security path evidence"
+    ),
+}
+
+_SURFACE_THEMES: dict[str, tuple[str, ...]] = {
+    HIGH_RISK_SURFACE_TELEMETRY: (
+        "telemetry_fallback_transitions",
+        "telemetry_closed_enum_tags",
+        "telemetry_scrub_list_deltas",
+        "telemetry_redaction_failure_token",
+        "telemetry_no_secret_leakage",
+    ),
+    HIGH_RISK_SURFACE_SENTRY: (
+        "telemetry_closed_enum_tags",
+        "telemetry_scrub_list_deltas",
+        "telemetry_redaction_failure_token",
+        "telemetry_no_secret_leakage",
+    ),
+    HIGH_RISK_SURFACE_MAIN: (
+        "main_channel4_directive_free",
+        "main_fallback_error_visibility",
+        "telemetry_fallback_transitions",
+        "telemetry_closed_enum_tags",
+        "telemetry_redaction_failure_token",
+    ),
+    HIGH_RISK_SURFACE_SCOPED_HISTORY: (
+        "scoped_history_policy_b_lifetime",
+        "main_channel4_directive_free",
+        "main_fallback_error_visibility",
+    ),
+    HIGH_RISK_SURFACE_INTENT: ("intent_closed_enrichment_markers",),
+    HIGH_RISK_SURFACE_REGENERATION: (
+        "regeneration_contract_lock_visibility",
+        "main_channel4_directive_free",
+    ),
+    HIGH_RISK_SURFACE_SECRETS: (
+        "secrets_path_handling",
+        "telemetry_no_secret_leakage",
+    ),
+}
+
+
+def _high_risk_surface_for_path(path: str) -> str | None:
+    """Return closed high-risk surface key for *path*, or None.
+
+    Matches exact product paths, ``*/<basename>`` suffixes, bare basenames
+    used in unit fixtures, and ``git_cg/<basename>`` package-relative forms.
+    Docs/ADR prose paths are not security evidence (D13) and only match when
+    the path itself is one of the closed high-risk modules.
+    """
+    norm = _norm_path(path).lstrip("./")
+    if not norm:
+        return None
+
+    base = PurePosixPath(norm).name
+    surface = _HIGH_RISK_BASENAME_TO_SURFACE.get(base)
+    if surface is None:
+        return None
+
+    if norm in HIGH_RISK_PATH_EXACT:
+        return surface
+    if any(norm.endswith(suffix) for suffix in HIGH_RISK_PATH_SUFFIXES):
+        return surface
+    # Bare basename fixtures (e.g. ``telemetry.py`` in unit tests).
+    if "/" not in norm:
+        return surface
+    # Package-relative forms without src/ prefix.
+    if norm.startswith("git_cg/") or "/git_cg/" in f"/{norm}":
+        return surface
+    return None
+
+
+def detect_high_risk_surfaces(paths: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    """Return sorted unique high-risk surface keys present in *paths* (D6)."""
+    found: set[str] = set()
+    for raw in paths or ():
+        if not raw or not str(raw).strip():
+            continue
+        surface = _high_risk_surface_for_path(str(raw))
+        if surface:
+            found.add(surface)
+    return tuple(sorted(found))
+
+
+def is_high_risk_path_set(paths: list[str] | tuple[str, ...] | None) -> bool:
+    """Return whether any staged path is a Slice 6 high-risk surface."""
+    return bool(detect_high_risk_surfaces(paths))
+
+
+def build_high_risk_checklist_themes(
+    paths: list[str] | tuple[str, ...] | None,
+) -> tuple[str, ...]:
+    """Map staged paths → ordered unique must-cover theme ids (D6/D20).
+
+    Presentation-only. Does not inspect hunk prose and does not treat
+    docs/ADR mentions as security path evidence (D13).
+    """
+    themes: list[str] = []
+    seen: set[str] = set()
+    for surface in detect_high_risk_surfaces(paths):
+        for theme_id in _SURFACE_THEMES.get(surface, ()):
+            if theme_id in seen:
+                continue
+            if theme_id not in _HIGH_RISK_THEME_BULLETS:
+                continue
+            seen.add(theme_id)
+            themes.append(theme_id)
+    return tuple(themes)
+
+
+def format_high_risk_body_checklist(
+    paths: list[str] | tuple[str, ...] | None = None,
+    *,
+    themes: tuple[str, ...] | list[str] | None = None,
+) -> str:
+    """Render directive-free high-risk must-cover checklist for the prompt (D6).
+
+    Returns empty string when no high-risk surfaces are present. Checklist
+    language must never set ``preferred_type`` or rank steers (Channel-4).
+    """
+    theme_ids = tuple(themes) if themes is not None else build_high_risk_checklist_themes(paths)
+    if not theme_ids:
+        return ""
+
+    surfaces = detect_high_risk_surfaces(paths) if paths is not None else ()
+    surface_bit = f" surfaces={','.join(surfaces)}" if surfaces else ""
+
+    lines = [
+        "HIGH-RISK BODY CHECKLIST (must-cover themes — wording pressure only):",
+        f"Staged high-risk paths require body coverage of the themes below{surface_bit}.",
+        "Cover each applicable theme in body_summary and/or Hybrid Included-changes mini-subjects.",
+        "This block is presentation pressure only. It does not change intent_id, gitmoji,",
+        "cc_type, semver_impact, or changelog_group authority, does not set preferred_type,",
+        "and is not a ranking override.",
+    ]
+    for theme_id in theme_ids:
+        bullet = _HIGH_RISK_THEME_BULLETS.get(theme_id)
+        if not bullet:
+            continue
+        lines.append(f"- [{theme_id}] {bullet}")
+    lines.append(
+        "Omit themes that have no staged evidence. Do not invent secrets, credentials, "
+        "or runtime claims from docs/ADR prose alone."
+    )
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Slice 5 — Low-confidence presentation posture (D7)
 # ---------------------------------------------------------------------------
 
