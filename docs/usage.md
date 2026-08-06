@@ -48,11 +48,11 @@ Disable Low-confidence intent arbitration; keep top rank + telemetry.
 
 ### `--gold-strict`
 
-Resolve gold lint to strict mode without enabling general --strict.
+Resolve presentation gold lint to strict (fail on STRICT_FAIL_CODES) without enabling general --strict. Complements path-class/hallucination gates; does not re-rank intent.
 
 ### `--blueprint <BLUEPRINT>`
 
-Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB; never overrides ranked intent_id).
+Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB). Overlays wording only; never overrides ranked intent_id, SemVer authority, or SOP rank order.
 
 ### `-r --recover`
 
@@ -98,11 +98,11 @@ Disable Phase 1 semantic producers for this run.
 
 #### `--gold-strict`
 
-Resolve gold lint to strict mode without enabling general --strict.
+Resolve presentation gold lint to strict (fail on STRICT_FAIL_CODES) without enabling general --strict. Complements path-class/hallucination gates; does not re-rank intent.
 
 #### `--blueprint <BLUEPRINT>`
 
-Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB; never overrides ranked intent_id).
+Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB). Overlays wording only; never overrides ranked intent_id, SemVer authority, or SOP rank order.
 
 #### `-i --interactive`
 

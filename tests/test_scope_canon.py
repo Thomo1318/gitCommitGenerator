@@ -9,7 +9,12 @@ import pytest
 
 from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
 from git_cg.regeneration import ResolvedCommitContract, enforce_semantic_contract
-from git_cg.scope_canon import CANONICAL_SCOPE_ALIASES, normalize_scope
+from git_cg.scope_canon import (
+    CANONICAL_SCOPE_ALIASES,
+    coerce_scope_normalised_from,
+    normalize_scope,
+    resolve_scope_normalisation,
+)
 
 # ---------------------------------------------------------------------------
 # normalize_scope pure behaviour
@@ -146,3 +151,45 @@ def test_enforce_semantic_contract_preserves_already_canonical_scope() -> None:
         active_directives={"preferred_scope": "api"},
     )
     assert out.primary_intent.scope == "api"
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 10 — resolve_scope_normalisation / coerce_scope_normalised_from
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_canon", "expected_from"),
+    [
+        ("scoped_history", "scoped-history", "scoped_history"),
+        ("scoped-hist", "scoped-history", "scoped-hist"),
+        ("main.py", "main", "main.py"),
+        ("git_cg.main", "main", "git_cg.main"),
+        ("docs/usage.md", "usage", "usage"),
+        ("docs/ADRs/foo.md", "adr", "adr"),
+        ("unknown-token", "unknown-token", "none"),
+        (None, None, "none"),
+        ("", None, "none"),
+    ],
+)
+def test_resolve_scope_normalisation(raw, expected_canon, expected_from) -> None:
+    canon, source = resolve_scope_normalisation(raw)
+    assert canon == expected_canon
+    assert source == expected_from
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("scoped_history", "scoped_history"),
+        ("main.py", "main.py"),
+        ("none", "none"),
+        ("", "none"),
+        (None, "none"),
+        ("/tmp/secret/path", "none"),
+        ("not-an-alias", "none"),
+        ("SCOPED_HISTORY", "scoped_history"),
+    ],
+)
+def test_coerce_scope_normalised_from(value, expected) -> None:
+    assert coerce_scope_normalised_from(value) == expected

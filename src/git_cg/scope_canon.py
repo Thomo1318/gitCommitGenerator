@@ -146,3 +146,59 @@ def normalize_scope(scope: str | None) -> str | None:
         return stem or None
 
     return cleaned
+
+
+def resolve_scope_normalisation(scope: str | None) -> tuple[str | None, str]:
+    """Return ``(canonical_scope, scope_normalised_from)`` for telemetry (RF-1).
+
+    ``scope_normalised_from`` is a key of ``CANONICAL_SCOPE_ALIASES`` when an
+    alias mapping fired, otherwise the closed default ``"none"``. Never returns
+    a filesystem path, raw free token, or empty string as the source key.
+    """
+    if scope is None:
+        return None, "none"
+
+    raw = scope.strip()
+    if not raw:
+        return None, "none"
+
+    cleaned = _strip_accidental_path(raw)
+    if not cleaned:
+        return None, "none"
+
+    key = cleaned.lower()
+
+    if key in CANONICAL_SCOPE_ALIASES:
+        return CANONICAL_SCOPE_ALIASES[key], key
+
+    stem = _PY_SUFFIX_RE.sub("", key)
+    if stem != key and stem in CANONICAL_SCOPE_ALIASES:
+        return CANONICAL_SCOPE_ALIASES[stem], stem
+
+    if "." in key:
+        if key in CANONICAL_SCOPE_ALIASES:
+            return CANONICAL_SCOPE_ALIASES[key], key
+        tail = key.rsplit(".", 1)[-1]
+        tail_stem = _PY_SUFFIX_RE.sub("", tail)
+        if tail_stem in CANONICAL_SCOPE_ALIASES:
+            return CANONICAL_SCOPE_ALIASES[tail_stem], tail_stem
+        if tail_stem:
+            return tail_stem, "none"
+        return None, "none"
+
+    if stem != key:
+        return (stem or None), "none"
+
+    return cleaned, "none"
+
+
+def coerce_scope_normalised_from(value: object) -> str:
+    """Coerce ``scope_normalised_from`` to a closed alias key or ``none`` (RF-1)."""
+    if value is None:
+        return "none"
+    text = str(value).strip().lower()
+    if not text or text == "none":
+        return "none"
+    if text in CANONICAL_SCOPE_ALIASES:
+        return text
+    return "none"

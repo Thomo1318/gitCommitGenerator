@@ -254,6 +254,13 @@ class GenerationTelemetry:
     blueprint_applied: bool = False
     # Issue #204 Slice 8: hallucination guard fired (bool only — RF-3 asymmetry).
     hallucination_guard_fired: bool = False
+    # Issue #204 Slice 10 / D26: remaining presentation observability (closed vocab).
+    # path_class_gate: DiffClass.name or "none" (not the fallback-reason enum value).
+    path_class_gate: str = "none"
+    # changelog_antisignal_applied: changelog marker exclusion path engaged.
+    changelog_antisignal_applied: bool = False
+    # scope_normalised_from: CANONICAL_SCOPE_ALIASES key or "none" (RF-1; never a path).
+    scope_normalised_from: str = "none"
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab / bool).
     contract_lift_applied: bool = False
     contract_lift_from_semver: str | None = None
@@ -751,6 +758,41 @@ def coerce_presentation_fallback_reason(value: object) -> str:
     return PresentationFallbackReason.NONE.value
 
 
+# Closed DiffClass.name vocabulary (mirrors commit_quality.DIFF_CLASS_*).
+_PATH_CLASS_GATE_ALLOWED: frozenset[str] = frozenset(
+    {
+        "none",
+        "tests_only",
+        "fixtures_only",
+        "docs_only",
+        "adr_only",
+        "config_ci_only",
+        "release_only",
+        "product_src",
+        "mixed",
+        "empty",
+    }
+)
+
+
+def coerce_path_class_gate(value: object) -> str:
+    """Coerce ``path_class_gate`` to a closed DiffClass label or ``none`` (D26)."""
+    text = str(value or "").strip().lower()
+    if text in _PATH_CLASS_GATE_ALLOWED:
+        return text
+    return "none"
+
+
+def coerce_scope_normalised_from(value: object) -> str:
+    """Coerce ``scope_normalised_from`` via scope_canon RF-1 (alias key or none)."""
+    try:
+        from git_cg.scope_canon import coerce_scope_normalised_from as _coerce
+
+        return _coerce(value)
+    except Exception:
+        return "none"
+
+
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     """
     Persist redacted telemetry state in the repository's Git directory for retrieval by a later hook.
@@ -841,13 +883,27 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
         telemetry.rename_confidence = "none"
 
     # Issue #204: closed presentation fallback reason (no free-text gateway).
-    telemetry.presentation_fallback_reason = coerce_presentation_fallback_reason(
-        getattr(telemetry, "presentation_fallback_reason", PresentationFallbackReason.NONE.value)
-    )
+    # Defence-in-depth: redact then re-coerce to closed enum (D26).
+    _pfr_raw = getattr(telemetry, "presentation_fallback_reason", PresentationFallbackReason.NONE.value)
+    _pfr_redacted = redact_payload(str(_pfr_raw or "none"))
+    if _pfr_redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+        telemetry.presentation_fallback_reason = PresentationFallbackReason.NONE.value
+    else:
+        telemetry.presentation_fallback_reason = coerce_presentation_fallback_reason(_pfr_redacted)
     # Issue #204 Slice 7: blueprint_applied bool only (never raw blueprint payload).
     telemetry.blueprint_applied = bool(getattr(telemetry, "blueprint_applied", False))
     # Issue #204 Slice 8: hallucination_guard_fired bool only (no finding payload).
     telemetry.hallucination_guard_fired = bool(getattr(telemetry, "hallucination_guard_fired", False))
+    # Issue #204 Slice 10 / D26: path_class_gate + changelog antisignal + scope alias key.
+    telemetry.path_class_gate = coerce_path_class_gate(getattr(telemetry, "path_class_gate", "none"))
+    telemetry.changelog_antisignal_applied = bool(getattr(telemetry, "changelog_antisignal_applied", False))
+    # RF-1: closed alias key only; defence-in-depth redact (never a filesystem path).
+    _scope_from = coerce_scope_normalised_from(getattr(telemetry, "scope_normalised_from", "none"))
+    _redacted_scope_from = redact_payload(str(_scope_from))
+    if _redacted_scope_from == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+        telemetry.scope_normalised_from = "none"
+    else:
+        telemetry.scope_normalised_from = coerce_scope_normalised_from(_redacted_scope_from)
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (bool + closed SemVer).
     telemetry.contract_lift_applied = bool(getattr(telemetry, "contract_lift_applied", False))
     telemetry.contract_lift_from_semver = coerce_closed_semver(getattr(telemetry, "contract_lift_from_semver", None))
@@ -999,6 +1055,13 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             # Issue #204 Slice 8: hallucination_guard_fired default + coerce.
             data.setdefault("hallucination_guard_fired", False)
             data["hallucination_guard_fired"] = bool(data.get("hallucination_guard_fired", False))
+            # Issue #204 Slice 10 / D26: path_class_gate + changelog antisignal + scope alias.
+            data.setdefault("path_class_gate", "none")
+            data["path_class_gate"] = coerce_path_class_gate(data.get("path_class_gate"))
+            data.setdefault("changelog_antisignal_applied", False)
+            data["changelog_antisignal_applied"] = bool(data.get("changelog_antisignal_applied", False))
+            data.setdefault("scope_normalised_from", "none")
+            data["scope_normalised_from"] = coerce_scope_normalised_from(data.get("scope_normalised_from"))
             # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs.
             data.setdefault("contract_lift_applied", False)
             data["contract_lift_applied"] = bool(data.get("contract_lift_applied", False))

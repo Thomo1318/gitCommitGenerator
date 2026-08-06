@@ -193,6 +193,41 @@ flowchart LR
 - **Commit-Message Gold Lint**: A deterministic post-enforcement linter (`git_cg.commit_gold`) checks wording quality, Included-changes coverage, and type/changelog-group coherence — without ever re-ranking intent (SOP matrix stays the SemVer authority). Modes: `off` / `warn` (hook-safe default) / `surface` (interactive) / `strict` (CI).
 - **Ranking Confidence + Intent Arbitration**: When the deterministic ranker is **Low** confidence (near-tie / mixed-intent / closed reasons), interactive TTY sessions can lock a matrix-legal primary **before** the LLM. Non-interactive and hook paths never block. Control with `GIT_CG_RANK_ARBITRATE=auto|off` or CLI `--rank-arbitrate` / `--no-rank-arbitrate`. See `docs/usage.md` and `docs/diagrams/ranking-confidence/`.
 
+- **Presentation Quality (Issue #204)**: After the SOP ranker locks the semantic contract, presentation layers only shape *wording* — never `intent_id`, SemVer authority, or rank order. Complementary to gold lint ([#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201)) and scoped-history ([#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163) / Phase 9).
+
+### Presentation quality operator guide (Issue #204)
+
+Presentation controls sit **downstream** of deterministic ranking. They may clamp subjects, scopes, bullets, and changelog groups; they must not re-rank intents or invent evidence.
+
+| Concern | Behaviour |
+|:---|:---|
+| **Scope canon / priors** | `normalize_scope` maps aliases (`main.py` → `main`, `scoped_history` → `scoped-history`). Unknown clean tokens pass through. Telemetry records `scope_normalised_from` as a closed alias key or `none` (never a path). |
+| **`--blueprint`** | Optional `CommitBlueprint` as inline JSON or `@path.json` (≤64 KiB). Applies presentation overlays only; **never** overrides ranked `intent_id`. |
+| **Low-confidence fallback** | When ranking confidence is Low, interactive TTY may arbitrate (`--rank-arbitrate`); non-interactive/hook paths keep top rank + telemetry. Fallback reasons are closed-vocab (`presentation_fallback_reason`). |
+| **Diff-class / path-class gates** | Diff paths classify as `tests_only`, `fixtures_only`, `docs_only`, `adr_only`, `config_ci_only`, `release_only`, `product_src`, `mixed`, or `empty`. Gates constrain type/changelog wording by class. Telemetry: `path_class_gate`. |
+| **Changelog anti-signal** | Changelog/marker-only noise is excluded from type dominance evidence (`changelog_antisignal_applied`). |
+| **Security path evidence** | Security-sensitive paths contribute evidence for type/SemVer claims; guards reject unsupported security wording. |
+| **SemVer / type / bullets** | Type dominance, changelog↔types coherence, and bullet cardinality are enforced as presentation gates (Slice 9 ordered evaluator). Gold lint ([#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201)) remains the post-render wording authority. |
+| **Hallucination / craft / vague-verb guards** | Post-LLM guards strip unsupported claims and vague verbs; shared regen budget then deterministic skeleton fallback preserving ranked intent + gitmoji. Telemetry: `hallucination_guard_fired` only (no craft/inventory bools). |
+| **Gold relationship** | Gold lint checks wording quality and Included-changes coverage **without** re-ranking. Presentation gates + gold are complementary: gates shape/clamp; gold judges the final message. |
+
+#### Operator pre-check (until gates are complete)
+
+Before relying solely on automation, compare the staged diff class against known library twins (tests-only vs product_src vs docs/ADR). If the class is `mixed` or unexpected, split the commit or tighten the stage set. Prefer `--dry-run` + `--gold-strict` when validating presentation changes.
+
+#### D26 telemetry (closed vocabulary)
+
+Persisted presentation fields (no raw diffs, prompts, commit bodies, blueprint JSON, or open-ended finding prose):
+
+- `presentation_fallback_reason`
+- `blueprint_applied`
+- `scope_normalised_from`
+- `path_class_gate`
+- `changelog_antisignal_applied`
+- `hallucination_guard_fired`
+
+See also: [usage flags](usage.md), epic [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204), gold [#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201), scoped history [#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163).
+
 ---
 
 ## 🚀 Installation & Provisioning

@@ -838,8 +838,12 @@ def test_write_telemetry_state_redacts_secrets_inside_commit_plan_json(tmp_path,
 
 
 def test_write_telemetry_state_calls_redact_payload_for_each_field(tmp_path, monkeypatch):
-    """write_telemetry_state must route diff_output, generated_message, and the serialized
-    commit_plan_json through redact_payload exactly once each."""
+    """write_telemetry_state must route sensitive string fields through redact_payload.
+
+    Baseline: diff_output, generated_message, serialized commit_plan_json.
+    Issue #204 Slice 10 also redacts presentation_fallback_reason and
+    scope_normalised_from before closed-vocab re-coercion.
+    """
     import git_cg.telemetry
     from git_cg.telemetry import GenerationTelemetry, write_telemetry_state
 
@@ -870,7 +874,10 @@ def test_write_telemetry_state_calls_redact_payload_for_each_field(tmp_path, mon
     assert seen_payloads[0] == "the-diff-output"
     assert seen_payloads[1] == "the-generated-message"
     assert seen_payloads[2] == json.dumps({"intent": "feat"})
-    assert len(seen_payloads) == 3
+    # Slice 10 D26 closed-string fields (defaults are "none").
+    assert seen_payloads[3] == "none"  # presentation_fallback_reason
+    assert seen_payloads[4] == "none"  # scope_normalised_from
+    assert len(seen_payloads) == 5
 
 
 def test_generation_telemetry_graph_schema_version_defaults_to_unknown():
@@ -2034,3 +2041,87 @@ def test_read_telemetry_state_defaults_hallucination_guard_fired_for_legacy(tmp_
     result = read_telemetry_state(str(tmp_path))
     assert result is not None
     assert result.hallucination_guard_fired is False
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 10 / D26 — path_class_gate, changelog_antisignal, scope_normalised_from
+# ---------------------------------------------------------------------------
+
+
+def test_path_class_gate_defaults_to_none():
+    tel = _minimal_telemetry()
+    assert tel.path_class_gate == "none"
+    assert tel.changelog_antisignal_applied is False
+    assert tel.scope_normalised_from == "none"
+
+
+def test_write_then_read_preserves_slice10_presentation_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr("git_cg.telemetry.redact_payload", lambda x: x)
+    tel = _minimal_telemetry(
+        path_class_gate="docs_only",
+        changelog_antisignal_applied=True,
+        scope_normalised_from="scoped_history",
+        presentation_fallback_reason="path_class_gate",
+    )
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.path_class_gate == "docs_only"
+    assert result.changelog_antisignal_applied is True
+    assert result.scope_normalised_from == "scoped_history"
+    assert result.presentation_fallback_reason == "path_class_gate"
+
+
+def test_read_telemetry_state_defaults_slice10_fields_for_legacy(tmp_path):
+    import json
+    from pathlib import Path
+
+    state = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "d",
+        "repo_name": "r",
+        "engine": "e",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "g",
+        "commit_plan_json": {},
+        "score_card": {},
+    }
+    path = Path(tmp_path) / "GIT_CG_OPIK_STATE.json"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.path_class_gate == "none"
+    assert result.changelog_antisignal_applied is False
+    assert result.scope_normalised_from == "none"
+
+
+def test_coerce_unknown_path_class_gate_to_none():
+    from git_cg.telemetry import coerce_path_class_gate
+
+    assert coerce_path_class_gate("not-a-class") == "none"
+    assert coerce_path_class_gate("PRODUCT_SRC") == "product_src"
+    assert coerce_path_class_gate(None) == "none"
+    assert coerce_path_class_gate("tests_only") == "tests_only"
+
+
+def test_coerce_scope_normalised_from_rf1_closed_set():
+    from git_cg.telemetry import coerce_scope_normalised_from
+
+    assert coerce_scope_normalised_from("scoped_history") == "scoped_history"
+    assert coerce_scope_normalised_from("main.py") == "main.py"
+    assert coerce_scope_normalised_from("/tmp/secret/path") == "none"
+    assert coerce_scope_normalised_from("") == "none"
+    assert coerce_scope_normalised_from(None) == "none"
+    assert coerce_scope_normalised_from("none") == "none"
+
+
+def test_write_redacts_and_recoerces_scope_normalised_from(tmp_path, monkeypatch):
+    """Defence-in-depth: even if a path sneaks in, write must collapse to none."""
+    monkeypatch.setattr("git_cg.telemetry.redact_payload", lambda x: x)
+    tel = _minimal_telemetry(scope_normalised_from="/Users/admin/secret/main.py")
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.scope_normalised_from == "none"

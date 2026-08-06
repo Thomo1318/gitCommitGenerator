@@ -29,8 +29,8 @@ flag --enable-semantic help="Enable Phase 1 semantic producers (default: GIT_CG_
 flag --no-enable-semantic help="Disable Phase 1 semantic producers for this run."
 flag --rank-arbitrate help="Allow Low-confidence pre-LLM intent arbitration when -i + TTY (default: GIT_CG_RANK_ARBITRATE env or auto)."
 flag --no-rank-arbitrate help="Disable Low-confidence intent arbitration; keep top rank + telemetry."
-flag --gold-strict help="Resolve gold lint to strict mode without enabling general --strict."
-flag --blueprint help="Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB; never overrides ranked intent_id)." {
+flag --gold-strict help="Resolve presentation gold lint to strict (fail on STRICT_FAIL_CODES) without enabling general --strict. Complements path-class/hallucination gates; does not re-rank intent."
+flag --blueprint help="Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB). Overlays wording only; never overrides ranked intent_id, SemVer authority, or SOP rank order." {
     arg <BLUEPRINT>
 }
 flag "-r --recover" help="Recover and retry the last generated commit message without querying the AI."
@@ -39,8 +39,8 @@ cmd commit help="Generate an AI commit message based on staged changes." {
     flag --no-rank-arbitrate help="Disable Low-confidence intent arbitration; keep top rank + telemetry."
     flag --enable-semantic help="Enable Phase 1 semantic producers (default: GIT_CG_ENABLE_SEMANTIC env or off)."
     flag --no-enable-semantic help="Disable Phase 1 semantic producers for this run."
-    flag --gold-strict help="Resolve gold lint to strict mode without enabling general --strict."
-    flag --blueprint help="Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB; never overrides ranked intent_id)." {
+    flag --gold-strict help="Resolve presentation gold lint to strict (fail on STRICT_FAIL_CODES) without enabling general --strict. Complements path-class/hallucination gates; does not re-rank intent."
+    flag --blueprint help="Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB). Overlays wording only; never overrides ranked intent_id, SemVer authority, or SOP rank order." {
         arg <BLUEPRINT>
     }
     flag "-i --interactive" help="Enable terminal-native interactive review via gum when a TTY is available."

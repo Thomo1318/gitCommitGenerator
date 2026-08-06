@@ -187,6 +187,19 @@ def init_sentry():
                                 # enums are safe as tags, but scrub free-text guidance.
                                 "low_confidence_guidance",
                                 "body_skeleton",
+                                # Slice 10 / D26 — scrub presentation locals; closed tags only via set_tag.
+                                "presentation_fallback_reason",
+                                "path_class_gate",
+                                "changelog_antisignal_applied",
+                                "hallucination_guard_fired",
+                                "scope_normalised_from",
+                                "preferred_scope",
+                                "preferred_scope_raw",
+                                "force_scope",
+                                "scope_hint",
+                                "guard_report",
+                                "claim_tags",
+                                "harvested_claim_tags",
                                 # Slice 7 blueprint — never ship payload/content.
                                 "blueprint",
                                 "blueprint_raw",

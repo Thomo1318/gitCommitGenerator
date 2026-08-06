@@ -541,9 +541,12 @@ def generate_commit_message(
             commit_result.primary_intent.cc_type = CommitType(active_directives["preferred_type"])
         if "preferred_scope" in active_directives:
             # I-12 / #204 §J: always route through normalize_scope (never assign raw token).
-            from git_cg.scope_canon import normalize_scope
+            from git_cg.scope_canon import resolve_scope_normalisation
 
-            commit_result.primary_intent.scope = normalize_scope(active_directives["preferred_scope"])
+            _canon, _from = resolve_scope_normalisation(active_directives["preferred_scope"])
+            commit_result.primary_intent.scope = _canon
+            # Stash closed alias key for D26 write (RF-1); never a path.
+            commit_result._scope_normalised_from = _from  # ephemeral D26 breadcrumb
     return commit_result
 
 
@@ -1396,6 +1399,45 @@ def _build_semantic_enrichment_facts(
     )
 
 
+def _presentation_telemetry_from_context(
+    gen_context: object | None,
+    *,
+    commit_plan: object | None = None,
+    preferred_scope_raw: str | None = None,
+) -> tuple[str, bool, str]:
+    """Derive closed D26 presentation telemetry from context/plan (Issue #204 Slice 10).
+
+    Returns:
+        (path_class_gate, changelog_antisignal_applied, scope_normalised_from)
+    """
+    path_class_gate = "none"
+    changelog_antisignal_applied = False
+    scope_normalised_from = "none"
+
+    cons = getattr(gen_context, "presentation_constraints", None) if gen_context is not None else None
+    if cons is not None:
+        raw_class = getattr(cons, "diff_class", None)
+        if raw_class:
+            path_class_gate = str(raw_class)
+        changelog_antisignal_applied = bool(getattr(cons, "changelog_antisignal_applied", False))
+
+    # Prefer the raw pre-normalise token when available; else final primary scope.
+    probe = preferred_scope_raw
+    if not probe and commit_plan is not None:
+        primary = getattr(commit_plan, "primary_intent", None)
+        probe = getattr(primary, "scope", None) if primary is not None else None
+    if probe:
+        try:
+            from git_cg.scope_canon import resolve_scope_normalisation
+
+            _canon, scope_normalised_from = resolve_scope_normalisation(str(probe))
+            del _canon
+        except Exception:
+            scope_normalised_from = "none"
+
+    return path_class_gate, changelog_antisignal_applied, scope_normalised_from
+
+
 def _write_telemetry_state_safe(
     review_state: ReviewState | None,
     diff_output: str,
@@ -1459,6 +1501,9 @@ def _write_telemetry_state_safe(
     presentation_fallback_reason: str = "none",
     blueprint_applied: bool = False,
     hallucination_guard_fired: bool = False,
+    path_class_gate: str = "none",
+    changelog_antisignal_applied: bool = False,
+    scope_normalised_from: str = "none",
     contract_lift_applied: bool = False,
     contract_lift_from_semver: str | None = None,
     contract_locked_semver: str | None = None,
@@ -1533,6 +1578,9 @@ def _write_telemetry_state_safe(
         presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
         blueprint_applied (bool): Issue #204 Slice 7 — True when a legal operator blueprint overlay was applied.
         hallucination_guard_fired (bool): Issue #204 Slice 8 — True when hallucination guard rejected unevidenced claims.
+        path_class_gate (str): Issue #204 Slice 10 — closed DiffClass label or none.
+        changelog_antisignal_applied (bool): Issue #204 Slice 10 — changelog marker exclusion engaged.
+        scope_normalised_from (str): Issue #204 Slice 10 — CANONICAL_SCOPE_ALIASES key or none (RF-1).
         contract_lift_applied (bool): Issue #204 Slice 5 — True when post-presentation SemVer was lifted to the locked contract floor.
         contract_lift_from_semver (str | None): Issue #204 Slice 5 — pre-lift SemVer value when a lift occurred.
         contract_locked_semver (str | None): Issue #204 Slice 5.5 — locked contract SemVer.
@@ -1636,6 +1684,9 @@ def _write_telemetry_state_safe(
             presentation_fallback_reason=str(presentation_fallback_reason or "none"),
             blueprint_applied=bool(blueprint_applied),
             hallucination_guard_fired=bool(hallucination_guard_fired),
+            path_class_gate=str(path_class_gate or "none"),
+            changelog_antisignal_applied=bool(changelog_antisignal_applied),
+            scope_normalised_from=str(scope_normalised_from or "none"),
             contract_lift_applied=bool(contract_lift_applied),
             contract_lift_from_semver=(
                 str(contract_lift_from_semver) if contract_lift_from_semver is not None else None
@@ -2575,6 +2626,13 @@ def _run_commit_generation(
     blueprint_applied: bool = False
     parsed_blueprint = None  # CommitBlueprint | None — never logged raw
     blueprint_guidance: str | None = None
+    # Issue #204 Slice 10 / D26: path-class + antisignal + scope-alias telemetry.
+    path_class_gate: str = "none"
+    changelog_antisignal_applied: bool = False
+    scope_normalised_from: str = "none"
+    path_class_gate, changelog_antisignal_applied, scope_normalised_from = _presentation_telemetry_from_context(
+        gen_context
+    )
 
     # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
     # Sole insertion seam: after rank/confidence owner, before contract/LLM.
@@ -2700,6 +2758,9 @@ def _run_commit_generation(
                     presentation_fallback_reason=presentation_fallback_reason,
                     blueprint_applied=blueprint_applied,
                     hallucination_guard_fired=hallucination_guard_fired,
+                    path_class_gate=path_class_gate,
+                    changelog_antisignal_applied=changelog_antisignal_applied,
+                    scope_normalised_from=scope_normalised_from,
                     contract_lift_applied=contract_lift_applied,
                     contract_lift_from_semver=contract_lift_from_semver,
                     contract_locked_semver=contract_locked_semver,
@@ -2731,6 +2792,11 @@ def _run_commit_generation(
                     semantic_summary=semantic_summary,
                     risk_assessment=risk_assessment,
                 )
+                path_class_gate, changelog_antisignal_applied, _scope_refresh = _presentation_telemetry_from_context(
+                    gen_context
+                )
+                if _scope_refresh != "none":
+                    scope_normalised_from = _scope_refresh
                 # Presentation narrowing: preferred_type/scope select among the new
                 # authoritative ranked snapshot without mutating SOP weights (G1).
                 from git_cg.intent_arbitrate import ranked_intents_for_directives
@@ -3303,6 +3369,13 @@ def _run_commit_generation(
                     presentation_fallback_reason,
                     _guard_report.fallback_reason,
                 )
+                with contextlib.suppress(Exception):
+                    sentry_sdk.set_tag("presentation_fallback_reason", str(presentation_fallback_reason))
+                    sentry_sdk.set_tag("path_class_gate", str(path_class_gate))
+                    sentry_sdk.set_tag(
+                        "hallucination_guard_fired",
+                        "true" if hallucination_guard_fired else "false",
+                    )
                 if gold_regen_attempts >= 2:
                     # Exhausted shared wording budget → deterministic skeleton (D14).
                     commit_plan = apply_guard_skeleton_fallback(
@@ -3403,6 +3476,16 @@ def _run_commit_generation(
                 gold_self_correction_outcome=gold_self_correction_outcome,
             )
             # Persist v1.1 outcome before abort so Opik state captures the fail mode.
+            path_class_gate, changelog_antisignal_applied, _scope_from = _presentation_telemetry_from_context(
+                gen_context,
+                commit_plan=getattr(review_state, "commit_plan", None) if review_state is not None else None,
+                preferred_scope_raw=(active_directives or {}).get("preferred_scope"),
+            )
+            _stashed = getattr(getattr(review_state, "commit_plan", None), "_scope_normalised_from", None)
+            if _stashed and str(_stashed) != "none":
+                scope_normalised_from = str(_stashed)
+            elif _scope_from != "none":
+                scope_normalised_from = _scope_from
             _write_telemetry_state_safe(
                 review_state=review_state,
                 diff_output=analysis_diff,
@@ -3477,6 +3560,9 @@ def _run_commit_generation(
                 presentation_fallback_reason=presentation_fallback_reason,
                 blueprint_applied=blueprint_applied,
                 hallucination_guard_fired=hallucination_guard_fired,
+                path_class_gate=path_class_gate,
+                changelog_antisignal_applied=changelog_antisignal_applied,
+                scope_normalised_from=scope_normalised_from,
                 contract_lift_applied=contract_lift_applied,
                 contract_lift_from_semver=contract_lift_from_semver,
                 contract_locked_semver=contract_locked_semver,
@@ -3557,6 +3643,16 @@ def _run_commit_generation(
 
         break
 
+    path_class_gate, changelog_antisignal_applied, _scope_from = _presentation_telemetry_from_context(
+        gen_context,
+        commit_plan=getattr(review_state, "commit_plan", None) if review_state is not None else None,
+        preferred_scope_raw=(active_directives or {}).get("preferred_scope") if active_directives else None,
+    )
+    _stashed = getattr(getattr(review_state, "commit_plan", None), "_scope_normalised_from", None)
+    if _stashed and str(_stashed) != "none":
+        scope_normalised_from = str(_stashed)
+    elif _scope_from != "none":
+        scope_normalised_from = _scope_from
     _write_telemetry_state_safe(
         review_state=review_state,
         diff_output=analysis_diff,
@@ -3629,6 +3725,9 @@ def _run_commit_generation(
         presentation_fallback_reason=presentation_fallback_reason,
         blueprint_applied=blueprint_applied,
         hallucination_guard_fired=hallucination_guard_fired,
+        path_class_gate=path_class_gate,
+        changelog_antisignal_applied=changelog_antisignal_applied,
+        scope_normalised_from=scope_normalised_from,
         contract_lift_applied=contract_lift_applied,
         contract_lift_from_semver=contract_lift_from_semver,
         contract_locked_semver=contract_locked_semver,
@@ -4140,6 +4239,10 @@ def record_telemetry(
                     # Issue #204 Slice 7: blueprint applied (bool only).
                     "blueprint_applied": bool(telemetry_state.get("blueprint_applied", False)),
                     "hallucination_guard_fired": bool(telemetry_state.get("hallucination_guard_fired", False)),
+                    # Issue #204 Slice 10 / D26: remaining presentation observability.
+                    "path_class_gate": telemetry_state.get("path_class_gate", "none"),
+                    "changelog_antisignal_applied": bool(telemetry_state.get("changelog_antisignal_applied", False)),
+                    "scope_normalised_from": telemetry_state.get("scope_normalised_from", "none"),
                     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab).
                     "contract_lift_applied": bool(telemetry_state.get("contract_lift_applied", False)),
                     "contract_lift_from_semver": telemetry_state.get("contract_lift_from_semver"),
