@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import re
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -70,6 +71,130 @@ class TrailerPriors(BaseModel):
     def _validate_role(self) -> TrailerPriors:
         if self.role not in _TRAILER_ROLES:
             raise ValueError(f"role must be one of {list(_TRAILER_ROLES)}; got {self.role!r}")
+        return self
+
+
+class ChangelogGroup(enum.StrEnum):
+    """Closed changelog group vocabulary for presentation trailers (Issue #204 · D22)."""
+
+    ADDED = "Added"
+    CHANGED = "Changed"
+    DEPRECATED = "Deprecated"
+    REMOVED = "Removed"
+    FIXED = "Fixed"
+    SECURITY = "Security"
+    DOCUMENTATION = "Documentation"
+    TESTS = "Tests"
+    MISCELLANEOUS = "Miscellaneous"
+
+
+_BLUEPRINT_STUB_ROLES = (
+    "prod",
+    "test",
+    "docs",
+    "adr",
+    "fixtures",
+    "telemetry",
+    "sentry",
+    "perf",
+    "refactor",
+    "security",
+    "other",
+)
+
+_CLAIM_TAG_RE = re.compile(r"^P9-[AB]\d{2}$")
+
+
+class BlueprintStub(BaseModel):
+    """Serialisable included-change inventory seed for CommitBlueprint (Issue #204 · §I)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    role: str = Field(description="Closed stub role (prod/test/docs/adr/...)")
+    surface: str = Field(
+        min_length=1,
+        max_length=64,
+        description="Canonical scope-like surface, not a filesystem path",
+    )
+    claim_tags: list[str] = Field(
+        default_factory=list,
+        description="Optional claim tags (e.g. P9-A05); max 8",
+    )
+    note: str | None = Field(
+        default=None,
+        max_length=80,
+        description="Inventory seed note only (max 80 chars)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_stub(self) -> BlueprintStub:
+        if self.role not in _BLUEPRINT_STUB_ROLES:
+            raise ValueError(f"role must be one of {list(_BLUEPRINT_STUB_ROLES)}; got {self.role!r}")
+        if any(ch in self.surface for ch in ("/", "\\", " ")):
+            raise ValueError("surface must be a canonical scope-like slug, not a path")
+        if len(self.claim_tags) > 8:
+            raise ValueError("claim_tags accepts at most 8 entries")
+        for tag in self.claim_tags:
+            if not _CLAIM_TAG_RE.match(str(tag)):
+                raise ValueError(f"claim_tags entries must match P9-[AB]\\d{{2}}; got {tag!r}")
+        return self
+
+
+class CommitBlueprint(BaseModel):
+    """Operator-selectable presentation overlay (Issue #204 · Slice 7 · Approval locks §I).
+
+    Presentation-only. Never mutates ranked intent_id / matrix authority.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    cc_type: CommitType | None = Field(default=None, description="Optional presentation primary cc_type")
+    scope: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Single scope slug; normalised via scope_canon",
+    )
+    semver_impact: SemVerImpact | None = Field(default=None, description="Optional presentation SemVer")
+    change_types: list[CommitType] | None = Field(
+        default=None,
+        description="Presentation Change-Types overlay",
+    )
+    changelog_groups: list[ChangelogGroup] | None = Field(
+        default=None,
+        description="Presentation Changelog-Groups overlay",
+    )
+    included_changes_stubs: list[BlueprintStub] | None = Field(
+        default=None,
+        description="Structured included-change inventory seeds",
+    )
+    subject_hint: str | None = Field(
+        default=None,
+        max_length=72,
+        description="Subject seed only (max 72); not a rank steer",
+    )
+    body_skeleton: list[str] | None = Field(
+        default=None,
+        description="Body section seeds only (max 12 x 120 chars)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> CommitBlueprint:
+        if self.change_types is not None and len(self.change_types) > 12:
+            raise ValueError("change_types accepts at most 12 entries")
+        if self.changelog_groups is not None and len(self.changelog_groups) > 12:
+            raise ValueError("changelog_groups accepts at most 12 entries")
+        if self.included_changes_stubs is not None and len(self.included_changes_stubs) > 16:
+            raise ValueError("included_changes_stubs accepts at most 16 entries")
+        if self.body_skeleton is not None:
+            if len(self.body_skeleton) > 12:
+                raise ValueError("body_skeleton accepts at most 12 entries")
+            for i, line in enumerate(self.body_skeleton):
+                if len(line) > 120:
+                    raise ValueError(f"body_skeleton[{i}] exceeds 120 characters")
+        if self.scope is not None and any(ch in self.scope for ch in ("/", "\\")):
+            raise ValueError("scope must be a single slug, not a path")
+        if self.subject_hint is not None and "\x00" in self.subject_hint:
+            raise ValueError("subject_hint must not contain NUL")
         return self
 
 
