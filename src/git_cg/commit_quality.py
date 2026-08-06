@@ -13,6 +13,7 @@ Authority boundaries:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
@@ -34,6 +35,7 @@ from git_cg.scope_canon import normalize_scope
 
 if TYPE_CHECKING:
     from git_cg.models import CommitPlan
+    from git_cg.ranking_confidence import RankingConfidence
 
 
 def _norm_path(path: str) -> str:
@@ -1483,8 +1485,11 @@ def format_included_change_stub_inventory(stubs: list[Stub]) -> str:
     if not stubs:
         return ""
     lines = [
-        "INCLUDED-CHANGES INVENTORY (coverage expectation — rephrase freely, do not drop surfaces):",
-        "Cover these surfaces in Included changes, or justify a true single-surface commit.",
+        "INCLUDED-CHANGES INVENTORY (planning coverage only — not final commit bullets):",
+        "Cover these surfaces via secondary_intents so the renderer emits exactly one Included changes section.",
+        "Final nested items MUST be Hybrid mini-subjects: `- <emoji> <cc_type>(<scope>): <subject>`.",
+        "Do not copy bracketed `[role/surface]` inventory syntax into body_summary or Included changes.",
+        "Do not put an Included changes heading inside body_summary.",
     ]
     for stub in stubs:
         scope = f" scope={stub.scope}" if stub.scope else ""
@@ -1492,6 +1497,259 @@ def format_included_change_stub_inventory(stubs: list[Stub]) -> str:
         claims = f" claims={','.join(stub.claim_tags)}" if stub.claim_tags else ""
         lines.append(f"- [{stub.role}/{stub.surface}] {stub.suggested_cc_type.value}{scope}: {note}{claims}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Slice 5 — Low-confidence presentation posture (D7)
+# ---------------------------------------------------------------------------
+
+# Trigger set is exactly the four existing v1 ranking-confidence reason codes.
+# Import lazily-safe constants; keep a local frozenset so this module never
+# becomes a second confidence policy owner.
+LOW_CONFIDENCE_TRIGGER_REASONS: frozenset[str] = frozenset(
+    {
+        "margin_below_low_threshold",
+        "mixed_intent",
+        "near_tie_top3",
+        "exact_tie_top",
+    }
+)
+
+# Forced path-roles where TrailerPriors win presentation under Low confidence (D3/D7).
+_LOW_CONFIDENCE_PRIOR_ROLES: frozenset[str] = frozenset(
+    {
+        "tests",
+        "docs",
+        "adr",
+        "fixtures",
+        "config_ci",
+    }
+)
+
+# Closed presentation fallback vocabulary (D9 / D26). Slice 5 emits only
+# ``none`` / ``low_confidence``; remaining values are reserved for later slices.
+PRESENTATION_FALLBACK_NONE = "none"
+PRESENTATION_FALLBACK_LOW_CONFIDENCE = "low_confidence"
+PRESENTATION_FALLBACK_REASONS: frozenset[str] = frozenset(
+    {
+        PRESENTATION_FALLBACK_NONE,
+        "error",
+        "blueprint",
+        "path_class_gate",
+        "semver_ceiling",
+        "type_dominance",
+        "hallucination_guard",
+        "craft_guard",
+        "inventory_guard",
+        PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+    }
+)
+
+
+@dataclass(frozen=True)
+class PresentationAdjustment:
+    """Immutable low-confidence presentation posture (D7 / D22).
+
+    Presentation-only. Never carries ranked ``intent_id`` rewrites.
+    """
+
+    active: bool = False
+    fallback_reason: str = PRESENTATION_FALLBACK_NONE
+    seed_presentation: bool = False
+    cc_type: CommitType | None = None
+    semver_impact: SemVerImpact | None = None
+    changelog_group: str | None = None
+    scope_hint: str | None = None
+    body_skeleton: str = ""
+    role: str = "mixed"
+
+
+def is_low_confidence_posture(confidence: RankingConfidence | None) -> bool:
+    """Return whether ranking confidence triggers Slice 5 low posture (D7)."""
+    if confidence is None:
+        return False
+    reasons = getattr(confidence, "reasons", None) or ()
+    return bool(set(reasons) & LOW_CONFIDENCE_TRIGGER_REASONS)
+
+
+def is_generic_feature_presentation(plan_or_seed: CommitPlan | None) -> bool:
+    """Return whether *plan_or_seed* is generic ``feat`` + ``MINOR`` (D7 tests).
+
+    ``None`` is treated as generic (no matrix-high presentation support yet).
+    """
+    if plan_or_seed is None:
+        return True
+    primary = getattr(plan_or_seed, "primary_intent", None)
+    if primary is None:
+        return True
+    cc = getattr(primary, "cc_type", None)
+    semver = getattr(primary, "semver_impact", None)
+    cc_val = cc.value if isinstance(cc, CommitType) else str(cc or "").lower()
+    sem_val = semver.value if isinstance(semver, SemVerImpact) else str(semver or "").upper()
+    return cc_val == CommitType.FEAT.value and sem_val == SemVerImpact.MINOR.value
+
+
+def strip_included_changes_from_body_summary(body_summary: str | None) -> str | None:
+    """Remove any ``Included changes:`` block leaked into body_summary.
+
+    Final Hybrid nested bullets are owned exclusively by ``secondary_intents``
+    via ``CommitPlan.render``. Prompt skeletons and inventory must never become
+    a second Included-changes section inside the prose body.
+    """
+    if body_summary is None:
+        return None
+    raw = str(body_summary).replace("\\n", "\n")
+    if not raw.strip():
+        return None
+
+    # Drop from the first Included-changes heading through contiguous bullet lines.
+    pattern = re.compile(
+        r"(?:\n[ \t]*)?Included changes:[ \t]*\n"
+        r"(?:[ \t]*- .*\n?)*"
+        r"(?:[ \t]*\n)?",
+        flags=re.IGNORECASE,
+    )
+    cleaned = pattern.sub("\n", raw)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned or None
+
+
+def build_low_confidence_body_skeleton(
+    *,
+    priors: TrailerPriors | None = None,
+    stubs: list[Stub] | None = None,
+) -> str:
+    """Build a deterministic Context / Changes body skeleton (D7).
+
+    Directive-free wording structure for ``body_summary`` only. Never sets
+    preferred_type or rank steers.
+
+    Does **not** embed a final-message ``Included changes:`` block or any
+    hyphen bullets intended for that section. Nested Hybrid mini-subjects are
+    owned by ``secondary_intents`` / ``CommitPlan.render``. Inventory stub
+    syntax (``[role/surface] ...``) must never be copied into the commit body.
+    """
+    del stubs  # inventory remains prompt-only via format_included_change_stub_inventory
+    role = getattr(priors, "role", None) or "mixed"
+    scope = getattr(priors, "scope_hint", None) or ""
+    scope_bit = f" (scope hint: {scope})" if scope else ""
+
+    lines = [
+        "BODY_SUMMARY STRUCTURE ONLY (Context/Changes prose — never final Included changes):",
+        "Context:",
+        f"- Ranking confidence is low for role `{role}`{scope_bit}.",
+        "- Describe only staged evidence; do not invent operator-visible capability.",
+        "",
+        "Changes:",
+        "- Summarise the behaviour or documentation delta grounded in the diff.",
+        "- Prefer failure-mode / outcome verbs over vague improve/enhance wording.",
+        "",
+        "Do NOT put an `Included changes:` heading inside body_summary.",
+        "Do NOT emit plain prose bullets or bracketed inventory bullets under Included changes.",
+        "Emit exactly one final Included changes section via secondary_intents only.",
+        "Every Included changes item MUST be a Hybrid mini-subject:",
+        "`- <emoji> <cc_type>(<scope>): <subject>`",
+        "Convert each inventory stub into that Hybrid shape; never copy `[role/surface]` syntax.",
+    ]
+    return "\n".join(lines)
+
+
+def format_low_confidence_guidance(adjustment: PresentationAdjustment) -> str:
+    """Render Slice 5 prompt guidance from a presentation adjustment (D7).
+
+    Returns an empty string when the posture is inactive.
+    """
+    if not adjustment.active or not adjustment.body_skeleton:
+        return ""
+    lines = [
+        "LOW-CONFIDENCE BODY SKELETON (wording structure only — does not change intent_id / gitmoji authority):",
+        "Structure body_summary with Context/Changes prose only. Use staged evidence only.",
+        "Do not invent generic feat+MINOR capability framing under uncertainty.",
+        "Emit exactly one `Included changes:` section in the final message, owned by "
+        "secondary_intents (never duplicated inside body_summary).",
+        "Every item under Included changes MUST be a Hybrid mini-subject: `- <emoji> <cc_type>(<scope>): <subject>`.",
+        "Never emit plain prose bullets, bracketed inventory bullets, or a second `Included changes:` heading.",
+    ]
+    if adjustment.seed_presentation:
+        cc = adjustment.cc_type.value if adjustment.cc_type is not None else "chore"
+        sem = adjustment.semver_impact.value if adjustment.semver_impact is not None else "NONE"
+        group = adjustment.changelog_group or "Miscellaneous"
+        scope = adjustment.scope_hint or "(none)"
+        lines.append(
+            "Path-role presentation seed (presentation fields only): "
+            f"cc_type={cc}, semver_impact={sem}, changelog_group={group}, scope_hint={scope}."
+        )
+        lines.append(
+            "When the alternative would be generic feat+MINOR on a forced path role "
+            "or unsupported feature framing, keep the seed above for presentation."
+        )
+    lines.append("")
+    lines.append(adjustment.body_skeleton)
+    lines.append("")
+    lines.append(
+        "This block guides body structure only. It MUST NOT change intent_id or gitmoji, "
+        "MUST NOT set preferred_type, and is not a ranking override."
+    )
+    return "\n".join(lines)
+
+
+def apply_low_confidence_presentation(
+    plan_or_seed: CommitPlan | None,
+    confidence: RankingConfidence | None,
+    priors: TrailerPriors,
+    *,
+    stubs: list[Stub] | None = None,
+) -> PresentationAdjustment:
+    """Compute low-confidence presentation posture without mutating authority (D7).
+
+    Never mutates ``plan_or_seed``, ranked intent ids, rank scores, or confidence.
+    Does not call ``rank_commit_intents``.
+    """
+    if not is_low_confidence_posture(confidence):
+        return PresentationAdjustment(role=getattr(priors, "role", "mixed") or "mixed")
+
+    role = getattr(priors, "role", "mixed") or "mixed"
+    skeleton = build_low_confidence_body_skeleton(priors=priors, stubs=stubs)
+    forced_role = role in _LOW_CONFIDENCE_PRIOR_ROLES
+    generic = is_generic_feature_presentation(plan_or_seed)
+
+    if forced_role:
+        # Path-class priors fully own presentation under Low confidence (D3/D7/D11).
+        return PresentationAdjustment(
+            active=True,
+            fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+            seed_presentation=True,
+            cc_type=priors.cc_type,
+            semver_impact=priors.semver_impact,
+            changelog_group=priors.changelog_group,
+            scope_hint=priors.scope_hint,
+            body_skeleton=skeleton,
+            role=role,
+        )
+
+    if generic:
+        # Product/mixed generic feat+MINOR: eliminate unearned MINOR without forcing
+        # soft chore type (dark-launch/carry-through may keep feat at PATCH).
+        return PresentationAdjustment(
+            active=True,
+            fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+            seed_presentation=True,
+            cc_type=None,
+            semver_impact=SemVerImpact.PATCH,
+            changelog_group=None,
+            scope_hint=priors.scope_hint,
+            body_skeleton=skeleton,
+            role=role,
+        )
+
+    # Low confidence but matrix presentation already non-generic — skeleton only.
+    return PresentationAdjustment(
+        active=True,
+        fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+        seed_presentation=False,
+        body_skeleton=skeleton,
+        role=role,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1527,6 +1785,45 @@ def _clamp_semver(current: SemVerImpact | str, ceiling: SemVerImpact) -> SemVerI
     if _SEMVER_RANK[cur.value] > _SEMVER_RANK[ceiling.value]:
         return ceiling
     return cur
+
+
+def apply_presentation_seed(plan: CommitPlan, adjustment: PresentationAdjustment) -> CommitPlan:
+    """Apply low-confidence presentation seed fields onto *plan* (D1/D7).
+
+    Preserves ranked ``intent_id`` and matrix ``gitmoji``. Safe no-op when the
+    adjustment is inactive. When active, always strips any leaked
+    ``Included changes:`` block from ``body_summary`` so nested Hybrid bullets
+    remain owned by ``secondary_intents`` / ``CommitPlan.render``.
+    """
+    if not adjustment.active:
+        return plan
+
+    cleaned_body = strip_included_changes_from_body_summary(plan.body_summary)
+    if cleaned_body != plan.body_summary:
+        plan = plan.model_copy(update={"body_summary": cleaned_body})
+
+    if not adjustment.seed_presentation:
+        return plan
+
+    primary = plan.primary_intent
+    preserved_intent_id = primary.intent_id
+    preserved_gitmoji = primary.gitmoji
+
+    if adjustment.cc_type is not None:
+        primary.cc_type = adjustment.cc_type
+    if adjustment.semver_impact is not None:
+        primary.semver_impact = adjustment.semver_impact
+        for sec in plan.secondary_intents:
+            # Keep secondaries from outranking the seeded ceiling.
+            sec.semver_impact = _clamp_semver(sec.semver_impact, adjustment.semver_impact)
+    if adjustment.changelog_group:
+        primary.changelog_group = adjustment.changelog_group
+    if adjustment.scope_hint and not primary.scope:
+        primary.scope = normalize_scope(adjustment.scope_hint)
+
+    primary.intent_id = preserved_intent_id
+    primary.gitmoji = preserved_gitmoji
+    return plan
 
 
 def _presentation_gitmoji_for(cc_type: CommitType | str, current: str) -> str:
