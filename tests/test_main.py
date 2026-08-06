@@ -6,6 +6,10 @@ import pytest
 import typer
 
 import git_cg.main as main_module
+
+# Slice 8: capture real evaluator before gold harness stubs it.
+from git_cg import commit_quality as _cq_mod
+from git_cg.commit_quality import GuardReport as _GuardReport
 from git_cg.main import (
     ReviewState,
     _detect_branch_issue_reference,
@@ -24,6 +28,8 @@ from git_cg.models import (
     ModelCommitPlan,
     SemVerImpact,
 )
+
+_real_evaluate_presentation_guards = _cq_mod.evaluate_presentation_guards
 
 
 def test_build_system_prompt_contains_diff():
@@ -862,8 +868,6 @@ def _gold_harness_mocks(monkeypatch, plans, *, telemetry_events: list | None = N
 
     monkeypatch.delenv("GIT_CG_GOLD_MODE", raising=False)
     writes: list[str] = []
-    plans_iter = iter(plans)
-
     monkeypatch.setattr(main_mod, "_validate_commit_source", lambda *a, **k: None)
     monkeypatch.setattr(
         main_mod,
@@ -898,7 +902,20 @@ def _gold_harness_mocks(monkeypatch, plans, *, telemetry_events: list | None = N
     monkeypatch.setattr(main_mod, "get_ai_client", lambda engine: object())
     monkeypatch.setattr(main_mod, "resolve_model_name", lambda client, preferred, verbose=False: "test-model")
     monkeypatch.setattr(main_mod, "_detect_branch_issue_reference", lambda verbose: [])
+    plans_iter = iter(plans)
     monkeypatch.setattr(main_mod, "generate_commit_message", lambda *a, **k: next(plans_iter))
+
+    # Gold harness fixtures intentionally use banned openers / inventory subjects.
+    # Slice 8 presentation guards share that vocabulary and the regen budget; keep
+    # gold-focused tests isolated by stubbing guards clean here. Slice 8 main-loop
+    # tests re-enable real guards explicitly via _enable_real_presentation_guards.
+    def _clean_guard_report(*a, **k):
+        return _GuardReport(findings=())
+
+    monkeypatch.setattr(
+        "git_cg.commit_quality.evaluate_presentation_guards",
+        _clean_guard_report,
+    )
     monkeypatch.setattr(main_mod, "_write_commit_message", lambda f, s, strict, verbose: writes.append(s))
     if telemetry_events is None:
         monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", lambda **k: None)
@@ -2139,3 +2156,176 @@ def test_run_commit_generation_accepts_blueprint_kwarg():
     params = list(inspect.signature(_run_commit_generation).parameters)
     assert "blueprint" in params
     assert params.index("blueprint") == params.index("rank_arbitrate") + 1
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 8 — presentation guards share gold_regen_attempts
+# ---------------------------------------------------------------------------
+
+
+def _guard_dirty_plan(
+    *,
+    description: str = "redact secrets from release packaging",
+    body: str = "Remove credentials leakage from the helper path.",
+):
+    """Product-src plan that trips GUARD_SECURITY_NOUN (no security path evidence)."""
+    return _gold_plan(body=body, description=description, scope="release")
+
+
+def _guard_clean_plan():
+    return _gold_plan(
+        body="Add a focused helper for release packaging.",
+        description="add focused release helper",
+        scope="release",
+    )
+
+
+def _enable_real_presentation_guards(monkeypatch):
+    """Undo the gold-harness clean-guard stub for Slice 8 loop tests."""
+    monkeypatch.setattr(
+        "git_cg.commit_quality.evaluate_presentation_guards",
+        _real_evaluate_presentation_guards,
+    )
+
+
+def test_slice8_guard_regen_shares_gold_budget_and_clears(monkeypatch, capsys, tmp_path):
+    """Dirty guard → one shared regen → clean plan writes; no gold fan-out."""
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _guard_dirty_plan(),
+            _guard_clean_plan(),
+            _guard_dirty_plan(),  # must not be consumed
+        ],
+        telemetry_events=telemetry_events,
+    )
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    assert "Presentation guard" in out
+    assert "shared regen 1/2" in out
+    assert "shared regen 2/2" not in out
+    assert telemetry_events, "success path must persist telemetry"
+    final = telemetry_events[-1]
+    assert final.get("hallucination_guard_fired") is True
+    assert final.get("gold_regen_attempts") == 1
+    assert final.get("presentation_fallback_reason") in {
+        "hallucination_guard",
+        "none",
+        "low_confidence",
+    }
+
+
+def test_slice8_guard_exhaustion_applies_skeleton_once(monkeypatch, capsys, tmp_path):
+    """Three dirty plans: two shared regens then skeleton fallback; hook path still writes."""
+    telemetry_events: list[dict] = []
+    dirty = _guard_dirty_plan()
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [dirty, dirty, dirty, dirty],  # fourth must not be consumed
+        telemetry_events=telemetry_events,
+    )
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out.lower()
+    assert "shared regen 1/2" in out
+    assert "shared regen 2/2" in out
+    assert "deterministic skeleton fallback" in out
+    # Written message must be skeleton-shaped, not the dirty secrets claim.
+    written = writes[0].lower()
+    assert "credentials" not in written
+    assert "secrets" not in written
+    final = telemetry_events[-1]
+    assert final.get("hallucination_guard_fired") is True
+    assert final.get("gold_regen_attempts") == 2
+    assert final.get("presentation_fallback_reason") == "hallucination_guard"
+    assert final.get("gold_blocked") is False
+
+
+def test_slice8_guard_and_gold_share_single_ceiling(monkeypatch, capsys, tmp_path):
+    """Guard regen then gold fail must not exceed the shared 0..2 ceiling (no 4th LLM)."""
+    telemetry_events: list[dict] = []
+    # Pass0: guard dirty (security noun)
+    # Pass1: guard-clean subject, gold-dirty banned body opener
+    # Pass2+: still dirty under shared counter → skeleton / gold exhaust; no 4th LLM
+    plans = [
+        _guard_dirty_plan(),
+        _gold_plan(
+            body="This commit adds a helper.",
+            description="add focused release helper",
+            scope="release",
+        ),
+        _gold_plan(
+            body="This commit adds a helper.",
+            description="add focused release helper",
+            scope="release",
+        ),
+        _gold_plan(
+            body="Add a focused helper for release packaging.",
+            description="add focused release helper",
+            scope="release",
+        ),
+    ]
+    consumed: list[int] = []
+    plans_iter = iter(enumerate(plans))
+
+    def _next_plan(*a, **k):
+        idx, plan = next(plans_iter)
+        consumed.append(idx)
+        return plan
+
+    writes = _gold_harness_mocks(monkeypatch, plans, telemetry_events=telemetry_events)
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    monkeypatch.setattr(main_mod, "generate_commit_message", _next_plan)
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,  # warn: gold does not block after shared budget
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    # Initial + at most 2 shared wording regens ⇒ indices 0..2 only (never plan 3).
+    assert consumed == sorted(consumed)
+    assert max(consumed) <= 2
+    assert len(consumed) <= 3
+    final = telemetry_events[-1]
+    assert int(final.get("gold_regen_attempts") or 0) <= 2
+    assert final.get("hallucination_guard_fired") is True

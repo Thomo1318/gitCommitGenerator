@@ -1991,3 +1991,46 @@ def test_read_telemetry_state_defaults_blueprint_applied_for_legacy(tmp_path):
     result = read_telemetry_state(str(tmp_path))
     assert result is not None
     assert result.blueprint_applied is False
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 8 hallucination_guard_fired
+# ---------------------------------------------------------------------------
+
+
+def test_hallucination_guard_fired_defaults_false():
+    tel = _minimal_telemetry()
+    assert tel.hallucination_guard_fired is False
+
+
+def test_write_then_read_preserves_hallucination_guard_fired(tmp_path, monkeypatch):
+    monkeypatch.setattr("git_cg.telemetry.redact_payload", lambda x: x)
+    tel = _minimal_telemetry(hallucination_guard_fired=True, presentation_fallback_reason="hallucination_guard")
+    write_telemetry_state(str(tmp_path), tel)
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.hallucination_guard_fired is True
+    assert result.presentation_fallback_reason == "hallucination_guard"
+
+
+def test_read_telemetry_state_defaults_hallucination_guard_fired_for_legacy(tmp_path):
+    import json
+    from pathlib import Path
+
+    state = {
+        "trace_id": None,
+        "diff_hash": "abc",
+        "diff_output": "d",
+        "repo_name": "r",
+        "engine": "e",
+        "model_name": "m",
+        "system_prompt_hash": "h",
+        "generated_message": "g",
+        "commit_plan_json": {},
+        "score_card": {},
+    }
+    path = Path(tmp_path) / "GIT_CG_OPIK_STATE.json"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    result = read_telemetry_state(str(tmp_path))
+    assert result is not None
+    assert result.hallucination_guard_fired is False

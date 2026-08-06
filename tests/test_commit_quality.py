@@ -16,11 +16,14 @@ from git_cg.commit_quality import (
     DIFF_CLASS_PRODUCT,
     DIFF_CLASS_TESTS,
     LOW_CONFIDENCE_TRIGGER_REASONS,
+    PRESENTATION_FALLBACK_CRAFT,
+    PRESENTATION_FALLBACK_HALLUCINATION,
     PRESENTATION_FALLBACK_LOW_CONFIDENCE,
     PRESENTATION_FALLBACK_NONE,
     PresentationAdjustment,
     PresentationConstraints,
     Stub,
+    apply_guard_skeleton_fallback,
     apply_low_confidence_presentation,
     apply_presentation_overlay,
     apply_presentation_seed,
@@ -33,14 +36,18 @@ from git_cg.commit_quality import (
     derive_trailer_priors,
     detect_high_risk_surfaces,
     dominant_presentation_cc_type,
+    evaluate_presentation_guards,
     filter_paths_for_content_signals,
+    format_guard_guidance,
     format_high_risk_body_checklist,
     format_included_change_stub_inventory,
     format_low_confidence_guidance,
+    harvest_claim_tags,
     has_security_path_evidence,
     is_generic_feature_presentation,
     is_high_risk_path_set,
     is_low_confidence_posture,
+    merge_presentation_fallback_reason,
     min_included_change_bullets,
     presentation_constraints,
     prose_has_security_negative_markers,
@@ -1731,3 +1738,255 @@ def test_format_blueprint_guidance_has_no_raw_json() -> None:
     assert "docs" in text
     assert "{" not in text  # no JSON dump
     assert "intent_id" in text  # authority reminder present
+
+
+# ---------------------------------------------------------------------------
+# Slice 8 — Hallucination / craft / claim-tag harvest (D14/D21)
+# ---------------------------------------------------------------------------
+
+
+def test_harvest_claim_tags_tip_g1_order_and_dedupe() -> None:
+    tags = harvest_claim_tags(
+        [
+            "locks P9-A05 authority",
+            "also P9-B07 and P9-B10; repeat P9-A05",
+            "noise without tags",
+        ]
+    )
+    assert tags == ["P9-A05", "P9-B07", "P9-B10"]
+
+
+def test_harvest_claim_tags_caps_at_eight() -> None:
+    blob = " ".join(f"P9-A{i:02d}" for i in range(1, 12))
+    tags = harvest_claim_tags([blob])
+    assert len(tags) == 8
+    assert tags[0] == "P9-A01"
+
+
+def test_guard_tip_g2_secrets_without_path_evidence() -> None:
+    plan = _plan(
+        intent_id="security_hardening",
+        gitmoji="🔐",
+        cc_type=CommitType.CHORE,
+        scope="fixtures",
+        description="Add or update secrets",
+        semver=SemVerImpact.PATCH,
+        changelog="Security",
+    )
+    plan.body_summary = "Document credentials rotation."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["tests/fixtures/scoped_history/README.md"],
+    )
+    assert report.hallucination_guard_fired is True
+    assert report.fallback_reason == PRESENTATION_FALLBACK_HALLUCINATION
+    codes = report.codes()
+    assert "GUARD_SECURITY_NOUN" in codes
+    # fixtures-only also treats Add opener as craft, but hallucination wins reason.
+
+
+def test_guard_tip_g4_docs_runtime_verbs() -> None:
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="handle graph unavailable errors",
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+    )
+    plan.body_summary = "Recovers gracefully when graph/shadow unavailable."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["docs/usage.md", "CHANGELOG.md", "DEVELOPMENT.md"],
+    )
+    assert report.dirty
+    assert "GUARD_DOCS_RUNTIME_VERB" in report.codes()
+    assert report.fallback_reason == PRESENTATION_FALLBACK_HALLUCINATION
+
+
+def test_guard_tip_g5_vague_improve_subject() -> None:
+    plan = _plan(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        scope="telemetry",
+        description="improve metrics scrubbing and fallbacks",
+        semver=SemVerImpact.MAJOR,
+        changelog="Added",
+    )
+    plan.body_summary = "Tighten scrubbing paths."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["src/git_cg/main.py", "src/git_cg/telemetry.py", "src/git_cg/sentry_config.py"],
+    )
+    assert "GUARD_VAGUE_SUBJECT_VERB" in report.codes()
+    assert report.fallback_reason == PRESENTATION_FALLBACK_CRAFT
+
+
+def test_guard_tip_g8_unearned_adds_guidance() -> None:
+    plan = _plan(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        scope="scoped-history",
+        description="adds guidance for scoped history",
+        semver=SemVerImpact.MINOR,
+        changelog="Added",
+    )
+    plan.body_summary = "Adds guidance rows."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["tests/test_scoped_history.py", "docs/ADRs/0163-scoped-reasoning-history.md"],
+    )
+    assert "GUARD_UNEARNED_CAPABILITY" in report.codes()
+
+
+def test_guard_tip_g9_adds_guard_assertion_ban() -> None:
+    plan = _plan(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        scope="scoped_history",
+        description="adds authority leakage guard",
+        semver=SemVerImpact.MINOR,
+        changelog="Added",
+    )
+    plan.body_summary = "Adds assertion coverage."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["src/git_cg/scoped_history.py", "tests/test_scoped_history.py"],
+    )
+    assert "GUARD_UNEARNED_CAPABILITY" in report.codes()
+
+
+def test_guard_tip_g11_unshipped_phase_product_actor() -> None:
+    plan = _plan(
+        intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type=CommitType.FEAT,
+        scope="semantic",
+        description="wire preflight carry-through counters",
+        semver=SemVerImpact.MINOR,
+        changelog="Added",
+    )
+    plan.body_summary = "Values come from the Phase 0.5 product elevation path."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["src/git_cg/main.py", "tests/test_semantic.py"],
+        evidence_text="+ carry counter only\n",
+    )
+    assert "GUARD_UNSHIPPED_PRODUCT_ACTOR" in report.codes()
+
+
+def test_guard_tip_g12_docs_adr_rejects_fix_runtime_story() -> None:
+    plan = _plan(
+        intent_id="bug_fix",
+        gitmoji="🥅",
+        cc_type=CommitType.FIX,
+        scope="adr",
+        description="recover fail-open graph paths",
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+    )
+    plan.body_summary = "Handle runtime fallback errors in the ADR mermaid."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["docs/ADRs/0163-scoped-reasoning-history.md", "docs/usage.md"],
+    )
+    assert report.hallucination_guard_fired
+    assert "GUARD_DOCS_RUNTIME_VERB" in report.codes()
+
+
+def test_guard_title_case_add_unit_tests_on_tests_only() -> None:
+    plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="scoped_history",
+        description="Add Unit Tests For Claims",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    plan.body_summary = "Cover locks."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=[
+            "tests/test_scoped_history.py",
+            "tests/test_scoped_history_telemetry.py",
+            "tests/test_main.py",
+            "tests/test_semantic.py",
+        ],
+    )
+    codes = report.codes()
+    assert "GUARD_TITLE_CASE_SUBJECT" in codes or "GUARD_TEST_DOCS_ADD_OPENER" in codes
+
+
+def test_merge_presentation_fallback_reason_precedence() -> None:
+    assert merge_presentation_fallback_reason("low_confidence", "hallucination_guard") == "hallucination_guard"
+    assert merge_presentation_fallback_reason("hallucination_guard", "craft_guard") == "hallucination_guard"
+    assert merge_presentation_fallback_reason("none", "craft_guard") == "craft_guard"
+    assert merge_presentation_fallback_reason("error", "hallucination_guard") == "error"
+
+
+def test_format_guard_guidance_directive_free() -> None:
+    plan = _plan(description="improve scrubbing")
+    plan.body_summary = "This commit introduces scrubbing."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["src/git_cg/telemetry.py"],
+    )
+    text = format_guard_guidance(report)
+    assert "PRESENTATION GUARD FINDINGS" in text
+    assert "preferred_type" not in text.lower()
+    assert "OVERRIDE" not in text
+    assert "intent_id" in text  # authority preservation note
+
+
+def test_apply_guard_skeleton_fallback_preserves_identity_and_docs_force() -> None:
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.FIX,
+        scope="usage",
+        description="handle secrets recovery",
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+    )
+    plan.body_summary = "Recovers secrets at runtime."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["docs/usage.md"],
+    )
+    out = apply_guard_skeleton_fallback(
+        plan,
+        paths=["docs/usage.md"],
+        claim_tags=["P9-A05"],
+        report=report,
+    )
+    assert out.primary_intent.intent_id == "documentation_update"
+    assert out.primary_intent.gitmoji == "📝"
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert "document" in (out.primary_intent.description or "").lower()
+    assert "P9-A05" in (out.body_summary or "")
+
+
+def test_clean_message_does_not_fire_guards() -> None:
+    plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="scoped-history",
+        description="cover claim locks for scoped history",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    plan.body_summary = "Pin P9-A05 / P9-B07 authority rows without inventing runtime recovery."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["tests/test_scoped_history.py", "tests/test_main.py"],
+    )
+    assert report.dirty is False
+    assert report.fallback_reason == PRESENTATION_FALLBACK_NONE
+    assert report.hallucination_guard_fired is False
