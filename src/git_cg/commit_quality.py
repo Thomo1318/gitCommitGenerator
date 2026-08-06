@@ -13,9 +13,11 @@ Authority boundaries:
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from git_cg.commit_gold import _file_groups
@@ -30,7 +32,12 @@ from git_cg.intent import (
     _is_security_path,
     _is_test_path,
 )
-from git_cg.models import CommitType, SemVerImpact, TrailerPriors
+from git_cg.models import (
+    CommitBlueprint,
+    CommitType,
+    SemVerImpact,
+    TrailerPriors,
+)
 from git_cg.scope_canon import normalize_scope
 
 if TYPE_CHECKING:
@@ -2356,3 +2363,506 @@ def apply_presentation_overlay(
     primary.intent_id = preserved_intent_id
     primary.gitmoji = preserved_gitmoji
     return plan
+
+
+# ---------------------------------------------------------------------------
+# Slice 7 — CommitBlueprint parse / validate / apply (Issue #204 · §I / D23)
+# ---------------------------------------------------------------------------
+
+BLUEPRINT_MAX_BYTES = 64 * 1024
+
+PRESENTATION_FALLBACK_ERROR = "error"
+PRESENTATION_FALLBACK_BLUEPRINT = "blueprint"
+
+
+class BlueprintError(ValueError):
+    """Operator blueprint parse / IO / legality failure (Issue #204 · D23).
+
+    Raised for hard-fail paths. CLI boundary maps this to ``typer.Exit(code=2)``
+    when the invocation is interactive/standalone; hook / non-TTY paths catch it
+    and fall closed to deterministic priors.
+    """
+
+    def __init__(self, message: str, *, kind: str = "blueprint") -> None:
+        super().__init__(message)
+        self.kind = kind  # "blueprint" | "error" (parse/IO)
+
+
+@dataclass(frozen=True)
+class PresentationState:
+    """Frozen presentation snapshot for pure blueprint apply (D22 internal).
+
+    Holds the mutable ``CommitPlan`` reference plus closed telemetry flags.
+    Policy helpers never mutate ranked ``intent_id``.
+    """
+
+    plan: object  # CommitPlan (runtime); typed loosely to avoid import cycles
+    blueprint_applied: bool = False
+    fallback_reason: str = PRESENTATION_FALLBACK_NONE
+    subject_hint: str | None = None
+    body_skeleton: tuple[str, ...] = ()
+
+
+def load_blueprint_source(
+    raw: str,
+    *,
+    repo_root: str | os.PathLike[str] | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+) -> tuple[dict, str]:
+    """Load blueprint JSON from inline text or ``@path`` (Approval locks §I).
+
+    Returns ``(payload_dict, source_label)``. Never returns raw file bytes to
+    callers beyond the parsed object. Enforces local regular file, 64 KiB cap,
+    and path-escape rejection relative to *repo_root* (preferred) or *cwd*.
+    """
+    if raw is None:
+        raise BlueprintError("blueprint source is required", kind="error")
+    text = str(raw).strip()
+    if not text:
+        raise BlueprintError("blueprint source is empty", kind="error")
+
+    if text.startswith("@"):
+        rel = text[1:].strip()
+        if not rel:
+            raise BlueprintError("blueprint @path is empty", kind="error")
+        # Reject obvious escapes / NUL before resolution.
+        if "\x00" in rel:
+            raise BlueprintError("blueprint path contains NUL", kind="error")
+        base = Path(repo_root) if repo_root is not None else Path(cwd or os.getcwd())
+        try:
+            base_resolved = base.resolve(strict=True)
+        except OSError as exc:
+            raise BlueprintError(f"blueprint root unreadable: {type(exc).__name__}", kind="error") from exc
+        candidate = Path(rel)
+        if not candidate.is_absolute():
+            candidate = Path(cwd or os.getcwd()) / candidate
+        try:
+            # Do not follow the final path via open until containment is proven.
+            # resolve(strict=True) canonicalises symlink targets for the root check.
+            resolved = candidate.resolve(strict=True)
+        except OSError as exc:
+            raise BlueprintError(f"blueprint file not found or unreadable: {type(exc).__name__}", kind="error") from exc
+        try:
+            resolved.relative_to(base_resolved)
+        except ValueError as exc:
+            raise BlueprintError("blueprint path escapes repository root", kind="error") from exc
+        # Reject non-files (dirs, devices). Symlinks are allowed only when the
+        # resolved target remains inside the repository root (checked above).
+        if not resolved.is_file():
+            raise BlueprintError("blueprint path must be a local regular file", kind="error")
+        # Also reject if the user-supplied path is a symlink whose *immediate*
+        # link target (before full resolve) points outside root — belt-and-braces
+        # for platforms where resolve behaviour differs.
+        check_path = candidate
+        if check_path.is_symlink():
+            try:
+                link_target = check_path.readlink()
+                abs_link = (check_path.parent / link_target).resolve(strict=False)
+                abs_link.relative_to(base_resolved)
+            except (OSError, ValueError) as exc:
+                raise BlueprintError("blueprint symlink escapes repository root", kind="error") from exc
+        try:
+            size = resolved.stat().st_size
+        except OSError as exc:
+            raise BlueprintError(f"blueprint stat failed: {type(exc).__name__}", kind="error") from exc
+        if size > BLUEPRINT_MAX_BYTES:
+            raise BlueprintError(
+                f"blueprint file exceeds {BLUEPRINT_MAX_BYTES} bytes",
+                kind="error",
+            )
+        try:
+            payload_text = resolved.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise BlueprintError(f"blueprint read failed: {type(exc).__name__}", kind="error") from exc
+        if len(payload_text.encode("utf-8")) > BLUEPRINT_MAX_BYTES:
+            raise BlueprintError(
+                f"blueprint payload exceeds {BLUEPRINT_MAX_BYTES} bytes",
+                kind="error",
+            )
+        source_label = "file"
+    else:
+        payload_text = text
+        if len(payload_text.encode("utf-8")) > BLUEPRINT_MAX_BYTES:
+            raise BlueprintError(
+                f"blueprint payload exceeds {BLUEPRINT_MAX_BYTES} bytes",
+                kind="error",
+            )
+        source_label = "inline"
+
+    try:
+        data = json.loads(payload_text)
+    except json.JSONDecodeError as exc:
+        raise BlueprintError(f"blueprint JSON parse error: {exc.msg}", kind="error") from exc
+    if not isinstance(data, dict):
+        raise BlueprintError("blueprint JSON must be an object", kind="error")
+    return data, source_label
+
+
+def parse_commit_blueprint(
+    raw: str | dict | CommitBlueprint,
+    *,
+    repo_root: str | os.PathLike[str] | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+) -> CommitBlueprint:
+    """Parse and schema-validate a CommitBlueprint (strict; unknown keys rejected)."""
+    if isinstance(raw, CommitBlueprint):
+        return raw
+    if isinstance(raw, dict):
+        data = raw
+    else:
+        data, _src = load_blueprint_source(str(raw), repo_root=repo_root, cwd=cwd)
+    try:
+        return CommitBlueprint.model_validate(data)
+    except Exception as exc:  # pydantic ValidationError
+        raise BlueprintError(f"blueprint schema invalid: {exc}", kind="blueprint") from exc
+
+
+def validate_blueprint_against_constraints(
+    blueprint: CommitBlueprint,
+    constraints: PresentationConstraints,
+    *,
+    ceiling: SemVerImpact | None = None,
+) -> None:
+    """Hard-fail when blueprint violates path-class force/forbid or D16 ceilings.
+
+    Raises:
+        BlueprintError: illegal combination (kind=``blueprint``).
+    """
+    # Primary type legality
+    if blueprint.cc_type is not None:
+        cc = blueprint.cc_type.value
+        if cc in constraints.forbid_cc_types:
+            raise BlueprintError(
+                f"blueprint cc_type {cc!r} forbidden by path-class gate {constraints.diff_class!r}",
+                kind="blueprint",
+            )
+        if constraints.force_cc_type is not None and blueprint.cc_type != constraints.force_cc_type:
+            raise BlueprintError(
+                f"blueprint cc_type {cc!r} conflicts with forced path-class type {constraints.force_cc_type.value!r}",
+                kind="blueprint",
+            )
+
+    # change_types legality
+    if blueprint.change_types:
+        for ct in blueprint.change_types:
+            if ct.value in constraints.forbid_cc_types:
+                raise BlueprintError(
+                    f"blueprint change_types entry {ct.value!r} forbidden by path-class gate",
+                    kind="blueprint",
+                )
+
+    # SemVer legality
+    eff_ceiling = ceiling
+    if constraints.force_semver is not None and (
+        eff_ceiling is None or _SEMVER_RANK[constraints.force_semver.value] <= _SEMVER_RANK[eff_ceiling.value]
+    ):
+        eff_ceiling = constraints.force_semver
+    if blueprint.semver_impact is not None:
+        if constraints.force_semver is not None and blueprint.semver_impact != constraints.force_semver:
+            raise BlueprintError(
+                f"blueprint semver_impact {blueprint.semver_impact.value!r} conflicts with "
+                f"forced path-class semver {constraints.force_semver.value!r}",
+                kind="blueprint",
+            )
+        if eff_ceiling is not None and _SEMVER_RANK[blueprint.semver_impact.value] > _SEMVER_RANK[eff_ceiling.value]:
+            raise BlueprintError(
+                f"blueprint semver_impact {blueprint.semver_impact.value!r} exceeds D16 ceiling {eff_ceiling.value!r}",
+                kind="blueprint",
+            )
+        if blueprint.semver_impact.value in constraints.forbid_semver:
+            raise BlueprintError(
+                f"blueprint semver_impact {blueprint.semver_impact.value!r} forbidden by path-class gate",
+                kind="blueprint",
+            )
+
+    # Changelog groups vs force group / security forbid
+    if blueprint.changelog_groups:
+        groups = [g.value for g in blueprint.changelog_groups]
+        if constraints.forbid_security_primary and any(g.lower() == "security" for g in groups):
+            raise BlueprintError(
+                "blueprint changelog_groups may not include Security without path evidence",
+                kind="blueprint",
+            )
+        if constraints.force_changelog_group is not None and groups:
+            # Pure forced classes: reject groups that are clearly product-only when docs/tests forced.
+            forced = constraints.force_changelog_group
+            if forced in {"Documentation", "Tests"} and "Security" in groups:
+                raise BlueprintError(
+                    f"blueprint changelog_groups include Security under forced {forced}",
+                    kind="blueprint",
+                )
+            if forced == "Documentation" and "Added" in groups and constraints.force_cc_type == CommitType.DOCS:
+                raise BlueprintError(
+                    "blueprint changelog_groups include Added under docs-only path-class",
+                    kind="blueprint",
+                )
+            if forced == "Tests" and "Added" in groups and constraints.force_cc_type == CommitType.TEST:
+                raise BlueprintError(
+                    "blueprint changelog_groups include Added under tests-only path-class",
+                    kind="blueprint",
+                )
+
+    # Scope force
+    if blueprint.scope is not None and constraints.force_scope is not None:
+        norm_bp = normalize_scope(blueprint.scope)
+        norm_force = normalize_scope(constraints.force_scope)
+        if norm_bp and norm_force and norm_bp != norm_force:
+            # Soft: allow more specific behaviour scope under same family? Hard-fail per lock.
+            # Docs/ADR force_scope is authoritative.
+            raise BlueprintError(
+                f"blueprint scope {norm_bp!r} conflicts with forced path-class scope {norm_force!r}",
+                kind="blueprint",
+            )
+
+    # Combined change_types + changelog allowlist when both provided
+    if blueprint.change_types and blueprint.changelog_groups:
+        cts = [c.value for c in blueprint.change_types]
+        groups = [g.value for g in blueprint.changelog_groups]
+        primary = blueprint.cc_type.value if blueprint.cc_type is not None else (cts[0] if cts else None)
+        if not changelog_groups_allowlisted(cts, groups, primary_cc_type=primary):
+            raise BlueprintError(
+                "blueprint change_types/changelog_groups fail D19 allowlist",
+                kind="blueprint",
+            )
+
+
+def apply_blueprint(
+    presentation_state: PresentationState | CommitPlan,
+    blueprint: CommitBlueprint,
+    constraints: PresentationConstraints,
+    *,
+    ceiling: SemVerImpact | None = None,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+) -> PresentationState:
+    """Overlay legal blueprint fields onto rendered presentation only.
+
+    Descriptive return is ``PresentationState`` (success). Illegal combinations
+    raise ``BlueprintError`` (HardError). Never mutates ranked ``intent_id``.
+    """
+    from git_cg.models import CommitPlan
+
+    if isinstance(presentation_state, PresentationState):
+        plan = presentation_state.plan
+        if not isinstance(plan, CommitPlan):
+            raise BlueprintError("presentation_state.plan must be a CommitPlan", kind="error")
+        prior_reason = presentation_state.fallback_reason
+    else:
+        plan = presentation_state
+        if not isinstance(plan, CommitPlan):
+            raise BlueprintError("presentation_state must be CommitPlan or PresentationState", kind="error")
+        prior_reason = PRESENTATION_FALLBACK_NONE
+
+    # Validate first (fail closed before mutation).
+    eff_ceiling = ceiling
+    if eff_ceiling is None and paths is not None:
+        eff_ceiling = semver_presentation_ceiling(paths, signals)
+    validate_blueprint_against_constraints(blueprint, constraints, ceiling=eff_ceiling)
+
+    primary = plan.primary_intent
+    preserved_intent_id = primary.intent_id
+    preserved_gitmoji = primary.gitmoji
+
+    # cc_type overlay (presentation only)
+    if blueprint.cc_type is not None:
+        # Path-class force already validated equal; still honour force if present.
+        primary.cc_type = constraints.force_cc_type or blueprint.cc_type
+        mapped = _TYPE_CHANGELOG_REQUIREMENTS.get(primary.cc_type.value)
+        if mapped and not blueprint.changelog_groups:
+            primary.changelog_group = mapped
+
+    # SemVer overlay
+    if constraints.force_semver is not None:
+        primary.semver_impact = constraints.force_semver
+        for sec in plan.secondary_intents:
+            sec.semver_impact = constraints.force_semver
+    elif blueprint.semver_impact is not None:
+        primary.semver_impact = blueprint.semver_impact
+        for sec in plan.secondary_intents:
+            sec.semver_impact = _clamp_semver(sec.semver_impact, blueprint.semver_impact)
+
+    # Scope overlay (§J): force_scope > blueprint scope > existing
+    if constraints.force_scope is not None:
+        primary.scope = normalize_scope(constraints.force_scope)
+    elif blueprint.scope is not None:
+        primary.scope = normalize_scope(blueprint.scope)
+    elif primary.scope:
+        primary.scope = normalize_scope(primary.scope)
+
+    # Changelog groups overlay
+    if blueprint.changelog_groups:
+        groups = [g.value for g in blueprint.changelog_groups]
+        if constraints.force_changelog_group is not None:
+            primary.changelog_group = constraints.force_changelog_group
+        else:
+            primary.changelog_group = groups[0]
+        # Ensure remaining required groups exist as secondaries when change_types provided.
+        if blueprint.change_types:
+            present_types = {primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
+            for ct in blueprint.change_types:
+                if ct.value == primary.cc_type.value:
+                    continue
+                if ct.value in present_types:
+                    continue
+                group = _TYPE_CHANGELOG_REQUIREMENTS.get(ct.value, "Miscellaneous")
+                # Prefer matching blueprint group when present.
+                for g in groups:
+                    if g == group or (ct.value == "feat" and g in {"Added", "Changed"}):
+                        group = g
+                        break
+                _ensure_secondary_for_type(
+                    plan,
+                    cc_type=ct,
+                    changelog_group=group,
+                    scope=primary.scope,
+                    description=(blueprint.subject_hint or f"cover {ct.value} surface")[:50],
+                    semver=primary.semver_impact,
+                )
+                present_types.add(ct.value)
+
+    # change_types without groups: ensure secondary coverage only
+    if blueprint.change_types and not blueprint.changelog_groups:
+        present_types = {primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
+        for ct in blueprint.change_types:
+            if ct.value in present_types:
+                continue
+            group = _TYPE_CHANGELOG_REQUIREMENTS.get(ct.value, "Miscellaneous")
+            _ensure_secondary_for_type(
+                plan,
+                cc_type=ct,
+                changelog_group=group,
+                scope=primary.scope,
+                description=(blueprint.subject_hint or f"cover {ct.value} surface")[:50],
+                semver=primary.semver_impact,
+            )
+            present_types.add(ct.value)
+
+    # Included-change stubs → presentation secondaries (inventory seeds)
+    if blueprint.included_changes_stubs:
+        present_types = {primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
+        for stub in blueprint.included_changes_stubs:
+            role = stub.role
+            suggested = {
+                "test": CommitType.TEST,
+                "docs": CommitType.DOCS,
+                "adr": CommitType.DOCS,
+                "fixtures": CommitType.DOCS,
+                "perf": CommitType.PERF,
+                "refactor": CommitType.REFACTOR,
+                "security": CommitType.FIX,
+                "telemetry": CommitType.FIX,
+                "sentry": CommitType.FIX,
+                "prod": primary.cc_type,
+                "other": CommitType.CHORE,
+            }.get(role, CommitType.CHORE)
+            if suggested.value in constraints.forbid_cc_types:
+                continue
+            group = _TYPE_CHANGELOG_REQUIREMENTS.get(suggested.value, "Miscellaneous")
+            if role in {"docs", "adr", "fixtures"}:
+                group = "Documentation"
+            elif role == "test":
+                group = "Tests"
+            note = (stub.note or stub.surface or suggested.value).strip()
+            if stub.claim_tags:
+                note = f"{note} ({', '.join(stub.claim_tags)})"
+            scope = normalize_scope(stub.surface) or primary.scope
+            if suggested.value == primary.cc_type.value and not plan.secondary_intents:
+                # Keep primary; optionally refine description from subject_hint only.
+                pass
+            elif suggested.value not in present_types or role in {"test", "docs", "adr"}:
+                # Always materialise distinct surface secondaries for inventory roles.
+                already = False
+                for sec in plan.secondary_intents:
+                    if sec.cc_type == suggested and normalize_scope(sec.scope) == scope:
+                        already = True
+                        break
+                if not already and not (
+                    suggested.value == primary.cc_type.value and normalize_scope(primary.scope) == scope
+                ):
+                    _ensure_secondary_for_type(
+                        plan,
+                        cc_type=suggested,
+                        changelog_group=group,
+                        scope=scope,
+                        description=note[:50],
+                        semver=SemVerImpact.NONE if constraints.force_semver is None else constraints.force_semver,
+                    )
+                    present_types.add(suggested.value)
+
+    # Subject hint → primary description (presentation craft seed only)
+    subject_hint = None
+    if blueprint.subject_hint:
+        subject_hint = blueprint.subject_hint.strip()
+        if subject_hint:
+            primary.description = subject_hint[:50]
+
+    body_skel: tuple[str, ...] = ()
+    if blueprint.body_skeleton:
+        body_skel = tuple(line.strip() for line in blueprint.body_skeleton if str(line).strip())
+        if body_skel and not (plan.body_summary and plan.body_summary.strip()):
+            plan.body_summary = "\n".join(body_skel)
+
+    # Final path-class force re-assert (envelope always wins)
+    if constraints.force_cc_type is not None:
+        primary.cc_type = constraints.force_cc_type
+    if constraints.force_semver is not None:
+        primary.semver_impact = constraints.force_semver
+        for sec in plan.secondary_intents:
+            sec.semver_impact = constraints.force_semver
+    if constraints.force_changelog_group is not None:
+        primary.changelog_group = constraints.force_changelog_group
+    if constraints.force_scope is not None:
+        primary.scope = normalize_scope(constraints.force_scope)
+
+    if eff_ceiling is not None and constraints.force_semver is None:
+        primary.semver_impact = _clamp_semver(primary.semver_impact, eff_ceiling)
+        for sec in plan.secondary_intents:
+            sec.semver_impact = _clamp_semver(sec.semver_impact, eff_ceiling)
+
+    primary.intent_id = preserved_intent_id
+    primary.gitmoji = preserved_gitmoji
+
+    return PresentationState(
+        plan=plan,
+        blueprint_applied=True,
+        fallback_reason=prior_reason if prior_reason != PRESENTATION_FALLBACK_NONE else PRESENTATION_FALLBACK_NONE,
+        subject_hint=subject_hint,
+        body_skeleton=body_skel,
+    )
+
+
+def format_blueprint_guidance(blueprint: CommitBlueprint | None) -> str:
+    """Render pre-LLM presentation pressure from a legal blueprint (no JSON dump)."""
+    if blueprint is None:
+        return ""
+    lines = [
+        "OPERATOR BLUEPRINT (presentation overlay only — does not change intent_id / gitmoji authority):",
+    ]
+    if blueprint.cc_type is not None:
+        lines.append(f"- preferred presentation cc_type: {blueprint.cc_type.value}")
+    if blueprint.scope is not None:
+        lines.append(f"- preferred presentation scope: {normalize_scope(blueprint.scope) or blueprint.scope}")
+    if blueprint.semver_impact is not None:
+        lines.append(f"- preferred presentation SemVer: {blueprint.semver_impact.value}")
+    if blueprint.change_types:
+        lines.append("- Change-Types overlay: " + ", ".join(ct.value for ct in blueprint.change_types))
+    if blueprint.changelog_groups:
+        lines.append("- Changelog-Groups overlay: " + ", ".join(g.value for g in blueprint.changelog_groups))
+    if blueprint.subject_hint:
+        lines.append(f"- subject seed: {blueprint.subject_hint.strip()[:72]}")
+    if blueprint.body_skeleton:
+        lines.append("- body skeleton seeds:")
+        for entry in blueprint.body_skeleton[:12]:
+            lines.append(f"  - {entry.strip()[:120]}")
+    if blueprint.included_changes_stubs:
+        lines.append("- included-change inventory seeds (emit as Hybrid mini-subjects via secondary_intents):")
+        for stub in blueprint.included_changes_stubs[:16]:
+            tags = f" tags={list(stub.claim_tags)}" if stub.claim_tags else ""
+            note = f" note={stub.note}" if stub.note else ""
+            lines.append(f"  - role={stub.role} surface={stub.surface}{tags}{note}")
+    lines.append(
+        "Path-class envelope and SemVer ceilings still win over this block. "
+        "Do not invent Security framing without path evidence. "
+        "Never treat this block as a ranking override."
+    )
+    return "\n".join(lines)
