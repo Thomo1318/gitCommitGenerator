@@ -3470,3 +3470,621 @@ def apply_guard_skeleton_fallback(
         )
 
     return plan
+
+
+# ---------------------------------------------------------------------------
+# Slice 9 - Pure A-N characterisation gates (issue #204)
+# ---------------------------------------------------------------------------
+# Ordered, CI-able evaluation of candidate commit plans against path-class
+# priors. No live LLM and no rank_commit_intents. Gate order is frozen:
+# path_class → type → semver → no_hallucination → inventory → craft.
+
+SLICE9_GATE_ORDER: tuple[str, ...] = (
+    "path_class",
+    "type",
+    "semver",
+    "no_hallucination",
+    "inventory",
+    "craft",
+)
+
+SEMVER_RANK: dict[str, int] = {
+    SemVerImpact.NONE.value: 0,
+    SemVerImpact.PATCH.value: 1,
+    SemVerImpact.MINOR.value: 2,
+    SemVerImpact.MAJOR.value: 3,
+}
+
+
+@dataclass(frozen=True)
+class GateFinding:
+    """Single ordered-gate failure for Slice 9 pure evaluation."""
+
+    gate: str
+    code: str
+    message: str
+    token: str = ""
+
+
+@dataclass(frozen=True)
+class GateReport:
+    """Ordered gate evaluation result (first failure wins)."""
+
+    findings: tuple[GateFinding, ...] = ()
+    first_fail_gate: str | None = None
+    passed: bool = True
+    codes: tuple[str, ...] = ()
+    gate_status: tuple[tuple[str, str], ...] = ()  # (gate, pass|fail|skip)
+
+    def codeset(self) -> frozenset[str]:
+        return frozenset(self.codes)
+
+
+def _enum_val(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value.value if hasattr(value, "value") else value)
+
+
+def _plan_types_groups(plan: CommitPlan | None) -> tuple[list[str], list[str], list[str]]:
+    if plan is None:
+        return [], [], []
+    primary = plan.primary_intent
+    types = [_enum_val(primary.cc_type)]
+    groups = [str(primary.changelog_group or "")]
+    scopes = [str(primary.scope or "")]
+    for sec in plan.secondary_intents or []:
+        types.append(_enum_val(sec.cc_type))
+        groups.append(str(sec.changelog_group or ""))
+        scopes.append(str(sec.scope or ""))
+    return types, groups, scopes
+
+
+def _inventory_blob(plan: CommitPlan | None, included_changes: list[str] | None = None) -> str:
+    bits: list[str] = []
+    if included_changes:
+        bits.extend(str(x) for x in included_changes)
+    if plan is None:
+        return "\n".join(bits)
+    subject, body = _plan_subject_body(plan)
+    bits.append(subject)
+    bits.append(body)
+    for sec in plan.secondary_intents or []:
+        bits.append(str(getattr(sec, "description", "") or ""))
+    return "\n".join(bits)
+
+
+def _check_path_class_gate(
+    plan: CommitPlan,
+    *,
+    paths: list[str],
+    constraints: PresentationConstraints,
+) -> list[GateFinding]:
+    """Path-class agreement only (security primary + forced scope).
+
+    Type/SemVer/group mismatches are owned by later gates so the frozen
+    order path_class → type → semver → … stays informative.
+    """
+    findings: list[GateFinding] = []
+    primary = plan.primary_intent
+    cc = _enum_val(primary.cc_type)
+    group = str(primary.changelog_group or "")
+    scope = normalize_scope(primary.scope) if primary.scope else primary.scope
+    blob = f"{primary.description or ''} {plan.body_summary or ''}".lower()
+
+    # Security primary banned without security path evidence.
+    if constraints.forbid_security_primary:
+        if group.lower() == "security":
+            findings.append(
+                GateFinding(
+                    gate="path_class",
+                    code="GATE_PATH_SECURITY_PRIMARY",
+                    message=("Path class forbids Security primary without security path evidence."),
+                    token=group,
+                )
+            )
+        # chore framed as security on fixtures/docs/ADR.
+        if cc == CommitType.CHORE.value and ("security" in blob or "secret" in blob or "credential" in blob):
+            findings.append(
+                GateFinding(
+                    gate="path_class",
+                    code="GATE_PATH_SECURITY_CHORE",
+                    message="Path class rejects security-framed chore without path evidence.",
+                    token="chore",
+                )
+            )
+
+    # Forced scope from path class (fixtures/adr/usage/scoped-history).
+    if constraints.force_scope:
+        forced = normalize_scope(constraints.force_scope) or constraints.force_scope
+        got = scope or ""
+        # Only flag clear package-scope / wrong-family disagreements.
+        if got and got != forced and got in {"git_cg", "src", "main"}:
+            findings.append(
+                GateFinding(
+                    gate="path_class",
+                    code="GATE_PATH_SCOPE_MISMATCH",
+                    message=(f"Path-class force_scope {forced!r} disagrees with plan scope {got!r}."),
+                    token=str(got),
+                )
+            )
+
+    return findings
+
+
+def _check_type_gate(
+    plan: CommitPlan,
+    *,
+    paths: list[str],
+    signals: DiffSignals | None,
+    constraints: PresentationConstraints,
+    concern_tags: set[str] | frozenset[str] | None,
+    priors: TrailerPriors | None,
+) -> list[GateFinding]:
+    findings: list[GateFinding] = []
+    primary = plan.primary_intent
+    cc = _enum_val(primary.cc_type)
+    types, groups, _scopes = _plan_types_groups(plan)
+
+    if constraints.force_cc_type is not None and cc != _enum_val(constraints.force_cc_type):
+        findings.append(
+            GateFinding(
+                gate="type",
+                code="GATE_TYPE_FORCE_MISMATCH",
+                message=(f"Primary type {cc!r} violates force_cc_type {_enum_val(constraints.force_cc_type)!r}."),
+                token=cc,
+            )
+        )
+
+    if cc in set(constraints.forbid_cc_types or ()):
+        findings.append(
+            GateFinding(
+                gate="type",
+                code="GATE_TYPE_FORBIDDEN",
+                message=f"Primary type {cc!r} is forbidden for this path class.",
+                token=cc,
+            )
+        )
+
+    dominant = dominant_presentation_cc_type(
+        paths,
+        signals=signals,
+        concern_tags=concern_tags,
+        priors=priors,
+    )
+    # Dominant is advisory when force_cc_type already set; still enforce when free.
+    if dominant is not None and cc != _enum_val(dominant) and constraints.force_cc_type is None:
+        findings.append(
+            GateFinding(
+                gate="type",
+                code="GATE_TYPE_DOMINANT_MISMATCH",
+                message=(f"Primary type {cc!r} disagrees with dominant type {_enum_val(dominant)!r}."),
+                token=cc,
+            )
+        )
+
+    # Required groups from the candidate's declared change-types.
+    required_groups = required_changelog_groups(types, primary_cc_type=primary.cc_type)
+
+    # If path class forced a primary group, ensure it is present.
+    if constraints.force_changelog_group and constraints.force_changelog_group not in groups:
+        findings.append(
+            GateFinding(
+                gate="type",
+                code="GATE_TYPE_GROUP_MISSING",
+                message=(f"Missing forced changelog group {constraints.force_changelog_group!r}."),
+                token=constraints.force_changelog_group,
+            )
+        )
+
+    # Dual-surface path pressure: tests+docs without runtime need both groups.
+    dc = classify_diff_class(paths)
+    has_tests = bool(_test_module_stems(paths))
+    has_docs = bool(_doc_surface_keys(paths))
+    has_prod = bool(_product_module_stems(paths))
+    expected_multi: list[str] = []
+    if has_tests and has_docs and not dc.has_runtime_surface:
+        expected_multi = ["Tests", "Documentation"]
+    elif has_prod and has_tests:
+        # Product+test dual surface should not collapse to a single non-Tests group
+        # when primary is feat/fix; Tests should appear.
+        if "Tests" not in groups and CommitType.TEST.value in types:
+            pass
+        elif (
+            has_tests
+            and "Tests" not in groups
+            and _enum_val(primary.cc_type)
+            in {
+                CommitType.FEAT.value,
+                CommitType.FIX.value,
+                CommitType.TEST.value,
+            }
+        ):
+            expected_multi = [groups[0], "Tests"] if groups else ["Tests"]
+
+    for req in expected_multi:
+        if req and req not in groups:
+            findings.append(
+                GateFinding(
+                    gate="type",
+                    code="GATE_TYPE_REQUIRED_GROUP_MISSING",
+                    message=f"Missing required changelog group {req!r}.",
+                    token=req,
+                )
+            )
+
+    # Reject single-group collapse when dual-surface expected.
+    if expected_multi and len(set(g for g in groups if g)) == 1:
+        findings.append(
+            GateFinding(
+                gate="type",
+                code="GATE_TYPE_SINGLE_GROUP_ONLY",
+                message=f"Multi-surface plan collapsed to single group {groups[0]!r}.",
+                token=groups[0] if groups else "",
+            )
+        )
+
+    # Candidate change-types must cover their required changelog mapping.
+    # feat may legally render as Added (new capability) or Changed (carry-through /
+    # dark-launch wiring without a user-facing MINOR bump story).
+    for req in required_groups:
+        if req not in groups:
+            if req == "Added" and "Changed" in groups and CommitType.FEAT.value in types:
+                continue
+            findings.append(
+                GateFinding(
+                    gate="type",
+                    code="GATE_TYPE_REQUIRED_GROUP_MISSING",
+                    message=f"Change-Types require changelog group {req!r}.",
+                    token=req,
+                )
+            )
+
+    return findings
+
+
+def _check_semver_gate(
+    plan: CommitPlan,
+    *,
+    paths: list[str],
+    signals: DiffSignals | None,
+    constraints: PresentationConstraints,
+    concern_tags: set[str] | frozenset[str] | None,
+) -> list[GateFinding]:
+    findings: list[GateFinding] = []
+    primary = plan.primary_intent
+    sem = _enum_val(primary.semver_impact)
+    ceiling = semver_presentation_ceiling(paths, signals, concern_tags=concern_tags)
+    ceil_v = _enum_val(ceiling)
+
+    if constraints.force_semver is not None and sem != _enum_val(constraints.force_semver):
+        findings.append(
+            GateFinding(
+                gate="semver",
+                code="GATE_SEMVER_FORCE_MISMATCH",
+                message=(f"SemVer {sem!r} violates force_semver {_enum_val(constraints.force_semver)!r}."),
+                token=sem,
+            )
+        )
+
+    if sem in set(constraints.forbid_semver or ()):
+        findings.append(
+            GateFinding(
+                gate="semver",
+                code="GATE_SEMVER_FORBIDDEN",
+                message=f"SemVer {sem!r} is forbidden for this path class.",
+                token=sem,
+            )
+        )
+
+    if SEMVER_RANK.get(sem, 99) > SEMVER_RANK.get(ceil_v, 0):
+        findings.append(
+            GateFinding(
+                gate="semver",
+                code="GATE_SEMVER_CEILING",
+                message=f"SemVer {sem!r} exceeds presentation ceiling {ceil_v!r}.",
+                token=sem,
+            )
+        )
+
+    # Secondaries must not exceed ceiling either.
+    for sec in plan.secondary_intents or []:
+        ssem = _enum_val(sec.semver_impact)
+        if SEMVER_RANK.get(ssem, 99) > SEMVER_RANK.get(ceil_v, 0):
+            findings.append(
+                GateFinding(
+                    gate="semver",
+                    code="GATE_SEMVER_SECONDARY_CEILING",
+                    message=f"Secondary SemVer {ssem!r} exceeds ceiling {ceil_v!r}.",
+                    token=ssem,
+                )
+            )
+            break
+
+    return findings
+
+
+def _check_inventory_gate(
+    plan: CommitPlan,
+    *,
+    paths: list[str],
+    signals: DiffSignals | None,
+    concern_tags: set[str] | frozenset[str] | None,
+    claim_tags: list[str] | tuple[str, ...] | None,
+    included_changes: list[str] | None,
+    require_stub_note_tokens: list[str] | tuple[str, ...] | None = None,
+) -> list[GateFinding]:
+    findings: list[GateFinding] = []
+    min_bullets = min_included_change_bullets(paths, concern_tags=concern_tags)
+    stubs = build_included_change_stubs(
+        paths,
+        signals,
+        concern_tags=concern_tags,
+        claim_tags=claim_tags,
+    )
+
+    # Candidate inventory: explicit included_changes win; else secondary descriptions.
+    inv_items: list[str] = []
+    if included_changes is not None:
+        inv_items = [str(x).strip() for x in included_changes if str(x).strip()]
+    else:
+        for sec in plan.secondary_intents or []:
+            desc = str(getattr(sec, "description", "") or "").strip()
+            if desc:
+                inv_items.append(desc)
+
+    # Cardinality: multi-surface pressure requires enough bullets.
+    # Allow stub-count floor when candidate omitted explicit inventory but
+    # secondaries under-count; still fail empty multi-surface inventory.
+    if min_bullets >= 2 and (len(inv_items) == 0 or len(inv_items) < min(2, min_bullets)):
+        findings.append(
+            GateFinding(
+                gate="inventory",
+                code="GATE_INVENTORY_CARDINALITY",
+                message=(f"Inventory has {len(inv_items)} bullet(s); path pressure requires >= {min_bullets}."),
+                token=str(len(inv_items)),
+            )
+        )
+
+    blob = _inventory_blob(plan, inv_items).lower()
+
+    # Required note tokens (e.g. gpg/signing for S9-H).
+    if require_stub_note_tokens:
+        # Prefer candidate inventory; fall back to deterministic stubs as oracle.
+        stub_blob = " ".join(f"{s.note or ''} {s.surface or ''} {s.role or ''}" for s in stubs).lower()
+        for tok in require_stub_note_tokens:
+            t = str(tok).lower()
+            if t not in blob and t not in stub_blob:
+                findings.append(
+                    GateFinding(
+                        gate="inventory",
+                        code="GATE_INVENTORY_MISSING_TOKEN",
+                        message=f"Inventory/stubs missing required token {tok!r}.",
+                        token=str(tok),
+                    )
+                )
+            elif t not in blob and t in stub_blob:
+                # Candidate omitted a token the pure stubs require.
+                findings.append(
+                    GateFinding(
+                        gate="inventory",
+                        code="GATE_INVENTORY_MISSING_TOKEN",
+                        message=(f"Candidate inventory omits required token {tok!r} present in deterministic stubs."),
+                        token=str(tok),
+                    )
+                )
+
+    # Claim tags must appear when provided on multi-test cases.
+    if claim_tags and len(_test_module_stems(paths)) >= 2:
+        missing = [t for t in claim_tags if t not in _inventory_blob(plan, inv_items)]
+        if missing:
+            findings.append(
+                GateFinding(
+                    gate="inventory",
+                    code="GATE_INVENTORY_MISSING_CLAIMS",
+                    message=f"Inventory missing claim tags {missing!r}.",
+                    token=",".join(missing),
+                )
+            )
+
+    # Thin single-bullet inventory on multi-concern product correctness.
+    tags = {t.lower() for t in (concern_tags or set())}
+    if len(tags) >= 3 and len(inv_items) == 1:
+        findings.append(
+            GateFinding(
+                gate="inventory",
+                code="GATE_INVENTORY_THIN",
+                message="Multi-concern product inventory collapsed to one bullet.",
+                token="1",
+            )
+        )
+
+    # Docs-only inventory on mixed test+docs path when tests are staged.
+    test_modules = _test_module_stems(paths)
+    if test_modules and inv_items:
+        testish = any(("test(" in x.lower()) or x.strip().startswith("✅") or "cover " in x.lower() for x in inv_items)
+        if not testish and constraints_force_test(paths, plan):
+            findings.append(
+                GateFinding(
+                    gate="inventory",
+                    code="GATE_INVENTORY_TEST_SURFACE_MISSING",
+                    message="Test-bearing path class inventory lacks test bullets.",
+                    token="test",
+                )
+            )
+
+    return findings
+
+
+def constraints_force_test(paths: list[str], plan: CommitPlan) -> bool:
+    """Helper: true when path class / plan primary expects test inventory."""
+    dc = classify_diff_class(paths)
+    cons = presentation_constraints(dc)
+    if cons.force_cc_type == CommitType.TEST:
+        return True
+    return _enum_val(plan.primary_intent.cc_type) == CommitType.TEST.value
+
+
+def evaluate_presentation_gates(
+    plan: CommitPlan | None,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    priors: TrailerPriors | None = None,
+    constraints: PresentationConstraints | None = None,
+    concern_tags: set[str] | frozenset[str] | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
+    evidence_text: str = "",
+    included_changes: list[str] | None = None,
+    require_stub_note_tokens: list[str] | tuple[str, ...] | None = None,
+) -> GateReport:
+    """Evaluate a candidate plan through Slice 9 ordered pure gates.
+
+    Gate order (first failure wins):
+    path_class → type → semver → no_hallucination → inventory → craft.
+
+    Pure and deterministic: never calls rank_commit_intents or a live LLM.
+    """
+    if plan is None:
+        finding = GateFinding(
+            gate="path_class",
+            code="GATE_MISSING_PLAN",
+            message="Candidate plan is missing.",
+        )
+        return GateReport(
+            findings=(finding,),
+            first_fail_gate="path_class",
+            passed=False,
+            codes=(finding.code,),
+            gate_status=tuple((g, "fail" if g == "path_class" else "skip") for g in SLICE9_GATE_ORDER),
+        )
+
+    clean = _resolve_paths(list(paths or []), signals)
+    base_priors = priors or derive_trailer_priors(clean, signals=signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    tags = set(concern_tags or set())
+
+    checkers: dict[str, list[GateFinding]] = {}
+
+    # 1) path_class
+    checkers["path_class"] = _check_path_class_gate(plan, paths=clean, constraints=cons)
+
+    # 2) type
+    checkers["type"] = _check_type_gate(
+        plan,
+        paths=clean,
+        signals=signals,
+        constraints=cons,
+        concern_tags=tags,
+        priors=base_priors,
+    )
+
+    # 3) semver
+    checkers["semver"] = _check_semver_gate(
+        plan,
+        paths=clean,
+        signals=signals,
+        constraints=cons,
+        concern_tags=tags,
+    )
+
+    # 4) no_hallucination (reuse Slice 8 hallucination findings only)
+    hall = check_hallucination_guard(
+        plan,
+        paths=clean,
+        signals=signals,
+        evidence_text=evidence_text,
+        constraints=cons,
+    )
+    checkers["no_hallucination"] = [
+        GateFinding(
+            gate="no_hallucination",
+            code=f.code,
+            message=f.message,
+            token=f.token,
+        )
+        for f in hall
+    ]
+
+    # 5) inventory
+    checkers["inventory"] = _check_inventory_gate(
+        plan,
+        paths=clean,
+        signals=signals,
+        concern_tags=tags,
+        claim_tags=claim_tags,
+        included_changes=included_changes,
+        require_stub_note_tokens=require_stub_note_tokens,
+    )
+
+    # 6) craft (reuse Slice 8 craft findings)
+    craft = check_craft_guard(
+        plan,
+        paths=clean,
+        signals=signals,
+        constraints=cons,
+    )
+    checkers["craft"] = [
+        GateFinding(
+            gate="craft",
+            code=f.code,
+            message=f.message,
+            token=f.token,
+        )
+        for f in craft
+    ]
+
+    ordered_findings: list[GateFinding] = []
+    status: list[tuple[str, str]] = []
+    first_fail: str | None = None
+    for gate in SLICE9_GATE_ORDER:
+        hits = checkers.get(gate) or []
+        if first_fail is None:
+            if hits:
+                first_fail = gate
+                status.append((gate, "fail"))
+                ordered_findings.extend(hits)
+            else:
+                status.append((gate, "pass"))
+        else:
+            # Still record later findings for diagnostics, but mark skip for first-fail semantics.
+            if hits:
+                status.append((gate, "skip"))
+                ordered_findings.extend(hits)
+            else:
+                status.append((gate, "skip"))
+
+    codes = tuple(dict.fromkeys(f.code for f in ordered_findings))
+    return GateReport(
+        findings=tuple(ordered_findings),
+        first_fail_gate=first_fail,
+        passed=first_fail is None,
+        codes=codes,
+        gate_status=tuple(status),
+    )
+
+
+def slice9_letter_map(corpus_eval_harness: dict | None = None) -> dict[str, str]:
+    """Return the frozen A-N letter map (optionally from corpus eval_harness)."""
+    default = {
+        "A": "TIP-G2",
+        "B": "TIP-G3",
+        "C": "TIP-G4",
+        "D": "TIP-G1",
+        "E": "S9-E",
+        "F": "TIP-G5",
+        "G": "TIP-G6",
+        "H": "S9-H",
+        "I": "TIP-G7",
+        "J": "TIP-G8",
+        "K": "TIP-G9",
+        "L": "TIP-G10",
+        "M": "TIP-G11",
+        "N": "TIP-G12",
+    }
+    if not corpus_eval_harness:
+        return default
+    raw = corpus_eval_harness.get("letter_map") or {}
+    out = dict(default)
+    out.update({str(k): str(v) for k, v in raw.items()})
+    return out
