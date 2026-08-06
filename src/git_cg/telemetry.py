@@ -250,6 +250,8 @@ class GenerationTelemetry:
     structural_new_command: bool = False
     # Issue #204 Phase 7.30 presentation fallback (closed vocab; default none).
     presentation_fallback_reason: str = PresentationFallbackReason.NONE.value
+    # Issue #204 Slice 7: operator blueprint applied (bool only — never raw JSON).
+    blueprint_applied: bool = False
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab / bool).
     contract_lift_applied: bool = False
     contract_lift_from_semver: str | None = None
@@ -840,6 +842,8 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     telemetry.presentation_fallback_reason = coerce_presentation_fallback_reason(
         getattr(telemetry, "presentation_fallback_reason", PresentationFallbackReason.NONE.value)
     )
+    # Issue #204 Slice 7: blueprint_applied bool only (never raw blueprint payload).
+    telemetry.blueprint_applied = bool(getattr(telemetry, "blueprint_applied", False))
     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (bool + closed SemVer).
     telemetry.contract_lift_applied = bool(getattr(telemetry, "contract_lift_applied", False))
     telemetry.contract_lift_from_semver = coerce_closed_semver(getattr(telemetry, "contract_lift_from_semver", None))
@@ -985,6 +989,9 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data["presentation_fallback_reason"] = coerce_presentation_fallback_reason(
                 data.get("presentation_fallback_reason")
             )
+            # Issue #204 Slice 7: blueprint_applied default + coerce.
+            data.setdefault("blueprint_applied", False)
+            data["blueprint_applied"] = bool(data.get("blueprint_applied", False))
             # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs.
             data.setdefault("contract_lift_applied", False)
             data["contract_lift_applied"] = bool(data.get("contract_lift_applied", False))

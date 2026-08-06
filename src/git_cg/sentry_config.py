@@ -187,6 +187,13 @@ def init_sentry():
                                 # enums are safe as tags, but scrub free-text guidance.
                                 "low_confidence_guidance",
                                 "body_skeleton",
+                                # Slice 7 blueprint — never ship payload/content.
+                                "blueprint",
+                                "blueprint_raw",
+                                "blueprint_source",
+                                "blueprint_guidance",
+                                "parsed_blueprint",
+                                "commit_blueprint",
                                 # Slice 5.5 lifecycle — keep tags only; scrub any locals.
                                 "commit_plan",
                                 "commit_plan_json",
