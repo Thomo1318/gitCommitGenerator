@@ -1457,6 +1457,7 @@ def _write_telemetry_state_safe(
     structural_public_api: bool = False,
     structural_new_command: bool = False,
     presentation_fallback_reason: str = "none",
+    blueprint_applied: bool = False,
     contract_lift_applied: bool = False,
     contract_lift_from_semver: str | None = None,
     contract_locked_semver: str | None = None,
@@ -1529,6 +1530,7 @@ def _write_telemetry_state_safe(
         structural_public_api (bool): Phase 9 structural public-API marker.
         structural_new_command (bool): Phase 9 structural new-command marker.
         presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
+        blueprint_applied (bool): Issue #204 Slice 7 — True when a legal operator blueprint overlay was applied.
         contract_lift_applied (bool): Issue #204 Slice 5 — True when post-presentation SemVer was lifted to the locked contract floor.
         contract_lift_from_semver (str | None): Issue #204 Slice 5 — pre-lift SemVer value when a lift occurred.
         contract_locked_semver (str | None): Issue #204 Slice 5.5 — locked contract SemVer.
@@ -1630,6 +1632,7 @@ def _write_telemetry_state_safe(
             structural_public_api=bool(structural_public_api),
             structural_new_command=bool(structural_new_command),
             presentation_fallback_reason=str(presentation_fallback_reason or "none"),
+            blueprint_applied=bool(blueprint_applied),
             contract_lift_applied=bool(contract_lift_applied),
             contract_lift_from_semver=(
                 str(contract_lift_from_semver) if contract_lift_from_semver is not None else None
@@ -2240,6 +2243,7 @@ def _run_commit_generation(
     enable_semantic: bool | None = None,
     gold_strict: bool = False,
     rank_arbitrate: bool | None = None,
+    blueprint: str | None = None,
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
@@ -2258,6 +2262,7 @@ def _run_commit_generation(
         enable_semantic (bool | None): Enable or disable semantic processing, or use its configured default.
         gold_strict (bool): Resolve gold lint to strict mode without affecting non-gold strictness.
         rank_arbitrate (bool | None): Enable or disable Low-confidence intent arbitration, or use env/default.
+        blueprint (str | None): Optional presentation CommitBlueprint as inline JSON or ``@path.json``.
 
     Returns:
         bool: `True` when generation completes successfully.
@@ -2559,6 +2564,10 @@ def _run_commit_generation(
     plan_normaliser_applied: bool = False
     plan_normaliser_reason: str = "none"
     presentation_touched_semver: bool = False
+    # Issue #204 Slice 7: operator blueprint (presentation-only).
+    blueprint_applied: bool = False
+    parsed_blueprint = None  # CommitBlueprint | None — never logged raw
+    blueprint_guidance: str | None = None
 
     # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
     # Sole insertion seam: after rank/confidence owner, before contract/LLM.
@@ -2682,6 +2691,7 @@ def _run_commit_generation(
                     structural_public_api=structural_public_api,
                     structural_new_command=structural_new_command,
                     presentation_fallback_reason=presentation_fallback_reason,
+                    blueprint_applied=blueprint_applied,
                     contract_lift_applied=contract_lift_applied,
                     contract_lift_from_semver=contract_lift_from_semver,
                     contract_locked_semver=contract_locked_semver,
@@ -2814,6 +2824,65 @@ def _run_commit_generation(
         low_confidence_guidance = None
         low_confidence_adjustment = None
 
+    # Issue #204 Slice 7 — parse/validate operator blueprint before LLM.
+    # Strict standalone CLI (strict=True + TTY): BlueprintError → exit 2.
+    # Hook / non-TTY: fall closed to deterministic priors; never block commit.
+    if blueprint:
+        from git_cg.commit_quality import (
+            BlueprintError,
+            constraints_from_paths,
+            format_blueprint_guidance,
+            parse_commit_blueprint,
+            semver_presentation_ceiling,
+            validate_blueprint_against_constraints,
+        )
+
+        try:
+            repo_root_for_bp = None
+            try:
+                repo_root_for_bp = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
+            except Exception:
+                repo_root_for_bp = None
+            parsed_blueprint = parse_commit_blueprint(
+                blueprint,
+                repo_root=repo_root_for_bp,
+                cwd=os.getcwd(),
+            )
+            staged_for_bp = list(getattr(gen_context.diff_signals, "files", None) or [])
+            bp_constraints = getattr(gen_context, "presentation_constraints", None)
+            if bp_constraints is None:
+                bp_constraints = constraints_from_paths(staged_for_bp, signals=gen_context.diff_signals)
+            bp_ceiling = semver_presentation_ceiling(staged_for_bp, gen_context.diff_signals)
+            validate_blueprint_against_constraints(parsed_blueprint, bp_constraints, ceiling=bp_ceiling)
+            blueprint_guidance = format_blueprint_guidance(parsed_blueprint)
+        except BlueprintError as bp_exc:
+            kind = getattr(bp_exc, "kind", "blueprint") or "blueprint"
+            # Never include raw blueprint payload in the operator message.
+            safe_msg = str(bp_exc).split(":")[0][:120]
+            # Standalone interactive CLI hard-fails; hooks must not block.
+            hard_fail = bool(strict) and bool(tty_ok)
+            if hard_fail:
+                console.print(f"[bold red]Blueprint rejected:[/bold red] {safe_msg}")
+                raise typer.Exit(code=2) from bp_exc
+            presentation_fallback_reason = "error" if kind == "error" else "blueprint"
+            parsed_blueprint = None
+            blueprint_guidance = None
+            blueprint_applied = False
+            if verbose:
+                console.log(f"[yellow]Blueprint ignored ({presentation_fallback_reason}): {safe_msg}[/yellow]")
+        except Exception as bp_exc:
+            hard_fail = bool(strict) and bool(tty_ok)
+            safe_msg = type(bp_exc).__name__
+            if hard_fail:
+                console.print(f"[bold red]Blueprint rejected:[/bold red] {safe_msg}")
+                raise typer.Exit(code=2) from bp_exc
+            presentation_fallback_reason = "error"
+            parsed_blueprint = None
+            blueprint_guidance = None
+            blueprint_applied = False
+            if verbose:
+                console.log(f"[yellow]Blueprint ignored (error): {safe_msg}[/yellow]")
+
     while True:
         regen_state = RegenerationState(
             previous_plan=review_state.commit_plan if review_state else None,
@@ -2835,6 +2904,14 @@ def _run_commit_generation(
                 f"requested lock was {reason}; falling through to normal contract precedence.[/yellow]"
             )
 
+        # Slice 7: fold blueprint presentation pressure into the existing guidance
+        # channel (no raw JSON). Path-class envelope still wins post-LLM.
+        _presentation_guidance = low_confidence_guidance
+        if blueprint_guidance:
+            if _presentation_guidance:
+                _presentation_guidance = f"{blueprint_guidance}\n\n{_presentation_guidance}"
+            else:
+                _presentation_guidance = blueprint_guidance
         system_prompt = build_system_prompt(
             analysis_diff,
             verbose,
@@ -2846,7 +2923,7 @@ def _run_commit_generation(
             gold_guidance=gold_guidance,
             scoped_history_guidance=scoped_history_guidance,
             staged_paths=list(getattr(gen_context.diff_signals, "files", None) or []),
-            low_confidence_guidance=low_confidence_guidance,
+            low_confidence_guidance=_presentation_guidance,
         )
 
         # Offline prompt tracking (synced asynchronously via script)
@@ -2945,6 +3022,50 @@ def _run_commit_generation(
                 if seeded.active:
                     presentation_fallback_reason = seeded.fallback_reason
                     presentation_touched_semver = True
+            # Slice 7: apply legal blueprint overlay before path-class envelope so
+            # path-class / ceilings retain precedence (Approval locks §I).
+            if parsed_blueprint is not None:
+                from git_cg.commit_quality import (
+                    BlueprintError as _BlueprintError,
+                    apply_blueprint,
+                    constraints_from_paths as _constraints_from_paths,
+                    semver_presentation_ceiling as _ceiling_fn,
+                )
+
+                try:
+                    _bp_cons = gen_context.presentation_constraints
+                    if _bp_cons is None:
+                        _bp_cons = _constraints_from_paths(staged_paths, signals=gen_context.diff_signals)
+                    _bp_ceil = _ceiling_fn(staged_paths, gen_context.diff_signals)
+                    _bp_state = apply_blueprint(
+                        commit_plan,
+                        parsed_blueprint,
+                        _bp_cons,
+                        ceiling=_bp_ceil,
+                        paths=staged_paths,
+                        signals=gen_context.diff_signals,
+                    )
+                    commit_plan = _bp_state.plan
+                    blueprint_applied = bool(_bp_state.blueprint_applied)
+                    presentation_touched_semver = True
+                except _BlueprintError as _bp_apply_exc:
+                    kind = getattr(_bp_apply_exc, "kind", "blueprint") or "blueprint"
+                    hard_fail = bool(strict) and bool(tty_ok)
+                    if hard_fail:
+                        safe_msg = str(_bp_apply_exc).split(":")[0][:120]
+                        console.print(f"[bold red]Blueprint rejected:[/bold red] {safe_msg}")
+                        raise typer.Exit(code=2) from _bp_apply_exc
+                    presentation_fallback_reason = "error" if kind == "error" else "blueprint"
+                    blueprint_applied = False
+                    if verbose:
+                        console.log(f"[yellow]Blueprint apply skipped ({presentation_fallback_reason})[/yellow]")
+                except Exception as _bp_apply_exc:
+                    hard_fail = bool(strict) and bool(tty_ok)
+                    if hard_fail:
+                        console.print(f"[bold red]Blueprint rejected:[/bold red] {type(_bp_apply_exc).__name__}")
+                        raise typer.Exit(code=2) from _bp_apply_exc
+                    presentation_fallback_reason = "error"
+                    blueprint_applied = False
             commit_plan = apply_presentation_overlay(
                 commit_plan,
                 paths=staged_paths,
@@ -3236,6 +3357,7 @@ def _run_commit_generation(
                 structural_public_api=structural_public_api,
                 structural_new_command=structural_new_command,
                 presentation_fallback_reason=presentation_fallback_reason,
+                blueprint_applied=blueprint_applied,
                 contract_lift_applied=contract_lift_applied,
                 contract_lift_from_semver=contract_lift_from_semver,
                 contract_locked_semver=contract_locked_semver,
@@ -3386,6 +3508,7 @@ def _run_commit_generation(
         structural_public_api=structural_public_api,
         structural_new_command=structural_new_command,
         presentation_fallback_reason=presentation_fallback_reason,
+        blueprint_applied=blueprint_applied,
         contract_lift_applied=contract_lift_applied,
         contract_lift_from_semver=contract_lift_from_semver,
         contract_locked_semver=contract_locked_semver,
@@ -3449,6 +3572,14 @@ def main_callback(
         False,
         "--gold-strict",
         help="Resolve gold lint to strict mode without enabling general --strict.",
+    ),
+    blueprint: str | None = typer.Option(
+        None,
+        "--blueprint",
+        help=(
+            "Optional presentation CommitBlueprint as inline JSON or @path.json "
+            "(max 64KiB; never overrides ranked intent_id)."
+        ),
     ),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx",
@@ -3517,6 +3648,7 @@ def main_callback(
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
         rank_arbitrate=rank_arbitrate,
+        blueprint=blueprint,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -3575,6 +3707,14 @@ def commit(
             "(default: GIT_CG_RANK_ARBITRATE env or auto)."
         ),
     ),
+    blueprint: str | None = typer.Option(
+        None,
+        "--blueprint",
+        help=(
+            "Optional presentation CommitBlueprint as inline JSON or @path.json "
+            "(max 64KiB; never overrides ranked intent_id)."
+        ),
+    ),
 ) -> None:
     """Generate an AI commit message based on staged changes."""
     _run_commit_generation(
@@ -3591,6 +3731,7 @@ def commit(
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
         rank_arbitrate=rank_arbitrate,
+        blueprint=blueprint,
     )
 
 
@@ -3876,6 +4017,8 @@ def record_telemetry(
                     "lock_resolution": telemetry_state.get("lock_resolution", "absent"),
                     # Issue #204 Slice 5 presentation fallback (closed vocab).
                     "presentation_fallback_reason": telemetry_state.get("presentation_fallback_reason", "none"),
+                    # Issue #204 Slice 7: blueprint applied (bool only).
+                    "blueprint_applied": bool(telemetry_state.get("blueprint_applied", False)),
                     # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab).
                     "contract_lift_applied": bool(telemetry_state.get("contract_lift_applied", False)),
                     "contract_lift_from_semver": telemetry_state.get("contract_lift_from_semver"),
