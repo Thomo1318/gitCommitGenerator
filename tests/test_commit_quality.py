@@ -20,6 +20,7 @@ from git_cg.commit_quality import (
     PRESENTATION_FALLBACK_HALLUCINATION,
     PRESENTATION_FALLBACK_LOW_CONFIDENCE,
     PRESENTATION_FALLBACK_NONE,
+    SLICE9_GATE_ORDER,
     PresentationAdjustment,
     PresentationConstraints,
     Stub,
@@ -36,6 +37,7 @@ from git_cg.commit_quality import (
     derive_trailer_priors,
     detect_high_risk_surfaces,
     dominant_presentation_cc_type,
+    evaluate_presentation_gates,
     evaluate_presentation_guards,
     filter_paths_for_content_signals,
     format_guard_guidance,
@@ -54,6 +56,7 @@ from git_cg.commit_quality import (
     required_changelog_groups,
     security_claims_without_path_evidence,
     semver_presentation_ceiling,
+    slice9_letter_map,
     strip_included_changes_from_body_summary,
 )
 from git_cg.intent import DiffSignals
@@ -1990,3 +1993,171 @@ def test_clean_message_does_not_fire_guards() -> None:
     assert report.dirty is False
     assert report.fallback_reason == PRESENTATION_FALLBACK_NONE
     assert report.hallucination_guard_fired is False
+
+
+# ---------------------------------------------------------------------------
+# Slice 9 - ordered pure gate evaluator unit coverage
+# ---------------------------------------------------------------------------
+
+
+def test_slice9_gate_order_constant() -> None:
+    assert SLICE9_GATE_ORDER == (
+        "path_class",
+        "type",
+        "semver",
+        "no_hallucination",
+        "inventory",
+        "craft",
+    )
+    assert list(slice9_letter_map()) == [chr(c) for c in range(ord("A"), ord("N") + 1)]
+
+
+def test_slice9_gate_first_fail_skips_later_gates() -> None:
+    """Illegal docs fix fails at type; later craft/hallucination still recorded as skip."""
+    import conftest as _cq
+
+    primary = _cq.make_commit_intent(
+        intent_id="bug_fix",
+        gitmoji="🥅",
+        cc_type="fix",
+        scope="adr",
+        description="Clarify fail-open fallback for scoped history",
+        semver_impact="PATCH",
+        changelog_group="Fixed",
+        construct=True,
+    )
+    plan = _cq.make_commit_plan(
+        primary=primary,
+        body_summary="Handle runtime fail-open recovery described in mermaid prose.",
+        construct=True,
+    )
+    paths = [
+        "docs/usage.md",
+        "docs/ADRs/0163-scoped-reasoning-history.md",
+    ]
+    report = evaluate_presentation_gates(plan, paths=paths)
+    assert report.passed is False
+    assert report.first_fail_gate == "type"
+    status = dict(report.gate_status)
+    assert status["path_class"] == "pass"
+    assert status["type"] == "fail"
+    assert status["semver"] == "skip"
+    assert status["craft"] == "skip"
+    assert "GATE_TYPE_FORBIDDEN" in report.codes or "GATE_TYPE_FORCE_MISMATCH" in report.codes
+
+
+def test_slice9_h_signing_inventory_token_required() -> None:
+    import conftest as _cq
+
+    paths = [
+        "tests/test_scoped_history.py",
+        "tests/fixtures/scoped_history/README.md",
+        "tests/fixtures/scoped_history/no-gpg-sign.md",
+    ]
+    primary = _cq.make_commit_intent(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type="test",
+        scope="scoped-history",
+        description="harden fixture signing and scoped-history locks",
+        semver_impact="NONE",
+        changelog_group="Tests",
+        construct=True,
+    )
+    sec = _cq.make_commit_intent(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type="docs",
+        scope="fixtures",
+        description="harden fixture GPG/signing setup",
+        semver_impact="NONE",
+        changelog_group="Documentation",
+        construct=True,
+    )
+    legal = _cq.make_commit_plan(
+        primary=primary,
+        secondary_intents=[sec],
+        body_summary="Keep hermetic tests with commit.gpgsign=false fixture docs.",
+        construct=True,
+    )
+    ok = evaluate_presentation_gates(
+        legal,
+        paths=paths,
+        included_changes=[
+            "✅ test(scoped-history): cover test_scoped_history suite",
+            "📝 docs(fixtures): harden fixture GPG/signing setup",
+            "📝 docs(fixtures): document fixture README",
+        ],
+        require_stub_note_tokens=["gpg", "signing"],
+    )
+    assert ok.passed is True
+
+    bad_primary = _cq.make_commit_intent(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type="test",
+        scope="scoped-history",
+        description="expand scoped-history fixture coverage",
+        semver_impact="NONE",
+        changelog_group="Tests",
+        construct=True,
+    )
+    bad_sec = _cq.make_commit_intent(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type="docs",
+        scope="fixtures",
+        description="document fixture README",
+        semver_impact="NONE",
+        changelog_group="Documentation",
+        construct=True,
+    )
+    bad = _cq.make_commit_plan(
+        primary=bad_primary,
+        secondary_intents=[bad_sec],
+        body_summary="Update fixtures without mentioning signing.",
+        construct=True,
+    )
+    report = evaluate_presentation_gates(
+        bad,
+        paths=paths,
+        included_changes=[
+            "✅ test(scoped-history): cover test_scoped_history suite",
+            "📝 docs(fixtures): document fixture README",
+        ],
+        require_stub_note_tokens=["gpg", "signing"],
+    )
+    assert report.passed is False
+    assert report.first_fail_gate == "inventory"
+    assert "GATE_INVENTORY_MISSING_TOKEN" in report.codes
+
+
+def test_slice9_evaluate_gates_never_calls_ranker(monkeypatch: pytest.MonkeyPatch) -> None:
+    import conftest as _cq
+
+    import git_cg.intent as intent_mod
+
+    def _boom(*_a, **_k):
+        raise AssertionError("ranker invoked")
+
+    monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
+    primary = _cq.make_commit_intent(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type="docs",
+        scope="adr",
+        description="document graph_unavailable posture",
+        semver_impact="NONE",
+        changelog_group="Documentation",
+        construct=True,
+    )
+    plan = _cq.make_commit_plan(
+        primary=primary,
+        body_summary="Docs-only graph_unavailable posture.",
+        construct=True,
+    )
+    report = evaluate_presentation_gates(
+        plan,
+        paths=["docs/usage.md", "docs/ADRs/0163-scoped-reasoning-history.md"],
+    )
+    assert report.passed is True

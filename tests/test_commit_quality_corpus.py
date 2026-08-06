@@ -1,7 +1,9 @@
-"""Issue #204 Slice 3 — pure presentation quality corpus (P9-G* + TIP-G*).
+"""Issue #204 Slice 3 + Slice 9 - pure presentation quality corpus.
 
 Freezes path-class priors, constraints, ceilings, and apply_presentation_overlay
-against pinned goldens. No live LLM and no rank_commit_intents.
+against pinned goldens (P9-G* + TIP-G* + S9-E/S9-H). Slice 9 adds the A-N
+ordered gate characterisation harness (eval_an.json) with no live LLM and no
+rank_commit_intents.
 """
 
 from __future__ import annotations
@@ -15,25 +17,31 @@ import conftest as _cq_factories
 import pytest
 
 from git_cg.commit_quality import (
+    SLICE9_GATE_ORDER,
     apply_presentation_overlay,
+    build_included_change_stubs,
     classify_diff_class,
     derive_trailer_priors,
     dominant_presentation_cc_type,
+    evaluate_presentation_gates,
     is_high_risk_path_set,
     min_included_change_bullets,
     presentation_constraints,
     semver_presentation_ceiling,
+    slice9_letter_map,
 )
 from git_cg.scope_canon import normalize_scope
 from git_cg.sop import load_sop
 
 # Shared D24 factories live in tests/conftest.py (pytest loads the module on the path).
 make_commit_plan = _cq_factories.make_commit_plan
+make_commit_intent = _cq_factories.make_commit_intent
 make_diff_signals = _cq_factories.make_diff_signals
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "commit_quality"
 CORPUS_PATH = FIXTURE_DIR / "corpus.json"
 GOLDENS_PATH = FIXTURE_DIR / "goldens.json"
+EVAL_AN_PATH = FIXTURE_DIR / "eval_an.json"
 
 EXPECTED_SOP_SHA256 = "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7"
 EXPECTED_SOP_ROW_COUNT = 75
@@ -125,6 +133,8 @@ def test_corpus_and_golden_ids_match(corpus: dict, goldens: dict) -> None:
         "TIP-G10",
         "TIP-G11",
         "TIP-G12",
+        "S9-E",
+        "S9-H",
     ]
 
 
@@ -305,6 +315,16 @@ def _assert_must_present(case: dict[str, Any], snap: dict[str, Any]) -> None:
     if "test_module_count_gte" in mp:
         modules = [p for p in case["staged_paths"] if Path(p).name.startswith("test_")]
         assert len(modules) >= int(mp["test_module_count_gte"]), case["id"]
+    if "stub_note_tokens_any" in mp:
+        stubs = build_included_change_stubs(
+            list(case["staged_paths"]),
+            make_diff_signals(**case["diff_signals_kwargs"]),
+            concern_tags=set(case.get("concern_tags") or []),
+            claim_tags=case.get("claim_tags") or [],
+        )
+        blob = " ".join(f"{s.note or ''} {s.surface or ''} {s.role or ''}" for s in stubs).lower()
+        tokens = [str(t).lower() for t in mp["stub_note_tokens_any"]]
+        assert any(tok in blob for tok in tokens), (case["id"], tokens, blob)
 
 
 def _assert_must_not_present(case: dict[str, Any], snap: dict[str, Any]) -> None:
@@ -395,3 +415,214 @@ def test_corpus_helpers_never_call_ranker(monkeypatch: pytest.MonkeyPatch, corpu
     monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
     case = corpus["cases"][0]
     _compute_snapshot(case)
+
+
+# ---------------------------------------------------------------------------
+# Slice 9 - A-N pure ordered-gate characterisation harness
+# ---------------------------------------------------------------------------
+
+_GITMOJI_FOR_TYPE = {
+    "docs": "📝",
+    "test": "✅",
+    "fix": "🐛",
+    "feat": "✨",
+    "chore": "🔧",
+    "refactor": "♻️",
+    "perf": "⚡",
+}
+_INTENT_FOR_TYPE = {
+    "docs": "documentation_update",
+    "test": "tests_update",
+    "fix": "bug_fix",
+    "feat": "feature_addition",
+    "chore": "chore_maintenance",
+}
+
+
+@pytest.fixture(scope="module")
+def eval_an() -> dict[str, Any]:
+    assert EVAL_AN_PATH.is_file(), f"missing Slice 9 eval fixture: {EVAL_AN_PATH}"
+    return _load_json(EVAL_AN_PATH)
+
+
+def _eval_candidate_ids() -> list[str]:
+    return [c["id"] for c in _load_json(EVAL_AN_PATH)["candidates"]]
+
+
+def _build_eval_plan(plan_fields: dict[str, Any]):
+    """Build a deliberately matrix-bypassing candidate plan for pure gate eval."""
+    fields = dict(plan_fields)
+    included = fields.pop("included_changes", None)
+    sec_types = list(fields.pop("secondary_types", None) or [])
+    sec_groups = list(fields.pop("secondary_groups", None) or [])
+    cc = str(fields.get("cc_type") or "feat")
+    primary = make_commit_intent(
+        intent_id=fields.get("intent_id") or _INTENT_FOR_TYPE.get(cc, "feature_addition"),
+        gitmoji=fields.get("gitmoji") or _GITMOJI_FOR_TYPE.get(cc, "✨"),
+        cc_type=cc,
+        scope=fields.get("scope"),
+        description=fields.get("description", "x"),
+        semver_impact=fields.get("semver_impact", "NONE"),
+        changelog_group=fields.get("changelog_group", "Miscellaneous"),
+        construct=True,
+    )
+    secondaries = []
+    for i, st in enumerate(sec_types):
+        st = str(st)
+        grp = (
+            sec_groups[i]
+            if i < len(sec_groups)
+            else ("Documentation" if st == "docs" else "Tests" if st == "test" else "Miscellaneous")
+        )
+        secondaries.append(
+            make_commit_intent(
+                intent_id=_INTENT_FOR_TYPE.get(st, "feature_addition"),
+                gitmoji=_GITMOJI_FOR_TYPE.get(st, "✨"),
+                cc_type=st,
+                scope=fields.get("scope"),
+                description=f"secondary {st}",
+                semver_impact=(
+                    "NONE" if fields.get("semver_impact") == "NONE" else fields.get("semver_impact", "NONE")
+                ),
+                changelog_group=grp,
+                construct=True,
+            )
+        )
+    plan = make_commit_plan(
+        primary=primary,
+        secondary_intents=secondaries,
+        body_summary=fields.get("body_summary", ""),
+        construct=True,
+    )
+    return plan, included
+
+
+def test_slice9_letter_map_covers_a_to_n(corpus: dict, eval_an: dict) -> None:
+    harness = corpus.get("eval_harness") or {}
+    letter_map = slice9_letter_map(harness)
+    assert list(letter_map) == [chr(c) for c in range(ord("A"), ord("N") + 1)]
+    assert harness.get("gate_order") == list(SLICE9_GATE_ORDER)
+    assert eval_an.get("gate_order") == list(SLICE9_GATE_ORDER)
+    assert eval_an.get("letter_map") == letter_map
+    case_ids = {c["id"] for c in corpus["cases"]}
+    for letter, case_id in letter_map.items():
+        assert case_id in case_ids, (letter, case_id)
+    # Every mapped corpus row carries the letter alias.
+    by_id = _case_map(corpus)
+    for letter, case_id in letter_map.items():
+        letters = by_id[case_id].get("eval_letters") or []
+        assert letter in letters, (case_id, letter, letters)
+
+
+def test_slice9_gap_cases_exist(corpus: dict, goldens: dict) -> None:
+    by_id = _case_map(corpus)
+    assert "S9-E" in by_id and "S9-H" in by_id
+    assert "S9-E" in goldens["cases"] and "S9-H" in goldens["cases"]
+    e = by_id["S9-E"]
+    h = by_id["S9-H"]
+    assert e["must_present"]["cc_type"] == "docs"
+    assert e["must_present"]["semver"] == "NONE"
+    assert "fix" in (e.get("must_not_present") or {}).get("cc_type", [])
+    assert h["must_present"]["cc_type"] == "test"
+    assert h["must_present"]["stub_note_tokens_any"] == ["gpg", "signing"]
+    # Deterministic stubs must surface signing inventory for H.
+    stubs = build_included_change_stubs(list(h["staged_paths"]))
+    blob = " ".join(f"{s.note or ''}" for s in stubs).lower()
+    assert "gpg" in blob or "signing" in blob
+
+
+@pytest.mark.parametrize("candidate_id", _eval_candidate_ids())
+def test_slice9_eval_an_candidate(
+    candidate_id: str,
+    corpus: dict,
+    eval_an: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import git_cg.intent as intent_mod
+
+    def _boom(*_a, **_k):
+        raise AssertionError("rank_commit_intents must not be called from Slice 9 eval")
+
+    monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
+
+    cand = next(c for c in eval_an["candidates"] if c["id"] == candidate_id)
+    letter = cand["letter"]
+    letter_map = slice9_letter_map(corpus.get("eval_harness"))
+    case = _case_map(corpus)[letter_map[letter]]
+    paths = list(case["staged_paths"])
+    signals = make_diff_signals(**case["diff_signals_kwargs"])
+    plan, included = _build_eval_plan(cand["plan"])
+
+    req_tokens = None
+    mp = case.get("must_present") or {}
+    if mp.get("stub_note_tokens_any"):
+        req_tokens = list(mp["stub_note_tokens_any"])
+    if letter == "H":
+        req_tokens = ["gpg", "signing"]
+
+    report = evaluate_presentation_gates(
+        plan,
+        paths=paths,
+        signals=signals,
+        concern_tags=set(case.get("concern_tags") or []),
+        claim_tags=case.get("claim_tags") or [],
+        evidence_text=case.get("evidence_text") or "",
+        included_changes=included,
+        require_stub_note_tokens=req_tokens,
+    )
+
+    # Gate order identity
+    assert [g for g, _ in report.gate_status] == list(SLICE9_GATE_ORDER)
+
+    expect = cand["expect"]
+    if expect == "pass":
+        assert report.passed is True, (candidate_id, report.first_fail_gate, report.codes)
+        assert report.first_fail_gate is None
+        assert report.codes == ()
+        assert all(status == "pass" for _, status in report.gate_status)
+    else:
+        assert report.passed is False, candidate_id
+        assert report.first_fail_gate is not None
+        exp_gate = cand.get("expect_fail_gate")
+        if exp_gate:
+            assert report.first_fail_gate == exp_gate, (
+                candidate_id,
+                report.first_fail_gate,
+                report.codes,
+            )
+        exp_codes = set(cand.get("expect_fail_codes_any") or [])
+        if exp_codes:
+            assert exp_codes & set(report.codes), (candidate_id, report.codes, exp_codes)
+        # First-fail semantics: earlier gates pass, fail gate is fail, later are skip.
+        seen_fail = False
+        for gate, status in report.gate_status:
+            if not seen_fail:
+                if gate == report.first_fail_gate:
+                    assert status == "fail", (candidate_id, gate, status)
+                    seen_fail = True
+                else:
+                    assert status == "pass", (candidate_id, gate, status)
+            else:
+                assert status == "skip", (candidate_id, gate, status)
+
+
+def test_slice9_eval_helpers_never_call_ranker(
+    monkeypatch: pytest.MonkeyPatch,
+    corpus: dict,
+    eval_an: dict,
+) -> None:
+    import git_cg.intent as intent_mod
+
+    def _boom(*_a, **_k):
+        raise AssertionError("ranker invoked from slice9 helpers")
+
+    monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
+    cand = eval_an["candidates"][0]
+    case = _case_map(corpus)[slice9_letter_map(corpus.get("eval_harness"))[cand["letter"]]]
+    plan, included = _build_eval_plan(cand["plan"])
+    evaluate_presentation_gates(
+        plan,
+        paths=list(case["staged_paths"]),
+        signals=make_diff_signals(**case["diff_signals_kwargs"]),
+        included_changes=included,
+    )
