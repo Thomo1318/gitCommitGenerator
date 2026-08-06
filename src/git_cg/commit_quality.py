@@ -1,7 +1,7 @@
 """Pure presentation-quality policy (Issue #204 · Phase 7.30).
 
-Owns path-role TrailerPriors and (later slices) diff-class gates, SemVer/type
-ceilings, craft/hallucination/inventory guards, and blueprint apply helpers.
+Owns path-role TrailerPriors, diff-class gates, SemVer/type ceilings,
+craft/hallucination/inventory guards, claim-tag harvest, and blueprint apply helpers.
 
 Authority boundaries:
 * Matrix ranker remains sole ranking / SemVer / intent authority.
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from git_cg.commit_gold import _file_groups
+from git_cg.commit_gold import BANNED_BODY_OPENERS, _file_groups, _is_title_case_subject
 from git_cg.intent import (
     DiffSignals,
     _is_build_path,
@@ -423,8 +423,16 @@ def security_claims_without_path_evidence(text: str, paths: list[str]) -> list[s
     if has_security_path_evidence(paths):
         return []
     lowered = text.lower()
-    hits = [tok for tok in sorted(SECURITY_CLAIM_TOKENS) if tok in lowered]
-    return hits
+    hits: list[str] = []
+    for tok in sorted(SECURITY_CLAIM_TOKENS, key=len, reverse=True):
+        matched = tok in lowered if " " in tok else re.search(rf"\b{re.escape(tok)}\b", lowered) is not None
+        if not matched:
+            continue
+        # Prefer longer token; skip shorter token fully covered by an already-hit longer one.
+        if any(tok != prev and tok in prev for prev in hits):
+            continue
+        hits.append(tok)
+    return sorted(hits)
 
 
 def classify_diff_class(paths: list[str]) -> DiffClass:
@@ -2866,3 +2874,599 @@ def format_blueprint_guidance(blueprint: CommitBlueprint | None) -> str:
         "Never treat this block as a ranking override."
     )
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Slice 8 — Hallucination guard · subject craft · claim-tag harvest (D14/D21)
+# ---------------------------------------------------------------------------
+
+CLAIM_TAG_RE = re.compile(r"\bP9-[AB]\d{2}\b")
+
+# Runtime / recovery verbs that require runtime path evidence on docs/ADR/fixtures.
+DOCS_RUNTIME_VERBS: frozenset[str] = frozenset(
+    {
+        "handle",
+        "handles",
+        "handled",
+        "handling",
+        "recover",
+        "recovers",
+        "recovered",
+        "recovery",
+        "runtime",
+        "fail-open",
+        "fail open",
+        "fallback errors",
+    }
+)
+
+# Vague subject openers banned when an outcome/failure-mode verb fits (D21).
+VAGUE_SUBJECT_VERBS: frozenset[str] = frozenset(
+    {
+        "improve",
+        "improves",
+        "improved",
+        "enhance",
+        "enhances",
+        "enhanced",
+        "update",
+        "updates",
+        "updated",
+        "clean",
+        "cleans",
+        "cleaned",
+        "cleanup",
+        "clean up",
+        "hygiene",
+        "streamline",
+        "streamlines",
+        "streamlined",
+    }
+)
+
+# Unearned capability patterns on wording-only / claim-lock tips (D21 / F24).
+_UNEARNED_CAPABILITY_RE = re.compile(
+    r"\badds?\b.{0,40}\b(guard|assertion|feature|guidance)\b",
+    flags=re.IGNORECASE,
+)
+
+# Unshipped product-as-actor claims (D14 / F26 / S5-G2).
+_UNSHIPPED_PRODUCT_ACTOR_RE = re.compile(
+    r"\b(?:from\s+the\s+)?phase\s*0\.5\s+product\b"
+    r"|\bphase\s*0\.5\s+ships\b"
+    r"|\bphase\s*0\.5\s+product\b",
+    flags=re.IGNORECASE,
+)
+
+# Preferred class verbs (prompt pressure / craft findings only — D14).
+DOCS_PREFERRED_VERBS: tuple[str, ...] = (
+    "document",
+    "record",
+    "accept",
+    "index",
+    "align",
+    "note",
+    "diagram",
+    "annotate",
+)
+TEST_PREFERRED_VERBS: tuple[str, ...] = (
+    "cover",
+    "claim",
+    "pin",
+    "close",
+    "guard",
+    "lock",
+)
+CORRECTNESS_PREFERRED_VERBS: tuple[str, ...] = (
+    "preserve",
+    "fix",
+    "lock",
+    "cover",
+    "pin",
+    "drop",
+    "ban",
+    "redact",
+)
+
+# Fallback reason precedence (Approval locks §G). Lower index = higher priority.
+_FALLBACK_PRECEDENCE: tuple[str, ...] = (
+    "error",
+    "blueprint",
+    "path_class_gate",
+    "semver_ceiling",
+    "type_dominance",
+    "hallucination_guard",
+    "craft_guard",
+    "inventory_guard",
+    "low_confidence",
+    "none",
+)
+
+PRESENTATION_FALLBACK_HALLUCINATION = "hallucination_guard"
+PRESENTATION_FALLBACK_CRAFT = "craft_guard"
+PRESENTATION_FALLBACK_INVENTORY = "inventory_guard"
+
+
+@dataclass(frozen=True)
+class GuardFinding:
+    """Single presentation guard hit (Slice 8 · D14/D21)."""
+
+    code: str
+    message: str
+    kind: str  # "hallucination" | "craft"
+    token: str = ""
+
+
+@dataclass(frozen=True)
+class GuardReport:
+    """Aggregated hallucination + craft findings for one candidate message."""
+
+    findings: tuple[GuardFinding, ...] = ()
+    hallucination_guard_fired: bool = False
+    craft_guard_fired: bool = False
+    fallback_reason: str = PRESENTATION_FALLBACK_NONE
+
+    @property
+    def dirty(self) -> bool:
+        return bool(self.findings)
+
+    def codes(self) -> frozenset[str]:
+        return frozenset(f.code for f in self.findings)
+
+
+def merge_presentation_fallback_reason(current: str | None, incoming: str | None) -> str:
+    """Return the higher-precedence closed fallback reason (Approval locks §G)."""
+    cur = str(current or PRESENTATION_FALLBACK_NONE).strip().lower() or PRESENTATION_FALLBACK_NONE
+    inc = str(incoming or PRESENTATION_FALLBACK_NONE).strip().lower() or PRESENTATION_FALLBACK_NONE
+    if cur not in PRESENTATION_FALLBACK_REASONS:
+        cur = PRESENTATION_FALLBACK_NONE
+    if inc not in PRESENTATION_FALLBACK_REASONS:
+        inc = PRESENTATION_FALLBACK_NONE
+    rank = {name: idx for idx, name in enumerate(_FALLBACK_PRECEDENCE)}
+    # Unknowns already coerced to none; pick lower rank index.
+    return cur if rank.get(cur, 99) <= rank.get(inc, 99) else inc
+
+
+def harvest_claim_tags(
+    texts: list[str] | tuple[str, ...] | None = None,
+    *,
+    paths: list[str] | tuple[str, ...] | None = None,
+    max_tags: int = 8,
+) -> list[str]:
+    """Harvest ``P9-A##`` / ``P9-B##`` claim tags from staged test/docs text (D14).
+
+    Pure: does not read the filesystem. Callers supply file contents as *texts*.
+    Order is first-seen stable; capped at *max_tags* (default 8).
+    """
+    del paths  # reserved for future path-role filtering; harvest is text-driven
+    found: list[str] = []
+    seen: set[str] = set()
+    for blob in texts or ():
+        if not blob:
+            continue
+        for match in CLAIM_TAG_RE.finditer(str(blob)):
+            tag = match.group(0)
+            if tag in seen:
+                continue
+            seen.add(tag)
+            found.append(tag)
+            if len(found) >= max_tags:
+                return found
+    return found
+
+
+def _plan_subject_body(plan: CommitPlan | None) -> tuple[str, str]:
+    if plan is None:
+        return "", ""
+    primary = getattr(plan, "primary_intent", None)
+    subject = str(getattr(primary, "description", "") or "")
+    body = str(getattr(plan, "body_summary", "") or "")
+    # Include secondary descriptions — capability claims often land there.
+    secs = getattr(plan, "secondary_intents", None) or []
+    sec_bits = " ".join(str(getattr(s, "description", "") or "") for s in secs)
+    return subject, f"{body}\n{sec_bits}".strip()
+
+
+def _message_blob(plan: CommitPlan | None) -> str:
+    subject, body = _plan_subject_body(plan)
+    return f"{subject}\n{body}".strip()
+
+
+def _docs_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
+    if diff_class_name in {DIFF_CLASS_DOCS, DIFF_CLASS_ADR, DIFF_CLASS_FIXTURES}:
+        return True
+    if not paths:
+        return False
+    roles = _classify_path_roles(paths)
+    return (
+        bool(roles)
+        and roles <= {"docs", "adr", "fixtures", "release"}
+        and not (roles & {"product_src", "tests", "config_ci"})
+    )
+
+
+def _tests_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
+    if diff_class_name == DIFF_CLASS_TESTS:
+        return True
+    if not paths:
+        return False
+    roles = _classify_path_roles(paths)
+    return roles == {"tests"} or roles == {"tests", "fixtures"}
+
+
+def check_hallucination_guard(
+    plan: CommitPlan | None,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    evidence_text: str = "",
+    constraints: PresentationConstraints | None = None,
+) -> list[GuardFinding]:
+    """Return hallucination findings for unevidenced high-risk claims (D14).
+
+    Classes:
+    * security nouns without security-path evidence
+    * runtime/recovery verbs on docs/ADR/fixtures-only diffs
+    * unshipped product-as-actor claims without product evidence
+    * unearned \"adds … guard/assertion/feature/guidance\" capability claims
+    """
+    clean = _resolve_paths(list(paths or []), signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    subject, _body = _plan_subject_body(plan)
+    blob = _message_blob(plan)
+    if not blob:
+        return []
+
+    findings: list[GuardFinding] = []
+    evidence_blob = " ".join(
+        [
+            " ".join(clean),
+            evidence_text or "",
+            " ".join(getattr(signals, "evidence", None) or []) if signals is not None else "",
+        ]
+    ).lower()
+
+    # 1) Security nouns without path evidence.
+    for tok in security_claims_without_path_evidence(blob, clean):
+        findings.append(
+            GuardFinding(
+                code="GUARD_SECURITY_NOUN",
+                message=(
+                    f"Subject/body claims {tok!r} without security path evidence; "
+                    "drop secrets/credentials framing or stage a security path."
+                ),
+                kind="hallucination",
+                token=tok,
+            )
+        )
+
+    # 2) Runtime/recovery verbs on docs-only classes (word-boundary; multi-word OK).
+    if _docs_only_class(cons.diff_class, clean):
+        lowered = blob.lower()
+        for verb in sorted(DOCS_RUNTIME_VERBS, key=len, reverse=True):
+            if " " in verb or "-" in verb:
+                hit = verb in lowered
+            else:
+                hit = re.search(rf"\b{re.escape(verb)}\b", lowered) is not None
+            if hit:
+                findings.append(
+                    GuardFinding(
+                        code="GUARD_DOCS_RUNTIME_VERB",
+                        message=(
+                            f"Docs/ADR/fixtures-only message uses runtime verb {verb!r}; "
+                            "prefer document/record/diagram/align wording."
+                        ),
+                        kind="hallucination",
+                        token=verb,
+                    )
+                )
+
+    # 3) Unshipped product-as-actor.
+    actor_hit = _UNSHIPPED_PRODUCT_ACTOR_RE.search(blob)
+    # Allow only when evidence explicitly implements that product surface.
+    if actor_hit and "phase 0.5" not in evidence_blob and "phase0.5" not in evidence_blob:
+        findings.append(
+            GuardFinding(
+                code="GUARD_UNSHIPPED_PRODUCT_ACTOR",
+                message=(
+                    f"Message claims unshipped product actor {actor_hit.group(0)!r} "
+                    "without staged product evidence (D14)."
+                ),
+                kind="hallucination",
+                token=actor_hit.group(0),
+            )
+        )
+
+    # 4) Unearned capability "adds … guard/assertion/feature/guidance".
+    # Fire when primary is feat OR when wording-only correctness diffs invent capability.
+    cap_hit = _UNEARNED_CAPABILITY_RE.search(subject) or _UNEARNED_CAPABILITY_RE.search(blob)
+    if cap_hit:
+        primary = getattr(plan, "primary_intent", None) if plan is not None else None
+        cc = getattr(primary, "cc_type", None)
+        cc_val = cc.value if isinstance(cc, CommitType) else str(cc or "").lower()
+        # Always reject on docs/tests-only; on product, reject feat framing of add-guard.
+        if (
+            _docs_only_class(cons.diff_class, clean)
+            or _tests_only_class(cons.diff_class, clean)
+            or cc_val == CommitType.FEAT.value
+        ):
+            findings.append(
+                GuardFinding(
+                    code="GUARD_UNEARNED_CAPABILITY",
+                    message=(
+                        f"Unearned capability claim {cap_hit.group(0)!r}; prefer outcome "
+                        "verbs (drop/ban/lock/cover) over invented guard/feature nouns."
+                    ),
+                    kind="hallucination",
+                    token=cap_hit.group(0),
+                )
+            )
+
+    # De-dupe by code+token while preserving order.
+    out: list[GuardFinding] = []
+    seen: set[tuple[str, str]] = set()
+    for f in findings:
+        key = (f.code, f.token.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+    return out
+
+
+def check_craft_guard(
+    plan: CommitPlan | None,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    constraints: PresentationConstraints | None = None,
+) -> list[GuardFinding]:
+    """Return subject-craft findings (D14/D21 · Title Case · vague verbs · openers).
+
+    Reuses ``commit_gold._is_title_case_subject`` and ``BANNED_BODY_OPENERS`` (I-13).
+    Pre-LLM use is prompt pressure; this function is the post-LLM evaluator.
+    """
+    if plan is None:
+        return []
+    clean = _resolve_paths(list(paths or []), signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    subject, body = _plan_subject_body(plan)
+    findings: list[GuardFinding] = []
+
+    if subject and _is_title_case_subject(subject):
+        findings.append(
+            GuardFinding(
+                code="GUARD_TITLE_CASE_SUBJECT",
+                message=(
+                    f"Subject looks Title Case ({subject!r}); use imperative lowercase "
+                    "(e.g. 'cover claim locks' / 'document blueprint overlay')."
+                ),
+                kind="craft",
+                token=subject.split()[0] if subject.split() else subject,
+            )
+        )
+
+    # Title Case inventory default "Add … unit tests" / SOP passthrough on test/docs.
+    first = _first_subject_token(subject)
+    docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
+    if docs_or_tests and first.lower() in {"add", "adds", "added"}:
+        findings.append(
+            GuardFinding(
+                code="GUARD_TEST_DOCS_ADD_OPENER",
+                message=(
+                    "Test/docs path-class subject opens with Add/Adds inventory default; "
+                    "prefer cover/claim/pin/document/record outcome verbs."
+                ),
+                kind="craft",
+                token=first,
+            )
+        )
+
+    # Vague verbs when outcome verbs fit (D21) — always craft pressure on correctness-ish.
+    if first.lower() in VAGUE_SUBJECT_VERBS:
+        findings.append(
+            GuardFinding(
+                code="GUARD_VAGUE_SUBJECT_VERB",
+                message=(
+                    f"Subject opens with vague verb {first!r}; prefer failure-mode / "
+                    "outcome verbs (preserve/fix/lock/cover/pin/drop/ban/document)."
+                ),
+                kind="craft",
+                token=first,
+            )
+        )
+
+    # Banned body openers (import gold source — I-13).
+    body_first = ""
+    if body:
+        for line in body.replace("\\n", "\n").splitlines():
+            if line.strip():
+                body_first = line.strip()
+                break
+    if body_first:
+        for opener in BANNED_BODY_OPENERS:
+            if body_first.startswith(opener):
+                findings.append(
+                    GuardFinding(
+                        code="GUARD_BANNED_BODY_OPENER",
+                        message=(
+                            f"Body opens with banned inventory/marketing opener {opener!r}; "
+                            "state the behaviour delta directly."
+                        ),
+                        kind="craft",
+                        token=opener.strip(),
+                    )
+                )
+                break
+
+    out: list[GuardFinding] = []
+    seen: set[tuple[str, str]] = set()
+    for f in findings:
+        key = (f.code, f.token.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+    return out
+
+
+def _first_subject_token(subject: str) -> str:
+    words = [w for w in (subject or "").strip().split() if any(ch.isalpha() for ch in w)]
+    if not words:
+        return ""
+    # Strip leading non-alpha from token (e.g. quotes).
+    token = words[0]
+    return re.sub(r"^[^A-Za-z]+", "", token)
+
+
+def evaluate_presentation_guards(
+    plan: CommitPlan | None,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    evidence_text: str = "",
+    constraints: PresentationConstraints | None = None,
+) -> GuardReport:
+    """Run hallucination + craft guards and pick a single primary fallback reason."""
+    hall = check_hallucination_guard(
+        plan,
+        paths=paths,
+        signals=signals,
+        evidence_text=evidence_text,
+        constraints=constraints,
+    )
+    craft = check_craft_guard(
+        plan,
+        paths=paths,
+        signals=signals,
+        constraints=constraints,
+    )
+    findings = tuple(hall + craft)
+    hall_fired = bool(hall)
+    craft_fired = bool(craft)
+    reason = PRESENTATION_FALLBACK_NONE
+    if hall_fired:
+        reason = PRESENTATION_FALLBACK_HALLUCINATION
+    elif craft_fired:
+        reason = PRESENTATION_FALLBACK_CRAFT
+    return GuardReport(
+        findings=findings,
+        hallucination_guard_fired=hall_fired,
+        craft_guard_fired=craft_fired,
+        fallback_reason=reason,
+    )
+
+
+def format_guard_guidance(report: GuardReport | None) -> str:
+    """Render directive-free guard findings for a shared regen attempt (I-14)."""
+    if report is None or not report.findings:
+        return ""
+    lines = [
+        "PRESENTATION GUARD FINDINGS (wording only — does not change intent_id / gitmoji authority):",
+        "Repair subject/body against staged evidence. Do not invent secrets, runtime recovery,",
+        "unshipped product actors, or unearned capability nouns. Prefer outcome/failure-mode verbs.",
+    ]
+    for finding in report.findings[:12]:
+        lines.append(f"- [{finding.code}] {finding.message}")
+    lines.append("This block guides wording only. It MUST NOT change intent_id, gitmoji, or ranking.")
+    return "\n".join(lines)
+
+
+def apply_guard_skeleton_fallback(
+    plan: CommitPlan,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    priors: TrailerPriors | None = None,
+    constraints: PresentationConstraints | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
+    report: GuardReport | None = None,
+) -> CommitPlan:
+    """Replace dirty subject/body with deterministic priors + stub skeleton (D14).
+
+    Presentation-only. Preserves ranked ``intent_id`` and matrix ``gitmoji``.
+    Used when shared ``gold_regen_attempts`` budget is exhausted (I-14).
+    """
+    clean = _resolve_paths(list(paths or []), signals)
+    base_priors = priors or derive_trailer_priors(clean, signals=signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+
+    primary = plan.primary_intent
+    preserved_intent_id = primary.intent_id
+    preserved_gitmoji = primary.gitmoji
+
+    # Prefer path-class force, else priors.
+    if cons.force_cc_type is not None:
+        primary.cc_type = cons.force_cc_type
+    else:
+        primary.cc_type = base_priors.cc_type
+    if cons.force_semver is not None:
+        primary.semver_impact = cons.force_semver
+    else:
+        primary.semver_impact = base_priors.semver_impact
+    if cons.force_changelog_group is not None:
+        primary.changelog_group = cons.force_changelog_group
+    else:
+        primary.changelog_group = base_priors.changelog_group
+    if cons.force_scope is not None:
+        primary.scope = normalize_scope(cons.force_scope)
+    elif base_priors.scope_hint:
+        primary.scope = normalize_scope(base_priors.scope_hint)
+
+    # Deterministic subject from path-class / preferred verbs.
+    if _docs_only_class(cons.diff_class, clean):
+        primary.description = "document staged documentation changes"[:50]
+    elif _tests_only_class(cons.diff_class, clean):
+        tag_bit = ""
+        tags = [t for t in (claim_tags or ()) if t][:3]
+        if tags:
+            tag_bit = f" ({', '.join(tags)})"
+        primary.description = f"cover staged claim locks{tag_bit}"[:50]
+    elif primary.cc_type == CommitType.FIX:
+        primary.description = "fix staged correctness regressions"[:50]
+    else:
+        primary.description = "apply staged presentation-safe changes"[:50]
+
+    # Body: short evidence-grounded skeleton; never Context:/Changes: marketing.
+    body_lines = [
+        "Deterministic presentation fallback after guard exhaustion.",
+        "Wording constrained to staged paths and path-class priors.",
+    ]
+    if report is not None and report.findings:
+        codes = ", ".join(sorted({f.code for f in report.findings})[:6])
+        body_lines.append(f"Cleared guard codes: {codes}.")
+    if claim_tags:
+        body_lines.append("Claim tags: " + ", ".join(list(claim_tags)[:8]) + ".")
+    plan.body_summary = "\n".join(body_lines)
+
+    primary.intent_id = preserved_intent_id
+    primary.gitmoji = preserved_gitmoji
+
+    # Ensure inventory secondaries from stubs when multi-surface.
+    stubs = build_included_change_stubs(
+        clean,
+        signals,
+        claim_tags=claim_tags,
+    )
+    pure_docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
+    for stub in stubs[:8]:
+        cc = _suggested_cc_for_role(
+            stub.role,
+            tags=set(),
+            pure_docs_or_tests=pure_docs_or_tests,
+        )
+        group = _TYPE_CHANGELOG_REQUIREMENTS.get(cc.value, primary.changelog_group)
+        note = stub.note or stub.surface
+        if stub.claim_tags:
+            note = f"{note} ({', '.join(stub.claim_tags[:4])})"
+        scope = stub.surface if stub.surface else primary.scope
+        _ensure_secondary_for_type(
+            plan,
+            cc_type=cc,
+            changelog_group=group,
+            scope=scope,
+            description=str(note)[:50],
+            semver=SemVerImpact.NONE if primary.semver_impact == SemVerImpact.NONE else primary.semver_impact,
+        )
+
+    return plan
