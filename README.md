@@ -204,7 +204,7 @@ Presentation controls sit **downstream** of deterministic ranking. They may clam
 
 | Concern | Behaviour |
 |:---|:---|
-| **Scope canon / priors** | `normalize_scope` maps aliases (`main.py` → `main`, `scoped_history` → `scoped-history`). Unknown clean tokens pass through. Telemetry records `scope_normalised_from` as a closed alias key or `none` (never a path). |
+| **Scope canon / priors** | `normalize_scope` maps aliases (`main.py` → `main`, `scoped_history` → `scoped-history`). Unknown clean tokens pass through. Telemetry records `scope_normalised_from` as the closed alias key that fired, or `none` when the input was already canonical / unknown (never a path). |
 | **`--blueprint`** | Optional `CommitBlueprint` as inline JSON or `@path.json` (≤64 KiB). Applies presentation overlays only; **never** overrides ranked `intent_id`. |
 | **Low-confidence fallback** | When ranking confidence is Low, interactive TTY may arbitrate (`--rank-arbitrate`); non-interactive/hook paths keep top rank + telemetry. Fallback reasons are closed-vocab (`presentation_fallback_reason`). |
 | **Diff-class / path-class gates** | Diff paths classify as `tests_only`, `fixtures_only`, `docs_only`, `adr_only`, `config_ci_only`, `release_only`, `product_src`, `mixed`, or `empty`. Gates constrain type/changelog wording by class. Telemetry: `path_class_gate`. |

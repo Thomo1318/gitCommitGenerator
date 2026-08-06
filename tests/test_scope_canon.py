@@ -161,21 +161,46 @@ def test_enforce_semantic_contract_preserves_already_canonical_scope() -> None:
 @pytest.mark.parametrize(
     ("raw", "expected_canon", "expected_from"),
     [
+        # Actual transformations retain the alias key that fired.
         ("scoped_history", "scoped-history", "scoped_history"),
         ("scoped-hist", "scoped-history", "scoped-hist"),
+        ("scoped_hist", "scoped-history", "scoped_hist"),
         ("main.py", "main", "main.py"),
         ("git_cg.main", "main", "git_cg.main"),
         ("docs/usage.md", "usage", "usage"),
         ("docs/ADRs/foo.md", "adr", "adr"),
+        ("src/git_cg/main.py", "main", "main"),  # basename alias reduces to canon token "main"
+        ("sentry_config.py", "sentry", "sentry_config.py"),
+        # Identity canonical inputs: no transformation → source "none".
+        ("main", "main", "none"),
+        ("scoped-history", "scoped-history", "none"),
+        ("telemetry", "telemetry", "none"),
+        ("intent", "intent", "none"),
+        ("adr", "adr", "none"),
+        ("usage", "usage", "none"),
+        ("fixtures", "fixtures", "none"),
+        ("phase9", "phase9", "none"),
+        # Unknown / empty.
         ("unknown-token", "unknown-token", "none"),
         (None, None, "none"),
         ("", None, "none"),
+        ("   ", None, "none"),
     ],
 )
 def test_resolve_scope_normalisation(raw, expected_canon, expected_from) -> None:
     canon, source = resolve_scope_normalisation(raw)
     assert canon == expected_canon
     assert source == expected_from
+
+
+def test_resolve_scope_normalisation_identity_vs_transform() -> None:
+    """RF-1 polish: identity canonical aliases report none; transforms keep keys."""
+    assert resolve_scope_normalisation("main") == ("main", "none")
+    assert resolve_scope_normalisation("main.py") == ("main", "main.py")
+    assert resolve_scope_normalisation("scoped-history") == ("scoped-history", "none")
+    assert resolve_scope_normalisation("scoped_history") == ("scoped-history", "scoped_history")
+    assert resolve_scope_normalisation("usage") == ("usage", "none")
+    assert resolve_scope_normalisation("docs/usage.md") == ("usage", "usage")
 
 
 @pytest.mark.parametrize(

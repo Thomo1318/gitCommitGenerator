@@ -152,8 +152,11 @@ def resolve_scope_normalisation(scope: str | None) -> tuple[str | None, str]:
     """Return ``(canonical_scope, scope_normalised_from)`` for telemetry (RF-1).
 
     ``scope_normalised_from`` is a key of ``CANONICAL_SCOPE_ALIASES`` when an
-    alias mapping fired, otherwise the closed default ``"none"``. Never returns
-    a filesystem path, raw free token, or empty string as the source key.
+    actual alias / path-tail normalisation fired, otherwise the closed default
+    ``"none"``. Identity inputs that are already canonical (for example
+    ``main`` or ``scoped-history``) report ``"none"`` — no transformation
+    occurred. Never returns a filesystem path, raw free token, or empty string
+    as the source key.
     """
     if scope is None:
         return None, "none"
@@ -162,34 +165,48 @@ def resolve_scope_normalisation(scope: str | None) -> tuple[str | None, str]:
     if not raw:
         return None, "none"
 
+    simple = raw.lower()
     cleaned = _strip_accidental_path(raw)
     if not cleaned:
         return None, "none"
 
     key = cleaned.lower()
+    matched_key = "none"
+    canon: str | None
 
     if key in CANONICAL_SCOPE_ALIASES:
-        return CANONICAL_SCOPE_ALIASES[key], key
+        canon = CANONICAL_SCOPE_ALIASES[key]
+        matched_key = key
+    else:
+        stem = _PY_SUFFIX_RE.sub("", key)
+        if stem != key and stem in CANONICAL_SCOPE_ALIASES:
+            canon = CANONICAL_SCOPE_ALIASES[stem]
+            matched_key = stem
+        elif "." in key:
+            if key in CANONICAL_SCOPE_ALIASES:
+                canon = CANONICAL_SCOPE_ALIASES[key]
+                matched_key = key
+            else:
+                tail = key.rsplit(".", 1)[-1]
+                tail_stem = _PY_SUFFIX_RE.sub("", tail)
+                if tail_stem in CANONICAL_SCOPE_ALIASES:
+                    canon = CANONICAL_SCOPE_ALIASES[tail_stem]
+                    matched_key = tail_stem
+                elif tail_stem:
+                    return tail_stem, "none"
+                else:
+                    return None, "none"
+        elif stem != key:
+            return (stem or None), "none"
+        else:
+            return cleaned, "none"
 
-    stem = _PY_SUFFIX_RE.sub("", key)
-    if stem != key and stem in CANONICAL_SCOPE_ALIASES:
-        return CANONICAL_SCOPE_ALIASES[stem], stem
-
-    if "." in key:
-        if key in CANONICAL_SCOPE_ALIASES:
-            return CANONICAL_SCOPE_ALIASES[key], key
-        tail = key.rsplit(".", 1)[-1]
-        tail_stem = _PY_SUFFIX_RE.sub("", tail)
-        if tail_stem in CANONICAL_SCOPE_ALIASES:
-            return CANONICAL_SCOPE_ALIASES[tail_stem], tail_stem
-        if tail_stem:
-            return tail_stem, "none"
-        return None, "none"
-
-    if stem != key:
-        return (stem or None), "none"
-
-    return cleaned, "none"
+    # Identity canonical inputs report no transformation (RF-1 polish).
+    # Path/basename reductions still report the alias key that fired even when
+    # that key equals the canon value (e.g. docs/usage.md → usage).
+    if matched_key != "none" and matched_key == canon and simple == canon:
+        return canon, "none"
+    return canon, matched_key
 
 
 def coerce_scope_normalised_from(value: object) -> str:
