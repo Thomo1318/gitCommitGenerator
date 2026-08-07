@@ -15,7 +15,7 @@
       "primary_intent.intent_id",
       "primary_intent.gitmoji"
     ],
-    "notes": "Slice 3 freezes pure presentation helpers only. Slice 9 adds eval letters A–N and S9-E/S9-H gap cases on the same pure helpers. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
+    "notes": "Slice 3 freezes pure presentation helpers only. Slice 9 adds eval letters A\u2013N and S9-E/S9-H gap cases on the same pure helpers. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
   },
   "cases": [
     {
@@ -343,7 +343,7 @@
     },
     {
       "id": "TIP-G2",
-      "description": "Tip fixtures README only — no security from prose",
+      "description": "Tip fixtures README only \u2014 no security from prose",
       "staged_paths": [
         "tests/fixtures/scoped_history/README.md"
       ],
@@ -382,7 +382,7 @@
           "Security"
         ],
         "gitmoji": [
-          "🔐"
+          "\ud83d\udd10"
         ]
       },
       "eval_letters": [
@@ -651,7 +651,7 @@
     },
     {
       "id": "TIP-G8",
-      "description": "Tip tests+ADR claim-lock — no feat invention",
+      "description": "Tip tests+ADR claim-lock \u2014 no feat invention",
       "staged_paths": [
         "tests/test_scoped_history.py",
         "docs/ADRs/0163-scoped-reasoning-history.md"
@@ -853,7 +853,7 @@
     },
     {
       "id": "TIP-G12",
-      "description": "Tip ADR + usage mermaid docs — no fix/runtime recovery",
+      "description": "Tip ADR + usage mermaid docs \u2014 no fix/runtime recovery",
       "staged_paths": [
         "docs/ADRs/0163-scoped-reasoning-history.md",
         "docs/usage.md"
@@ -899,7 +899,7 @@
           "Fixed"
         ],
         "gitmoji": [
-          "🥅"
+          "\ud83e\udd45"
         ],
         "runtime_verbs": [
           "recover",
@@ -912,8 +912,249 @@
       ]
     },
     {
+      "id": "TIP-G13",
+      "description": "Session 6: telemetry schema/lifecycle fields present as feat+MINOR (not fix+PATCH validate-only)",
+      "eval_letters": [],
+      "staged_paths": [
+        "src/git_cg/telemetry.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/telemetry.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [
+        "new_capability",
+        "lifecycle_fields",
+        "schema_add",
+        "score_boundary",
+        "telemetry_schema"
+      ],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Add lifecycle score boundary fields and schema for contract consistency.",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "feat",
+        "semver": "MINOR",
+        "semver_ceiling": "MINOR",
+        "changelog_group": "Added",
+        "scope": "telemetry",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "NONE",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg",
+          "commit-plan",
+          "lifecycle"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G14",
+      "description": "Session 6: pure evaluator/snapshot forbids enforce/lift/mutate verbs; test primary",
+      "eval_letters": [],
+      "staged_paths": [
+        "tests/test_contract_lifecycle.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_contract_lifecycle.py"
+        ],
+        "touches_tests": true,
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Characterise contract lifecycle evaluator coverage only.",
+      "must_present": {
+        "diff_class": "tests_only",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Tests",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "mutation_verbs": [
+          "enforce",
+          "lift",
+          "mutate"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G15",
+      "description": "Session 6: Sentry contract-violation reporter is fix+PATCH with named event",
+      "eval_letters": [],
+      "staged_paths": [
+        "src/git_cg/sentry_config.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/sentry_config.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [
+        "correctness",
+        "commit_plan_contract_violation"
+      ],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Report commit_plan_contract_violation to Sentry on plan contract failures.",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "semver_ceiling": "PATCH",
+        "changelog_group": "Fixed",
+        "scope": "sentry",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G16",
+      "description": "Session 6: main wiring uses module scope + Hybrid Included; reject epic-noun and Context/Changes",
+      "eval_letters": [],
+      "staged_paths": [
+        "src/git_cg/main.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/main.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [
+        "correctness",
+        "wiring"
+      ],
+      "claim_tags": [],
+      "seed_scope": "commit-plan",
+      "preferred_scope": null,
+      "evidence_text": "Wire capture, re-lift, persist, Opik, and Sentry contract paths in main.",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "semver_ceiling": "PATCH",
+        "changelog_group": "Fixed",
+        "scope": "main",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg",
+          "commit-plan",
+          "lifecycle"
+        ],
+        "body_templates": [
+          "Context:",
+          "Changes:"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G17",
+      "description": "Session 6: tests+plan diffs use primary test without attribution bleed",
+      "eval_letters": [],
+      "staged_paths": [
+        "tests/test_contract_lifecycle.py",
+        "docs/plans/204-commit-presentation-quality.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_contract_lifecycle.py",
+          "docs/plans/204-commit-presentation-quality.md"
+        ],
+        "touches_tests": true,
+        "touches_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "lifecycle",
+      "preferred_scope": null,
+      "evidence_text": "Cover contract lifecycle claims; plan documents coverage only.",
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Tests",
+        "overlay_types_include": [
+          "test",
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Tests",
+          "Documentation"
+        ],
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "lifecycle",
+          "commit-plan",
+          "git_cg"
+        ],
+        "attribution_bleed": true
+      }
+    },
+    {
       "id": "S9-E",
-      "description": "Slice 9 case E: docs mention graph_unavailable/redaction — still docs, never runtime fix",
+      "description": "Slice 9 case E: docs mention graph_unavailable/redaction \u2014 still docs, never runtime fix",
       "eval_letters": [
         "E"
       ],
@@ -968,8 +1209,8 @@
           "Fixed"
         ],
         "gitmoji": [
-          "🥅",
-          "🔐"
+          "\ud83e\udd45",
+          "\ud83d\udd10"
         ],
         "runtime_verbs": [
           "recover",
@@ -1070,6 +1311,6 @@
       "M": "TIP-G11",
       "N": "TIP-G12"
     },
-    "notes": "Slice 9 pure characterisation harness. Letters A–N map onto TIP-G* plus S9-E/S9-H gap cases. No live LLM and no rank_commit_intents."
+    "notes": "Slice 9 pure characterisation harness. Letters A\u2013N map onto TIP-G* plus S9-E/S9-H gap cases. TIP-G13\u2013G17 are Session 6 message-quality rows (not letter-mapped). No live LLM and no rank_commit_intents."
   }
 }

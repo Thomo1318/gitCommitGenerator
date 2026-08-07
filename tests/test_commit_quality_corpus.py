@@ -133,6 +133,11 @@ def test_corpus_and_golden_ids_match(corpus: dict, goldens: dict) -> None:
         "TIP-G10",
         "TIP-G11",
         "TIP-G12",
+        "TIP-G13",
+        "TIP-G14",
+        "TIP-G15",
+        "TIP-G16",
+        "TIP-G17",
         "S9-E",
         "S9-H",
     ]
@@ -363,6 +368,43 @@ def _assert_must_not_present(case: dict[str, Any], snap: dict[str, Any]) -> None
         blob = json.dumps(overlay).lower()
         for verb in mnp["runtime_verbs"]:
             assert verb.lower() not in blob, (case["id"], verb)
+
+    # Session 6 residual markers (guard-level; not overlay snapshot fields).
+    if mnp.get("mutation_verbs"):
+        from git_cg.commit_quality import evaluate_presentation_guards
+
+        plan = snap.get("_plan")
+        if plan is not None:
+            paths = list(case["staged_paths"])
+            bad = plan.model_copy(
+                update={
+                    "body_summary": (
+                        "Enforce the contract floor, lift the score boundary, and mutate plan fields in the evaluator."
+                    )
+                }
+            )
+            report = evaluate_presentation_guards(bad, paths=paths)
+            assert "GUARD_EVALUATOR_MUTATION_VERB" in report.codes(), case["id"]
+    if mnp.get("body_templates"):
+        from git_cg.commit_quality import evaluate_presentation_guards
+
+        plan = snap.get("_plan")
+        if plan is not None:
+            paths = list(case["staged_paths"])
+            bad = plan.model_copy(update={"body_summary": "Context:\nEpic framing.\n\nChanges:\nWire everything."})
+            report = evaluate_presentation_guards(bad, paths=paths)
+            assert "GUARD_CONTEXT_CHANGES_TEMPLATE" in report.codes(), case["id"]
+    if mnp.get("attribution_bleed"):
+        from git_cg.commit_quality import evaluate_presentation_guards
+
+        plan = snap.get("_plan")
+        if plan is not None:
+            paths = list(case["staged_paths"])
+            bad = plan.model_copy(
+                update={"body_summary": ("Implement the whole lifecycle feature and wire telemetry schema.")}
+            )
+            report = evaluate_presentation_guards(bad, paths=paths)
+            assert "GUARD_ATTRIBUTION_BLEED" in report.codes(), case["id"]
 
 
 @pytest.mark.parametrize("case_id", _corpus_case_ids())
