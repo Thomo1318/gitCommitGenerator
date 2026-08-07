@@ -212,6 +212,9 @@ Presentation controls sit **downstream** of deterministic ranking. They may clam
 | **Security path evidence** | Security-sensitive paths contribute evidence for type/SemVer claims; guards reject unsupported security wording. |
 | **SemVer / type / bullets** | Type dominance, changelog↔types coherence, and bullet cardinality are enforced as presentation gates (Slice 9 ordered evaluator). Gold lint ([#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201)) remains the post-render wording authority. |
 | **Hallucination / craft / vague-verb guards** | Post-LLM guards strip unsupported claims and vague verbs; shared regen budget then deterministic skeleton fallback preserving ranked intent + gitmoji. Telemetry: `hallucination_guard_fired` only (no craft/inventory bools). |
+| **Module / behaviour scope law** | Package/root and epic-noun scopes (`git_cg`, `commit-plan`, `lifecycle`, …) are never final when a dominant module or behaviour slug is available (e.g. `main`, `telemetry`, `scoped-history`). |
+| **Session 6 message-quality residuals** | Telemetry schema/lifecycle capability → `feat`/`MINOR` (not correctness `fix`/`PATCH`); pure evaluator bodies forbid `enforce`/`lift`/`mutate`; competing `Context:`/`Changes:` templates rejected; tests/docs attribution bleed blocked. Corpus rows `TIP-G13`–`TIP-G17`. |
+| **V12-A proof pack** | Stable named locks `test_v12_a01`–`test_v12_a45` in `tests/test_v12_a_claims.py` (no live LLM; never calls `rank_commit_intents`). Complements the frozen corpus/eval harness under `tests/fixtures/commit_quality/`. |
 | **Gold relationship** | Gold lint checks wording quality and Included-changes coverage **without** re-ranking. Presentation gates + gold are complementary: gates shape/clamp; gold judges the final message. |
 
 #### Operator pre-check (until gates are complete)
