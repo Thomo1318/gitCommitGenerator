@@ -126,6 +126,21 @@ SECURITY_CLAIM_TOKENS: frozenset[str] = frozenset(
 
 CHANGELOG_BASENAMES = frozenset({"changelog.md"})
 
+# Package/root and epic-noun scopes are never final when a module/behaviour
+# slug dominates (V12-A26 / TIP-G7 / TIP-G16 / Session 6 module-scope law).
+INVALID_FINAL_SCOPES: frozenset[str] = frozenset(
+    {
+        "git_cg",
+        "git-cg",
+        "src",
+        "commit-plan",
+        "commit_plan",
+        "lifecycle",
+        "contract-lifecycle",
+        "contract_lifecycle",
+    }
+)
+
 
 @dataclass(frozen=True)
 class DiffClass:
@@ -905,6 +920,19 @@ DARK_LAUNCH_TAGS: frozenset[str] = frozenset(
     }
 )
 
+# Operator-visible capability / schema-add tags → feat presentation when not
+# correctness-dominated (Session 6 / TIP-G13 · V12-A39).
+CAPABILITY_CONCERN_TAGS: frozenset[str] = frozenset(
+    {
+        "new_capability",
+        "operator_visible_capability",
+        "lifecycle_fields",
+        "schema_add",
+        "score_boundary",
+        "telemetry_schema",
+    }
+)
+
 # Carry-through / stub-wiring feat presentation uses Changed (not Added-led) (TIP-G11).
 CARRY_THROUGH_TAGS: frozenset[str] = frozenset(
     {
@@ -969,8 +997,8 @@ def semver_presentation_ceiling(
         return SemVerImpact.PATCH
 
     # Default product_src / mixed without break or capability evidence: PATCH ceiling
-    # (MINOR only when explicit operator-visible capability tag is supplied).
-    if "operator_visible_capability" in tags or "new_capability" in tags:
+    # (MINOR only when explicit operator-visible / schema-add capability tags fire).
+    if tags & CAPABILITY_CONCERN_TAGS:
         return SemVerImpact.MINOR
 
     return SemVerImpact.PATCH
@@ -998,6 +1026,11 @@ def dominant_presentation_cc_type(
     # Correctness/safety on product paths → fix over feat
     if tags & CORRECTNESS_CONCERN_TAGS and base.role in {"product_src", "mixed"}:
         return CommitType.FIX
+
+    # Schema/capability adds on product paths → feat over fix/chore validate framing
+    # (Session 6 / TIP-G13). Correctness tags above still win when both present.
+    if tags & CAPABILITY_CONCERN_TAGS and base.role in {"product_src", "mixed"}:
+        return CommitType.FEAT
 
     return None
 
@@ -2265,6 +2298,7 @@ def apply_presentation_overlay(
     # --- 3. Scope (D11 force_scope / priors hint / directive) ---
     # Order (Approval locks §J simplified): force_scope > preferred_scope >
     # existing normalised scope > priors.scope_hint
+    # Package/root and epic-noun scopes never final when module/behaviour dominates.
     if cons.force_scope is not None:
         primary.scope = normalize_scope(cons.force_scope)
     elif active_directives and "preferred_scope" in active_directives:
@@ -2273,6 +2307,47 @@ def apply_presentation_overlay(
         primary.scope = normalize_scope(primary.scope)
     elif base_priors.scope_hint:
         primary.scope = normalize_scope(base_priors.scope_hint)
+
+    scope_now = normalize_scope(primary.scope) if primary.scope else None
+    raw_scope = str(primary.scope or "").lower().replace("_", "-")
+    if scope_now in INVALID_FINAL_SCOPES or raw_scope in INVALID_FINAL_SCOPES:
+        replacement = None
+        if cons.force_scope is not None:
+            cand = normalize_scope(cons.force_scope)
+            if cand not in INVALID_FINAL_SCOPES:
+                replacement = cand
+        if replacement is None and active_directives and "preferred_scope" in active_directives:
+            cand = normalize_scope(active_directives["preferred_scope"])
+            if cand not in INVALID_FINAL_SCOPES:
+                replacement = cand
+        if replacement is None and base_priors.scope_hint:
+            cand = normalize_scope(base_priors.scope_hint)
+            if cand not in INVALID_FINAL_SCOPES:
+                replacement = cand
+        if replacement is None:
+            # Prefer a single dominant product module; only then behaviour slug
+            # derived from product paths (ignore test/docs filename tokens).
+            replacement = _dominant_product_scope(clean)
+        if replacement is None:
+            product_only = [
+                p for p in clean if not _is_test_path(p) and not _is_docs_path(p) and not _is_fixtures_path(p)
+            ]
+            replacement = _behaviour_scope_hint(product_only or clean)
+        if replacement is None:
+            # Tests/docs-only residual: prefer behaviour slug, else test/docs hint.
+            replacement = _behaviour_scope_hint(clean)
+            if replacement is None:
+                roles = _classify_path_roles(clean)
+                if "tests" in roles:
+                    replacement = "test"
+                elif "adr" in roles:
+                    replacement = "adr"
+                elif "docs" in roles:
+                    replacement = _docs_scope_hint(clean) or "docs"
+                elif "fixtures" in roles:
+                    replacement = "fixtures"
+        if replacement and normalize_scope(replacement) not in INVALID_FINAL_SCOPES:
+            primary.scope = normalize_scope(replacement)
 
     for sec in plan.secondary_intents:
         if sec.scope:
@@ -3177,7 +3252,71 @@ def check_hallucination_guard(
             )
         )
 
-    # 4) Unearned capability "adds … guard/assertion/feature/guidance".
+    # 4) Pure evaluator / snapshot bodies must not claim enforce/lift/mutate (TIP-G14).
+    if _tests_only_class(cons.diff_class, clean) or (
+        any(_is_test_path(p) for p in clean)
+        and not any((not _is_test_path(p) and not _is_docs_path(p) and not _is_fixtures_path(p)) for p in clean)
+    ):
+        for verb in ("enforce", "enforces", "enforced", "lift", "lifts", "lifted", "mutate", "mutates", "mutated"):
+            if re.search(rf"\b{re.escape(verb)}\b", blob.lower()):
+                findings.append(
+                    GuardFinding(
+                        code="GUARD_EVALUATOR_MUTATION_VERB",
+                        message=(
+                            f"Evaluator/snapshot body claims mutation verb {verb!r}; "
+                            "describe coverage only (no enforce/lift/mutate plan verbs)."
+                        ),
+                        kind="hallucination",
+                        token=verb,
+                    )
+                )
+
+    # 5) Competing Context:/Changes: body templates (Session 6 / TIP-G16).
+    # Hybrid commits use Included changes via secondaries — not marketing essays.
+    body_only = str(getattr(plan, "body_summary", "") or "") if plan is not None else ""
+    if body_only:
+        has_context = bool(re.search(r"(?m)^Context:\s*$", body_only) or body_only.lstrip().startswith("Context:"))
+        has_changes = bool(re.search(r"(?m)^Changes:\s*$", body_only) or re.search(r"(?m)^Changes:\s+", body_only))
+        if has_context and has_changes:
+            findings.append(
+                GuardFinding(
+                    code="GUARD_CONTEXT_CHANGES_TEMPLATE",
+                    message=(
+                        "Body uses banned Context:/Changes: template; prefer Hybrid "
+                        "`Included changes:` via secondary_intents (Session 6)."
+                    ),
+                    kind="hallucination",
+                    token="Context:/Changes:",
+                )
+            )
+
+    # 6) Tests-only / tests+docs bodies must not claim whole-product implementation
+    # (Session 6 / TIP-G17 attribution bleed).
+    roles = _classify_path_roles(clean)
+    tests_docs_only = roles and roles <= {"tests", "fixtures", "docs", "adr"}
+    if tests_docs_only and not (roles & {"product_src"}):
+        bleed = re.search(
+            r"\b(implement(?:s|ed|ing)?|wir(?:e|es|ed|ing)|ship(?:s|ped|ping)?|land(?:s|ed|ing)?)\b"
+            r".{0,40}\b(lifecycle|telemetry|contract|schema|slice|feature|product)\b"
+            r"|\b(whole|entire)\s+(slice|feature|implementation)\b"
+            r"|\battribut(?:e|es|ed|ing)\b",
+            blob,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if bleed:
+            findings.append(
+                GuardFinding(
+                    code="GUARD_ATTRIBUTION_BLEED",
+                    message=(
+                        "Tests/docs-only body claims product implementation/wiring; "
+                        "assert coverage only (Session 6 / TIP-G17)."
+                    ),
+                    kind="hallucination",
+                    token=bleed.group(0)[:48],
+                )
+            )
+
+    # 7) Unearned capability "adds … guard/assertion/feature/guidance".
     # Fire when primary is feat OR when wording-only correctness diffs invent capability.
     cap_hit = _UNEARNED_CAPABILITY_RE.search(subject) or _UNEARNED_CAPABILITY_RE.search(blob)
     if cap_hit:
