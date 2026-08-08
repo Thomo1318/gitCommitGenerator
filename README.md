@@ -216,10 +216,17 @@ Presentation controls sit **downstream** of deterministic ranking. They may clam
 | **Session 6 message-quality residuals** | Telemetry schema/lifecycle capability → `feat`/`MINOR` (not correctness `fix`/`PATCH`); pure evaluator bodies forbid `enforce`/`lift`/`mutate`; competing `Context:`/`Changes:` templates rejected; tests/docs attribution bleed blocked. Corpus rows `TIP-G13`–`TIP-G17`. |
 | **V12-A proof pack** | Stable named locks `test_v12_a01`–`test_v12_a45` in `tests/test_v12_a_claims.py` (no live LLM; never calls `rank_commit_intents`). Complements the frozen corpus/eval harness under `tests/fixtures/commit_quality/`. |
 | **Gold relationship** | Gold lint checks wording quality and Included-changes coverage **without** re-ranking. Presentation gates + gold are complementary: gates shape/clamp; gold judges the final message. |
+| **F80 message-only rebuild bypass** | Set `GIT_CG_SKIP_PREPARE=1` (also `true`/`yes`/`on`) so `prepare-commit-msg` no-ops without rewriting the message. Use for controlled amend/`--no-edit` rebuilds where hooks would otherwise re-enter `git-cg`. **Do not** export it globally or bake it into `hk.pkl` — ordinary generation must keep running. `--no-verify` alone is not a substitute when hk/global hooks still invoke the generator. |
 
 #### Operator pre-check (until gates are complete)
 
 Before relying solely on automation, compare the staged diff class against known library twins (tests-only vs product_src vs docs/ADR). If the class is `mixed` or unexpected, split the commit or tighten the stage set. Prefer `--dry-run` + `--gold-strict` when validating presentation changes.
+
+Message-only rebuild example (preserves the existing message; skips prepare generation):
+
+```bash
+GIT_CG_SKIP_PREPARE=1 git commit --amend --no-edit
+```
 
 #### D26 telemetry (closed vocabulary)
 
@@ -231,6 +238,15 @@ Persisted presentation fields (no raw diffs, prompts, commit bodies, blueprint J
 - `path_class_gate`
 - `changelog_antisignal_applied`
 - `hallucination_guard_fired`
+- `gold_findings_count` / `gold_blocked` / `gold_regen_attempts` (gold channel; closed counters only)
+
+#### Environment controls (presentation-adjacent)
+
+| Variable | Values | Effect |
+|:---|:---|:---|
+| `GIT_CG_SKIP_PREPARE` | `1` / `true` / `yes` / `on` | F80: skip `prepare-commit-msg` generation (message-only rebuilds). Unset/other → normal generation. |
+| `GIT_CG_ENABLE_SEMANTIC` | `1` / `true` / `yes` / `on` | Enable Phase 1 semantic producers (default off). |
+| `GIT_CG_RANK_ARBITRATE` | `auto` (default) / `off` | Low-confidence intent arbitration gate for interactive TTY. |
 
 See also: [usage flags](usage.md), epic [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204), gold [#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201), scoped history [#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163).
 

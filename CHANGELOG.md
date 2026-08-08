@@ -6,6 +6,7 @@
 
 - ✨ feat(core): Phase 7.25 gold-standard commit-message content quality — deterministic `commit_gold` linter (wording/coverage/coherence findings) with three-channel prompt assembly and an additive GOLD RUBRIC (#182)
 - ✨ feat(commit-quality): Session 6 presentation residuals — telemetry schema capability dominance, evaluator mutation-verb guards, Context/Changes template rejection, attribution-bleed detection, and module/behaviour scope law (#204)
+- ✨ feat(hooks): F80 `GIT_CG_SKIP_PREPARE` bypass so message-only rebuilds do not re-enter `prepare-commit-msg` generation (#204)
 
 ### 🐛 Bug Fixes & Refactors
 
@@ -17,11 +18,13 @@
 - ✅ test(intent): B1 characterisation fixtures (release-notes product, bugfix-pure, error-only) + golden cascade refresh via `GIT_CG_UPDATE_GOLDENS` (#182)
 - ✅ test(core): B2 gold-linter tables, Claim A purity tests (A_01-A_05), and generation-path gold wiring integration (#182)
 - ✅ test(commit-quality): V12-A named proof pack (`test_v12_a01`–`a45`) plus Session 6 corpus rows TIP-G13–G17 and goldens (#204)
+- ✅ test(hooks): F80 `GIT_CG_SKIP_PREPARE` truthy-token matrix and no-op-before-validation coverage (#204)
 
 ### 📝 Documentation
 
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
+- 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
 
 ## v0.12.0
 

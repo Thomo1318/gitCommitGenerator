@@ -61,7 +61,7 @@ cmd "commit" {
         default ".git/COMMIT_EDITMSG"
     }
     arg "<COMMIT_SOURCE>" {
-        help "Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')"
+        help "Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit'). Set GIT_CG_SKIP_PREPARE=1 to no-op prepare-commit-msg generation for message-only rebuilds."
         required #false
         default ""
     }

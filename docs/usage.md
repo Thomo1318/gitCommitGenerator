@@ -74,7 +74,7 @@ Path to the commit message file
 
 #### `[COMMIT_SOURCE]`
 
-Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')
+Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit'). Set GIT_CG_SKIP_PREPARE=1 to no-op prepare-commit-msg generation for message-only rebuilds.
 
 **Default:** ``
 
