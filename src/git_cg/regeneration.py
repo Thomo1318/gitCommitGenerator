@@ -92,6 +92,63 @@ def _matrix_row_for_intent(matrix: list[dict], intent_id: str) -> dict | None:
     return next((r for r in matrix if matrix_row_intent_id(r) == intent_id), None)
 
 
+def _apply_path_class_envelope(
+    contract: ResolvedCommitContract,
+    context: GenerationContext,
+) -> ResolvedCommitContract:
+    """Apply authoritative path-class presentation envelope to a resolved contract.
+
+    P-S12 / Session 12: pure tests/fixtures/docs must not lock product ``fix`` /
+    non-NONE SemVer merely because ranking was contaminated by prose/AST markers.
+    Presentation constraints remain presentation-owned for type/group/SemVer; the
+    ranked ``primary_intent_id`` and matrix ``gitmoji`` stay identity authority.
+    """
+    cons = getattr(context, "presentation_constraints", None)
+    if cons is None:
+        return contract
+
+    force_cc = getattr(cons, "force_cc_type", None)
+    force_semver = getattr(cons, "force_semver", None)
+    force_group = getattr(cons, "force_changelog_group", None)
+    forbid_cc = set(getattr(cons, "forbid_cc_types", ()) or ())
+    forbid_semver = set(getattr(cons, "forbid_semver", ()) or ())
+
+    cc_type = str(contract.cc_type or "chore")
+    semver = str(contract.semver_impact or "NONE").upper()
+    group = str(contract.changelog_group or "Miscellaneous")
+
+    if force_cc is not None:
+        cc_type = force_cc.value if hasattr(force_cc, "value") else str(force_cc)
+    elif cc_type in forbid_cc:
+        # Soft demotion when force is absent but forbid hits (should be rare).
+        cc_type = "chore"
+
+    if force_semver is not None:
+        semver = force_semver.value if hasattr(force_semver, "value") else str(force_semver)
+    elif semver in forbid_semver:
+        semver = "NONE"
+
+    if force_group is not None:
+        group = str(force_group)
+
+    if (
+        cc_type == contract.cc_type
+        and semver == str(contract.semver_impact or "").upper()
+        and group == str(contract.changelog_group or "")
+    ):
+        return contract
+
+    return ResolvedCommitContract(
+        primary_intent_id=contract.primary_intent_id,
+        gitmoji=contract.gitmoji,
+        cc_type=cc_type,
+        semver_impact=semver,
+        changelog_group=group,
+        secondary_intent_ids=list(contract.secondary_intent_ids),
+        lock_resolution=contract.lock_resolution,
+    )
+
+
 def resolve_semantic_contract(context: GenerationContext, state: RegenerationState) -> ResolvedCommitContract:
     """
     Resolve the semantic commit contract for the next generation cycle.
@@ -220,7 +277,7 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
 
     primary_id = matrix_row_intent_id(resolved_row)
 
-    return ResolvedCommitContract(
+    contract = ResolvedCommitContract(
         primary_intent_id=primary_id,
         gitmoji=resolved_row.get("emoji", ""),
         cc_type=resolved_row.get("cc_type", "chore"),
@@ -231,6 +288,9 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
         ),
         lock_resolution=lock_resolution,
     )
+    # Path-class envelope is authoritative for presentation fields before any
+    # later lift can reassert a contaminated product SemVer (P-S12-3/4).
+    return _apply_path_class_envelope(contract, context)
 
 
 def enforce_semantic_contract(

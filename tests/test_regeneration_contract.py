@@ -626,3 +626,196 @@ def test_resolve_semantic_contract_absent_lock_resolution_when_unset():
     contract = resolve_semantic_contract(context, state)
     assert contract.primary_intent_id == "feature_addition"
     assert contract.lock_resolution == "absent"
+
+
+def test_path_class_envelope_demotes_contaminated_fix_patch_for_fixtures():
+    """P-S12: pure fixtures must not lock fix/PATCH when ranking is contaminated."""
+    from git_cg.commit_quality import constraints_from_paths
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.regeneration import (
+        GenerationContext,
+        RegenerationState,
+        lift_plan_to_contract_semver,
+        resolve_semantic_contract,
+    )
+
+    paths = ["tests/fixtures/commit_quality/README.md"]
+    cons = constraints_from_paths(paths)
+    context = GenerationContext(
+        diff_signals=DiffSignals(files=paths, only_tests=True, only_fixtures=True),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="bug_fix",
+                emoji="🐛",
+                code=":bug:",
+                cc_type="fix",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+                intent_group="bugfix",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+            RankedIntent(
+                intent_id="tests_update",
+                emoji="✅",
+                code=":white_check_mark:",
+                cc_type="test",
+                description="",
+                semver_impact="NONE",
+                changelog_group="Tests",
+                intent_group="tests",
+                score=20.0,
+                priority=40,
+                specificity=40,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+        presentation_constraints=cons,
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+    contract = resolve_semantic_contract(context, state)
+
+    # Identity stays ranked; presentation fields follow path-class envelope.
+    assert contract.primary_intent_id == "bug_fix"
+    assert contract.gitmoji == "🐛"
+    assert contract.cc_type == "test"
+    assert contract.semver_impact == "NONE"
+    assert contract.changelog_group == "Tests"
+
+    # CommitIntent matrix validator canonicalises matrix-owned fields from intent_id.
+    # Use a test-family identity so the plan under lift is not re-expanded to fix/PATCH.
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="tests_update",
+            gitmoji="✅",
+            cc_type=CommitType.TEST,
+            scope="fixtures",
+            description="cover fixture evidence",
+            semver_impact=SemVerImpact.NONE,
+            changelog_group="Tests",
+        ),
+        rationale="path-class envelope",
+        body_summary="Cover staged fixture evidence.",
+    )
+    assert plan.primary_intent.semver_impact == SemVerImpact.NONE
+    assert plan.primary_intent.cc_type == CommitType.TEST
+    lifted, applied, _from = lift_plan_to_contract_semver(plan, contract)
+    assert applied is False
+    assert lifted.primary_intent.semver_impact == SemVerImpact.NONE
+
+
+def test_path_class_envelope_empty_unknown_preserves_fix_patch():
+    """Empty path class must not demote matrix fix/PATCH to NONE."""
+    from git_cg.commit_quality import apply_presentation_overlay, constraints_from_paths
+    from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
+    from git_cg.regeneration import (
+        GenerationContext,
+        RegenerationState,
+        lift_plan_to_contract_semver,
+        resolve_semantic_contract,
+    )
+
+    cons = constraints_from_paths([])
+    assert cons.diff_class == "empty"
+    assert cons.force_semver is None
+
+    context = GenerationContext(
+        diff_signals=DiffSignals(files=[]),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="bug_fix",
+                emoji="🐛",
+                code=":bug:",
+                cc_type="fix",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+                intent_group="bugfix",
+                score=100.0,
+                priority=100,
+                specificity=100,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+        presentation_constraints=cons,
+    )
+    state = RegenerationState(previous_plan=None, active_directives={})
+    contract = resolve_semantic_contract(context, state)
+
+    # Identity + matrix SemVer survive empty/unknown path class.
+    assert contract.primary_intent_id == "bug_fix"
+    assert contract.cc_type == "fix"
+    assert contract.semver_impact == "PATCH"
+    assert contract.changelog_group == "Fixed"
+
+    plan = CommitPlan(
+        primary_intent=CommitIntent(
+            intent_id="bug_fix",
+            gitmoji="🐛",
+            cc_type=CommitType.FIX,
+            scope="intent",
+            description="preserve matrix patch under empty paths",
+            semver_impact=SemVerImpact.PATCH,
+            changelog_group="Fixed",
+        ),
+        rationale="empty-unknown envelope",
+        body_summary="Keep fix/PATCH when path evidence is unknown.",
+    )
+    lifted, applied, _from = lift_plan_to_contract_semver(plan, contract)
+    assert applied is False
+    assert lifted.primary_intent.semver_impact == SemVerImpact.PATCH
+
+    # Overlay must also preserve PATCH under empty/unknown constraints.
+    overlaid = apply_presentation_overlay(
+        plan,
+        paths=[],
+        signals=DiffSignals(files=[]),
+        constraints=cons,
+    )
+    assert overlaid.primary_intent.semver_impact == SemVerImpact.PATCH
+    assert overlaid.primary_intent.cc_type == CommitType.FIX
+
+
+def test_path_class_envelope_product_mixed_preserves_patch():
+    """Product source + tests must not force NONE via path-class envelope."""
+    from git_cg.commit_quality import constraints_from_paths
+    from git_cg.regeneration import (
+        GenerationContext,
+        RegenerationState,
+        resolve_semantic_contract,
+    )
+
+    paths = ["src/git_cg/intent.py", "tests/test_intent.py"]
+    cons = constraints_from_paths(paths)
+    assert cons.force_semver is None
+
+    context = GenerationContext(
+        diff_signals=DiffSignals(files=paths, touches_tests=True),
+        ranked_intents=[
+            RankedIntent(
+                intent_id="bug_fix",
+                emoji="🐛",
+                code=":bug:",
+                cc_type="fix",
+                description="",
+                semver_impact="PATCH",
+                changelog_group="Fixed",
+                intent_group="bugfix",
+                score=90.0,
+                priority=90,
+                specificity=90,
+                split_weight=50,
+            ),
+        ],
+        constraints=IntentSelectionConstraints(),
+        presentation_constraints=cons,
+    )
+    contract = resolve_semantic_contract(context, RegenerationState(previous_plan=None, active_directives={}))
+    assert contract.primary_intent_id == "bug_fix"
+    assert contract.semver_impact == "PATCH"
+    assert contract.cc_type == "fix"

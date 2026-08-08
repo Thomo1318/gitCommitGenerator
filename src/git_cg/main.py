@@ -1331,9 +1331,22 @@ def _build_generation_context(
     ranking_confidence = compute_ranking_confidence(ranked_candidates) if ranked_candidates else None
     # Issue #204 Slice 2/2b: TrailerPriors + DiffClass constraints (D25).
     # Must not feed rank_commit_intents — presentation only.
+    # Path recovery: prefer signals.files; constraints_from_paths/_resolve_paths
+    # also fall back to signals when the explicit list is empty. Empty remains
+    # unknown (not a pure non-product force-NONE envelope).
     from git_cg.commit_quality import constraints_from_paths, derive_trailer_priors
 
-    staged = list(signals.files or [])
+    staged = [p for p in (signals.files or []) if p and str(p).strip()]
+    if not staged:
+        # Second-chance path harvest from the raw diff when signal files were empty.
+        try:
+            from git_cg.intent import extract_diff_file_summary
+
+            staged = [p for p in (extract_diff_file_summary(diff_output).paths or []) if p and str(p).strip()]
+            if staged and not signals.files:
+                signals.files = list(staged)
+        except Exception:
+            staged = []
     scope_priors = derive_trailer_priors(staged, signals=signals)
     presentation_constraints = constraints_from_paths(staged, signals=signals)
     return GenerationContext(
@@ -3020,8 +3033,13 @@ def _run_commit_generation(
             else:
                 _presentation_guidance = blueprint_guidance
         # Slice 8: fold guard findings into presentation guidance on shared regen.
+        # When Context:/Changes: is already banned by guards, do not re-append the
+        # low-confidence skeleton block (even Hybrid-safe) ahead of the repair order —
+        # guard findings must be the dominant wording pressure on retry.
         if guard_guidance:
-            if _presentation_guidance:
+            if "GUARD_CONTEXT_CHANGES_TEMPLATE" in guard_guidance:
+                _presentation_guidance = guard_guidance
+            elif _presentation_guidance:
                 _presentation_guidance = f"{guard_guidance}\n\n{_presentation_guidance}"
             else:
                 _presentation_guidance = guard_guidance

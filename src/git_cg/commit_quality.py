@@ -13,6 +13,7 @@ Authority boundaries:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -523,14 +524,15 @@ def presentation_constraints(diff_class: DiffClass) -> PresentationConstraints:
         forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
         notes.append("tests_only_force_test_none")
     elif name == DIFF_CLASS_FIXTURES:
-        force_cc = CommitType.DOCS
+        # P-S12-4: fixtures/corpus/goldens are a test-family envelope, not docs.
+        force_cc = CommitType.TEST
         force_semver = SemVerImpact.NONE
-        force_group = "Documentation"
+        force_group = "Tests"
         force_scope = "fixtures"
         forbid_cc.update({"feat", "fix"})
         forbid_security = True
         forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
-        notes.append("fixtures_only_force_docs_none")
+        notes.append("fixtures_only_force_test_none")
     elif name == DIFF_CLASS_DOCS:
         force_cc = CommitType.DOCS
         force_semver = SemVerImpact.NONE
@@ -549,7 +551,13 @@ def presentation_constraints(diff_class: DiffClass) -> PresentationConstraints:
         forbid_security = True
         forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
         notes.append("adr_only_force_docs_adr_none")
-    elif name in {DIFF_CLASS_CONFIG_CI, DIFF_CLASS_RELEASE, DIFF_CLASS_EMPTY}:
+    elif name == DIFF_CLASS_EMPTY:
+        # Unknown/empty path set is not evidence of a pure non-product diff.
+        # Do not force NONE or forbid matrix SemVer — ranked contract remains authority
+        # until concrete paths prove docs/tests/fixtures/config-only (P-S12 empty-unknown).
+        notes.append("empty_paths_unknown_no_semver_force")
+        forbid_security = True
+    elif name in {DIFF_CLASS_CONFIG_CI, DIFF_CLASS_RELEASE}:
         # No product runtime ⇒ NONE ceiling unless version files (handled via runtime flag).
         if not diff_class.has_runtime_surface:
             force_semver = SemVerImpact.NONE
@@ -564,8 +572,8 @@ def presentation_constraints(diff_class: DiffClass) -> PresentationConstraints:
             forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
             notes.append("mixed_no_runtime_semver_none")
             path_list = list(diff_class.paths)
-            has_tests = any(_is_meaningful_test_path(p) for p in path_list)
-            has_docs = any((_is_docs_path(p) or _is_adr_path(p) or _is_fixtures_path(p)) for p in path_list)
+            has_tests = any(_is_meaningful_test_path(p) or _is_fixtures_path(p) for p in path_list)
+            has_docs = any((_is_docs_path(p) or _is_adr_path(p)) and not _is_fixtures_path(p) for p in path_list)
             # Test-dominant non-runtime mixed (tests+ADR/docs/fixtures): never invent feat.
             if has_tests:
                 force_cc = CommitType.TEST
@@ -581,8 +589,10 @@ def presentation_constraints(diff_class: DiffClass) -> PresentationConstraints:
                 notes.append("mixed_no_runtime_docs_primary")
         forbid_security = not diff_class.has_security_path_evidence
 
-    # Global D11: no runtime surface ⇒ NONE
-    if not diff_class.has_runtime_surface and force_semver is None:
+    # Global D11: no runtime surface ⇒ NONE.
+    # Empty/unknown paths are excluded: missing path evidence must not invent a
+    # pure non-product envelope (preserves matrix SemVer such as validation_update→PATCH).
+    if name != DIFF_CLASS_EMPTY and not diff_class.has_runtime_surface and force_semver is None:
         force_semver = SemVerImpact.NONE
         forbid_semver.update({"PATCH", "MINOR", "MAJOR"})
         notes.append("global_no_runtime_semver_none")
@@ -738,12 +748,16 @@ def _config_ci_defaults(paths: list[str]) -> tuple[CommitType, str]:
 
 
 def _resolve_paths(staged_paths: list[str], signals: DiffSignals | None) -> list[str]:
-    """Prefer explicit staged paths; fall back to signals.files."""
+    """Prefer explicit staged paths; fall back to signals.files.
+
+    Empty result means path evidence is unknown — callers must not treat that as
+    a pure docs/tests/fixtures envelope (see presentation_constraints empty branch).
+    """
     paths = [p for p in staged_paths if p and str(p).strip()]
     if paths:
         return paths
     if signals is not None and signals.files:
-        return list(signals.files)
+        return [p for p in signals.files if p and str(p).strip()]
     return []
 
 
@@ -789,9 +803,9 @@ def derive_trailer_priors(
 
     if roles == {"fixtures"}:
         return TrailerPriors(
-            cc_type=CommitType.DOCS,
+            cc_type=CommitType.TEST,
             semver_impact=SemVerImpact.NONE,
-            changelog_group="Documentation",
+            changelog_group="Tests",
             scope_hint=normalize_scope("fixtures"),
             role="fixtures",
         )
@@ -978,13 +992,17 @@ def semver_presentation_ceiling(
     markers = contract_break_markers if contract_break_markers is not None else DEFAULT_CONTRACT_BREAK_MARKERS
     blob = evidence_text.lower()
 
+    # Empty/unknown paths: open ceiling (no presentation demotion). Matrix/ranked
+    # contract remains SemVer authority until concrete paths classify the diff.
+    if dc.name == DIFF_CLASS_EMPTY:
+        return SemVerImpact.MAJOR
+
     # Pure non-runtime classes → NONE
     if dc.name in {
         DIFF_CLASS_TESTS,
         DIFF_CLASS_FIXTURES,
         DIFF_CLASS_DOCS,
         DIFF_CLASS_ADR,
-        DIFF_CLASS_EMPTY,
     } or (not dc.has_runtime_surface and dc.name != DIFF_CLASS_PRODUCT):
         return SemVerImpact.NONE
 
@@ -1192,11 +1210,11 @@ def _doc_surface_keys(paths: list[str]) -> list[tuple[str, str, str]]:
             if key in seen:
                 continue
             seen.add(key)
-            note = "document fixture corpus"
+            note = "cover fixture corpus"
             if any(tok in lowered for tok in ("gpg", "gpgsign", "signing", "no-gpg-sign")):
                 note = "harden fixture GPG/signing setup"
             elif name == "readme.md":
-                note = "document fixture README"
+                note = "cover fixture README"
             out.append(("fixtures", "fixtures", note))
             continue
         if _is_adr_path(path):
@@ -1250,13 +1268,13 @@ def _suggested_cc_for_role(
     pure_docs_or_tests: bool,
 ) -> CommitType:
     """Pick a presentation-legal suggested cc_type for a stub role."""
-    if role in {"test"}:
+    if role in {"test", "fixtures"}:
         return CommitType.TEST
-    if role in {"docs", "adr", "fixtures"}:
+    if role in {"docs", "adr"}:
         return CommitType.DOCS
     if pure_docs_or_tests:
         # Never seed feat/fix capability on pure test/docs/ADR inventories.
-        return CommitType.TEST if role == "test" else CommitType.DOCS
+        return CommitType.TEST if role in {"test", "fixtures"} else CommitType.DOCS
     if tags & CORRECTNESS_CONCERN_TAGS:
         return CommitType.FIX
     if tags & DARK_LAUNCH_TAGS or tags & CARRY_THROUGH_TAGS:
@@ -1333,6 +1351,7 @@ def build_included_change_stubs(
     has_test = bool(test_modules)
     has_prod = bool(product_modules)
     has_docs = bool(doc_surfaces)
+    has_fixtures = any(_is_fixtures_path(path) for path in clean)
 
     # Surface / concern pressure gates (D5 thresholds).
     multi_test = len(test_modules) >= 2
@@ -1381,7 +1400,7 @@ def build_included_change_stubs(
             surface = "scoped-history"
         cc = _suggested_cc_for_role(role, tags=tags, pure_docs_or_tests=pure_docs_or_tests)
         if pure_docs_or_tests and cc in {CommitType.FEAT, CommitType.FIX}:
-            cc = CommitType.TEST if has_test else CommitType.DOCS
+            cc = CommitType.TEST if (has_test or has_fixtures) else CommitType.DOCS
         scope = _scope_for_stub(role, surface, clean)
         _add(
             Stub(
@@ -1468,8 +1487,9 @@ def build_included_change_stubs(
 
     # --- Docs / ADR / fixtures ---
     for role, surface, note in doc_surfaces:
+        # P-S12-4: fixtures are test-family inventory; docs/ADR remain docs.
         # TIP-G12 / pure docs: docs-only inventory; never fix/runtime recovery.
-        cc = CommitType.DOCS
+        cc = CommitType.TEST if role == "fixtures" else CommitType.DOCS
         _add(
             Stub(
                 role=role,
@@ -1505,7 +1525,10 @@ def build_included_change_stubs(
         for s in stubs:
             cc = s.suggested_cc_type
             if cc in {CommitType.FEAT, CommitType.FIX, CommitType.PERF}:
-                cc = CommitType.TEST if s.role == "test" else CommitType.DOCS
+                # P-S12-4: fixtures stay test-family under pure non-product classes.
+                cc = CommitType.TEST if s.role in {"test", "fixtures"} else CommitType.DOCS
+            if s.role == "fixtures" and cc != CommitType.TEST:
+                cc = CommitType.TEST
             if s.role in {"prod", "telemetry", "sentry", "perf", "refactor", "security"} and not has_prod:
                 # Drop runtime stubs with no product paths.
                 continue
@@ -1904,15 +1927,17 @@ def build_low_confidence_body_skeleton(
     priors: TrailerPriors | None = None,
     stubs: list[Stub] | None = None,
 ) -> str:
-    """Build a deterministic Context / Changes body skeleton (D7).
+    """Build a deterministic Hybrid-safe body skeleton (D7 / Session 12).
 
     Directive-free wording structure for ``body_summary`` only. Never sets
     preferred_type or rank steers.
 
-    Does **not** embed a final-message ``Included changes:`` block or any
-    hyphen bullets intended for that section. Nested Hybrid mini-subjects are
-    owned by ``secondary_intents`` / ``CommitPlan.render``. Inventory stub
-    syntax (``[role/surface] ...``) must never be copied into the commit body.
+    Must **not** teach banned ``Context:`` / ``Changes:`` section headers
+    (``GUARD_CONTEXT_CHANGES_TEMPLATE``). Does **not** embed a final-message
+    ``Included changes:`` block or any hyphen bullets intended for that
+    section. Nested Hybrid mini-subjects are owned by ``secondary_intents`` /
+    ``CommitPlan.render``. Inventory stub syntax (``[role/surface] ...``) must
+    never be copied into the commit body.
     """
     del stubs  # inventory remains prompt-only via format_included_change_stub_inventory
     role = getattr(priors, "role", None) or "mixed"
@@ -1920,21 +1945,18 @@ def build_low_confidence_body_skeleton(
     scope_bit = f" (scope hint: {scope})" if scope else ""
 
     lines = [
-        "BODY_SUMMARY STRUCTURE ONLY (Context/Changes prose — never final Included changes):",
-        "Context:",
+        "BODY_SUMMARY STRUCTURE ONLY (plain Hybrid prose — never final Included changes):",
         f"- Ranking confidence is low for role `{role}`{scope_bit}.",
-        "- Describe only staged evidence; do not invent operator-visible capability.",
-        "",
-        "Changes:",
-        "- Summarise the behaviour or documentation delta grounded in the diff.",
+        "- Write body_summary as 1-3 short plain-prose sentences grounded only in staged evidence.",
+        "- State the behavioural outcome or failure mode; do not invent operator-visible capability.",
         "- Prefer failure-mode / outcome verbs over vague improve/enhance wording.",
-        "",
-        "Do NOT put an `Included changes:` heading inside body_summary.",
-        "Do NOT emit plain prose bullets or bracketed inventory bullets under Included changes.",
-        "Emit exactly one final Included changes section via secondary_intents only.",
-        "Every Included changes item MUST be a Hybrid mini-subject:",
-        "`- <emoji> <cc_type>(<scope>): <subject>`",
-        "Convert each inventory stub into that Hybrid shape; never copy `[role/surface]` syntax.",
+        "- Do NOT use `Context:` or `Changes:` section headers anywhere in body_summary.",
+        "- Do NOT put an `Included changes:` heading inside body_summary.",
+        "- Do NOT emit plain prose bullets or bracketed inventory bullets under Included changes.",
+        "- Emit exactly one final Included changes section via secondary_intents only.",
+        "- Every Included changes item MUST be a Hybrid mini-subject:",
+        "  `- <emoji> <cc_type>(<scope>): <subject>`",
+        "- Convert each inventory stub into that Hybrid shape; never copy `[role/surface]` syntax.",
     ]
     return "\n".join(lines)
 
@@ -1943,12 +1965,16 @@ def format_low_confidence_guidance(adjustment: PresentationAdjustment) -> str:
     """Render Slice 5 prompt guidance from a presentation adjustment (D7).
 
     Returns an empty string when the posture is inactive.
+
+    Must stay Hybrid-safe: never instruct ``Context:`` / ``Changes:`` headers
+    (banned by ``GUARD_CONTEXT_CHANGES_TEMPLATE``).
     """
     if not adjustment.active or not adjustment.body_skeleton:
         return ""
     lines = [
         "LOW-CONFIDENCE BODY SKELETON (wording structure only — does not change intent_id / gitmoji authority):",
-        "Structure body_summary with Context/Changes prose only. Use staged evidence only.",
+        "Write body_summary as plain Hybrid prose only (1-3 short sentences). Use staged evidence only.",
+        "Do NOT use `Context:` or `Changes:` section headers in body_summary (banned template).",
         "Do not invent generic feat+MINOR capability framing under uncertainty.",
         "Do not choose NONE merely because ranking confidence is low; the presentation "
         "layer applies the deterministic SemVer posture.",
@@ -2416,12 +2442,22 @@ def apply_presentation_overlay(
             semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
         )
         present_types.add("test")
-    if (has_docs or has_fixtures) and "docs" not in present_types and primary.cc_type != CommitType.DOCS:
+    if has_fixtures and "test" not in present_types and primary.cc_type != CommitType.TEST:
+        _ensure_secondary_for_type(
+            plan,
+            cc_type=CommitType.TEST,
+            changelog_group="Tests",
+            scope="fixtures",
+            description="cover fixture evidence",
+            semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
+        )
+        present_types.add("test")
+    if has_docs and "docs" not in present_types and primary.cc_type != CommitType.DOCS:
         _ensure_secondary_for_type(
             plan,
             cc_type=CommitType.DOCS,
             changelog_group="Documentation",
-            scope=_docs_scope_hint(clean) or ("fixtures" if has_fixtures else "docs"),
+            scope=_docs_scope_hint(clean) or "docs",
             description="document the change",
             semver=SemVerImpact.NONE if cons.force_semver is None else cons.force_semver,
         )
@@ -2829,7 +2865,7 @@ def apply_blueprint(
                 "test": CommitType.TEST,
                 "docs": CommitType.DOCS,
                 "adr": CommitType.DOCS,
-                "fixtures": CommitType.DOCS,
+                "fixtures": CommitType.TEST,
                 "perf": CommitType.PERF,
                 "refactor": CommitType.REFACTOR,
                 "security": CommitType.FIX,
@@ -2841,9 +2877,9 @@ def apply_blueprint(
             if suggested.value in constraints.forbid_cc_types:
                 continue
             group = _TYPE_CHANGELOG_REQUIREMENTS.get(suggested.value, "Miscellaneous")
-            if role in {"docs", "adr", "fixtures"}:
+            if role in {"docs", "adr"}:
                 group = "Documentation"
-            elif role == "test":
+            elif role in {"test", "fixtures"}:
                 group = "Tests"
             note = (stub.note or stub.surface or suggested.value).strip()
             if stub.claim_tags:
@@ -2852,7 +2888,7 @@ def apply_blueprint(
             if suggested.value == primary.cc_type.value and not plan.secondary_intents:
                 # Keep primary; optionally refine description from subject_hint only.
                 pass
-            elif suggested.value not in present_types or role in {"test", "docs", "adr"}:
+            elif suggested.value not in present_types or role in {"test", "docs", "adr", "fixtures"}:
                 # Always materialise distinct surface secondaries for inventory roles.
                 already = False
                 for sec in plan.secondary_intents:
@@ -3148,25 +3184,26 @@ def _message_blob(plan: CommitPlan | None) -> str:
 
 
 def _docs_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
-    if diff_class_name in {DIFF_CLASS_DOCS, DIFF_CLASS_ADR, DIFF_CLASS_FIXTURES}:
+    # Fixtures are test-family (P-S12-4), not documentation prose.
+    if diff_class_name in {DIFF_CLASS_DOCS, DIFF_CLASS_ADR}:
         return True
     if not paths:
         return False
     roles = _classify_path_roles(paths)
     return (
         bool(roles)
-        and roles <= {"docs", "adr", "fixtures", "release"}
-        and not (roles & {"product_src", "tests", "config_ci"})
+        and roles <= {"docs", "adr", "release"}
+        and not (roles & {"product_src", "tests", "fixtures", "config_ci"})
     )
 
 
 def _tests_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
-    if diff_class_name == DIFF_CLASS_TESTS:
+    if diff_class_name in {DIFF_CLASS_TESTS, DIFF_CLASS_FIXTURES}:
         return True
     if not paths:
         return False
     roles = _classify_path_roles(paths)
-    return roles == {"tests"} or roles == {"tests", "fixtures"}
+    return roles == {"tests"} or roles == {"fixtures"} or roles == {"tests", "fixtures"}
 
 
 def check_hallucination_guard(
@@ -3505,6 +3542,15 @@ def format_guard_guidance(report: GuardReport | None) -> str:
         "Repair subject/body against staged evidence. Do not invent secrets, runtime recovery,",
         "unshipped product actors, or unearned capability nouns. Prefer outcome/failure-mode verbs.",
     ]
+    codes = {str(getattr(f, "code", "") or "") for f in report.findings}
+    if "GUARD_CONTEXT_CHANGES_TEMPLATE" in codes:
+        lines.extend(
+            [
+                "CRITICAL: body_summary must NOT use `Context:` or `Changes:` section headers.",
+                "Rewrite body_summary as plain Hybrid prose (1-3 sentences) only.",
+                "Keep exactly one final `Included changes:` section via secondary_intents Hybrid mini-subjects.",
+            ]
+        )
     for finding in report.findings[:12]:
         lines.append(f"- [{finding.code}] {finding.message}")
     lines.append("This block guides wording only. It MUST NOT change intent_id, gitmoji, or ranking.")
@@ -3566,17 +3612,31 @@ def apply_guard_skeleton_fallback(
     else:
         primary.description = "apply staged presentation-safe changes"[:50]
 
-    # Body: short evidence-grounded skeleton; never Context:/Changes: marketing.
-    body_lines = [
-        "Deterministic presentation fallback after guard exhaustion.",
-        "Wording constrained to staged paths and path-class priors.",
-    ]
-    if report is not None and report.findings:
-        codes = ", ".join(sorted({f.code for f in report.findings})[:6])
-        body_lines.append(f"Cleared guard codes: {codes}.")
+    # Body: short evidence-grounded skeleton. Never emit process-meta phrases
+    # (fallback/guard exhaustion/cleared codes) — gold-strict rejects those as final.
+    body_lines: list[str] = []
+    if _docs_only_class(cons.diff_class, clean):
+        body_lines.append("Document staged documentation paths without product claims.")
+    elif _tests_only_class(cons.diff_class, clean):
+        body_lines.append("Cover staged test and fixture evidence without product framing.")
+    else:
+        body_lines.append("Describe staged path-class outcomes without unevidenced claims.")
     if claim_tags:
         body_lines.append("Claim tags: " + ", ".join(list(claim_tags)[:8]) + ".")
     plan.body_summary = "\n".join(body_lines)
+    # Provenance for gold-strict truth fails. Prefer rationale marker (survives
+    # model_copy / serialization) over a dynamic private attribute.
+    from git_cg.commit_gold import SKELETON_FALLBACK_MARKER
+
+    marker_line = SKELETON_FALLBACK_MARKER
+    rationale = str(getattr(plan, "rationale", "") or "").strip()
+    if marker_line not in rationale:
+        plan.rationale = f"{rationale}\n{marker_line}".strip() if rationale else marker_line
+    try:
+        object.__setattr__(plan, "_presentation_skeleton_fallback", True)
+    except Exception:
+        with contextlib.suppress(Exception):
+            plan.__dict__["_presentation_skeleton_fallback"] = True  # type: ignore[index]
 
     primary.intent_id = preserved_intent_id
     primary.gitmoji = preserved_gitmoji
@@ -3817,9 +3877,10 @@ def _check_type_gate(
         )
 
     # Dual-surface path pressure: tests+docs without runtime need both groups.
+    # P-S12-4: fixtures are test-family surfaces, not Documentation pressure.
     dc = classify_diff_class(paths)
-    has_tests = bool(_test_module_stems(paths))
-    has_docs = bool(_doc_surface_keys(paths))
+    has_tests = bool(_test_module_stems(paths)) or any(_is_fixtures_path(p) for p in paths)
+    has_docs = any(role in {"docs", "adr"} for role, _surface, _note in _doc_surface_keys(paths))
     has_prod = bool(_product_module_stems(paths))
     expected_multi: list[str] = []
     if has_tests and has_docs and not dc.has_runtime_surface:

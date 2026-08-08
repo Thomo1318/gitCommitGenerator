@@ -6,13 +6,17 @@ Locks path-role → TrailerPriors defaults. Does **not** wire priors into
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from pydantic import ValidationError
 
 from git_cg.commit_quality import (
     DIFF_CLASS_ADR,
     DIFF_CLASS_DOCS,
+    DIFF_CLASS_EMPTY,
     DIFF_CLASS_FIXTURES,
+    DIFF_CLASS_MIXED,
     DIFF_CLASS_PRODUCT,
     DIFF_CLASS_TESTS,
     LOW_CONFIDENCE_TRIGGER_REASONS,
@@ -125,9 +129,9 @@ def test_trailer_priors_rejects_unknown_role() -> None:
             ["tests/fixtures/commit_quality/README.md"],
             {
                 "role": "fixtures",
-                "cc_type": CommitType.DOCS,
+                "cc_type": CommitType.TEST,
                 "semver_impact": SemVerImpact.NONE,
-                "changelog_group": "Documentation",
+                "changelog_group": "Tests",
                 "scope_hint": "fixtures",
             },
             id="fixtures_readme_only",
@@ -316,7 +320,7 @@ def test_build_generation_context_attaches_scope_priors(monkeypatch: pytest.Monk
         pytest.param(
             ["tests/fixtures/commit_quality/README.md"],
             DIFF_CLASS_FIXTURES,
-            CommitType.DOCS,
+            CommitType.TEST,
             {"feat", "fix"},
             id="fixtures_only_gate",
         ),
@@ -406,6 +410,43 @@ def test_product_src_allows_non_none_without_forcing_feat() -> None:
     assert cons.force_semver is None or cons.force_semver != SemVerImpact.MAJOR
 
 
+def test_empty_path_class_is_unknown_not_force_none() -> None:
+    """Missing path evidence must not invent a pure non-product NONE envelope."""
+    dc = classify_diff_class([])
+    assert dc.name == DIFF_CLASS_EMPTY
+    cons = presentation_constraints(dc)
+    assert cons.diff_class == DIFF_CLASS_EMPTY
+    assert cons.force_semver is None
+    assert "PATCH" not in cons.forbid_semver
+    assert "MINOR" not in cons.forbid_semver
+    assert "MAJOR" not in cons.forbid_semver
+    assert "empty_paths_unknown_no_semver_force" in cons.notes
+    # Open ceiling: do not demote matrix PATCH/MINOR via presentation clamp.
+    assert semver_presentation_ceiling([]) == SemVerImpact.MAJOR
+    assert constraints_from_paths([]).force_semver is None
+
+
+def test_constraints_from_paths_fallback_to_signals_files() -> None:
+    """Empty staged list must recover concrete paths from DiffSignals.files."""
+    signals = DiffSignals(files=["src/git_cg/intent.py", "tests/test_intent.py"])
+    cons = constraints_from_paths([], signals=signals)
+    assert cons.diff_class == DIFF_CLASS_MIXED
+    assert cons.force_semver is None
+    assert "PATCH" not in cons.forbid_semver
+    assert semver_presentation_ceiling([], signals=signals) == SemVerImpact.PATCH
+
+
+def test_product_plus_tests_preserves_patch_ceiling() -> None:
+    paths = ["src/git_cg/regeneration.py", "tests/test_regeneration_contract.py"]
+    dc = classify_diff_class(paths)
+    assert dc.name == DIFF_CLASS_MIXED
+    assert dc.has_runtime_surface is True
+    cons = presentation_constraints(dc)
+    assert cons.force_semver is None
+    assert cons.force_cc_type is None
+    assert semver_presentation_ceiling(paths) == SemVerImpact.PATCH
+
+
 def test_build_generation_context_attaches_presentation_constraints(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -430,6 +471,37 @@ def test_build_generation_context_attaches_presentation_constraints(
     assert ctx.presentation_constraints.diff_class == DIFF_CLASS_DOCS
     assert ctx.presentation_constraints.changelog_antisignal_applied is True
     assert ctx.presentation_constraints.force_semver == SemVerImpact.NONE
+
+
+def test_build_generation_context_recovers_paths_when_signal_files_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Second-chance path harvest from raw diff must avoid empty→NONE demotion."""
+    from git_cg.main import _build_generation_context
+
+    monkeypatch.setattr(
+        "git_cg.main.extract_diff_signals",
+        lambda _diff: DiffSignals(files=[]),
+    )
+    monkeypatch.setattr("git_cg.main.rank_commit_intents", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        "git_cg.main.load_sop",
+        lambda: {"gitmoji_reference_matrix": []},
+    )
+
+    diff = (
+        "diff --git a/src/git_cg/intent.py b/src/git_cg/intent.py\n"
+        "--- a/src/git_cg/intent.py\n"
+        "+++ b/src/git_cg/intent.py\n"
+        "@@ -1 +1 @@\n"
+        "-old\n"
+        "+new\n"
+    )
+    ctx = _build_generation_context(diff, enable_semantic=False)
+    assert ctx.presentation_constraints is not None
+    assert ctx.presentation_constraints.diff_class == DIFF_CLASS_PRODUCT
+    assert ctx.presentation_constraints.force_semver is None
+    assert "src/git_cg/intent.py" in (ctx.diff_signals.files or [])
 
 
 # ---------------------------------------------------------------------------
@@ -1012,6 +1084,18 @@ def _lc_plan(primary=None, **kwargs):
     return CommitPlan.model_construct(**payload)
 
 
+def _has_context_changes_section_headers(text: str) -> bool:
+    """True when text teaches banned Context:/Changes: section headers (not ban mentions)."""
+    return bool(
+        re.search(r"(?m)^Context:\s*$", text)
+        or re.search(r"(?m)^Changes:\s*$", text)
+        or re.search(r"(?m)^Context:\s+\S", text)
+        or re.search(r"(?m)^Changes:\s+\S", text)
+        or "Structure body_summary with Context/Changes prose only" in text
+        or "BODY_SUMMARY STRUCTURE ONLY (Context/Changes prose" in text
+    )
+
+
 @pytest.mark.parametrize("reason", sorted(LOW_CONFIDENCE_TRIGGER_REASONS))
 def test_low_confidence_posture_triggers_on_each_v1_reason(reason: str) -> None:
     conf = _low_conf(reason)
@@ -1020,8 +1104,9 @@ def test_low_confidence_posture_triggers_on_each_v1_reason(reason: str) -> None:
     adj = apply_low_confidence_presentation(None, conf, priors)
     assert adj.active is True
     assert adj.fallback_reason == PRESENTATION_FALLBACK_LOW_CONFIDENCE
-    assert "Context:" in adj.body_skeleton
-    assert "Changes:" in adj.body_skeleton
+    # Hybrid-safe: must NOT teach banned Context:/Changes: headers (Session 12 / Opik G1).
+    assert not _has_context_changes_section_headers(adj.body_skeleton)
+    assert "Do NOT use `Context:` or `Changes:`" in adj.body_skeleton
     # Skeleton teaches body_summary only; final Included changes is secondary_intents-owned.
     assert "Included changes:" not in adj.body_skeleton.split("Do NOT put an `Included changes:`")[0]
     assert "body_summary" in adj.body_skeleton.lower() or "BODY_SUMMARY" in adj.body_skeleton
@@ -1173,8 +1258,10 @@ def test_low_confidence_skeleton_deterministic_and_complete() -> None:
     sk1 = build_low_confidence_body_skeleton(priors=priors, stubs=stubs)
     sk2 = build_low_confidence_body_skeleton(priors=priors, stubs=stubs)
     assert sk1 == sk2
-    for heading in ("Context:", "Changes:"):
-        assert heading in sk1
+    # Must stay Hybrid-safe — never teach banned Context:/Changes: headers.
+    assert not _has_context_changes_section_headers(sk1)
+    assert "plain Hybrid prose" in sk1 or "plain-prose" in sk1
+    assert "Do NOT use `Context:` or `Changes:`" in sk1
     # Must not teach a final Included-changes prose block inside body_summary.
     assert sk1.count("Included changes:") == 0 or "Do NOT put an `Included changes:`" in sk1
     assert not any(line.startswith("- [") or line.startswith("- cover each distinct") for line in sk1.splitlines())
@@ -1195,7 +1282,8 @@ def test_low_confidence_skeleton_deterministic_and_complete() -> None:
     )
     assert "LOW-CONFIDENCE BODY SKELETON" in guidance
     assert "preferred_type" not in guidance.split("MUST NOT set preferred_type")[0]
-    assert "Context:" in guidance
+    assert not _has_context_changes_section_headers(guidance)
+    assert "Do NOT use `Context:` or `Changes:`" in guidance
     assert "exactly one" in guidance.lower()
     assert "Hybrid mini-subject" in guidance
     assert "second" in guidance.lower() and "Included changes" in guidance
@@ -1225,10 +1313,13 @@ def test_low_confidence_skeleton_rejects_prose_included_changes_bullets() -> Non
     assert "\nIncluded changes:\n-" not in f"\n{skeleton}\n"
     assert "- cover each distinct staged surface" not in skeleton
     assert "- [" not in skeleton
+    assert not _has_context_changes_section_headers(skeleton)
     # Guidance must forbid duplicate headings and require Hybrid shape.
     assert "exactly one" in guidance.lower()
     assert "Never emit plain prose bullets" in guidance or "never emit plain prose bullets" in guidance.lower()
     assert "inventory" in guidance.lower()
+    assert "Do NOT use `Context:` or `Changes:`" in guidance
+    assert not _has_context_changes_section_headers(guidance)
 
 
 def test_strip_included_changes_from_body_summary_removes_leaked_section() -> None:
@@ -1280,7 +1371,11 @@ def test_apply_presentation_seed_strips_leaked_included_changes_when_active() ->
         active=True,
         fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
         seed_presentation=False,
-        body_skeleton="Context:\n- x\n\nChanges:\n- y",
+        body_skeleton=(
+            "BODY_SUMMARY STRUCTURE ONLY (plain Hybrid prose — never final Included changes):\n"
+            "- Write body_summary as plain prose only.\n"
+            "- Do NOT use `Context:` or `Changes:` section headers anywhere in body_summary."
+        ),
         role="mixed",
     )
     out = apply_presentation_seed(plan, adj)
@@ -1336,9 +1431,9 @@ def test_low_confidence_tip_g2_fixtures_no_security_primary() -> None:
     out = apply_presentation_seed(generic, adj)
     out = apply_presentation_overlay(out, paths=paths, priors=priors)
     assert out.primary_intent.intent_id == "feature_addition"
-    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.cc_type == CommitType.TEST
     assert out.primary_intent.semver_impact == SemVerImpact.NONE
-    assert out.primary_intent.changelog_group == "Documentation"
+    assert out.primary_intent.changelog_group == "Tests"
     assert out.primary_intent.changelog_group.lower() != "security"
     assert out.primary_intent.cc_type != CommitType.CHORE or out.primary_intent.changelog_group != "Security"
 
@@ -1408,6 +1503,42 @@ def test_low_confidence_medium_high_does_not_seed() -> None:
         assert adj.active is False, level
 
 
+def test_low_confidence_skeleton_never_teaches_context_changes_headers() -> None:
+    """Session 12 / Opik: LC skeleton must not reintroduce GUARD_CONTEXT_CHANGES_TEMPLATE."""
+    priors = derive_trailer_priors(["src/git_cg/intent.py", "tests/test_intent.py"])
+    skeleton = build_low_confidence_body_skeleton(priors=priors)
+    guidance = format_low_confidence_guidance(
+        PresentationAdjustment(
+            active=True,
+            fallback_reason=PRESENTATION_FALLBACK_LOW_CONFIDENCE,
+            body_skeleton=skeleton,
+            role=priors.role,
+        )
+    )
+    for blob in (skeleton, guidance):
+        assert not _has_context_changes_section_headers(blob)
+        assert "Do NOT use `Context:` or `Changes:`" in blob
+
+
+def test_format_guard_guidance_emphasises_context_changes_ban() -> None:
+    from git_cg.commit_quality import GuardFinding, GuardReport, format_guard_guidance
+
+    report = GuardReport(
+        findings=[
+            GuardFinding(
+                code="GUARD_CONTEXT_CHANGES_TEMPLATE",
+                message="Body uses banned Context:/Changes: template",
+                kind="hallucination",
+                token="Context:/Changes:",
+            )
+        ]
+    )
+    text = format_guard_guidance(report)
+    assert "GUARD_CONTEXT_CHANGES_TEMPLATE" in text
+    assert "must NOT use `Context:` or `Changes:`" in text
+    assert "plain Hybrid prose" in text
+
+
 def test_build_system_prompt_includes_low_confidence_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.main import build_system_prompt
 
@@ -1418,11 +1549,16 @@ def test_build_system_prompt_includes_low_confidence_guidance(monkeypatch: pytes
         low_confidence_guidance=(
             "LOW-CONFIDENCE BODY SKELETON (wording structure only — does not change "
             "intent_id / gitmoji authority):\n"
-            "Context:\n- sample\n\nChanges:\n- sample\n\nIncluded changes:\n- sample"
+            "Write body_summary as plain Hybrid prose only.\n"
+            "Do NOT use `Context:` or `Changes:` section headers in body_summary.\n"
+            "Emit exactly one Included changes section via secondary_intents."
         ),
     )
     assert "LOW-CONFIDENCE BODY SKELETON" in prompt
-    assert "Context:" in prompt
+    assert "plain Hybrid prose" in prompt
+    assert "Do NOT use `Context:` or `Changes:`" in prompt
+    # Prompt may mention the ban; it must not teach a Context:/Changes: skeleton block.
+    assert "Context:\n- sample" not in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -2065,13 +2201,13 @@ def test_slice9_h_signing_inventory_token_required() -> None:
         construct=True,
     )
     sec = _cq.make_commit_intent(
-        intent_id="documentation_update",
-        gitmoji="📝",
-        cc_type="docs",
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type="test",
         scope="fixtures",
         description="harden fixture GPG/signing setup",
         semver_impact="NONE",
-        changelog_group="Documentation",
+        changelog_group="Tests",
         construct=True,
     )
     legal = _cq.make_commit_plan(
@@ -2085,8 +2221,8 @@ def test_slice9_h_signing_inventory_token_required() -> None:
         paths=paths,
         included_changes=[
             "✅ test(scoped-history): cover test_scoped_history suite",
-            "📝 docs(fixtures): harden fixture GPG/signing setup",
-            "📝 docs(fixtures): document fixture README",
+            "✅ test(fixtures): harden fixture GPG/signing setup",
+            "✅ test(fixtures): cover fixture README",
         ],
         require_stub_note_tokens=["gpg", "signing"],
     )
@@ -2103,13 +2239,13 @@ def test_slice9_h_signing_inventory_token_required() -> None:
         construct=True,
     )
     bad_sec = _cq.make_commit_intent(
-        intent_id="documentation_update",
-        gitmoji="📝",
-        cc_type="docs",
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type="test",
         scope="fixtures",
-        description="document fixture README",
+        description="cover fixture README",
         semver_impact="NONE",
-        changelog_group="Documentation",
+        changelog_group="Tests",
         construct=True,
     )
     bad = _cq.make_commit_plan(
@@ -2123,7 +2259,7 @@ def test_slice9_h_signing_inventory_token_required() -> None:
         paths=paths,
         included_changes=[
             "✅ test(scoped-history): cover test_scoped_history suite",
-            "📝 docs(fixtures): document fixture README",
+            "✅ test(fixtures): cover fixture README",
         ],
         require_stub_note_tokens=["gpg", "signing"],
     )
