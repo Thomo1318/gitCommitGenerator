@@ -816,3 +816,60 @@ def test_v11_a03_repo_history_fp_budget() -> None:
     clean = len(subjects) - len(hits)
     ratio = clean / len(subjects)
     assert ratio >= 0.95, f"FP budget failed: {clean}/{len(subjects)} clean; hits={hits}"
+
+
+def test_skeleton_fallback_is_strict_fail() -> None:
+    """P-S12: skeleton fallback provenance fails gold-strict even with clean wording."""
+    from git_cg.commit_gold import SKELETON_FALLBACK_MARKER
+    from git_cg.commit_quality import apply_guard_skeleton_fallback
+
+    assert "GOLD_SKELETON_FALLBACK_FINAL" in STRICT_FAIL_CODES
+    assert "GOLD_PROCESS_META_BODY" in STRICT_FAIL_CODES
+
+    base = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="cover staged claim locks"),
+        body="Cover staged fixture evidence without product framing.",
+    )
+    out = apply_guard_skeleton_fallback(base, paths=["tests/fixtures/x.md"])
+    assert SKELETON_FALLBACK_MARKER in (out.rationale or "")
+    report = check_commit_gold(
+        out,
+        None,
+        signals=DiffSignals(files=["tests/fixtures/x.md"], only_fixtures=True, only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_SKELETON_FALLBACK_FINAL" in report.codes()
+    assert not report.ok_for_mode("strict")
+
+
+def test_process_meta_body_is_strict_fail() -> None:
+    """P-S12: process-meta fallback phrases fail gold-strict."""
+    plan = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="cover staged tests"),
+        body="Deterministic presentation fallback after guard exhaustion.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["tests/test_foo.py"], only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_PROCESS_META_BODY" in report.codes()
+    assert not report.ok_for_mode("strict")
+
+
+def test_fixtures_path_class_semver_ceiling() -> None:
+    """P-S12: fixtures-only with PATCH fails gold-strict path-class ceiling."""
+    plan = _plan(
+        _intent("bug_fix", "🐛", "fix", "PATCH", "Fixed", description="cover fixture pins"),
+        body="Cover fixture pins without product claims.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["tests/fixtures/pack/data.json"], only_fixtures=True, only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    codes = report.codes()
+    assert "GOLD_PATH_CLASS_SEMVER_CEILING" in codes or "GOLD_PATH_CLASS_TYPE_MISMATCH" in codes
+    assert not report.ok_for_mode("strict")

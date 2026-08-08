@@ -1155,14 +1155,17 @@ def test_v11_a07_gold_strict_exhausted_after_two_regens(monkeypatch, capsys, tmp
     """V11-A07: shrinking then still failing after attempt 2 → exhausted."""
     import typer
 
-    # Pass 0: BODY + SCOPE (2 codes)
+    # Pass 0: BODY + SUBJECT_TITLE_CASE (2 codes)
     # Pass 1 after regen1: BODY only (strict subset) → allow second regen
     # Pass 2 after regen2: BODY only → exhausted
+    #
+    # Note: presentation overlay normalises filename scopes (release.py → release)
+    # before gold runs, so SCOPE_FILENAME is no longer a reliable multi-code seed.
     telemetry_events: list[dict] = []
     writes = _gold_harness_mocks(
         monkeypatch,
         [
-            _gold_plan(body="This commit adds a helper.", description="add helper", scope="release.py"),
+            _gold_plan(body="This commit adds a helper.", description="Add Helper", scope="release"),
             _gold_plan(body="This commit adds a helper.", description="add helper", scope="release"),
             _gold_plan(body="This commit adds a helper.", description="add helper", scope="release"),
         ],
@@ -1666,6 +1669,9 @@ def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
         "GOLD_SCOPE_FILENAME",
         "GOLD_SUBJECT_TITLE_CASE",
         "GOLD_SUBJECT_INVENTORY",
+        "GOLD_SKELETON_FALLBACK_FINAL",
+        "GOLD_PROCESS_META_BODY",
+        "GOLD_PATH_CLASS_SEMVER_CEILING",
     ):
         assert code in STRICT_FAIL_CODES
 

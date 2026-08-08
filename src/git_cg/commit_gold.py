@@ -166,8 +166,30 @@ STRICT_FAIL_CODES: frozenset[str] = frozenset(
         "GOLD_SCOPE_FILENAME",
         "GOLD_SUBJECT_TITLE_CASE",
         "GOLD_SUBJECT_INVENTORY",
+        # P-S12 gold-strict truth fails (fallback / process-meta / path-class ceilings).
+        "GOLD_SKELETON_FALLBACK_FINAL",
+        "GOLD_PROCESS_META_BODY",
+        "GOLD_PATH_CLASS_SEMVER_CEILING",
+        "GOLD_PATH_CLASS_TYPE_MISMATCH",
+        "GOLD_FIXTURE_PRODUCT_FRAMING",
+        "GOLD_DOCS_IMPLEMENTATION_CLAIM",
     }
 )
+
+# Process-meta phrases that must never appear in a final accepted body (P-S12-1/2).
+_PROCESS_META_PHRASES: tuple[str, ...] = (
+    "deterministic presentation fallback",
+    "guard exhaustion",
+    "cleared guard codes",
+    "wording constrained to staged paths",
+    "path-class priors",
+    "presentation fallback after",
+    "shared regen budget",
+    "skeleton fallback",
+)
+
+# Provenance marker written into rationale by apply_guard_skeleton_fallback.
+SKELETON_FALLBACK_MARKER = "[presentation-skeleton-fallback]"
 
 # Closed imperative-verb allowlist for GOLD_SUBJECT_INVENTORY (Issue #191).
 # Matching is case-insensitive on the first alphabetic token of a clause.
@@ -854,6 +876,209 @@ def _check_contract_smoke(
     ]
 
 
+def _message_blob(plan: CommitPlan) -> str:
+    """Lowercased subject+body blob for phrase matching."""
+    primary = plan.primary_intent
+    parts = [
+        str(getattr(primary, "description", "") or ""),
+        str(getattr(plan, "body_summary", "") or ""),
+        str(getattr(plan, "rationale", "") or ""),
+    ]
+    for sec in getattr(plan, "secondary_intents", None) or []:
+        parts.append(str(getattr(sec, "description", "") or ""))
+    return "\n".join(parts).lower()
+
+
+def _is_fixture_path_gold(path: str) -> bool:
+    parts = {part.lower() for part in str(path).replace("\\", "/").split("/") if part}
+    return bool(parts & {"fixtures", "fixture", "goldens", "corpus"})
+
+
+def _is_docs_path_gold(path: str) -> bool:
+    lowered = str(path).replace("\\", "/").lower()
+    name = lowered.rsplit("/", 1)[-1]
+    return (
+        lowered.startswith("docs/")
+        or lowered.startswith("doc/")
+        or name in {"readme.md", "changelog.md", "development.md"}
+        or (name.endswith(".md") and ("/docs/" in f"/{lowered}" or "/adr" in f"/{lowered}"))
+    )
+
+
+def _is_test_path_gold(path: str) -> bool:
+    lowered = str(path).replace("\\", "/").lower()
+    parts = {p for p in lowered.split("/") if p}
+    name = lowered.rsplit("/", 1)[-1]
+    return (
+        bool(parts & {"tests", "test", "spec", "__tests__"})
+        or name.startswith("test_")
+        or ".test." in name
+        or ".spec." in name
+        or name.endswith("_test.go")
+        or _is_fixture_path_gold(path)
+    )
+
+
+def _path_family(signals: DiffSignals) -> str | None:
+    """Return pure path family: fixtures|tests|docs|None (mixed/product)."""
+    paths = [p for p in (signals.files or []) if p]
+    if not paths:
+        return None
+    if all(_is_fixture_path_gold(p) for p in paths):
+        return "fixtures"
+    if all(_is_test_path_gold(p) for p in paths):
+        return "tests"
+
+    # docs-only when every path is docs-class / doc-like text and none are
+    # non-md test modules, fixtures, or pure test .py files.
+    docs_like = all(
+        _is_docs_path_gold(p) or str(p).replace("\\", "/").lower().endswith((".md", ".rst", ".txt", ".adoc"))
+        for p in paths
+    )
+    no_non_md_tests = not any(_is_test_path_gold(p) and not str(p).lower().endswith(".md") for p in paths)
+    no_fixtures = not any(_is_fixture_path_gold(p) for p in paths)
+    no_test_py = not any(str(p).endswith(".py") and _is_test_path_gold(p) for p in paths)
+    if docs_like and no_non_md_tests and no_fixtures and no_test_py:
+        return "docs"
+
+    # broader docs: only docs paths via signals flags
+    if getattr(signals, "only_docs", False):
+        return "docs"
+    if getattr(signals, "only_fixtures", False):
+        return "fixtures"
+    if getattr(signals, "only_tests", False):
+        return "tests"
+    return None
+
+
+def _check_skeleton_and_process_meta(plan: CommitPlan) -> list[GoldFinding]:
+    """Reject skeleton fallback provenance and process-meta body phrases (P-S12)."""
+    findings: list[GoldFinding] = []
+    rationale = str(getattr(plan, "rationale", "") or "")
+    blob = _message_blob(plan)
+
+    if SKELETON_FALLBACK_MARKER in rationale or getattr(plan, "_presentation_skeleton_fallback", False):
+        findings.append(
+            GoldFinding(
+                code="GOLD_SKELETON_FALLBACK_FINAL",
+                message=(
+                    "Final plan is a presentation skeleton fallback; gold-strict "
+                    "rejects fallback provenance as an accepted final message."
+                ),
+            )
+        )
+
+    hits = [phrase for phrase in _PROCESS_META_PHRASES if phrase in blob]
+    if hits:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PROCESS_META_BODY",
+                message=(
+                    "Body/subject contains process-meta fallback phrasing "
+                    f"({', '.join(hits[:4])}); final messages must describe staged outcomes only."
+                ),
+            )
+        )
+    return findings
+
+
+def _check_path_class_truth(plan: CommitPlan, signals: DiffSignals) -> list[GoldFinding]:
+    """Path-class SemVer ceilings and product-framing bans for pure docs/tests/fixtures."""
+    findings: list[GoldFinding] = []
+    family = _path_family(signals)
+    if family is None:
+        return findings
+
+    primary = plan.primary_intent
+    cc = getattr(primary.cc_type, "value", primary.cc_type)
+    cc_s = str(cc or "").lower()
+    sem = getattr(primary.semver_impact, "value", primary.semver_impact)
+    sem_s = str(sem or "NONE").upper()
+    blob = _message_blob(plan)
+
+    if family in {"fixtures", "tests", "docs"} and sem_s in {"PATCH", "MINOR", "MAJOR"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_SEMVER_CEILING",
+                message=(f"Pure {family} path-class forbids non-NONE SemVer ({sem_s}); presentation ceiling is NONE."),
+            )
+        )
+
+    if family == "fixtures" and cc_s in {"feat", "fix"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_TYPE_MISMATCH",
+                message=f"Fixtures-only path-class forbids primary type {cc_s!r}; expected test.",
+            )
+        )
+    elif family == "tests" and cc_s in {"feat", "fix"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_TYPE_MISMATCH",
+                message=f"Tests-only path-class forbids primary type {cc_s!r}; expected test.",
+            )
+        )
+    elif family == "docs" and cc_s in {"feat", "fix"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_TYPE_MISMATCH",
+                message=f"Docs-only path-class forbids primary type {cc_s!r}; expected docs.",
+            )
+        )
+
+    if family == "fixtures":
+        product_framing = (
+            "validate",
+            "enforce",
+            "implement",
+            "implementation",
+            "runtime recovery",
+            "wire telemetry",
+            "public api",
+        )
+        hits = [tok for tok in product_framing if tok in blob]
+        # Allow benign "test" framing; flag validate/enforce/implement product claims.
+        if hits:
+            findings.append(
+                GoldFinding(
+                    code="GOLD_FIXTURE_PRODUCT_FRAMING",
+                    message=(
+                        "Fixtures/proof-pack wording uses product validate/enforce/implementation "
+                        f"framing ({', '.join(hits[:4])}); describe fixture evidence only."
+                    ),
+                )
+            )
+
+    if family == "docs":
+        # Docs-only references to prior work must not claim to add/implement it.
+        impl_claims = (
+            "implement ",
+            "implements ",
+            "implemented ",
+            "add support for",
+            "adds support for",
+            "introduce capability",
+            "introduces capability",
+            "wire the",
+            "wires the",
+            "enforce the contract",
+            "enforces the contract",
+        )
+        hits = [tok for tok in impl_claims if tok in blob]
+        if hits and cc_s == "docs":
+            findings.append(
+                GoldFinding(
+                    code="GOLD_DOCS_IMPLEMENTATION_CLAIM",
+                    message=(
+                        "Docs-only message claims to add/implement product behaviour "
+                        f"({', '.join(hits[:3])}); document prior work without shipping claims."
+                    ),
+                )
+            )
+
+    return findings
+
+
 def check_commit_gold(
     plan: CommitPlan,
     contract: ResolvedCommitContract | None,
@@ -905,4 +1130,7 @@ def check_commit_gold(
             presentation_overlay_applied=presentation_overlay_applied,
         )
     )
+    # P-S12 truth fails: skeleton provenance, process-meta, path-class ceilings.
+    findings.extend(_check_skeleton_and_process_meta(plan))
+    findings.extend(_check_path_class_truth(plan, signals))
     return GoldReport(findings=tuple(findings))
