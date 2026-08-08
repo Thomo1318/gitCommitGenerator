@@ -318,26 +318,15 @@
         "scope": "scoped-history",
         "semver_impact": "NONE",
         "changelog_group": "Tests",
-        "secondary_intents": [
-          {
-            "intent_id": "documentation_update",
-            "cc_type": "docs",
-            "scope": "fixtures",
-            "semver_impact": "NONE",
-            "changelog_group": "Documentation"
-          }
-        ],
+        "secondary_intents": [],
         "types": [
-          "test",
-          "docs"
+          "test"
         ],
         "groups": [
-          "Tests",
-          "Documentation"
+          "Tests"
         ],
         "scopes": [
-          "scoped-history",
-          "fixtures"
+          "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
         "preserved_ranked_gitmoji": "\u2728"
@@ -564,17 +553,17 @@
         "path_count": 1
       },
       "priors": {
-        "cc_type": "docs",
+        "cc_type": "test",
         "semver_impact": "NONE",
-        "changelog_group": "Documentation",
+        "changelog_group": "Tests",
         "scope_hint": "fixtures",
         "role": "fixtures"
       },
       "constraints": {
         "diff_class": "fixtures_only",
-        "force_cc_type": "docs",
+        "force_cc_type": "test",
         "force_semver": "NONE",
-        "force_changelog_group": "Documentation",
+        "force_changelog_group": "Tests",
         "force_scope": "fixtures",
         "forbid_cc_types": [
           "feat",
@@ -589,12 +578,12 @@
         "changelog_antisignal_applied": false,
         "security_requires_path_evidence": true,
         "notes": [
-          "fixtures_only_force_docs_none",
+          "fixtures_only_force_test_none",
           "security_primary_forbidden_without_path_evidence"
         ]
       },
       "semver_ceiling": "NONE",
-      "dominant_cc_type": "docs",
+      "dominant_cc_type": "test",
       "min_included_change_bullets": 1,
       "scope_canon": {
         "scoped_history": "scoped-history",
@@ -606,16 +595,16 @@
       "overlay": {
         "intent_id": "feature_addition",
         "gitmoji": "\u2728",
-        "cc_type": "docs",
+        "cc_type": "test",
         "scope": "fixtures",
         "semver_impact": "NONE",
-        "changelog_group": "Documentation",
+        "changelog_group": "Tests",
         "secondary_intents": [],
         "types": [
-          "docs"
+          "test"
         ],
         "groups": [
-          "Documentation"
+          "Tests"
         ],
         "scopes": [
           "fixtures"
@@ -1810,26 +1799,15 @@
         "scope": "scoped-history",
         "semver_impact": "NONE",
         "changelog_group": "Tests",
-        "secondary_intents": [
-          {
-            "intent_id": "documentation_update",
-            "cc_type": "docs",
-            "scope": "fixtures",
-            "semver_impact": "NONE",
-            "changelog_group": "Documentation"
-          }
-        ],
+        "secondary_intents": [],
         "types": [
-          "test",
-          "docs"
+          "test"
         ],
         "groups": [
-          "Tests",
-          "Documentation"
+          "Tests"
         ],
         "scopes": [
-          "scoped-history",
-          "fixtures"
+          "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
         "preserved_ranked_gitmoji": "\u2728"

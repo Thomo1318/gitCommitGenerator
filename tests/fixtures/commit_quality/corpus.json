@@ -189,8 +189,7 @@
         "semver_ceiling": "NONE",
         "min_included_change_bullets_gte": 2,
         "overlay_groups_include": [
-          "Tests",
-          "Documentation"
+          "Tests"
         ]
       },
       "must_not_present": {
@@ -360,9 +359,9 @@
       "preferred_scope": null,
       "must_present": {
         "diff_class": "fixtures_only",
-        "cc_type": "docs",
+        "cc_type": "test",
         "semver": "NONE",
-        "changelog_group": "Documentation",
+        "changelog_group": "Tests",
         "scope": "fixtures",
         "forbid_security_primary": true
       },
@@ -1254,12 +1253,10 @@
         "changelog_group": "Tests",
         "scope": "scoped-history",
         "overlay_types_include": [
-          "test",
-          "docs"
+          "test"
         ],
         "overlay_groups_include": [
-          "Tests",
-          "Documentation"
+          "Tests"
         ],
         "min_included_change_bullets_gte": 2,
         "stub_note_tokens_any": [

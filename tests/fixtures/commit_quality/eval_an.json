@@ -32,12 +32,12 @@
       "expect": "pass",
       "plan": {
         "intent_id": "documentation_update",
-        "gitmoji": "📝",
-        "cc_type": "docs",
+        "gitmoji": "\ud83d\udcdd",
+        "cc_type": "test",
         "scope": "fixtures",
         "description": "document scoped-history behavior matrix",
         "semver_impact": "NONE",
-        "changelog_group": "Documentation",
+        "changelog_group": "Tests",
         "body_summary": "Document fixture authority matrix for hermetic local runs."
       }
     },
@@ -47,7 +47,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "security_hardening",
-        "gitmoji": "🔐",
+        "gitmoji": "\ud83d\udd10",
         "cc_type": "chore",
         "scope": "fixtures",
         "description": "rotate fixture secrets and credentials",
@@ -67,7 +67,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "documentation_update",
-        "gitmoji": "📝",
+        "gitmoji": "\ud83d\udcdd",
         "cc_type": "docs",
         "scope": "adr",
         "description": "accept and index ADR-0163 scoped history",
@@ -82,7 +82,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "security_hardening",
-        "gitmoji": "🔐",
+        "gitmoji": "\ud83d\udd10",
         "cc_type": "chore",
         "scope": "adr",
         "description": "update ADR-0163 status to implemented",
@@ -102,7 +102,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "documentation_update",
-        "gitmoji": "📝",
+        "gitmoji": "\ud83d\udcdd",
         "cc_type": "docs",
         "scope": "usage",
         "description": "document Policy B and scoped-history DX",
@@ -117,7 +117,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "bug_fix",
-        "gitmoji": "🥅",
+        "gitmoji": "\ud83e\udd45",
         "cc_type": "fix",
         "scope": "usage",
         "description": "handle scoped history fallback errors",
@@ -137,7 +137,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "close Phase 9 coverage and claim gaps",
@@ -145,11 +145,11 @@
         "changelog_group": "Tests",
         "body_summary": "Lock P9-A05, P9-B07, and P9-B10 across four test modules.",
         "included_changes": [
-          "✅ test(scoped-history): cover test_scoped_history suite",
-          "✅ test(scoped-history): cover test_scoped_history_telemetry suite",
-          "✅ test(main): cover test_main suite",
-          "✅ test(semantic): cover test_semantic suite",
-          "✅ test(scoped-history): lock claim tags P9-A05,P9-B07,P9-B10"
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\u2705 test(scoped-history): cover test_scoped_history_telemetry suite",
+          "\u2705 test(main): cover test_main suite",
+          "\u2705 test(semantic): cover test_semantic suite",
+          "\u2705 test(scoped-history): lock claim tags P9-A05,P9-B07,P9-B10"
         ]
       }
     },
@@ -159,7 +159,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "Add P9 scoped history and telemetry unit tests",
@@ -167,11 +167,11 @@
         "changelog_group": "Tests",
         "body_summary": "Cover four modules with claim locks.",
         "included_changes": [
-          "✅ test(scoped-history): cover test_scoped_history suite",
-          "✅ test(scoped-history): cover test_scoped_history_telemetry suite",
-          "✅ test(main): cover test_main suite",
-          "✅ test(semantic): cover test_semantic suite",
-          "✅ test(scoped-history): lock claim tags P9-A05,P9-B07,P9-B10"
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\u2705 test(scoped-history): cover test_scoped_history_telemetry suite",
+          "\u2705 test(main): cover test_main suite",
+          "\u2705 test(semantic): cover test_semantic suite",
+          "\u2705 test(scoped-history): lock claim tags P9-A05,P9-B07,P9-B10"
         ]
       },
       "expect_fail_gate": "craft",
@@ -186,7 +186,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "documentation_update",
-        "gitmoji": "📝",
+        "gitmoji": "\ud83d\udcdd",
         "cc_type": "docs",
         "scope": "adr",
         "description": "document graph_unavailable and redaction posture",
@@ -194,8 +194,8 @@
         "changelog_group": "Documentation",
         "body_summary": "Describe graph_unavailable and redaction semantics in docs only.",
         "included_changes": [
-          "📝 docs(adr): document ADR decision path",
-          "📝 docs(usage): document operator usage"
+          "\ud83d\udcdd docs(adr): document ADR decision path",
+          "\ud83d\udcdd docs(usage): document operator usage"
         ]
       }
     },
@@ -205,7 +205,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "bug_fix",
-        "gitmoji": "🥅",
+        "gitmoji": "\ud83e\udd45",
         "cc_type": "fix",
         "scope": "adr",
         "description": "handle graph_unavailable redaction failures",
@@ -225,7 +225,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "bug_fix",
-        "gitmoji": "🐛",
+        "gitmoji": "\ud83d\udc1b",
         "cc_type": "fix",
         "scope": "telemetry",
         "description": "preserve scoped-history error signals",
@@ -233,12 +233,12 @@
         "changelog_group": "Fixed",
         "body_summary": "Keep fallback none, parser batch results, scrub vars, and REDACTED sentinel.",
         "included_changes": [
-          "🐛 fix(main): stop graph-stage none overwrite",
-          "🐛 fix(telemetry): reuse parser_batch_results markers",
-          "🐛 fix(main): discover renames via name-status only",
-          "🐛 fix(sentry): expand scrub vars for evidence",
-          "🐛 fix(telemetry): preserve REDACTED sentinel",
-          "🐛 fix(telemetry): keep closed-enum fallback tags"
+          "\ud83d\udc1b fix(main): stop graph-stage none overwrite",
+          "\ud83d\udc1b fix(telemetry): reuse parser_batch_results markers",
+          "\ud83d\udc1b fix(main): discover renames via name-status only",
+          "\ud83d\udc1b fix(sentry): expand scrub vars for evidence",
+          "\ud83d\udc1b fix(telemetry): preserve REDACTED sentinel",
+          "\ud83d\udc1b fix(telemetry): keep closed-enum fallback tags"
         ]
       }
     },
@@ -248,7 +248,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "telemetry",
         "description": "improve telemetry scrubbing and metrics",
@@ -256,7 +256,7 @@
         "changelog_group": "Added",
         "body_summary": "Improve scrubbing.",
         "included_changes": [
-          "✨ feat(telemetry): improve scrubbing"
+          "\u2728 feat(telemetry): improve scrubbing"
         ]
       },
       "expect_fail_gate": "type",
@@ -272,7 +272,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "lock Phase 9 claims and ADR path",
@@ -286,11 +286,11 @@
           "Documentation"
         ],
         "included_changes": [
-          "✅ test(scoped-history): cover producer suites",
-          "✅ test(scoped-history): cover telemetry claim suite",
-          "📝 docs(fixtures): document fixture README",
-          "📝 docs(adr): document ADR rename path",
-          "📝 docs(usage): retarget usage links"
+          "\u2705 test(scoped-history): cover producer suites",
+          "\u2705 test(scoped-history): cover telemetry claim suite",
+          "\ud83d\udcdd docs(fixtures): document fixture README",
+          "\ud83d\udcdd docs(adr): document ADR rename path",
+          "\ud83d\udcdd docs(usage): retarget usage links"
         ]
       }
     },
@@ -300,7 +300,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "harden test assertions and expand coverage",
@@ -314,8 +314,8 @@
           "Miscellaneous"
         ],
         "included_changes": [
-          "📝 docs(adr): rename ADR only",
-          "📝 docs(usage): retarget links only"
+          "\ud83d\udcdd docs(adr): rename ADR only",
+          "\ud83d\udcdd docs(usage): retarget links only"
         ]
       },
       "expect_fail_gate": "type",
@@ -331,7 +331,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "harden fixture signing and scoped-history locks",
@@ -345,9 +345,9 @@
           "Documentation"
         ],
         "included_changes": [
-          "✅ test(scoped-history): cover test_scoped_history suite",
-          "📝 docs(fixtures): harden fixture GPG/signing setup",
-          "📝 docs(fixtures): document fixture README"
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\ud83d\udcdd docs(fixtures): harden fixture GPG/signing setup",
+          "\ud83d\udcdd docs(fixtures): document fixture README"
         ]
       }
     },
@@ -357,7 +357,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "expand scoped-history fixture coverage",
@@ -371,8 +371,8 @@
           "Documentation"
         ],
         "included_changes": [
-          "✅ test(scoped-history): cover test_scoped_history suite",
-          "📝 docs(fixtures): document fixture README"
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\ud83d\udcdd docs(fixtures): document fixture README"
         ]
       },
       "expect_fail_gate": "inventory",
@@ -386,7 +386,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "bug_fix",
-        "gitmoji": "🐛",
+        "gitmoji": "\ud83d\udc1b",
         "cc_type": "fix",
         "scope": "scoped-history",
         "description": "harden rename parse and fail-open fallbacks",
@@ -394,11 +394,11 @@
         "changelog_group": "Fixed",
         "body_summary": "Fix NUL rename parse, literal fallback enums, CLI prose reject, and directive-free guidance.",
         "included_changes": [
-          "🐛 fix(scoped-history): parse NUL rename records",
-          "🐛 fix(scoped-history): keep literal none/error fallbacks",
-          "🐛 fix(main): reject bare command CLI prose hints",
-          "🐛 fix(scoped-history): keep Channel-4 guidance directive-free",
-          "🐛 fix(main): preserve producer fail-open path"
+          "\ud83d\udc1b fix(scoped-history): parse NUL rename records",
+          "\ud83d\udc1b fix(scoped-history): keep literal none/error fallbacks",
+          "\ud83d\udc1b fix(main): reject bare command CLI prose hints",
+          "\ud83d\udc1b fix(scoped-history): keep Channel-4 guidance directive-free",
+          "\ud83d\udc1b fix(main): preserve producer fail-open path"
         ]
       }
     },
@@ -408,7 +408,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "git_cg",
         "description": "add producer correctness improvements",
@@ -416,7 +416,7 @@
         "changelog_group": "Added",
         "body_summary": "Feature-framed producer correctness.",
         "included_changes": [
-          "✨ feat(git_cg): touch main and scoped_history"
+          "\u2728 feat(git_cg): touch main and scoped_history"
         ]
       },
       "expect_fail_gate": "type",
@@ -431,7 +431,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "tests_update",
-        "gitmoji": "✅",
+        "gitmoji": "\u2705",
         "cc_type": "test",
         "scope": "scoped-history",
         "description": "lock CLI, public-api, and authority claims",
@@ -445,9 +445,9 @@
           "Documentation"
         ],
         "included_changes": [
-          "✅ test(scoped-history): lock CLI prose and command cases",
-          "✅ test(scoped-history): lock identifier-child public_api fallback",
-          "📝 docs(adr): record ADR cc_type authority row"
+          "\u2705 test(scoped-history): lock CLI prose and command cases",
+          "\u2705 test(scoped-history): lock identifier-child public_api fallback",
+          "\ud83d\udcdd docs(adr): record ADR cc_type authority row"
         ]
       }
     },
@@ -457,7 +457,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "scoped-history",
         "description": "adds guidance for scoped history",
@@ -478,7 +478,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "bug_fix",
-        "gitmoji": "🐛",
+        "gitmoji": "\ud83d\udc1b",
         "cc_type": "fix",
         "scope": "scoped-history",
         "description": "drop directive verbs from split guidance",
@@ -492,8 +492,8 @@
           "Tests"
         ],
         "included_changes": [
-          "🐛 fix(scoped-history): descriptive split-surface guidance only",
-          "✅ test(scoped-history): ban consider in guidance leakage claims"
+          "\ud83d\udc1b fix(scoped-history): descriptive split-surface guidance only",
+          "\u2705 test(scoped-history): ban consider in guidance leakage claims"
         ]
       }
     },
@@ -503,7 +503,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "scoped-history",
         "description": "adds authority leakage guard",
@@ -517,8 +517,8 @@
           "Tests"
         ],
         "included_changes": [
-          "✨ feat(scoped-history): adds authority leakage guard",
-          "✅ test(scoped-history): add assertion"
+          "\u2728 feat(scoped-history): adds authority leakage guard",
+          "\u2705 test(scoped-history): add assertion"
         ]
       },
       "expect_fail_gate": "type",
@@ -533,7 +533,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "semantic",
         "description": "harvest hub and complex callers from payloads",
@@ -547,8 +547,8 @@
           "Tests"
         ],
         "included_changes": [
-          "✨ feat(semantic): add free-harvest semantic helpers",
-          "✅ test(semantic): cover harvest map and absent keys"
+          "\u2728 feat(semantic): add free-harvest semantic helpers",
+          "\u2705 test(semantic): cover harvest map and absent keys"
         ]
       }
     },
@@ -558,7 +558,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "semantic",
         "description": "extract hub and complexity flags from payloads",
@@ -572,8 +572,8 @@
           "Tests"
         ],
         "included_changes": [
-          "✨ feat(semantic): extract hub flags",
-          "✅ test(semantic): cover harvest map"
+          "\u2728 feat(semantic): extract hub flags",
+          "\u2705 test(semantic): cover harvest map"
         ]
       },
       "expect_fail_gate": "semver",
@@ -588,7 +588,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "scoped-history",
         "description": "thread preflight group count into split evidence",
@@ -602,8 +602,8 @@
           "Tests"
         ],
         "included_changes": [
-          "✨ feat(scoped-history): thread preflight groups through main",
-          "✅ test(semantic): cover elevation counter defaults"
+          "\u2728 feat(scoped-history): thread preflight groups through main",
+          "\u2705 test(semantic): cover elevation counter defaults"
         ]
       }
     },
@@ -613,7 +613,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "feature_addition",
-        "gitmoji": "✨",
+        "gitmoji": "\u2728",
         "cc_type": "feat",
         "scope": "scoped-history",
         "description": "wire preflight groups count for split confidence",
@@ -627,8 +627,8 @@
           "Tests"
         ],
         "included_changes": [
-          "✨ feat(scoped-history): wire preflight groups",
-          "✅ test(semantic): cover elevation only"
+          "\u2728 feat(scoped-history): wire preflight groups",
+          "\u2705 test(semantic): cover elevation only"
         ]
       },
       "expect_fail_gate": "semver",
@@ -643,7 +643,7 @@
       "expect": "pass",
       "plan": {
         "intent_id": "documentation_update",
-        "gitmoji": "📝",
+        "gitmoji": "\ud83d\udcdd",
         "cc_type": "docs",
         "scope": "adr",
         "description": "diagram Policy B scoped-history architecture",
@@ -651,8 +651,8 @@
         "changelog_group": "Documentation",
         "body_summary": "Add ADR mermaid overview and usage Related link.",
         "included_changes": [
-          "📝 docs(adr): document ADR decision path",
-          "📝 docs(usage): document operator usage"
+          "\ud83d\udcdd docs(adr): document ADR decision path",
+          "\ud83d\udcdd docs(usage): document operator usage"
         ]
       }
     },
@@ -662,7 +662,7 @@
       "expect": "fail",
       "plan": {
         "intent_id": "bug_fix",
-        "gitmoji": "🥅",
+        "gitmoji": "\ud83e\udd45",
         "cc_type": "fix",
         "scope": "adr",
         "description": "Clarify fail-open fallback for scoped history",
@@ -670,7 +670,7 @@
         "changelog_group": "Fixed",
         "body_summary": "Handle runtime fail-open recovery described in mermaid prose.",
         "included_changes": [
-          "📝 docs(usage): clarify fallback only"
+          "\ud83d\udcdd docs(usage): clarify fallback only"
         ]
       },
       "expect_fail_gate": "type",

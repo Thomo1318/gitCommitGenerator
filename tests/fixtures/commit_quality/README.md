@@ -21,7 +21,7 @@ Freeze of pure presentation helpers against the production SOP matrix pin:
 
 | Letter | Corpus id | Theme |
 | --- | --- | --- |
-| A | TIP-G2 | fixtures README authority prose → docs/NONE; reject security |
+| A | TIP-G2 | fixtures README authority prose → test/NONE; reject security |
 | B | TIP-G3 | ADR + index → docs(adr)/NONE; reject chore/Security |
 | C | TIP-G4 | usage + CHANGELOG → docs/NONE; reject runtime fix |
 | D | TIP-G1 | multi-test + claim tags → test inventory |

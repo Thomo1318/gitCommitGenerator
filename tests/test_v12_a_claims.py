@@ -141,7 +141,7 @@ def test_v12_a02_path_role_priors_evaluation() -> None:
         (["tests/test_foo.py"], "tests", CommitType.TEST, SemVerImpact.NONE, "Tests"),
         (["docs/usage.md"], "docs", CommitType.DOCS, SemVerImpact.NONE, "Documentation"),
         (["docs/ADRs/0163-scoped-reasoning-history.md"], "adr", CommitType.DOCS, SemVerImpact.NONE, "Documentation"),
-        (["tests/fixtures/commit_quality/README.md"], "fixtures", CommitType.DOCS, SemVerImpact.NONE, "Documentation"),
+        (["tests/fixtures/commit_quality/README.md"], "fixtures", CommitType.TEST, SemVerImpact.NONE, "Tests"),
         ([".github/workflows/ci.yml"], "config_ci", CommitType.CI, SemVerImpact.NONE, "Miscellaneous"),
     ]
     for paths, role, cc, sem, group in cases:
