@@ -83,6 +83,21 @@ console = Console()
 # message we must NOT overwrite — critical for safe global-hook operation.
 GENERATING_SOURCES: set[str | None] = {None, "", "template"}
 
+# Truthy tokens for GIT_CG_SKIP_PREPARE (F80 / P-S12-9 message-only rebuilds).
+# Keep aligned with semantic/rank-arbitrate env parsers: 1/true/yes/on.
+_SKIP_PREPARE_TRUTHY: frozenset[str] = frozenset({"1", "true", "yes", "on"})
+
+
+def _is_skip_prepare_enabled() -> bool:
+    """Return True when prepare-commit-msg generation must no-op.
+
+    Used for message-only rebuilds (amend --no-edit / controlled rewrites) so the
+    prepare-commit-msg hook cannot recursively re-enter git-cg. Ordinary hook
+    generation is unchanged unless the operator sets GIT_CG_SKIP_PREPARE.
+    """
+    raw = os.environ.get("GIT_CG_SKIP_PREPARE", "").strip().lower()
+    return raw in _SKIP_PREPARE_TRUTHY
+
 
 class ReviewStateMutationResult(enum.StrEnum):
     """Possible outcomes when mutating issue-reference state during review."""
@@ -2340,6 +2355,14 @@ def _run_commit_generation(
         console.log(f"Commit Msg File: {commit_msg_file}")
         console.log(f"Commit Source: {commit_source}")
         console.log(f"Interactive Mode: {interactive}")
+
+    # F80 / P-S12-9: message-only rebuilds must not re-enter generation via
+    # prepare-commit-msg. --no-verify alone is insufficient when hooks still run
+    # under hk/global hook paths; operators set GIT_CG_SKIP_PREPARE=1 instead.
+    if _is_skip_prepare_enabled():
+        if verbose:
+            console.log("GIT_CG_SKIP_PREPARE enabled; skipping prepare-commit-msg generation.")
+        raise typer.Exit(code=0)
 
     sentry_sdk.add_breadcrumb(category="lifecycle", message="Starting git-cg execution")
 

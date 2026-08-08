@@ -13,6 +13,7 @@ from git_cg.commit_quality import GuardReport as _GuardReport
 from git_cg.main import (
     ReviewState,
     _detect_branch_issue_reference,
+    _is_skip_prepare_enabled,
     _staged_diff_command,
     _validate_commit_source,
     build_generation_messages,
@@ -322,6 +323,94 @@ def test_validate_commit_source_amend_proceed():
 
 def test_validate_commit_source_none():
     assert _validate_commit_source(None, "COMMIT_EDITMSG", False, False) is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("1", True),
+        ("true", True),
+        ("TRUE", True),
+        ("yes", True),
+        ("on", True),
+        ("0", False),
+        ("false", False),
+        ("off", False),
+        ("", False),
+        ("  ", False),
+        ("nope", False),
+    ],
+)
+def test_is_skip_prepare_enabled_truthy_tokens(monkeypatch, raw, expected):
+    """F80: only 1/true/yes/on enable the prepare-commit-msg bypass."""
+    if raw is None:
+        monkeypatch.delenv("GIT_CG_SKIP_PREPARE", raising=False)
+    else:
+        monkeypatch.setenv("GIT_CG_SKIP_PREPARE", raw)
+    assert _is_skip_prepare_enabled() is expected
+
+
+def test_is_skip_prepare_enabled_unset(monkeypatch):
+    monkeypatch.delenv("GIT_CG_SKIP_PREPARE", raising=False)
+    assert _is_skip_prepare_enabled() is False
+
+
+def test_run_commit_generation_skip_prepare_noops_before_source_validation(monkeypatch):
+    """F80: GIT_CG_SKIP_PREPARE exits 0 without validating source or generating."""
+    import git_cg.main as main_mod
+
+    monkeypatch.setenv("GIT_CG_SKIP_PREPARE", "1")
+    called = {"validate": 0}
+
+    def _boom(*_a, **_k):
+        called["validate"] += 1
+        raise AssertionError("_validate_commit_source must not run when skip-prepare is set")
+
+    monkeypatch.setattr(main_mod, "_validate_commit_source", _boom)
+
+    with pytest.raises(typer.Exit) as excinfo:
+        main_mod._run_commit_generation(
+            commit_msg_file="COMMIT_EDITMSG",
+            commit_source="template",
+            extra_args=None,
+            engine="mtplx",
+            dry_run=True,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,
+            interactive=False,
+        )
+    assert excinfo.value.exit_code == 0
+    assert called["validate"] == 0
+
+
+def test_run_commit_generation_without_skip_prepare_still_validates_source(monkeypatch):
+    """Ordinary hook path still hits source validation when skip-prepare is unset."""
+    import git_cg.main as main_mod
+
+    monkeypatch.delenv("GIT_CG_SKIP_PREPARE", raising=False)
+    seen: list[str | None] = []
+
+    def _capture(source, *_a, **_k):
+        seen.append(source)
+        raise typer.Exit(code=0)
+
+    monkeypatch.setattr(main_mod, "_validate_commit_source", _capture)
+
+    with pytest.raises(typer.Exit) as excinfo:
+        main_mod._run_commit_generation(
+            commit_msg_file="COMMIT_EDITMSG",
+            commit_source="template",
+            extra_args=None,
+            engine="mtplx",
+            dry_run=True,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,
+            interactive=False,
+        )
+    assert excinfo.value.exit_code == 0
+    assert seen == ["template"]
 
 
 @patch("subprocess.check_output")
