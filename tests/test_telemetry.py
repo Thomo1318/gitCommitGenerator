@@ -383,17 +383,54 @@ def test_redact_payload_timeout(monkeypatch):
     assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
 
-def test_redact_payload_non_zero_exit(monkeypatch):
+def test_redact_payload_non_zero_exit_without_stdout_fails_closed(monkeypatch):
+    """Non-zero exit with no parseable findings report must still omit (scanner hard fail)."""
     import subprocess
+    from dataclasses import dataclass
 
     from git_cg.telemetry import redact_payload
 
+    @dataclass
+    class MockProcess:
+        stdout: str
+        returncode: int = 1
+
     def mock_run(*args, **kwargs):
-        raise subprocess.CalledProcessError(returncode=1, cmd="betterleaks")
+        assert kwargs.get("check") is False
+        return MockProcess(stdout="")
 
     monkeypatch.setattr(subprocess, "run", mock_run)
     payload = "No secrets here"
     assert redact_payload(payload) == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+
+def test_redact_payload_findings_on_nonzero_exit_are_applied(monkeypatch):
+    """betterleaks exits 1 when leaks are found; stdout JSON must still redact (APC-C)."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+        returncode: int = 1
+
+    def mock_run(*args, **kwargs):
+        assert kwargs.get("check") is False
+        # Use a non-PEM sentinel so pre-commit betterleaks does not treat the
+        # fixture itself as a real private-key finding.
+        findings = [{"Secret": "TEST_FAKE_SCANNER_FINDING_EXIT1"}]
+        return MockProcess(stdout=json.dumps(findings), returncode=1)
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    secret = "TEST_FAKE_SCANNER_FINDING_EXIT1"
+    payload = f"plan includes key material: {secret}"
+    result = redact_payload(payload)
+    assert result == "plan includes key material: [REDACTED]"
+    assert secret not in result
+    assert "[REDACTION FAILED" not in result
 
 
 def test_write_telemetry_state_redact_failure(tmp_path, monkeypatch):
@@ -611,7 +648,7 @@ def test_redact_payload_invokes_betterleaks_with_expected_args(monkeypatch):
     assert captured["cmd"] == ["betterleaks", "stdin", "-f", "json", "-r", "-", "--no-banner", "-l", "fatal"]
     assert captured["kwargs"]["input"] == payload
     assert captured["kwargs"]["text"] is True
-    assert captured["kwargs"]["check"] is True
+    assert captured["kwargs"]["check"] is False
     assert captured["kwargs"]["timeout"] == 5
 
 
@@ -708,6 +745,67 @@ def test_redact_payload_empty_findings_list_returns_unmodified_payload(monkeypat
 
     payload = "perfectly clean payload"
     assert redact_payload(payload) == payload
+
+
+def test_redact_payload_ordinary_message_not_omitted(monkeypatch):
+    """APC-C01: ordinary commit message/plan text must not become the omission token."""
+    import json
+    import subprocess
+    from dataclasses import dataclass
+
+    from git_cg.telemetry import redact_payload
+
+    @dataclass
+    class MockProcess:
+        stdout: str
+        returncode: int = 0
+
+    def mock_run(*args, **kwargs):
+        return MockProcess(stdout=json.dumps([]), returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    message = "📝 docs(usage): clarify graph refresh workspace scope"
+    plan = '{"intent_id":"documentation_update","cc_type":"docs","semver_impact":"NONE"}'
+    assert redact_payload(message) == message
+    assert redact_payload(plan) == plan
+    assert "[REDACTION FAILED" not in redact_payload(message)
+
+
+def test_write_telemetry_state_ordinary_payloads_persist_redacted_fields(tmp_path, monkeypatch):
+    """APC-C01: write path keeps generated_message / commit_plan_json for ordinary text."""
+    import git_cg.telemetry
+    from git_cg.telemetry import GenerationTelemetry, read_telemetry_state, write_telemetry_state
+
+    def mock_redact_payload(payload: str) -> str:
+        # Identity redaction for ordinary payloads (scanner clean).
+        return payload
+
+    monkeypatch.setattr(git_cg.telemetry, "redact_payload", mock_redact_payload)
+
+    message = "📝 docs(usage): clarify graph refresh workspace scope"
+    plan = {"intent_id": "documentation_update", "cc_type": "docs", "semver_impact": "NONE"}
+    telemetry = GenerationTelemetry(
+        trace_id="t-apc-c",
+        thread_id="th-apc-c",
+        diff_hash="dh-apc-c",
+        diff_output="diff --git a/docs/usage.md b/docs/usage.md\n",
+        repo_name="repo",
+        engine="mtplx",
+        model_name="model",
+        system_prompt_hash="ph1",
+        generated_message=message,
+        commit_plan_json=plan,
+        score_card={},
+        path_class_gate="docs_only",
+    )
+    write_telemetry_state(str(tmp_path), telemetry)
+    loaded = read_telemetry_state(str(tmp_path))
+    assert loaded is not None
+    assert loaded.generated_message == message
+    assert loaded.commit_plan_json == plan
+    assert loaded.path_class_gate == "docs_only"
+    assert loaded.generated_message != "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+    assert loaded.commit_plan_json != {"_redaction": "failed"}
 
 
 def test_redact_payload_malformed_json_output(monkeypatch):

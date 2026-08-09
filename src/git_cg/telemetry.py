@@ -684,7 +684,14 @@ def reverse_parse_commit_message(text: str) -> dict[str, Any]:
 def redact_payload(payload: str) -> str:
     """
     Scrub PII and secrets from strings using betterleaks.
-    Acts as a mandatory gateway interceptor before telemetry is enabled.
+
+    Acts as a mandatory gateway interceptor before telemetry is persisted.
+
+    betterleaks exits non-zero (default exit code 1) when findings are present
+    while still emitting a JSON findings list on stdout. Treat parseable
+    findings as a successful scan and apply redactions; only omit the payload
+    when the scanner is missing, times out, or returns unusable output
+    (Issue #212 APC-C).
     """
     if not payload:
         return payload
@@ -695,24 +702,37 @@ def redact_payload(payload: str) -> str:
             input=payload,
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
             timeout=5,
         )
-
-        output = process.stdout.strip()
-        findings = json.loads(output)
-        if not isinstance(findings, list):
-            raise ValueError("Expected JSON list from betterleaks")
-
-        redacted = payload
-        for finding in findings:
-            secret = finding.get("Secret")
-            if secret and secret in redacted:
-                redacted = redacted.replace(secret, "[REDACTED]")
-        return redacted
-    except Exception:
-        # Fail safe if betterleaks is missing or fails to execute
+    except FileNotFoundError, subprocess.TimeoutExpired, OSError:
+        # Fail safe if betterleaks is missing, times out, or cannot execute.
         return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+    except Exception:
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    output = (process.stdout or "").strip()
+    if not output:
+        # No report body: cannot distinguish clean vs broken scanner → omit.
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    try:
+        findings = json.loads(output)
+    except json.JSONDecodeError:
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    if not isinstance(findings, list):
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    # Parseable findings list is authoritative even when exit code is non-zero.
+    redacted = payload
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        secret = finding.get("Secret")
+        if secret and secret in redacted:
+            redacted = redacted.replace(secret, "[REDACTED]")
+    return redacted
 
 
 def _normalize_optional_bool(value: Any) -> bool | None:
