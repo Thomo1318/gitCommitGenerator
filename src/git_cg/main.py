@@ -2971,11 +2971,15 @@ def _run_commit_generation(
         )
 
         try:
-            repo_root_for_bp = None
-            try:
-                repo_root_for_bp = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
-            except Exception:
-                repo_root_for_bp = None
+            # Prefer the already-resolved repo root from generation setup.
+            repo_root_for_bp = repo_root if repo_root not in (None, "") else None
+            if repo_root_for_bp is None:
+                try:
+                    repo_root_for_bp = subprocess.check_output(
+                        ["git", "rev-parse", "--show-toplevel"], text=True
+                    ).strip()
+                except Exception:
+                    repo_root_for_bp = None
             parsed_blueprint = parse_commit_blueprint(
                 blueprint,
                 repo_root=repo_root_for_bp,
@@ -3001,8 +3005,9 @@ def _run_commit_generation(
             parsed_blueprint = None
             blueprint_guidance = None
             blueprint_applied = False
-            if verbose:
-                console.log(f"[yellow]Blueprint ignored ({presentation_fallback_reason}): {safe_msg}[/yellow]")
+            # Operator explicitly passed --blueprint: always surface the safe
+            # rejection notice (hooks still fall open and do not hard-fail).
+            console.print(f"[yellow]Blueprint ignored ({presentation_fallback_reason}): {safe_msg}[/yellow]")
         except Exception as bp_exc:
             hard_fail = bool(strict) and bool(tty_ok)
             safe_msg = type(bp_exc).__name__
@@ -3013,8 +3018,7 @@ def _run_commit_generation(
             parsed_blueprint = None
             blueprint_guidance = None
             blueprint_applied = False
-            if verbose:
-                console.log(f"[yellow]Blueprint ignored (error): {safe_msg}[/yellow]")
+            console.print(f"[yellow]Blueprint ignored (error): {safe_msg}[/yellow]")
 
     while True:
         regen_state = RegenerationState(
@@ -3203,8 +3207,7 @@ def _run_commit_generation(
                         raise typer.Exit(code=2) from _bp_apply_exc
                     presentation_fallback_reason = "error" if kind == "error" else "blueprint"
                     blueprint_applied = False
-                    if verbose:
-                        console.log(f"[yellow]Blueprint apply skipped ({presentation_fallback_reason})[/yellow]")
+                    console.print(f"[yellow]Blueprint apply skipped ({presentation_fallback_reason})[/yellow]")
                 except Exception as _bp_apply_exc:
                     hard_fail = bool(strict) and bool(tty_ok)
                     if hard_fail:
@@ -3212,6 +3215,7 @@ def _run_commit_generation(
                         raise typer.Exit(code=2) from _bp_apply_exc
                     presentation_fallback_reason = "error"
                     blueprint_applied = False
+                    console.print("[yellow]Blueprint apply skipped (error)[/yellow]")
             commit_plan = apply_presentation_overlay(
                 commit_plan,
                 paths=staged_paths,
@@ -3222,6 +3226,9 @@ def _run_commit_generation(
             )
             presentation_overlay_applied = True
             presentation_touched_semver = True
+        except typer.Exit:
+            # Controlled aborts from blueprint hard-fail must propagate.
+            raise
         except Exception as overlay_exc:
             # Presentation overlay must not brick commit generation, but do not
             # silently swallow unexpected failures without a breadcrumb.
@@ -3467,6 +3474,9 @@ def _run_commit_generation(
                         continue
             else:
                 guard_guidance = None
+        except typer.Exit:
+            # Controlled aborts (e.g. strict blueprint / gold hard-fail) must propagate.
+            raise
         except Exception as _guard_exc:
             # Guards must never brick commit generation.
             if verbose:

@@ -2271,6 +2271,32 @@ def test_run_commit_generation_accepts_blueprint_kwarg():
 # ---------------------------------------------------------------------------
 
 
+def test_slice7_strict_blueprint_rejection_preserves_exit_code(monkeypatch, capsys, tmp_path):
+    """Interactive strict + invalid --blueprint must raise typer.Exit(2), not be swallowed."""
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add a focused helper for release packaging.")])
+    import git_cg.main as main_mod
+
+    # tty_ok = interactive and can_open_tty(); force the hard-fail path.
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+    with pytest.raises(typer.Exit) as excinfo:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=True,
+            blueprint="{not-valid-json",
+        )
+    assert excinfo.value.exit_code == 2
+    out = capsys.readouterr().out
+    assert "Blueprint rejected" in out
+    assert writes == []
+
+
 def _guard_dirty_security_plan(
     *,
     description: str = "redact secrets from release packaging",
@@ -2393,11 +2419,7 @@ def test_slice8_guard_regen_shares_gold_budget_and_clears(monkeypatch, capsys, t
     final = telemetry_events[-1]
     assert final.get("hallucination_guard_fired") is True
     assert final.get("gold_regen_attempts") == 1
-    assert final.get("presentation_fallback_reason") in {
-        "hallucination_guard",
-        "none",
-        "low_confidence",
-    }
+    assert final.get("presentation_fallback_reason") == "hallucination_guard"
 
 
 def test_slice8_guard_exhaustion_applies_skeleton_once(monkeypatch, capsys, tmp_path):
@@ -2490,10 +2512,9 @@ def test_slice8_guard_and_gold_share_single_ceiling(monkeypatch, capsys, tmp_pat
     )
     assert result is True
     assert len(writes) == 1
-    # Initial + at most 2 shared wording regens ⇒ indices 0..2 only (never plan 3).
-    assert consumed == sorted(consumed)
-    assert max(consumed) <= 2
-    assert len(consumed) <= 3
+    # Initial + exactly 2 shared wording regens ⇒ indices 0..2 only (never plan 3).
+    assert consumed == [0, 1, 2]
+    assert 3 not in consumed
     final = telemetry_events[-1]
-    assert int(final.get("gold_regen_attempts") or 0) <= 2
+    assert final.get("gold_regen_attempts") == 2
     assert final.get("hallucination_guard_fired") is True
