@@ -899,6 +899,56 @@ def test_process_meta_in_rationale_only_is_not_body_fail() -> None:
     assert "GOLD_PROCESS_META_BODY" not in report.codes()
 
 
+def test_path_class_wording_ignores_rationale_only_claims() -> None:
+    """Path-class product/docs wording bans must ignore non-rendered rationale."""
+    docs_plan = _plan(
+        _intent(
+            "docs_update",
+            "📝",
+            "docs",
+            "NONE",
+            "Documentation",
+            description="document usage flags",
+        ),
+        body="Document the usage-flags operator guide without shipping claims.",
+    )
+    docs_plan = docs_plan.model_copy(
+        update={
+            "rationale": (
+                "Internal provenance only: implement support for claim locks and "
+                "enforce the contract floor during gold self-correction."
+            )
+        }
+    )
+    docs_report = check_commit_gold(
+        docs_plan,
+        None,
+        signals=DiffSignals(files=["docs/usage.md"], only_docs=True, touches_docs=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_DOCS_IMPLEMENTATION_CLAIM" not in docs_report.codes()
+
+    fixtures_plan = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="pin fixture evidence"),
+        body="Pin fixture evidence without product framing.",
+    )
+    fixtures_plan = fixtures_plan.model_copy(
+        update={
+            "rationale": (
+                "Internal provenance only: validate public api and wire telemetry "
+                "during presentation repair; not operator-visible."
+            )
+        }
+    )
+    fixtures_report = check_commit_gold(
+        fixtures_plan,
+        None,
+        signals=DiffSignals(files=["tests/fixtures/pack/data.json"], only_fixtures=True, only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_FIXTURE_PRODUCT_FRAMING" not in fixtures_report.codes()
+
+
 def test_docs_implementation_claim_fires_for_non_docs_cc_type() -> None:
     """Docs-only path family rejects implementation claims even when cc_type is chore."""
     plan = _plan(

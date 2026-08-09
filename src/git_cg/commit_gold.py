@@ -1003,7 +1003,10 @@ def _check_path_class_truth(plan: CommitPlan, signals: DiffSignals) -> list[Gold
     cc_s = str(cc or "").lower()
     sem = getattr(primary.semver_impact, "value", primary.semver_impact)
     sem_s = str(sem or "NONE").upper()
-    blob = _message_blob(plan)
+    # Path-class wording bans inspect operator-visible text only. Rationale is
+    # provenance and must not trip GOLD_FIXTURE_PRODUCT_FRAMING /
+    # GOLD_DOCS_IMPLEMENTATION_CLAIM (same contract as process-meta scans).
+    blob = _message_blob(plan, include_rationale=False)
 
     if family in {"fixtures", "tests", "docs"} and sem_s in {"PATCH", "MINOR", "MAJOR"}:
         findings.append(
