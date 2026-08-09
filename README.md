@@ -248,7 +248,7 @@ Persisted presentation fields (no raw diffs, prompts, commit bodies, blueprint J
 | `GIT_CG_ENABLE_SEMANTIC` | `1` / `true` / `yes` / `on` | Enable Phase 1 semantic producers (default off). |
 | `GIT_CG_RANK_ARBITRATE` | `auto` (default) / `off` | Low-confidence intent arbitration gate for interactive TTY. |
 
-See also: [usage flags](usage.md), epic [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204), gold [#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201), scoped history [#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163).
+See also: [usage flags](docs/usage.md), epic [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204), gold [#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201), scoped history [#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163).
 
 ---
 
