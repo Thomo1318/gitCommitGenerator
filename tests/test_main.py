@@ -2260,13 +2260,31 @@ def test_run_commit_generation_accepts_blueprint_kwarg():
 # ---------------------------------------------------------------------------
 
 
-def _guard_dirty_plan(
+def _guard_dirty_security_plan(
     *,
     description: str = "redact secrets from release packaging",
     body: str = "Remove credentials leakage from the helper path.",
 ):
     """Product-src plan that trips GUARD_SECURITY_NOUN (no security path evidence)."""
     return _gold_plan(body=body, description=description, scope="release")
+
+
+def _guard_dirty_unrepairable_plan(
+    *,
+    description: str = "adds guidance for release packaging",
+    body: str = "Adds guidance rows for the helper path.",
+):
+    """Product-src plan that trips a non-auto-repairable presentation guard."""
+    return _gold_plan(body=body, description=description, scope="release")
+
+
+def _guard_dirty_plan(
+    *,
+    description: str = "adds guidance for release packaging",
+    body: str = "Adds guidance rows for the helper path.",
+):
+    """Backward-compatible alias: non-auto-repairable dirty plan for regen/skeleton tests."""
+    return _guard_dirty_unrepairable_plan(description=description, body=body)
 
 
 def _guard_clean_plan():
@@ -2285,8 +2303,51 @@ def _enable_real_presentation_guards(monkeypatch):
     )
 
 
+def test_slice8_security_noun_repairs_without_regen(monkeypatch, capsys, tmp_path):
+    """GUARD_SECURITY_NOUN is deterministically repaired; no shared regen / skeleton."""
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _guard_dirty_security_plan(),
+            _guard_clean_plan(),  # must not be consumed
+        ],
+        telemetry_events=telemetry_events,
+    )
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+        gold_strict=True,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    assert "deterministic security-noun repair" in out
+    assert "shared regen" not in out
+    assert "skeleton fallback" not in out.lower()
+    written = writes[0].lower()
+    assert "secrets" not in written
+    assert "credentials" not in written
+    assert "sensitive" in written or "access material" in written
+    assert "[presentation-skeleton-fallback]" not in writes[0]
+    final = telemetry_events[-1]
+    assert final.get("hallucination_guard_fired") is True
+    assert int(final.get("gold_regen_attempts") or 0) == 0
+    assert final.get("gold_blocked") is False
+
+
 def test_slice8_guard_regen_shares_gold_budget_and_clears(monkeypatch, capsys, tmp_path):
-    """Dirty guard → one shared regen → clean plan writes; no gold fan-out."""
+    """Dirty unrepairable guard → one shared regen → clean plan writes; no gold fan-out."""
     telemetry_events: list[dict] = []
     writes = _gold_harness_mocks(
         monkeypatch,
@@ -2329,7 +2390,7 @@ def test_slice8_guard_regen_shares_gold_budget_and_clears(monkeypatch, capsys, t
 
 
 def test_slice8_guard_exhaustion_applies_skeleton_once(monkeypatch, capsys, tmp_path):
-    """Three dirty plans: two shared regens then skeleton fallback; hook path still writes."""
+    """Three dirty unrepairable plans: two shared regens then skeleton fallback; hook path still writes."""
     telemetry_events: list[dict] = []
     dirty = _guard_dirty_plan()
     writes = _gold_harness_mocks(
@@ -2357,10 +2418,9 @@ def test_slice8_guard_exhaustion_applies_skeleton_once(monkeypatch, capsys, tmp_
     assert "shared regen 1/2" in out
     assert "shared regen 2/2" in out
     assert "deterministic skeleton fallback" in out
-    # Written message must be skeleton-shaped, not the dirty secrets claim.
+    # Written message must be skeleton-shaped, not the dirty capability claim.
     written = writes[0].lower()
-    assert "credentials" not in written
-    assert "secrets" not in written
+    assert "adds guidance" not in written
     final = telemetry_events[-1]
     assert final.get("hallucination_guard_fired") is True
     assert final.get("gold_regen_attempts") == 2
@@ -2371,7 +2431,7 @@ def test_slice8_guard_exhaustion_applies_skeleton_once(monkeypatch, capsys, tmp_
 def test_slice8_guard_and_gold_share_single_ceiling(monkeypatch, capsys, tmp_path):
     """Guard regen then gold fail must not exceed the shared 0..2 ceiling (no 4th LLM)."""
     telemetry_events: list[dict] = []
-    # Pass0: guard dirty (security noun)
+    # Pass0: guard dirty (unrepairable capability claim)
     # Pass1: guard-clean subject, gold-dirty banned body opener
     # Pass2+: still dirty under shared counter → skeleton / gold exhaust; no 4th LLM
     plans = [

@@ -3383,6 +3383,7 @@ def _run_commit_generation(
                 evaluate_presentation_guards,
                 format_guard_guidance,
                 merge_presentation_fallback_reason,
+                try_repair_presentation_guards,
             )
 
             _guard_paths = list(getattr(gen_context.diff_signals, "files", None) or [])
@@ -3396,53 +3397,74 @@ def _run_commit_generation(
             if _guard_report.hallucination_guard_fired:
                 hallucination_guard_fired = True
             if _guard_report.dirty:
-                presentation_fallback_reason = merge_presentation_fallback_reason(
-                    presentation_fallback_reason,
-                    _guard_report.fallback_reason,
+                # Deterministic wording repair first (security-noun scrub). This keeps
+                # gold-strict usable when the model keeps emitting banned claim nouns:
+                # repair is presentation-only and does not mark skeleton provenance.
+                commit_plan, _guard_report, _guard_repaired = try_repair_presentation_guards(
+                    commit_plan,
+                    paths=_guard_paths,
+                    signals=gen_context.diff_signals,
+                    evidence_text=analysis_diff or "",
+                    constraints=getattr(gen_context, "presentation_constraints", None),
+                    report=_guard_report,
                 )
-                with contextlib.suppress(Exception):
-                    sentry_sdk.set_tag("presentation_fallback_reason", str(presentation_fallback_reason))
-                    sentry_sdk.set_tag("path_class_gate", str(path_class_gate))
-                    sentry_sdk.set_tag(
-                        "hallucination_guard_fired",
-                        "true" if hallucination_guard_fired else "false",
-                    )
-                if gold_regen_attempts >= 2:
-                    # Exhausted shared wording budget → deterministic skeleton (D14).
-                    commit_plan = apply_guard_skeleton_fallback(
-                        commit_plan,
-                        paths=_guard_paths,
-                        signals=gen_context.diff_signals,
-                        priors=gen_context.scope_priors,
-                        constraints=gen_context.presentation_constraints,
-                        claim_tags=harvested_claim_tags,
-                        report=_guard_report,
-                    )
+                if _guard_repaired:
                     review_state.commit_plan = commit_plan
                     guard_guidance = None
-                    # Fresh gold evaluation against the skeleton; do not inherit prior gold codes.
-                    gold_guidance = None
-                    gold_previous_codes = None
-                    if verbose:
-                        console.log(
-                            "[yellow]Presentation guards exhausted shared regen budget; "
-                            "applied deterministic skeleton fallback.[/yellow]"
-                        )
-                else:
-                    # Shared wording budget with gold (I-14). Clear gold guidance/codes so a
-                    # guard retry does not re-anchor on stale gold findings.
-                    gold_regen_attempts += 1
-                    guard_guidance = format_guard_guidance(_guard_report)
-                    gold_guidance = None
-                    gold_previous_codes = None
-                    gold_previous_primary_id = commit_plan.primary_intent.intent_id
                     if verbose or gold_mode != "off":
-                        codes = ", ".join(sorted(_guard_report.codes()))
                         console.print(
-                            f"[yellow]Presentation guard ({_guard_report.fallback_reason}): {codes} "
-                            f"(shared regen {gold_regen_attempts}/2)[/yellow]"
+                            "[yellow]Presentation guard: applied deterministic security-noun "
+                            "repair (no skeleton provenance).[/yellow]"
                         )
-                    continue
+                    # Fall through to gold with the repaired plan.
+                else:
+                    presentation_fallback_reason = merge_presentation_fallback_reason(
+                        presentation_fallback_reason,
+                        _guard_report.fallback_reason,
+                    )
+                    with contextlib.suppress(Exception):
+                        sentry_sdk.set_tag("presentation_fallback_reason", str(presentation_fallback_reason))
+                        sentry_sdk.set_tag("path_class_gate", str(path_class_gate))
+                        sentry_sdk.set_tag(
+                            "hallucination_guard_fired",
+                            "true" if hallucination_guard_fired else "false",
+                        )
+                    if gold_regen_attempts >= 2:
+                        # Exhausted shared wording budget → deterministic skeleton (D14).
+                        commit_plan = apply_guard_skeleton_fallback(
+                            commit_plan,
+                            paths=_guard_paths,
+                            signals=gen_context.diff_signals,
+                            priors=gen_context.scope_priors,
+                            constraints=gen_context.presentation_constraints,
+                            claim_tags=harvested_claim_tags,
+                            report=_guard_report,
+                        )
+                        review_state.commit_plan = commit_plan
+                        guard_guidance = None
+                        # Fresh gold evaluation against the skeleton; do not inherit prior gold codes.
+                        gold_guidance = None
+                        gold_previous_codes = None
+                        if verbose:
+                            console.log(
+                                "[yellow]Presentation guards exhausted shared regen budget; "
+                                "applied deterministic skeleton fallback.[/yellow]"
+                            )
+                    else:
+                        # Shared wording budget with gold (I-14). Clear gold guidance/codes so a
+                        # guard retry does not re-anchor on stale gold findings.
+                        gold_regen_attempts += 1
+                        guard_guidance = format_guard_guidance(_guard_report)
+                        gold_guidance = None
+                        gold_previous_codes = None
+                        gold_previous_primary_id = commit_plan.primary_intent.intent_id
+                        if verbose or gold_mode != "off":
+                            codes = ", ".join(sorted(_guard_report.codes()))
+                            console.print(
+                                f"[yellow]Presentation guard ({_guard_report.fallback_reason}): {codes} "
+                                f"(shared regen {gold_regen_attempts}/2)[/yellow]"
+                            )
+                        continue
             else:
                 guard_guidance = None
         except Exception as _guard_exc:

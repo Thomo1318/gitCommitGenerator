@@ -57,11 +57,13 @@ from git_cg.commit_quality import (
     min_included_change_bullets,
     presentation_constraints,
     prose_has_security_negative_markers,
+    repair_security_noun_claims,
     required_changelog_groups,
     security_claims_without_path_evidence,
     semver_presentation_ceiling,
     slice9_letter_map,
     strip_included_changes_from_body_summary,
+    try_repair_presentation_guards,
 )
 from git_cg.intent import DiffSignals
 from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact, TrailerPriors
@@ -2080,6 +2082,79 @@ def test_format_guard_guidance_directive_free() -> None:
     assert "preferred_type" not in text.lower()
     assert "OVERRIDE" not in text
     assert "intent_id" in text  # authority preservation note
+
+
+def test_format_guard_guidance_does_not_repoison_security_nouns() -> None:
+    plan = _plan(
+        intent_id="validation_update",
+        gitmoji="🦺",
+        cc_type=CommitType.FIX,
+        scope="telemetry",
+        description="redact secrets on scanner exit",
+        semver=SemVerImpact.PATCH,
+        changelog="Changed",
+    )
+    plan.body_summary = "Keep ordinary payloads when secrets are found."
+    report = evaluate_presentation_guards(
+        plan,
+        paths=["src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+    )
+    assert "GUARD_SECURITY_NOUN" in report.codes()
+    text = format_guard_guidance(report).lower()
+    # Guidance must not re-inject banned claim nouns into the regen prompt.
+    for tok in ("secrets", "secret", "credentials", "credential", "password", "token", "api key", "apikey"):
+        if " " in tok:
+            assert tok not in text
+        else:
+            assert re.search(rf"\b{re.escape(tok)}\b", text) is None
+
+
+def test_repair_security_noun_claims_scrubs_wording() -> None:
+    plan = _plan(
+        intent_id="validation_update",
+        gitmoji="🦺",
+        cc_type=CommitType.FIX,
+        scope="telemetry",
+        description="apply betterleaks secrets redaction on exit 1",
+        semver=SemVerImpact.PATCH,
+        changelog="Changed",
+    )
+    plan.body_summary = "Keep ordinary payloads when secrets are found."
+    out, changed = repair_security_noun_claims(
+        plan,
+        paths=["src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+    )
+    assert changed is True
+    blob = f"{out.primary_intent.description}\n{out.body_summary}".lower()
+    assert "secret" not in blob
+    assert "sensitive" in blob
+    post = evaluate_presentation_guards(
+        out,
+        paths=["src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+    )
+    assert post.dirty is False
+
+
+def test_try_repair_presentation_guards_clears_security_noun_only() -> None:
+    plan = _plan(
+        intent_id="validation_update",
+        gitmoji="🦺",
+        cc_type=CommitType.FIX,
+        scope="telemetry",
+        description="redact secrets from telemetry payloads",
+        semver=SemVerImpact.PATCH,
+        changelog="Changed",
+    )
+    plan.body_summary = "Drop credentials framing on ordinary writes."
+    repaired, report, ok = try_repair_presentation_guards(
+        plan,
+        paths=["src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+    )
+    assert ok is True
+    assert report.dirty is False
+    blob = f"{repaired.primary_intent.description}\n{repaired.body_summary}".lower()
+    assert "secret" not in blob
+    assert "credential" not in blob
 
 
 def test_apply_guard_skeleton_fallback_preserves_identity_and_docs_force() -> None:

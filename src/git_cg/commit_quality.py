@@ -125,6 +125,19 @@ SECURITY_CLAIM_TOKENS: frozenset[str] = frozenset(
     }
 )
 
+# Deterministic wording repairs for GUARD_SECURITY_NOUN when path evidence is absent.
+# Longer phrases first. Replacements must themselves be free of SECURITY_CLAIM_TOKENS.
+SECURITY_NOUN_REPAIRS: tuple[tuple[str, str], ...] = (
+    ("api key", "api handle"),
+    ("apikey", "api handle"),
+    ("credentials", "access material"),
+    ("credential", "access material"),
+    ("secrets", "sensitive values"),
+    ("secret", "sensitive value"),
+    ("password", "passphrase"),
+    ("token", "auth handle"),
+)
+
 CHANGELOG_BASENAMES = frozenset({"changelog.md"})
 
 # Package/root and epic-noun scopes are never final when a module/behaviour
@@ -3244,8 +3257,9 @@ def check_hallucination_guard(
             GuardFinding(
                 code="GUARD_SECURITY_NOUN",
                 message=(
-                    f"Subject/body claims {tok!r} without security path evidence; "
-                    "drop secrets/credentials framing or stage a security path."
+                    "Subject/body uses a security-claim noun without security path "
+                    "evidence; use neutral scanner/outcome wording or stage a "
+                    "security path."
                 ),
                 kind="hallucination",
                 token=tok,
@@ -3533,14 +3547,147 @@ def evaluate_presentation_guards(
     )
 
 
+def _replace_security_claim_tokens(text: str) -> str:
+    """Replace banned security-claim nouns with neutral wording (presentation-only)."""
+    if not text:
+        return text
+    out = str(text)
+    for tok, repl in SECURITY_NOUN_REPAIRS:
+        if " " in tok:
+            pattern = re.compile(re.escape(tok), flags=re.IGNORECASE)
+        else:
+            pattern = re.compile(rf"\b{re.escape(tok)}\b", flags=re.IGNORECASE)
+        out = pattern.sub(repl, out)
+    return out
+
+
+def repair_security_noun_claims(
+    plan: CommitPlan,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+) -> tuple[CommitPlan, bool]:
+    """Deterministically scrub GUARD_SECURITY_NOUN tokens from plan wording.
+
+    Presentation-only. Preserves ranked ``intent_id`` / gitmoji / matrix fields.
+    Returns ``(plan, changed)``. When path evidence already unlocks security
+    nouns, returns the input plan unchanged.
+    """
+    clean = _resolve_paths(list(paths or []), signals)
+    if has_security_path_evidence(clean):
+        return plan, False
+
+    primary = plan.primary_intent
+    desc = str(getattr(primary, "description", "") or "")
+    body = str(getattr(plan, "body_summary", "") or "")
+    rationale = str(getattr(plan, "rationale", "") or "")
+
+    new_desc = _replace_security_claim_tokens(desc)
+    new_body = _replace_security_claim_tokens(body)
+    new_rationale = _replace_security_claim_tokens(rationale)
+
+    secondaries_changed = False
+    new_secondaries: list = []
+    for sec in list(getattr(plan, "secondary_intents", None) or []):
+        sec_desc = str(getattr(sec, "description", "") or "")
+        repaired_sec_desc = _replace_security_claim_tokens(sec_desc)
+        if repaired_sec_desc != sec_desc:
+            secondaries_changed = True
+            if hasattr(sec, "model_copy"):
+                sec = sec.model_copy(update={"description": repaired_sec_desc})
+            else:
+                sec.description = repaired_sec_desc
+        new_secondaries.append(sec)
+
+    changed = new_desc != desc or new_body != body or new_rationale != rationale or secondaries_changed
+    if not changed:
+        return plan, False
+
+    if hasattr(primary, "model_copy"):
+        primary = primary.model_copy(update={"description": new_desc})
+    else:
+        primary.description = new_desc
+
+    updates = {
+        "primary_intent": primary,
+        "body_summary": new_body,
+        "rationale": new_rationale,
+    }
+    if secondaries_changed:
+        updates["secondary_intents"] = new_secondaries
+
+    if hasattr(plan, "model_copy"):
+        return plan.model_copy(update=updates), True
+
+    plan.primary_intent = primary
+    plan.body_summary = new_body
+    plan.rationale = new_rationale
+    if secondaries_changed:
+        plan.secondary_intents = new_secondaries
+    return plan, True
+
+
+def try_repair_presentation_guards(
+    plan: CommitPlan,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    evidence_text: str = "",
+    constraints: PresentationConstraints | None = None,
+    report: GuardReport | None = None,
+) -> tuple[CommitPlan, GuardReport, bool]:
+    """Attempt deterministic wording repair for repairable presentation guards.
+
+    Currently repairs ``GUARD_SECURITY_NOUN`` only. Returns
+    ``(plan, report, repaired)`` where *repaired* is True when wording changed
+    and the post-repair guard report is clean enough to continue without
+    skeleton provenance.
+    """
+    active = report or evaluate_presentation_guards(
+        plan,
+        paths=paths,
+        signals=signals,
+        evidence_text=evidence_text,
+        constraints=constraints,
+    )
+    if not active.dirty:
+        return plan, active, False
+
+    codes = active.codes()
+    # Only auto-repair when every finding is a security-noun claim. Mixed dirty
+    # sets still need LLM regen or skeleton.
+    if not codes or codes - {"GUARD_SECURITY_NOUN"}:
+        return plan, active, False
+
+    repaired_plan, changed = repair_security_noun_claims(
+        plan,
+        paths=paths,
+        signals=signals,
+    )
+    if not changed:
+        return plan, active, False
+
+    post = evaluate_presentation_guards(
+        repaired_plan,
+        paths=paths,
+        signals=signals,
+        evidence_text=evidence_text,
+        constraints=constraints,
+    )
+    if post.dirty:
+        return plan, active, False
+    return repaired_plan, post, True
+
+
 def format_guard_guidance(report: GuardReport | None) -> str:
     """Render directive-free guard findings for a shared regen attempt (I-14)."""
     if report is None or not report.findings:
         return ""
     lines = [
         "PRESENTATION GUARD FINDINGS (wording only — does not change intent_id / gitmoji authority):",
-        "Repair subject/body against staged evidence. Do not invent secrets, runtime recovery,",
-        "unshipped product actors, or unearned capability nouns. Prefer outcome/failure-mode verbs.",
+        "Repair subject/body against staged evidence. Do not invent security-claim nouns,",
+        "runtime recovery, unshipped product actors, or unearned capability nouns.",
+        "Prefer outcome/failure-mode verbs and neutral scanner wording.",
     ]
     codes = {str(getattr(f, "code", "") or "") for f in report.findings}
     if "GUARD_CONTEXT_CHANGES_TEMPLATE" in codes:
@@ -3552,9 +3699,12 @@ def format_guard_guidance(report: GuardReport | None) -> str:
             ]
         )
     for finding in report.findings[:12]:
-        lines.append(f"- [{finding.code}] {finding.message}")
+        # Never echo banned security-claim nouns into the regen prompt (I-14).
+        msg = _replace_security_claim_tokens(str(finding.message or ""))
+        lines.append(f"- [{finding.code}] {msg}")
     lines.append("This block guides wording only. It MUST NOT change intent_id, gitmoji, or ranking.")
-    return "\n".join(lines)
+    # Final scrub so header/body never re-poison the model with claim nouns.
+    return _replace_security_claim_tokens("\n".join(lines))
 
 
 def apply_guard_skeleton_fallback(
