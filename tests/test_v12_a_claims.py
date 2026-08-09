@@ -35,6 +35,18 @@ from git_cg.models import ChangelogGroup, CommitBlueprint, CommitType, SemVerImp
 from git_cg.ranking_confidence import REASON_MARGIN_BELOW_LOW_THRESHOLD, RankingConfidence
 from git_cg.scope_canon import normalize_scope
 
+
+@pytest.fixture(autouse=True)
+def _v12_a_never_calls_ranker(monkeypatch: pytest.MonkeyPatch):
+    """Module-wide no-ranker contract for the V12-A claim pack."""
+    import git_cg.intent as intent_mod
+
+    def _boom(*_a, **_k):
+        raise AssertionError("ranker invoked from V12-A pack")
+
+    monkeypatch.setattr(intent_mod, "rank_commit_intents", _boom)
+
+
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "commit_quality"
 CORPUS_PATH = FIXTURE_DIR / "corpus.json"
 EVAL_AN_PATH = FIXTURE_DIR / "eval_an.json"

@@ -424,7 +424,7 @@ def test_commit_quality_corpus_case(
     case = _case_map(corpus)[case_id]
     expected = goldens["cases"][case_id]
     snap = _compute_snapshot(case)
-    plan = snap.pop("_plan")
+    plan = snap["_plan"]
 
     # Identity lock
     assert snap["overlay"]["intent_id"] == snap["overlay"]["preserved_ranked_intent_id"] == "feature_addition"
@@ -432,8 +432,8 @@ def test_commit_quality_corpus_case(
     assert plan.primary_intent.intent_id == "feature_addition"
     assert plan.primary_intent.gitmoji == "✨"
 
-    # Full golden snapshot (presentation fields)
-    comparable = {k: v for k, v in snap.items()}
+    # Full golden snapshot (presentation fields) — exclude internal plan object.
+    comparable = {k: v for k, v in snap.items() if k != "_plan"}
     assert comparable["diff_class"] == expected["diff_class"], case_id
     assert comparable["priors"] == expected["priors"], case_id
     assert comparable["constraints"] == expected["constraints"], case_id
@@ -523,9 +523,7 @@ def _build_eval_plan(plan_fields: dict[str, Any]):
                 cc_type=st,
                 scope=fields.get("scope"),
                 description=f"secondary {st}",
-                semver_impact=(
-                    "NONE" if fields.get("semver_impact") == "NONE" else fields.get("semver_impact", "NONE")
-                ),
+                semver_impact="NONE",
                 changelog_group=grp,
                 construct=True,
             )

@@ -1025,6 +1025,8 @@ def test_stub_frozen_and_role_validated() -> None:
     with pytest.raises(ValueError):
         Stub(role="not-a-role", surface="x", suggested_cc_type=CommitType.TEST)
     assert s.role == "test"
+    with pytest.raises((TypeError, AttributeError, ValidationError)):
+        s.role = "docs"  # type: ignore[misc]
 
 
 def test_min_bullets_multi_test_modules_counts_modules() -> None:
