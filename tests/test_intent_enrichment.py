@@ -251,3 +251,44 @@ def test_named_semantic_fixture_changes_only_when_enabled(sop_matrix: list[dict]
     # Without facts, semantic-on matches semantic-off for this baseline signal set.
     on_no_facts = [(r.intent_id, r.score) for r in rank_commit_intents(signals, sop_matrix, enable_semantic=True)]
     assert on_no_facts == off
+
+
+def test_product_markers_quarantined_for_pure_non_product_paths(matrix_vocab: frozenset[str]) -> None:
+    """Shared product-marker quarantine applies to signal gen + semantic enrichment."""
+    from git_cg.intent import _PRODUCT_ONLY_MARKERS
+
+    signals = DiffSignals(
+        only_docs=True,
+        touches_docs=True,
+        touches_security=True,
+        validation_added=True,
+        error_handling_added=True,
+        adds_public_api=True,
+        changes_architecture=True,
+        files=["docs/usage.md"],
+    )
+    generated = _generate_signal_markers(signals)
+    assert generated.isdisjoint(_PRODUCT_ONLY_MARKERS)
+
+    facts = SemanticEnrichmentFacts(
+        fingerprints=FingerprintEnrichmentFacts(
+            markers=sorted(_PRODUCT_ONLY_MARKERS),
+        )
+    )
+    markers = collect_active_markers(
+        signals,
+        enrichment=facts,
+        enable_semantic=True,
+        matrix_vocab=matrix_vocab | _PRODUCT_ONLY_MARKERS,
+    )
+    assert markers.isdisjoint(_PRODUCT_ONLY_MARKERS)
+
+    # Product paths still receive product markers from signals.
+    product = DiffSignals(
+        files=["src/git_cg/main.py"],
+        touches_security=True,
+        validation_added=True,
+        adds_public_api=True,
+    )
+    product_markers = _generate_signal_markers(product)
+    assert product_markers & _PRODUCT_ONLY_MARKERS

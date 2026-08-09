@@ -23,6 +23,35 @@ from pydantic import BaseModel, Field
 
 from git_cg.semantic_flags import is_semantic_enabled
 
+# Product/runtime markers that must not promote product ranking on pure
+# docs/tests/fixtures path classes. Shared by signal generation and semantic
+# enrichment so the quarantine lists cannot drift (P-S12 / CodeRabbit).
+_PRODUCT_ONLY_MARKERS: frozenset[str] = frozenset(
+    {
+        "runtime_logic_changed",
+        "functional_code_changed",
+        "new_api",
+        "new_user_facing_capability",
+        "new_command",
+        "major_subsystem_restructured",
+        "core_architecture_changed",
+        "exception_handling_added",
+        "error_handling_improved",
+        "try_except_added",
+        "internal_restructure",
+        "security_vulnerability_fixed",
+        "privacy_issue_fixed",
+        "validation_added",
+        "validation_hardened",
+        "schema_validation_changed",
+        "security_tooling_only_without_fix",
+        "secret_reference_changed",
+        "centralize_logic",
+        "deduplicate_code",
+        "extract_shared_helper",
+    }
+)
+
 
 class DiffSignals(BaseModel):
     """Deterministic signals extracted from a staged git diff."""
@@ -871,20 +900,7 @@ def collect_active_markers(
     # P-S12: fingerprint runtime_logic_changed must not promote product ranking on
     # pure docs/tests/fixtures; retain path-family markers only.
     if signals.only_docs or signals.only_tests or signals.only_fixtures:
-        _product_enrichment = {
-            "runtime_logic_changed",
-            "functional_code_changed",
-            "new_api",
-            "new_user_facing_capability",
-            "new_command",
-            "major_subsystem_restructured",
-            "core_architecture_changed",
-            "exception_handling_added",
-            "error_handling_improved",
-            "try_except_added",
-            "internal_restructure",
-        }
-        enriched -= _product_enrichment
+        enriched -= _PRODUCT_ONLY_MARKERS
     markers |= enriched
     return markers
 
@@ -1019,25 +1035,27 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
         markers.update(["packaged_data_changed", "wheel_or_sdist_config_changed"])
 
     # Security & Validation / Features & API / Architecture
-    # P-S12: quarantine product/runtime markers for pure docs/tests/fixtures.
-    non_product = bool(signals.only_docs or signals.only_tests or signals.only_fixtures)
-    if not non_product:
-        if signals.touches_security:
-            markers.update(["security_vulnerability_fixed", "privacy_issue_fixed"])
-        if signals.validation_added:
-            markers.update(["validation_added", "validation_hardened", "schema_validation_changed"])
-        if signals.error_handling_added:
-            markers.update(["exception_handling_added", "error_handling_improved", "try_except_added"])
-        if signals.secret_scanning_changed or signals.secrets_management_changed:
-            markers.update(["security_tooling_only_without_fix", "secret_reference_changed"])
+    # Always generate from signals, then quarantine product/runtime markers for
+    # pure docs/tests/fixtures via the shared _PRODUCT_ONLY_MARKERS set.
+    if signals.touches_security:
+        markers.update(["security_vulnerability_fixed", "privacy_issue_fixed"])
+    if signals.validation_added:
+        markers.update(["validation_added", "validation_hardened", "schema_validation_changed"])
+    if signals.error_handling_added:
+        markers.update(["exception_handling_added", "error_handling_improved", "try_except_added"])
+    if signals.secret_scanning_changed or signals.secrets_management_changed:
+        markers.update(["security_tooling_only_without_fix", "secret_reference_changed"])
 
-        if signals.adds_public_api:
-            markers.update(["new_api", "new_user_facing_capability", "functional_code_changed"])
+    if signals.adds_public_api:
+        markers.update(["new_api", "new_user_facing_capability", "functional_code_changed"])
 
-        if signals.changes_architecture:
-            markers.update(["major_subsystem_restructured", "core_architecture_changed"])
-        if signals.centralized_config_resolution or signals.new_shared_module:
-            markers.update(["centralize_logic", "deduplicate_code", "extract_shared_helper", "internal_restructure"])
+    if signals.changes_architecture:
+        markers.update(["major_subsystem_restructured", "core_architecture_changed"])
+    if signals.centralized_config_resolution or signals.new_shared_module:
+        markers.update(["centralize_logic", "deduplicate_code", "extract_shared_helper", "internal_restructure"])
+
+    if signals.only_docs or signals.only_tests or signals.only_fixtures:
+        markers -= _PRODUCT_ONLY_MARKERS
 
     # CI/CD & Hooks
     if signals.touches_ci:
