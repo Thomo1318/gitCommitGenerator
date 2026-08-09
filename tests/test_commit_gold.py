@@ -871,5 +871,52 @@ def test_fixtures_path_class_semver_ceiling() -> None:
         presentation_overlay_applied=True,
     )
     codes = report.codes()
-    assert "GOLD_PATH_CLASS_SEMVER_CEILING" in codes or "GOLD_PATH_CLASS_TYPE_MISMATCH" in codes
+    assert "GOLD_PATH_CLASS_SEMVER_CEILING" in codes
+    assert "GOLD_PATH_CLASS_TYPE_MISMATCH" in codes
+    assert not report.ok_for_mode("strict")
+
+
+def test_process_meta_in_rationale_only_is_not_body_fail() -> None:
+    """Process-meta phrases in non-rendered rationale must not trip GOLD_PROCESS_META_BODY."""
+    plan = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="cover staged tests"),
+        body="Cover staged fixture evidence without product framing.",
+    )
+    plan = plan.model_copy(
+        update={
+            "rationale": (
+                "Internal note: deterministic presentation fallback after guard exhaustion "
+                "with shared regen budget; not operator-visible."
+            )
+        }
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["tests/test_foo.py"], only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_PROCESS_META_BODY" not in report.codes()
+
+
+def test_docs_implementation_claim_fires_for_non_docs_cc_type() -> None:
+    """Docs-only path family rejects implementation claims even when cc_type is chore."""
+    plan = _plan(
+        _intent(
+            "chore_maintenance",
+            "🔧",
+            "chore",
+            "NONE",
+            "Miscellaneous",
+            description="implement support for claim locks",
+        ),
+        body="Implement the contract floor and add support for staged claim locks.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["docs/usage.md"], only_docs=True, touches_docs=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_DOCS_IMPLEMENTATION_CLAIM" in report.codes()
     assert not report.ok_for_mode("strict")

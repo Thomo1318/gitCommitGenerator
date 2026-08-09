@@ -876,14 +876,21 @@ def _check_contract_smoke(
     ]
 
 
-def _message_blob(plan: CommitPlan) -> str:
-    """Lowercased subject+body blob for phrase matching."""
+def _message_blob(plan: CommitPlan, *, include_rationale: bool = True) -> str:
+    """Lowercased subject+body blob for phrase matching.
+
+    ``rationale`` is internal provenance and is not rendered by ``CommitPlan.render()``.
+    Callers that inspect operator-visible wording should pass
+    ``include_rationale=False`` so non-rendered process-meta notes cannot trip
+    body/subject guards.
+    """
     primary = plan.primary_intent
     parts = [
         str(getattr(primary, "description", "") or ""),
         str(getattr(plan, "body_summary", "") or ""),
-        str(getattr(plan, "rationale", "") or ""),
     ]
+    if include_rationale:
+        parts.append(str(getattr(plan, "rationale", "") or ""))
     for sec in getattr(plan, "secondary_intents", None) or []:
         parts.append(str(getattr(sec, "description", "") or ""))
     return "\n".join(parts).lower()
@@ -955,7 +962,9 @@ def _check_skeleton_and_process_meta(plan: CommitPlan) -> list[GoldFinding]:
     """Reject skeleton fallback provenance and process-meta body phrases (P-S12)."""
     findings: list[GoldFinding] = []
     rationale = str(getattr(plan, "rationale", "") or "")
-    blob = _message_blob(plan)
+    # Process-meta must inspect only rendered wording. Rationale is provenance-only
+    # and is checked separately for skeleton markers.
+    rendered_blob = _message_blob(plan, include_rationale=False)
 
     if SKELETON_FALLBACK_MARKER in rationale or getattr(plan, "_presentation_skeleton_fallback", False):
         findings.append(
@@ -968,7 +977,7 @@ def _check_skeleton_and_process_meta(plan: CommitPlan) -> list[GoldFinding]:
             )
         )
 
-    hits = [phrase for phrase in _PROCESS_META_PHRASES if phrase in blob]
+    hits = [phrase for phrase in _PROCESS_META_PHRASES if phrase in rendered_blob]
     if hits:
         findings.append(
             GoldFinding(
@@ -1065,7 +1074,9 @@ def _check_path_class_truth(plan: CommitPlan, signals: DiffSignals) -> list[Gold
             "enforces the contract",
         )
         hits = [tok for tok in impl_claims if tok in blob]
-        if hits and cc_s == "docs":
+        # Path family already established docs-only; do not gate on cc_type so
+        # docs-only chore/refactor/style claims are still rejected.
+        if hits:
             findings.append(
                 GoldFinding(
                     code="GOLD_DOCS_IMPLEMENTATION_CLAIM",
