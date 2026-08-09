@@ -2229,19 +2229,30 @@ def test_scoped_history_guidance_never_uses_user_override_channel():
     assert "SCOPED-HISTORY FEEDBACK" in prompt
 
 
-def test_blueprint_option_on_root_and_commit_help():
-    """Slice 7: --blueprint must appear on root and commit help surfaces."""
+def test_blueprint_option_on_root_and_commit_help(monkeypatch):
+    """Slice 7: --blueprint must appear on root and commit help surfaces.
+
+    Rich/Typer truncates long option names under narrow terminals (CI often
+    has COLUMNS≈40), rendering ``--blueprint`` as ``--blue…``. Pin a wide
+    COLUMNS so the full flag is present in help text.
+    """
+    import os
+
     from typer.testing import CliRunner
 
     from git_cg.main import app
 
-    root = CliRunner().invoke(app, ["--help"])
-    assert root.exit_code == 0, root.output
-    assert "--blueprint" in root.output
+    monkeypatch.setenv("COLUMNS", "120")
+    # Some Rich versions also honour the process env at console construct time.
+    os.environ["COLUMNS"] = "120"
 
-    commit = CliRunner().invoke(app, ["commit", "--help"])
+    root = CliRunner().invoke(app, ["--help"], env={**os.environ, "COLUMNS": "120"})
+    assert root.exit_code == 0, root.output
+    assert "--blueprint" in root.output, root.output
+
+    commit = CliRunner().invoke(app, ["commit", "--help"], env={**os.environ, "COLUMNS": "120"})
     assert commit.exit_code == 0, commit.output
-    assert "--blueprint" in commit.output
+    assert "--blueprint" in commit.output, commit.output
 
 
 def test_run_commit_generation_accepts_blueprint_kwarg():
