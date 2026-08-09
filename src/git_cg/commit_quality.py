@@ -2494,6 +2494,14 @@ def apply_presentation_overlay(
     # Identity invariant (D1): ranked intent_id + matrix gitmoji stay put.
     primary.intent_id = preserved_intent_id
     primary.gitmoji = preserved_gitmoji
+
+    # Breaking-change flags are MAJOR-only presentation. After path-class / ceiling
+    # demotion below MAJOR, residual breaking_change must not survive into render.
+    final_sem = getattr(primary.semver_impact, "value", primary.semver_impact)
+    if str(final_sem or "NONE").upper() != "MAJOR":
+        plan.breaking_change = False
+        plan.breaking_change_description = None
+
     return plan
 
 

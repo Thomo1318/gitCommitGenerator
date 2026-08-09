@@ -247,6 +247,7 @@ def test_apc_b02_tests_test_none() -> None:
     assert final.primary_intent.cc_type == CommitType.TEST
     assert final.primary_intent.semver_impact == SemVerImpact.NONE
     assert final.primary_intent.intent_id != "breaking_change"
+    assert final.breaking_change is False
 
 
 def test_apc_b03_product_non_breaking_feat_minor() -> None:
@@ -272,6 +273,7 @@ def test_apc_b03_product_non_breaking_feat_minor() -> None:
     assert final.primary_intent.cc_type == CommitType.FEAT
     assert final.primary_intent.semver_impact == SemVerImpact.MINOR
     assert final.primary_intent.intent_id != "breaking_change"
+    assert final.breaking_change is False
 
 
 def test_apc_b_gold_trigger_not_forced_major() -> None:
@@ -294,6 +296,7 @@ def test_apc_b_gold_trigger_not_forced_major() -> None:
     assert contract.semver_impact != "MAJOR"
     assert final.primary_intent.semver_impact != SemVerImpact.MAJOR
     assert contract.primary_intent_id != "breaking_change"
+    assert final.breaking_change is False
 
 
 def test_apc_b04_no_sop_rewrite_required_for_docs_fixture() -> None:
