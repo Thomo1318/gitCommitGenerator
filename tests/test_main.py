@@ -500,13 +500,14 @@ def test_build_semantic_enrichment_facts_flag_on_builds_container():
 
 
 # ---------------------------------------------------------------------------
-# _staged_diff_command / extract_git_diff (Issue #161 Slice 4)
+# _staged_diff_command / extract_git_diff (Issue #161 Slice 4 / #212)
 #
 # extract_git_diff no longer hard-truncates the analysis diff at 50000 chars;
 # truncation now only happens (via pack_prompt_diff, tested separately) on
-# the LLM-facing prompt payload. These tests cover the rtk-vs-standard
-# command selection, fallback-on-failure, no-truncation regression, empty
-# diff handling, and the CalledProcessError -> _abort() path.
+# the LLM-facing prompt payload. Analysis extraction always uses standard
+# git (never RTK) so path harvest / ranking stay on unified diffs (#212).
+# These tests cover command builders, RTK-ignored-on-analysis, no-truncation
+# regression, empty diff handling, and the CalledProcessError -> _abort() path.
 # ---------------------------------------------------------------------------
 
 
@@ -519,6 +520,7 @@ def test_staged_diff_command_standard_excludes_lockfiles():
 
 
 def test_staged_diff_command_rtk_prefixes_git_diff():
+    """Builder still supports RTK argv for optional non-analysis callers."""
     cmd = _staged_diff_command(use_rtk=True)
     assert cmd[:3] == ["rtk", "git", "diff"]
     assert ":(exclude)*.lock" in cmd
@@ -538,30 +540,30 @@ def test_extract_git_diff_without_rtk_uses_standard_command(mock_check_output, m
 
 @patch("shutil.which", return_value="/usr/bin/rtk")
 @patch("subprocess.check_output")
-def test_extract_git_diff_with_rtk_available_uses_rtk_command(mock_check_output, mock_which):
+def test_extract_git_diff_ignores_rtk_and_uses_standard_git(mock_check_output, mock_which):
+    """Issue #212: analysis path must never select RTK even when installed."""
     mock_check_output.return_value = "diff --git a/x.py b/x.py\n+content\n"
 
     result = extract_git_diff(verbose=False, strict=False)
 
     assert result == "diff --git a/x.py b/x.py\n+content\n"
     args, _ = mock_check_output.call_args
-    assert args[0][0] == "rtk"
+    assert args[0][0] == "git"
+    assert args[0][:4] == ["git", "diff", "--cached", "--"]
+    mock_which.assert_not_called()
 
 
 @patch("shutil.which", return_value="/usr/bin/rtk")
 @patch("subprocess.check_output")
-def test_extract_git_diff_rtk_failure_falls_back_to_standard_diff(mock_check_output, mock_which):
-    def side_effect(cmd, **kwargs):
-        if cmd[0] == "rtk":
-            raise subprocess.CalledProcessError(1, cmd, output="rtk boom")
-        return "diff --git a/x.py b/x.py\n+ok\n"
-
-    mock_check_output.side_effect = side_effect
+def test_extract_git_diff_does_not_attempt_rtk_fallback_path(mock_check_output, mock_which):
+    """With RTK present, analysis still issues exactly one standard git call."""
+    mock_check_output.return_value = "diff --git a/x.py b/x.py\n+ok\n"
 
     result = extract_git_diff(verbose=True, strict=False)
 
     assert result == "diff --git a/x.py b/x.py\n+ok\n"
-    assert mock_check_output.call_count == 2
+    assert mock_check_output.call_count == 1
+    assert mock_check_output.call_args.args[0][0] == "git"
 
 
 @patch("shutil.which", return_value=None)

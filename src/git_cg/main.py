@@ -1203,7 +1203,13 @@ def pack_prompt_diff(
 @opik.track(project_name="gitCommitGenerator")
 def extract_git_diff(verbose: bool, strict: bool) -> str:
     """
-    Extracts the staged Git diff for analysis and ranking.
+    Extract the staged Git diff for analysis and ranking.
+
+    Always uses standard ``git diff --cached`` so signal extraction, intent
+    ranking, and path-class gates receive a real unified diff. RTK must not
+    wrap this path: its summarized non-unified output collapses
+    ``path_class_gate`` to ``empty`` and corrupts content markers (Issue #212).
+    Prompt-size limits remain the job of ``pack_prompt_diff`` only.
 
     Returns:
         str: The staged diff content.
@@ -1212,30 +1218,14 @@ def extract_git_diff(verbose: bool, strict: bool) -> str:
         typer.Exit: If diff extraction fails or no staged changes are found.
     """
     try:
-        has_rtk = shutil.which("rtk") is not None
-        if has_rtk:
-            if verbose:
-                console.log("Using rtk for token compression...")
-            try:
-                diff_output = subprocess.check_output(
-                    _staged_diff_command(use_rtk=True),
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-            except subprocess.CalledProcessError as e:
-                if verbose:
-                    console.log(f"rtk failed ({e}). Falling back to standard diff.")
-                diff_output = subprocess.check_output(
-                    _staged_diff_command(use_rtk=False),
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-        else:
-            diff_output = subprocess.check_output(
-                _staged_diff_command(use_rtk=False),
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
+        if verbose:
+            console.log("Extracting staged analysis diff via standard git...")
+        # Analysis path is always plain git. Keep RTK off the ranking/signal path.
+        diff_output = subprocess.check_output(
+            _staged_diff_command(use_rtk=False),
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         _abort(f"[bold red]Error getting git diff:[/bold red] {e.output}", strict=strict)
 
