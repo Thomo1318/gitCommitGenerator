@@ -1,0 +1,37 @@
+[14:38:33] Starting git-cg...                                       main.py:2353
+           Engine: mtplx                                            main.py:2354
+           Commit Msg File: .git/COMMIT_EDITMSG                     main.py:2355
+           Commit Source:                                           main.py:2356
+           Interactive Mode: False                                  main.py:2357
+           Using rtk for token compression...                       main.py:1218
+           Extracted analysis git diff (436 characters).            main.py:1247
+           AI Client initialized. Calling mtplx to generate commit  main.py:2553
+           message...                                                           
+Configured model 'Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed' is not loaded; 
+falling back to 'mtplx-qwen36-27b-optimized-speed'.
+           Using model: mtplx-qwen36-27b-optimized-speed            main.py:2563
+           Using shared ranked intent candidates...                  main.py:679
+[14:39:20] Resolved and Enforced Semantic Contract: breaking_change main.py:3335
+           (feat)                                                               
+╭────────────────────────── Generated Commit Message ──────────────────────────╮
+│ 💥 feat(greeter)!: add excited flag and greet_many                           │
+│                                                                              │
+│ Refactors `greet` to accept an optional `excited` keyword argument for       │
+│ enthusiastic outputs. Introduces `greet_many` to process lists of names      │
+│ efficiently. Maintains backward compatibility for existing callers while     │
+│ expanding demo capabilities.                                                 │
+│                                                                              │
+│ Included changes:                                                            │
+│ - ✨ feat(greeter): add greet_many batch function                            │
+│                                                                              │
+│ SemVer-Impact: MAJOR                                                         │
+│ Change-Types: feat                                                           │
+│ Changelog-Groups: Changed, Added                                             │
+│                                                                              │
+│ BREAKING CHANGE: The `greet` function signature now requires a keyword-only  │
+│ `excited` parameter. Existing positional calls may break if not updated to   │
+│ use keyword syntax or rely on the default `False` value.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+           Commit message written to .git/COMMIT_EDITMSG             main.py:921
+           Opik telemetry state written to                          main.py:1733
+           .git/GIT_CG_OPIK_STATE.json                                          

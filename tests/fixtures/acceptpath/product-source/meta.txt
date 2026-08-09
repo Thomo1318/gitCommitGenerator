@@ -1,0 +1,5 @@
+CASE=product-source REPO=/tmp/git-cg-mtplx-product-source-2ChoHk ART=/tmp/git-cg-acceptpath-mtplx-suite-20260809-143832/product-source
+time_start=2026-08-09 14:38:32 AEST
+exit_code=0
+elapsed_s=49.48
+repo=/tmp/git-cg-mtplx-product-source-2ChoHk

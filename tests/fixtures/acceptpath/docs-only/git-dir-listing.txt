@@ -1,0 +1,16 @@
+total 48
+drwxr-xr-x@ 15 admin  wheel   480 Aug  9 14:30 .
+drwx------@  5 admin  wheel   160 Aug  9 14:29 ..
+-rw-r--r--@  1 admin  wheel   284 Aug  9 14:30 COMMIT_EDITMSG
+-rw-r--r--@  1 admin  wheel  3416 Aug  9 14:30 GIT_CG_OPIK_STATE.json
+-rw-r--r--@  1 admin  wheel    21 Aug  9 14:29 HEAD
+-rw-r--r--@  1 admin  wheel     0 Aug  9 14:29 MERGE_RR
+-rw-r--r--@  1 admin  wheel   196 Aug  9 14:29 config
+-rw-r--r--@  1 admin  wheel    73 Aug  9 14:29 description
+drwxr-xr-x@ 16 admin  wheel   512 Aug  9 14:29 hooks
+-rw-r--r--@  1 admin  wheel   136 Aug  9 14:29 index
+drwxr-xr-x@  3 admin  wheel    96 Aug  9 14:29 info
+drwxr-xr-x@  4 admin  wheel   128 Aug  9 14:29 logs
+drwxr-xr-x@  9 admin  wheel   288 Aug  9 14:29 objects
+drwxr-xr-x@  4 admin  wheel   128 Aug  9 14:29 refs
+drwxr-xr-x@  2 admin  wheel    64 Aug  9 14:29 rr-cache

@@ -1,0 +1,20 @@
+=== gold-trigger ===
+exit=3:exit_code=0
+elapsed=4:elapsed_s=31.62
+--- COMMIT_EDITMSG ---
+💥 feat(util)!: add normalize_or_default and null fallback
+
+Introduce `normalize_or_default` to safely handle missing values. Update `normalize` to fallback to an empty string on `None` inputs, preventing `AttributeError` crashes. Add documentation for the trimming utility.
+
+Included changes:
+- 👔 feat(util): update normalize for safe stripping
+- 💡 docs(util): add docstring to normalize helper
+
+SemVer-Impact: MAJOR
+Change-Types: feat, docs
+Changelog-Groups: Added, Documentation
+
+BREAKING CHANGE: The `normalize` function now implicitly handles `None` by returning an empty string, altering previous error-throwing behavior. Callers expecting exceptions on `None` inputs must adapt.--- contract lines ---
+12:           Using model: mtplx-qwen36-27b-optimized-speed            main.py:2563
+14:[14:40:21] Resolved and Enforced Semantic Contract: breaking_change main.py:3335
+16:╭────────────────────────── Generated Commit Message ──────────────────────────╮

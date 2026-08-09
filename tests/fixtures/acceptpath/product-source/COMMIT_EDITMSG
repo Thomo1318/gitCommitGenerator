@@ -1,0 +1,12 @@
+💥 feat(greeter)!: add excited flag and greet_many
+
+Refactors `greet` to accept an optional `excited` keyword argument for enthusiastic outputs. Introduces `greet_many` to process lists of names efficiently. Maintains backward compatibility for existing callers while expanding demo capabilities.
+
+Included changes:
+- ✨ feat(greeter): add greet_many batch function
+
+SemVer-Impact: MAJOR
+Change-Types: feat
+Changelog-Groups: Changed, Added
+
+BREAKING CHANGE: The `greet` function signature now requires a keyword-only `excited` parameter. Existing positional calls may break if not updated to use keyword syntax or rely on the default `False` value.

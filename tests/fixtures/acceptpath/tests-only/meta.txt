@@ -1,0 +1,5 @@
+CASE=tests-only REPO=/tmp/git-cg-mtplx-tests-only-Ksp8Dz ART=/tmp/git-cg-acceptpath-mtplx-suite-20260809-143832/tests-only
+time_start=2026-08-09 14:39:22 AEST
+exit_code=0
+elapsed_s=28.61
+repo=/tmp/git-cg-mtplx-tests-only-Ksp8Dz

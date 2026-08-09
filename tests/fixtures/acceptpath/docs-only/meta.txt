@@ -1,0 +1,8 @@
+ART=/tmp/git-cg-acceptpath-mtplx-20260809-142925
+REPO=/tmp/git-cg-mtplx-docs-BiYb0X
+TS=20260809-142925
+SOP=/Users/admin/dev/activeProjects/gitCommitGenerator/config/gitops_agent_sop.json
+MTPLX_BASE_URL=http://127.0.0.1:8000/v1
+MTPLX_MODEL=
+exit_code=0
+elapsed_s=71.25

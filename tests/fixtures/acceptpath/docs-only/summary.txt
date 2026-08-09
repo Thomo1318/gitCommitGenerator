@@ -1,0 +1,46 @@
+=== COMMIT_EDITMSG ===
+🔐 chore(docs): document review checklist for usage
+
+Guide contributors to verify commit subjects, preserve machine-readable trailers, and maintain focused change sets via a new usage documentation checklist.
+
+SemVer-Impact: PATCH
+Change-Types: chore
+Changelog-Groups: Miscellaneous
+=== CLI tail stdout ===
+[14:29:27] Starting git-cg...                                       main.py:2353
+           Engine: mtplx                                            main.py:2354
+           Commit Msg File: .git/COMMIT_EDITMSG                     main.py:2355
+           Commit Source:                                           main.py:2356
+           Interactive Mode: False                                  main.py:2357
+           Using rtk for token compression...                       main.py:1218
+           Extracted analysis git diff (349 characters).            main.py:1247
+           AI Client initialized. Calling mtplx to generate commit  main.py:2553
+           message...                                                           
+Configured model 'Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed' is not loaded; 
+falling back to 'mtplx-qwen36-27b-optimized-speed'.
+           Using model: mtplx-qwen36-27b-optimized-speed            main.py:2563
+[14:29:28] Using shared ranked intent candidates...                  main.py:679
+[14:30:07] Resolved and Enforced Semantic Contract: secrets_update  main.py:3335
+           (chore)                                                              
+Presentation guard (craft_guard): GUARD_BANNED_BODY_OPENER, 
+GUARD_VAGUE_SUBJECT_VERB (shared regen 1/2)
+           Using shared ranked intent candidates...                  main.py:679
+[14:30:34] Resolved and Enforced Semantic Contract: secrets_update  main.py:3335
+           (chore)                                                              
+╭────────────────────────── Generated Commit Message ──────────────────────────╮
+│ 🔐 chore(docs): document review checklist for usage                          │
+│                                                                              │
+│ Guide contributors to verify commit subjects, preserve machine-readable      │
+│ trailers, and maintain focused change sets via a new usage documentation     │
+│ checklist.                                                                   │
+│                                                                              │
+│ SemVer-Impact: PATCH                                                         │
+│ Change-Types: chore                                                          │
+│ Changelog-Groups: Miscellaneous                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+           Commit message written to .git/COMMIT_EDITMSG             main.py:921
+[14:30:35] Opik telemetry state written to                          main.py:1733
+           .git/GIT_CG_OPIK_STATE.json                                          
+
+=== CLI tail stderr ===
+OPIK: Started logging traces to the "gitCommitGenerator" project at https://www.comet.com/opik/api/v1/session/redirect/projects/?trace_id=019fe4c8-6b11-7c10-af67-733e9fa98849&path=aHR0cHM6Ly93d3cuY29tZXQuY29tL29waWsvYXBpLw==.

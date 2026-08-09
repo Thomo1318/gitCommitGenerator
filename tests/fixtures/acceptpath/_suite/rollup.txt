@@ -1,0 +1,75 @@
+SUITE_ROLLUP
+============================================================
+product-source exit 0 elapsed_s 49.48
+contract: breaking_change main.py:3335
+subject: 💥 feat(greeter)!: add excited flag and greet_many
+path_class_gate: empty
+gold: strict findings 0 outcome not_needed regens 0
+semver: MAJOR violation False
+ranking: low 2.5 ni_top_rank
+score_card: {'header_length_ok': True, 'description_length_ok': True, 'type_valid': True, 'emoji_matrix_aligned': True, 'semver_consistent': True, 'breaking_change_complete': True}
+guards: []
+trace: 019fe4d0-bff8-74ca-8c41-6c91bd372493
+--- message ---
+💥 feat(greeter)!: add excited flag and greet_many
+
+Refactors `greet` to accept an optional `excited` keyword argument for enthusiastic outputs. Introduces `greet_many` to process lists of names efficiently. Maintains backward compatibility for existing callers while expanding demo capabilities.
+
+Included changes:
+- ✨ feat(greeter): add greet_many batch function
+
+SemVer-Impact: MAJOR
+Change-Types: feat
+Changelog-Groups: Changed, Added
+
+BREAKING CHANGE: The `greet` function signature now requires a keyword-only `excited` parameter. Existing positional calls may break if not updated to use keyword syntax or rely on the default `False` value.
+============================================================
+tests-only exit 0 elapsed_s 28.61
+contract: breaking_change main.py:3335
+subject: 💥 feat(test)!: add edge case tests for add function
+path_class_gate: empty
+gold: strict findings 0 outcome not_needed regens 0
+semver: MAJOR violation False
+ranking: low 2.5 ni_top_rank
+score_card: {'header_length_ok': True, 'description_length_ok': True, 'type_valid': True, 'emoji_matrix_aligned': True, 'semver_consistent': True, 'breaking_change_complete': True}
+guards: []
+trace: 019fe4d1-8398-7b97-8062-e4556e5e87ad
+--- message ---
+💥 feat(test)!: add edge case tests for add function
+
+Expands test coverage for the `add` utility by verifying behavior with zero and negative operands. Ensures robust handling of edge cases before broader integration.
+
+Included changes:
+- ✅ test(mathy): cover zero and negative inputs
+
+SemVer-Impact: MAJOR
+Change-Types: feat, test
+Changelog-Groups: Added, Tests
+
+BREAKING CHANGE: Introduces new test assertions that may fail against existing implementations lacking explicit zero/negative handling.
+============================================================
+gold-trigger exit 0 elapsed_s 31.62
+contract: breaking_change main.py:3335
+subject: 💥 feat(util)!: add normalize_or_default and null fallback
+path_class_gate: empty
+gold: strict findings 0 outcome not_needed regens 0
+semver: MAJOR violation False
+ranking: low 2.5 ni_top_rank
+score_card: {'header_length_ok': True, 'description_length_ok': True, 'type_valid': True, 'emoji_matrix_aligned': True, 'semver_consistent': True, 'breaking_change_complete': True}
+guards: []
+trace: 019fe4d1-f55f-7093-a5da-4bde596640f6
+--- message ---
+💥 feat(util)!: add normalize_or_default and null fallback
+
+Introduce `normalize_or_default` to safely handle missing values. Update `normalize` to fallback to an empty string on `None` inputs, preventing `AttributeError` crashes. Add documentation for the trimming utility.
+
+Included changes:
+- 👔 feat(util): update normalize for safe stripping
+- 💡 docs(util): add docstring to normalize helper
+
+SemVer-Impact: MAJOR
+Change-Types: feat, docs
+Changelog-Groups: Added, Documentation
+
+BREAKING CHANGE: The `normalize` function now implicitly handles `None` by returning an empty string, altering previous error-throwing behavior. Callers expecting exceptions on `None` inputs must adapt.
+PARENT /tmp/git-cg-acceptpath-mtplx-suite-20260809-143832
