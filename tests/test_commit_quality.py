@@ -58,6 +58,7 @@ from git_cg.commit_quality import (
     min_included_change_bullets,
     presentation_constraints,
     prose_has_security_negative_markers,
+    repair_craft_wording,
     repair_security_noun_claims,
     required_changelog_groups,
     security_claims_without_path_evidence,
@@ -2158,6 +2159,124 @@ def test_try_repair_presentation_guards_clears_security_noun_only() -> None:
     blob = f"{repaired.primary_intent.description}\n{repaired.body_summary}".lower()
     assert "secret" not in blob
     assert "credential" not in blob
+
+
+def test_repair_craft_wording_docs_only_add_and_banned_opener() -> None:
+    """#214: docs-only Add subject + banned body opener repairs without skeleton."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="Add Review Checklist For Usage",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "This commit introduces a review checklist for staged docs."
+    paths = ["docs/usage.md"]
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert pre.dirty is True
+    assert "GUARD_TEST_DOCS_ADD_OPENER" in pre.codes() or "GUARD_TITLE_CASE_SUBJECT" in pre.codes()
+    assert "GUARD_BANNED_BODY_OPENER" in pre.codes()
+
+    out, changed = repair_craft_wording(plan, paths=paths, report=pre)
+    assert changed is True
+    assert out.primary_intent.intent_id == "documentation_update"
+    assert out.primary_intent.gitmoji == "📝"
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    desc = (out.primary_intent.description or "").lower()
+    assert desc.startswith("document")
+    assert not desc.startswith("add")
+    body = out.body_summary or ""
+    assert not body.startswith("This commit introduces")
+    assert "checklist" in body.lower() or "documentation" in body.lower()
+    # No skeleton provenance.
+    assert "[presentation-skeleton-fallback]" not in (out.rationale or "")
+    post = evaluate_presentation_guards(out, paths=paths)
+    assert post.dirty is False
+    assert post.fallback_reason == PRESENTATION_FALLBACK_NONE
+
+
+def test_try_repair_presentation_guards_docs_only_craft_avoids_skeleton() -> None:
+    """#214: try_repair clears craft-only docs-only dirty sets without skeleton."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="Adds usage documentation checklist",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "Adds a contributor review checklist for commit subjects."
+    paths = ["docs/usage.md"]
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is True
+    assert report.dirty is False
+    assert repaired.primary_intent.intent_id == "documentation_update"
+    assert repaired.primary_intent.gitmoji == "📝"
+    assert (repaired.primary_intent.description or "").lower().startswith("document")
+    assert not (repaired.body_summary or "").lstrip().startswith("Adds ")
+    assert "[presentation-skeleton-fallback]" not in (repaired.rationale or "")
+    # Gold-strict must accept repaired wording (no skeleton marker).
+    from git_cg.commit_gold import check_commit_gold
+    from git_cg.intent import DiffSignals
+
+    gold = check_commit_gold(
+        repaired,
+        None,
+        signals=DiffSignals(files=paths, only_docs=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_SKELETON_FALLBACK_FINAL" not in gold.codes()
+    assert gold.ok_for_mode("strict")
+
+
+def test_try_repair_presentation_guards_tests_only_add_opener() -> None:
+    """#214: tests-only Add/Title-Case subject repairs to cover/outcome verb."""
+    plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="scoped-history",
+        description="Add Unit Tests For Claims",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    plan.body_summary = "Cover locks."
+    paths = [
+        "tests/test_scoped_history.py",
+        "tests/test_scoped_history_telemetry.py",
+    ]
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is True
+    assert report.dirty is False
+    desc = (repaired.primary_intent.description or "").lower()
+    assert desc.startswith("cover") or desc.startswith("pin") or desc.startswith("claim")
+    assert not desc.startswith("add")
+
+
+def test_try_repair_presentation_guards_mixed_hallucination_and_craft_no_silent_accept() -> None:
+    """#214: mixed hallucination+craft must not silent-repair into acceptance."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="adr",
+        description="Add Runtime Recovery Guidance",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    # Runtime verb on docs path trips hallucination; Add opener trips craft.
+    plan.body_summary = "This commit introduces runtime fallback recovery in the ADR."
+    paths = ["docs/ADRs/0163-scoped-reasoning-history.md"]
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is False
+    assert report.dirty is True
+    assert report.hallucination_guard_fired is True
+    # Plan identity unchanged on failed repair.
+    assert repaired.primary_intent.description == plan.primary_intent.description
 
 
 def test_apply_guard_skeleton_fallback_preserves_identity_and_docs_force() -> None:

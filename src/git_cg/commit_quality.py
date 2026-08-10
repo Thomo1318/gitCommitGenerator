@@ -3834,6 +3834,295 @@ def repair_security_noun_claims(
     return plan, True
 
 
+# Craft-only codes eligible for deterministic wording repair on docs/tests
+# path-classes (issue #214). Mixed hallucination sets still require regen.
+_CRAFT_REPAIRABLE_CODES: frozenset[str] = frozenset(
+    {
+        "GUARD_TEST_DOCS_ADD_OPENER",
+        "GUARD_BANNED_BODY_OPENER",
+        "GUARD_TITLE_CASE_SUBJECT",
+        "GUARD_VAGUE_SUBJECT_VERB",
+    }
+)
+
+_CRAFT_SUBJECT_OPENER_RE = re.compile(
+    r"^(?P<lead>[\"'\(\[]*)(?P<verb>Add|Adds|Added|Improve|Improves|Improved|"
+    r"Enhance|Enhances|Enhanced|Update|Updates|Updated|Clean(?:\s+up)?|Cleans|"
+    r"Cleaned|Cleanup|Hygiene|Streamline|Streamlines|Streamlined)\b(?P<rest>.*)$",
+    flags=re.IGNORECASE,
+)
+
+
+def _title_case_to_imperative(subject: str) -> str:
+    """Lowercase Title Case subject words while preserving acronyms/short tokens."""
+    words = (subject or "").split()
+    if not words:
+        return subject or ""
+    out: list[str] = []
+    for idx, word in enumerate(words):
+        if not any(ch.isalpha() for ch in word):
+            out.append(word)
+            continue
+        alpha = re.sub(r"[^A-Za-z]", "", word)
+        if alpha.isupper() and len(alpha) <= 4:
+            out.append(word)
+            continue
+        if idx == 0:
+            out.append(word[:1].lower() + word[1:] if word else word)
+        elif word[:1].isupper() and (len(word) == 1 or word[1:].islower() or not any(c.islower() for c in word[1:])):
+            out.append(word[:1].lower() + word[1:])
+        else:
+            out.append(word)
+    return " ".join(out)
+
+
+def _repair_craft_subject(subject: str, *, docs_only: bool, tests_only: bool) -> str:
+    """Rewrite craft-dirty subject openers to outcome verbs (presentation-only)."""
+    raw = (subject or "").strip()
+    if not raw:
+        if docs_only:
+            return "document staged documentation changes"
+        if tests_only:
+            return "cover staged claim locks"
+        return raw
+
+    text = _title_case_to_imperative(raw)
+    match = _CRAFT_SUBJECT_OPENER_RE.match(text)
+    if match:
+        rest = (match.group("rest") or "").strip(" -:—,.")
+        rest_l = rest.lower()
+        for prefix in (
+            "unit tests for ",
+            "unit tests ",
+            "tests for ",
+            "tests ",
+            "documentation for ",
+            "documentation ",
+            "docs for ",
+            "docs ",
+            "support for ",
+            "support ",
+        ):
+            if rest_l.startswith(prefix):
+                rest = rest[len(prefix) :].strip()
+                rest_l = rest.lower()
+                break
+        if docs_only:
+            if rest and not rest_l.startswith("document"):
+                text = f"document {rest}"
+            elif rest:
+                text = rest if rest_l.startswith("document") else f"document {rest}"
+            else:
+                text = "document staged documentation changes"
+        elif tests_only:
+            if rest and not rest_l.startswith(("cover", "pin", "claim", "lock")):
+                text = f"cover {rest}"
+            elif rest:
+                text = rest
+            else:
+                text = "cover staged claim locks"
+        else:
+            text = f"fix {rest}" if rest else "fix staged correctness regressions"
+        lead = match.group("lead") or ""
+        text = f"{lead}{text}".strip()
+
+    first = _first_subject_token(text).lower()
+    inventory_openers = {
+        "add",
+        "adds",
+        "added",
+        "update",
+        "updates",
+        "updated",
+        "improve",
+        "improves",
+        "improved",
+    }
+    if docs_only and first in inventory_openers:
+        text = "document staged documentation changes"
+    if tests_only and first in inventory_openers:
+        text = "cover staged claim locks"
+
+    words = text.split()
+    if words:
+        w0 = words[0]
+        alpha = re.sub(r"^[^A-Za-z]+", "", w0)
+        if alpha and alpha[:1].isupper():
+            words[0] = w0.replace(alpha, alpha[:1].lower() + alpha[1:], 1)
+            text = " ".join(words)
+    return text[:50]
+
+
+def _sentence_case(text: str) -> str:
+    """Capitalize the first alphabetic character of a sentence."""
+    if not text:
+        return text
+    chars = list(text)
+    for i, ch in enumerate(chars):
+        if ch.isalpha():
+            chars[i] = ch.upper()
+            break
+    return "".join(chars)
+
+
+def _ensure_terminal_punct(text: str) -> str:
+    stripped = text.rstrip()
+    if not stripped:
+        return stripped
+    if stripped.endswith((".", "!", "?")):
+        return stripped
+    return f"{stripped}."
+
+
+def _repair_craft_body(body: str, *, docs_only: bool, tests_only: bool) -> str:
+    """Rewrite banned body openers to direct behaviour-delta prose."""
+    raw = (body or "").replace(chr(92) + "n", chr(10))
+    if not raw.strip():
+        if docs_only:
+            return "Document staged documentation paths without product claims."
+        if tests_only:
+            return "Cover staged test and fixture evidence without product framing."
+        return raw
+
+    lines = raw.splitlines()
+    first_idx = next((i for i, ln in enumerate(lines) if ln.strip()), None)
+    if first_idx is None:
+        return raw
+
+    first = lines[first_idx].strip()
+    matched = False
+    remainder = first
+    for opener in sorted(BANNED_BODY_OPENERS, key=len, reverse=True):
+        if first.startswith(opener):
+            remainder = first[len(opener) :].lstrip(" -:—,.")
+            matched = True
+            break
+        if first.lower().startswith(opener.lower()):
+            remainder = first[len(opener) :].lstrip(" -:—,.")
+            matched = True
+            break
+
+    if matched:
+        rem_l = remainder.lower()
+        if docs_only:
+            if remainder and not rem_l.startswith(("document", "describe", "clarify", "record")):
+                rebuilt = f"Document {remainder[0].lower() + remainder[1:]}"
+            elif remainder:
+                rebuilt = remainder
+            else:
+                rebuilt = "Document staged documentation paths without product claims."
+        elif tests_only:
+            if remainder and not rem_l.startswith(("cover", "pin", "claim", "lock", "record")):
+                rebuilt = f"Cover {remainder[0].lower() + remainder[1:]}"
+            elif remainder:
+                rebuilt = remainder
+            else:
+                rebuilt = "Cover staged test and fixture evidence without product framing."
+        else:
+            rebuilt = remainder if remainder else first
+        rebuilt = _ensure_terminal_punct(_sentence_case(rebuilt))
+        lines[first_idx] = rebuilt
+        return "\n".join(lines).strip()
+
+    first_tok = _first_subject_token(first).lower()
+    if first_tok in {"adds", "add", "introduces", "introduce", "ensures", "ensure"}:
+        parts = first.split(None, 1)
+        rest = parts[1] if len(parts) > 1 else ""
+        if docs_only:
+            if rest:
+                rebuilt = f"Document {rest[0].lower() + rest[1:]}"
+            else:
+                rebuilt = "Document staged documentation paths without product claims."
+        elif tests_only:
+            if rest:
+                rebuilt = f"Cover {rest[0].lower() + rest[1:]}"
+            else:
+                rebuilt = "Cover staged test and fixture evidence without product framing."
+        else:
+            rebuilt = first
+        rebuilt = _ensure_terminal_punct(_sentence_case(rebuilt))
+        lines[first_idx] = rebuilt
+        return "\n".join(lines).strip()
+
+    return raw.strip()
+
+
+def repair_craft_wording(
+    plan: CommitPlan,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    constraints: PresentationConstraints | None = None,
+    report: GuardReport | None = None,
+) -> tuple[CommitPlan, bool]:
+    """Deterministically repair craft-only subject/body openers (issue #214).
+
+    Presentation-only. Preserves ranked ``intent_id`` / gitmoji / matrix fields.
+    Intended for docs-only and tests-only path classes where Add/banned openers
+    otherwise exhaust regen into skeleton provenance rejected by gold-strict.
+    """
+    clean = _resolve_paths(list(paths or []), signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    docs_only = _docs_only_class(cons.diff_class, clean)
+    tests_only = _tests_only_class(cons.diff_class, clean)
+    if not (docs_only or tests_only):
+        return plan, False
+
+    active = report or evaluate_presentation_guards(
+        plan,
+        paths=paths,
+        signals=signals,
+        constraints=cons,
+    )
+    codes = active.codes()
+    if not codes or not codes <= _CRAFT_REPAIRABLE_CODES:
+        return plan, False
+
+    primary = plan.primary_intent
+    desc = str(getattr(primary, "description", "") or "")
+    body = str(getattr(plan, "body_summary", "") or "")
+    new_desc = _repair_craft_subject(desc, docs_only=docs_only, tests_only=tests_only)
+    new_body = _repair_craft_body(body, docs_only=docs_only, tests_only=tests_only)
+
+    secondaries_changed = False
+    new_secondaries: list = []
+    for sec in list(getattr(plan, "secondary_intents", None) or []):
+        sec_desc = str(getattr(sec, "description", "") or "")
+        repaired_sec = _repair_craft_subject(sec_desc, docs_only=docs_only, tests_only=tests_only)
+        if repaired_sec != sec_desc:
+            secondaries_changed = True
+            if hasattr(sec, "model_copy"):
+                sec = sec.model_copy(update={"description": repaired_sec})
+            else:
+                sec.description = repaired_sec
+        new_secondaries.append(sec)
+
+    changed = new_desc != desc or new_body != body or secondaries_changed
+    if not changed:
+        return plan, False
+
+    if hasattr(primary, "model_copy"):
+        primary = primary.model_copy(update={"description": new_desc})
+    else:
+        primary.description = new_desc
+
+    updates = {
+        "primary_intent": primary,
+        "body_summary": new_body,
+    }
+    if secondaries_changed:
+        updates["secondary_intents"] = new_secondaries
+
+    if hasattr(plan, "model_copy"):
+        return plan.model_copy(update=updates), True
+
+    plan.primary_intent = primary
+    plan.body_summary = new_body
+    if secondaries_changed:
+        plan.secondary_intents = new_secondaries
+    return plan, True
+
+
 def try_repair_presentation_guards(
     plan: CommitPlan,
     *,
@@ -3845,10 +4134,14 @@ def try_repair_presentation_guards(
 ) -> tuple[CommitPlan, GuardReport, bool]:
     """Attempt deterministic wording repair for repairable presentation guards.
 
-    Currently repairs ``GUARD_SECURITY_NOUN`` only. Returns
-    ``(plan, report, repaired)`` where *repaired* is True when wording changed
-    and the post-repair guard report is clean enough to continue without
-    skeleton provenance.
+    Repair order:
+    1. ``GUARD_SECURITY_NOUN``-only dirty sets (any path class)
+    2. Craft-only dirty sets on docs-only / tests-only path classes (#214)
+
+    Returns ``(plan, report, repaired)`` where *repaired* is True when wording
+    changed and the post-repair guard report is clean enough to continue without
+    skeleton provenance. Mixed hallucination+craft sets still need LLM regen or
+    skeleton.
     """
     active = report or evaluate_presentation_guards(
         plan,
@@ -3861,16 +4154,32 @@ def try_repair_presentation_guards(
         return plan, active, False
 
     codes = active.codes()
-    # Only auto-repair when every finding is a security-noun claim. Mixed dirty
-    # sets still need LLM regen or skeleton.
-    if not codes or codes - {"GUARD_SECURITY_NOUN"}:
+    if not codes:
         return plan, active, False
 
-    repaired_plan, changed = repair_security_noun_claims(
-        plan,
-        paths=paths,
-        signals=signals,
-    )
+    repaired_plan = plan
+    changed = False
+
+    # 1) Security-noun-only path (existing behaviour).
+    if codes <= {"GUARD_SECURITY_NOUN"}:
+        repaired_plan, changed = repair_security_noun_claims(
+            plan,
+            paths=paths,
+            signals=signals,
+        )
+    # 2) Craft-only path on docs/tests path-class (#214).
+    elif codes <= _CRAFT_REPAIRABLE_CODES:
+        repaired_plan, changed = repair_craft_wording(
+            plan,
+            paths=paths,
+            signals=signals,
+            constraints=constraints,
+            report=active,
+        )
+    else:
+        # Mixed dirty sets (e.g. hallucination + craft) are not silently repaired.
+        return plan, active, False
+
     if not changed:
         return plan, active, False
 
@@ -3911,7 +4220,7 @@ def format_guard_guidance(report: GuardReport | None) -> str:
         lines.append(f"- [{finding.code}] {msg}")
     lines.append("This block guides wording only. It MUST NOT change intent_id, gitmoji, or ranking.")
     # Final scrub so header/body never re-poison the model with claim nouns.
-    return _replace_security_claim_tokens("\n".join(lines))
+    return _replace_security_claim_tokens(chr(10).join(lines))
 
 
 def apply_guard_skeleton_fallback(

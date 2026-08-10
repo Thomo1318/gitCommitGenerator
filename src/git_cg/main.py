@@ -3404,9 +3404,9 @@ def _run_commit_generation(
             if _guard_report.hallucination_guard_fired:
                 hallucination_guard_fired = True
             if _guard_report.dirty:
-                # Deterministic wording repair first (security-noun scrub). This keeps
-                # gold-strict usable when the model keeps emitting banned claim nouns:
-                # repair is presentation-only and does not mark skeleton provenance.
+                # Deterministic wording repair first (security-noun scrub and
+                # docs/tests craft openers — issue #214). This keeps gold-strict
+                # usable without skeleton provenance when repair clears the dirty set.
                 commit_plan, _guard_report, _guard_repaired = try_repair_presentation_guards(
                     commit_plan,
                     paths=_guard_paths,
@@ -3420,7 +3420,7 @@ def _run_commit_generation(
                     guard_guidance = None
                     if verbose or gold_mode != "off":
                         console.print(
-                            "[yellow]Presentation guard: applied deterministic security-noun "
+                            "[yellow]Presentation guard: applied deterministic wording "
                             "repair (no skeleton provenance).[/yellow]"
                         )
                     # Fall through to gold with the repaired plan.
