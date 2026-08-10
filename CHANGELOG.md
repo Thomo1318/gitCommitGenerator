@@ -29,6 +29,35 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.13.1
+
+### Miscellaneous
+
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #215 from Thomo1318/fix/214-docs-only-gold-strict-craft-avoids-skeleton-fallback
+
+### Fixed
+
+- 🦺 fix(commit-quality): narrow extended body craft emission to Provides/Includes (#214)
+- 🦺 fix(main): preserve security-noun repair operator copy (#214)
+- 🦺 fix(commit-quality): lock punctuated openers and extended body craft (#214)
+- 🦺 fix(commit-quality): broaden craft-verb catalogue for docs/tests (#214)
+- 🦺 fix(commit-quality): docs-only craft repair avoids skeleton fallback (#214)
+
+### Tests
+
+- 🦺 fix(commit-quality): narrow extended body craft emission to Provides/Includes (#214)
+- 🦺 fix(commit-quality): lock punctuated openers and extended body craft (#214)
+- 🦺 fix(commit-quality): broaden craft-verb catalogue for docs/tests (#214)
+- 🦺 fix(commit-quality): docs-only craft repair avoids skeleton fallback (#214)
+- ✅ test(acceptpath): freeze docs-only post-repair COMMIT_EDITMSG snapshot (#214)
+
+### Documentation
+
+- ✅ test(acceptpath): freeze docs-only post-repair COMMIT_EDITMSG snapshot (#214)
+- 📝 docs(docs): note #214 craft catalogue and post-repair snapshot (#214)
+- 📝 docs(docs): document changelog for commit-quality fixes (#214)
+
 ## v0.13.0
 
 ### Miscellaneous
