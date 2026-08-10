@@ -11,7 +11,11 @@ from git_cg.models import CommitIntent, CommitPlan, CommitType, SemVerImpact
 from git_cg.regeneration import ResolvedCommitContract, enforce_semantic_contract
 from git_cg.scope_canon import (
     CANONICAL_SCOPE_ALIASES,
+    canonical_scope_values,
     coerce_scope_normalised_from,
+    export_scope_canon,
+    is_canonical_scope,
+    iter_canonical_scope_aliases,
     normalize_scope,
     resolve_scope_normalisation,
 )
@@ -218,3 +222,20 @@ def test_resolve_scope_normalisation_identity_vs_transform() -> None:
 )
 def test_coerce_scope_normalised_from(value, expected) -> None:
     assert coerce_scope_normalised_from(value) == expected
+
+
+def test_shared_canon_export_surface() -> None:
+    """Stable #201-facing export helpers stay leaf-adjacent and closed."""
+    aliases = iter_canonical_scope_aliases()
+    assert aliases
+    assert all(isinstance(a, tuple) and len(a) == 2 for a in aliases)
+    values = canonical_scope_values()
+    assert "scoped-history" in values
+    assert "main" in values
+    assert is_canonical_scope("scoped_history")
+    assert is_canonical_scope("main.py")
+    assert not is_canonical_scope("not-a-real-scope-token-xyz")
+    snap = export_scope_canon()
+    assert set(snap) == {"aliases", "canonical_values"}
+    assert snap["aliases"]["scoped_history"] == "scoped-history"
+    assert "telemetry" in snap["canonical_values"]

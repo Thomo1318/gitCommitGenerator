@@ -219,3 +219,46 @@ def coerce_scope_normalised_from(value: object) -> str:
     if text in CANONICAL_SCOPE_ALIASES:
         return text
     return "none"
+
+
+# ---------------------------------------------------------------------------
+# Stable shared export surface (Issue #204 NTH · future #201 allowlist consumers)
+# ---------------------------------------------------------------------------
+# Keep this module leaf-adjacent (stdlib only). Downstream allowlists should
+# import these helpers rather than copy CANONICAL_SCOPE_ALIASES tables.
+
+
+def iter_canonical_scope_aliases() -> tuple[tuple[str, str], ...]:
+    """Return a stable ``(alias, canonical)`` snapshot of the closed alias map.
+
+    Intended for #201 / ontology allowlist consumers that need the producer-side
+    canon without importing presentation policy from ``commit_quality``.
+    """
+    return tuple(sorted(CANONICAL_SCOPE_ALIASES.items(), key=lambda item: item[0]))
+
+
+def canonical_scope_values() -> frozenset[str]:
+    """Return the closed set of canonical scope slugs (unique values)."""
+    return frozenset(CANONICAL_SCOPE_ALIASES.values())
+
+
+def is_canonical_scope(scope: str | None) -> bool:
+    """Return whether *scope* normalises to a known canonical slug value."""
+    if scope is None:
+        return False
+    normalised = normalize_scope(scope)
+    if normalised is None:
+        return False
+    return normalised in canonical_scope_values()
+
+
+def export_scope_canon() -> dict[str, object]:
+    """JSON-serialisable canon snapshot for shared allowlist importers.
+
+    Shape is intentionally small and stable:
+    ``{"aliases": {alias: canon}, "canonical_values": [..sorted..]}``.
+    """
+    return {
+        "aliases": dict(sorted(CANONICAL_SCOPE_ALIASES.items())),
+        "canonical_values": sorted(canonical_scope_values()),
+    }
