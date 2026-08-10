@@ -478,9 +478,9 @@ class TestPromptfooConfig:
         """Letter A must ban security framing tokens in live assertions."""
         data = _load_promptfoo_yaml()
         case = next(c for c in data["tests"] if (c.get("vars") or {}).get("letter") == "A")
-        blob = "\n".join(a["value"] for a in case["assert"] if a.get("type") == "javascript")
+        values = [a["value"] for a in case["assert"] if a.get("type") == "javascript"]
         for token in ("secrets", "credentials", "security"):
-            assert token in blob.lower(), token
+            assert any(v.lstrip().startswith("!") and token in v.lower() for v in values), token
 
     def test_smoke_case_remains_first(self):
         """Baseline smoke case stays index 0 so legacy first-case tests remain stable."""

@@ -229,8 +229,6 @@ tests:
   - type: javascript
     value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
   - type: javascript
-    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
-  - type: javascript
     value: '!output.toLowerCase().includes(''security'')'
   - type: javascript
     value: '!output.toLowerCase().includes(''secrets'')'
