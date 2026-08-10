@@ -58,6 +58,7 @@ from git_cg.commit_quality import (
     min_included_change_bullets,
     presentation_constraints,
     prose_has_security_negative_markers,
+    repair_craft_wording,
     repair_security_noun_claims,
     required_changelog_groups,
     security_claims_without_path_evidence,
@@ -2158,6 +2159,307 @@ def test_try_repair_presentation_guards_clears_security_noun_only() -> None:
     blob = f"{repaired.primary_intent.description}\n{repaired.body_summary}".lower()
     assert "secret" not in blob
     assert "credential" not in blob
+
+
+def test_repair_craft_wording_docs_only_add_and_banned_opener() -> None:
+    """#214: docs-only Add subject + banned body opener repairs without skeleton."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="Add Review Checklist For Usage",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "This commit introduces a review checklist for staged docs."
+    paths = ["docs/usage.md"]
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert pre.dirty is True
+    assert "GUARD_TEST_DOCS_ADD_OPENER" in pre.codes() or "GUARD_TITLE_CASE_SUBJECT" in pre.codes()
+    assert "GUARD_BANNED_BODY_OPENER" in pre.codes()
+
+    out, changed = repair_craft_wording(plan, paths=paths, report=pre)
+    assert changed is True
+    assert out.primary_intent.intent_id == "documentation_update"
+    assert out.primary_intent.gitmoji == "📝"
+    assert out.primary_intent.cc_type == CommitType.DOCS
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    desc = (out.primary_intent.description or "").lower()
+    assert desc.startswith("document")
+    assert not desc.startswith("add")
+    body = out.body_summary or ""
+    assert not body.startswith("This commit introduces")
+    assert "checklist" in body.lower() or "documentation" in body.lower()
+    # No skeleton provenance.
+    assert "[presentation-skeleton-fallback]" not in (out.rationale or "")
+    post = evaluate_presentation_guards(out, paths=paths)
+    assert post.dirty is False
+    assert post.fallback_reason == PRESENTATION_FALLBACK_NONE
+
+
+@pytest.mark.parametrize(
+    ("description", "body", "paths", "expect_prefix"),
+    [
+        (
+            "Refresh usage documentation checklist",
+            "Provides a review checklist for staged docs.",
+            ["docs/usage.md"],
+            "document",
+        ),
+        (
+            "Expand ADR decision record notes",
+            "Includes alignment notes for the acceptance path.",
+            ["docs/ADRs/0163-scoped-reasoning-history.md"],
+            "record",
+        ),
+        (
+            "Polish flowchart guidance",
+            "Updates the operator diagram section.",
+            ["docs/usage.md"],
+            "diagram",
+        ),
+        (
+            "Tweak unit tests for claim locks",
+            "Ensures claim-lock coverage stays pinned.",
+            ["tests/test_scoped_history.py"],
+            "pin",
+        ),
+        (
+            "Adjust snapshot coverage for claims",
+            "Improves fixture evidence for the suite.",
+            ["tests/test_scoped_history.py"],
+            "pin",
+        ),
+        (
+            "Streamline tests for guard matrix",
+            "Covers regression paths for the guard matrix.",
+            ["tests/test_commit_quality.py"],
+            "guard",
+        ),
+    ],
+)
+def test_repair_craft_wording_broader_catalogue(
+    description: str,
+    body: str,
+    paths: list[str],
+    expect_prefix: str,
+) -> None:
+    """#214 NTH: broader inventory/vague openers map onto preferred outcome verbs."""
+    docs_only = all(p.startswith("docs/") or "/ADRs/" in p or p.startswith("docs\\") for p in paths)
+    if docs_only:
+        plan = _plan(
+            intent_id="documentation_update",
+            gitmoji="📝",
+            cc_type=CommitType.DOCS,
+            scope="usage",
+            description=description,
+            semver=SemVerImpact.NONE,
+            changelog="Documentation",
+        )
+    else:
+        plan = _plan(
+            intent_id="tests_update",
+            gitmoji="✅",
+            cc_type=CommitType.TEST,
+            scope="commit-quality",
+            description=description,
+            semver=SemVerImpact.NONE,
+            changelog="Tests",
+        )
+    plan.body_summary = body
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert pre.dirty is True
+    out, changed = repair_craft_wording(plan, paths=paths, report=pre)
+    assert changed is True
+    desc = (out.primary_intent.description or "").lower()
+    assert desc.startswith(expect_prefix), desc
+    assert not desc.startswith(
+        ("add", "improve", "update", "enhance", "tweak", "adjust", "streamline", "refresh", "expand", "polish")
+    )
+    post = evaluate_presentation_guards(out, paths=paths)
+    assert post.dirty is False
+    assert "[presentation-skeleton-fallback]" not in (out.rationale or "")
+
+
+def test_first_subject_token_strips_trailing_punctuation() -> None:
+    """#214 CodeRabbit: punctuated openers still match inventory catalogues."""
+    from git_cg.commit_quality import _first_subject_token
+
+    assert _first_subject_token("add: coverage for claims") == "add"
+    assert _first_subject_token("Add: coverage for claims") == "Add"
+    assert _first_subject_token("'refresh' usage docs") == "refresh"
+
+
+def test_check_craft_guard_punctuated_inventory_opener_docs_and_tests() -> None:
+    """#214: 'add:' / 'Add:' subjects fire craft repair on docs and tests paths."""
+    docs_plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="add: coverage for claims",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    docs_plan.body_summary = "Document the claim-coverage guidance cleanly."
+    docs_paths = ["docs/usage.md"]
+    docs_pre = evaluate_presentation_guards(docs_plan, paths=docs_paths)
+    assert docs_pre.dirty is True
+    assert "GUARD_TEST_DOCS_ADD_OPENER" in docs_pre.codes() or "GUARD_VAGUE_SUBJECT_VERB" in docs_pre.codes()
+    docs_out, docs_changed = repair_craft_wording(docs_plan, paths=docs_paths, report=docs_pre)
+    assert docs_changed is True
+    assert (docs_out.primary_intent.description or "").lower().startswith(("document", "record", "note"))
+    assert evaluate_presentation_guards(docs_out, paths=docs_paths).dirty is False
+
+    tests_plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="commit-quality",
+        description="Add: coverage for claims",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    tests_plan.body_summary = "Cover claim locks cleanly."
+    tests_paths = ["tests/test_commit_quality.py"]
+    tests_pre = evaluate_presentation_guards(tests_plan, paths=tests_paths)
+    assert tests_pre.dirty is True
+    tests_out, tests_changed = repair_craft_wording(tests_plan, paths=tests_paths, report=tests_pre)
+    assert tests_changed is True
+    desc = (tests_out.primary_intent.description or "").lower()
+    assert desc.startswith(("cover", "claim", "pin", "lock", "guard"))
+    assert evaluate_presentation_guards(tests_out, paths=tests_paths).dirty is False
+
+
+def test_check_craft_guard_plain_add_body_does_not_emit_extended_opener() -> None:
+    """#214 CI: legal docs body 'Add ADR …' must stay craft-pass (N-legal lock)."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="adr",
+        description="diagram Policy B scoped-history architecture",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "Add ADR mermaid overview and usage Related link."
+    paths = ["docs/adr/0001-policy-b.md", "docs/usage.md"]
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert "GUARD_BANNED_BODY_OPENER" not in pre.codes()
+    # Subject/body craft may still be clean for this legal fixture shape.
+    craft_codes = {f.code for f in pre.findings if f.kind == "craft"}
+    assert "GUARD_BANNED_BODY_OPENER" not in craft_codes
+
+
+def test_check_craft_guard_extended_body_inventory_opener_dispatches_repair() -> None:
+    """#214 CodeRabbit: clean subject + Provides/Includes body still craft-repairs."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="document review checklist",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "Provides a review checklist for staged docs."
+    paths = ["docs/usage.md"]
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert pre.dirty is True
+    assert "GUARD_BANNED_BODY_OPENER" in pre.codes()
+    out, changed = repair_craft_wording(plan, paths=paths, report=pre)
+    assert changed is True
+    body = out.body_summary or ""
+    assert not body.lstrip().lower().startswith("provides")
+    assert "checklist" in body.lower()
+    post = evaluate_presentation_guards(out, paths=paths)
+    assert post.dirty is False
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is True
+    assert report.dirty is False
+    assert not (repaired.body_summary or "").lstrip().lower().startswith("provides")
+
+
+def test_try_repair_presentation_guards_docs_only_craft_avoids_skeleton() -> None:
+    """#214: try_repair clears craft-only docs-only dirty sets without skeleton."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="Adds usage documentation checklist",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "Adds a contributor review checklist for commit subjects."
+    paths = ["docs/usage.md"]
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is True
+    assert report.dirty is False
+    assert repaired.primary_intent.intent_id == "documentation_update"
+    assert repaired.primary_intent.gitmoji == "📝"
+    assert (repaired.primary_intent.description or "").lower().startswith("document")
+    assert not (repaired.body_summary or "").lstrip().startswith("Adds ")
+    assert "[presentation-skeleton-fallback]" not in (repaired.rationale or "")
+    # Gold-strict must accept repaired wording (no skeleton marker).
+    from git_cg.commit_gold import check_commit_gold
+    from git_cg.intent import DiffSignals
+
+    gold = check_commit_gold(
+        repaired,
+        None,
+        signals=DiffSignals(files=paths, only_docs=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_SKELETON_FALLBACK_FINAL" not in gold.codes()
+    assert gold.ok_for_mode("strict")
+
+
+def test_try_repair_presentation_guards_tests_only_add_opener() -> None:
+    """#214: tests-only Add/Title-Case subject repairs to cover/outcome verb."""
+    plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="scoped-history",
+        description="Add Unit Tests For Claims",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    plan.body_summary = "Cover locks."
+    paths = [
+        "tests/test_scoped_history.py",
+        "tests/test_scoped_history_telemetry.py",
+    ]
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is True
+    assert report.dirty is False
+    desc = (repaired.primary_intent.description or "").lower()
+    assert desc.startswith("cover") or desc.startswith("pin") or desc.startswith("claim")
+    assert not desc.startswith("add")
+
+
+def test_try_repair_presentation_guards_mixed_hallucination_and_craft_no_silent_accept() -> None:
+    """#214: mixed hallucination+craft must not silent-repair into acceptance."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="adr",
+        description="Add Runtime Recovery Guidance",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    # Runtime verb on docs path trips hallucination; Add opener trips craft.
+    plan.body_summary = "This commit introduces runtime fallback recovery in the ADR."
+    paths = ["docs/ADRs/0163-scoped-reasoning-history.md"]
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is False
+    assert report.dirty is True
+    assert report.hallucination_guard_fired is True
+    # Plan identity unchanged on failed repair.
+    assert repaired.primary_intent.description == plan.primary_intent.description
 
 
 def test_apply_guard_skeleton_fallback_preserves_identity_and_docs_force() -> None:

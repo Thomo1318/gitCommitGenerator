@@ -1,0 +1,24 @@
+# Post-repair COMMIT_EDITMSG snapshot (Issue #214 nice-to-have)
+#
+# Historical COMMIT_EDITMSG in this directory remains the pre-fix #212
+# dogfood capture (secrets_update / chore / PATCH). Do not overwrite it.
+#
+# This snapshot freezes a successful gold-strict docs-only craft-repair
+# outcome for drift guards and bakeoff compare.
+
+CASE=docs-only
+ISSUE=214
+CLAIM=CQ-D
+HEAD=c77d1ed
+ENGINE=mtplx
+MODEL=mtplx-qwen36-27b-optimized-speed-v2
+ARTIFACT_ROOT=/tmp/git-cg-acceptpath-cqd-214-20260810-151339
+WORK_REPO=/tmp/git-cg-mtplx-docs-only-qQJGGZ
+PATH_CLASS_GATE=docs_only
+INTENT_ID=documentation_update
+CC_TYPE=docs
+SEMVER=NONE
+DETERMINISTIC_WORDING_REPAIR=yes
+SKELETON_PROVENANCE=no
+GOLD_SKELETON_FALLBACK_FINAL=no
+CAPTURED=2026-08-10T15:13:39+10:00

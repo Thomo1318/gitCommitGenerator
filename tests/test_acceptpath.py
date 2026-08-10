@@ -15,6 +15,7 @@ from acceptpath_pack import (
     CLOSE_GATE_CASES,
     INFO_CASES,
     PACK_ROOT,
+    assert_docs_only_post_repair_snapshot,
     assert_pack_integrity,
     case_dir,
     iter_close_gate_cases,
@@ -396,3 +397,16 @@ def test_acceptpath_pack_rejects_path_escape() -> None:
         case.read_text("../README.md")
     with pytest.raises(ValueError, match="escapes case root"):
         case.optional_text("../../pyproject.toml")
+
+
+def test_acceptpath_docs_only_post_repair_snapshot_issue_214() -> None:
+    """#214 NTH: frozen post-repair COMMIT_EDITMSG snapshot stays craft-clean."""
+    assert_docs_only_post_repair_snapshot()
+    case = load_case("docs-only")
+    # Historical pre-fix capture remains distinct evidence.
+    pre = case.read_text("COMMIT_EDITMSG").strip()
+    post = case.read_text("COMMIT_EDITMSG.post-repair").strip()
+    assert pre != post
+    assert "SemVer-Impact: PATCH" in pre or "secrets" in pre.lower() or "chore" in pre.lower()
+    assert "SemVer-Impact: NONE" in post
+    assert "Change-Types: docs" in post

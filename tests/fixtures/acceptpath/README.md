@@ -71,3 +71,19 @@ for case in iter_close_gate_cases():
 ```
 
 Close-gate cases remain the four MTPLX envelopes. ``lmlx-docs-compare`` is informational only.
+
+## #214 post-repair snapshot (docs-only)
+
+After the docs-only gold-strict craft residual (#214), the historical
+`docs-only/COMMIT_EDITMSG` remains the **pre-fix** #212 capture.
+
+Additional optional artifacts (not required for #212 pack integrity):
+
+| File | Role |
+|:---|:---|
+| `docs-only/COMMIT_EDITMSG.post-repair` | Successful post-craft-repair message under gold-strict |
+| `docs-only/post-repair-meta.txt` | Provenance for the post-repair snapshot |
+
+Deterministic tests may assert shape/spine on the post-repair snapshot without
+re-running live MTPLX. Live CQ-D remains operator confirmation.
+

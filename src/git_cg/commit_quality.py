@@ -3252,6 +3252,28 @@ VAGUE_SUBJECT_VERBS: frozenset[str] = frozenset(
         "streamline",
         "streamlines",
         "streamlined",
+        # #214 broader craft catalogue (docs/tests inventory-ish openers)
+        "refresh",
+        "refreshes",
+        "refreshed",
+        "revise",
+        "revises",
+        "revised",
+        "polish",
+        "polishes",
+        "polished",
+        "tweak",
+        "tweaks",
+        "tweaked",
+        "adjust",
+        "adjusts",
+        "adjusted",
+        "expand",
+        "expands",
+        "expanded",
+        "extend",
+        "extends",
+        "extended",
     }
 )
 
@@ -3644,9 +3666,16 @@ def check_craft_guard(
         )
 
     # Title Case inventory default "Add … unit tests" / SOP passthrough on test/docs.
+    # #214: broader inventory openers (refresh/expand/tweak/…) share this code on
+    # docs/tests path-classes so craft repair can rewrite them to preferred verbs.
     first = _first_subject_token(subject)
     docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
-    if docs_or_tests and first.lower() in {"add", "adds", "added"}:
+    first_l = first.lower()
+    subject_l = (subject or "").strip().lower()
+    inventory_hit = first_l in CRAFT_INVENTORY_SUBJECT_OPENERS or any(
+        subject_l.startswith(op + " ") or subject_l == op for op in CRAFT_INVENTORY_SUBJECT_OPENERS if " " in op
+    )
+    if docs_or_tests and inventory_hit and first_l in {"add", "adds", "added"}:
         findings.append(
             GuardFinding(
                 code="GUARD_TEST_DOCS_ADD_OPENER",
@@ -3658,9 +3687,23 @@ def check_craft_guard(
                 token=first,
             )
         )
+    elif docs_or_tests and inventory_hit and first_l not in VAGUE_SUBJECT_VERBS:
+        # Non-vague inventory openers outside the classic Add* set still need
+        # craft pressure so repair_craft_wording can map them to the catalogue.
+        findings.append(
+            GuardFinding(
+                code="GUARD_TEST_DOCS_ADD_OPENER",
+                message=(
+                    f"Test/docs path-class subject opens with inventory opener {first!r}; "
+                    "prefer cover/claim/pin/document/record outcome verbs."
+                ),
+                kind="craft",
+                token=first,
+            )
+        )
 
     # Vague verbs when outcome verbs fit (D21) — always craft pressure on correctness-ish.
-    if first.lower() in VAGUE_SUBJECT_VERBS:
+    if first_l in VAGUE_SUBJECT_VERBS or (subject_l.startswith("clean up ") or subject_l == "clean up"):
         findings.append(
             GuardFinding(
                 code="GUARD_VAGUE_SUBJECT_VERB",
@@ -3673,7 +3716,8 @@ def check_craft_guard(
             )
         )
 
-    # Banned body openers (import gold source — I-13).
+    # Banned body openers (import gold source — I-13) plus extended docs/tests
+    # inventory first-tokens from _CRAFT_BODY_INVENTORY_OPENERS (#214).
     body_first = ""
     if body:
         for line in body.replace("\\n", "\n").splitlines():
@@ -3681,6 +3725,7 @@ def check_craft_guard(
                 body_first = line.strip()
                 break
     if body_first:
+        emitted_body_opener = False
         for opener in BANNED_BODY_OPENERS:
             if body_first.startswith(opener):
                 findings.append(
@@ -3694,7 +3739,26 @@ def check_craft_guard(
                         token=opener.strip(),
                     )
                 )
+                emitted_body_opener = True
                 break
+        if not emitted_body_opener:
+            # Extended inventory openers (Provides/Includes) are repairable on
+            # docs/tests path-classes so repair_craft_wording can dispatch.
+            # Use the narrow emission set — not the full repair catalogue — so
+            # historical legal bodies like "Add ADR …" stay craft-pass (#214 CI).
+            body_tok = _first_subject_token(body_first).lower()
+            if docs_or_tests and body_tok in _CRAFT_BODY_EXTENDED_GUARD_OPENERS:
+                findings.append(
+                    GuardFinding(
+                        code="GUARD_BANNED_BODY_OPENER",
+                        message=(
+                            f"Body opens with inventory opener {body_tok!r}; "
+                            "state the behaviour delta with preferred docs/tests outcome verbs."
+                        ),
+                        kind="craft",
+                        token=body_tok,
+                    )
+                )
 
     out: list[GuardFinding] = []
     seen: set[tuple[str, str]] = set()
@@ -3711,9 +3775,12 @@ def _first_subject_token(subject: str) -> str:
     words = [w for w in (subject or "").strip().split() if any(ch.isalpha() for ch in w)]
     if not words:
         return ""
-    # Strip leading non-alpha from token (e.g. quotes).
+    # Strip leading/trailing non-alpha so openers like "add:" / "'Add'" still match
+    # inventory catalogues (issue #214 CodeRabbit residual).
     token = words[0]
-    return re.sub(r"^[^A-Za-z]+", "", token)
+    token = re.sub(r"^[^A-Za-z]+", "", token)
+    token = re.sub(r"[^A-Za-z]+$", "", token)
+    return token
 
 
 def evaluate_presentation_guards(
@@ -3834,6 +3901,521 @@ def repair_security_noun_claims(
     return plan, True
 
 
+# Craft-only codes eligible for deterministic wording repair on docs/tests
+# path-classes (issue #214). Mixed hallucination sets still require regen.
+_CRAFT_REPAIRABLE_CODES: frozenset[str] = frozenset(
+    {
+        "GUARD_TEST_DOCS_ADD_OPENER",
+        "GUARD_BANNED_BODY_OPENER",
+        "GUARD_TITLE_CASE_SUBJECT",
+        "GUARD_VAGUE_SUBJECT_VERB",
+    }
+)
+
+# Inventory / vague subject openers eligible for craft rewrite (broader than
+# the original Add/Improve seed). Keep aligned with VAGUE_SUBJECT_VERBS + Add*.
+CRAFT_INVENTORY_SUBJECT_OPENERS: frozenset[str] = frozenset(
+    {
+        "add",
+        "adds",
+        "added",
+        "improve",
+        "improves",
+        "improved",
+        "enhance",
+        "enhances",
+        "enhanced",
+        "update",
+        "updates",
+        "updated",
+        "clean",
+        "cleans",
+        "cleaned",
+        "cleanup",
+        "clean up",
+        "hygiene",
+        "streamline",
+        "streamlines",
+        "streamlined",
+        "refresh",
+        "refreshes",
+        "refreshed",
+        "revise",
+        "revises",
+        "revised",
+        "polish",
+        "polishes",
+        "polished",
+        "tweak",
+        "tweaks",
+        "tweaked",
+        "adjust",
+        "adjusts",
+        "adjusted",
+        "expand",
+        "expands",
+        "expanded",
+        "extend",
+        "extends",
+        "extended",
+    }
+)
+
+# Body first-token inventory openers eligible for craft *repair* on docs/tests.
+# Broader than gold BANNED_BODY_OPENERS so repair can rewrite Provides/Includes
+# and common inventory stems once a repairable craft finding is present.
+_CRAFT_BODY_INVENTORY_OPENERS: frozenset[str] = frozenset(
+    {
+        "add",
+        "adds",
+        "added",
+        "introduce",
+        "introduces",
+        "introduced",
+        "ensure",
+        "ensures",
+        "ensured",
+        "update",
+        "updates",
+        "updated",
+        "improve",
+        "improves",
+        "improved",
+        "enhance",
+        "enhances",
+        "enhanced",
+        "provide",
+        "provides",
+        "provided",
+        "include",
+        "includes",
+        "included",
+    }
+)
+
+# Guard *emission* set for extended body inventory (CodeRabbit #214 residual).
+# Keep narrower than repair catalogue so legal Slice-9 bodies like "Add ADR …"
+# (N-legal) remain craft-pass while Provides/Includes still dispatch repair.
+# Gold BANNED_BODY_OPENERS already covers "Adds "/"Introduces "/"Ensures ".
+_CRAFT_BODY_EXTENDED_GUARD_OPENERS: frozenset[str] = frozenset(
+    {
+        "provide",
+        "provides",
+        "provided",
+        "include",
+        "includes",
+        "included",
+    }
+)
+
+_CRAFT_SUBJECT_OPENER_RE = re.compile(
+    r"^(?P<lead>[\"\'\(\[]*)(?P<verb>"
+    r"Add|Adds|Added|"
+    r"Improve|Improves|Improved|"
+    r"Enhance|Enhances|Enhanced|"
+    r"Update|Updates|Updated|"
+    r"Clean(?:\s+up)?|Cleans|Cleaned|Cleanup|"
+    r"Hygiene|"
+    r"Streamline|Streamlines|Streamlined|"
+    r"Refresh|Refreshes|Refreshed|"
+    r"Revise|Revises|Revised|"
+    r"Polish|Polishes|Polished|"
+    r"Tweak|Tweaks|Tweaked|"
+    r"Adjust|Adjusts|Adjusted|"
+    r"Expand|Expands|Expanded|"
+    r"Extend|Extends|Extended"
+    r")\b(?P<rest>.*)$",
+    flags=re.IGNORECASE,
+)
+
+
+def _pick_docs_outcome_verb(rest: str) -> str:
+    """Choose a docs preferred outcome verb from residual subject text."""
+    blob = (rest or "").lower()
+    specialised = (
+        ("diagram", "diagram"),
+        ("flowchart", "diagram"),
+        ("sequence diagram", "diagram"),
+        ("annotate", "annotate"),
+        ("annotation", "annotate"),
+        ("index", "index"),
+        ("changelog", "record"),
+        ("release note", "record"),
+        ("align", "align"),
+        ("alignment", "align"),
+        ("accept", "accept"),
+        ("acceptance", "accept"),
+        ("decision record", "record"),
+        (" adr", "record"),
+        ("adr ", "record"),
+        ("note", "note"),
+    )
+    for needle, verb in specialised:
+        if needle in blob:
+            return verb
+    return "document"
+
+
+def _pick_tests_outcome_verb(rest: str) -> str:
+    """Choose a tests preferred outcome verb from residual subject text."""
+    blob = (rest or "").lower()
+    specialised = (
+        ("claim locks", "pin"),
+        ("claim lock", "pin"),
+        ("claim-lock", "pin"),
+        ("claim-locks", "pin"),
+        ("snapshot", "pin"),
+        ("pin", "pin"),
+        ("lock", "lock"),
+        ("guard", "guard"),
+        ("close", "close"),
+        ("claim", "claim"),
+        ("fixture", "cover"),
+        ("regression", "cover"),
+    )
+    for needle, verb in specialised:
+        if needle in blob:
+            return verb
+    return "cover"
+
+
+def _strip_tests_outcome_rest(rest: str, verb: str) -> str:
+    """Avoid duplicated outcome nouns after selecting a tests catalogue verb."""
+    text_out = (rest or "").strip()
+    lowered = text_out.lower()
+    # If residual is exactly the claim-lock phrase, keep the stable noun phrase.
+    if verb == "pin" and lowered in {"claim locks", "claim lock", "claim-lock", "claim-locks"}:
+        return "claim locks"
+    # Bare claim residual (after inventory stripping) should not become "claim claims".
+    if verb == "claim" and lowered in {"claim", "claims"}:
+        return "claim locks"
+    if verb == "guard" and lowered in {"guard matrix", "guards", "guard"}:
+        return text_out
+    # Drop a leading preferred verb already present when replacing with specialised.
+    for pref in ("cover", "claim", "pin", "lock", "guard", "close"):
+        if lowered.startswith(pref + " "):
+            return text_out[len(pref) :].strip()
+    # Residual is only the chosen verb (or simple plural) — keep verb alone.
+    if lowered in {verb, verb + "s"}:
+        return verb
+    return text_out
+
+
+def _strip_inventory_rest_prefixes(rest: str) -> str:
+    """Drop redundant inventory noun prefixes from a repaired subject residual."""
+    text_out = (rest or "").strip(" -:—,.")
+    lowered = text_out.lower()
+    for prefix in (
+        "unit tests for ",
+        "unit tests ",
+        "tests for ",
+        "tests ",
+        "test coverage for ",
+        "test coverage ",
+        "coverage for ",
+        "coverage of ",
+        "documentation for ",
+        "documentation of ",
+        "documentation ",
+        "docs for ",
+        "docs of ",
+        "docs ",
+        "support for ",
+        "support ",
+        "guidance for ",
+        "guidance on ",
+        "guidance ",
+        "notes for ",
+        "notes on ",
+        "notes ",
+        "details for ",
+        "details on ",
+        "details ",
+    ):
+        if lowered.startswith(prefix):
+            text_out = text_out[len(prefix) :].strip()
+            lowered = text_out.lower()
+            break
+    return text_out
+
+
+def _title_case_to_imperative(subject: str) -> str:
+    """Lowercase Title Case subject words while preserving acronyms/short tokens."""
+    words = (subject or "").split()
+    if not words:
+        return subject or ""
+    out: list[str] = []
+    for idx, word in enumerate(words):
+        if not any(ch.isalpha() for ch in word):
+            out.append(word)
+            continue
+        alpha = re.sub(r"[^A-Za-z]", "", word)
+        if alpha.isupper() and len(alpha) <= 4:
+            out.append(word)
+            continue
+        if idx == 0:
+            out.append(word[:1].lower() + word[1:] if word else word)
+        elif word[:1].isupper() and (len(word) == 1 or word[1:].islower() or not any(c.islower() for c in word[1:])):
+            out.append(word[:1].lower() + word[1:])
+        else:
+            out.append(word)
+    return " ".join(out)
+
+
+def _repair_craft_subject(subject: str, *, docs_only: bool, tests_only: bool) -> str:
+    """Rewrite craft-dirty subject openers to outcome verbs (presentation-only)."""
+    raw = (subject or "").strip()
+    if not raw:
+        if docs_only:
+            return "document staged documentation changes"
+        if tests_only:
+            return "cover staged claim locks"
+        return raw
+
+    text_out = _title_case_to_imperative(raw)
+    match = _CRAFT_SUBJECT_OPENER_RE.match(text_out)
+    if match:
+        rest = _strip_inventory_rest_prefixes(match.group("rest") or "")
+        rest_l = rest.lower()
+        preferred_docs = tuple(v.lower() for v in DOCS_PREFERRED_VERBS)
+        if docs_only:
+            if rest and rest_l.startswith(preferred_docs):
+                text_out = rest
+            elif rest:
+                verb = _pick_docs_outcome_verb(rest)
+                text_out = rest if rest_l.startswith(verb + " ") else f"{verb} {rest}"
+            else:
+                text_out = "document staged documentation changes"
+        elif tests_only:
+            if rest:
+                verb = _pick_tests_outcome_verb(rest)
+                cleaned = _strip_tests_outcome_rest(rest, verb)
+                cleaned_l = cleaned.lower()
+                if cleaned_l.startswith(verb + " ") or cleaned_l == verb:
+                    text_out = cleaned
+                else:
+                    text_out = f"{verb} {cleaned}".strip()
+            else:
+                text_out = "cover staged claim locks"
+        else:
+            text_out = f"fix {rest}" if rest else "fix staged correctness regressions"
+        lead = match.group("lead") or ""
+        text_out = f"{lead}{text_out}".strip()
+
+    first = _first_subject_token(text_out).lower()
+    lowered_subject = text_out.lower()
+    still_inventory = first in CRAFT_INVENTORY_SUBJECT_OPENERS or any(
+        lowered_subject.startswith(op + " ") or lowered_subject == op
+        for op in CRAFT_INVENTORY_SUBJECT_OPENERS
+        if " " in op
+    )
+    if still_inventory:
+        rest = _strip_inventory_rest_prefixes(
+            re.sub(r"^(?:clean\s+up|\w+)\b", "", text_out, count=1, flags=re.IGNORECASE).strip(" -:—,.")
+        )
+        if docs_only:
+            if rest:
+                verb = _pick_docs_outcome_verb(rest)
+                text_out = rest if rest.lower().startswith(verb + " ") else f"{verb} {rest}"
+            else:
+                text_out = "document staged documentation changes"
+        elif tests_only:
+            if rest:
+                verb = _pick_tests_outcome_verb(rest)
+                cleaned = _strip_tests_outcome_rest(rest, verb)
+                cleaned_l = cleaned.lower()
+                text_out = (
+                    cleaned if cleaned_l.startswith(verb + " ") or cleaned_l == verb else f"{verb} {cleaned}".strip()
+                )
+            else:
+                text_out = "cover staged claim locks"
+
+    words = text_out.split()
+    if words:
+        w0 = words[0]
+        alpha = re.sub(r"^[^A-Za-z]+", "", w0)
+        if alpha and alpha[:1].isupper():
+            words[0] = w0.replace(alpha, alpha[:1].lower() + alpha[1:], 1)
+            text_out = " ".join(words)
+    return text_out[:50]
+
+
+def _sentence_case(text: str) -> str:
+    """Capitalize the first alphabetic character of a sentence."""
+    if not text:
+        return text
+    chars = list(text)
+    for i, ch in enumerate(chars):
+        if ch.isalpha():
+            chars[i] = ch.upper()
+            break
+    return "".join(chars)
+
+
+def _ensure_terminal_punct(text: str) -> str:
+    stripped = text.rstrip()
+    if not stripped:
+        return stripped
+    if stripped.endswith((".", "!", "?")):
+        return stripped
+    return f"{stripped}."
+
+
+def _repair_craft_body(body: str, *, docs_only: bool, tests_only: bool) -> str:
+    """Rewrite banned body openers to direct behaviour-delta prose."""
+    raw = (body or "").replace(chr(92) + "n", chr(10))
+    if not raw.strip():
+        if docs_only:
+            return "Document staged documentation paths without product claims."
+        if tests_only:
+            return "Cover staged test and fixture evidence without product framing."
+        return raw
+
+    lines = raw.splitlines()
+    first_idx = next((i for i, ln in enumerate(lines) if ln.strip()), None)
+    if first_idx is None:
+        return raw
+
+    first = lines[first_idx].strip()
+    matched = False
+    remainder = first
+    for opener in sorted(BANNED_BODY_OPENERS, key=len, reverse=True):
+        if first.startswith(opener):
+            remainder = first[len(opener) :].lstrip(" -:—,.")
+            matched = True
+            break
+        if first.lower().startswith(opener.lower()):
+            remainder = first[len(opener) :].lstrip(" -:—,.")
+            matched = True
+            break
+
+    if matched:
+        rem_l = remainder.lower()
+        docs_ok = (*(v.lower() for v in DOCS_PREFERRED_VERBS), "describe", "clarify")
+        tests_ok = (*(v.lower() for v in TEST_PREFERRED_VERBS), "record")
+        if docs_only:
+            if remainder and not rem_l.startswith(docs_ok):
+                verb = _pick_docs_outcome_verb(remainder)
+                rebuilt = f"{verb.capitalize()} {remainder[0].lower() + remainder[1:]}"
+            elif remainder:
+                rebuilt = remainder
+            else:
+                rebuilt = "Document staged documentation paths without product claims."
+        elif tests_only:
+            if remainder and not rem_l.startswith(tests_ok):
+                verb = _pick_tests_outcome_verb(remainder)
+                rebuilt = f"{verb.capitalize()} {remainder[0].lower() + remainder[1:]}"
+            elif remainder:
+                rebuilt = remainder
+            else:
+                rebuilt = "Cover staged test and fixture evidence without product framing."
+        else:
+            rebuilt = remainder if remainder else first
+        rebuilt = _ensure_terminal_punct(_sentence_case(rebuilt))
+        lines[first_idx] = rebuilt
+        return "\n".join(lines).strip()
+
+    first_tok = _first_subject_token(first).lower()
+    if first_tok in _CRAFT_BODY_INVENTORY_OPENERS:
+        parts = first.split(None, 1)
+        rest = parts[1] if len(parts) > 1 else ""
+        if docs_only:
+            if rest:
+                verb = _pick_docs_outcome_verb(rest)
+                rebuilt = f"{verb.capitalize()} {rest[0].lower() + rest[1:]}"
+            else:
+                rebuilt = "Document staged documentation paths without product claims."
+        elif tests_only:
+            if rest:
+                verb = _pick_tests_outcome_verb(rest)
+                rebuilt = f"{verb.capitalize()} {rest[0].lower() + rest[1:]}"
+            else:
+                rebuilt = "Cover staged test and fixture evidence without product framing."
+        else:
+            rebuilt = first
+        rebuilt = _ensure_terminal_punct(_sentence_case(rebuilt))
+        lines[first_idx] = rebuilt
+        return "\n".join(lines).strip()
+
+    return raw.strip()
+
+
+def repair_craft_wording(
+    plan: CommitPlan,
+    *,
+    paths: list[str] | None = None,
+    signals: DiffSignals | None = None,
+    constraints: PresentationConstraints | None = None,
+    report: GuardReport | None = None,
+) -> tuple[CommitPlan, bool]:
+    """Deterministically repair craft-only subject/body openers (issue #214).
+
+    Presentation-only. Preserves ranked ``intent_id`` / gitmoji / matrix fields.
+    Intended for docs-only and tests-only path classes where Add/banned openers
+    otherwise exhaust regen into skeleton provenance rejected by gold-strict.
+    """
+    clean = _resolve_paths(list(paths or []), signals)
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    docs_only = _docs_only_class(cons.diff_class, clean)
+    tests_only = _tests_only_class(cons.diff_class, clean)
+    if not (docs_only or tests_only):
+        return plan, False
+
+    active = report or evaluate_presentation_guards(
+        plan,
+        paths=paths,
+        signals=signals,
+        constraints=cons,
+    )
+    codes = active.codes()
+    if not codes or not codes <= _CRAFT_REPAIRABLE_CODES:
+        return plan, False
+
+    primary = plan.primary_intent
+    desc = str(getattr(primary, "description", "") or "")
+    body = str(getattr(plan, "body_summary", "") or "")
+    new_desc = _repair_craft_subject(desc, docs_only=docs_only, tests_only=tests_only)
+    new_body = _repair_craft_body(body, docs_only=docs_only, tests_only=tests_only)
+
+    secondaries_changed = False
+    new_secondaries: list = []
+    for sec in list(getattr(plan, "secondary_intents", None) or []):
+        sec_desc = str(getattr(sec, "description", "") or "")
+        repaired_sec = _repair_craft_subject(sec_desc, docs_only=docs_only, tests_only=tests_only)
+        if repaired_sec != sec_desc:
+            secondaries_changed = True
+            if hasattr(sec, "model_copy"):
+                sec = sec.model_copy(update={"description": repaired_sec})
+            else:
+                sec.description = repaired_sec
+        new_secondaries.append(sec)
+
+    changed = new_desc != desc or new_body != body or secondaries_changed
+    if not changed:
+        return plan, False
+
+    if hasattr(primary, "model_copy"):
+        primary = primary.model_copy(update={"description": new_desc})
+    else:
+        primary.description = new_desc
+
+    updates = {
+        "primary_intent": primary,
+        "body_summary": new_body,
+    }
+    if secondaries_changed:
+        updates["secondary_intents"] = new_secondaries
+
+    if hasattr(plan, "model_copy"):
+        return plan.model_copy(update=updates), True
+
+    plan.primary_intent = primary
+    plan.body_summary = new_body
+    if secondaries_changed:
+        plan.secondary_intents = new_secondaries
+    return plan, True
+
+
 def try_repair_presentation_guards(
     plan: CommitPlan,
     *,
@@ -3845,10 +4427,14 @@ def try_repair_presentation_guards(
 ) -> tuple[CommitPlan, GuardReport, bool]:
     """Attempt deterministic wording repair for repairable presentation guards.
 
-    Currently repairs ``GUARD_SECURITY_NOUN`` only. Returns
-    ``(plan, report, repaired)`` where *repaired* is True when wording changed
-    and the post-repair guard report is clean enough to continue without
-    skeleton provenance.
+    Repair order:
+    1. ``GUARD_SECURITY_NOUN``-only dirty sets (any path class)
+    2. Craft-only dirty sets on docs-only / tests-only path classes (#214)
+
+    Returns ``(plan, report, repaired)`` where *repaired* is True when wording
+    changed and the post-repair guard report is clean enough to continue without
+    skeleton provenance. Mixed hallucination+craft sets still need LLM regen or
+    skeleton.
     """
     active = report or evaluate_presentation_guards(
         plan,
@@ -3861,16 +4447,32 @@ def try_repair_presentation_guards(
         return plan, active, False
 
     codes = active.codes()
-    # Only auto-repair when every finding is a security-noun claim. Mixed dirty
-    # sets still need LLM regen or skeleton.
-    if not codes or codes - {"GUARD_SECURITY_NOUN"}:
+    if not codes:
         return plan, active, False
 
-    repaired_plan, changed = repair_security_noun_claims(
-        plan,
-        paths=paths,
-        signals=signals,
-    )
+    repaired_plan = plan
+    changed = False
+
+    # 1) Security-noun-only path (existing behaviour).
+    if codes <= {"GUARD_SECURITY_NOUN"}:
+        repaired_plan, changed = repair_security_noun_claims(
+            plan,
+            paths=paths,
+            signals=signals,
+        )
+    # 2) Craft-only path on docs/tests path-class (#214).
+    elif codes <= _CRAFT_REPAIRABLE_CODES:
+        repaired_plan, changed = repair_craft_wording(
+            plan,
+            paths=paths,
+            signals=signals,
+            constraints=constraints,
+            report=active,
+        )
+    else:
+        # Mixed dirty sets (e.g. hallucination + craft) are not silently repaired.
+        return plan, active, False
+
     if not changed:
         return plan, active, False
 
@@ -3911,7 +4513,7 @@ def format_guard_guidance(report: GuardReport | None) -> str:
         lines.append(f"- [{finding.code}] {msg}")
     lines.append("This block guides wording only. It MUST NOT change intent_id, gitmoji, or ranking.")
     # Final scrub so header/body never re-poison the model with claim nouns.
-    return _replace_security_claim_tokens("\n".join(lines))
+    return _replace_security_claim_tokens(chr(10).join(lines))
 
 
 def apply_guard_skeleton_fallback(
