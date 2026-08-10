@@ -2198,6 +2198,90 @@ def test_repair_craft_wording_docs_only_add_and_banned_opener() -> None:
     assert post.fallback_reason == PRESENTATION_FALLBACK_NONE
 
 
+@pytest.mark.parametrize(
+    ("description", "body", "paths", "expect_prefix"),
+    [
+        (
+            "Refresh usage documentation checklist",
+            "Provides a review checklist for staged docs.",
+            ["docs/usage.md"],
+            "document",
+        ),
+        (
+            "Expand ADR decision record notes",
+            "Includes alignment notes for the acceptance path.",
+            ["docs/ADRs/0163-scoped-reasoning-history.md"],
+            "record",
+        ),
+        (
+            "Polish flowchart guidance",
+            "Updates the operator diagram section.",
+            ["docs/usage.md"],
+            "diagram",
+        ),
+        (
+            "Tweak unit tests for claim locks",
+            "Ensures claim-lock coverage stays pinned.",
+            ["tests/test_scoped_history.py"],
+            "pin",
+        ),
+        (
+            "Adjust snapshot coverage for claims",
+            "Improves fixture evidence for the suite.",
+            ["tests/test_scoped_history.py"],
+            "pin",
+        ),
+        (
+            "Streamline tests for guard matrix",
+            "Covers regression paths for the guard matrix.",
+            ["tests/test_commit_quality.py"],
+            "guard",
+        ),
+    ],
+)
+def test_repair_craft_wording_broader_catalogue(
+    description: str,
+    body: str,
+    paths: list[str],
+    expect_prefix: str,
+) -> None:
+    """#214 NTH: broader inventory/vague openers map onto preferred outcome verbs."""
+    docs_only = all(p.startswith("docs/") or "/ADRs/" in p or p.startswith("docs\\") for p in paths)
+    if docs_only:
+        plan = _plan(
+            intent_id="documentation_update",
+            gitmoji="📝",
+            cc_type=CommitType.DOCS,
+            scope="usage",
+            description=description,
+            semver=SemVerImpact.NONE,
+            changelog="Documentation",
+        )
+    else:
+        plan = _plan(
+            intent_id="tests_update",
+            gitmoji="✅",
+            cc_type=CommitType.TEST,
+            scope="commit-quality",
+            description=description,
+            semver=SemVerImpact.NONE,
+            changelog="Tests",
+        )
+    plan.body_summary = body
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert pre.dirty is True
+    out, changed = repair_craft_wording(plan, paths=paths, report=pre)
+    assert changed is True
+    desc = (out.primary_intent.description or "").lower()
+    assert desc.startswith(expect_prefix), desc
+    assert not desc.startswith(
+        ("add", "improve", "update", "enhance", "tweak", "adjust", "streamline", "refresh", "expand", "polish")
+    )
+    post = evaluate_presentation_guards(out, paths=paths)
+    assert post.dirty is False
+    assert "[presentation-skeleton-fallback]" not in (out.rationale or "")
+
+
 def test_try_repair_presentation_guards_docs_only_craft_avoids_skeleton() -> None:
     """#214: try_repair clears craft-only docs-only dirty sets without skeleton."""
     plan = _plan(

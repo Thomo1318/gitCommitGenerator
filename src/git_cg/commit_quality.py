@@ -3252,6 +3252,28 @@ VAGUE_SUBJECT_VERBS: frozenset[str] = frozenset(
         "streamline",
         "streamlines",
         "streamlined",
+        # #214 broader craft catalogue (docs/tests inventory-ish openers)
+        "refresh",
+        "refreshes",
+        "refreshed",
+        "revise",
+        "revises",
+        "revised",
+        "polish",
+        "polishes",
+        "polished",
+        "tweak",
+        "tweaks",
+        "tweaked",
+        "adjust",
+        "adjusts",
+        "adjusted",
+        "expand",
+        "expands",
+        "expanded",
+        "extend",
+        "extends",
+        "extended",
     }
 )
 
@@ -3644,9 +3666,16 @@ def check_craft_guard(
         )
 
     # Title Case inventory default "Add … unit tests" / SOP passthrough on test/docs.
+    # #214: broader inventory openers (refresh/expand/tweak/…) share this code on
+    # docs/tests path-classes so craft repair can rewrite them to preferred verbs.
     first = _first_subject_token(subject)
     docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
-    if docs_or_tests and first.lower() in {"add", "adds", "added"}:
+    first_l = first.lower()
+    subject_l = (subject or "").strip().lower()
+    inventory_hit = first_l in CRAFT_INVENTORY_SUBJECT_OPENERS or any(
+        subject_l.startswith(op + " ") or subject_l == op for op in CRAFT_INVENTORY_SUBJECT_OPENERS if " " in op
+    )
+    if docs_or_tests and inventory_hit and first_l in {"add", "adds", "added"}:
         findings.append(
             GuardFinding(
                 code="GUARD_TEST_DOCS_ADD_OPENER",
@@ -3658,9 +3687,23 @@ def check_craft_guard(
                 token=first,
             )
         )
+    elif docs_or_tests and inventory_hit and first_l not in VAGUE_SUBJECT_VERBS:
+        # Non-vague inventory openers outside the classic Add* set still need
+        # craft pressure so repair_craft_wording can map them to the catalogue.
+        findings.append(
+            GuardFinding(
+                code="GUARD_TEST_DOCS_ADD_OPENER",
+                message=(
+                    f"Test/docs path-class subject opens with inventory opener {first!r}; "
+                    "prefer cover/claim/pin/document/record outcome verbs."
+                ),
+                kind="craft",
+                token=first,
+            )
+        )
 
     # Vague verbs when outcome verbs fit (D21) — always craft pressure on correctness-ish.
-    if first.lower() in VAGUE_SUBJECT_VERBS:
+    if first_l in VAGUE_SUBJECT_VERBS or (subject_l.startswith("clean up ") or subject_l == "clean up"):
         findings.append(
             GuardFinding(
                 code="GUARD_VAGUE_SUBJECT_VERB",
@@ -3845,12 +3888,208 @@ _CRAFT_REPAIRABLE_CODES: frozenset[str] = frozenset(
     }
 )
 
+# Inventory / vague subject openers eligible for craft rewrite (broader than
+# the original Add/Improve seed). Keep aligned with VAGUE_SUBJECT_VERBS + Add*.
+CRAFT_INVENTORY_SUBJECT_OPENERS: frozenset[str] = frozenset(
+    {
+        "add",
+        "adds",
+        "added",
+        "improve",
+        "improves",
+        "improved",
+        "enhance",
+        "enhances",
+        "enhanced",
+        "update",
+        "updates",
+        "updated",
+        "clean",
+        "cleans",
+        "cleaned",
+        "cleanup",
+        "clean up",
+        "hygiene",
+        "streamline",
+        "streamlines",
+        "streamlined",
+        "refresh",
+        "refreshes",
+        "refreshed",
+        "revise",
+        "revises",
+        "revised",
+        "polish",
+        "polishes",
+        "polished",
+        "tweak",
+        "tweaks",
+        "tweaked",
+        "adjust",
+        "adjusts",
+        "adjusted",
+        "expand",
+        "expands",
+        "expanded",
+        "extend",
+        "extends",
+        "extended",
+    }
+)
+
+# Body first-token inventory openers beyond gold BANNED_BODY_OPENERS prefixes.
+_CRAFT_BODY_INVENTORY_OPENERS: frozenset[str] = frozenset(
+    {
+        "add",
+        "adds",
+        "added",
+        "introduce",
+        "introduces",
+        "introduced",
+        "ensure",
+        "ensures",
+        "ensured",
+        "update",
+        "updates",
+        "updated",
+        "improve",
+        "improves",
+        "improved",
+        "enhance",
+        "enhances",
+        "enhanced",
+        "provide",
+        "provides",
+        "provided",
+        "include",
+        "includes",
+        "included",
+    }
+)
+
 _CRAFT_SUBJECT_OPENER_RE = re.compile(
-    r"^(?P<lead>[\"'\(\[]*)(?P<verb>Add|Adds|Added|Improve|Improves|Improved|"
-    r"Enhance|Enhances|Enhanced|Update|Updates|Updated|Clean(?:\s+up)?|Cleans|"
-    r"Cleaned|Cleanup|Hygiene|Streamline|Streamlines|Streamlined)\b(?P<rest>.*)$",
+    r"^(?P<lead>[\"\'\(\[]*)(?P<verb>"
+    r"Add|Adds|Added|"
+    r"Improve|Improves|Improved|"
+    r"Enhance|Enhances|Enhanced|"
+    r"Update|Updates|Updated|"
+    r"Clean(?:\s+up)?|Cleans|Cleaned|Cleanup|"
+    r"Hygiene|"
+    r"Streamline|Streamlines|Streamlined|"
+    r"Refresh|Refreshes|Refreshed|"
+    r"Revise|Revises|Revised|"
+    r"Polish|Polishes|Polished|"
+    r"Tweak|Tweaks|Tweaked|"
+    r"Adjust|Adjusts|Adjusted|"
+    r"Expand|Expands|Expanded|"
+    r"Extend|Extends|Extended"
+    r")\b(?P<rest>.*)$",
     flags=re.IGNORECASE,
 )
+
+
+def _pick_docs_outcome_verb(rest: str) -> str:
+    """Choose a docs preferred outcome verb from residual subject text."""
+    blob = (rest or "").lower()
+    specialised = (
+        ("diagram", "diagram"),
+        ("flowchart", "diagram"),
+        ("sequence diagram", "diagram"),
+        ("annotate", "annotate"),
+        ("annotation", "annotate"),
+        ("index", "index"),
+        ("changelog", "record"),
+        ("release note", "record"),
+        ("align", "align"),
+        ("alignment", "align"),
+        ("accept", "accept"),
+        ("acceptance", "accept"),
+        ("decision record", "record"),
+        (" adr", "record"),
+        ("adr ", "record"),
+        ("note", "note"),
+    )
+    for needle, verb in specialised:
+        if needle in blob:
+            return verb
+    return "document"
+
+
+def _pick_tests_outcome_verb(rest: str) -> str:
+    """Choose a tests preferred outcome verb from residual subject text."""
+    blob = (rest or "").lower()
+    specialised = (
+        ("claim locks", "pin"),
+        ("claim lock", "pin"),
+        ("claim-lock", "pin"),
+        ("claim-locks", "pin"),
+        ("snapshot", "pin"),
+        ("pin", "pin"),
+        ("lock", "lock"),
+        ("guard", "guard"),
+        ("close", "close"),
+        ("claim", "claim"),
+        ("fixture", "cover"),
+        ("regression", "cover"),
+    )
+    for needle, verb in specialised:
+        if needle in blob:
+            return verb
+    return "cover"
+
+
+def _strip_tests_outcome_rest(rest: str, verb: str) -> str:
+    """Avoid duplicated outcome nouns after selecting a tests catalogue verb."""
+    text_out = (rest or "").strip()
+    lowered = text_out.lower()
+    # If residual is exactly the claim-lock phrase, drop it (verb carries meaning).
+    if verb == "pin" and lowered in {"claim locks", "claim lock", "claim-lock", "claim-locks"}:
+        return "claim locks"
+    if verb == "guard" and lowered in {"guard matrix", "guards", "guard"}:
+        return text_out
+    # Drop a leading preferred verb already present when replacing with specialised.
+    for pref in ("cover", "claim", "pin", "lock", "guard", "close"):
+        if lowered.startswith(pref + " "):
+            return text_out[len(pref) :].strip()
+    return text_out
+
+
+def _strip_inventory_rest_prefixes(rest: str) -> str:
+    """Drop redundant inventory noun prefixes from a repaired subject residual."""
+    text_out = (rest or "").strip(" -:—,.")
+    lowered = text_out.lower()
+    for prefix in (
+        "unit tests for ",
+        "unit tests ",
+        "tests for ",
+        "tests ",
+        "test coverage for ",
+        "test coverage ",
+        "coverage for ",
+        "coverage of ",
+        "documentation for ",
+        "documentation of ",
+        "documentation ",
+        "docs for ",
+        "docs of ",
+        "docs ",
+        "support for ",
+        "support ",
+        "guidance for ",
+        "guidance on ",
+        "guidance ",
+        "notes for ",
+        "notes on ",
+        "notes ",
+        "details for ",
+        "details on ",
+        "details ",
+    ):
+        if lowered.startswith(prefix):
+            text_out = text_out[len(prefix) :].strip()
+            lowered = text_out.lower()
+            break
+    return text_out
 
 
 def _title_case_to_imperative(subject: str) -> str:
@@ -3886,71 +4125,72 @@ def _repair_craft_subject(subject: str, *, docs_only: bool, tests_only: bool) ->
             return "cover staged claim locks"
         return raw
 
-    text = _title_case_to_imperative(raw)
-    match = _CRAFT_SUBJECT_OPENER_RE.match(text)
+    text_out = _title_case_to_imperative(raw)
+    match = _CRAFT_SUBJECT_OPENER_RE.match(text_out)
     if match:
-        rest = (match.group("rest") or "").strip(" -:—,.")
+        rest = _strip_inventory_rest_prefixes(match.group("rest") or "")
         rest_l = rest.lower()
-        for prefix in (
-            "unit tests for ",
-            "unit tests ",
-            "tests for ",
-            "tests ",
-            "documentation for ",
-            "documentation ",
-            "docs for ",
-            "docs ",
-            "support for ",
-            "support ",
-        ):
-            if rest_l.startswith(prefix):
-                rest = rest[len(prefix) :].strip()
-                rest_l = rest.lower()
-                break
+        preferred_docs = tuple(v.lower() for v in DOCS_PREFERRED_VERBS)
         if docs_only:
-            if rest and not rest_l.startswith("document"):
-                text = f"document {rest}"
+            if rest and rest_l.startswith(preferred_docs):
+                text_out = rest
             elif rest:
-                text = rest if rest_l.startswith("document") else f"document {rest}"
+                verb = _pick_docs_outcome_verb(rest)
+                text_out = rest if rest_l.startswith(verb + " ") else f"{verb} {rest}"
             else:
-                text = "document staged documentation changes"
+                text_out = "document staged documentation changes"
         elif tests_only:
-            if rest and not rest_l.startswith(("cover", "pin", "claim", "lock")):
-                text = f"cover {rest}"
-            elif rest:
-                text = rest
+            if rest:
+                verb = _pick_tests_outcome_verb(rest)
+                cleaned = _strip_tests_outcome_rest(rest, verb)
+                cleaned_l = cleaned.lower()
+                if cleaned_l.startswith(verb + " ") or cleaned_l == verb:
+                    text_out = cleaned
+                else:
+                    text_out = f"{verb} {cleaned}".strip()
             else:
-                text = "cover staged claim locks"
+                text_out = "cover staged claim locks"
         else:
-            text = f"fix {rest}" if rest else "fix staged correctness regressions"
+            text_out = f"fix {rest}" if rest else "fix staged correctness regressions"
         lead = match.group("lead") or ""
-        text = f"{lead}{text}".strip()
+        text_out = f"{lead}{text_out}".strip()
 
-    first = _first_subject_token(text).lower()
-    inventory_openers = {
-        "add",
-        "adds",
-        "added",
-        "update",
-        "updates",
-        "updated",
-        "improve",
-        "improves",
-        "improved",
-    }
-    if docs_only and first in inventory_openers:
-        text = "document staged documentation changes"
-    if tests_only and first in inventory_openers:
-        text = "cover staged claim locks"
+    first = _first_subject_token(text_out).lower()
+    lowered_subject = text_out.lower()
+    still_inventory = first in CRAFT_INVENTORY_SUBJECT_OPENERS or any(
+        lowered_subject.startswith(op + " ") or lowered_subject == op
+        for op in CRAFT_INVENTORY_SUBJECT_OPENERS
+        if " " in op
+    )
+    if still_inventory:
+        rest = _strip_inventory_rest_prefixes(
+            re.sub(r"^(?:clean\s+up|\w+)\b", "", text_out, count=1, flags=re.IGNORECASE).strip(" -:—,.")
+        )
+        if docs_only:
+            if rest:
+                verb = _pick_docs_outcome_verb(rest)
+                text_out = rest if rest.lower().startswith(verb + " ") else f"{verb} {rest}"
+            else:
+                text_out = "document staged documentation changes"
+        elif tests_only:
+            if rest:
+                verb = _pick_tests_outcome_verb(rest)
+                cleaned = _strip_tests_outcome_rest(rest, verb)
+                cleaned_l = cleaned.lower()
+                text_out = (
+                    cleaned if cleaned_l.startswith(verb + " ") or cleaned_l == verb else f"{verb} {cleaned}".strip()
+                )
+            else:
+                text_out = "cover staged claim locks"
 
-    words = text.split()
+    words = text_out.split()
     if words:
         w0 = words[0]
         alpha = re.sub(r"^[^A-Za-z]+", "", w0)
         if alpha and alpha[:1].isupper():
             words[0] = w0.replace(alpha, alpha[:1].lower() + alpha[1:], 1)
-            text = " ".join(words)
-    return text[:50]
+            text_out = " ".join(words)
+    return text_out[:50]
 
 
 def _sentence_case(text: str) -> str:
@@ -4004,16 +4244,20 @@ def _repair_craft_body(body: str, *, docs_only: bool, tests_only: bool) -> str:
 
     if matched:
         rem_l = remainder.lower()
+        docs_ok = (*(v.lower() for v in DOCS_PREFERRED_VERBS), "describe", "clarify")
+        tests_ok = (*(v.lower() for v in TEST_PREFERRED_VERBS), "record")
         if docs_only:
-            if remainder and not rem_l.startswith(("document", "describe", "clarify", "record")):
-                rebuilt = f"Document {remainder[0].lower() + remainder[1:]}"
+            if remainder and not rem_l.startswith(docs_ok):
+                verb = _pick_docs_outcome_verb(remainder)
+                rebuilt = f"{verb.capitalize()} {remainder[0].lower() + remainder[1:]}"
             elif remainder:
                 rebuilt = remainder
             else:
                 rebuilt = "Document staged documentation paths without product claims."
         elif tests_only:
-            if remainder and not rem_l.startswith(("cover", "pin", "claim", "lock", "record")):
-                rebuilt = f"Cover {remainder[0].lower() + remainder[1:]}"
+            if remainder and not rem_l.startswith(tests_ok):
+                verb = _pick_tests_outcome_verb(remainder)
+                rebuilt = f"{verb.capitalize()} {remainder[0].lower() + remainder[1:]}"
             elif remainder:
                 rebuilt = remainder
             else:
@@ -4025,17 +4269,19 @@ def _repair_craft_body(body: str, *, docs_only: bool, tests_only: bool) -> str:
         return "\n".join(lines).strip()
 
     first_tok = _first_subject_token(first).lower()
-    if first_tok in {"adds", "add", "introduces", "introduce", "ensures", "ensure"}:
+    if first_tok in _CRAFT_BODY_INVENTORY_OPENERS:
         parts = first.split(None, 1)
         rest = parts[1] if len(parts) > 1 else ""
         if docs_only:
             if rest:
-                rebuilt = f"Document {rest[0].lower() + rest[1:]}"
+                verb = _pick_docs_outcome_verb(rest)
+                rebuilt = f"{verb.capitalize()} {rest[0].lower() + rest[1:]}"
             else:
                 rebuilt = "Document staged documentation paths without product claims."
         elif tests_only:
             if rest:
-                rebuilt = f"Cover {rest[0].lower() + rest[1:]}"
+                verb = _pick_tests_outcome_verb(rest)
+                rebuilt = f"{verb.capitalize()} {rest[0].lower() + rest[1:]}"
             else:
                 rebuilt = "Cover staged test and fixture evidence without product framing."
         else:
