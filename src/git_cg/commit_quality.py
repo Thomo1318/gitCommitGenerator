@@ -3742,10 +3742,12 @@ def check_craft_guard(
                 emitted_body_opener = True
                 break
         if not emitted_body_opener:
-            # Extended inventory openers (Provides/Includes/…) are repairable on
+            # Extended inventory openers (Provides/Includes) are repairable on
             # docs/tests path-classes so repair_craft_wording can dispatch.
+            # Use the narrow emission set — not the full repair catalogue — so
+            # historical legal bodies like "Add ADR …" stay craft-pass (#214 CI).
             body_tok = _first_subject_token(body_first).lower()
-            if docs_or_tests and body_tok in _CRAFT_BODY_INVENTORY_OPENERS:
+            if docs_or_tests and body_tok in _CRAFT_BODY_EXTENDED_GUARD_OPENERS:
                 findings.append(
                     GuardFinding(
                         code="GUARD_BANNED_BODY_OPENER",
@@ -3959,7 +3961,9 @@ CRAFT_INVENTORY_SUBJECT_OPENERS: frozenset[str] = frozenset(
     }
 )
 
-# Body first-token inventory openers beyond gold BANNED_BODY_OPENERS prefixes.
+# Body first-token inventory openers eligible for craft *repair* on docs/tests.
+# Broader than gold BANNED_BODY_OPENERS so repair can rewrite Provides/Includes
+# and common inventory stems once a repairable craft finding is present.
 _CRAFT_BODY_INVENTORY_OPENERS: frozenset[str] = frozenset(
     {
         "add",
@@ -3980,6 +3984,21 @@ _CRAFT_BODY_INVENTORY_OPENERS: frozenset[str] = frozenset(
         "enhance",
         "enhances",
         "enhanced",
+        "provide",
+        "provides",
+        "provided",
+        "include",
+        "includes",
+        "included",
+    }
+)
+
+# Guard *emission* set for extended body inventory (CodeRabbit #214 residual).
+# Keep narrower than repair catalogue so legal Slice-9 bodies like "Add ADR …"
+# (N-legal) remain craft-pass while Provides/Includes still dispatch repair.
+# Gold BANNED_BODY_OPENERS already covers "Adds "/"Introduces "/"Ensures ".
+_CRAFT_BODY_EXTENDED_GUARD_OPENERS: frozenset[str] = frozenset(
+    {
         "provide",
         "provides",
         "provided",

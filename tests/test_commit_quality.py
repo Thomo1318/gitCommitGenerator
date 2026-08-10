@@ -2332,6 +2332,26 @@ def test_check_craft_guard_punctuated_inventory_opener_docs_and_tests() -> None:
     assert evaluate_presentation_guards(tests_out, paths=tests_paths).dirty is False
 
 
+def test_check_craft_guard_plain_add_body_does_not_emit_extended_opener() -> None:
+    """#214 CI: legal docs body 'Add ADR …' must stay craft-pass (N-legal lock)."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="adr",
+        description="diagram Policy B scoped-history architecture",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "Add ADR mermaid overview and usage Related link."
+    paths = ["docs/adr/0001-policy-b.md", "docs/usage.md"]
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert "GUARD_BANNED_BODY_OPENER" not in pre.codes()
+    # Subject/body craft may still be clean for this legal fixture shape.
+    craft_codes = {f.code for f in pre.findings if f.kind == "craft"}
+    assert "GUARD_BANNED_BODY_OPENER" not in craft_codes
+
+
 def test_check_craft_guard_extended_body_inventory_opener_dispatches_repair() -> None:
     """#214 CodeRabbit: clean subject + Provides/Includes body still craft-repairs."""
     plan = _plan(
