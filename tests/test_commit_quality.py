@@ -2415,9 +2415,11 @@ def test_fill_secondary_intents_from_stubs_multi_test_modules() -> None:
         changelog="Tests",
     )
     out = fill_secondary_intents_from_stubs(plan, paths)
-    # multi-test stubs should not invent feat/fix
+    # multi-test stubs should not invent feat/fix, and lean fill must not
+    # materialise same-type module secondaries (inventory/prompt only).
     assert all(i.cc_type == CommitType.TEST for i in [out.primary_intent, *out.secondary_intents])
     assert out.primary_intent.semver_impact == SemVerImpact.NONE
+    assert out.secondary_intents == []
 
 
 def test_fill_secondary_intents_single_surface_noop() -> None:

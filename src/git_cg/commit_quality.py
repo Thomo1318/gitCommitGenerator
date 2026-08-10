@@ -2369,9 +2369,15 @@ def fill_secondary_intents_from_stubs(
     """Post-LLM secondary fill from deterministic included-change stubs (Issue #204).
 
     Presentation-only. Never calls ``rank_commit_intents``, never mutates primary
-    ``intent_id`` / matrix gitmoji, and only adds matrix-legal inventory
-    secondaries for multi-surface pressure. Single-surface diffs remain no-ops
-    because ``build_included_change_stubs`` returns empty without pressure.
+    ``intent_id`` / matrix gitmoji, and only closes **missing test/docs type
+    families** under multi-surface pressure.
+
+    Product-family stubs (``chore`` / ``fix`` / ``feat`` / …) remain prompt
+    inventory via ``build_included_change_stubs`` and must not inflate
+    Change-Types / Changelog-Groups with same-type junk secondaries. Distinct
+    same-type surface hard-merge is reserved for explicit blueprints
+    (``apply_blueprint``). Single-surface diffs remain no-ops because
+    ``build_included_change_stubs`` returns empty without pressure.
     """
     del ranked_intents  # reserved authority seam; fill is presentation-only
     clean = _resolve_paths(list(paths or []), signals)
@@ -2394,6 +2400,15 @@ def fill_secondary_intents_from_stubs(
     pure_docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
     tags = {t.lower() for t in (concern_tags or set())}
 
+    # Lean trailer fill: only materialise absent test/docs families once each.
+    # Light cardinality in apply_presentation_overlay often already closed these
+    # gaps; this path is the post-LLM / direct-call safety net.
+    fillable_types = {CommitType.TEST, CommitType.DOCS}
+    present_types = {
+        primary.cc_type,
+        *(sec.cc_type for sec in plan.secondary_intents),
+    }
+
     for stub in stubs[: max(0, int(max_stubs))]:
         cc = stub.suggested_cc_type
         # Re-derive under current path-class purity so fill cannot invent feat/fix
@@ -2401,9 +2416,13 @@ def fill_secondary_intents_from_stubs(
         cc = _suggested_cc_for_role(stub.role, tags=tags, pure_docs_or_tests=pure_docs_or_tests)
         if pure_docs_or_tests and cc in {CommitType.FEAT, CommitType.FIX, CommitType.PERF}:
             cc = CommitType.TEST if stub.role in {"test", "fixtures"} else CommitType.DOCS
+        if cc not in fillable_types:
+            continue
+        if cc in present_types:
+            continue
         if cc.value in set(cons.forbid_cc_types or ()):
             continue
-        _hard_merge_inventory_stub(
+        added = _hard_merge_inventory_stub(
             plan,
             role=stub.role,
             surface=stub.scope or stub.surface,
@@ -2412,6 +2431,8 @@ def fill_secondary_intents_from_stubs(
             claim_tags=stub.claim_tags,
             constraints=cons,
         )
+        if added:
+            present_types.add(cc)
 
     primary.intent_id = preserved_intent_id
     primary.gitmoji = preserved_gitmoji
