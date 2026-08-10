@@ -1,0 +1,7 @@
+📝 docs(usage): document review checklist to usage guide
+
+Outlines a review checklist to verify generated commit messages align with staged changes, preserve machine-readable trailers, and enforce single-focused change sets.
+
+SemVer-Impact: NONE
+Change-Types: docs
+Changelog-Groups: Documentation

@@ -44,6 +44,14 @@ REQUIRED_CLOSE_GATE_FILES: Final[tuple[str, ...]] = (
 )
 
 # LMLX / informational parity core (aligned with close-gate minus optional CLI split).
+# Optional #214 post-repair snapshot files (docs-only craft residual).
+OPTIONAL_POST_REPAIR_FILES: Final[Mapping[str, tuple[str, ...]]] = {
+    "docs-only": (
+        "COMMIT_EDITMSG.post-repair",
+        "post-repair-meta.txt",
+    ),
+}
+
 REQUIRED_INFO_FILES: Final[tuple[str, ...]] = (
     "staged.diff",
     "COMMIT_EDITMSG",
@@ -186,6 +194,43 @@ def staged_diff(case: str) -> str:
     return load_case(case).staged_diff()
 
 
+def assert_docs_only_post_repair_snapshot() -> None:
+    """Drift-guard the #214 docs-only post-repair COMMIT_EDITMSG snapshot.
+
+    Does not require live models. Historical pre-fix COMMIT_EDITMSG is left
+    untouched as #212 evidence.
+    """
+    case = load_case("docs-only")
+    for name in OPTIONAL_POST_REPAIR_FILES["docs-only"]:
+        path = case.root / name
+        if not path.is_file():
+            raise AssertionError(f"missing docs-only post-repair artifact: {name}")
+    msg = case.read_text("COMMIT_EDITMSG.post-repair").strip()
+    if not msg:
+        raise AssertionError("docs-only COMMIT_EDITMSG.post-repair is empty")
+    header = next((ln.strip() for ln in msg.splitlines() if ln.strip()), "")
+    lowered = msg.lower()
+    if "semver-impact: none" not in lowered:
+        raise AssertionError("post-repair snapshot must carry SemVer-Impact: NONE")
+    if "change-types: docs" not in lowered:
+        raise AssertionError("post-repair snapshot must carry Change-Types: docs")
+    if "[presentation-skeleton-fallback]" in lowered:
+        raise AssertionError("post-repair snapshot must not include skeleton provenance")
+    if header.lower().startswith(("add ", "adds ", "improve ", "update ")):
+        raise AssertionError(f"post-repair header still inventory-shaped: {header!r}")
+    # Prefer docs outcome verb catalogue on the subject token.
+    subject = header
+    # strip leading gitmoji / type prefix if present: "📝 docs(usage): document …"
+    if ":" in subject:
+        subject = subject.split(":", 1)[1].strip()
+    first = subject.split()[0].lower() if subject.split() else ""
+    if first not in {"document", "record", "accept", "index", "align", "note", "diagram", "annotate"}:
+        raise AssertionError(f"post-repair subject opener not in docs catalogue: {first!r} ({header!r})")
+    meta = case.read_text("post-repair-meta.txt")
+    if "ISSUE=214" not in meta or "PATH_CLASS_GATE=docs_only" not in meta:
+        raise AssertionError("post-repair-meta.txt missing #214 docs_only provenance markers")
+
+
 def assert_pack_integrity(*, include_info: bool = True) -> None:
     """Raise ``AssertionError`` if required pack files are missing.
 
@@ -205,10 +250,12 @@ __all__ = [
     "CLOSE_GATE_CASES",
     "EXPECTED_ENVELOPES",
     "INFO_CASES",
+    "OPTIONAL_POST_REPAIR_FILES",
     "PACK_ROOT",
     "REQUIRED_CLOSE_GATE_FILES",
     "REQUIRED_INFO_FILES",
     "AcceptpathCase",
+    "assert_docs_only_post_repair_snapshot",
     "assert_pack_integrity",
     "case_dir",
     "iter_all_cases",
