@@ -11,12 +11,14 @@
 ### 🐛 Bug Fixes & Refactors
 
 - 🦺 fix(commit-quality): docs-only/tests-only craft repair avoids skeleton fallback under gold-strict (#214)
+- 🦺 fix(commit-quality): broaden craft-verb catalogue for inventory/vague openers on docs/tests (#214)
 - 🥅 fix(intent): close #181-class mis-rank by adding product markers to `error_handling` negative signals (feature_addition now outranks error_handling on product+error diffs) (#182)
 - 🦺 fix(commit-quality): replace package/epic scopes with dominant module or behaviour slugs; keep path-class envelopes authoritative over blueprint overlays (#204)
 
 ### ✅ Tests
 
 - ✅ test(commit-quality): lock docs/tests craft repair, mixed-set refusal, and gold-strict no-skeleton path (#214)
+- ✅ test(acceptpath): freeze docs-only post-repair COMMIT_EDITMSG snapshot + catalogue locks (#214)
 - ✅ test(intent): B1 characterisation fixtures (release-notes product, bugfix-pure, error-only) + golden cascade refresh via `GIT_CG_UPDATE_GOLDENS` (#182)
 - ✅ test(core): B2 gold-linter tables, Claim A purity tests (A_01-A_05), and generation-path gold wiring integration (#182)
 - ✅ test(commit-quality): V12-A named proof pack (`test_v12_a01`–`a45`) plus Session 6 corpus rows TIP-G13–G17 and goldens (#204)
