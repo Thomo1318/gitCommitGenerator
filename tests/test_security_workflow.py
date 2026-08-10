@@ -13,6 +13,7 @@ Enforces supply-chain contracts:
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 import yaml
@@ -181,9 +182,10 @@ class TestSecurityWorkflow:
         """
         step = next(s for s in self._workflow()["jobs"]["trufflehog"]["steps"] if s.get("name") == "TruffleHog OSS")
         extra = step["with"]["extra_args"]
-        assert "--only-verified" in extra
+        args = set(shlex.split(extra))
+        assert "--only-verified" in args
         # Documented intentional FP mitigation; other detectors remain active.
-        assert "--exclude-detectors=Lob" in extra
+        assert "--exclude-detectors=Lob" in args
 
     def test_trufflehog_job_step_order(self):
         """The trufflehog job must checkout before running the TruffleHog action."""
