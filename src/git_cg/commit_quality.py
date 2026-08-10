@@ -2183,6 +2183,13 @@ _CC_TYPE_SEED_INTENT: dict[str, str] = {
 }
 
 
+def _intent_scope_key(scope: str | None) -> str | None:
+    """Normalised scope key for inventory secondary matching."""
+    if scope is None:
+        return None
+    return normalize_scope(scope) or str(scope).strip() or None
+
+
 def _ensure_secondary_for_type(
     plan: CommitPlan,
     *,
@@ -2191,20 +2198,50 @@ def _ensure_secondary_for_type(
     scope: str | None,
     description: str,
     semver: SemVerImpact = SemVerImpact.NONE,
-) -> None:
-    """Append a minimal secondary intent when a required type/group is missing."""
+    match_scope: bool = False,
+) -> bool:
+    """Append a minimal secondary intent when a required type/group is missing.
+
+    When ``match_scope=True`` (inventory hard-merge / stub fill), match by
+    ``(cc_type, normalised scope)`` so distinct surfaces of the same type can
+    coexist. Legacy callers keep type-only dedupe.
+    """
     from git_cg.models import CommitIntent
 
-    existing_types = {plan.primary_intent.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
-    if cc_type.value in existing_types:
-        # Repair changelog group on the matching intent if needed.
-        if plan.primary_intent.cc_type == cc_type:
-            plan.primary_intent.changelog_group = changelog_group
+    wanted_scope = _intent_scope_key(scope)
+    desc = str(description or "")[:50]
+
+    def _same_scope(existing_scope: str | None) -> bool:
+        return _intent_scope_key(existing_scope) == wanted_scope
+
+    if match_scope:
+        primary = plan.primary_intent
+        if primary.cc_type == cc_type and _same_scope(primary.scope):
+            primary.changelog_group = changelog_group
+            primary.semver_impact = semver
+            return False
         for sec in plan.secondary_intents:
-            if sec.cc_type == cc_type:
+            if sec.cc_type == cc_type and _same_scope(sec.scope):
                 sec.changelog_group = changelog_group
                 sec.semver_impact = semver
-        return
+                # Keep a more specific inventory note when the existing one is empty.
+                if desc and not str(getattr(sec, "description", "") or "").strip():
+                    sec.description = desc
+                return False
+    else:
+        existing_types = {
+            plan.primary_intent.cc_type.value,
+            *(s.cc_type.value for s in plan.secondary_intents),
+        }
+        if cc_type.value in existing_types:
+            # Repair changelog group on the matching intent if needed.
+            if plan.primary_intent.cc_type == cc_type:
+                plan.primary_intent.changelog_group = changelog_group
+            for sec in plan.secondary_intents:
+                if sec.cc_type == cc_type:
+                    sec.changelog_group = changelog_group
+                    sec.semver_impact = semver
+            return False
 
     seed_id = _CC_TYPE_SEED_INTENT.get(cc_type.value, "configuration_update")
     sec = CommitIntent(
@@ -2212,7 +2249,7 @@ def _ensure_secondary_for_type(
         gitmoji=_CC_TYPE_GITMOJI.get(cc_type.value, "🔧"),
         cc_type=cc_type,
         scope=normalize_scope(scope) if scope else scope,
-        description=description[:50],
+        description=desc,
         semver_impact=semver,
         changelog_group=changelog_group,
     )
@@ -2226,6 +2263,156 @@ def _ensure_secondary_for_type(
     if scope:
         sec.scope = normalize_scope(scope)
     plan.secondary_intents.append(sec)
+    return True
+
+
+def _stub_inventory_note(stub: Stub | object) -> str:
+    """Build a concise inventory description from a stub-like object."""
+    note = str(getattr(stub, "note", None) or getattr(stub, "surface", "") or "").strip()
+    claim_tags = tuple(getattr(stub, "claim_tags", None) or ())
+    if claim_tags:
+        tag_bit = ", ".join(str(t) for t in claim_tags[:4] if t)
+        if tag_bit:
+            note = f"{note} ({tag_bit})" if note else tag_bit
+    return note[:50] if note else "cover surface"
+
+
+def _role_changelog_group(role: str, cc_type: CommitType) -> str:
+    """Presentation changelog group for an inventory role/type pair."""
+    if role in {"docs", "adr"}:
+        return "Documentation"
+    if role in {"test", "fixtures"}:
+        return "Tests"
+    return _TYPE_CHANGELOG_REQUIREMENTS.get(cc_type.value, "Miscellaneous")
+
+
+def _hard_merge_inventory_stub(
+    plan: CommitPlan,
+    *,
+    role: str,
+    surface: str | None,
+    cc_type: CommitType,
+    note: str | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
+    constraints: PresentationConstraints | None = None,
+    forbid_cc_types: set[str] | frozenset[str] | None = None,
+    force_semver: SemVerImpact | None = None,
+) -> bool:
+    """Materialise one inventory stub as a matrix-legal secondary when needed.
+
+    Hard-merge rules (Issue #204 NTH):
+    * never mutates ranked ``intent_id`` / primary matrix gitmoji
+    * never overwrites primary merely because a stub shares its type
+    * preserves distinct ``(cc_type, normalised scope/surface)`` evidence
+    * respects path-class forbid/force SemVer ceilings when provided
+    """
+    cons = constraints
+    forbidden = set(forbid_cc_types or ())
+    if cons is not None:
+        forbidden |= set(cons.forbid_cc_types or ())
+    if cc_type.value in forbidden:
+        return False
+
+    scope = normalize_scope(surface) if surface else None
+    if scope is None and surface:
+        scope = str(surface).strip() or None
+
+    primary = plan.primary_intent
+    # Covered already by primary surface — keep primary, do not duplicate.
+    if primary.cc_type == cc_type and _intent_scope_key(primary.scope) == _intent_scope_key(scope):
+        return False
+
+    group = _role_changelog_group(role, cc_type)
+    desc_src = note or surface or cc_type.value
+    if claim_tags:
+        tag_bit = ", ".join(str(t) for t in list(claim_tags)[:4] if t)
+        if tag_bit:
+            desc_src = f"{desc_src} ({tag_bit})"
+
+    # Inventory secondaries default to NONE; path-class force_semver wins.
+    if force_semver is not None:
+        semver = force_semver
+    elif cons is not None and cons.force_semver is not None:
+        semver = cons.force_semver
+    else:
+        semver = SemVerImpact.NONE
+
+    return _ensure_secondary_for_type(
+        plan,
+        cc_type=cc_type,
+        changelog_group=group,
+        scope=scope or primary.scope,
+        description=str(desc_src)[:50],
+        semver=semver,
+        match_scope=True,
+    )
+
+
+def fill_secondary_intents_from_stubs(
+    plan: CommitPlan,
+    paths: list[str] | None = None,
+    *,
+    signals: DiffSignals | None = None,
+    ranked_intents: list | None = None,
+    concern_tags: frozenset[str] | set[str] | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
+    constraints: PresentationConstraints | None = None,
+    max_stubs: int = 8,
+) -> CommitPlan:
+    """Post-LLM secondary fill from deterministic included-change stubs (Issue #204).
+
+    Presentation-only. Never calls ``rank_commit_intents``, never mutates primary
+    ``intent_id`` / matrix gitmoji, and only adds matrix-legal inventory
+    secondaries for multi-surface pressure. Single-surface diffs remain no-ops
+    because ``build_included_change_stubs`` returns empty without pressure.
+    """
+    del ranked_intents  # reserved authority seam; fill is presentation-only
+    clean = _resolve_paths(list(paths or []), signals)
+    if not clean:
+        return plan
+
+    cons = constraints or presentation_constraints(classify_diff_class(clean))
+    stubs = build_included_change_stubs(
+        clean,
+        signals,
+        concern_tags=concern_tags,
+        claim_tags=claim_tags,
+    )
+    if not stubs:
+        return plan
+
+    primary = plan.primary_intent
+    preserved_intent_id = primary.intent_id
+    preserved_gitmoji = primary.gitmoji
+    pure_docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
+    tags = {t.lower() for t in (concern_tags or set())}
+
+    for stub in stubs[: max(0, int(max_stubs))]:
+        cc = stub.suggested_cc_type
+        # Re-derive under current path-class purity so fill cannot invent feat/fix
+        # capability on pure docs/tests inventories.
+        cc = _suggested_cc_for_role(stub.role, tags=tags, pure_docs_or_tests=pure_docs_or_tests)
+        if pure_docs_or_tests and cc in {CommitType.FEAT, CommitType.FIX, CommitType.PERF}:
+            cc = CommitType.TEST if stub.role in {"test", "fixtures"} else CommitType.DOCS
+        if cc.value in set(cons.forbid_cc_types or ()):
+            continue
+        _hard_merge_inventory_stub(
+            plan,
+            role=stub.role,
+            surface=stub.scope or stub.surface,
+            cc_type=cc,
+            note=_stub_inventory_note(stub),
+            claim_tags=stub.claim_tags,
+            constraints=cons,
+        )
+
+    primary.intent_id = preserved_intent_id
+    primary.gitmoji = preserved_gitmoji
+    if cons.force_semver is not None:
+        primary.semver_impact = cons.force_semver
+        for sec in plan.secondary_intents:
+            sec.semver_impact = cons.force_semver
+    return plan
 
 
 def apply_presentation_overlay(
@@ -2476,10 +2663,16 @@ def apply_presentation_overlay(
         )
         present_types.add("docs")
 
-    # Cardinality floor retained for callers/tests; stub materialisation is
-    # prompt inventory (format_included_change_stub_inventory), not silent
-    # secondary invention that fights split_recommended.
+    # Cardinality floor retained for callers/tests; multi-surface stub fill is
+    # presentation inventory only and never invents junk on single-surface diffs.
     _ = min_bullets
+    fill_secondary_intents_from_stubs(
+        plan,
+        clean,
+        signals=signals,
+        concern_tags=tags,
+        constraints=cons,
+    )
 
     # Final SemVer re-clamp after any secondary injection.
     if cons.force_semver is not None:
@@ -2877,9 +3070,8 @@ def apply_blueprint(
             )
             present_types.add(ct.value)
 
-    # Included-change stubs → presentation secondaries (inventory seeds)
+    # Included-change stubs → hard-merge presentation secondaries (inventory seeds)
     if blueprint.included_changes_stubs:
-        present_types = {primary.cc_type.value, *(s.cc_type.value for s in plan.secondary_intents)}
         for stub in blueprint.included_changes_stubs:
             role = stub.role
             suggested = {
@@ -2895,39 +3087,18 @@ def apply_blueprint(
                 "prod": primary.cc_type,
                 "other": CommitType.CHORE,
             }.get(role, CommitType.CHORE)
-            if suggested.value in constraints.forbid_cc_types:
-                continue
-            group = _TYPE_CHANGELOG_REQUIREMENTS.get(suggested.value, "Miscellaneous")
-            if role in {"docs", "adr"}:
-                group = "Documentation"
-            elif role in {"test", "fixtures"}:
-                group = "Tests"
             note = (stub.note or stub.surface or suggested.value).strip()
             if stub.claim_tags:
                 note = f"{note} ({', '.join(stub.claim_tags)})"
-            scope = normalize_scope(stub.surface) or primary.scope
-            if suggested.value == primary.cc_type.value and not plan.secondary_intents:
-                # Keep primary; optionally refine description from subject_hint only.
-                pass
-            elif suggested.value not in present_types or role in {"test", "docs", "adr", "fixtures"}:
-                # Always materialise distinct surface secondaries for inventory roles.
-                already = False
-                for sec in plan.secondary_intents:
-                    if sec.cc_type == suggested and normalize_scope(sec.scope) == scope:
-                        already = True
-                        break
-                if not already and not (
-                    suggested.value == primary.cc_type.value and normalize_scope(primary.scope) == scope
-                ):
-                    _ensure_secondary_for_type(
-                        plan,
-                        cc_type=suggested,
-                        changelog_group=group,
-                        scope=scope,
-                        description=note[:50],
-                        semver=SemVerImpact.NONE if constraints.force_semver is None else constraints.force_semver,
-                    )
-                    present_types.add(suggested.value)
+            _hard_merge_inventory_stub(
+                plan,
+                role=role,
+                surface=stub.surface,
+                cc_type=suggested,
+                note=note,
+                claim_tags=stub.claim_tags,
+                constraints=constraints,
+            )
 
     # Subject hint → primary description (presentation craft seed only)
     subject_hint = None
@@ -3800,31 +3971,14 @@ def apply_guard_skeleton_fallback(
     primary.gitmoji = preserved_gitmoji
 
     # Ensure inventory secondaries from stubs when multi-surface.
-    stubs = build_included_change_stubs(
+    fill_secondary_intents_from_stubs(
+        plan,
         clean,
-        signals,
+        signals=signals,
         claim_tags=claim_tags,
+        constraints=cons,
+        max_stubs=8,
     )
-    pure_docs_or_tests = _docs_only_class(cons.diff_class, clean) or _tests_only_class(cons.diff_class, clean)
-    for stub in stubs[:8]:
-        cc = _suggested_cc_for_role(
-            stub.role,
-            tags=set(),
-            pure_docs_or_tests=pure_docs_or_tests,
-        )
-        group = _TYPE_CHANGELOG_REQUIREMENTS.get(cc.value, primary.changelog_group)
-        note = stub.note or stub.surface
-        if stub.claim_tags:
-            note = f"{note} ({', '.join(stub.claim_tags[:4])})"
-        scope = stub.surface if stub.surface else primary.scope
-        _ensure_secondary_for_type(
-            plan,
-            cc_type=cc,
-            changelog_group=group,
-            scope=scope,
-            description=str(note)[:50],
-            semver=SemVerImpact.NONE if primary.semver_impact == SemVerImpact.NONE else primary.semver_impact,
-        )
 
     return plan
 

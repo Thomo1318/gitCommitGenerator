@@ -43,6 +43,7 @@ from git_cg.commit_quality import (
     dominant_presentation_cc_type,
     evaluate_presentation_gates,
     evaluate_presentation_guards,
+    fill_secondary_intents_from_stubs,
     filter_paths_for_content_signals,
     format_guard_guidance,
     format_high_risk_body_checklist,
@@ -2374,3 +2375,93 @@ def test_slice9_evaluate_gates_never_calls_ranker(monkeypatch: pytest.MonkeyPatc
         paths=["docs/usage.md", "docs/ADRs/0163-scoped-reasoning-history.md"],
     )
     assert report.passed is True
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 NTH — stub hard-merge + post-LLM secondary fill
+# ---------------------------------------------------------------------------
+
+
+def test_fill_secondary_intents_from_stubs_prod_plus_test() -> None:
+    """Dual-surface product+test stubs materialise a test secondary."""
+    paths = ["src/git_cg/telemetry.py", "tests/test_telemetry.py"]
+    plan = _plan(
+        intent_id="bug_fix",
+        gitmoji="🐛",
+        cc_type=CommitType.FIX,
+        scope="telemetry",
+        description="cover telemetry redaction",
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+    )
+    out = fill_secondary_intents_from_stubs(plan, paths)
+    assert out.primary_intent.intent_id == "bug_fix"
+    assert out.primary_intent.gitmoji == "🐛"
+    types = {out.primary_intent.cc_type.value, *(s.cc_type.value for s in out.secondary_intents)}
+    assert "test" in types
+    assert out.primary_intent.cc_type == CommitType.FIX
+
+
+def test_fill_secondary_intents_from_stubs_multi_test_modules() -> None:
+    """Multiple test modules keep distinct inventory scopes when pressure exists."""
+    paths = ["tests/test_telemetry.py", "tests/test_main.py", "tests/test_intent.py"]
+    plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="test",
+        description="cover presentation suites",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    out = fill_secondary_intents_from_stubs(plan, paths)
+    # multi-test stubs should not invent feat/fix
+    assert all(i.cc_type == CommitType.TEST for i in [out.primary_intent, *out.secondary_intents])
+    assert out.primary_intent.semver_impact == SemVerImpact.NONE
+
+
+def test_fill_secondary_intents_single_surface_noop() -> None:
+    paths = ["src/git_cg/telemetry.py"]
+    plan = _plan(
+        intent_id="bug_fix",
+        gitmoji="🐛",
+        cc_type=CommitType.FIX,
+        scope="telemetry",
+        description="cover telemetry path",
+        semver=SemVerImpact.PATCH,
+        changelog="Fixed",
+    )
+    out = fill_secondary_intents_from_stubs(plan, paths)
+    assert out.secondary_intents == []
+
+
+def test_apply_blueprint_hard_merges_distinct_test_stubs() -> None:
+    """Two same-type blueprint stubs with distinct surfaces both survive."""
+    from git_cg.commit_quality import apply_blueprint, classify_diff_class, presentation_constraints
+    from git_cg.models import BlueprintStub, CommitBlueprint
+
+    paths = ["tests/test_telemetry.py", "tests/test_main.py"]
+    cons = presentation_constraints(classify_diff_class(paths))
+    plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="test",
+        description="cover suites",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    bp = CommitBlueprint(
+        included_changes_stubs=[
+            BlueprintStub(role="test", surface="telemetry", note="cover telemetry suite"),
+            BlueprintStub(role="test", surface="main", note="cover main suite"),
+        ]
+    )
+    state = apply_blueprint(plan, bp, cons, ceiling=SemVerImpact.NONE, paths=paths)
+    out = state.plan
+    scopes = {normalize_scope(out.primary_intent.scope), *(normalize_scope(s.scope) for s in out.secondary_intents)}
+    # Distinct surfaces must not collapse to a single type-only secondary.
+    assert "telemetry" in scopes or any("telemetry" in str(s.description).lower() for s in out.secondary_intents)
+    assert "main" in scopes or any("main" in str(s.description).lower() for s in out.secondary_intents)
+    assert out.primary_intent.intent_id == "tests_update"
+    assert out.primary_intent.gitmoji == "✅"
