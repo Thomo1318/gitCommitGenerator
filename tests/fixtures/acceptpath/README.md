@@ -24,7 +24,7 @@ These fixtures exist so implementers are **not** dependent on ephemeral `/tmp` p
 * `GIT_CG_OPIK_STATE.json` and/or `telemetry-extract.txt` — observed telemetry
 * `summary.txt` / CLI logs when present
 
-`lmlx-docs-compare/` is intentionally partial (no full parity with MTPLX case dirs). Do **not** block #212 on completing it.
+`lmlx-docs-compare/` is an informational twin of `docs-only/` with full artifact parity for bakeoff compare. Do **not** block #212 close on LMLX outcomes.
 
 ## Expected triples after #212 (law)
 
@@ -55,3 +55,19 @@ Gold remains a **validator**, not close-spine authority.
 
 Deterministic tests should prefer these committed files over `/tmp`.
 Live MTPLX re-dogfood is operator confirmation only, not the merge gate.
+
+
+## Shared pack API
+
+Import ``tests/acceptpath_pack.py`` (module ``acceptpath_pack`` on ``sys.path`` via pytest root) for bakeoffs:
+
+```python
+from acceptpath_pack import iter_close_gate_cases, staged_diff, assert_pack_integrity
+
+assert_pack_integrity()
+for case in iter_close_gate_cases():
+    diff = case.staged_diff()
+    envelope = case.expected_envelope()
+```
+
+Close-gate cases remain the four MTPLX envelopes. ``lmlx-docs-compare`` is informational only.

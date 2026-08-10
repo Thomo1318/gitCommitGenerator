@@ -8,10 +8,19 @@ before live MTPLX confirmation (APC-D).
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import conftest as _cq
 import pytest
+from acceptpath_pack import (
+    ALL_CASES,
+    CLOSE_GATE_CASES,
+    INFO_CASES,
+    PACK_ROOT,
+    assert_pack_integrity,
+    iter_close_gate_cases,
+    iter_info_cases,
+    load_case,
+    staged_diff as _fixture_diff,
+)
 
 from git_cg.commit_quality import (
     DIFF_CLASS_DOCS,
@@ -37,7 +46,8 @@ from git_cg.regeneration import (
     resolve_semantic_contract,
 )
 
-FIXTURES = Path(__file__).resolve().parent / "fixtures" / "acceptpath"
+# Back-compat alias for any local references / bakeoff copy-paste.
+FIXTURES = PACK_ROOT
 
 # RTK-style summarized non-unified output observed in live dogfood (docs-only).
 _RTK_DOCS_SUMMARY = """\
@@ -54,12 +64,6 @@ docs/usage.md
   + - document graph refresh workspace scope
   + secret token password age
 """
-
-
-def _fixture_diff(case: str) -> str:
-    path = FIXTURES / case / "staged.diff"
-    assert path.is_file(), f"missing frozen fixture: {path}"
-    return path.read_text(encoding="utf-8")
 
 
 def _final_plan_from_context(ctx, *, hostile_plan):
@@ -308,3 +312,72 @@ def test_apc_b04_no_sop_rewrite_required_for_docs_fixture() -> None:
     assert ctx.ranked_intents[0].intent_id == "documentation_update"
     assert ctx.ranked_intents[0].cc_type == "docs"
     assert ctx.ranked_intents[0].semver_impact == "NONE"
+
+
+# ---------------------------------------------------------------------------
+# Shared fixture pack + informational LMLX parity (Issue #212 NTH)
+# ---------------------------------------------------------------------------
+
+
+def test_acceptpath_pack_integrity_close_gate_and_info() -> None:
+    """Canonical pack exposes close-gate + informational cases with required artifacts."""
+    assert_pack_integrity(include_info=True)
+    assert CLOSE_GATE_CASES == (
+        "docs-only",
+        "product-source",
+        "tests-only",
+        "gold-trigger",
+    )
+    assert INFO_CASES == ("lmlx-docs-compare",)
+    assert ALL_CASES == CLOSE_GATE_CASES + INFO_CASES
+    assert PACK_ROOT.is_dir()
+
+    for case in iter_close_gate_cases():
+        assert case.is_close_gate()
+        assert case.staged_diff().startswith("diff --git")
+        assert not case.missing_required_files()
+        assert case.expected_envelope()["diff_class"]
+
+    for case in iter_info_cases():
+        assert not case.is_close_gate()
+        assert not case.missing_required_files()
+
+
+def test_acceptpath_lmlx_docs_compare_is_informational_parity_twin() -> None:
+    """LMLX twin mirrors docs-only staged envelope; outcomes stay non-blocking."""
+    docs = load_case("docs-only")
+    lmlx = load_case("lmlx-docs-compare")
+
+    assert lmlx.staged_diff() == docs.staged_diff()
+    assert "docs/usage.md" in lmlx.staged_diff()
+
+    # Parity core artifacts present (informational bakeoff contract).
+    for name in (
+        "staged.diff",
+        "COMMIT_EDITMSG",
+        "GIT_CG_OPIK_STATE.json",
+        "summary.txt",
+        "meta.txt",
+        "status.txt",
+        "telemetry-extract.txt",
+    ):
+        assert (lmlx.root / name).is_file(), name
+
+    meta = lmlx.read_text("meta.txt")
+    assert "ENGINE=lmlx" in meta
+    assert "informational" in meta.lower() or "not a #212 close gate" in meta
+
+    tel = lmlx.read_text("telemetry-extract.txt")
+    # Preserve truthful captured LMLX evidence (empty gate / redaction failure).
+    assert "engine='lmlx'" in tel or 'engine="lmlx"' in tel or "engine=lmlx" in tel
+    assert "path_class_gate" in tel
+
+    # Deterministic recovery still classifies the shared staged.diff as docs_only.
+    ctx = _build_generation_context(lmlx.staged_diff(), enable_semantic=False)
+    assert ctx.presentation_constraints.diff_class == DIFF_CLASS_DOCS
+
+
+def test_acceptpath_pack_staged_diff_helper_matches_case_loader() -> None:
+    """Bakeoff harnesses can use either staged_diff(name) or load_case(name)."""
+    for name in CLOSE_GATE_CASES:
+        assert _fixture_diff(name) == load_case(name).staged_diff()
