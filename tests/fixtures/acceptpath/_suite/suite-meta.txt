@@ -11,6 +11,6 @@ time_end=2026-08-09 14:40:23 AEST
 
 === INFORMATIONAL: lmlx-docs-compare ===
 STATUS=informational_parity_twin
-NOTE=Full artifact parity with docs-only envelope; not a #212 close gate
+NOTE=Required core-artifact parity with docs-only envelope; not a #212 close gate
 ENGINE=lmlx
 TWIN_OF=docs-only

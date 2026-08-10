@@ -24,7 +24,7 @@ These fixtures exist so implementers are **not** dependent on ephemeral `/tmp` p
 * `GIT_CG_OPIK_STATE.json` and/or `telemetry-extract.txt` — observed telemetry
 * `summary.txt` / CLI logs when present
 
-`lmlx-docs-compare/` is an informational twin of `docs-only/` with full artifact parity for bakeoff compare. Do **not** block #212 close on LMLX outcomes.
+`lmlx-docs-compare/` is an informational twin of `docs-only/` with required core-artifact parity for bakeoff compare. Do **not** block #212 close on LMLX outcomes.
 
 ## Expected triples after #212 (law)
 

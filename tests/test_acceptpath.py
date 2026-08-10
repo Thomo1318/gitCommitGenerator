@@ -16,6 +16,7 @@ from acceptpath_pack import (
     INFO_CASES,
     PACK_ROOT,
     assert_pack_integrity,
+    case_dir,
     iter_close_gate_cases,
     iter_info_cases,
     load_case,
@@ -381,3 +382,17 @@ def test_acceptpath_pack_staged_diff_helper_matches_case_loader() -> None:
     """Bakeoff harnesses can use either staged_diff(name) or load_case(name)."""
     for name in CLOSE_GATE_CASES:
         assert _fixture_diff(name) == load_case(name).staged_diff()
+
+
+def test_acceptpath_pack_rejects_path_escape() -> None:
+    """case_dir/read_text must not resolve outside the committed fixture pack."""
+    with pytest.raises(ValueError, match="escapes fixture pack"):
+        case_dir("../")
+    with pytest.raises(ValueError, match="escapes fixture pack"):
+        case_dir("docs-only/../../")
+
+    case = load_case("docs-only")
+    with pytest.raises(ValueError, match="escapes case root"):
+        case.read_text("../README.md")
+    with pytest.raises(ValueError, match="escapes case root"):
+        case.optional_text("../../pyproject.toml")

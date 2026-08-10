@@ -106,14 +106,22 @@ class AcceptpathCase:
             raise FileNotFoundError(f"missing staged.diff for acceptpath case {self.name!r}: {path}")
         return path.read_text(encoding="utf-8")
 
+    def _artifact_path(self, name: str) -> Path:
+        """Resolve an artifact path and reject escapes outside this case root."""
+        root = self.root.resolve()
+        path = (root / name).resolve()
+        if not path.is_relative_to(root):
+            raise ValueError(f"acceptpath artifact escapes case root for {self.name!r}: {name!r}")
+        return path
+
     def read_text(self, name: str) -> str:
-        path = self.root / name
+        path = self._artifact_path(name)
         if not path.is_file():
             raise FileNotFoundError(f"missing {name!r} for acceptpath case {self.name!r}: {path}")
         return path.read_text(encoding="utf-8")
 
     def optional_text(self, name: str) -> str | None:
-        path = self.root / name
+        path = self._artifact_path(name)
         if not path.is_file():
             return None
         return path.read_text(encoding="utf-8")
@@ -132,12 +140,19 @@ class AcceptpathCase:
 
 
 def case_dir(name: str) -> Path:
-    """Return the directory for a named acceptpath case."""
+    """Return the directory for a named acceptpath case.
+
+    Paths are resolved and must remain under ``PACK_ROOT`` so bakeoff callers
+    cannot escape the committed fixture pack via ``..`` or absolute segments.
+    """
     if name not in ALL_CASES and name not in {"_suite"}:
         # Allow unknown names for forward-compatible bakeoff extensions, but
         # still resolve under the pack root.
         pass
-    path = PACK_ROOT / name
+    pack_root = PACK_ROOT.resolve()
+    path = (pack_root / name).resolve()
+    if not path.is_relative_to(pack_root):
+        raise ValueError(f"acceptpath case escapes fixture pack: {name!r}")
     if not path.is_dir():
         raise FileNotFoundError(f"acceptpath case directory missing: {path}")
     return path
