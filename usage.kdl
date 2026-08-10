@@ -106,9 +106,10 @@ cmd "commit" {
 
 cmd "preflight" {
     help "Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes)."
-    arg "<PATHS>" {
+    arg "[PATHS]" {
         help "Optional path overrides; defaults to staged paths from git diff --cached --name-only."
         required #false
+        var #true
     }
     flag "--json" {
         help "Emit machine-readable JSON instead of human tables."

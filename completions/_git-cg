@@ -56,7 +56,7 @@ cmd commit help="Generate an AI commit message based on staged changes." {
 cmd preflight help="Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes)." {
     flag --json help="Emit machine-readable JSON instead of human tables."
     flag "-v --verbose" help="Include stub notes and high-risk checklist bullets."
-    arg "[PATHS]" help="Optional path overrides; defaults to staged paths from git diff --cached --name-only." required=#false
+    arg "[PATHS]…" help="Optional path overrides; defaults to staged paths from git diff --cached --name-only." required=#false var=#true
 }
 cmd sop help="Display the GitOps SOP matrices and workflows."
 cmd release help="Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog." {

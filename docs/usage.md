@@ -128,13 +128,13 @@ AI engine to use (e.g. omlx, mtplx).
 
 ## `git-cg preflight`
 
-- **Usage**: `git-cg preflight [--json] [-v --verbose] [PATHS]`
+- **Usage**: `git-cg preflight [--json] [-v --verbose] [PATHS]…`
 
 Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes).
 
 ### Arguments
 
-#### `[PATHS]`
+#### `[PATHS]…`
 
 Optional path overrides; defaults to staged paths from git diff --cached --name-only.
 

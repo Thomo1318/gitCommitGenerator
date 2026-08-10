@@ -36,6 +36,7 @@
   - [Presentation quality operator guide (Issue #204)](#presentation-quality-operator-guide-issue-204)
     - [Operator pre-check (until gates are complete)](#operator-pre-check-until-gates-are-complete)
     - [D26 telemetry (closed vocabulary)](#d26-telemetry-closed-vocabulary)
+    - [Environment controls (presentation-adjacent)](#environment-controls-presentation-adjacent)
 - [🚀 Installation & Provisioning](#-installation--provisioning)
   - [Configuration & Secrets](#configuration--secrets)
   - [Font Configuration](#font-configuration)
