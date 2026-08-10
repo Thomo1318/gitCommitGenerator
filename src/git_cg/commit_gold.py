@@ -675,12 +675,14 @@ def _check_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
 
 
 def _norm_gitmoji(emoji: str) -> str:
-    """Normalise a gitmoji by stripping variation selectors (U+FE0F, U+FE0E).
+    """Normalise a gitmoji for static matrix lookup (D8 confusable-aware).
 
-    The SOP matrix encodes some emoji both with and without the variation selector
-    (e.g. ``\u26a1`` and ``\u26a1\ufe0f``); normalising makes lookup selector-insensitive.
+    Delegates to :func:`git_cg.gitmoji_norm.normalize_gitmoji` so gold, models,
+    and presentation share one VS/confusable policy without a parallel invent layer.
     """
-    return emoji.replace("\ufe0f", "").replace("\ufe0e", "")
+    from git_cg.gitmoji_norm import normalize_gitmoji
+
+    return normalize_gitmoji(emoji)
 
 
 def _check_type_group_coherence(

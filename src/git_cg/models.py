@@ -262,10 +262,15 @@ class CommitIntent(BaseModel):
             # SOP genuinely unavailable — cannot enforce; skip rather than crash.
             return self
 
-        # 1. Lookup by intent_id or fallback to emoji/code
+        # 1. Lookup by intent_id or fallback to emoji/code (D8 confusable-aware).
+        from git_cg.gitmoji_norm import gitmojis_equivalent
+
         entry = next((item for item in matrix if item.get("intent_id") == self.intent_id), None)
         if not entry:
-            entry = next((item for item in matrix if item.get("emoji") == self.gitmoji), None)
+            entry = next(
+                (item for item in matrix if gitmojis_equivalent(str(item.get("emoji") or ""), self.gitmoji)),
+                None,
+            )
         if not entry:
             entry = next((item for item in matrix if item.get("code") == self.gitmoji), None)
 

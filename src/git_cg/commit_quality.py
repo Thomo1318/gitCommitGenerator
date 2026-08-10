@@ -2155,6 +2155,13 @@ def apply_presentation_seed(plan: CommitPlan, adjustment: PresentationAdjustment
     return plan
 
 
+def _is_security_gitmoji(emoji: str) -> bool:
+    """True when *emoji* is a security-framing glyph under D8/D13 normalisation."""
+    from git_cg.gitmoji_norm import is_security_gitmoji
+
+    return is_security_gitmoji(emoji)
+
+
 def _presentation_gitmoji_for(cc_type: CommitType | str, current: str) -> str:
     """Return gitmoji for *new* presentation secondaries only.
 
@@ -2500,7 +2507,7 @@ def apply_presentation_overlay(
 
     # Security primary forbid without path evidence (D13) — demote framing only.
     if cons.forbid_security_primary and (
-        primary.changelog_group.lower() == "security" or primary.gitmoji in {"🔐", "🔒️"}
+        primary.changelog_group.lower() == "security" or _is_security_gitmoji(primary.gitmoji)
     ):
         if cons.force_cc_type is not None:
             primary.cc_type = cons.force_cc_type
