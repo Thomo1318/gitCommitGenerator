@@ -1133,11 +1133,14 @@ _BREAKING_COMPAT_CLAIM_PHRASES: tuple[str, ...] = (
 
 
 def _plan_has_breaking_marker(plan: CommitPlan) -> bool:
-    """True when the plan claims a breaking change via flag, bang type, or footer text."""
+    """True when the plan claims a breaking change via flag, bang type, or footer text.
+
+    Orphan ``breaking_change_description`` values are ignored when
+    ``breaking_change`` is false: ``CommitPlan.render()`` only emits the
+    BREAKING footer when the flag is set, so description-only state is not
+    operator-visible craft evidence.
+    """
     if bool(getattr(plan, "breaking_change", False)):
-        return True
-    desc = str(getattr(plan, "breaking_change_description", "") or "").strip()
-    if desc:
         return True
     primary = plan.primary_intent
     cc = str(getattr(primary, "cc_type", "") or "")

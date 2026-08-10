@@ -1110,3 +1110,17 @@ def test_non_breaking_backward_compatible_wording_is_clean() -> None:
     )
     report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
     assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()
+
+
+def test_orphan_breaking_description_without_flag_is_not_marker() -> None:
+    """Non-breaking plans ignore orphan breaking_change_description craft state."""
+    # Construct via model_construct to bypass validators if needed, but CommitPlan
+    # currently permits breaking_change=False with a description.
+    plan = _plan(
+        FEAT,
+        body="Add greet_many while remaining backward compatible for existing callers.",
+        breaking=False,
+        breaking_desc="legacy note that must not count without breaking_change=true",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()
