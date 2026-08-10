@@ -63,8 +63,18 @@ def normalize_gitmoji(emoji: str) -> str:
 
 
 def gitmojis_equivalent(left: str, right: str) -> bool:
-    """True when *left* and *right* normalise to the same confusable base."""
-    return normalize_gitmoji(left) == normalize_gitmoji(right)
+    """True when *left* and *right* normalise to the same non-empty confusable base.
+
+    Empty or selector-only input never matches. An absent matrix ``emoji`` value
+    must not bind an intent to a row via the empty-string fallback path.
+    """
+    left_base = normalize_gitmoji(left)
+    if not left_base:
+        return False
+    right_base = normalize_gitmoji(right)
+    if not right_base:
+        return False
+    return left_base == right_base
 
 
 def is_security_gitmoji(emoji: str) -> bool:

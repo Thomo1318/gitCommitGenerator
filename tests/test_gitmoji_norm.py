@@ -37,6 +37,10 @@ def test_gitmojis_equivalent_for_matrix_vs_variants() -> None:
     assert gitmojis_equivalent("⚡️", "⚡")
     assert gitmojis_equivalent("🔐", "🔐")
     assert not gitmojis_equivalent("🔐", "🔒")  # distinct matrix intents
+    # Empty / missing glyphs must never match (matrix emoji fallback safety).
+    assert not gitmojis_equivalent("", "")
+    assert not gitmojis_equivalent("", "🔒")
+    assert not gitmojis_equivalent("🔒", "")
 
 
 def test_is_security_gitmoji_covers_lock_family() -> None:
