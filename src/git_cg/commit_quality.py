@@ -3716,7 +3716,8 @@ def check_craft_guard(
             )
         )
 
-    # Banned body openers (import gold source — I-13).
+    # Banned body openers (import gold source — I-13) plus extended docs/tests
+    # inventory first-tokens from _CRAFT_BODY_INVENTORY_OPENERS (#214).
     body_first = ""
     if body:
         for line in body.replace("\\n", "\n").splitlines():
@@ -3724,6 +3725,7 @@ def check_craft_guard(
                 body_first = line.strip()
                 break
     if body_first:
+        emitted_body_opener = False
         for opener in BANNED_BODY_OPENERS:
             if body_first.startswith(opener):
                 findings.append(
@@ -3737,7 +3739,24 @@ def check_craft_guard(
                         token=opener.strip(),
                     )
                 )
+                emitted_body_opener = True
                 break
+        if not emitted_body_opener:
+            # Extended inventory openers (Provides/Includes/…) are repairable on
+            # docs/tests path-classes so repair_craft_wording can dispatch.
+            body_tok = _first_subject_token(body_first).lower()
+            if docs_or_tests and body_tok in _CRAFT_BODY_INVENTORY_OPENERS:
+                findings.append(
+                    GuardFinding(
+                        code="GUARD_BANNED_BODY_OPENER",
+                        message=(
+                            f"Body opens with inventory opener {body_tok!r}; "
+                            "state the behaviour delta with preferred docs/tests outcome verbs."
+                        ),
+                        kind="craft",
+                        token=body_tok,
+                    )
+                )
 
     out: list[GuardFinding] = []
     seen: set[tuple[str, str]] = set()
@@ -3754,9 +3773,12 @@ def _first_subject_token(subject: str) -> str:
     words = [w for w in (subject or "").strip().split() if any(ch.isalpha() for ch in w)]
     if not words:
         return ""
-    # Strip leading non-alpha from token (e.g. quotes).
+    # Strip leading/trailing non-alpha so openers like "add:" / "'Add'" still match
+    # inventory catalogues (issue #214 CodeRabbit residual).
     token = words[0]
-    return re.sub(r"^[^A-Za-z]+", "", token)
+    token = re.sub(r"^[^A-Za-z]+", "", token)
+    token = re.sub(r"[^A-Za-z]+$", "", token)
+    return token
 
 
 def evaluate_presentation_guards(
@@ -4042,8 +4064,11 @@ def _strip_tests_outcome_rest(rest: str, verb: str) -> str:
     """Avoid duplicated outcome nouns after selecting a tests catalogue verb."""
     text_out = (rest or "").strip()
     lowered = text_out.lower()
-    # If residual is exactly the claim-lock phrase, drop it (verb carries meaning).
+    # If residual is exactly the claim-lock phrase, keep the stable noun phrase.
     if verb == "pin" and lowered in {"claim locks", "claim lock", "claim-lock", "claim-locks"}:
+        return "claim locks"
+    # Bare claim residual (after inventory stripping) should not become "claim claims".
+    if verb == "claim" and lowered in {"claim", "claims"}:
         return "claim locks"
     if verb == "guard" and lowered in {"guard matrix", "guards", "guard"}:
         return text_out
@@ -4051,6 +4076,9 @@ def _strip_tests_outcome_rest(rest: str, verb: str) -> str:
     for pref in ("cover", "claim", "pin", "lock", "guard", "close"):
         if lowered.startswith(pref + " "):
             return text_out[len(pref) :].strip()
+    # Residual is only the chosen verb (or simple plural) — keep verb alone.
+    if lowered in {verb, verb + "s"}:
+        return verb
     return text_out
 
 

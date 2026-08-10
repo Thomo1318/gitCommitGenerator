@@ -2282,6 +2282,85 @@ def test_repair_craft_wording_broader_catalogue(
     assert "[presentation-skeleton-fallback]" not in (out.rationale or "")
 
 
+def test_first_subject_token_strips_trailing_punctuation() -> None:
+    """#214 CodeRabbit: punctuated openers still match inventory catalogues."""
+    from git_cg.commit_quality import _first_subject_token
+
+    assert _first_subject_token("add: coverage for claims") == "add"
+    assert _first_subject_token("Add: coverage for claims") == "Add"
+    assert _first_subject_token("'refresh' usage docs") == "refresh"
+
+
+def test_check_craft_guard_punctuated_inventory_opener_docs_and_tests() -> None:
+    """#214: 'add:' / 'Add:' subjects fire craft repair on docs and tests paths."""
+    docs_plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="add: coverage for claims",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    docs_plan.body_summary = "Document the claim-coverage guidance cleanly."
+    docs_paths = ["docs/usage.md"]
+    docs_pre = evaluate_presentation_guards(docs_plan, paths=docs_paths)
+    assert docs_pre.dirty is True
+    assert "GUARD_TEST_DOCS_ADD_OPENER" in docs_pre.codes() or "GUARD_VAGUE_SUBJECT_VERB" in docs_pre.codes()
+    docs_out, docs_changed = repair_craft_wording(docs_plan, paths=docs_paths, report=docs_pre)
+    assert docs_changed is True
+    assert (docs_out.primary_intent.description or "").lower().startswith(("document", "record", "note"))
+    assert evaluate_presentation_guards(docs_out, paths=docs_paths).dirty is False
+
+    tests_plan = _plan(
+        intent_id="tests_update",
+        gitmoji="✅",
+        cc_type=CommitType.TEST,
+        scope="commit-quality",
+        description="Add: coverage for claims",
+        semver=SemVerImpact.NONE,
+        changelog="Tests",
+    )
+    tests_plan.body_summary = "Cover claim locks cleanly."
+    tests_paths = ["tests/test_commit_quality.py"]
+    tests_pre = evaluate_presentation_guards(tests_plan, paths=tests_paths)
+    assert tests_pre.dirty is True
+    tests_out, tests_changed = repair_craft_wording(tests_plan, paths=tests_paths, report=tests_pre)
+    assert tests_changed is True
+    desc = (tests_out.primary_intent.description or "").lower()
+    assert desc.startswith(("cover", "claim", "pin", "lock", "guard"))
+    assert evaluate_presentation_guards(tests_out, paths=tests_paths).dirty is False
+
+
+def test_check_craft_guard_extended_body_inventory_opener_dispatches_repair() -> None:
+    """#214 CodeRabbit: clean subject + Provides/Includes body still craft-repairs."""
+    plan = _plan(
+        intent_id="documentation_update",
+        gitmoji="📝",
+        cc_type=CommitType.DOCS,
+        scope="usage",
+        description="document review checklist",
+        semver=SemVerImpact.NONE,
+        changelog="Documentation",
+    )
+    plan.body_summary = "Provides a review checklist for staged docs."
+    paths = ["docs/usage.md"]
+    pre = evaluate_presentation_guards(plan, paths=paths)
+    assert pre.dirty is True
+    assert "GUARD_BANNED_BODY_OPENER" in pre.codes()
+    out, changed = repair_craft_wording(plan, paths=paths, report=pre)
+    assert changed is True
+    body = out.body_summary or ""
+    assert not body.lstrip().lower().startswith("provides")
+    assert "checklist" in body.lower()
+    post = evaluate_presentation_guards(out, paths=paths)
+    assert post.dirty is False
+    repaired, report, ok = try_repair_presentation_guards(plan, paths=paths)
+    assert ok is True
+    assert report.dirty is False
+    assert not (repaired.body_summary or "").lstrip().lower().startswith("provides")
+
+
 def test_try_repair_presentation_guards_docs_only_craft_avoids_skeleton() -> None:
     """#214: try_repair clears craft-only docs-only dirty sets without skeleton."""
     plan = _plan(
