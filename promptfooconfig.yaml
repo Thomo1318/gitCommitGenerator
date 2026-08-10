@@ -518,6 +518,8 @@ tests:
     value: output.trim().length > 5 && output.trim().length <= 72
   - type: javascript
     value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('feat(') || /\sfeat:/.test(output) || output.includes('feat:')
 - description: '#204 Slice9 M/TIP-G11: preflight carry-through elevation → feat PATCH scoped-history'
   vars:
     letter: M
@@ -545,6 +547,8 @@ tests:
     value: output.trim().length > 5 && output.trim().length <= 72
   - type: javascript
     value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('feat(') || /\sfeat:/.test(output) || output.includes('feat:')
   - type: javascript
     value: '!output.toLowerCase().includes(''phase 0.5 product'')'
 - description: '#204 Slice9 N/TIP-G12: ADR mermaid + usage Related → docs(adr)/NONE; reject runtime fix'

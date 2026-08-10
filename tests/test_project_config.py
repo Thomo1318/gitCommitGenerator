@@ -474,6 +474,20 @@ class TestPromptfooConfig:
             assert any("length" in v and "72" in v for v in js_values), case.get("description")
             assert any(".test(" in v for v in js_values), case.get("description")
 
+    def test_slice9_l_m_require_positive_feat_type(self):
+        """TIP-G10/G11 (letters L/M) must positively require a feat header."""
+        data = _load_promptfoo_yaml()
+        by_letter = {
+            case["vars"]["letter"]: case
+            for case in data["tests"]
+            if isinstance(case.get("vars"), dict) and case["vars"].get("letter")
+        }
+        for letter in ("L", "M"):
+            values = [a["value"] for a in by_letter[letter]["assert"] if a.get("type") == "javascript"]
+            assert any(
+                (not v.lstrip().startswith("!")) and ("feat(" in v or "feat:" in v or r"\sfeat:" in v) for v in values
+            ), letter
+
     def test_slice9_a_bans_security_tokens(self):
         """Letter A must ban security framing tokens in live assertions."""
         data = _load_promptfoo_yaml()
