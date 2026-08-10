@@ -6,9 +6,14 @@ import pytest
 import typer
 
 import git_cg.main as main_module
+
+# Slice 8: capture real evaluator before gold harness stubs it.
+from git_cg import commit_quality as _cq_mod
+from git_cg.commit_quality import GuardReport as _GuardReport
 from git_cg.main import (
     ReviewState,
     _detect_branch_issue_reference,
+    _is_skip_prepare_enabled,
     _staged_diff_command,
     _validate_commit_source,
     build_generation_messages,
@@ -24,6 +29,8 @@ from git_cg.models import (
     ModelCommitPlan,
     SemVerImpact,
 )
+
+_real_evaluate_presentation_guards = _cq_mod.evaluate_presentation_guards
 
 
 def test_build_system_prompt_contains_diff():
@@ -318,6 +325,94 @@ def test_validate_commit_source_none():
     assert _validate_commit_source(None, "COMMIT_EDITMSG", False, False) is None
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("1", True),
+        ("true", True),
+        ("TRUE", True),
+        ("yes", True),
+        ("on", True),
+        ("0", False),
+        ("false", False),
+        ("off", False),
+        ("", False),
+        ("  ", False),
+        ("nope", False),
+    ],
+)
+def test_is_skip_prepare_enabled_truthy_tokens(monkeypatch, raw, expected):
+    """F80: only 1/true/yes/on enable the prepare-commit-msg bypass."""
+    if raw is None:
+        monkeypatch.delenv("GIT_CG_SKIP_PREPARE", raising=False)
+    else:
+        monkeypatch.setenv("GIT_CG_SKIP_PREPARE", raw)
+    assert _is_skip_prepare_enabled() is expected
+
+
+def test_is_skip_prepare_enabled_unset(monkeypatch):
+    monkeypatch.delenv("GIT_CG_SKIP_PREPARE", raising=False)
+    assert _is_skip_prepare_enabled() is False
+
+
+def test_run_commit_generation_skip_prepare_noops_before_source_validation(monkeypatch):
+    """F80: GIT_CG_SKIP_PREPARE exits 0 without validating source or generating."""
+    import git_cg.main as main_mod
+
+    monkeypatch.setenv("GIT_CG_SKIP_PREPARE", "1")
+    called = {"validate": 0}
+
+    def _boom(*_a, **_k):
+        called["validate"] += 1
+        raise AssertionError("_validate_commit_source must not run when skip-prepare is set")
+
+    monkeypatch.setattr(main_mod, "_validate_commit_source", _boom)
+
+    with pytest.raises(typer.Exit) as excinfo:
+        main_mod._run_commit_generation(
+            commit_msg_file="COMMIT_EDITMSG",
+            commit_source="template",
+            extra_args=None,
+            engine="mtplx",
+            dry_run=True,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,
+            interactive=False,
+        )
+    assert excinfo.value.exit_code == 0
+    assert called["validate"] == 0
+
+
+def test_run_commit_generation_without_skip_prepare_still_validates_source(monkeypatch):
+    """Ordinary hook path still hits source validation when skip-prepare is unset."""
+    import git_cg.main as main_mod
+
+    monkeypatch.delenv("GIT_CG_SKIP_PREPARE", raising=False)
+    seen: list[str | None] = []
+
+    def _capture(source, *_a, **_k):
+        seen.append(source)
+        raise typer.Exit(code=0)
+
+    monkeypatch.setattr(main_mod, "_validate_commit_source", _capture)
+
+    with pytest.raises(typer.Exit) as excinfo:
+        main_mod._run_commit_generation(
+            commit_msg_file="COMMIT_EDITMSG",
+            commit_source="template",
+            extra_args=None,
+            engine="mtplx",
+            dry_run=True,
+            verbose=False,
+            amend_regenerate=False,
+            strict=False,
+            interactive=False,
+        )
+    assert excinfo.value.exit_code == 0
+    assert seen == ["template"]
+
+
 @patch("subprocess.check_output")
 def test_detect_branch_issue_reference_found(mock_check_output):
     mock_check_output.return_value = "feat/123-some-feature\n"
@@ -405,13 +500,14 @@ def test_build_semantic_enrichment_facts_flag_on_builds_container():
 
 
 # ---------------------------------------------------------------------------
-# _staged_diff_command / extract_git_diff (Issue #161 Slice 4)
+# _staged_diff_command / extract_git_diff (Issue #161 Slice 4 / #212)
 #
 # extract_git_diff no longer hard-truncates the analysis diff at 50000 chars;
 # truncation now only happens (via pack_prompt_diff, tested separately) on
-# the LLM-facing prompt payload. These tests cover the rtk-vs-standard
-# command selection, fallback-on-failure, no-truncation regression, empty
-# diff handling, and the CalledProcessError -> _abort() path.
+# the LLM-facing prompt payload. Analysis extraction always uses standard
+# git (never RTK) so path harvest / ranking stay on unified diffs (#212).
+# These tests cover command builders, RTK-ignored-on-analysis, no-truncation
+# regression, empty diff handling, and the CalledProcessError -> _abort() path.
 # ---------------------------------------------------------------------------
 
 
@@ -424,6 +520,7 @@ def test_staged_diff_command_standard_excludes_lockfiles():
 
 
 def test_staged_diff_command_rtk_prefixes_git_diff():
+    """Builder still supports RTK argv for optional non-analysis callers."""
     cmd = _staged_diff_command(use_rtk=True)
     assert cmd[:3] == ["rtk", "git", "diff"]
     assert ":(exclude)*.lock" in cmd
@@ -443,30 +540,30 @@ def test_extract_git_diff_without_rtk_uses_standard_command(mock_check_output, m
 
 @patch("shutil.which", return_value="/usr/bin/rtk")
 @patch("subprocess.check_output")
-def test_extract_git_diff_with_rtk_available_uses_rtk_command(mock_check_output, mock_which):
+def test_extract_git_diff_ignores_rtk_and_uses_standard_git(mock_check_output, mock_which):
+    """Issue #212: analysis path must never select RTK even when installed."""
     mock_check_output.return_value = "diff --git a/x.py b/x.py\n+content\n"
 
     result = extract_git_diff(verbose=False, strict=False)
 
     assert result == "diff --git a/x.py b/x.py\n+content\n"
     args, _ = mock_check_output.call_args
-    assert args[0][0] == "rtk"
+    assert args[0][0] == "git"
+    assert args[0][:4] == ["git", "diff", "--cached", "--"]
+    mock_which.assert_not_called()
 
 
 @patch("shutil.which", return_value="/usr/bin/rtk")
 @patch("subprocess.check_output")
-def test_extract_git_diff_rtk_failure_falls_back_to_standard_diff(mock_check_output, mock_which):
-    def side_effect(cmd, **kwargs):
-        if cmd[0] == "rtk":
-            raise subprocess.CalledProcessError(1, cmd, output="rtk boom")
-        return "diff --git a/x.py b/x.py\n+ok\n"
-
-    mock_check_output.side_effect = side_effect
+def test_extract_git_diff_does_not_attempt_rtk_fallback_path(mock_check_output, mock_which):
+    """With RTK present, analysis still issues exactly one standard git call."""
+    mock_check_output.return_value = "diff --git a/x.py b/x.py\n+ok\n"
 
     result = extract_git_diff(verbose=True, strict=False)
 
     assert result == "diff --git a/x.py b/x.py\n+ok\n"
-    assert mock_check_output.call_count == 2
+    assert mock_check_output.call_count == 1
+    assert mock_check_output.call_args.args[0][0] == "git"
 
 
 @patch("shutil.which", return_value=None)
@@ -862,8 +959,6 @@ def _gold_harness_mocks(monkeypatch, plans, *, telemetry_events: list | None = N
 
     monkeypatch.delenv("GIT_CG_GOLD_MODE", raising=False)
     writes: list[str] = []
-    plans_iter = iter(plans)
-
     monkeypatch.setattr(main_mod, "_validate_commit_source", lambda *a, **k: None)
     monkeypatch.setattr(
         main_mod,
@@ -898,7 +993,20 @@ def _gold_harness_mocks(monkeypatch, plans, *, telemetry_events: list | None = N
     monkeypatch.setattr(main_mod, "get_ai_client", lambda engine: object())
     monkeypatch.setattr(main_mod, "resolve_model_name", lambda client, preferred, verbose=False: "test-model")
     monkeypatch.setattr(main_mod, "_detect_branch_issue_reference", lambda verbose: [])
+    plans_iter = iter(plans)
     monkeypatch.setattr(main_mod, "generate_commit_message", lambda *a, **k: next(plans_iter))
+
+    # Gold harness fixtures intentionally use banned openers / inventory subjects.
+    # Slice 8 presentation guards share that vocabulary and the regen budget; keep
+    # gold-focused tests isolated by stubbing guards clean here. Slice 8 main-loop
+    # tests re-enable real guards explicitly via _enable_real_presentation_guards.
+    def _clean_guard_report(*a, **k):
+        return _GuardReport(findings=())
+
+    monkeypatch.setattr(
+        "git_cg.commit_quality.evaluate_presentation_guards",
+        _clean_guard_report,
+    )
     monkeypatch.setattr(main_mod, "_write_commit_message", lambda f, s, strict, verbose: writes.append(s))
     if telemetry_events is None:
         monkeypatch.setattr(main_mod, "_write_telemetry_state_safe", lambda **k: None)
@@ -1138,14 +1246,17 @@ def test_v11_a07_gold_strict_exhausted_after_two_regens(monkeypatch, capsys, tmp
     """V11-A07: shrinking then still failing after attempt 2 → exhausted."""
     import typer
 
-    # Pass 0: BODY + SCOPE (2 codes)
+    # Pass 0: BODY + SUBJECT_TITLE_CASE (2 codes)
     # Pass 1 after regen1: BODY only (strict subset) → allow second regen
     # Pass 2 after regen2: BODY only → exhausted
+    #
+    # Note: presentation overlay normalises filename scopes (release.py → release)
+    # before gold runs, so SCOPE_FILENAME is no longer a reliable multi-code seed.
     telemetry_events: list[dict] = []
     writes = _gold_harness_mocks(
         monkeypatch,
         [
-            _gold_plan(body="This commit adds a helper.", description="add helper", scope="release.py"),
+            _gold_plan(body="This commit adds a helper.", description="Add Helper", scope="release"),
             _gold_plan(body="This commit adds a helper.", description="add helper", scope="release"),
             _gold_plan(body="This commit adds a helper.", description="add helper", scope="release"),
         ],
@@ -1649,6 +1760,9 @@ def test_gold_blocked_telemetry_uses_strict_fail_codes(monkeypatch, tmp_path):
         "GOLD_SCOPE_FILENAME",
         "GOLD_SUBJECT_TITLE_CASE",
         "GOLD_SUBJECT_INVENTORY",
+        "GOLD_SKELETON_FALLBACK_FINAL",
+        "GOLD_PROCESS_META_BODY",
+        "GOLD_PATH_CLASS_SEMVER_CEILING",
     ):
         assert code in STRICT_FAIL_CODES
 
@@ -2113,3 +2227,348 @@ def test_scoped_history_guidance_never_uses_user_override_channel():
     assert "EXPLICIT USER OVERRIDE" not in prompt
     assert "CRITICAL PRECEDENCE RULE" not in prompt
     assert "SCOPED-HISTORY FEEDBACK" in prompt
+
+
+def test_blueprint_option_on_root_and_commit_help(monkeypatch):
+    """Slice 7: --blueprint must appear on root and commit help surfaces.
+
+    Rich/Typer can:
+    * truncate long option names under narrow terminals (``--blue…``)
+    * split the leading dashes with ANSI SGR codes (``-\x1b...-blueprint``)
+
+    Pin a wide COLUMNS and strip ANSI before asserting the full flag name.
+    """
+    import os
+    import re
+
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    ansi_re = re.compile(r"\x1b\[[0-9;]*m")
+
+    def _plain(text: str) -> str:
+        return ansi_re.sub("", text)
+
+    monkeypatch.setenv("COLUMNS", "120")
+    # Some Rich versions also honour the process env at console construct time.
+    os.environ["COLUMNS"] = "120"
+    help_env = {**os.environ, "COLUMNS": "120", "TERM": "dumb", "NO_COLOR": "1"}
+
+    root = CliRunner().invoke(app, ["--help"], env=help_env, color=False)
+    assert root.exit_code == 0, root.output
+    assert "--blueprint" in _plain(root.output), root.output
+
+    commit = CliRunner().invoke(app, ["commit", "--help"], env=help_env, color=False)
+    assert commit.exit_code == 0, commit.output
+    assert "--blueprint" in _plain(commit.output), commit.output
+
+
+def test_run_commit_generation_accepts_blueprint_kwarg():
+    """Slice 7: _run_commit_generation signature forwards blueprint after rank_arbitrate."""
+    import inspect
+
+    from git_cg.main import _run_commit_generation
+
+    params = list(inspect.signature(_run_commit_generation).parameters)
+    assert "blueprint" in params
+    assert params.index("blueprint") == params.index("rank_arbitrate") + 1
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 Slice 8 — presentation guards share gold_regen_attempts
+# ---------------------------------------------------------------------------
+
+
+def test_slice7_strict_blueprint_rejection_preserves_exit_code(monkeypatch, capsys, tmp_path):
+    """Interactive strict + invalid --blueprint must raise typer.Exit(2), not be swallowed."""
+    writes = _gold_harness_mocks(monkeypatch, [_gold_plan(body="Add a focused helper for release packaging.")])
+    import git_cg.main as main_mod
+
+    # tty_ok = interactive and can_open_tty(); force the hard-fail path.
+    monkeypatch.setattr(main_mod, "can_open_tty", lambda: True)
+    with pytest.raises(typer.Exit) as excinfo:
+        main_mod._run_commit_generation(
+            str(tmp_path / "COMMIT_EDITMSG"),
+            None,
+            None,
+            engine="mtplx",
+            dry_run=False,
+            verbose=False,
+            amend_regenerate=False,
+            strict=True,
+            interactive=True,
+            blueprint="{not-valid-json",
+        )
+    assert excinfo.value.exit_code == 2
+    out = capsys.readouterr().out
+    assert "Blueprint rejected" in out
+    assert writes == []
+
+
+def _guard_dirty_security_plan(
+    *,
+    description: str = "redact secrets from release packaging",
+    body: str = "Remove credentials leakage from the helper path.",
+):
+    """Product-src plan that trips GUARD_SECURITY_NOUN (no security path evidence)."""
+    return _gold_plan(body=body, description=description, scope="release")
+
+
+def _guard_dirty_unrepairable_plan(
+    *,
+    description: str = "adds guidance for release packaging",
+    body: str = "Adds guidance rows for the helper path.",
+):
+    """Product-src plan that trips a non-auto-repairable presentation guard."""
+    return _gold_plan(body=body, description=description, scope="release")
+
+
+def _guard_dirty_plan(
+    *,
+    description: str = "adds guidance for release packaging",
+    body: str = "Adds guidance rows for the helper path.",
+):
+    """Backward-compatible alias: non-auto-repairable dirty plan for regen/skeleton tests."""
+    return _guard_dirty_unrepairable_plan(description=description, body=body)
+
+
+def _guard_clean_plan():
+    return _gold_plan(
+        body="Add a focused helper for release packaging.",
+        description="add focused release helper",
+        scope="release",
+    )
+
+
+def _enable_real_presentation_guards(monkeypatch):
+    """Undo the gold-harness clean-guard stub for Slice 8 loop tests."""
+    monkeypatch.setattr(
+        "git_cg.commit_quality.evaluate_presentation_guards",
+        _real_evaluate_presentation_guards,
+    )
+
+
+def test_slice8_security_noun_repairs_without_regen(monkeypatch, capsys, tmp_path):
+    """GUARD_SECURITY_NOUN is deterministically repaired; no shared regen / skeleton."""
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _guard_dirty_security_plan(),
+            _guard_clean_plan(),  # must not be consumed
+        ],
+        telemetry_events=telemetry_events,
+    )
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+        gold_strict=True,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    assert "deterministic security-noun repair" in out
+    assert "shared regen" not in out
+    assert "skeleton fallback" not in out.lower()
+    written = writes[0].lower()
+    assert "secrets" not in written
+    assert "credentials" not in written
+    assert "sensitive" in written or "access material" in written
+    assert "[presentation-skeleton-fallback]" not in writes[0]
+    final = telemetry_events[-1]
+    assert final.get("hallucination_guard_fired") is True
+    assert int(final.get("gold_regen_attempts") or 0) == 0
+    assert final.get("gold_blocked") is False
+
+
+def test_slice8_guard_regen_shares_gold_budget_and_clears(monkeypatch, capsys, tmp_path):
+    """Dirty unrepairable guard → one shared regen → clean plan writes; no gold fan-out."""
+    telemetry_events: list[dict] = []
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [
+            _guard_dirty_plan(),
+            _guard_clean_plan(),
+            _guard_dirty_plan(),  # must not be consumed
+        ],
+        telemetry_events=telemetry_events,
+    )
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out
+    assert "Presentation guard" in out
+    assert "shared regen 1/2" in out
+    assert "shared regen 2/2" not in out
+    assert telemetry_events, "success path must persist telemetry"
+    final = telemetry_events[-1]
+    assert final.get("hallucination_guard_fired") is True
+    assert final.get("gold_regen_attempts") == 1
+    assert final.get("presentation_fallback_reason") == "hallucination_guard"
+
+
+def test_slice8_guard_exhaustion_applies_skeleton_once(monkeypatch, capsys, tmp_path):
+    """Three dirty unrepairable plans: two shared regens then skeleton fallback; hook path still writes."""
+    telemetry_events: list[dict] = []
+    dirty = _guard_dirty_plan()
+    writes = _gold_harness_mocks(
+        monkeypatch,
+        [dirty, dirty, dirty, dirty],  # fourth must not be consumed
+        telemetry_events=telemetry_events,
+    )
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    out = capsys.readouterr().out.lower()
+    assert "shared regen 1/2" in out
+    assert "shared regen 2/2" in out
+    assert "deterministic skeleton fallback" in out
+    # Written message must be skeleton-shaped, not the dirty capability claim.
+    written = writes[0].lower()
+    assert "adds guidance" not in written
+    final = telemetry_events[-1]
+    assert final.get("hallucination_guard_fired") is True
+    assert final.get("gold_regen_attempts") == 2
+    assert final.get("presentation_fallback_reason") == "hallucination_guard"
+    assert final.get("gold_blocked") is False
+
+
+def test_slice8_guard_and_gold_share_single_ceiling(monkeypatch, capsys, tmp_path):
+    """Guard regen then gold fail must not exceed the shared 0..2 ceiling (no 4th LLM)."""
+    telemetry_events: list[dict] = []
+    # Pass0: guard dirty (unrepairable capability claim)
+    # Pass1: guard-clean subject, gold-dirty banned body opener
+    # Pass2+: still dirty under shared counter → skeleton / gold exhaust; no 4th LLM
+    plans = [
+        _guard_dirty_plan(),
+        _gold_plan(
+            body="This commit adds a helper.",
+            description="add focused release helper",
+            scope="release",
+        ),
+        _gold_plan(
+            body="This commit adds a helper.",
+            description="add focused release helper",
+            scope="release",
+        ),
+        _gold_plan(
+            body="Add a focused helper for release packaging.",
+            description="add focused release helper",
+            scope="release",
+        ),
+    ]
+    consumed: list[int] = []
+    plans_iter = iter(enumerate(plans))
+
+    def _next_plan(*a, **k):
+        idx, plan = next(plans_iter)
+        consumed.append(idx)
+        return plan
+
+    writes = _gold_harness_mocks(monkeypatch, plans, telemetry_events=telemetry_events)
+    _enable_real_presentation_guards(monkeypatch)
+    import git_cg.main as main_mod
+
+    monkeypatch.setattr(main_mod, "generate_commit_message", _next_plan)
+
+    result = main_mod._run_commit_generation(
+        str(tmp_path / "COMMIT_EDITMSG"),
+        None,
+        None,
+        engine="mtplx",
+        dry_run=False,
+        verbose=True,
+        amend_regenerate=False,
+        strict=False,  # warn: gold does not block after shared budget
+        interactive=False,
+    )
+    assert result is True
+    assert len(writes) == 1
+    # Initial + exactly 2 shared wording regens ⇒ indices 0..2 only (never plan 3).
+    assert consumed == [0, 1, 2]
+    assert 3 not in consumed
+    final = telemetry_events[-1]
+    assert final.get("gold_regen_attempts") == 2
+    assert final.get("hallucination_guard_fired") is True
+
+
+def test_preflight_json_paths_override() -> None:
+    """Read-only preflight prints path-class JSON without invoking LLM/ranker."""
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    result = CliRunner().invoke(
+        app,
+        ["preflight", "--json", "src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+        color=False,
+    )
+    assert result.exit_code == 0, result.output
+    import json
+
+    payload = json.loads(result.output)
+    assert payload["path_count"] == 2
+    assert "telemetry.py" in payload["paths"][0] or payload["paths"][0].endswith("telemetry.py")
+    assert payload["diff_class"]
+    assert "high_risk_surfaces" in payload
+    assert "included_change_stubs" in payload
+    assert payload["empty_or_unknown"] is False
+
+
+def test_preflight_help_lists_json_flag() -> None:
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    result = CliRunner().invoke(app, ["preflight", "--help"], color=False)
+    assert result.exit_code == 0, result.output
+    help_text = _strip_ansi(result.output)
+    assert "--json" in help_text
+    assert "--verbose" in help_text or "-v" in help_text
+
+
+def test_root_help_lists_preflight_command() -> None:
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    result = CliRunner().invoke(app, ["--help"], color=False)
+    assert result.exit_code == 0, result.output
+    assert "preflight" in _strip_ansi(result.output)

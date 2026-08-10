@@ -1,0 +1,5 @@
+CASE=gold-trigger REPO=/tmp/git-cg-mtplx-gold-trigger-K664Ga ART=/tmp/git-cg-acceptpath-mtplx-suite-20260809-143832/gold-trigger
+time_start=2026-08-09 14:39:51 AEST
+exit_code=0
+elapsed_s=31.62
+repo=/tmp/git-cg-mtplx-gold-trigger-K664Ga

@@ -107,6 +107,40 @@ class LockResolution(enum.StrEnum):
     ABSENT = "absent"
 
 
+class PresentationFallbackReason(enum.StrEnum):
+    """Closed presentation fallback reasons (Issue #204 · Phase 7.30).
+
+    Single primary reason per run. Precedence is owned by presentation policy;
+    this enum is vocabulary only.
+    """
+
+    NONE = "none"
+    ERROR = "error"
+    BLUEPRINT = "blueprint"
+    PATH_CLASS_GATE = "path_class_gate"
+    SEMVER_CEILING = "semver_ceiling"
+    TYPE_DOMINANCE = "type_dominance"
+    HALLUCINATION_GUARD = "hallucination_guard"
+    CRAFT_GUARD = "craft_guard"
+    INVENTORY_GUARD = "inventory_guard"
+    LOW_CONFIDENCE = "low_confidence"
+
+
+class PlanNormaliserReason(enum.StrEnum):
+    """Closed plan-normaliser reasons (Issue #204 · Slice 5.5).
+
+    Single primary reason per run. Vocabulary only — evaluation lives in
+    ``evaluate_contract_lifecycle``.
+    """
+
+    NONE = "none"
+    CONTRACT_LIFT = "contract_lift"
+    PRESENTATION_CLAMP = "presentation_clamp"
+    MATRIX_RECONSTRUCTION = "matrix_reconstruction"
+    MALFORMED_SEMVER = "malformed_semver"
+    RESIDUAL_VIOLATION = "residual_violation"
+
+
 class GoldSelfCorrectionOutcome(enum.StrEnum):
     """Closed gold self-correction outcomes (Issue #191 Option B).
 
@@ -214,6 +248,29 @@ class GenerationTelemetry:
     structural_error_handling: bool = False
     structural_public_api: bool = False
     structural_new_command: bool = False
+    # Issue #204 Phase 7.30 presentation fallback (closed vocab; default none).
+    presentation_fallback_reason: str = PresentationFallbackReason.NONE.value
+    # Issue #204 Slice 7: operator blueprint applied (bool only — never raw JSON).
+    blueprint_applied: bool = False
+    # Issue #204 Slice 8: hallucination guard fired (bool only — RF-3 asymmetry).
+    hallucination_guard_fired: bool = False
+    # Issue #204 Slice 10 / D26: remaining presentation observability (closed vocab).
+    # path_class_gate: DiffClass.name or "none" (not the fallback-reason enum value).
+    path_class_gate: str = "none"
+    # changelog_antisignal_applied: changelog marker exclusion path engaged.
+    changelog_antisignal_applied: bool = False
+    # scope_normalised_from: CANONICAL_SCOPE_ALIASES key or "none" (RF-1; never a path).
+    scope_normalised_from: str = "none"
+    # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab / bool).
+    contract_lift_applied: bool = False
+    contract_lift_from_semver: str | None = None
+    # Issue #204 Slice 5.5: contract lifecycle observability (closed vocab / bool).
+    contract_locked_semver: str | None = None
+    llm_raw_semver: str | None = None
+    plan_persisted_semver: str | None = None
+    contract_violation: bool = False
+    plan_normaliser_applied: bool = False
+    plan_normaliser_reason: str = PlanNormaliserReason.NONE.value
 
 
 def compute_prompt_hash(prompt: str) -> str:
@@ -239,6 +296,40 @@ def ranking_override_feedback_score(ranking_override: bool) -> float:
     only at this score boundary.
     """
     return 1.0 if ranking_override else 0.0
+
+
+def contract_consistent_feedback_score(contract_violation: bool) -> float:
+    """Derive the Opik ``contract_consistent`` feedback score.
+
+    Type boundary (Issue #204 Slice 5.5): ``GenerationTelemetry.contract_violation``
+    is a **bool**; the Opik feedback score is a **float** ``1.0`` (consistent) /
+    ``0.0`` (violation) derived only at this score boundary.
+    """
+    return 0.0 if contract_violation else 1.0
+
+
+_CLOSED_SEMVER: frozenset[str] = frozenset({"NONE", "PATCH", "MINOR", "MAJOR"})
+
+
+def coerce_closed_semver(value: object) -> str | None:
+    """Coerce to closed SemVer vocabulary or ``None`` (no free text)."""
+    if value is None or value == "":
+        return None
+    if hasattr(value, "value"):
+        value = value.value
+    raw = str(value).strip().upper()
+    return raw if raw in _CLOSED_SEMVER else None
+
+
+def coerce_plan_normaliser_reason(value: object) -> str:
+    """Coerce unknown plan-normaliser reasons to ``none`` (D9/D26)."""
+    if isinstance(value, PlanNormaliserReason):
+        return value.value
+    text = str(value or "").strip().lower()
+    allowed = {m.value for m in PlanNormaliserReason}
+    if text in allowed:
+        return text
+    return PlanNormaliserReason.NONE.value
 
 
 def run_deterministic_checks(commit_plan: CommitPlan) -> DeterministicScoreCard:
@@ -593,7 +684,14 @@ def reverse_parse_commit_message(text: str) -> dict[str, Any]:
 def redact_payload(payload: str) -> str:
     """
     Scrub PII and secrets from strings using betterleaks.
-    Acts as a mandatory gateway interceptor before telemetry is enabled.
+
+    Acts as a mandatory gateway interceptor before telemetry is persisted.
+
+    betterleaks exits non-zero (default exit code 1) when findings are present
+    while still emitting a JSON findings list on stdout. Treat parseable
+    findings as a successful scan and apply redactions; only omit the payload
+    when the scanner is missing, times out, or returns unusable output
+    (Issue #212 APC-C).
     """
     if not payload:
         return payload
@@ -604,24 +702,37 @@ def redact_payload(payload: str) -> str:
             input=payload,
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
             timeout=5,
         )
-
-        output = process.stdout.strip()
-        findings = json.loads(output)
-        if not isinstance(findings, list):
-            raise ValueError("Expected JSON list from betterleaks")
-
-        redacted = payload
-        for finding in findings:
-            secret = finding.get("Secret")
-            if secret and secret in redacted:
-                redacted = redacted.replace(secret, "[REDACTED]")
-        return redacted
-    except Exception:
-        # Fail safe if betterleaks is missing or fails to execute
+    except FileNotFoundError, subprocess.TimeoutExpired, OSError:
+        # Fail safe if betterleaks is missing, times out, or cannot execute.
         return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+    except Exception:
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    output = (process.stdout or "").strip()
+    if not output:
+        # No report body: cannot distinguish clean vs broken scanner → omit.
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    try:
+        findings = json.loads(output)
+    except json.JSONDecodeError:
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    if not isinstance(findings, list):
+        return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+
+    # Parseable findings list is authoritative even when exit code is non-zero.
+    redacted = payload
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        secret = finding.get("Secret")
+        if secret and secret in redacted:
+            redacted = redacted.replace(secret, "[REDACTED]")
+    return redacted
 
 
 def _normalize_optional_bool(value: Any) -> bool | None:
@@ -654,6 +765,52 @@ def _normalize_optional_bool(value: Any) -> bool | None:
 
 def get_state_file_path(git_dir: str) -> Path:
     return Path(git_dir) / "GIT_CG_OPIK_STATE.json"
+
+
+def coerce_presentation_fallback_reason(value: object) -> str:
+    """Coerce unknown presentation fallback reasons to ``none`` (D9/D26)."""
+    if isinstance(value, PresentationFallbackReason):
+        return value.value
+    text = str(value or "").strip().lower()
+    allowed = {m.value for m in PresentationFallbackReason}
+    if text in allowed:
+        return text
+    return PresentationFallbackReason.NONE.value
+
+
+# Closed DiffClass.name vocabulary (mirrors commit_quality.DIFF_CLASS_*).
+_PATH_CLASS_GATE_ALLOWED: frozenset[str] = frozenset(
+    {
+        "none",
+        "tests_only",
+        "fixtures_only",
+        "docs_only",
+        "adr_only",
+        "config_ci_only",
+        "release_only",
+        "product_src",
+        "mixed",
+        "empty",
+    }
+)
+
+
+def coerce_path_class_gate(value: object) -> str:
+    """Coerce ``path_class_gate`` to a closed DiffClass label or ``none`` (D26)."""
+    text = str(value or "").strip().lower()
+    if text in _PATH_CLASS_GATE_ALLOWED:
+        return text
+    return "none"
+
+
+def coerce_scope_normalised_from(value: object) -> str:
+    """Coerce ``scope_normalised_from`` via scope_canon RF-1 (alias key or none)."""
+    try:
+        from git_cg.scope_canon import coerce_scope_normalised_from as _coerce
+
+        return _coerce(value)
+    except Exception:
+        return "none"
 
 
 def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
@@ -744,6 +901,41 @@ def write_telemetry_state(git_dir: str, telemetry: GenerationTelemetry) -> None:
     except Exception:
         telemetry.scoped_history_fallback_reason = "none"
         telemetry.rename_confidence = "none"
+
+    # Issue #204: closed presentation fallback reason (no free-text gateway).
+    # Defence-in-depth: redact then re-coerce to closed enum (D26).
+    _pfr_raw = getattr(telemetry, "presentation_fallback_reason", PresentationFallbackReason.NONE.value)
+    _pfr_redacted = redact_payload(str(_pfr_raw or "none"))
+    if _pfr_redacted == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+        telemetry.presentation_fallback_reason = PresentationFallbackReason.NONE.value
+    else:
+        telemetry.presentation_fallback_reason = coerce_presentation_fallback_reason(_pfr_redacted)
+    # Issue #204 Slice 7: blueprint_applied bool only (never raw blueprint payload).
+    telemetry.blueprint_applied = bool(getattr(telemetry, "blueprint_applied", False))
+    # Issue #204 Slice 8: hallucination_guard_fired bool only (no finding payload).
+    telemetry.hallucination_guard_fired = bool(getattr(telemetry, "hallucination_guard_fired", False))
+    # Issue #204 Slice 10 / D26: path_class_gate + changelog antisignal + scope alias key.
+    telemetry.path_class_gate = coerce_path_class_gate(getattr(telemetry, "path_class_gate", "none"))
+    telemetry.changelog_antisignal_applied = bool(getattr(telemetry, "changelog_antisignal_applied", False))
+    # RF-1: closed alias key only; defence-in-depth redact (never a filesystem path).
+    _scope_from = coerce_scope_normalised_from(getattr(telemetry, "scope_normalised_from", "none"))
+    _redacted_scope_from = redact_payload(str(_scope_from))
+    if _redacted_scope_from == "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]":
+        telemetry.scope_normalised_from = "none"
+    else:
+        telemetry.scope_normalised_from = coerce_scope_normalised_from(_redacted_scope_from)
+    # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (bool + closed SemVer).
+    telemetry.contract_lift_applied = bool(getattr(telemetry, "contract_lift_applied", False))
+    telemetry.contract_lift_from_semver = coerce_closed_semver(getattr(telemetry, "contract_lift_from_semver", None))
+    # Issue #204 Slice 5.5: contract lifecycle fields (closed vocab / bool).
+    telemetry.contract_locked_semver = coerce_closed_semver(getattr(telemetry, "contract_locked_semver", None))
+    telemetry.llm_raw_semver = coerce_closed_semver(getattr(telemetry, "llm_raw_semver", None))
+    telemetry.plan_persisted_semver = coerce_closed_semver(getattr(telemetry, "plan_persisted_semver", None))
+    telemetry.contract_violation = bool(getattr(telemetry, "contract_violation", False))
+    telemetry.plan_normaliser_applied = bool(getattr(telemetry, "plan_normaliser_applied", False))
+    telemetry.plan_normaliser_reason = coerce_plan_normaliser_reason(
+        getattr(telemetry, "plan_normaliser_reason", PlanNormaliserReason.NONE.value)
+    )
 
     state_file = get_state_file_path(git_dir)
     with state_file.open("w", encoding="utf-8") as f:
@@ -872,6 +1064,42 @@ def read_telemetry_state(git_dir: str) -> GenerationTelemetry | None:
             data.setdefault("structural_error_handling", False)
             data.setdefault("structural_public_api", False)
             data.setdefault("structural_new_command", False)
+            # Issue #204 presentation fallback default (Phase 7.30).
+            data.setdefault("presentation_fallback_reason", PresentationFallbackReason.NONE.value)
+            data["presentation_fallback_reason"] = coerce_presentation_fallback_reason(
+                data.get("presentation_fallback_reason")
+            )
+            # Issue #204 Slice 7: blueprint_applied default + coerce.
+            data.setdefault("blueprint_applied", False)
+            data["blueprint_applied"] = bool(data.get("blueprint_applied", False))
+            # Issue #204 Slice 8: hallucination_guard_fired default + coerce.
+            data.setdefault("hallucination_guard_fired", False)
+            data["hallucination_guard_fired"] = bool(data.get("hallucination_guard_fired", False))
+            # Issue #204 Slice 10 / D26: path_class_gate + changelog antisignal + scope alias.
+            data.setdefault("path_class_gate", "none")
+            data["path_class_gate"] = coerce_path_class_gate(data.get("path_class_gate"))
+            data.setdefault("changelog_antisignal_applied", False)
+            data["changelog_antisignal_applied"] = bool(data.get("changelog_antisignal_applied", False))
+            data.setdefault("scope_normalised_from", "none")
+            data["scope_normalised_from"] = coerce_scope_normalised_from(data.get("scope_normalised_from"))
+            # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs.
+            data.setdefault("contract_lift_applied", False)
+            data["contract_lift_applied"] = bool(data.get("contract_lift_applied", False))
+            data.setdefault("contract_lift_from_semver", None)
+            data["contract_lift_from_semver"] = coerce_closed_semver(data.get("contract_lift_from_semver"))
+            # Issue #204 Slice 5.5: contract lifecycle defaults + closed coerce.
+            data.setdefault("contract_locked_semver", None)
+            data["contract_locked_semver"] = coerce_closed_semver(data.get("contract_locked_semver"))
+            data.setdefault("llm_raw_semver", None)
+            data["llm_raw_semver"] = coerce_closed_semver(data.get("llm_raw_semver"))
+            data.setdefault("plan_persisted_semver", None)
+            data["plan_persisted_semver"] = coerce_closed_semver(data.get("plan_persisted_semver"))
+            data.setdefault("contract_violation", False)
+            data["contract_violation"] = bool(data.get("contract_violation", False))
+            data.setdefault("plan_normaliser_applied", False)
+            data["plan_normaliser_applied"] = bool(data.get("plan_normaliser_applied", False))
+            data.setdefault("plan_normaliser_reason", PlanNormaliserReason.NONE.value)
+            data["plan_normaliser_reason"] = coerce_plan_normaliser_reason(data.get("plan_normaliser_reason"))
             # Normalise ranking fields.
             level = data.get("ranking_confidence_level")
             if level is not None and level not in {m.value for m in RankingConfidenceLevel}:

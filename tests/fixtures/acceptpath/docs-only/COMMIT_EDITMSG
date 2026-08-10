@@ -1,0 +1,7 @@
+🔐 chore(docs): document review checklist for usage
+
+Guide contributors to verify commit subjects, preserve machine-readable trailers, and maintain focused change sets via a new usage documentation checklist.
+
+SemVer-Impact: PATCH
+Change-Types: chore
+Changelog-Groups: Miscellaneous

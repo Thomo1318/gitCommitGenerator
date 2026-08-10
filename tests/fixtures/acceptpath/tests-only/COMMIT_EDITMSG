@@ -1,0 +1,12 @@
+💥 feat(test)!: add edge case tests for add function
+
+Expands test coverage for the `add` utility by verifying behavior with zero and negative operands. Ensures robust handling of edge cases before broader integration.
+
+Included changes:
+- ✅ test(mathy): cover zero and negative inputs
+
+SemVer-Impact: MAJOR
+Change-Types: feat, test
+Changelog-Groups: Added, Tests
+
+BREAKING CHANGE: Introduces new test assertions that may fail against existing implementations lacking explicit zero/negative handling.

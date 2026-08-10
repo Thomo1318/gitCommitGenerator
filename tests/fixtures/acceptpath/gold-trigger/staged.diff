@@ -1,0 +1,19 @@
+diff --git a/src/demo/util.py b/src/demo/util.py
+index b593cf5..f3fa12d 100644
+--- a/src/demo/util.py
++++ b/src/demo/util.py
+@@ -1,2 +1,13 @@
+ def normalize(value: str) -> str:
+-    return value.strip()
++    """Return a trimmed string.
++
++    This helper updates things and improves stuff for callers.
++    """
++    text = value or ""
++    return text.strip()
++
++
++def normalize_or_default(value: str | None, default: str = "") -> str:
++    if value is None:
++        return default
++    return normalize(value)

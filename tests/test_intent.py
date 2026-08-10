@@ -174,3 +174,54 @@ def test_commit_intent_unknown_intent_falls_back_to_wrench_entry(monkeypatch):
     assert intent.cc_type == CommitType.CHORE
     assert intent.semver_impact == SemVerImpact.NONE
     assert intent.changelog_group == "Miscellaneous"
+
+
+def test_fixture_json_content_markers_quarantined() -> None:
+    """P-S12: fixture JSON validate/schema prose must not emit product markers."""
+    from git_cg.intent import _generate_signal_markers, extract_diff_signals
+
+    diff = """diff --git a/tests/fixtures/pack/data.json b/tests/fixtures/pack/data.json
+--- a/tests/fixtures/pack/data.json
++++ b/tests/fixtures/pack/data.json
+@@ -0,0 +1,5 @@
++{
++  "validate": true,
++  "schema": "strict",
++  "guard": "safety",
++  "try:": "except raise fallback"
++}
+"""
+    signals = extract_diff_signals(diff)
+    assert signals.only_fixtures or signals.only_tests
+    assert signals.validation_added is False
+    assert signals.error_handling_added is False
+    assert signals.adds_public_api is False
+    assert signals.changes_architecture is False
+    markers = _generate_signal_markers(signals)
+    assert "validation_added" not in markers
+    assert "new_api" not in markers
+    assert "exception_handling_added" not in markers
+    assert "tests_only" in markers or "test_only" in markers
+
+
+def test_docs_markdown_content_markers_quarantined() -> None:
+    """P-S12: docs Markdown validate/implement prose must not promote product markers."""
+    from git_cg.intent import _generate_signal_markers, extract_diff_signals
+
+    diff = """diff --git a/docs/usage.md b/docs/usage.md
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -1,0 +1,3 @@
++# Usage
++Validate the schema and implement the public API guard.
++Architecture pipeline resolver adapter strategy.
+"""
+    signals = extract_diff_signals(diff)
+    assert signals.only_docs
+    assert signals.validation_added is False
+    assert signals.adds_public_api is False
+    assert signals.changes_architecture is False
+    markers = _generate_signal_markers(signals)
+    assert "validation_added" not in markers
+    assert "new_api" not in markers
+    assert "major_subsystem_restructured" not in markers

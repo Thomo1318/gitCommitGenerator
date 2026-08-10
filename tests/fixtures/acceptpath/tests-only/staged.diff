@@ -1,0 +1,16 @@
+diff --git a/tests/test_mathy.py b/tests/test_mathy.py
+index 76c058a..bc6c0c8 100644
+--- a/tests/test_mathy.py
++++ b/tests/test_mathy.py
+@@ -2,3 +2,11 @@ from demo.mathy import add
+ 
+ def test_add_basic():
+     assert add(1, 2) == 3
++
++
++def test_add_zero():
++    assert add(0, 5) == 5
++
++
++def test_add_negative():
++    assert add(-2, 3) == 1

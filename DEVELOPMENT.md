@@ -383,11 +383,17 @@ contract boundary. Related work is intentionally split across later phases:
 ### Analysis vs prompt diff (interim until Phase 11)
 
 `extract_git_diff()` returns the **full** staged analysis diff for signals,
-ranking, contract resolution, and telemetry hashing.
+ranking, contract resolution, and telemetry hashing. It must always use
+standard `git diff --cached` (unified diff). Do **not** wrap the analysis path
+with `rtk`: RTK's summarized non-unified output collapses path harvest to
+empty, disables presentation constraints (`path_class_gate=empty`), and can
+corrupt content markers used by the deterministic ranker (Issue #212).
 
 `pack_prompt_diff()` may apply an interim character ceiling to the **LLM user
 payload only**, preferring whole-file omission with an inventory footer over a
-mid-hunk `[:50000]` chop. This is **not** the Phase 11 packer product.
+mid-hunk `[:50000]` chop. This is **not** the Phase 11 packer product. RTK (if
+used at all) belongs only on optional prompt-compression paths, never on
+analysis/ranking extraction.
 
 ### Shadow workspace clone hardlinks (Phase 7.5)
 

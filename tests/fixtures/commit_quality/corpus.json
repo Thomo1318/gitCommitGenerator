@@ -1,0 +1,1313 @@
+{
+  "schema_version": 1,
+  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
+  "sop_matrix_row_count": 75,
+  "tie_break": {
+    "presentation_authority": [
+      "path_class_force_forbid",
+      "semver_ceiling",
+      "type_dominance",
+      "scope_force_then_directive_then_normalise_then_prior_hint",
+      "changelog_types_allowlist_repair",
+      "cardinality_floor_light"
+    ],
+    "identity_lock": [
+      "primary_intent.intent_id",
+      "primary_intent.gitmoji"
+    ],
+    "notes": "Slice 3 freezes pure presentation helpers only. Slice 9 adds eval letters A\u2013N and S9-E/S9-H gap cases on the same pure helpers. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
+  },
+  "cases": [
+    {
+      "id": "P9-G1",
+      "description": "Phase 9 producer: scoped_history product module",
+      "staged_paths": [
+        "src/git_cg/scoped_history.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/scoped_history.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "scoped_history",
+      "preferred_scope": "scoped-history",
+      "must_present": {
+        "scope_canon": "scoped-history",
+        "diff_class": "product_src",
+        "role": "product_src"
+      },
+      "must_not_present": {
+        "scope": [
+          "scoped_history",
+          "scoped_hist",
+          "main.py"
+        ],
+        "force_cc_type": [
+          "test",
+          "docs"
+        ]
+      }
+    },
+    {
+      "id": "P9-G2",
+      "description": "Phase 9 mixed telemetry/sentry + telemetry tests",
+      "staged_paths": [
+        "src/git_cg/telemetry.py",
+        "src/git_cg/sentry_config.py",
+        "tests/test_scoped_history_telemetry.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/telemetry.py",
+          "src/git_cg/sentry_config.py",
+          "tests/test_scoped_history_telemetry.py"
+        ],
+        "touches_tests": true,
+        "files_changed_count": 3
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "mixed",
+        "role": "mixed",
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "diff_class": [
+          "tests_only",
+          "docs_only",
+          "adr_only",
+          "fixtures_only"
+        ],
+        "force_cc_type": [
+          "test",
+          "docs"
+        ]
+      }
+    },
+    {
+      "id": "P9-G3",
+      "description": "Phase 9 producer: intent module",
+      "staged_paths": [
+        "src/git_cg/intent.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/intent.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "intent.py",
+      "preferred_scope": "intent",
+      "must_present": {
+        "scope_canon": "intent",
+        "diff_class": "product_src",
+        "role": "product_src"
+      },
+      "must_not_present": {
+        "scope": [
+          "intent.py",
+          "git_cg.intent"
+        ]
+      }
+    },
+    {
+      "id": "P9-G4",
+      "description": "Phase 9 producer: main high-risk path",
+      "staged_paths": [
+        "src/git_cg/main.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/main.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "main.py",
+      "preferred_scope": "main",
+      "must_present": {
+        "scope_canon": "main",
+        "diff_class": "product_src",
+        "role": "product_src",
+        "high_risk_path": true
+      },
+      "must_not_present": {
+        "scope": [
+          "main.py"
+        ]
+      }
+    },
+    {
+      "id": "P9-G5",
+      "description": "Phase 9 tests + scoped_history fixtures tree",
+      "staged_paths": [
+        "tests/test_scoped_history.py",
+        "tests/fixtures/scoped_history/README.md",
+        "tests/fixtures/scoped_history/flow_disjoint_flows.json",
+        "tests/fixtures/scoped_history/flow_disjoint_staged.txt",
+        "tests/fixtures/scoped_history/flow_overlap_flows.json",
+        "tests/fixtures/scoped_history/flow_overlap_staged.txt",
+        "tests/fixtures/scoped_history/rename_new.py",
+        "tests/fixtures/scoped_history/rename_old.py",
+        "tests/fixtures/scoped_history/structural_cli.py",
+        "tests/fixtures/scoped_history/structural_error.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_scoped_history.py",
+          "tests/fixtures/scoped_history/README.md",
+          "tests/fixtures/scoped_history/flow_disjoint_flows.json",
+          "tests/fixtures/scoped_history/flow_disjoint_staged.txt",
+          "tests/fixtures/scoped_history/flow_overlap_flows.json",
+          "tests/fixtures/scoped_history/flow_overlap_staged.txt",
+          "tests/fixtures/scoped_history/rename_new.py",
+          "tests/fixtures/scoped_history/rename_old.py",
+          "tests/fixtures/scoped_history/structural_cli.py",
+          "tests/fixtures/scoped_history/structural_error.py"
+        ],
+        "touches_tests": true,
+        "only_tests": false,
+        "files_changed_count": 10
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "min_included_change_bullets_gte": 2,
+        "overlay_groups_include": [
+          "Tests"
+        ]
+      },
+      "must_not_present": {
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "security_primary": true
+      }
+    },
+    {
+      "id": "P9-G6",
+      "description": "Phase 9 claim tests only",
+      "staged_paths": [
+        "tests/test_semantic.py",
+        "tests/test_main.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_semantic.py",
+          "tests/test_main.py"
+        ],
+        "touches_tests": true,
+        "only_tests": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "tests_only",
+        "cc_type": "test",
+        "semver": "NONE",
+        "changelog_group": "Tests",
+        "scope": "test"
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ]
+      }
+    },
+    {
+      "id": "P9-G7",
+      "description": "Phase 9 ADR-only (issue path spelling)",
+      "staged_paths": [
+        "docs/ADRs/ADR-0163-scoped-reasoning-history.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "docs/ADRs/ADR-0163-scoped-reasoning-history.md"
+        ],
+        "touches_docs": true,
+        "only_docs": true,
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "adr_only",
+        "cc_type": "docs",
+        "semver": "NONE",
+        "changelog_group": "Documentation",
+        "scope": "adr"
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix",
+          "chore"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "security_primary": true
+      }
+    },
+    {
+      "id": "TIP-G1",
+      "description": "Tip multi-module tests-only; claim tags P9-A05/B07/B10",
+      "staged_paths": [
+        "tests/test_scoped_history.py",
+        "tests/test_scoped_history_telemetry.py",
+        "tests/test_main.py",
+        "tests/test_semantic.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_scoped_history.py",
+          "tests/test_scoped_history_telemetry.py",
+          "tests/test_main.py",
+          "tests/test_semantic.py"
+        ],
+        "touches_tests": true,
+        "only_tests": true,
+        "files_changed_count": 4
+      },
+      "concern_tags": [],
+      "claim_tags": [
+        "P9-A05",
+        "P9-B07",
+        "P9-B10"
+      ],
+      "seed_scope": "scoped_history",
+      "preferred_scope": "scoped-history",
+      "must_present": {
+        "diff_class": "tests_only",
+        "cc_type": "test",
+        "semver": "NONE",
+        "changelog_group": "Tests",
+        "scope": "scoped-history",
+        "scope_canon_alias": "scoped-history",
+        "test_module_count_gte": 4,
+        "claim_tags": [
+          "P9-A05",
+          "P9-B07",
+          "P9-B10"
+        ]
+      },
+      "must_not_present": {
+        "scope": [
+          "scoped_history",
+          "test"
+        ],
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ]
+      },
+      "eval_letters": [
+        "D"
+      ]
+    },
+    {
+      "id": "TIP-G2",
+      "description": "Tip fixtures README only \u2014 no security from prose",
+      "staged_paths": [
+        "tests/fixtures/scoped_history/README.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/fixtures/scoped_history/README.md"
+        ],
+        "touches_docs": true,
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "fixtures_only",
+        "cc_type": "test",
+        "semver": "NONE",
+        "changelog_group": "Tests",
+        "scope": "fixtures",
+        "forbid_security_primary": true
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "security_tokens": [
+          "secrets",
+          "credentials",
+          "Security"
+        ],
+        "gitmoji": [
+          "\ud83d\udd10"
+        ]
+      },
+      "eval_letters": [
+        "A"
+      ]
+    },
+    {
+      "id": "TIP-G3",
+      "description": "Tip ADR + index docs-only",
+      "staged_paths": [
+        "docs/ADRs/ADR-0163-scoped-reasoning-history.md",
+        "docs/ADRs/index.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "docs/ADRs/ADR-0163-scoped-reasoning-history.md",
+          "docs/ADRs/index.md"
+        ],
+        "touches_docs": true,
+        "only_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "adr_only",
+        "cc_type": "docs",
+        "semver": "NONE",
+        "changelog_group": "Documentation",
+        "scope": "adr"
+      },
+      "must_not_present": {
+        "cc_type": [
+          "chore",
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "security_primary": true
+      },
+      "eval_letters": [
+        "B"
+      ]
+    },
+    {
+      "id": "TIP-G4",
+      "description": "Tip multi-doc + CHANGELOG anti-signal",
+      "staged_paths": [
+        "docs/usage.md",
+        "CHANGELOG.md",
+        "DEVELOPMENT.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "docs/usage.md",
+          "CHANGELOG.md",
+          "DEVELOPMENT.md"
+        ],
+        "touches_docs": true,
+        "only_docs": true,
+        "files_changed_count": 3
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "docs_only",
+        "cc_type": "docs",
+        "semver": "NONE",
+        "changelog_group": "Documentation",
+        "changelog_antisignal_applied": true,
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "fix",
+          "feat"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group": [
+          "Fixed"
+        ],
+        "runtime_verbs": [
+          "handle",
+          "recover",
+          "fallback errors"
+        ]
+      },
+      "eval_letters": [
+        "C"
+      ]
+    },
+    {
+      "id": "TIP-G5",
+      "description": "Tip telemetry/main/sentry correctness -> fix+PATCH+Fixed",
+      "staged_paths": [
+        "src/git_cg/main.py",
+        "src/git_cg/telemetry.py",
+        "src/git_cg/sentry_config.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/main.py",
+          "src/git_cg/telemetry.py",
+          "src/git_cg/sentry_config.py"
+        ],
+        "files_changed_count": 3
+      },
+      "concern_tags": [
+        "closed_enum",
+        "correctness",
+        "fallback_none_overwrite",
+        "parser_batch_results",
+        "redacted_sentinel",
+        "scrub_vars"
+      ],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "semver_ceiling": "PATCH",
+        "changelog_group": "Fixed",
+        "min_included_change_bullets_gte": 5
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group_only": [
+          "Added"
+        ]
+      },
+      "eval_letters": [
+        "F"
+      ]
+    },
+    {
+      "id": "TIP-G6",
+      "description": "Tip mixed tests+fixtures+ADR+docs retargets",
+      "staged_paths": [
+        "tests/test_scoped_history.py",
+        "tests/test_scoped_history_telemetry.py",
+        "tests/test_main.py",
+        "tests/test_semantic.py",
+        "tests/fixtures/scoped_history/README.md",
+        "docs/ADRs/0163-scoped-reasoning-history.md",
+        "docs/ADRs/index.md",
+        "docs/usage.md",
+        "DEVELOPMENT.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_scoped_history.py",
+          "tests/test_scoped_history_telemetry.py",
+          "tests/test_main.py",
+          "tests/test_semantic.py",
+          "tests/fixtures/scoped_history/README.md",
+          "docs/ADRs/0163-scoped-reasoning-history.md",
+          "docs/ADRs/index.md",
+          "docs/usage.md",
+          "DEVELOPMENT.md"
+        ],
+        "touches_tests": true,
+        "touches_docs": true,
+        "files_changed_count": 9
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "overlay_types_include": [
+          "test",
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Tests",
+          "Documentation"
+        ],
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group_only": [
+          "Miscellaneous"
+        ]
+      },
+      "eval_letters": [
+        "G"
+      ]
+    },
+    {
+      "id": "TIP-G7",
+      "description": "Tip main+scoped_history producer correctness -> fix+PATCH",
+      "staged_paths": [
+        "src/git_cg/main.py",
+        "src/git_cg/scoped_history.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/main.py",
+          "src/git_cg/scoped_history.py"
+        ],
+        "files_changed_count": 2
+      },
+      "concern_tags": [
+        "cli_hint_reject",
+        "correctness",
+        "directive_free_wording",
+        "fallback_enum",
+        "nul_rename_parse"
+      ],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": "scoped-history",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "changelog_group": "Fixed",
+        "scope": "scoped-history",
+        "min_included_change_bullets_gte": 4
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg",
+          "scoped_history"
+        ]
+      },
+      "eval_letters": [
+        "I"
+      ]
+    },
+    {
+      "id": "TIP-G8",
+      "description": "Tip tests+ADR claim-lock \u2014 no feat invention",
+      "staged_paths": [
+        "tests/test_scoped_history.py",
+        "docs/ADRs/0163-scoped-reasoning-history.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_scoped_history.py",
+          "docs/ADRs/0163-scoped-reasoning-history.md"
+        ],
+        "touches_tests": true,
+        "touches_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "overlay_types_include": [
+          "test",
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Tests",
+          "Documentation"
+        ],
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "force_cc_type": [
+          "feat"
+        ],
+        "changelog_group_only": [
+          "Miscellaneous"
+        ]
+      },
+      "eval_letters": [
+        "J"
+      ]
+    },
+    {
+      "id": "TIP-G9",
+      "description": "Tip wording-only scoped_history + claim test -> fix+test+PATCH",
+      "staged_paths": [
+        "src/git_cg/scoped_history.py",
+        "tests/test_scoped_history.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/scoped_history.py",
+          "tests/test_scoped_history.py"
+        ],
+        "touches_tests": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [
+        "authority_leakage_ban",
+        "correctness",
+        "directive_verb_drop"
+      ],
+      "claim_tags": [],
+      "seed_scope": "scoped_history",
+      "preferred_scope": "scoped-history",
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "changelog_group": "Fixed",
+        "scope": "scoped-history",
+        "overlay_types_include": [
+          "fix",
+          "test"
+        ],
+        "overlay_groups_include": [
+          "Fixed",
+          "Tests"
+        ],
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "scoped_history"
+        ]
+      },
+      "eval_letters": [
+        "K"
+      ]
+    },
+    {
+      "id": "TIP-G10",
+      "description": "Tip dark-launch semantic harvest + tests -> feat+PATCH+Added,Tests",
+      "staged_paths": [
+        "src/git_cg/semantic.py",
+        "tests/test_semantic.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/semantic.py",
+          "tests/test_semantic.py"
+        ],
+        "touches_tests": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [
+        "dark_launch",
+        "free_harvest"
+      ],
+      "claim_tags": [],
+      "seed_scope": "semantic",
+      "preferred_scope": null,
+      "must_present": {
+        "diff_class": "mixed",
+        "semver_ceiling": "PATCH",
+        "overlay_types_include": [
+          "feat",
+          "test"
+        ],
+        "overlay_groups_include": [
+          "Added",
+          "Tests"
+        ],
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ]
+      },
+      "eval_letters": [
+        "L"
+      ]
+    },
+    {
+      "id": "TIP-G11",
+      "description": "Tip main preflight carry-through + elevation test -> scoped-history PATCH",
+      "staged_paths": [
+        "src/git_cg/main.py",
+        "tests/test_semantic.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/main.py",
+          "tests/test_semantic.py"
+        ],
+        "touches_tests": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [
+        "elevation",
+        "preflight_carry_through"
+      ],
+      "claim_tags": [],
+      "seed_scope": "semantic",
+      "preferred_scope": "scoped-history",
+      "must_present": {
+        "diff_class": "mixed",
+        "scope": "scoped-history",
+        "semver_ceiling": "PATCH",
+        "overlay_types_include": [
+          "feat",
+          "test"
+        ],
+        "overlay_groups_include": [
+          "Changed",
+          "Tests"
+        ],
+        "changelog_group": "Changed",
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "scope": [
+          "semantic"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ]
+      },
+      "eval_letters": [
+        "M"
+      ]
+    },
+    {
+      "id": "TIP-G12",
+      "description": "Tip ADR + usage mermaid docs \u2014 no fix/runtime recovery",
+      "staged_paths": [
+        "docs/ADRs/0163-scoped-reasoning-history.md",
+        "docs/usage.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "docs/ADRs/0163-scoped-reasoning-history.md",
+          "docs/usage.md"
+        ],
+        "touches_docs": true,
+        "only_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": "adr",
+      "must_present": {
+        "diff_class": "docs_only",
+        "cc_type": "docs",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "scope": "adr",
+        "changelog_group": "Documentation",
+        "overlay_types_include": [
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Documentation"
+        ],
+        "forbid_security_primary": true
+      },
+      "must_not_present": {
+        "cc_type_forced": [
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group": [
+          "Fixed"
+        ],
+        "gitmoji": [
+          "\ud83e\udd45"
+        ],
+        "runtime_verbs": [
+          "recover",
+          "handle",
+          "fail-open-fix"
+        ]
+      },
+      "eval_letters": [
+        "N"
+      ]
+    },
+    {
+      "id": "TIP-G13",
+      "description": "Session 6: telemetry schema/lifecycle fields present as feat+MINOR (not fix+PATCH validate-only)",
+      "eval_letters": [],
+      "staged_paths": [
+        "src/git_cg/telemetry.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/telemetry.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [
+        "new_capability",
+        "lifecycle_fields",
+        "schema_add",
+        "score_boundary",
+        "telemetry_schema"
+      ],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Add lifecycle score boundary fields and schema for contract consistency.",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "feat",
+        "semver": "MINOR",
+        "semver_ceiling": "MINOR",
+        "changelog_group": "Added",
+        "scope": "telemetry",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "NONE",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg",
+          "commit-plan",
+          "lifecycle"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G14",
+      "description": "Session 6: pure evaluator/snapshot forbids enforce/lift/mutate verbs; test primary",
+      "eval_letters": [],
+      "staged_paths": [
+        "tests/test_contract_lifecycle.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_contract_lifecycle.py"
+        ],
+        "touches_tests": true,
+        "files_changed_count": 1
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Characterise contract lifecycle evaluator coverage only.",
+      "must_present": {
+        "diff_class": "tests_only",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Tests",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "mutation_verbs": [
+          "enforce",
+          "lift",
+          "mutate"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G15",
+      "description": "Session 6: Sentry contract-violation reporter is fix+PATCH with named event",
+      "eval_letters": [],
+      "staged_paths": [
+        "src/git_cg/sentry_config.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/sentry_config.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [
+        "correctness",
+        "commit_plan_contract_violation"
+      ],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Report commit_plan_contract_violation to Sentry on plan contract failures.",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "semver_ceiling": "PATCH",
+        "changelog_group": "Fixed",
+        "scope": "sentry",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G16",
+      "description": "Session 6: main wiring uses module scope + Hybrid Included; reject epic-noun and Context/Changes",
+      "eval_letters": [],
+      "staged_paths": [
+        "src/git_cg/main.py"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "src/git_cg/main.py"
+        ],
+        "files_changed_count": 1
+      },
+      "concern_tags": [
+        "correctness",
+        "wiring"
+      ],
+      "claim_tags": [],
+      "seed_scope": "commit-plan",
+      "preferred_scope": null,
+      "evidence_text": "Wire capture, re-lift, persist, Opik, and Sentry contract paths in main.",
+      "must_present": {
+        "diff_class": "product_src",
+        "cc_type": "fix",
+        "semver": "PATCH",
+        "semver_ceiling": "PATCH",
+        "changelog_group": "Fixed",
+        "scope": "main",
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat"
+        ],
+        "semver": [
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "git_cg",
+          "commit-plan",
+          "lifecycle"
+        ],
+        "body_templates": [
+          "Context:",
+          "Changes:"
+        ]
+      }
+    },
+    {
+      "id": "TIP-G17",
+      "description": "Session 6: tests+plan diffs use primary test without attribution bleed",
+      "eval_letters": [],
+      "staged_paths": [
+        "tests/test_contract_lifecycle.py",
+        "docs/plans/204-commit-presentation-quality.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_contract_lifecycle.py",
+          "docs/plans/204-commit-presentation-quality.md"
+        ],
+        "touches_tests": true,
+        "touches_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "lifecycle",
+      "preferred_scope": null,
+      "evidence_text": "Cover contract lifecycle claims; plan documents coverage only.",
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Tests",
+        "overlay_types_include": [
+          "test",
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Tests",
+          "Documentation"
+        ],
+        "min_included_change_bullets_gte": 2
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "scope": [
+          "lifecycle",
+          "commit-plan",
+          "git_cg"
+        ],
+        "attribution_bleed": true
+      }
+    },
+    {
+      "id": "S9-E",
+      "description": "Slice 9 case E: docs mention graph_unavailable/redaction \u2014 still docs, never runtime fix",
+      "eval_letters": [
+        "E"
+      ],
+      "staged_paths": [
+        "docs/usage.md",
+        "docs/ADRs/0163-scoped-reasoning-history.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "docs/usage.md",
+          "docs/ADRs/0163-scoped-reasoning-history.md"
+        ],
+        "touches_docs": true,
+        "only_docs": true,
+        "files_changed_count": 2
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": "adr",
+      "evidence_text": "Document graph_unavailable fail-open posture and redaction sentinel semantics in architecture prose only; no runtime producer changes.",
+      "must_present": {
+        "diff_class": "docs_only",
+        "cc_type": "docs",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Documentation",
+        "scope": "adr",
+        "overlay_types_include": [
+          "docs"
+        ],
+        "overlay_groups_include": [
+          "Documentation"
+        ],
+        "forbid_security_primary": true,
+        "min_included_change_bullets_gte": 1
+      },
+      "must_not_present": {
+        "cc_type": [
+          "fix",
+          "feat"
+        ],
+        "cc_type_forced": [
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group": [
+          "Fixed"
+        ],
+        "gitmoji": [
+          "\ud83e\udd45",
+          "\ud83d\udd10"
+        ],
+        "runtime_verbs": [
+          "recover",
+          "handle",
+          "fail-open-fix"
+        ],
+        "security_primary": true
+      }
+    },
+    {
+      "id": "S9-H",
+      "description": "Slice 9 case H: fixture enables commit.gpgsign=false / --no-gpg-sign must surface signing harden inventory",
+      "eval_letters": [
+        "H"
+      ],
+      "staged_paths": [
+        "tests/test_scoped_history.py",
+        "tests/fixtures/scoped_history/README.md",
+        "tests/fixtures/scoped_history/no-gpg-sign.md"
+      ],
+      "diff_signals_kwargs": {
+        "files": [
+          "tests/test_scoped_history.py",
+          "tests/fixtures/scoped_history/README.md",
+          "tests/fixtures/scoped_history/no-gpg-sign.md"
+        ],
+        "touches_tests": true,
+        "touches_docs": true,
+        "files_changed_count": 3
+      },
+      "concern_tags": [],
+      "claim_tags": [],
+      "seed_scope": "git_cg",
+      "preferred_scope": null,
+      "evidence_text": "Test fixture documents commit.gpgsign=false and --no-gpg-sign local hardening for hermetic commit tests.",
+      "must_present": {
+        "diff_class": "mixed",
+        "cc_type": "test",
+        "semver": "NONE",
+        "semver_ceiling": "NONE",
+        "changelog_group": "Tests",
+        "scope": "scoped-history",
+        "overlay_types_include": [
+          "test"
+        ],
+        "overlay_groups_include": [
+          "Tests"
+        ],
+        "min_included_change_bullets_gte": 2,
+        "stub_note_tokens_any": [
+          "gpg",
+          "signing"
+        ]
+      },
+      "must_not_present": {
+        "cc_type": [
+          "feat",
+          "fix"
+        ],
+        "semver": [
+          "PATCH",
+          "MINOR",
+          "MAJOR"
+        ],
+        "changelog_group_only": [
+          "Miscellaneous"
+        ],
+        "security_primary": true
+      }
+    }
+  ],
+  "eval_harness": {
+    "schema_version": 1,
+    "slice": 9,
+    "gate_order": [
+      "path_class",
+      "type",
+      "semver",
+      "no_hallucination",
+      "inventory",
+      "craft"
+    ],
+    "letter_map": {
+      "A": "TIP-G2",
+      "B": "TIP-G3",
+      "C": "TIP-G4",
+      "D": "TIP-G1",
+      "E": "S9-E",
+      "F": "TIP-G5",
+      "G": "TIP-G6",
+      "H": "S9-H",
+      "I": "TIP-G7",
+      "J": "TIP-G8",
+      "K": "TIP-G9",
+      "L": "TIP-G10",
+      "M": "TIP-G11",
+      "N": "TIP-G12"
+    },
+    "notes": "Slice 9 pure characterisation harness. Letters A\u2013N map onto TIP-G* plus S9-E/S9-H gap cases. TIP-G13\u2013G17 are Session 6 message-quality rows (not letter-mapped). No live LLM and no rank_commit_intents."
+  }
+}

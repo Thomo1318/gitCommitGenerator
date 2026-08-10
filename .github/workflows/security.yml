@@ -57,7 +57,11 @@ jobs:
               || github.sha
             }}
           version: "3.95.9"
-          extra_args: --only-verified
+          # Lob's verified detector false-positives on pytest identifiers
+          # such as ``test_v12_a02_path_role_priors_evaluation`` (test_ prefix
+          # + long snake_case). Real secrets remain covered by other detectors
+          # and by betterleaks/GitGuardian in the same pipeline.
+          extra_args: --only-verified --exclude-detectors=Lob
 
   sbom:
     name: Generate SBOM

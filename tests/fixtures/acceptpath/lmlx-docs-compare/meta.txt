@@ -1,0 +1,9 @@
+ART=/tmp/git-cg-acceptpath-sop-20260809-122933
+REPO=/tmp/git-cg-lmlx-docs-compare
+TS=20260809-122933
+ENGINE=lmlx
+MODEL=Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed
+SOP=/Users/admin/dev/activeProjects/gitCommitGenerator/config/gitops_agent_sop.json
+exit_code=0 elapsed_s=119
+elapsed_s=119
+NOTE=informational twin of docs-only; not a #212 close gate

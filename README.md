@@ -33,6 +33,10 @@
 - [🏗 System Stack](#-system-stack)
 - [🛠 File Role Matrix](#-file-role-matrix)
 - [✨ Features](#-features)
+  - [Presentation quality operator guide (Issue #204)](#presentation-quality-operator-guide-issue-204)
+    - [Operator pre-check (until gates are complete)](#operator-pre-check-until-gates-are-complete)
+    - [D26 telemetry (closed vocabulary)](#d26-telemetry-closed-vocabulary)
+    - [Environment controls (presentation-adjacent)](#environment-controls-presentation-adjacent)
 - [🚀 Installation & Provisioning](#-installation--provisioning)
   - [Configuration & Secrets](#configuration--secrets)
   - [Font Configuration](#font-configuration)
@@ -192,6 +196,60 @@ flowchart LR
 - **Safe Dry-Runs**: Validate AI output before modifying your git message file.
 - **Commit-Message Gold Lint**: A deterministic post-enforcement linter (`git_cg.commit_gold`) checks wording quality, Included-changes coverage, and type/changelog-group coherence — without ever re-ranking intent (SOP matrix stays the SemVer authority). Modes: `off` / `warn` (hook-safe default) / `surface` (interactive) / `strict` (CI).
 - **Ranking Confidence + Intent Arbitration**: When the deterministic ranker is **Low** confidence (near-tie / mixed-intent / closed reasons), interactive TTY sessions can lock a matrix-legal primary **before** the LLM. Non-interactive and hook paths never block. Control with `GIT_CG_RANK_ARBITRATE=auto|off` or CLI `--rank-arbitrate` / `--no-rank-arbitrate`. See `docs/usage.md` and `docs/diagrams/ranking-confidence/`.
+
+- **Presentation Quality (Issue #204)**: After the SOP ranker locks the semantic contract, presentation layers only shape *wording* — never `intent_id`, SemVer authority, or rank order. Complementary to gold lint ([#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201)) and scoped-history ([#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163) / Phase 9).
+
+### Presentation quality operator guide (Issue #204)
+
+Presentation controls sit **downstream** of deterministic ranking. They may clamp subjects, scopes, bullets, and changelog groups; they must not re-rank intents or invent evidence.
+
+| Concern | Behaviour |
+|:---|:---|
+| **Scope canon / priors** | `normalize_scope` maps aliases (`main.py` → `main`, `scoped_history` → `scoped-history`). Unknown clean tokens pass through. Telemetry records `scope_normalised_from` as the closed alias key that fired, or `none` when the input was already canonical / unknown (never a path). |
+| **`--blueprint`** | Optional `CommitBlueprint` as inline JSON or `@path.json` (≤64 KiB). Applies presentation overlays only; **never** overrides ranked `intent_id`. |
+| **Low-confidence fallback** | When ranking confidence is Low, interactive TTY may arbitrate (`--rank-arbitrate`); non-interactive/hook paths keep top rank + telemetry. Fallback reasons are closed-vocab (`presentation_fallback_reason`). |
+| **Diff-class / path-class gates** | Diff paths classify as `tests_only`, `fixtures_only`, `docs_only`, `adr_only`, `config_ci_only`, `release_only`, `product_src`, `mixed`, or `empty`. Gates constrain type/changelog wording by class. Telemetry: `path_class_gate`. |
+| **Changelog anti-signal** | Changelog/marker-only noise is excluded from type dominance evidence (`changelog_antisignal_applied`). |
+| **Security path evidence** | Security-sensitive paths contribute evidence for type/SemVer claims; guards reject unsupported security wording. |
+| **SemVer / type / bullets** | Type dominance, changelog↔types coherence, and bullet cardinality are enforced as presentation gates (Slice 9 ordered evaluator). Gold lint ([#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201)) remains the post-render wording authority. |
+| **Hallucination / craft / vague-verb guards** | Post-LLM guards strip unsupported claims and vague verbs; shared regen budget then deterministic skeleton fallback preserving ranked intent + gitmoji. Telemetry: `hallucination_guard_fired` only (no craft/inventory bools). |
+| **Module / behaviour scope law** | Package/root and epic-noun scopes (`git_cg`, `commit-plan`, `lifecycle`, …) are never final when a dominant module or behaviour slug is available (e.g. `main`, `telemetry`, `scoped-history`). |
+| **Session 6 message-quality residuals** | Telemetry schema/lifecycle capability → `feat`/`MINOR` (not correctness `fix`/`PATCH`); pure evaluator bodies forbid `enforce`/`lift`/`mutate`; competing `Context:`/`Changes:` templates rejected; tests/docs attribution bleed blocked. Corpus rows `TIP-G13`–`TIP-G17`. |
+| **V12-A proof pack** | Stable named locks `test_v12_a01`–`test_v12_a45` in `tests/test_v12_a_claims.py` (no live LLM; never calls `rank_commit_intents`). Complements the frozen corpus/eval harness under `tests/fixtures/commit_quality/`. |
+| **Gold relationship** | Gold lint checks wording quality and Included-changes coverage **without** re-ranking. Presentation gates + gold are complementary: gates shape/clamp; gold judges the final message. |
+| **F80 message-only rebuild bypass** | Set `GIT_CG_SKIP_PREPARE=1` (also `true`/`yes`/`on`) so `prepare-commit-msg` no-ops without rewriting the message. Use for controlled amend/`--no-edit` rebuilds where hooks would otherwise re-enter `git-cg`. **Do not** export it globally or bake it into `hk.pkl` — ordinary generation must keep running. `--no-verify` alone is not a substitute when hk/global hooks still invoke the generator. |
+
+#### Operator pre-check (until gates are complete)
+
+Before relying solely on automation, compare the staged diff class against known library twins (tests-only vs product_src vs docs/ADR). If the class is `mixed` or unexpected, split the commit or tighten the stage set. Prefer `--dry-run` + `--gold-strict` when validating presentation changes.
+
+Message-only rebuild example (preserves the existing message; skips prepare generation):
+
+```bash
+GIT_CG_SKIP_PREPARE=1 git commit --amend --no-edit
+```
+
+#### D26 telemetry (closed vocabulary)
+
+Persisted presentation fields (no raw diffs, prompts, commit bodies, blueprint JSON, or open-ended finding prose):
+
+- `presentation_fallback_reason`
+- `blueprint_applied`
+- `scope_normalised_from`
+- `path_class_gate`
+- `changelog_antisignal_applied`
+- `hallucination_guard_fired`
+- `gold_findings_count` / `gold_blocked` / `gold_regen_attempts` (gold channel; closed counters only)
+
+#### Environment controls (presentation-adjacent)
+
+| Variable | Values | Effect |
+|:---|:---|:---|
+| `GIT_CG_SKIP_PREPARE` | `1` / `true` / `yes` / `on` | F80: skip `prepare-commit-msg` generation (message-only rebuilds). Unset/other → normal generation. |
+| `GIT_CG_ENABLE_SEMANTIC` | `1` / `true` / `yes` / `on` | Enable Phase 1 semantic producers (default off). |
+| `GIT_CG_RANK_ARBITRATE` | `auto` (default) / `off` | Low-confidence intent arbitration gate for interactive TTY. |
+
+See also: [usage flags](docs/usage.md), epic [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204), gold [#201](https://github.com/Thomo1318/gitCommitGenerator/issues/201), scoped history [#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163).
 
 ---
 

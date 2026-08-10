@@ -1,0 +1,684 @@
+{
+  "schema_version": 1,
+  "slice": 9,
+  "gate_order": [
+    "path_class",
+    "type",
+    "semver",
+    "no_hallucination",
+    "inventory",
+    "craft"
+  ],
+  "letter_map": {
+    "A": "TIP-G2",
+    "B": "TIP-G3",
+    "C": "TIP-G4",
+    "D": "TIP-G1",
+    "E": "S9-E",
+    "F": "TIP-G5",
+    "G": "TIP-G6",
+    "H": "S9-H",
+    "I": "TIP-G7",
+    "J": "TIP-G8",
+    "K": "TIP-G9",
+    "L": "TIP-G10",
+    "M": "TIP-G11",
+    "N": "TIP-G12"
+  },
+  "candidates": [
+    {
+      "id": "A-legal",
+      "letter": "A",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "documentation_update",
+        "gitmoji": "\ud83d\udcdd",
+        "cc_type": "test",
+        "scope": "fixtures",
+        "description": "document scoped-history behavior matrix",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Document fixture authority matrix for hermetic local runs."
+      }
+    },
+    {
+      "id": "A-security-hallucination",
+      "letter": "A",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "security_hardening",
+        "gitmoji": "\ud83d\udd10",
+        "cc_type": "chore",
+        "scope": "fixtures",
+        "description": "rotate fixture secrets and credentials",
+        "semver_impact": "PATCH",
+        "changelog_group": "Security",
+        "body_summary": "Rotate credentials and secrets for fixture auth flows."
+      },
+      "expect_fail_gate": "path_class",
+      "expect_fail_codes_any": [
+        "GATE_PATH_SECURITY_PRIMARY",
+        "GUARD_SECURITY_NOUN"
+      ]
+    },
+    {
+      "id": "B-legal",
+      "letter": "B",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "documentation_update",
+        "gitmoji": "\ud83d\udcdd",
+        "cc_type": "docs",
+        "scope": "adr",
+        "description": "accept and index ADR-0163 scoped history",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "body_summary": "Mark ADR-0163 implemented and refresh the ADR index entry."
+      }
+    },
+    {
+      "id": "B-chore-security",
+      "letter": "B",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "security_hardening",
+        "gitmoji": "\ud83d\udd10",
+        "cc_type": "chore",
+        "scope": "adr",
+        "description": "update ADR-0163 status to implemented",
+        "semver_impact": "PATCH",
+        "changelog_group": "Security",
+        "body_summary": "Security chore on ADR status only."
+      },
+      "expect_fail_gate": "path_class",
+      "expect_fail_codes_any": [
+        "GATE_PATH_SECURITY_PRIMARY",
+        "GATE_TYPE_FORBIDDEN"
+      ]
+    },
+    {
+      "id": "C-legal",
+      "letter": "C",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "documentation_update",
+        "gitmoji": "\ud83d\udcdd",
+        "cc_type": "docs",
+        "scope": "usage",
+        "description": "document Policy B and scoped-history DX",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "body_summary": "Refresh usage, changelog, and development docs for Policy B."
+      }
+    },
+    {
+      "id": "C-runtime-fix",
+      "letter": "C",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "bug_fix",
+        "gitmoji": "\ud83e\udd45",
+        "cc_type": "fix",
+        "scope": "usage",
+        "description": "handle scoped history fallback errors",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "body_summary": "Recover runtime fallback errors mentioned in CHANGELOG prose."
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_FORBIDDEN",
+        "GUARD_DOCS_RUNTIME_VERB"
+      ]
+    },
+    {
+      "id": "D-legal",
+      "letter": "D",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "close Phase 9 coverage and claim gaps",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Lock P9-A05, P9-B07, and P9-B10 across four test modules.",
+        "included_changes": [
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\u2705 test(scoped-history): cover test_scoped_history_telemetry suite",
+          "\u2705 test(main): cover test_main suite",
+          "\u2705 test(semantic): cover test_semantic suite",
+          "\u2705 test(scoped-history): lock claim tags P9-A05,P9-B07,P9-B10"
+        ]
+      }
+    },
+    {
+      "id": "D-title-case",
+      "letter": "D",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "Add P9 scoped history and telemetry unit tests",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Cover four modules with claim locks.",
+        "included_changes": [
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\u2705 test(scoped-history): cover test_scoped_history_telemetry suite",
+          "\u2705 test(main): cover test_main suite",
+          "\u2705 test(semantic): cover test_semantic suite",
+          "\u2705 test(scoped-history): lock claim tags P9-A05,P9-B07,P9-B10"
+        ]
+      },
+      "expect_fail_gate": "craft",
+      "expect_fail_codes_any": [
+        "GUARD_TITLE_CASE_SUBJECT",
+        "GUARD_TEST_DOCS_ADD_OPENER"
+      ]
+    },
+    {
+      "id": "E-legal",
+      "letter": "E",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "documentation_update",
+        "gitmoji": "\ud83d\udcdd",
+        "cc_type": "docs",
+        "scope": "adr",
+        "description": "document graph_unavailable and redaction posture",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "body_summary": "Describe graph_unavailable and redaction semantics in docs only.",
+        "included_changes": [
+          "\ud83d\udcdd docs(adr): document ADR decision path",
+          "\ud83d\udcdd docs(usage): document operator usage"
+        ]
+      }
+    },
+    {
+      "id": "E-runtime-fix",
+      "letter": "E",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "bug_fix",
+        "gitmoji": "\ud83e\udd45",
+        "cc_type": "fix",
+        "scope": "adr",
+        "description": "handle graph_unavailable redaction failures",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "body_summary": "Recover when graph_unavailable redaction fails at runtime."
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_FORBIDDEN",
+        "GUARD_DOCS_RUNTIME_VERB"
+      ]
+    },
+    {
+      "id": "F-legal",
+      "letter": "F",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "bug_fix",
+        "gitmoji": "\ud83d\udc1b",
+        "cc_type": "fix",
+        "scope": "telemetry",
+        "description": "preserve scoped-history error signals",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "body_summary": "Keep fallback none, parser batch results, scrub vars, and REDACTED sentinel.",
+        "included_changes": [
+          "\ud83d\udc1b fix(main): stop graph-stage none overwrite",
+          "\ud83d\udc1b fix(telemetry): reuse parser_batch_results markers",
+          "\ud83d\udc1b fix(main): discover renames via name-status only",
+          "\ud83d\udc1b fix(sentry): expand scrub vars for evidence",
+          "\ud83d\udc1b fix(telemetry): preserve REDACTED sentinel",
+          "\ud83d\udc1b fix(telemetry): keep closed-enum fallback tags"
+        ]
+      }
+    },
+    {
+      "id": "F-feat-major-improve",
+      "letter": "F",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "telemetry",
+        "description": "improve telemetry scrubbing and metrics",
+        "semver_impact": "MAJOR",
+        "changelog_group": "Added",
+        "body_summary": "Improve scrubbing.",
+        "included_changes": [
+          "\u2728 feat(telemetry): improve scrubbing"
+        ]
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_DOMINANT_MISMATCH",
+        "GATE_SEMVER_CEILING",
+        "GUARD_VAGUE_SUBJECT_VERB"
+      ]
+    },
+    {
+      "id": "G-legal",
+      "letter": "G",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "lock Phase 9 claims and ADR path",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Cover suites, fixtures, ADR rename, and docs retargets.",
+        "secondary_types": [
+          "docs"
+        ],
+        "secondary_groups": [
+          "Documentation"
+        ],
+        "included_changes": [
+          "\u2705 test(scoped-history): cover producer suites",
+          "\u2705 test(scoped-history): cover telemetry claim suite",
+          "\ud83d\udcdd docs(fixtures): document fixture README",
+          "\ud83d\udcdd docs(adr): document ADR rename path",
+          "\ud83d\udcdd docs(usage): retarget usage links"
+        ]
+      }
+    },
+    {
+      "id": "G-misc-docs-only-inventory",
+      "letter": "G",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "harden test assertions and expand coverage",
+        "semver_impact": "NONE",
+        "changelog_group": "Miscellaneous",
+        "body_summary": "Docs only inventory.",
+        "secondary_types": [
+          "docs"
+        ],
+        "secondary_groups": [
+          "Miscellaneous"
+        ],
+        "included_changes": [
+          "\ud83d\udcdd docs(adr): rename ADR only",
+          "\ud83d\udcdd docs(usage): retarget links only"
+        ]
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_GROUP_MISSING",
+        "GATE_TYPE_SINGLE_GROUP_ONLY",
+        "GATE_INVENTORY_TEST_SURFACE_MISSING"
+      ]
+    },
+    {
+      "id": "H-legal",
+      "letter": "H",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "harden fixture signing and scoped-history locks",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Keep hermetic tests with commit.gpgsign=false and --no-gpg-sign fixture docs.",
+        "secondary_types": [
+          "docs"
+        ],
+        "secondary_groups": [
+          "Documentation"
+        ],
+        "included_changes": [
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\ud83d\udcdd docs(fixtures): harden fixture GPG/signing setup",
+          "\ud83d\udcdd docs(fixtures): document fixture README"
+        ]
+      }
+    },
+    {
+      "id": "H-silent-omit-gpg",
+      "letter": "H",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "expand scoped-history fixture coverage",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Update fixtures without mentioning signing.",
+        "secondary_types": [
+          "docs"
+        ],
+        "secondary_groups": [
+          "Documentation"
+        ],
+        "included_changes": [
+          "\u2705 test(scoped-history): cover test_scoped_history suite",
+          "\ud83d\udcdd docs(fixtures): document fixture README"
+        ]
+      },
+      "expect_fail_gate": "inventory",
+      "expect_fail_codes_any": [
+        "GATE_INVENTORY_MISSING_TOKEN"
+      ]
+    },
+    {
+      "id": "I-legal",
+      "letter": "I",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "bug_fix",
+        "gitmoji": "\ud83d\udc1b",
+        "cc_type": "fix",
+        "scope": "scoped-history",
+        "description": "harden rename parse and fail-open fallbacks",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "body_summary": "Fix NUL rename parse, literal fallback enums, CLI prose reject, and directive-free guidance.",
+        "included_changes": [
+          "\ud83d\udc1b fix(scoped-history): parse NUL rename records",
+          "\ud83d\udc1b fix(scoped-history): keep literal none/error fallbacks",
+          "\ud83d\udc1b fix(main): reject bare command CLI prose hints",
+          "\ud83d\udc1b fix(scoped-history): keep Channel-4 guidance directive-free",
+          "\ud83d\udc1b fix(main): preserve producer fail-open path"
+        ]
+      }
+    },
+    {
+      "id": "I-feat-minor-package-scope",
+      "letter": "I",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "git_cg",
+        "description": "add producer correctness improvements",
+        "semver_impact": "MINOR",
+        "changelog_group": "Added",
+        "body_summary": "Feature-framed producer correctness.",
+        "included_changes": [
+          "\u2728 feat(git_cg): touch main and scoped_history"
+        ]
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_DOMINANT_MISMATCH",
+        "GATE_SEMVER_CEILING"
+      ]
+    },
+    {
+      "id": "J-legal",
+      "letter": "J",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "tests_update",
+        "gitmoji": "\u2705",
+        "cc_type": "test",
+        "scope": "scoped-history",
+        "description": "lock CLI, public-api, and authority claims",
+        "semver_impact": "NONE",
+        "changelog_group": "Tests",
+        "body_summary": "Claim-lock tests and ADR authority row only.",
+        "secondary_types": [
+          "docs"
+        ],
+        "secondary_groups": [
+          "Documentation"
+        ],
+        "included_changes": [
+          "\u2705 test(scoped-history): lock CLI prose and command cases",
+          "\u2705 test(scoped-history): lock identifier-child public_api fallback",
+          "\ud83d\udcdd docs(adr): record ADR cc_type authority row"
+        ]
+      }
+    },
+    {
+      "id": "J-feat-guidance-invention",
+      "letter": "J",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "scoped-history",
+        "description": "adds guidance for scoped history",
+        "semver_impact": "MINOR",
+        "changelog_group": "Miscellaneous",
+        "body_summary": "Adds scoped reasoning history guidance.",
+        "included_changes": []
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_FORBIDDEN",
+        "GUARD_UNEARNED_CAPABILITY"
+      ]
+    },
+    {
+      "id": "K-legal",
+      "letter": "K",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "bug_fix",
+        "gitmoji": "\ud83d\udc1b",
+        "cc_type": "fix",
+        "scope": "scoped-history",
+        "description": "drop directive verbs from split guidance",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "body_summary": "Drop Consider whether wording and ban consider in claim tests.",
+        "secondary_types": [
+          "test"
+        ],
+        "secondary_groups": [
+          "Tests"
+        ],
+        "included_changes": [
+          "\ud83d\udc1b fix(scoped-history): descriptive split-surface guidance only",
+          "\u2705 test(scoped-history): ban consider in guidance leakage claims"
+        ]
+      }
+    },
+    {
+      "id": "K-adds-guard-feat",
+      "letter": "K",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "scoped-history",
+        "description": "adds authority leakage guard",
+        "semver_impact": "MINOR",
+        "changelog_group": "Fixed",
+        "body_summary": "Adds assertion coverage only.",
+        "secondary_types": [
+          "test"
+        ],
+        "secondary_groups": [
+          "Tests"
+        ],
+        "included_changes": [
+          "\u2728 feat(scoped-history): adds authority leakage guard",
+          "\u2705 test(scoped-history): add assertion"
+        ]
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_DOMINANT_MISMATCH",
+        "GUARD_UNEARNED_CAPABILITY"
+      ]
+    },
+    {
+      "id": "L-legal",
+      "letter": "L",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "semantic",
+        "description": "harvest hub and complex callers from payloads",
+        "semver_impact": "PATCH",
+        "changelog_group": "Added",
+        "body_summary": "Free-harvest hub/complex callers from existing payloads with tests.",
+        "secondary_types": [
+          "test"
+        ],
+        "secondary_groups": [
+          "Tests"
+        ],
+        "included_changes": [
+          "\u2728 feat(semantic): add free-harvest semantic helpers",
+          "\u2705 test(semantic): cover harvest map and absent keys"
+        ]
+      }
+    },
+    {
+      "id": "L-minor-feat-only",
+      "letter": "L",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "semantic",
+        "description": "extract hub and complexity flags from payloads",
+        "semver_impact": "MINOR",
+        "changelog_group": "Added",
+        "body_summary": "No nested inventory.",
+        "secondary_types": [
+          "test"
+        ],
+        "secondary_groups": [
+          "Tests"
+        ],
+        "included_changes": [
+          "\u2728 feat(semantic): extract hub flags",
+          "\u2705 test(semantic): cover harvest map"
+        ]
+      },
+      "expect_fail_gate": "semver",
+      "expect_fail_codes_any": [
+        "GATE_SEMVER_CEILING",
+        "GATE_INVENTORY_CARDINALITY"
+      ]
+    },
+    {
+      "id": "M-legal",
+      "letter": "M",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "scoped-history",
+        "description": "thread preflight group count into split evidence",
+        "semver_impact": "PATCH",
+        "changelog_group": "Changed",
+        "body_summary": "Carry preflight counters through main with elevation test coverage.",
+        "secondary_types": [
+          "test"
+        ],
+        "secondary_groups": [
+          "Tests"
+        ],
+        "included_changes": [
+          "\u2728 feat(scoped-history): thread preflight groups through main",
+          "\u2705 test(semantic): cover elevation counter defaults"
+        ]
+      }
+    },
+    {
+      "id": "M-phase-product-actor",
+      "letter": "M",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "feature_addition",
+        "gitmoji": "\u2728",
+        "cc_type": "feat",
+        "scope": "scoped-history",
+        "description": "wire preflight groups count for split confidence",
+        "semver_impact": "MINOR",
+        "changelog_group": "Changed",
+        "body_summary": "Values come from the Phase 0.5 product elevation path.",
+        "secondary_types": [
+          "test"
+        ],
+        "secondary_groups": [
+          "Tests"
+        ],
+        "included_changes": [
+          "\u2728 feat(scoped-history): wire preflight groups",
+          "\u2705 test(semantic): cover elevation only"
+        ]
+      },
+      "expect_fail_gate": "semver",
+      "expect_fail_codes_any": [
+        "GATE_SEMVER_CEILING",
+        "GUARD_UNSHIPPED_PRODUCT_ACTOR"
+      ]
+    },
+    {
+      "id": "N-legal",
+      "letter": "N",
+      "expect": "pass",
+      "plan": {
+        "intent_id": "documentation_update",
+        "gitmoji": "\ud83d\udcdd",
+        "cc_type": "docs",
+        "scope": "adr",
+        "description": "diagram Policy B scoped-history architecture",
+        "semver_impact": "NONE",
+        "changelog_group": "Documentation",
+        "body_summary": "Add ADR mermaid overview and usage Related link.",
+        "included_changes": [
+          "\ud83d\udcdd docs(adr): document ADR decision path",
+          "\ud83d\udcdd docs(usage): document operator usage"
+        ]
+      }
+    },
+    {
+      "id": "N-fix-runtime-titlecase",
+      "letter": "N",
+      "expect": "fail",
+      "plan": {
+        "intent_id": "bug_fix",
+        "gitmoji": "\ud83e\udd45",
+        "cc_type": "fix",
+        "scope": "adr",
+        "description": "Clarify fail-open fallback for scoped history",
+        "semver_impact": "PATCH",
+        "changelog_group": "Fixed",
+        "body_summary": "Handle runtime fail-open recovery described in mermaid prose.",
+        "included_changes": [
+          "\ud83d\udcdd docs(usage): clarify fallback only"
+        ]
+      },
+      "expect_fail_gate": "type",
+      "expect_fail_codes_any": [
+        "GATE_TYPE_FORBIDDEN",
+        "GUARD_DOCS_RUNTIME_VERB",
+        "GUARD_TITLE_CASE_SUBJECT"
+      ]
+    }
+  ]
+}

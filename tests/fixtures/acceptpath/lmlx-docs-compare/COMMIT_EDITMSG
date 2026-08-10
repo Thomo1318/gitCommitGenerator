@@ -1,0 +1,7 @@
+🔐 chore(docs): document GIT_CG_SKIP_PREPARE usage
+
+Explains how to bypass `prepare-commit-msg` generation by setting `GIT_CG_SKIP_PREPARE` to `1`. This configuration streamlines message-only rebuilds and amends.
+
+SemVer-Impact: PATCH
+Change-Types: chore
+Changelog-Groups: Miscellaneous

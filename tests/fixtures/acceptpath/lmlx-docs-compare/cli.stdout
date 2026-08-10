@@ -1,0 +1,27 @@
+[12:29:34] Starting git-cg...                                       main.py:2353
+           Engine: lmlx                                             main.py:2354
+           Commit Msg File: .git/COMMIT_EDITMSG                     main.py:2355
+           Commit Source:                                           main.py:2356
+           Interactive Mode: False                                  main.py:2357
+           Using rtk for token compression...                       main.py:1218
+           Extracted analysis git diff (261 characters).            main.py:1247
+           AI Client initialized. Calling lmlx to generate commit   main.py:2553
+           message...                                                           
+           Using model: Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed main.py:2563
+           Using shared ranked intent candidates...                  main.py:679
+[12:31:31] Resolved and Enforced Semantic Contract: secrets_update  main.py:3335
+           (chore)                                                              
+╭────────────────────────── Generated Commit Message ──────────────────────────╮
+│ 🔐 chore(docs): document GIT_CG_SKIP_PREPARE usage                           │
+│                                                                              │
+│ Explains how to bypass `prepare-commit-msg` generation by setting            │
+│ `GIT_CG_SKIP_PREPARE` to `1`. This configuration streamlines message-only    │
+│ rebuilds and amends.                                                         │
+│                                                                              │
+│ SemVer-Impact: PATCH                                                         │
+│ Change-Types: chore                                                          │
+│ Changelog-Groups: Miscellaneous                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+           Commit message written to .git/COMMIT_EDITMSG             main.py:921
+           Opik telemetry state written to                          main.py:1733
+           .git/GIT_CG_OPIK_STATE.json                                          

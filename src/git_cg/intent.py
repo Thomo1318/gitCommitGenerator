@@ -23,6 +23,35 @@ from pydantic import BaseModel, Field
 
 from git_cg.semantic_flags import is_semantic_enabled
 
+# Product/runtime markers that must not promote product ranking on pure
+# docs/tests/fixtures path classes. Shared by signal generation and semantic
+# enrichment so the quarantine lists cannot drift (P-S12 / CodeRabbit).
+_PRODUCT_ONLY_MARKERS: frozenset[str] = frozenset(
+    {
+        "runtime_logic_changed",
+        "functional_code_changed",
+        "new_api",
+        "new_user_facing_capability",
+        "new_command",
+        "major_subsystem_restructured",
+        "core_architecture_changed",
+        "exception_handling_added",
+        "error_handling_improved",
+        "try_except_added",
+        "internal_restructure",
+        "security_vulnerability_fixed",
+        "privacy_issue_fixed",
+        "validation_added",
+        "validation_hardened",
+        "schema_validation_changed",
+        "security_tooling_only_without_fix",
+        "secret_reference_changed",
+        "centralize_logic",
+        "deduplicate_code",
+        "extract_shared_helper",
+    }
+)
+
 
 class DiffSignals(BaseModel):
     """Deterministic signals extracted from a staged git diff."""
@@ -47,6 +76,7 @@ class DiffSignals(BaseModel):
 
     only_docs: bool = False
     only_tests: bool = False
+    only_fixtures: bool = False
     only_formatting: bool = False
     only_dependency_changes: bool = False
     only_config: bool = False
@@ -257,6 +287,30 @@ def _normalize_diff_for_content_matching(diff_output: str) -> str:
     return "\n".join(filter(None, normalized))
 
 
+def _strip_changelog_hunks_for_content_signals(diff_output: str) -> str:
+    """D12 exclude_from_signals: drop CHANGELOG.md file sections from content matching.
+
+    Path-class / docs coverage still sees changelog paths via file_summary; only
+    prose-driven content markers must ignore changelog bodies.
+    """
+    lines = diff_output.splitlines()
+    out: list[str] = []
+    skipping = False
+    for line in lines:
+        if line.startswith("diff --git "):
+            lowered = line.lower()
+            # Match a/CHANGELOG.md or b/CHANGELOG.md path tips.
+            skipping = "changelog.md" in lowered
+            if skipping:
+                continue
+            out.append(line)
+            continue
+        if skipping:
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def extract_diff_signals(diff_output: str) -> DiffSignals:
     """Extract deterministic signals from staged diff output.
 
@@ -269,14 +323,18 @@ def extract_diff_signals(diff_output: str) -> DiffSignals:
     file_summary = extract_diff_file_summary(diff_output)
     paths = file_summary.paths
 
+    # D12: changelog paths remain in file_summary for docs coverage, but their
+    # prose must not feed security/fix/feat content markers.
+    content_diff = _strip_changelog_hunks_for_content_signals(diff_output)
+
     # Normalize diff to prevent false positives from metadata lines (like file paths)
-    normalized_diff = _normalize_diff_for_content_matching(diff_output)
+    normalized_diff = _normalize_diff_for_content_matching(content_diff)
     lowered_diff = normalized_diff.lower()
 
     signals = DiffSignals(files=paths)
 
     _apply_file_signals(signals, file_summary)
-    _apply_content_signals(signals, diff_output, lowered_diff)
+    _apply_content_signals(signals, content_diff, lowered_diff)
     _apply_only_signals(signals, paths)
     _apply_diff_metrics(signals, diff_output)
 
@@ -403,72 +461,91 @@ def _apply_file_signals(signals: DiffSignals, file_summary: DiffFileSummary) -> 
         signals.evidence.append("SOP or SOP schema changed")
 
 
+def _paths_are_non_product_only(paths: list[str]) -> bool:
+    """True when every path is docs, tests, or fixtures (no product/runtime surface)."""
+    if not paths:
+        return False
+    return all(_is_docs_path(p) or _is_test_path(p) or _is_fixture_path(p) for p in paths)
+
+
 def _apply_content_signals(signals: DiffSignals, diff_output: str, lowered_diff: str) -> None:
     added_lines = [line for line in diff_output.splitlines() if line.startswith("+") and not line.startswith("+++")]
+    # P-S12-5/6: fixture JSON, test AST/source, and Markdown prose must not promote
+    # product/runtime ranking markers. Path/file-class signals remain authoritative.
+    quarantine = _paths_are_non_product_only(list(signals.files or []))
 
-    if "breaking change:" in lowered_diff or re.search(r"^\+\s*.+!:", diff_output, flags=re.MULTILINE):
-        signals.has_breaking_change = True
-        signals.evidence.append("Breaking-change syntax or footer detected")
+    if not quarantine:
+        if "breaking change:" in lowered_diff or re.search(r"^\+\s*.+!:", diff_output, flags=re.MULTILINE):
+            signals.has_breaking_change = True
+            signals.evidence.append("Breaking-change syntax or footer detected")
 
-    if any(re.search(pattern, diff_output, flags=re.MULTILINE) for pattern in _PUBLIC_API_PATTERNS):
-        signals.adds_public_api = True
-        signals.evidence.append("Public API or CLI surface appears to be added")
+        if any(re.search(pattern, diff_output, flags=re.MULTILINE) for pattern in _PUBLIC_API_PATTERNS):
+            signals.adds_public_api = True
+            signals.evidence.append("Public API or CLI surface appears to be added")
 
-    if any(term in lowered_diff for term in _ARCHITECTURE_TERMS):
-        signals.changes_architecture = True
-        signals.evidence.append("Architecture-related terms detected")
+        if any(term in lowered_diff for term in _ARCHITECTURE_TERMS):
+            signals.changes_architecture = True
+            signals.evidence.append("Architecture-related terms detected")
 
-    if "src/git_cg/sop.py" in lowered_diff or "load_sop" in lowered_diff or "resolve_sop_path" in lowered_diff:
-        signals.new_shared_module = True
-        signals.centralized_config_resolution = True
-        signals.evidence.append("Centralized SOP/config loader signals detected")
+        if "src/git_cg/sop.py" in lowered_diff or "load_sop" in lowered_diff or "resolve_sop_path" in lowered_diff:
+            signals.new_shared_module = True
+            signals.centralized_config_resolution = True
+            signals.evidence.append("Centralized SOP/config loader signals detected")
 
-    if "os.getcwd()" in lowered_diff and ("load_sop" in lowered_diff or "resolve_sop_path" in lowered_diff):
-        signals.removed_duplicate_logic = True
-        signals.centralized_config_resolution = True
-        signals.evidence.append("Duplicate cwd-based SOP resolution appears to be replaced")
+        if "os.getcwd()" in lowered_diff and ("load_sop" in lowered_diff or "resolve_sop_path" in lowered_diff):
+            signals.removed_duplicate_logic = True
+            signals.centralized_config_resolution = True
+            signals.evidence.append("Duplicate cwd-based SOP resolution appears to be replaced")
 
-    if "prepare-commit-msg" in lowered_diff or "commit_source" in lowered_diff or "--amend-regenerate" in lowered_diff:
-        signals.hook_portability = True
-        signals.touches_hooks = True
-        signals.evidence.append("Git hook portability or hook-source handling changed")
+        if (
+            "prepare-commit-msg" in lowered_diff
+            or "commit_source" in lowered_diff
+            or "--amend-regenerate" in lowered_diff
+        ):
+            signals.hook_portability = True
+            signals.touches_hooks = True
+            signals.evidence.append("Git hook portability or hook-source handling changed")
 
-    if any(term in lowered_diff for term in _VALIDATION_TERMS):
-        signals.validation_added = True
-        signals.evidence.append("Validation or safety-guard terms detected")
+        if any(term in lowered_diff for term in _VALIDATION_TERMS):
+            signals.validation_added = True
+            signals.evidence.append("Validation or safety-guard terms detected")
 
-    if any(term in lowered_diff for term in _ERROR_HANDLING_TERMS):
-        signals.error_handling_added = True
-        signals.evidence.append("Error handling or fallback terms detected")
+        if any(term in lowered_diff for term in _ERROR_HANDLING_TERMS):
+            signals.error_handling_added = True
+            signals.evidence.append("Error handling or fallback terms detected")
 
-    if any(term in lowered_diff for term in _LOGGING_TERMS):
-        signals.logging_changed = True
-        signals.evidence.append("Logging/tracing/debug output changed")
+        if any(term in lowered_diff for term in _LOGGING_TERMS):
+            signals.logging_changed = True
+            signals.evidence.append("Logging/tracing/debug output changed")
 
-    if any(term in lowered_diff for term in _SECRET_SCANNING_TERMS):
-        signals.secret_scanning_changed = True
-        signals.touches_security = True
-        signals.evidence.append("Secret scanning tooling detected")
+        if any(term in lowered_diff for term in _SECRET_SCANNING_TERMS):
+            signals.secret_scanning_changed = True
+            signals.touches_security = True
+            signals.evidence.append("Secret scanning tooling detected")
 
-    if any(term in lowered_diff for term in _SECRETS_MANAGEMENT_TERMS):
-        signals.secrets_management_changed = True
-        signals.evidence.append("Secrets-management terms detected")
+        if any(term in lowered_diff for term in _SECRETS_MANAGEMENT_TERMS):
+            signals.secrets_management_changed = True
+            signals.evidence.append("Secrets-management terms detected")
 
-    if _dependency_added(added_lines):
-        signals.dependency_added = True
-        signals.evidence.append("Potential dependency addition detected")
+        if _dependency_added(added_lines):
+            signals.dependency_added = True
+            signals.evidence.append("Potential dependency addition detected")
 
-    if _dependency_removed(diff_output):
-        signals.dependency_removed = True
-        signals.evidence.append("Potential dependency removal detected")
+        if _dependency_removed(diff_output):
+            signals.dependency_removed = True
+            signals.evidence.append("Potential dependency removal detected")
+    else:
+        signals.evidence.append("Content product/runtime markers quarantined for docs/tests/fixtures-only diff")
 
 
 def _apply_only_signals(signals: DiffSignals, paths: list[str]) -> None:
     if not paths:
         return
 
-    signals.only_docs = all(_is_docs_path(path) for path in paths)
-    signals.only_tests = all(_is_test_path(path) for path in paths)
+    signals.only_fixtures = all(_is_fixture_path(path) for path in paths)
+    # Fixtures are a test-family envelope; pure fixtures also count as only_tests.
+    signals.only_docs = all(_is_docs_path(path) for path in paths) and not signals.only_fixtures
+    signals.only_tests = all(_is_test_path(path) or _is_fixture_path(path) for path in paths)
     signals.only_config = all(_is_config_path(path) for path in paths)
 
     dependency_paths = [_is_dependency_path(path) for path in paths]
@@ -477,6 +554,9 @@ def _apply_only_signals(signals: DiffSignals, paths: list[str]) -> None:
     # Conservative placeholder: formatting-only detection should later use
     # a parser/formatter diff or language-aware analysis.
     signals.only_formatting = False
+
+    if signals.only_fixtures:
+        signals.evidence.append("All changed files are fixture/corpus files")
 
     if signals.only_docs:
         signals.evidence.append("All changed files are documentation files")
@@ -527,6 +607,12 @@ def _is_test_path(path: str) -> bool:
         or ".spec." in name
         or name.endswith("_test.go")
     )
+
+
+def _is_fixture_path(path: str) -> bool:
+    """Return whether *path* is under a fixtures/corpus/goldens tree."""
+    parts = {part.lower() for part in PurePosixPath(path).parts}
+    return bool(parts & {"fixtures", "fixture", "goldens", "corpus"})
 
 
 def _is_ci_path(path: str) -> bool:
@@ -810,7 +896,12 @@ def collect_active_markers(
     markers = set(_generate_signal_markers(signals))
     if not is_semantic_enabled(enable_semantic):
         return markers
-    markers |= enrich_markers_from_facts(enrichment, matrix_vocab=matrix_vocab)
+    enriched = enrich_markers_from_facts(enrichment, matrix_vocab=matrix_vocab)
+    # P-S12: fingerprint runtime_logic_changed must not promote product ranking on
+    # pure docs/tests/fixtures; retain path-family markers only.
+    if signals.only_docs or signals.only_tests or signals.only_fixtures:
+        enriched -= _PRODUCT_ONLY_MARKERS
+    markers |= enriched
     return markers
 
 
@@ -943,7 +1034,9 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     if signals.packaged_data_changed:
         markers.update(["packaged_data_changed", "wheel_or_sdist_config_changed"])
 
-    # Security & Validation
+    # Security & Validation / Features & API / Architecture
+    # Always generate from signals, then quarantine product/runtime markers for
+    # pure docs/tests/fixtures via the shared _PRODUCT_ONLY_MARKERS set.
     if signals.touches_security:
         markers.update(["security_vulnerability_fixed", "privacy_issue_fixed"])
     if signals.validation_added:
@@ -953,15 +1046,16 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     if signals.secret_scanning_changed or signals.secrets_management_changed:
         markers.update(["security_tooling_only_without_fix", "secret_reference_changed"])
 
-    # Features & API
     if signals.adds_public_api:
         markers.update(["new_api", "new_user_facing_capability", "functional_code_changed"])
 
-    # Architecture & Refactoring
     if signals.changes_architecture:
         markers.update(["major_subsystem_restructured", "core_architecture_changed"])
     if signals.centralized_config_resolution or signals.new_shared_module:
         markers.update(["centralize_logic", "deduplicate_code", "extract_shared_helper", "internal_restructure"])
+
+    if signals.only_docs or signals.only_tests or signals.only_fixtures:
+        markers -= _PRODUCT_ONLY_MARKERS
 
     # CI/CD & Hooks
     if signals.touches_ci:

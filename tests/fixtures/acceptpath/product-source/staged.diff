@@ -1,0 +1,16 @@
+diff --git a/src/demo/greeter.py b/src/demo/greeter.py
+index 6e13ed0..c6adb2e 100644
+--- a/src/demo/greeter.py
++++ b/src/demo/greeter.py
+@@ -1,4 +1,9 @@
+ """Simple greeter used by accept-path product-source dogfood."""
+ 
+-def greet(name: str) -> str:
+-    return f"hello, {name}"
++def greet(name: str, *, excited: bool = False) -> str:
++    base = f"hello, {name}"
++    return f"{base}!" if excited else base
++
++
++def greet_many(names: list[str]) -> list[str]:
++    return [greet(n) for n in names]

@@ -59,6 +59,8 @@ def _plan(
     *,
     body: str | None = None,
     split: bool = False,
+    breaking: bool = False,
+    breaking_desc: str | None = None,
 ) -> CommitPlan:
     """Construct a structured plan WITHOUT model validators (direct fixture)."""
     return CommitPlan.model_construct(
@@ -67,8 +69,8 @@ def _plan(
         split_recommended=split,
         rationale="fixture rationale",
         body_summary=body,
-        breaking_change=False,
-        breaking_change_description=None,
+        breaking_change=breaking,
+        breaking_change_description=breaking_desc,
     )
 
 
@@ -188,6 +190,117 @@ def test_a04_check_commit_gold_does_not_mutate_primary_fields() -> None:
         plan.primary_intent.changelog_group,
     )
     assert before == after
+
+
+def test_presentation_overlay_gold_accepts_legal_semver_and_group_divergence() -> None:
+    """After #204 overlay, gold keeps identity checks but allows presentation fields."""
+    contract = ResolvedCommitContract(
+        primary_intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type="feat",
+        semver_impact="MINOR",
+        changelog_group="Added",
+        secondary_intent_ids=[],
+    )
+    # Direct fixtures: bypass matrix canonicalisation so presentation fields stick.
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "PATCH",  # presentation ceiling below matrix MINOR
+        "Added",
+        scope="commit-quality",
+        description="apply path-class presentation overlay",
+    )
+    secondary = _intent(
+        "tests_update",
+        "✅",
+        "test",
+        "NONE",
+        "Tests",  # D19 presentation group (matrix row is Miscellaneous)
+        scope="commit-quality",
+        description="lock overlay cases",
+    )
+    plan = _plan(
+        primary,
+        [secondary],
+        body="Path-class overlay clamps SemVer and repairs changelog groups.",
+    )
+    report = check_commit_gold(
+        plan,
+        contract,
+        signals=DiffSignals(files=["src/git_cg/commit_quality.py", "tests/test_commit_quality.py"]),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_CONTRACT_SMOKE" not in report.codes()
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" not in report.codes()
+    assert "GOLD_TYPE_GROUP_INCOHERENT" not in report.codes()
+
+
+def test_presentation_overlay_gold_still_rejects_identity_drift() -> None:
+    """Even with overlay flag, intent_id/gitmoji drift remains GOLD_CONTRACT_SMOKE."""
+    contract = ResolvedCommitContract(
+        primary_intent_id="feature_addition",
+        gitmoji="✨",
+        cc_type="feat",
+        semver_impact="MINOR",
+        changelog_group="Added",
+        secondary_intent_ids=[],
+    )
+    drifted = _intent(
+        "bug_fix",  # identity drift
+        "🐛",
+        "fix",
+        "PATCH",
+        "Fixed",
+        scope="commit-quality",
+        description="wrong identity after overlay",
+    )
+    plan = _plan(drifted, body="Identity must remain locked to the enforced contract.")
+    report = check_commit_gold(
+        plan,
+        contract,
+        signals=DiffSignals(files=["src/git_cg/commit_quality.py"]),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_CONTRACT_SMOKE" in report.codes()
+    msg = next(f.message for f in report.findings if f.code == "GOLD_CONTRACT_SMOKE")
+    assert "intent_id" in msg
+    assert "gitmoji" in msg
+
+
+def test_presentation_overlay_flag_default_keeps_legacy_matrix_strictness() -> None:
+    """Default callers still fail matrix SemVer/group mismatches (no silent relaxation)."""
+    primary = _intent(
+        "feature_addition",
+        "✨",
+        "feat",
+        "NONE",  # matrix says MINOR
+        "Added",
+        scope="api",
+        description="clamp semver illegally without overlay flag",
+    )
+    secondary = _intent(
+        "tests_update",
+        "✅",
+        "test",
+        "NONE",
+        "Tests",  # matrix says Miscellaneous
+        scope="test",
+        description="bad group",
+    )
+    plan = _plan(
+        primary,
+        [secondary],
+        body="Legacy gold path remains strict without the overlay flag.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["src/git_cg/release.py", "tests/test_release.py"]),
+    )
+    assert "GOLD_SEMVER_MATRIX_MISMATCH" in report.codes()
+    assert "GOLD_TYPE_GROUP_INCOHERENT" in report.codes()
 
 
 def test_contract_smoke_fires_on_diverged_primary() -> None:
@@ -705,3 +818,309 @@ def test_v11_a03_repo_history_fp_budget() -> None:
     clean = len(subjects) - len(hits)
     ratio = clean / len(subjects)
     assert ratio >= 0.95, f"FP budget failed: {clean}/{len(subjects)} clean; hits={hits}"
+
+
+def test_skeleton_fallback_is_strict_fail() -> None:
+    """P-S12: skeleton fallback provenance fails gold-strict even with clean wording."""
+    from git_cg.commit_gold import SKELETON_FALLBACK_MARKER
+    from git_cg.commit_quality import apply_guard_skeleton_fallback
+
+    assert "GOLD_SKELETON_FALLBACK_FINAL" in STRICT_FAIL_CODES
+    assert "GOLD_PROCESS_META_BODY" in STRICT_FAIL_CODES
+
+    base = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="cover staged claim locks"),
+        body="Cover staged fixture evidence without product framing.",
+    )
+    out = apply_guard_skeleton_fallback(base, paths=["tests/fixtures/x.md"])
+    assert SKELETON_FALLBACK_MARKER in (out.rationale or "")
+    report = check_commit_gold(
+        out,
+        None,
+        signals=DiffSignals(files=["tests/fixtures/x.md"], only_fixtures=True, only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_SKELETON_FALLBACK_FINAL" in report.codes()
+    assert not report.ok_for_mode("strict")
+
+
+def test_process_meta_body_is_strict_fail() -> None:
+    """P-S12: process-meta fallback phrases fail gold-strict."""
+    plan = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="cover staged tests"),
+        body="Deterministic presentation fallback after guard exhaustion.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["tests/test_foo.py"], only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_PROCESS_META_BODY" in report.codes()
+    assert not report.ok_for_mode("strict")
+
+
+def test_fixtures_path_class_semver_ceiling() -> None:
+    """P-S12: fixtures-only with PATCH fails gold-strict path-class ceiling."""
+    plan = _plan(
+        _intent("bug_fix", "🐛", "fix", "PATCH", "Fixed", description="cover fixture pins"),
+        body="Cover fixture pins without product claims.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["tests/fixtures/pack/data.json"], only_fixtures=True, only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    codes = report.codes()
+    assert "GOLD_PATH_CLASS_SEMVER_CEILING" in codes
+    assert "GOLD_PATH_CLASS_TYPE_MISMATCH" in codes
+    assert not report.ok_for_mode("strict")
+
+
+def test_process_meta_in_rationale_only_is_not_body_fail() -> None:
+    """Process-meta phrases in non-rendered rationale must not trip GOLD_PROCESS_META_BODY."""
+    plan = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="cover staged tests"),
+        body="Cover staged fixture evidence without product framing.",
+    )
+    plan = plan.model_copy(
+        update={
+            "rationale": (
+                "Internal note: deterministic presentation fallback after guard exhaustion "
+                "with shared regen budget; not operator-visible."
+            )
+        }
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["tests/test_foo.py"], only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_PROCESS_META_BODY" not in report.codes()
+
+
+def test_path_class_wording_ignores_rationale_only_claims() -> None:
+    """Path-class product/docs wording bans must ignore non-rendered rationale."""
+    docs_plan = _plan(
+        _intent(
+            "docs_update",
+            "📝",
+            "docs",
+            "NONE",
+            "Documentation",
+            description="document usage flags",
+        ),
+        body="Document the usage-flags operator guide without shipping claims.",
+    )
+    docs_plan = docs_plan.model_copy(
+        update={
+            "rationale": (
+                "Internal provenance only: implement support for claim locks and "
+                "enforce the contract floor during gold self-correction."
+            )
+        }
+    )
+    docs_report = check_commit_gold(
+        docs_plan,
+        None,
+        signals=DiffSignals(files=["docs/usage.md"], only_docs=True, touches_docs=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_DOCS_IMPLEMENTATION_CLAIM" not in docs_report.codes()
+
+    fixtures_plan = _plan(
+        _intent("tests_update", "✅", "test", "NONE", "Tests", description="pin fixture evidence"),
+        body="Pin fixture evidence without product framing.",
+    )
+    fixtures_plan = fixtures_plan.model_copy(
+        update={
+            "rationale": (
+                "Internal provenance only: validate public api and wire telemetry "
+                "during presentation repair; not operator-visible."
+            )
+        }
+    )
+    fixtures_report = check_commit_gold(
+        fixtures_plan,
+        None,
+        signals=DiffSignals(files=["tests/fixtures/pack/data.json"], only_fixtures=True, only_tests=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_FIXTURE_PRODUCT_FRAMING" not in fixtures_report.codes()
+
+
+def test_docs_implementation_claim_fires_for_non_docs_cc_type() -> None:
+    """Docs-only path family rejects implementation claims even when cc_type is chore."""
+    plan = _plan(
+        _intent(
+            "chore_maintenance",
+            "🔧",
+            "chore",
+            "NONE",
+            "Miscellaneous",
+            description="implement support for claim locks",
+        ),
+        body="Implement the contract floor and add support for staged claim locks.",
+    )
+    report = check_commit_gold(
+        plan,
+        None,
+        signals=DiffSignals(files=["docs/usage.md"], only_docs=True, touches_docs=True),
+        presentation_overlay_applied=True,
+    )
+    assert "GOLD_DOCS_IMPLEMENTATION_CLAIM" in report.codes()
+    assert not report.ok_for_mode("strict")
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 NTH — high-risk theme phrase coverage (warn-only)
+# ---------------------------------------------------------------------------
+
+
+def test_high_risk_theme_missing_when_body_omits_concepts() -> None:
+    """Staged telemetry without theme wording emits GOLD_HIGH_RISK_THEME_MISSING."""
+    plan = _plan(
+        FEAT,
+        body="Improve operator messaging for commit presentation quality.",
+    )
+    signals = DiffSignals(files=["src/git_cg/telemetry.py"])
+    report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
+    assert "GOLD_HIGH_RISK_THEME_MISSING" in report.codes()
+    # Nice-to-have: not a strict-fail code.
+    assert "GOLD_HIGH_RISK_THEME_MISSING" not in STRICT_FAIL_CODES
+
+
+def test_high_risk_theme_covered_when_body_hits_concepts() -> None:
+    """Body covering telemetry must-cover themes clears the high-risk lint."""
+    primary = _intent(
+        "bug_fix",
+        "🐛",
+        "fix",
+        "PATCH",
+        "Fixed",
+        scope="telemetry",
+        description="cover telemetry redaction",
+    )
+    plan = _plan(
+        primary,
+        body=(
+            "Cover telemetry fallback-reason transitions and closed-enum tags. "
+            "Scrub allow/deny list deltas when redaction coverage changes. "
+            "Redaction failure yields the literal token [REDACTED]. "
+            "No secret material in payloads."
+        ),
+    )
+    signals = DiffSignals(files=["src/git_cg/telemetry.py"])
+    report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
+    assert "GOLD_HIGH_RISK_THEME_MISSING" not in report.codes()
+
+
+def test_high_risk_theme_skipped_for_low_risk_paths() -> None:
+    plan = _plan(FEAT, body="Document operator usage for presentation quality.")
+    signals = DiffSignals(files=["docs/usage.md"])
+    report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
+    assert "GOLD_HIGH_RISK_THEME_MISSING" not in report.codes()
+
+
+# ---------------------------------------------------------------------------
+# Issue #212 NTH / PC5 — BREAKING vs backward-compatible craft contradiction
+# ---------------------------------------------------------------------------
+
+
+def test_breaking_compat_contradiction_when_footer_claims_backward_compatible() -> None:
+    """BREAKING + backward-compatible body emits GOLD_BREAKING_COMPAT_CONTRADICTION."""
+    primary = _intent(
+        "breaking_change",
+        "💥",
+        "feat",
+        "MAJOR",
+        "Changed",
+        scope="greeter",
+        description="add excited flag and greet_many",
+    )
+    plan = _plan(
+        primary,
+        body=(
+            "Refactors greet to accept an optional excited keyword argument. "
+            "Maintains backward compatibility for existing callers while expanding demo capabilities."
+        ),
+        breaking=True,
+        breaking_desc=(
+            "The greet function signature now requires a keyword-only excited parameter. "
+            "Existing positional calls may break if not updated to use keyword syntax or "
+            "rely on the default False value."
+        ),
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" in report.codes()
+    # Nice-to-have: not a strict-fail code (PC5 / #212 NTH).
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in STRICT_FAIL_CODES
+    assert report.ok_for_mode("strict")
+
+
+def test_breaking_compat_contradiction_for_defaulted_kwonly_claims() -> None:
+    """Defaulted kw-only safety claims contradict BREAKING markers."""
+    primary = _intent(
+        "breaking_change",
+        "💥",
+        "feat",
+        "MAJOR",
+        "Changed",
+        scope="api",
+        description="add optional excited flag",
+    )
+    plan = _plan(
+        primary,
+        body="Add optional kw-only excited flag with default false for existing callers.",
+        breaking=True,
+        breaking_desc="keyword-only excited parameter",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" in report.codes()
+
+
+def test_breaking_without_compat_claims_is_clean() -> None:
+    """True breaking wording without compatibility hedges does not fire the craft lint."""
+    primary = _intent(
+        "breaking_change",
+        "💥",
+        "feat",
+        "MAJOR",
+        "Changed",
+        scope="api",
+        description="remove legacy greet positional overload",
+    )
+    plan = _plan(
+        primary,
+        body="Remove the positional greet overload and require the new keyword-only API.",
+        breaking=True,
+        breaking_desc="positional greet(name) overload removed; callers must pass keywords.",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/api.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()
+
+
+def test_non_breaking_backward_compatible_wording_is_clean() -> None:
+    """Compatibility claims are fine when no BREAKING marker is present."""
+    plan = _plan(
+        FEAT,
+        body="Add greet_many while remaining backward compatible for existing callers.",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()
+
+
+def test_orphan_breaking_description_without_flag_is_not_marker() -> None:
+    """Non-breaking plans ignore orphan breaking_change_description craft state."""
+    # Construct via model_construct to bypass validators if needed, but CommitPlan
+    # currently permits breaking_change=False with a description.
+    plan = _plan(
+        FEAT,
+        body="Add greet_many while remaining backward compatible for existing callers.",
+        breaking=False,
+        breaking_desc="legacy note that must not count without breaking_change=true",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()

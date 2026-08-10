@@ -183,6 +183,35 @@ def init_sentry():
                                 "renamed_paths",
                                 "changed_files",
                                 "parser_batch_results",
+                                # Phase 7.30 presentation locals (Issue #204) — closed
+                                # enums are safe as tags, but scrub free-text guidance.
+                                "low_confidence_guidance",
+                                "body_skeleton",
+                                # Slice 10 / D26 — scrub presentation locals; closed tags only via set_tag.
+                                "presentation_fallback_reason",
+                                "path_class_gate",
+                                "changelog_antisignal_applied",
+                                "hallucination_guard_fired",
+                                "scope_normalised_from",
+                                "preferred_scope",
+                                "preferred_scope_raw",
+                                "force_scope",
+                                "scope_hint",
+                                "guard_report",
+                                "claim_tags",
+                                "harvested_claim_tags",
+                                # Slice 7 blueprint — never ship payload/content.
+                                "blueprint",
+                                "blueprint_raw",
+                                "blueprint_source",
+                                "blueprint_guidance",
+                                "parsed_blueprint",
+                                "commit_blueprint",
+                                # Slice 5.5 lifecycle — keep tags only; scrub any locals.
+                                "commit_plan",
+                                "commit_plan_json",
+                                "llm_raw_plan",
+                                "contract_lifecycle",
                             ]:
                                 if var_name in frame["vars"]:
                                     frame["vars"][var_name] = "[SCRUBBED]"
@@ -200,3 +229,65 @@ def init_sentry():
             before_send=scrub_data,
             traces_sample_rate=0.0,
         )
+
+
+def report_commit_plan_contract_violation(
+    *,
+    locked_semver: str | None,
+    persisted_semver: str | None,
+    lift_applied: bool = False,
+    lift_from_semver: str | None = None,
+    normaliser_reason: str = "none",
+    diff_hash: str | None = None,
+) -> None:
+    """Emit errors-only Sentry event for a locked-vs-persisted contract violation.
+
+    Issue #204 · Slice 5.5. Fingerprint ``commit_plan_contract_violation``.
+    Tags are closed enum / hash identifiers only — never prompts, diffs, bodies,
+    blueprint JSON, or free-text plan content.
+    """
+    # Local import keeps module import light when Sentry is disabled.
+    import sentry_sdk
+
+    def _sem(value: object) -> str:
+        if value is None or value == "":
+            return "unknown"
+        if hasattr(value, "value"):
+            value = value.value
+        raw = str(value).strip().upper()
+        return raw if raw in {"NONE", "PATCH", "MINOR", "MAJOR"} else "unknown"
+
+    locked = _sem(locked_semver)
+    persisted = _sem(persisted_semver)
+    from_sem = _sem(lift_from_semver) if lift_from_semver not in (None, "") else "none"
+    reason = str(normaliser_reason or "none").strip().lower()
+    allowed_reasons = {
+        "none",
+        "contract_lift",
+        "presentation_clamp",
+        "matrix_reconstruction",
+        "malformed_semver",
+        "residual_violation",
+    }
+    if reason not in allowed_reasons:
+        reason = "none"
+    dhash = str(diff_hash or "").strip().lower()
+    # Allow only short hex hashes; drop anything else.
+    if not dhash or len(dhash) > 64 or any(c not in "0123456789abcdef" for c in dhash):
+        dhash = "none"
+
+    with sentry_sdk.new_scope() as scope:
+        scope.set_tag("event_name", "commit_plan_contract_violation")
+        scope.set_tag("contract_locked_semver", locked)
+        scope.set_tag("plan_persisted_semver", persisted)
+        scope.set_tag("contract_lift_applied", "true" if lift_applied else "false")
+        scope.set_tag("contract_lift_from_semver", from_sem)
+        scope.set_tag("plan_normaliser_reason", reason)
+        scope.set_tag("diff_hash", dhash)
+        scope.fingerprint = [
+            "commit_plan_contract_violation",
+            locked,
+            persisted,
+            reason,
+        ]
+        sentry_sdk.capture_message("commit_plan_contract_violation", level="error")

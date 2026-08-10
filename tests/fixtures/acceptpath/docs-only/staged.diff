@@ -1,0 +1,14 @@
+diff --git a/docs/usage.md b/docs/usage.md
+index 054d06a..8f44ea0 100644
+--- a/docs/usage.md
++++ b/docs/usage.md
+@@ -9,3 +9,9 @@ git-cg generates governed commit messages from staged diffs.
+ 1. Stage changes
+ 2. Run git-cg commit
+ 3. Review the generated message
++
++## Review checklist
++
++- Confirm the subject matches the staged intent
++- Confirm trailers remain machine-readable
++- Prefer a single focused change set per commit

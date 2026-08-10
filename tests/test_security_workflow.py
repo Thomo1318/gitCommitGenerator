@@ -13,6 +13,7 @@ Enforces supply-chain contracts:
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 import yaml
@@ -174,9 +175,17 @@ class TestSecurityWorkflow:
         assert step["with"]["path"] == "./"
 
     def test_trufflehog_only_verified_flag_preserved(self):
-        """`--only-verified` must remain set to avoid noisy unverified findings."""
+        """`--only-verified` must remain set to avoid noisy unverified findings.
+
+        Lob may be excluded alongside verified mode when its detector
+        false-positives on long pytest identifiers; keep the verified gate.
+        """
         step = next(s for s in self._workflow()["jobs"]["trufflehog"]["steps"] if s.get("name") == "TruffleHog OSS")
-        assert step["with"]["extra_args"] == "--only-verified"
+        extra = step["with"]["extra_args"]
+        args = set(shlex.split(extra))
+        assert "--only-verified" in args
+        # Documented intentional FP mitigation; other detectors remain active.
+        assert "--exclude-detectors=Lob" in args
 
     def test_trufflehog_job_step_order(self):
         """The trufflehog job must checkout before running the TruffleHog action."""

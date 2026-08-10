@@ -1,0 +1,37 @@
+[14:39:52] Starting git-cg...                                       main.py:2353
+           Engine: mtplx                                            main.py:2354
+           Commit Msg File: .git/COMMIT_EDITMSG                     main.py:2355
+           Commit Source:                                           main.py:2356
+           Interactive Mode: False                                  main.py:2357
+[14:39:53] Using rtk for token compression...                       main.py:1218
+           Extracted analysis git diff (502 characters).            main.py:1247
+           AI Client initialized. Calling mtplx to generate commit  main.py:2553
+           message...                                                           
+Configured model 'Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed' is not loaded; 
+falling back to 'mtplx-qwen36-27b-optimized-speed'.
+           Using model: mtplx-qwen36-27b-optimized-speed            main.py:2563
+           Using shared ranked intent candidates...                  main.py:679
+[14:40:21] Resolved and Enforced Semantic Contract: breaking_change main.py:3335
+           (feat)                                                               
+╭────────────────────────── Generated Commit Message ──────────────────────────╮
+│ 💥 feat(util)!: add normalize_or_default and null fallback                   │
+│                                                                              │
+│ Introduce `normalize_or_default` to safely handle missing values. Update     │
+│ `normalize` to fallback to an empty string on `None` inputs, preventing      │
+│ `AttributeError` crashes. Add documentation for the trimming utility.        │
+│                                                                              │
+│ Included changes:                                                            │
+│ - 👔 feat(util): update normalize for safe stripping                         │
+│ - 💡 docs(util): add docstring to normalize helper                           │
+│                                                                              │
+│ SemVer-Impact: MAJOR                                                         │
+│ Change-Types: feat, docs                                                     │
+│ Changelog-Groups: Added, Documentation                                       │
+│                                                                              │
+│ BREAKING CHANGE: The `normalize` function now implicitly handles `None` by   │
+│ returning an empty string, altering previous error-throwing behavior.        │
+│ Callers expecting exceptions on `None` inputs must adapt.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+           Commit message written to .git/COMMIT_EDITMSG             main.py:921
+           Opik telemetry state written to                          main.py:1733
+           .git/GIT_CG_OPIK_STATE.json                                          

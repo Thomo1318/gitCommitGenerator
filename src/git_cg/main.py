@@ -83,6 +83,21 @@ console = Console()
 # message we must NOT overwrite — critical for safe global-hook operation.
 GENERATING_SOURCES: set[str | None] = {None, "", "template"}
 
+# Truthy tokens for GIT_CG_SKIP_PREPARE (F80 / P-S12-9 message-only rebuilds).
+# Keep aligned with semantic/rank-arbitrate env parsers: 1/true/yes/on.
+_SKIP_PREPARE_TRUTHY: frozenset[str] = frozenset({"1", "true", "yes", "on"})
+
+
+def _is_skip_prepare_enabled() -> bool:
+    """Return True when prepare-commit-msg generation must no-op.
+
+    Used for message-only rebuilds (amend --no-edit / controlled rewrites) so the
+    prepare-commit-msg hook cannot recursively re-enter git-cg. Ordinary hook
+    generation is unchanged unless the operator sets GIT_CG_SKIP_PREPARE.
+    """
+    raw = os.environ.get("GIT_CG_SKIP_PREPARE", "").strip().lower()
+    return raw in _SKIP_PREPARE_TRUTHY
+
 
 class ReviewStateMutationResult(enum.StrEnum):
     """Possible outcomes when mutating issue-reference state during review."""
@@ -540,7 +555,13 @@ def generate_commit_message(
         if "preferred_type" in active_directives:
             commit_result.primary_intent.cc_type = CommitType(active_directives["preferred_type"])
         if "preferred_scope" in active_directives:
-            commit_result.primary_intent.scope = active_directives["preferred_scope"]
+            # I-12 / #204 §J: always route through normalize_scope (never assign raw token).
+            from git_cg.scope_canon import resolve_scope_normalisation
+
+            _canon, _from = resolve_scope_normalisation(active_directives["preferred_scope"])
+            commit_result.primary_intent.scope = _canon
+            # Stash closed alias key for D26 write (RF-1); never a path.
+            commit_result._scope_normalised_from = _from  # ephemeral D26 breadcrumb
     return commit_result
 
 
@@ -602,6 +623,10 @@ def build_system_prompt(
     contract=None,
     gold_guidance: str | None = None,
     scoped_history_guidance: str | None = None,
+    staged_paths: list[str] | None = None,
+    concern_tags: frozenset[str] | set[str] | None = None,
+    claim_tags: list[str] | tuple[str, ...] | None = None,
+    low_confidence_guidance: str | None = None,
 ) -> str:
     """
     Compose the system prompt for generating a structured Conventional Commit plan.
@@ -620,6 +645,11 @@ def build_system_prompt(
         scoped_history_guidance (str | None): Phase 9 split/rename rationale feedback. Routed
             through Channel 4 (Issue #163); directive-free; never sets preferred_type or
             authority fields.
+        staged_paths (list[str] | None): Staged paths for included-change stubs and
+            Slice 6 high-risk body checklist injection (D6/D20).
+        low_confidence_guidance (str | None): Issue #204 Slice 5 body-skeleton guidance.
+            Directive-free wording structure only; never sets preferred_type or mutates
+            ranked intent authority.
 
     Returns:
         str: The complete system prompt, including SOP context, intent candidates, language and localisation requirements, and any regeneration guidance.
@@ -727,10 +757,71 @@ def build_system_prompt(
         "- Subject: state the user-visible outcome, not an inventory of files or edits. ≤50 chars, imperative.\n"
         "- Body: explain WHY the change is needed and the behaviour delta; note preserved invariants when relevant.\n"
         f"- Do NOT open the body with: {banned}.\n"
-        "- Secondary intents: when the diff touches multiple distinct surfaces, include them so Included changes is complete.\n"
+        "- Secondary intents: when the diff touches multiple distinct surfaces, put them in secondary_intents "
+        "so the renderer emits exactly one Included changes section. Preserve every distinct "
+        "evidence-backed responsibility (especially tests, docs, fixes, implementation); do not "
+        "collapse a multi-surface diff into one intent solely because ranking confidence is low.\n"
+        "- body_summary must NOT contain an `Included changes:` heading or nested bullets; "
+        "those come only from secondary_intents as Hybrid mini-subjects "
+        "(`- <emoji> <cc_type>(<scope>): <subject>`).\n"
+        "- Never copy bracketed inventory lines (`[role/surface] ...`) into the final message.\n"
         "- This rubric guides wording only. It MUST NOT change intent_id, gitmoji, cc_type, semver_impact, or changelog_group."
     )
     context_parts.append(gold_rubric)
+
+    # Shared staged-path discovery for Slice 4 inventory + Slice 6 checklist.
+    # Prefer explicit staged_paths; fall back to diff signal files when omitted.
+    presentation_paths = [p for p in (staged_paths or []) if p and str(p).strip()]
+    presentation_signals = None
+    if not presentation_paths:
+        try:
+            from git_cg.intent import extract_diff_signals as _extract_diff_signals_for_paths
+
+            presentation_signals = _extract_diff_signals_for_paths(diff_output)
+            presentation_paths = list(getattr(presentation_signals, "files", None) or [])
+        except Exception:
+            presentation_signals = None
+            presentation_paths = []
+
+    # Issue #204 Slice 4 — included-change stub inventory (D5/D18). Prompt pressure
+    # only; LLM may rephrase. Never mutates ranked intent authority.
+    try:
+        from git_cg.commit_quality import (
+            build_included_change_stubs,
+            format_included_change_stub_inventory,
+        )
+
+        stub_signals = None if (staged_paths and ranked_candidates is not None) else presentation_signals
+        stubs = build_included_change_stubs(
+            presentation_paths,
+            stub_signals,
+            ranked_candidates,
+            concern_tags=concern_tags,
+            claim_tags=claim_tags,
+        )
+        inventory = format_included_change_stub_inventory(stubs)
+        if inventory:
+            context_parts.append(inventory)
+    except Exception:
+        # Inventory is best-effort presentation aid; never brick prompt build.
+        pass
+
+    # Issue #204 Slice 6 — high-risk body checklist (D6/D20). Prompt pressure only.
+    # Injected only when staged high-risk product paths are present. Directive-free:
+    # never sets preferred_type / rank steers; never treats docs prose as path evidence.
+    try:
+        from git_cg.commit_quality import format_high_risk_body_checklist
+
+        checklist = format_high_risk_body_checklist(presentation_paths)
+        if checklist:
+            context_parts.append(checklist)
+    except Exception:
+        # Checklist is best-effort presentation aid; never brick prompt build.
+        pass
+
+    # Issue #204 Slice 5 — low-confidence body skeleton (D7). Prompt pressure only.
+    if low_confidence_guidance and str(low_confidence_guidance).strip():
+        context_parts.append(str(low_confidence_guidance).strip())
 
     if context_parts:
         gitops_matrix_str = "\n\n" + "\n\n".join(context_parts)
@@ -1112,7 +1203,13 @@ def pack_prompt_diff(
 @opik.track(project_name="gitCommitGenerator")
 def extract_git_diff(verbose: bool, strict: bool) -> str:
     """
-    Extracts the staged Git diff for analysis and ranking.
+    Extract the staged Git diff for analysis and ranking.
+
+    Always uses standard ``git diff --cached`` so signal extraction, intent
+    ranking, and path-class gates receive a real unified diff. RTK must not
+    wrap this path: its summarized non-unified output collapses
+    ``path_class_gate`` to ``empty`` and corrupts content markers (Issue #212).
+    Prompt-size limits remain the job of ``pack_prompt_diff`` only.
 
     Returns:
         str: The staged diff content.
@@ -1121,30 +1218,14 @@ def extract_git_diff(verbose: bool, strict: bool) -> str:
         typer.Exit: If diff extraction fails or no staged changes are found.
     """
     try:
-        has_rtk = shutil.which("rtk") is not None
-        if has_rtk:
-            if verbose:
-                console.log("Using rtk for token compression...")
-            try:
-                diff_output = subprocess.check_output(
-                    _staged_diff_command(use_rtk=True),
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-            except subprocess.CalledProcessError as e:
-                if verbose:
-                    console.log(f"rtk failed ({e}). Falling back to standard diff.")
-                diff_output = subprocess.check_output(
-                    _staged_diff_command(use_rtk=False),
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-        else:
-            diff_output = subprocess.check_output(
-                _staged_diff_command(use_rtk=False),
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
+        if verbose:
+            console.log("Extracting staged analysis diff via standard git...")
+        # Analysis path is always plain git. Keep RTK off the ranking/signal path.
+        diff_output = subprocess.check_output(
+            _staged_diff_command(use_rtk=False),
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         _abort(f"[bold red]Error getting git diff:[/bold red] {e.output}", strict=strict)
 
@@ -1253,12 +1334,34 @@ def _build_generation_context(
     )
     # Confidence is bound to this rank pass only; empty rank → no confidence object.
     ranking_confidence = compute_ranking_confidence(ranked_candidates) if ranked_candidates else None
+    # Issue #204 Slice 2/2b: TrailerPriors + DiffClass constraints (D25).
+    # Must not feed rank_commit_intents — presentation only.
+    # Path recovery: prefer signals.files; constraints_from_paths/_resolve_paths
+    # also fall back to signals when the explicit list is empty. Empty remains
+    # unknown (not a pure non-product force-NONE envelope).
+    from git_cg.commit_quality import constraints_from_paths, derive_trailer_priors
+
+    staged = [p for p in (signals.files or []) if p and str(p).strip()]
+    if not staged:
+        # Second-chance path harvest from the raw diff when signal files were empty.
+        try:
+            from git_cg.intent import extract_diff_file_summary
+
+            staged = [p for p in (extract_diff_file_summary(diff_output).paths or []) if p and str(p).strip()]
+            if staged and not signals.files:
+                signals.files = list(staged)
+        except Exception:
+            staged = []
+    scope_priors = derive_trailer_priors(staged, signals=signals)
+    presentation_constraints = constraints_from_paths(staged, signals=signals)
     return GenerationContext(
         diff_signals=signals,
         ranked_intents=ranked_candidates,
         constraints=constraints,
         semantic_summary=semantic_summary if semantic_on else None,
         risk_assessment=risk_assessment if semantic_on else None,
+        scope_priors=scope_priors,
+        presentation_constraints=presentation_constraints,
         ranking_confidence=ranking_confidence,
     )
 
@@ -1312,6 +1415,45 @@ def _build_semantic_enrichment_facts(
         graph=graph_facts,
         fingerprints=fingerprints,
     )
+
+
+def _presentation_telemetry_from_context(
+    gen_context: object | None,
+    *,
+    commit_plan: object | None = None,
+    preferred_scope_raw: str | None = None,
+) -> tuple[str, bool, str]:
+    """Derive closed D26 presentation telemetry from context/plan (Issue #204 Slice 10).
+
+    Returns:
+        (path_class_gate, changelog_antisignal_applied, scope_normalised_from)
+    """
+    path_class_gate = "none"
+    changelog_antisignal_applied = False
+    scope_normalised_from = "none"
+
+    cons = getattr(gen_context, "presentation_constraints", None) if gen_context is not None else None
+    if cons is not None:
+        raw_class = getattr(cons, "diff_class", None)
+        if raw_class:
+            path_class_gate = str(raw_class)
+        changelog_antisignal_applied = bool(getattr(cons, "changelog_antisignal_applied", False))
+
+    # Prefer the raw pre-normalise token when available; else final primary scope.
+    probe = preferred_scope_raw
+    if not probe and commit_plan is not None:
+        primary = getattr(commit_plan, "primary_intent", None)
+        probe = getattr(primary, "scope", None) if primary is not None else None
+    if probe:
+        try:
+            from git_cg.scope_canon import resolve_scope_normalisation
+
+            _canon, scope_normalised_from = resolve_scope_normalisation(str(probe))
+            del _canon
+        except Exception:
+            scope_normalised_from = "none"
+
+    return path_class_gate, changelog_antisignal_applied, scope_normalised_from
 
 
 def _write_telemetry_state_safe(
@@ -1374,6 +1516,20 @@ def _write_telemetry_state_safe(
     structural_error_handling: bool = False,
     structural_public_api: bool = False,
     structural_new_command: bool = False,
+    presentation_fallback_reason: str = "none",
+    blueprint_applied: bool = False,
+    hallucination_guard_fired: bool = False,
+    path_class_gate: str = "none",
+    changelog_antisignal_applied: bool = False,
+    scope_normalised_from: str = "none",
+    contract_lift_applied: bool = False,
+    contract_lift_from_semver: str | None = None,
+    contract_locked_semver: str | None = None,
+    llm_raw_semver: str | None = None,
+    plan_persisted_semver: str | None = None,
+    contract_violation: bool = False,
+    plan_normaliser_applied: bool = False,
+    plan_normaliser_reason: str = "none",
 ) -> None:
     """
     Persist generation telemetry for the reviewed commit plan without interrupting the main workflow.
@@ -1437,6 +1593,20 @@ def _write_telemetry_state_safe(
         structural_error_handling (bool): Phase 9 structural error-handling marker.
         structural_public_api (bool): Phase 9 structural public-API marker.
         structural_new_command (bool): Phase 9 structural new-command marker.
+        presentation_fallback_reason (str): Issue #204 closed presentation fallback reason.
+        blueprint_applied (bool): Issue #204 Slice 7 — True when a legal operator blueprint overlay was applied.
+        hallucination_guard_fired (bool): Issue #204 Slice 8 — True when hallucination guard rejected unevidenced claims.
+        path_class_gate (str): Issue #204 Slice 10 — closed DiffClass label or none.
+        changelog_antisignal_applied (bool): Issue #204 Slice 10 — changelog marker exclusion engaged.
+        scope_normalised_from (str): Issue #204 Slice 10 — CANONICAL_SCOPE_ALIASES key or none (RF-1).
+        contract_lift_applied (bool): Issue #204 Slice 5 — True when post-presentation SemVer was lifted to the locked contract floor.
+        contract_lift_from_semver (str | None): Issue #204 Slice 5 — pre-lift SemVer value when a lift occurred.
+        contract_locked_semver (str | None): Issue #204 Slice 5.5 — locked contract SemVer.
+        llm_raw_semver (str | None): Issue #204 Slice 5.5 — raw LLM SemVer pre-enforce.
+        plan_persisted_semver (str | None): Issue #204 Slice 5.5 — final primary SemVer.
+        contract_violation (bool): Issue #204 Slice 5.5 — locked vs persisted diverge.
+        plan_normaliser_applied (bool): Issue #204 Slice 5.5 — normaliser/lift touched SemVer.
+        plan_normaliser_reason (str): Issue #204 Slice 5.5 — closed normaliser reason.
     """
     try:
         import dataclasses
@@ -1529,6 +1699,22 @@ def _write_telemetry_state_safe(
             structural_error_handling=bool(structural_error_handling),
             structural_public_api=bool(structural_public_api),
             structural_new_command=bool(structural_new_command),
+            presentation_fallback_reason=str(presentation_fallback_reason or "none"),
+            blueprint_applied=bool(blueprint_applied),
+            hallucination_guard_fired=bool(hallucination_guard_fired),
+            path_class_gate=str(path_class_gate or "none"),
+            changelog_antisignal_applied=bool(changelog_antisignal_applied),
+            scope_normalised_from=str(scope_normalised_from or "none"),
+            contract_lift_applied=bool(contract_lift_applied),
+            contract_lift_from_semver=(
+                str(contract_lift_from_semver) if contract_lift_from_semver is not None else None
+            ),
+            contract_locked_semver=(str(contract_locked_semver) if contract_locked_semver is not None else None),
+            llm_raw_semver=str(llm_raw_semver) if llm_raw_semver is not None else None,
+            plan_persisted_semver=(str(plan_persisted_semver) if plan_persisted_semver is not None else None),
+            contract_violation=bool(contract_violation),
+            plan_normaliser_applied=bool(plan_normaliser_applied),
+            plan_normaliser_reason=str(plan_normaliser_reason or "none"),
         )
         try:
             git_dir = subprocess.check_output(["git", "rev-parse", "--git-dir"], text=True).strip()
@@ -2129,6 +2315,7 @@ def _run_commit_generation(
     enable_semantic: bool | None = None,
     gold_strict: bool = False,
     rank_arbitrate: bool | None = None,
+    blueprint: str | None = None,
 ) -> bool:
     """
     Generate a commit message from the staged diff, optionally review it, and record telemetry.
@@ -2147,6 +2334,7 @@ def _run_commit_generation(
         enable_semantic (bool | None): Enable or disable semantic processing, or use its configured default.
         gold_strict (bool): Resolve gold lint to strict mode without affecting non-gold strictness.
         rank_arbitrate (bool | None): Enable or disable Low-confidence intent arbitration, or use env/default.
+        blueprint (str | None): Optional presentation CommitBlueprint as inline JSON or ``@path.json``.
 
     Returns:
         bool: `True` when generation completes successfully.
@@ -2157,6 +2345,14 @@ def _run_commit_generation(
         console.log(f"Commit Msg File: {commit_msg_file}")
         console.log(f"Commit Source: {commit_source}")
         console.log(f"Interactive Mode: {interactive}")
+
+    # F80 / P-S12-9: message-only rebuilds must not re-enter generation via
+    # prepare-commit-msg. --no-verify alone is insufficient when hooks still run
+    # under hk/global hook paths; operators set GIT_CG_SKIP_PREPARE=1 instead.
+    if _is_skip_prepare_enabled():
+        if verbose:
+            console.log("GIT_CG_SKIP_PREPARE enabled; skipping prepare-commit-msg generation.")
+        raise typer.Exit(code=0)
 
     sentry_sdk.add_breadcrumb(category="lifecycle", message="Starting git-cg execution")
 
@@ -2406,7 +2602,13 @@ def _run_commit_generation(
     # change mid-loop); gold auto-regen is bounded to 2 attempts with monotonic
     # code-set shrinkage (Option B) and tracked separately from Instructor retries.
     from git_cg.commit_gold import check_commit_gold, resolve_gold_mode
-    from git_cg.regeneration import RegenerationState, enforce_semantic_contract, resolve_semantic_contract
+    from git_cg.regeneration import (
+        RegenerationState,
+        enforce_semantic_contract,
+        evaluate_contract_lifecycle,
+        lift_plan_to_contract_semver,
+        resolve_semantic_contract,
+    )
     from git_cg.telemetry import GoldSelfCorrectionOutcome
 
     gold_mode = resolve_gold_mode(
@@ -2428,6 +2630,35 @@ def _run_commit_generation(
     ranking_choice_path: str | None = None
     ranking_override = False
     ranking_arbitrate_effective: str | None = None
+    presentation_fallback_reason: str = "none"
+    low_confidence_guidance: str | None = None
+    low_confidence_adjustment = None
+    # Slice 8 (#204): claim-tag harvest + hallucination/craft guards (shared regen budget).
+    harvested_claim_tags: list[str] = []
+    hallucination_guard_fired: bool = False
+    guard_guidance: str | None = None
+    # Slice 5 hotfix (#204): contract-lift telemetry (lift-only SemVer floor).
+    contract_lift_applied: bool = False
+    contract_lift_from_semver: str | None = None
+    # Slice 5.5 (#204): contract lifecycle observability.
+    contract_locked_semver: str | None = None
+    llm_raw_semver: str | None = None
+    plan_persisted_semver: str | None = None
+    contract_violation: bool = False
+    plan_normaliser_applied: bool = False
+    plan_normaliser_reason: str = "none"
+    presentation_touched_semver: bool = False
+    # Issue #204 Slice 7: operator blueprint (presentation-only).
+    blueprint_applied: bool = False
+    parsed_blueprint = None  # CommitBlueprint | None — never logged raw
+    blueprint_guidance: str | None = None
+    # Issue #204 Slice 10 / D26: path-class + antisignal + scope-alias telemetry.
+    path_class_gate: str = "none"
+    changelog_antisignal_applied: bool = False
+    scope_normalised_from: str = "none"
+    path_class_gate, changelog_antisignal_applied, scope_normalised_from = _presentation_telemetry_from_context(
+        gen_context
+    )
 
     # --- Pre-LLM ranking arbitration (Issue #195) ---------------------------
     # Sole insertion seam: after rank/confidence owner, before contract/LLM.
@@ -2550,6 +2781,20 @@ def _run_commit_generation(
                     structural_error_handling=structural_error_handling,
                     structural_public_api=structural_public_api,
                     structural_new_command=structural_new_command,
+                    presentation_fallback_reason=presentation_fallback_reason,
+                    blueprint_applied=blueprint_applied,
+                    hallucination_guard_fired=hallucination_guard_fired,
+                    path_class_gate=path_class_gate,
+                    changelog_antisignal_applied=changelog_antisignal_applied,
+                    scope_normalised_from=scope_normalised_from,
+                    contract_lift_applied=contract_lift_applied,
+                    contract_lift_from_semver=contract_lift_from_semver,
+                    contract_locked_semver=contract_locked_semver,
+                    llm_raw_semver=llm_raw_semver,
+                    plan_persisted_semver=plan_persisted_semver,
+                    contract_violation=contract_violation,
+                    plan_normaliser_applied=plan_normaliser_applied,
+                    plan_normaliser_reason=plan_normaliser_reason,
                 )
                 opik.flush_tracker()
                 _abort(
@@ -2573,6 +2818,11 @@ def _run_commit_generation(
                     semantic_summary=semantic_summary,
                     risk_assessment=risk_assessment,
                 )
+                path_class_gate, changelog_antisignal_applied, _scope_refresh = _presentation_telemetry_from_context(
+                    gen_context
+                )
+                if _scope_refresh != "none":
+                    scope_normalised_from = _scope_refresh
                 # Presentation narrowing: preferred_type/scope select among the new
                 # authoritative ranked snapshot without mutating SOP weights (G1).
                 from git_cg.intent_arbitrate import ranked_intents_for_directives
@@ -2632,6 +2882,144 @@ def _run_commit_generation(
                 residual_guidance = arb.residual_guidance
             break
 
+    # Issue #204 Slice 8 — harvest P9-A##/P9-B## claim tags from staged evidence (D14).
+    # Pure text harvest from analysis/prompt diffs + staged test blobs (index, not worktree).
+    # Runs before low-confidence stubs so claim tags can seed inventory pressure.
+    try:
+        from git_cg.commit_quality import harvest_claim_tags
+        from git_cg.git_index import read_staged_sources
+
+        _claim_texts: list[str] = [analysis_diff or "", prompt_diff or ""]
+        _staged_for_claims = [str(p) for p in (getattr(gen_context.diff_signals, "files", None) or []) if p]
+        _test_claim_paths: list[str] = []
+        for _cp in _staged_for_claims:
+            _low = _cp.replace("\\", "/").lower()
+            if (
+                "/test" in f"/{_low}"
+                or _low.startswith("tests/")
+                or _low.endswith("_test.py")
+                or _low.endswith("test.py")
+            ):
+                _test_claim_paths.append(_cp)
+        if _test_claim_paths:
+            _staged_claim_read = read_staged_sources(
+                paths=_test_claim_paths,
+                max_file_bytes=256_000,
+            )
+            for _blob in (_staged_claim_read.files or {}).values():
+                if not _blob:
+                    continue
+                _claim_texts.append(_blob.decode("utf-8", errors="replace")[:200_000])
+        harvested_claim_tags = harvest_claim_tags(_claim_texts)
+    except Exception:
+        harvested_claim_tags = []
+
+    # Issue #204 Slice 5 — low-confidence presentation posture (D7).
+    # After ranking confidence + #195 arbitration; before prompt construction.
+    # Non-interactive: never blocks. Interactive: does not replace TUI.
+    try:
+        from git_cg.commit_quality import (
+            PRESENTATION_FALLBACK_NONE,
+            apply_low_confidence_presentation,
+            build_included_change_stubs,
+            format_low_confidence_guidance,
+        )
+        from git_cg.models import TrailerPriors as _TrailerPriors
+
+        _priors = gen_context.scope_priors
+        if not isinstance(_priors, _TrailerPriors):
+            from git_cg.commit_quality import derive_trailer_priors as _derive_trailer_priors
+
+            _priors = _derive_trailer_priors(
+                list(getattr(gen_context.diff_signals, "files", None) or []),
+                signals=gen_context.diff_signals,
+            )
+        _stubs = build_included_change_stubs(
+            list(getattr(gen_context.diff_signals, "files", None) or []),
+            gen_context.diff_signals,
+            gen_context.ranked_intents,
+            claim_tags=harvested_claim_tags,
+        )
+        low_confidence_adjustment = apply_low_confidence_presentation(
+            None,
+            gen_context.ranking_confidence,
+            _priors,
+            stubs=_stubs,
+        )
+        if low_confidence_adjustment.active:
+            presentation_fallback_reason = low_confidence_adjustment.fallback_reason
+            low_confidence_guidance = format_low_confidence_guidance(low_confidence_adjustment)
+        else:
+            presentation_fallback_reason = PRESENTATION_FALLBACK_NONE
+            low_confidence_guidance = None
+    except Exception:
+        presentation_fallback_reason = "none"
+        low_confidence_guidance = None
+        low_confidence_adjustment = None
+
+    # Issue #204 Slice 7 — parse/validate operator blueprint before LLM.
+    # Strict standalone CLI (strict=True + TTY): BlueprintError → exit 2.
+    # Hook / non-TTY: fall closed to deterministic priors; never block commit.
+    if blueprint:
+        from git_cg.commit_quality import (
+            BlueprintError,
+            constraints_from_paths,
+            format_blueprint_guidance,
+            parse_commit_blueprint,
+            semver_presentation_ceiling,
+            validate_blueprint_against_constraints,
+        )
+
+        try:
+            # Prefer the already-resolved repo root from generation setup.
+            repo_root_for_bp = repo_root if repo_root not in (None, "") else None
+            if repo_root_for_bp is None:
+                try:
+                    repo_root_for_bp = subprocess.check_output(
+                        ["git", "rev-parse", "--show-toplevel"], text=True
+                    ).strip()
+                except Exception:
+                    repo_root_for_bp = None
+            parsed_blueprint = parse_commit_blueprint(
+                blueprint,
+                repo_root=repo_root_for_bp,
+                cwd=os.getcwd(),
+            )
+            staged_for_bp = list(getattr(gen_context.diff_signals, "files", None) or [])
+            bp_constraints = getattr(gen_context, "presentation_constraints", None)
+            if bp_constraints is None:
+                bp_constraints = constraints_from_paths(staged_for_bp, signals=gen_context.diff_signals)
+            bp_ceiling = semver_presentation_ceiling(staged_for_bp, gen_context.diff_signals)
+            validate_blueprint_against_constraints(parsed_blueprint, bp_constraints, ceiling=bp_ceiling)
+            blueprint_guidance = format_blueprint_guidance(parsed_blueprint)
+        except BlueprintError as bp_exc:
+            kind = getattr(bp_exc, "kind", "blueprint") or "blueprint"
+            # Never include raw blueprint payload in the operator message.
+            safe_msg = str(bp_exc).split(":")[0][:120]
+            # Standalone interactive CLI hard-fails; hooks must not block.
+            hard_fail = bool(strict) and bool(tty_ok)
+            if hard_fail:
+                console.print(f"[bold red]Blueprint rejected:[/bold red] {safe_msg}")
+                raise typer.Exit(code=2) from bp_exc
+            presentation_fallback_reason = "error" if kind == "error" else "blueprint"
+            parsed_blueprint = None
+            blueprint_guidance = None
+            blueprint_applied = False
+            # Operator explicitly passed --blueprint: always surface the safe
+            # rejection notice (hooks still fall open and do not hard-fail).
+            console.print(f"[yellow]Blueprint ignored ({presentation_fallback_reason}): {safe_msg}[/yellow]")
+        except Exception as bp_exc:
+            hard_fail = bool(strict) and bool(tty_ok)
+            safe_msg = type(bp_exc).__name__
+            if hard_fail:
+                console.print(f"[bold red]Blueprint rejected:[/bold red] {safe_msg}")
+                raise typer.Exit(code=2) from bp_exc
+            presentation_fallback_reason = "error"
+            parsed_blueprint = None
+            blueprint_guidance = None
+            blueprint_applied = False
+            console.print(f"[yellow]Blueprint ignored (error): {safe_msg}[/yellow]")
+
     while True:
         regen_state = RegenerationState(
             previous_plan=review_state.commit_plan if review_state else None,
@@ -2653,6 +3041,25 @@ def _run_commit_generation(
                 f"requested lock was {reason}; falling through to normal contract precedence.[/yellow]"
             )
 
+        # Slice 7: fold blueprint presentation pressure into the existing guidance
+        # channel (no raw JSON). Path-class envelope still wins post-LLM.
+        _presentation_guidance = low_confidence_guidance
+        if blueprint_guidance:
+            if _presentation_guidance:
+                _presentation_guidance = f"{blueprint_guidance}\n\n{_presentation_guidance}"
+            else:
+                _presentation_guidance = blueprint_guidance
+        # Slice 8: fold guard findings into presentation guidance on shared regen.
+        # When Context:/Changes: is already banned by guards, do not re-append the
+        # low-confidence skeleton block (even Hybrid-safe) ahead of the repair order —
+        # guard findings must be the dominant wording pressure on retry.
+        if guard_guidance:
+            if "GUARD_CONTEXT_CHANGES_TEMPLATE" in guard_guidance:
+                _presentation_guidance = guard_guidance
+            elif _presentation_guidance:
+                _presentation_guidance = f"{guard_guidance}\n\n{_presentation_guidance}"
+            else:
+                _presentation_guidance = guard_guidance
         system_prompt = build_system_prompt(
             analysis_diff,
             verbose,
@@ -2663,6 +3070,10 @@ def _run_commit_generation(
             contract=contract,
             gold_guidance=gold_guidance,
             scoped_history_guidance=scoped_history_guidance,
+            staged_paths=list(getattr(gen_context.diff_signals, "files", None) or []),
+            concern_tags=None,
+            claim_tags=harvested_claim_tags,
+            low_confidence_guidance=_presentation_guidance,
         )
 
         # Offline prompt tracking (synced asynchronously via script)
@@ -2707,8 +3118,200 @@ def _run_commit_generation(
                 )
                 _abort(f"[bold red]Error generating commit message from AI:[/bold red] {e}", strict=strict)
 
+        # Slice 5.5: capture raw LLM SemVer before contract enforcement / presentation.
+        try:
+            _raw = getattr(commit_plan.primary_intent, "semver_impact", None)
+            llm_raw_semver = (
+                str(_raw.value).upper()
+                if hasattr(_raw, "value")
+                else (str(_raw).strip().upper() if _raw is not None else None)
+            )
+            if llm_raw_semver not in {"NONE", "PATCH", "MINOR", "MAJOR"}:
+                llm_raw_semver = None
+        except Exception:
+            llm_raw_semver = None
+        try:
+            contract_locked_semver = str(getattr(contract, "semver_impact", "") or "").upper() or None
+            if contract_locked_semver not in {"NONE", "PATCH", "MINOR", "MAJOR"}:
+                contract_locked_semver = None
+        except Exception:
+            contract_locked_semver = None
+
         # Always enforce the pre-resolved SOP contract after model render.
         commit_plan = enforce_semantic_contract(commit_plan, contract, active_directives)
+        # Issue #204: presentation overlay (path-class / SemVer ceiling / type
+        # dominance / changelog allowlist). Never mutates ranked intent_id/gitmoji.
+        presentation_overlay_applied = False
+        try:
+            from git_cg.commit_quality import apply_presentation_overlay
+
+            staged_paths = list(getattr(gen_context.diff_signals, "files", None) or [])
+            # Slice 5: seed presentation from TrailerPriors under low confidence first
+            # (identity-preserving). Path-class overlay runs after so D11 envelope wins
+            # over low-confidence priors when they disagree (locked precedence).
+            if low_confidence_adjustment is not None and getattr(low_confidence_adjustment, "active", False):
+                from git_cg.commit_quality import (
+                    apply_low_confidence_presentation,
+                    apply_presentation_seed,
+                    derive_trailer_priors,
+                )
+                from git_cg.models import TrailerPriors
+
+                seed_priors = gen_context.scope_priors
+                if not isinstance(seed_priors, TrailerPriors):
+                    seed_priors = derive_trailer_priors(
+                        staged_paths,
+                        signals=gen_context.diff_signals,
+                    )
+                seeded = apply_low_confidence_presentation(
+                    commit_plan,
+                    gen_context.ranking_confidence,
+                    seed_priors,
+                )
+                commit_plan = apply_presentation_seed(commit_plan, seeded)
+                if seeded.active:
+                    presentation_fallback_reason = seeded.fallback_reason
+                    presentation_touched_semver = True
+            # Slice 7: apply legal blueprint overlay before path-class envelope so
+            # path-class / ceilings retain precedence (Approval locks §I).
+            if parsed_blueprint is not None:
+                from git_cg.commit_quality import (
+                    BlueprintError as _BlueprintError,
+                    apply_blueprint,
+                    constraints_from_paths as _constraints_from_paths,
+                    semver_presentation_ceiling as _ceiling_fn,
+                )
+
+                try:
+                    _bp_cons = gen_context.presentation_constraints
+                    if _bp_cons is None:
+                        _bp_cons = _constraints_from_paths(staged_paths, signals=gen_context.diff_signals)
+                    _bp_ceil = _ceiling_fn(staged_paths, gen_context.diff_signals)
+                    _bp_state = apply_blueprint(
+                        commit_plan,
+                        parsed_blueprint,
+                        _bp_cons,
+                        ceiling=_bp_ceil,
+                        paths=staged_paths,
+                        signals=gen_context.diff_signals,
+                    )
+                    commit_plan = _bp_state.plan
+                    blueprint_applied = bool(_bp_state.blueprint_applied)
+                    presentation_touched_semver = True
+                except _BlueprintError as _bp_apply_exc:
+                    kind = getattr(_bp_apply_exc, "kind", "blueprint") or "blueprint"
+                    hard_fail = bool(strict) and bool(tty_ok)
+                    if hard_fail:
+                        safe_msg = str(_bp_apply_exc).split(":")[0][:120]
+                        console.print(f"[bold red]Blueprint rejected:[/bold red] {safe_msg}")
+                        raise typer.Exit(code=2) from _bp_apply_exc
+                    presentation_fallback_reason = "error" if kind == "error" else "blueprint"
+                    blueprint_applied = False
+                    console.print(f"[yellow]Blueprint apply skipped ({presentation_fallback_reason})[/yellow]")
+                except Exception as _bp_apply_exc:
+                    hard_fail = bool(strict) and bool(tty_ok)
+                    if hard_fail:
+                        console.print(f"[bold red]Blueprint rejected:[/bold red] {type(_bp_apply_exc).__name__}")
+                        raise typer.Exit(code=2) from _bp_apply_exc
+                    presentation_fallback_reason = "error"
+                    blueprint_applied = False
+                    console.print("[yellow]Blueprint apply skipped (error)[/yellow]")
+            commit_plan = apply_presentation_overlay(
+                commit_plan,
+                paths=staged_paths,
+                signals=gen_context.diff_signals,
+                priors=gen_context.scope_priors,
+                constraints=gen_context.presentation_constraints,
+                active_directives=active_directives,
+            )
+            presentation_overlay_applied = True
+            presentation_touched_semver = True
+        except typer.Exit:
+            # Controlled aborts from blueprint hard-fail must propagate.
+            raise
+        except Exception as overlay_exc:
+            # Presentation overlay must not brick commit generation, but do not
+            # silently swallow unexpected failures without a breadcrumb.
+            if verbose:
+                console.log(
+                    f"[yellow]Presentation overlay skipped ({type(overlay_exc).__name__}: {overlay_exc})[/yellow]"
+                )
+        # Slice 5 hotfix (#204): presentation seed/overlay must never demote the
+        # locked SOP contract SemVer. Lift-only — never raise inside the hook path.
+        # enforce_semantic_contract runs *before* presentation; this re-asserts the
+        # contract as a hard lower bound after any ceiling/seed clamp.
+        try:
+            commit_plan, contract_lift_applied, contract_lift_from_semver = lift_plan_to_contract_semver(
+                commit_plan, contract
+            )
+            if contract_lift_applied and verbose:
+                console.log(
+                    f"[yellow]Contract lift: primary.semver_impact "
+                    f"{contract_lift_from_semver} → {contract.semver_impact} "
+                    f"(locked {contract.primary_intent_id}/{contract.cc_type})[/yellow]"
+                )
+        except Exception:
+            # Lift is best-effort — never brick commit generation.
+            contract_lift_applied = False
+            contract_lift_from_semver = None
+        # Slice 5.5 residual floor: re-assert lift immediately before advisory merge /
+        # gold / persist so no later pure path can leave a demoted SemVer.
+        try:
+            commit_plan, _re_lift, _re_from = lift_plan_to_contract_semver(commit_plan, contract)
+            if _re_lift:
+                contract_lift_applied = True
+                if contract_lift_from_semver is None:
+                    contract_lift_from_semver = _re_from
+        except Exception:
+            pass
+        # Capture persisted primary SemVer + evaluate lifecycle snapshot.
+        try:
+            _pers = getattr(commit_plan.primary_intent, "semver_impact", None)
+            plan_persisted_semver = (
+                str(_pers.value).upper()
+                if hasattr(_pers, "value")
+                else (str(_pers).strip().upper() if _pers is not None else None)
+            )
+            if plan_persisted_semver not in {"NONE", "PATCH", "MINOR", "MAJOR"}:
+                plan_persisted_semver = None
+        except Exception:
+            plan_persisted_semver = None
+        try:
+            lifecycle = evaluate_contract_lifecycle(
+                locked_semver=contract_locked_semver or getattr(contract, "semver_impact", None),
+                llm_raw_semver=llm_raw_semver,
+                persisted_semver=plan_persisted_semver,
+                lift_applied=contract_lift_applied,
+                lift_from_semver=contract_lift_from_semver,
+                presentation_touched=presentation_touched_semver,
+            )
+            contract_locked_semver = lifecycle.contract_locked_semver
+            llm_raw_semver = lifecycle.llm_raw_semver
+            plan_persisted_semver = lifecycle.plan_persisted_semver
+            contract_violation = lifecycle.contract_violation
+            plan_normaliser_applied = lifecycle.plan_normaliser_applied
+            plan_normaliser_reason = lifecycle.plan_normaliser_reason
+            if contract_lift_applied:
+                contract_lift_from_semver = lifecycle.contract_lift_from_semver
+        except Exception:
+            contract_violation = False
+            plan_normaliser_applied = bool(contract_lift_applied)
+            plan_normaliser_reason = "contract_lift" if contract_lift_applied else "none"
+        if contract_violation:
+            try:
+                from git_cg.sentry_config import report_commit_plan_contract_violation
+                from git_cg.telemetry import compute_diff_hash
+
+                report_commit_plan_contract_violation(
+                    locked_semver=contract_locked_semver,
+                    persisted_semver=plan_persisted_semver,
+                    lift_applied=contract_lift_applied,
+                    lift_from_semver=contract_lift_from_semver,
+                    normaliser_reason=plan_normaliser_reason,
+                    diff_hash=compute_diff_hash(analysis_diff) if analysis_diff else None,
+                )
+            except Exception:
+                pass
         # Phase 9: advisory OR-merge for split_recommended + rationale notes only.
         # Never mutates intent_id / gitmoji / cc_type / semver / changelog authority.
         try:
@@ -2778,6 +3381,107 @@ def _run_commit_generation(
         if regeneration_guidance:
             review_state.set_regeneration_guidance(regeneration_guidance)
 
+        # Issue #204 Slice 8 — hallucination / craft guards (D14/D21).
+        # Shares gold_regen_attempts ceiling (I-14); non-blocking on hooks after exhaustion
+        # via deterministic priors/skeleton fallback.
+        try:
+            from git_cg.commit_quality import (
+                apply_guard_skeleton_fallback,
+                evaluate_presentation_guards,
+                format_guard_guidance,
+                merge_presentation_fallback_reason,
+                try_repair_presentation_guards,
+            )
+
+            _guard_paths = list(getattr(gen_context.diff_signals, "files", None) or [])
+            _guard_report = evaluate_presentation_guards(
+                commit_plan,
+                paths=_guard_paths,
+                signals=gen_context.diff_signals,
+                evidence_text=analysis_diff or "",
+                constraints=getattr(gen_context, "presentation_constraints", None),
+            )
+            if _guard_report.hallucination_guard_fired:
+                hallucination_guard_fired = True
+            if _guard_report.dirty:
+                # Deterministic wording repair first (security-noun scrub). This keeps
+                # gold-strict usable when the model keeps emitting banned claim nouns:
+                # repair is presentation-only and does not mark skeleton provenance.
+                commit_plan, _guard_report, _guard_repaired = try_repair_presentation_guards(
+                    commit_plan,
+                    paths=_guard_paths,
+                    signals=gen_context.diff_signals,
+                    evidence_text=analysis_diff or "",
+                    constraints=getattr(gen_context, "presentation_constraints", None),
+                    report=_guard_report,
+                )
+                if _guard_repaired:
+                    review_state.commit_plan = commit_plan
+                    guard_guidance = None
+                    if verbose or gold_mode != "off":
+                        console.print(
+                            "[yellow]Presentation guard: applied deterministic security-noun "
+                            "repair (no skeleton provenance).[/yellow]"
+                        )
+                    # Fall through to gold with the repaired plan.
+                else:
+                    presentation_fallback_reason = merge_presentation_fallback_reason(
+                        presentation_fallback_reason,
+                        _guard_report.fallback_reason,
+                    )
+                    with contextlib.suppress(Exception):
+                        sentry_sdk.set_tag("presentation_fallback_reason", str(presentation_fallback_reason))
+                        sentry_sdk.set_tag("path_class_gate", str(path_class_gate))
+                        sentry_sdk.set_tag(
+                            "hallucination_guard_fired",
+                            "true" if hallucination_guard_fired else "false",
+                        )
+                    if gold_regen_attempts >= 2:
+                        # Exhausted shared wording budget → deterministic skeleton (D14).
+                        commit_plan = apply_guard_skeleton_fallback(
+                            commit_plan,
+                            paths=_guard_paths,
+                            signals=gen_context.diff_signals,
+                            priors=gen_context.scope_priors,
+                            constraints=gen_context.presentation_constraints,
+                            claim_tags=harvested_claim_tags,
+                            report=_guard_report,
+                        )
+                        review_state.commit_plan = commit_plan
+                        guard_guidance = None
+                        # Fresh gold evaluation against the skeleton; do not inherit prior gold codes.
+                        gold_guidance = None
+                        gold_previous_codes = None
+                        if verbose:
+                            console.log(
+                                "[yellow]Presentation guards exhausted shared regen budget; "
+                                "applied deterministic skeleton fallback.[/yellow]"
+                            )
+                    else:
+                        # Shared wording budget with gold (I-14). Clear gold guidance/codes so a
+                        # guard retry does not re-anchor on stale gold findings.
+                        gold_regen_attempts += 1
+                        guard_guidance = format_guard_guidance(_guard_report)
+                        gold_guidance = None
+                        gold_previous_codes = None
+                        gold_previous_primary_id = commit_plan.primary_intent.intent_id
+                        if verbose or gold_mode != "off":
+                            codes = ", ".join(sorted(_guard_report.codes()))
+                            console.print(
+                                f"[yellow]Presentation guard ({_guard_report.fallback_reason}): {codes} "
+                                f"(shared regen {gold_regen_attempts}/2)[/yellow]"
+                            )
+                        continue
+            else:
+                guard_guidance = None
+        except typer.Exit:
+            # Controlled aborts (e.g. strict blueprint / gold hard-fail) must propagate.
+            raise
+        except Exception as _guard_exc:
+            # Guards must never brick commit generation.
+            if verbose:
+                console.log(f"[yellow]Presentation guards skipped ({type(_guard_exc).__name__}: {_guard_exc})[/yellow]")
+
         # Issue #182 / #191: gold runs after mixed-policy and ReviewState construction,
         # before render/write/acceptance display. Findings print unconditionally in
         # warn/surface/strict (never verbose-gated); pass/fail derives from
@@ -2788,6 +3492,7 @@ def _run_commit_generation(
             contract,
             signals=gen_context.diff_signals,
             ranked_intents=gen_context.ranked_intents,
+            presentation_overlay_applied=presentation_overlay_applied,
         )
         review_state.gold_findings = list(gold_report.findings)
         # P6 telemetry: structured signal from GoldFinding.split_preferred (not message prose).
@@ -2834,6 +3539,16 @@ def _run_commit_generation(
                 gold_self_correction_outcome=gold_self_correction_outcome,
             )
             # Persist v1.1 outcome before abort so Opik state captures the fail mode.
+            path_class_gate, changelog_antisignal_applied, _scope_from = _presentation_telemetry_from_context(
+                gen_context,
+                commit_plan=getattr(review_state, "commit_plan", None) if review_state is not None else None,
+                preferred_scope_raw=(active_directives or {}).get("preferred_scope"),
+            )
+            _stashed = getattr(getattr(review_state, "commit_plan", None), "_scope_normalised_from", None)
+            if _stashed and str(_stashed) != "none":
+                scope_normalised_from = str(_stashed)
+            elif _scope_from != "none":
+                scope_normalised_from = _scope_from
             _write_telemetry_state_safe(
                 review_state=review_state,
                 diff_output=analysis_diff,
@@ -2905,6 +3620,20 @@ def _run_commit_generation(
                 structural_error_handling=structural_error_handling,
                 structural_public_api=structural_public_api,
                 structural_new_command=structural_new_command,
+                presentation_fallback_reason=presentation_fallback_reason,
+                blueprint_applied=blueprint_applied,
+                hallucination_guard_fired=hallucination_guard_fired,
+                path_class_gate=path_class_gate,
+                changelog_antisignal_applied=changelog_antisignal_applied,
+                scope_normalised_from=scope_normalised_from,
+                contract_lift_applied=contract_lift_applied,
+                contract_lift_from_semver=contract_lift_from_semver,
+                contract_locked_semver=contract_locked_semver,
+                llm_raw_semver=llm_raw_semver,
+                plan_persisted_semver=plan_persisted_semver,
+                contract_violation=contract_violation,
+                plan_normaliser_applied=plan_normaliser_applied,
+                plan_normaliser_reason=plan_normaliser_reason,
             )
             _abort(
                 "[bold red]Commit message failed gold lint in strict mode: "
@@ -2977,6 +3706,16 @@ def _run_commit_generation(
 
         break
 
+    path_class_gate, changelog_antisignal_applied, _scope_from = _presentation_telemetry_from_context(
+        gen_context,
+        commit_plan=getattr(review_state, "commit_plan", None) if review_state is not None else None,
+        preferred_scope_raw=(active_directives or {}).get("preferred_scope") if active_directives else None,
+    )
+    _stashed = getattr(getattr(review_state, "commit_plan", None), "_scope_normalised_from", None)
+    if _stashed and str(_stashed) != "none":
+        scope_normalised_from = str(_stashed)
+    elif _scope_from != "none":
+        scope_normalised_from = _scope_from
     _write_telemetry_state_safe(
         review_state=review_state,
         diff_output=analysis_diff,
@@ -3046,6 +3785,20 @@ def _run_commit_generation(
         structural_error_handling=structural_error_handling,
         structural_public_api=structural_public_api,
         structural_new_command=structural_new_command,
+        presentation_fallback_reason=presentation_fallback_reason,
+        blueprint_applied=blueprint_applied,
+        hallucination_guard_fired=hallucination_guard_fired,
+        path_class_gate=path_class_gate,
+        changelog_antisignal_applied=changelog_antisignal_applied,
+        scope_normalised_from=scope_normalised_from,
+        contract_lift_applied=contract_lift_applied,
+        contract_lift_from_semver=contract_lift_from_semver,
+        contract_locked_semver=contract_locked_semver,
+        llm_raw_semver=llm_raw_semver,
+        plan_persisted_semver=plan_persisted_semver,
+        contract_violation=contract_violation,
+        plan_normaliser_applied=plan_normaliser_applied,
+        plan_normaliser_reason=plan_normaliser_reason,
     )
 
     opik.flush_tracker()
@@ -3101,6 +3854,14 @@ def main_callback(
         False,
         "--gold-strict",
         help="Resolve gold lint to strict mode without enabling general --strict.",
+    ),
+    blueprint: str | None = typer.Option(
+        None,
+        "--blueprint",
+        help=(
+            "Optional presentation CommitBlueprint as inline JSON or @path.json "
+            "(max 64KiB; never overrides ranked intent_id)."
+        ),
     ),
     engine: str = typer.Option(
         os.environ.get("GIT_CG_ENGINE") or "mtplx",
@@ -3169,6 +3930,7 @@ def main_callback(
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
         rank_arbitrate=rank_arbitrate,
+        blueprint=blueprint,
     )
     if not dry_run:
         _apply_standalone_commit(commit_msg_file, strict=strict)
@@ -3227,6 +3989,14 @@ def commit(
             "(default: GIT_CG_RANK_ARBITRATE env or auto)."
         ),
     ),
+    blueprint: str | None = typer.Option(
+        None,
+        "--blueprint",
+        help=(
+            "Optional presentation CommitBlueprint as inline JSON or @path.json "
+            "(max 64KiB; never overrides ranked intent_id)."
+        ),
+    ),
 ) -> None:
     """Generate an AI commit message based on staged changes."""
     _run_commit_generation(
@@ -3243,7 +4013,174 @@ def commit(
         enable_semantic=enable_semantic,
         gold_strict=gold_strict,
         rank_arbitrate=rank_arbitrate,
+        blueprint=blueprint,
     )
+
+
+@app.command("preflight")
+def preflight(
+    paths: list[str] | None = typer.Argument(
+        None,
+        help="Optional staged-path overrides. Defaults to `git diff --cached --name-only`.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON instead of human tables.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Include stub notes and theme bullets."),
+) -> None:
+    """Print a read-only diff-class / path-class preflight summary (Issue #204).
+
+    Does not invoke the LLM, ranker, hooks, or git writes. Safe for CI and local
+    operator dry-runs before commit generation.
+    """
+    import json as _json
+    import subprocess as _subprocess
+
+    from git_cg.commit_quality import (
+        build_high_risk_checklist_themes,
+        build_included_change_stubs,
+        classify_diff_class,
+        constraints_from_paths,
+        derive_trailer_priors,
+        detect_high_risk_surfaces,
+        format_high_risk_body_checklist,
+        presentation_constraints,
+        semver_presentation_ceiling,
+    )
+
+    resolved: list[str] = []
+    if paths:
+        resolved = [str(p).strip() for p in paths if str(p).strip()]
+    else:
+        try:
+            proc = _subprocess.run(
+                ["git", "diff", "--cached", "--name-only", "-z"],
+                check=False,
+                capture_output=True,
+                text=False,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                resolved = [p.decode("utf-8", "surrogateescape") for p in proc.stdout.split(b"\0") if p]
+        except OSError as exc:
+            console.print(f"[red]preflight could not read staged paths: {type(exc).__name__}[/red]")
+            raise typer.Exit(code=1) from exc
+
+    # Preserve order, drop blanks/dupes.
+    seen: set[str] = set()
+    clean_paths: list[str] = []
+    for raw in resolved:
+        item = raw.strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        clean_paths.append(item)
+
+    diff_class = classify_diff_class(clean_paths)
+    cons = constraints_from_paths(clean_paths)
+    # constraints_from_paths may already embed class; keep presentation_constraints as fallback.
+    if cons is None:
+        cons = presentation_constraints(diff_class)
+    priors = derive_trailer_priors(clean_paths)
+    ceiling = semver_presentation_ceiling(clean_paths)
+    surfaces = detect_high_risk_surfaces(clean_paths)
+    themes = build_high_risk_checklist_themes(clean_paths)
+    stubs = build_included_change_stubs(clean_paths)
+
+    payload = {
+        "paths": clean_paths,
+        "path_count": len(clean_paths),
+        "diff_class": getattr(diff_class, "name", str(diff_class)),
+        "has_runtime_surface": bool(getattr(diff_class, "has_runtime_surface", False)),
+        "force_cc_type": getattr(getattr(cons, "force_cc_type", None), "value", None),
+        "forbid_cc_types": sorted(getattr(cons, "forbid_cc_types", ()) or ()),
+        "force_semver": getattr(getattr(cons, "force_semver", None), "value", None),
+        "force_scope": getattr(cons, "force_scope", None),
+        "force_changelog_group": getattr(cons, "force_changelog_group", None),
+        "semver_ceiling": getattr(ceiling, "value", str(ceiling)),
+        "priors": {
+            "role": getattr(priors, "role", None),
+            "cc_type": getattr(getattr(priors, "cc_type", None), "value", None),
+            "semver_impact": getattr(getattr(priors, "semver_impact", None), "value", None),
+            "changelog_group": getattr(priors, "changelog_group", None),
+            "scope_hint": getattr(priors, "scope_hint", None),
+        },
+        "high_risk_surfaces": list(surfaces),
+        "high_risk_themes": list(themes),
+        "included_change_stubs": [
+            {
+                "role": s.role,
+                "surface": s.surface,
+                "suggested_cc_type": s.suggested_cc_type.value,
+                "scope": s.scope,
+                "note": s.note,
+                "claim_tags": list(s.claim_tags),
+                "source": s.source,
+            }
+            for s in stubs
+        ],
+        "empty_or_unknown": not clean_paths,
+    }
+
+    if json_out:
+        typer.echo(_json.dumps(payload, indent=2, sort_keys=True))
+        raise typer.Exit(code=0)
+
+    console.print(Panel("[bold green]git-cg preflight[/bold green] (read-only · no LLM · no ranker)"))
+    if not clean_paths:
+        console.print("[yellow]No paths resolved (empty staged set or unknown).[/yellow]")
+    else:
+        console.print(f"[cyan]paths[/cyan] ({len(clean_paths)}):")
+        for p in clean_paths[:40]:
+            console.print(f"  - {p}")
+        if len(clean_paths) > 40:
+            console.print(f"  … +{len(clean_paths) - 40} more")
+
+    table = Table(title="Path-class envelope", show_lines=True)
+    table.add_column("Field", style="magenta")
+    table.add_column("Value", style="white")
+    table.add_row("diff_class", str(payload["diff_class"]))
+    table.add_row("has_runtime_surface", str(payload["has_runtime_surface"]))
+    table.add_row("force_cc_type", str(payload["force_cc_type"]))
+    table.add_row("forbid_cc_types", ", ".join(payload["forbid_cc_types"]) or "—")
+    table.add_row("force_semver", str(payload["force_semver"]))
+    table.add_row("semver_ceiling", str(payload["semver_ceiling"]))
+    table.add_row("force_scope", str(payload["force_scope"]))
+    table.add_row("force_changelog_group", str(payload["force_changelog_group"]))
+    table.add_row("prior.role", str(payload["priors"]["role"]))
+    table.add_row("prior.cc_type", str(payload["priors"]["cc_type"]))
+    table.add_row("prior.scope_hint", str(payload["priors"]["scope_hint"]))
+    console.print(table)
+
+    if surfaces or themes:
+        console.print("[cyan]high-risk surfaces[/cyan]: " + (", ".join(surfaces) if surfaces else "—"))
+        console.print("[cyan]high-risk themes[/cyan]: " + (", ".join(themes) if themes else "—"))
+        if verbose:
+            checklist = format_high_risk_body_checklist(clean_paths, themes=themes)
+            if checklist:
+                console.print(Panel(checklist, title="High-risk checklist", border_style="yellow"))
+    else:
+        console.print("[dim]No high-risk surfaces detected.[/dim]")
+
+    if stubs:
+        stub_table = Table(title="Included-change stubs", show_lines=False)
+        stub_table.add_column("role")
+        stub_table.add_column("surface")
+        stub_table.add_column("cc_type")
+        stub_table.add_column("scope")
+        if verbose:
+            stub_table.add_column("note")
+        for s in stubs:
+            row = [s.role, s.surface, s.suggested_cc_type.value, str(s.scope or "")]
+            if verbose:
+                row.append(str(s.note or ""))
+            stub_table.add_row(*row)
+        console.print(stub_table)
+    else:
+        console.print("[dim]No included-change stubs (single-surface / no pressure).[/dim]")
+
+    raise typer.Exit(code=0)
 
 
 @app.command("sop")
@@ -3526,6 +4463,25 @@ def record_telemetry(
                     "ranking_override": bool(telemetry_state.get("ranking_override", False)),
                     "ranking_arbitrate_effective": telemetry_state.get("ranking_arbitrate_effective"),
                     "lock_resolution": telemetry_state.get("lock_resolution", "absent"),
+                    # Issue #204 Slice 5 presentation fallback (closed vocab).
+                    "presentation_fallback_reason": telemetry_state.get("presentation_fallback_reason", "none"),
+                    # Issue #204 Slice 7: blueprint applied (bool only).
+                    "blueprint_applied": bool(telemetry_state.get("blueprint_applied", False)),
+                    "hallucination_guard_fired": bool(telemetry_state.get("hallucination_guard_fired", False)),
+                    # Issue #204 Slice 10 / D26: remaining presentation observability.
+                    "path_class_gate": telemetry_state.get("path_class_gate", "none"),
+                    "changelog_antisignal_applied": bool(telemetry_state.get("changelog_antisignal_applied", False)),
+                    "scope_normalised_from": telemetry_state.get("scope_normalised_from", "none"),
+                    # Issue #204 Slice 5 hotfix: contract-lift breadcrumbs (closed vocab).
+                    "contract_lift_applied": bool(telemetry_state.get("contract_lift_applied", False)),
+                    "contract_lift_from_semver": telemetry_state.get("contract_lift_from_semver"),
+                    # Issue #204 Slice 5.5: contract lifecycle (closed vocab).
+                    "contract_locked_semver": telemetry_state.get("contract_locked_semver"),
+                    "llm_raw_semver": telemetry_state.get("llm_raw_semver"),
+                    "plan_persisted_semver": telemetry_state.get("plan_persisted_semver"),
+                    "contract_violation": bool(telemetry_state.get("contract_violation", False)),
+                    "plan_normaliser_applied": bool(telemetry_state.get("plan_normaliser_applied", False)),
+                    "plan_normaliser_reason": telemetry_state.get("plan_normaliser_reason", "none"),
                     # Phase 7.25 gold parity (absorbed into #195).
                     "gold_mode": telemetry_state.get("gold_mode", "off"),
                     "gold_findings_count": telemetry_state.get("gold_findings_count", 0),
@@ -3540,6 +4496,12 @@ def record_telemetry(
                         "name": "ranking_override",
                         "value": 1.0 if bool(telemetry_state.get("ranking_override")) else 0.0,
                         "reason": "ranking_override",
+                    },
+                    # Issue #204 Slice 5.5: contract_consistent = 1.0 when no violation.
+                    {
+                        "name": "contract_consistent",
+                        "value": (0.0 if bool(telemetry_state.get("contract_violation", False)) else 1.0),
+                        "reason": str(telemetry_state.get("plan_normaliser_reason") or "none"),
                     },
                 ],
                 thread_id=thread_id,

@@ -1,0 +1,46 @@
+bytes 3416
+top_keys ['affected_flows_count', 'blast_radius_size', 'blueprint_applied', 'body_similarity_avg', 'body_similarity_min', 'changelog_antisignal_applied', 'commit_plan_json', 'contract_lift_applied', 'contract_lift_from_semver', 'contract_locked_semver', 'contract_violation', 'diff_hash', 'diff_output', 'engine', 'fingerprint_class_counts', 'fingerprint_files_compared', 'fingerprint_grammar_version', 'fingerprint_latency_ms', 'fingerprint_markers', 'generated_message', 'gold_blocked', 'gold_finding_codes', 'gold_findings_count', 'gold_mode', 'gold_regen_attempts', 'gold_self_correction_attempts', 'gold_self_correction_outcome', 'gold_split_recommendation', 'graph_build_latency_ms', 'graph_query_latency_ms', 'graph_schema_version', 'hallucination_guard_fired', 'llm_raw_semver', 'lock_resolution', 'model_name', 'parser_latency_ms', 'path_class_gate', 'plan_normaliser_applied', 'plan_normaliser_reason', 'plan_persisted_semver', 'preflight_fallback_reason', 'preflight_groups_count', 'preflight_mode', 'presentation_fallback_reason', 'ranking_arbitrate_effective', 'ranking_choice_path', 'ranking_confidence_level', 'ranking_confidence_margin', 'ranking_confidence_reasons', 'ranking_override', 'rename_confidence', 'repo_name', 'scope_normalised_from', 'scoped_history_fallback_reason', 'scoped_history_guidance', 'scoped_history_latency_ms', 'scoped_history_rename_rationale', 'scoped_history_split_high_confidence', 'scoped_history_split_rationale', 'score_card', 'semantic_context_fallback_reasons', 'semantic_context_schema_version', 'semantic_enabled', 'semantic_parser_metrics', 'semantic_refresh_graph', 'shadow_fail_open_reason', 'shadow_workspace_used', 'structural_error_handling', 'structural_new_command', 'structural_public_api', 'system_prompt_hash', 'test_coverage_gap', 'test_gaps_count', 'thread_id', 'trace_id']
+commit_plan_json._redaction: "failed"
+contract_lift_applied: false
+contract_lift_from_semver: null
+contract_locked_semver: "PATCH"
+contract_violation: false
+engine: "mtplx"
+generated_message: "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
+gold_blocked: false
+gold_finding_codes: []
+gold_findings_count: 0
+gold_mode: "strict"
+gold_regen_attempts: 1
+gold_self_correction_attempts: 1
+gold_self_correction_outcome: "cleared"
+gold_split_recommendation: false
+hallucination_guard_fired: false
+llm_raw_semver: "PATCH"
+model_name: "mtplx-qwen36-27b-optimized-speed"
+path_class_gate: "empty"
+plan_persisted_semver: "PATCH"
+presentation_fallback_reason: "none"
+ranking_arbitrate_effective: "skipped_high_medium"
+ranking_choice_path: "skipped_high_medium"
+ranking_confidence_level: "medium"
+ranking_confidence_margin: 13.5
+ranking_confidence_reasons: []
+ranking_override: false
+scope_normalised_from: "none"
+scoped_history_fallback_reason: "none"
+scoped_history_guidance: null
+scoped_history_latency_ms: 0.0
+scoped_history_rename_rationale: ""
+scoped_history_split_high_confidence: false
+scoped_history_split_rationale: ""
+score_card.emoji_matrix_aligned: true
+score_card.semver_consistent: true
+--- message file ---
+🔐 chore(docs): document review checklist for usage
+
+Guide contributors to verify commit subjects, preserve machine-readable trailers, and maintain focused change sets via a new usage documentation checklist.
+
+SemVer-Impact: PATCH
+Change-Types: chore
+Changelog-Groups: Miscellaneous

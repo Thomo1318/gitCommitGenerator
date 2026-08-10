@@ -41,7 +41,12 @@ flag "--no-rank-arbitrate" {
 }
 
 flag "--gold-strict" {
-    help "Resolve gold lint to strict mode without enabling general --strict."
+    help "Resolve presentation gold lint to strict (fail on STRICT_FAIL_CODES) without enabling general --strict. Complements path-class/hallucination gates; does not re-rank intent."
+}
+
+flag "--blueprint" {
+    help "Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB). Overlays wording only; never overrides ranked intent_id, SemVer authority, or SOP rank order."
+    arg "<BLUEPRINT>"
 }
 
 flag "-r --recover" {
@@ -56,7 +61,7 @@ cmd "commit" {
         default ".git/COMMIT_EDITMSG"
     }
     arg "<COMMIT_SOURCE>" {
-        help "Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit')"
+        help "Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit'). Set GIT_CG_SKIP_PREPARE=1 to no-op prepare-commit-msg generation for message-only rebuilds."
         required #false
         default ""
     }
@@ -73,7 +78,11 @@ cmd "commit" {
         help "Disable Phase 1 semantic producers for this run."
     }
     flag "--gold-strict" {
-        help "Resolve gold lint to strict mode without enabling general --strict."
+        help "Resolve presentation gold lint to strict (fail on STRICT_FAIL_CODES) without enabling general --strict. Complements path-class/hallucination gates; does not re-rank intent."
+    }
+    flag "--blueprint" {
+        help "Optional presentation CommitBlueprint as inline JSON or @path.json (max 64KiB). Overlays wording only; never overrides ranked intent_id, SemVer authority, or SOP rank order."
+        arg "<BLUEPRINT>"
     }
     flag "-i --interactive" {
         help "Enable terminal-native interactive review via gum when a TTY is available."
@@ -94,6 +103,21 @@ cmd "commit" {
     }
 }
 
+
+cmd "preflight" {
+    help "Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes)."
+    arg "[PATHS]" {
+        help "Optional path overrides; defaults to staged paths from git diff --cached --name-only."
+        required #false
+        var #true
+    }
+    flag "--json" {
+        help "Emit machine-readable JSON instead of human tables."
+    }
+    flag "-v --verbose" {
+        help "Include stub notes and high-risk checklist bullets."
+    }
+}
 
 cmd "sop" {
     help "Display the GitOps SOP matrices and workflows."

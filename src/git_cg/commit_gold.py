@@ -1,14 +1,19 @@
-"""Deterministic post-enforce commit-message gold linter (Issues #182 / #191).
+"""Deterministic post-enforce commit-message gold linter (Issues #182 / #191 / #204).
 
 Gold checks content quality of a structured ``CommitPlan`` *after*
 ``enforce_semantic_contract`` and the mixed-policy handle. The checker is pure:
 no I/O, no model calls, no SOP mutation, and no mutation of the plan/contract.
 
 Authority boundary (locked):
-    * The matrix ranker remains the sole ranking / ``semver_impact`` authority.
+    * The matrix ranker remains the sole ranking / identity authority
+      (``intent_id`` + matrix ``gitmoji``).
+    * Issue #204 presentation overlay may legally rewrite rendered presentation
+      fields (``cc_type``, scope, SemVer presentation, changelog group, inventory)
+      after enforce. When ``presentation_overlay_applied=True``, gold keeps
+      identity/wording checks but does not treat those presentation fields as
+      matrix-contract smoke failures.
     * Gold never emits ``preferred_type``/``preferred_scope`` steers and never
-      rewrites ``intent_id``/``gitmoji``/``cc_type``/``semver_impact``/
-      ``changelog_group``. It may only request *wording* / *secondary-coverage*
+      rewrites plan fields. It may only request *wording* / *secondary-coverage*
       regeneration via the dedicated ``gold_guidance`` channel.
 """
 
@@ -161,8 +166,30 @@ STRICT_FAIL_CODES: frozenset[str] = frozenset(
         "GOLD_SCOPE_FILENAME",
         "GOLD_SUBJECT_TITLE_CASE",
         "GOLD_SUBJECT_INVENTORY",
+        # P-S12 gold-strict truth fails (fallback / process-meta / path-class ceilings).
+        "GOLD_SKELETON_FALLBACK_FINAL",
+        "GOLD_PROCESS_META_BODY",
+        "GOLD_PATH_CLASS_SEMVER_CEILING",
+        "GOLD_PATH_CLASS_TYPE_MISMATCH",
+        "GOLD_FIXTURE_PRODUCT_FRAMING",
+        "GOLD_DOCS_IMPLEMENTATION_CLAIM",
     }
 )
+
+# Process-meta phrases that must never appear in a final accepted body (P-S12-1/2).
+_PROCESS_META_PHRASES: tuple[str, ...] = (
+    "deterministic presentation fallback",
+    "guard exhaustion",
+    "cleared guard codes",
+    "wording constrained to staged paths",
+    "path-class priors",
+    "presentation fallback after",
+    "shared regen budget",
+    "skeleton fallback",
+)
+
+# Provenance marker written into rationale by apply_guard_skeleton_fallback.
+SKELETON_FALLBACK_MARKER = "[presentation-skeleton-fallback]"
 
 # Closed imperative-verb allowlist for GOLD_SUBJECT_INVENTORY (Issue #191).
 # Matching is case-insensitive on the first alphabetic token of a clause.
@@ -648,22 +675,36 @@ def _check_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
 
 
 def _norm_gitmoji(emoji: str) -> str:
-    """Normalise a gitmoji by stripping variation selectors (U+FE0F, U+FE0E).
+    """Normalise a gitmoji for static matrix lookup (D8 confusable-aware).
 
-    The SOP matrix encodes some emoji both with and without the variation selector
-    (e.g. ``\u26a1`` and ``\u26a1\ufe0f``); normalising makes lookup selector-insensitive.
+    Delegates to :func:`git_cg.gitmoji_norm.normalize_gitmoji` so gold, models,
+    and presentation share one VS/confusable policy without a parallel invent layer.
     """
-    return emoji.replace("\ufe0f", "").replace("\ufe0e", "")
+    from git_cg.gitmoji_norm import normalize_gitmoji
+
+    return normalize_gitmoji(emoji)
 
 
-def _check_type_group_coherence(plan: CommitPlan) -> list[GoldFinding]:
+def _check_type_group_coherence(
+    plan: CommitPlan,
+    *,
+    presentation_overlay_applied: bool = False,
+) -> list[GoldFinding]:
     """Emit ``GOLD_TYPE_GROUP_INCOHERENT`` for F7 group-unreachable trailer sets.
 
     F7: every declared type (primary + secondaries) must be coherent with *every*
     declared ``Changelog-Groups`` entry under the SOP matrix. An unknown gitmoji is
     skipped (enforce owns vocabulary), never failed here. Per-gitmoji coherent
     groups come from the static normative mapping (assert-tested against the SOP).
+
+    When ``presentation_overlay_applied`` is True (Issue #204), presentation may
+    legally emit D19 groups such as ``Tests`` / ``Documentation`` that the static
+    matrix row maps only to ``Miscellaneous``. In that mode, skip the gitmoji→group
+    matrix reachability check and rely on presentation allowlist + identity smoke.
     """
+    if presentation_overlay_applied:
+        return []
+
     incoherent: list[str] = []
     for intent in (plan.primary_intent, *plan.secondary_intents):
         entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
@@ -694,13 +735,24 @@ def _intent_semver(intent) -> str:
     return str(raw or "").strip().upper()
 
 
-def _check_semver_matrix(plan: CommitPlan) -> list[GoldFinding]:
+def _check_semver_matrix(
+    plan: CommitPlan,
+    *,
+    presentation_overlay_applied: bool = False,
+) -> list[GoldFinding]:
     """Emit ``GOLD_SEMVER_MATRIX_MISMATCH`` when an intent's SemVer disagrees with the SOP (F2).
 
     Each primary/secondary gitmoji has exactly one matrix ``semver_impact``. Gold never
     invents SemVer from type names or issue drama — it only checks the structured plan
     against the static matrix. Unknown gitmojis are skipped (enforce owns vocabulary).
+
+    When ``presentation_overlay_applied`` is True (Issue #204), presentation may clamp
+    rendered SemVer below the matrix row (e.g. ✨ MINOR → PATCH/NONE ceiling). Skip the
+    exact matrix equality check in that mode; identity smoke still guards intent/gitmoji.
     """
+    if presentation_overlay_applied:
+        return []
+
     mismatches: list[str] = []
     for intent in (plan.primary_intent, *plan.secondary_intents):
         entry = GITMOJI_CC_GROUPS.get(_norm_gitmoji(intent.gitmoji))
@@ -781,12 +833,21 @@ def _check_subject_title_case(plan: CommitPlan) -> list[GoldFinding]:
     ]
 
 
-def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | None) -> list[GoldFinding]:
+def _check_contract_smoke(
+    plan: CommitPlan,
+    contract: ResolvedCommitContract | None,
+    *,
+    presentation_overlay_applied: bool = False,
+) -> list[GoldFinding]:
     """Emit ``GOLD_CONTRACT_SMOKE`` when primary fields disagree with the contract.
 
     This is a bug-class smoke (enforce should make it impossible); it may hard-fail
     independently of mode. Skipped entirely when ``contract`` is ``None`` (direct
     structured fixtures — F4).
+
+    With ``presentation_overlay_applied=True`` (Issue #204), only identity fields
+    (``intent_id``, ``gitmoji``) are smoke-checked. Presentation-owned ``cc_type``,
+    ``semver_impact``, and ``changelog_group`` may legally diverge after overlay.
     """
     if contract is None:
         return []
@@ -797,21 +858,463 @@ def _check_contract_smoke(plan: CommitPlan, contract: ResolvedCommitContract | N
         mismatches.append(f"intent_id {primary.intent_id!r} != contract {contract.primary_intent_id!r}")
     if primary.gitmoji != contract.gitmoji:
         mismatches.append(f"gitmoji {primary.gitmoji!r} != contract {contract.gitmoji!r}")
-    if primary_type != contract.cc_type:
-        mismatches.append(f"cc_type {primary_type!r} != contract {contract.cc_type!r}")
-    primary_semver = (
-        primary.semver_impact.value if hasattr(primary.semver_impact, "value") else str(primary.semver_impact)
-    )
-    if primary_semver != contract.semver_impact:
-        mismatches.append(f"semver_impact {primary_semver!r} != contract {contract.semver_impact!r}")
-    if str(primary.changelog_group) != str(contract.changelog_group):
-        mismatches.append(f"changelog_group {primary.changelog_group!r} != contract {contract.changelog_group!r}")
+    if not presentation_overlay_applied:
+        if primary_type != contract.cc_type:
+            mismatches.append(f"cc_type {primary_type!r} != contract {contract.cc_type!r}")
+        primary_semver = (
+            primary.semver_impact.value if hasattr(primary.semver_impact, "value") else str(primary.semver_impact)
+        )
+        if primary_semver != contract.semver_impact:
+            mismatches.append(f"semver_impact {primary_semver!r} != contract {contract.semver_impact!r}")
+        if str(primary.changelog_group) != str(contract.changelog_group):
+            mismatches.append(f"changelog_group {primary.changelog_group!r} != contract {contract.changelog_group!r}")
     if not mismatches:
         return []
     return [
         GoldFinding(
             code="GOLD_CONTRACT_SMOKE",
             message="Primary fields diverged from the enforced contract (bug): " + "; ".join(mismatches),
+        )
+    ]
+
+
+def _message_blob(plan: CommitPlan, *, include_rationale: bool = True) -> str:
+    """Lowercased subject+body blob for phrase matching.
+
+    ``rationale`` is internal provenance and is not rendered by ``CommitPlan.render()``.
+    Callers that inspect operator-visible wording should pass
+    ``include_rationale=False`` so non-rendered process-meta notes cannot trip
+    body/subject guards.
+    """
+    primary = plan.primary_intent
+    parts = [
+        str(getattr(primary, "description", "") or ""),
+        str(getattr(plan, "body_summary", "") or ""),
+    ]
+    if include_rationale:
+        parts.append(str(getattr(plan, "rationale", "") or ""))
+    for sec in getattr(plan, "secondary_intents", None) or []:
+        parts.append(str(getattr(sec, "description", "") or ""))
+    return "\n".join(parts).lower()
+
+
+def _is_fixture_path_gold(path: str) -> bool:
+    parts = {part.lower() for part in str(path).replace("\\", "/").split("/") if part}
+    return bool(parts & {"fixtures", "fixture", "goldens", "corpus"})
+
+
+def _is_docs_path_gold(path: str) -> bool:
+    lowered = str(path).replace("\\", "/").lower()
+    name = lowered.rsplit("/", 1)[-1]
+    return (
+        lowered.startswith("docs/")
+        or lowered.startswith("doc/")
+        or name in {"readme.md", "changelog.md", "development.md"}
+        or (name.endswith(".md") and ("/docs/" in f"/{lowered}" or "/adr" in f"/{lowered}"))
+    )
+
+
+def _is_test_path_gold(path: str) -> bool:
+    lowered = str(path).replace("\\", "/").lower()
+    parts = {p for p in lowered.split("/") if p}
+    name = lowered.rsplit("/", 1)[-1]
+    return (
+        bool(parts & {"tests", "test", "spec", "__tests__"})
+        or name.startswith("test_")
+        or ".test." in name
+        or ".spec." in name
+        or name.endswith("_test.go")
+        or _is_fixture_path_gold(path)
+    )
+
+
+def _path_family(signals: DiffSignals) -> str | None:
+    """Return pure path family: fixtures|tests|docs|None (mixed/product)."""
+    paths = [p for p in (signals.files or []) if p]
+    if not paths:
+        return None
+    if all(_is_fixture_path_gold(p) for p in paths):
+        return "fixtures"
+    if all(_is_test_path_gold(p) for p in paths):
+        return "tests"
+
+    # docs-only when every path is docs-class / doc-like text and none are
+    # non-md test modules, fixtures, or pure test .py files.
+    docs_like = all(
+        _is_docs_path_gold(p) or str(p).replace("\\", "/").lower().endswith((".md", ".rst", ".txt", ".adoc"))
+        for p in paths
+    )
+    no_non_md_tests = not any(_is_test_path_gold(p) and not str(p).lower().endswith(".md") for p in paths)
+    no_fixtures = not any(_is_fixture_path_gold(p) for p in paths)
+    no_test_py = not any(str(p).endswith(".py") and _is_test_path_gold(p) for p in paths)
+    if docs_like and no_non_md_tests and no_fixtures and no_test_py:
+        return "docs"
+
+    # broader docs: only docs paths via signals flags
+    if getattr(signals, "only_docs", False):
+        return "docs"
+    if getattr(signals, "only_fixtures", False):
+        return "fixtures"
+    if getattr(signals, "only_tests", False):
+        return "tests"
+    return None
+
+
+def _check_skeleton_and_process_meta(plan: CommitPlan) -> list[GoldFinding]:
+    """Reject skeleton fallback provenance and process-meta body phrases (P-S12)."""
+    findings: list[GoldFinding] = []
+    rationale = str(getattr(plan, "rationale", "") or "")
+    # Process-meta must inspect only rendered wording. Rationale is provenance-only
+    # and is checked separately for skeleton markers.
+    rendered_blob = _message_blob(plan, include_rationale=False)
+
+    if SKELETON_FALLBACK_MARKER in rationale or getattr(plan, "_presentation_skeleton_fallback", False):
+        findings.append(
+            GoldFinding(
+                code="GOLD_SKELETON_FALLBACK_FINAL",
+                message=(
+                    "Final plan is a presentation skeleton fallback; gold-strict "
+                    "rejects fallback provenance as an accepted final message."
+                ),
+            )
+        )
+
+    hits = [phrase for phrase in _PROCESS_META_PHRASES if phrase in rendered_blob]
+    if hits:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PROCESS_META_BODY",
+                message=(
+                    "Body/subject contains process-meta fallback phrasing "
+                    f"({', '.join(hits[:4])}); final messages must describe staged outcomes only."
+                ),
+            )
+        )
+    return findings
+
+
+def _check_path_class_truth(plan: CommitPlan, signals: DiffSignals) -> list[GoldFinding]:
+    """Path-class SemVer ceilings and product-framing bans for pure docs/tests/fixtures."""
+    findings: list[GoldFinding] = []
+    family = _path_family(signals)
+    if family is None:
+        return findings
+
+    primary = plan.primary_intent
+    cc = getattr(primary.cc_type, "value", primary.cc_type)
+    cc_s = str(cc or "").lower()
+    sem = getattr(primary.semver_impact, "value", primary.semver_impact)
+    sem_s = str(sem or "NONE").upper()
+    # Path-class wording bans inspect operator-visible text only. Rationale is
+    # provenance and must not trip GOLD_FIXTURE_PRODUCT_FRAMING /
+    # GOLD_DOCS_IMPLEMENTATION_CLAIM (same contract as process-meta scans).
+    blob = _message_blob(plan, include_rationale=False)
+
+    if family in {"fixtures", "tests", "docs"} and sem_s in {"PATCH", "MINOR", "MAJOR"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_SEMVER_CEILING",
+                message=(f"Pure {family} path-class forbids non-NONE SemVer ({sem_s}); presentation ceiling is NONE."),
+            )
+        )
+
+    if family == "fixtures" and cc_s in {"feat", "fix"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_TYPE_MISMATCH",
+                message=f"Fixtures-only path-class forbids primary type {cc_s!r}; expected test.",
+            )
+        )
+    elif family == "tests" and cc_s in {"feat", "fix"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_TYPE_MISMATCH",
+                message=f"Tests-only path-class forbids primary type {cc_s!r}; expected test.",
+            )
+        )
+    elif family == "docs" and cc_s in {"feat", "fix"}:
+        findings.append(
+            GoldFinding(
+                code="GOLD_PATH_CLASS_TYPE_MISMATCH",
+                message=f"Docs-only path-class forbids primary type {cc_s!r}; expected docs.",
+            )
+        )
+
+    if family == "fixtures":
+        product_framing = (
+            "validate",
+            "enforce",
+            "implement",
+            "implementation",
+            "runtime recovery",
+            "wire telemetry",
+            "public api",
+        )
+        hits = [tok for tok in product_framing if tok in blob]
+        # Allow benign "test" framing; flag validate/enforce/implement product claims.
+        if hits:
+            findings.append(
+                GoldFinding(
+                    code="GOLD_FIXTURE_PRODUCT_FRAMING",
+                    message=(
+                        "Fixtures/proof-pack wording uses product validate/enforce/implementation "
+                        f"framing ({', '.join(hits[:4])}); describe fixture evidence only."
+                    ),
+                )
+            )
+
+    if family == "docs":
+        # Docs-only references to prior work must not claim to add/implement it.
+        impl_claims = (
+            "implement ",
+            "implements ",
+            "implemented ",
+            "add support for",
+            "adds support for",
+            "introduce capability",
+            "introduces capability",
+            "wire the",
+            "wires the",
+            "enforce the contract",
+            "enforces the contract",
+        )
+        hits = [tok for tok in impl_claims if tok in blob]
+        # Path family already established docs-only; do not gate on cc_type so
+        # docs-only chore/refactor/style claims are still rejected.
+        if hits:
+            findings.append(
+                GoldFinding(
+                    code="GOLD_DOCS_IMPLEMENTATION_CLAIM",
+                    message=(
+                        "Docs-only message claims to add/implement product behaviour "
+                        f"({', '.join(hits[:3])}); document prior work without shipping claims."
+                    ),
+                )
+            )
+
+    return findings
+
+
+# Craft contradiction: BREAKING marker vs compatibility claims (Issue #212 NTH / PC5).
+# Presentation wording pressure only — not in STRICT_FAIL_CODES (nice-to-have lint).
+_BREAKING_COMPAT_CLAIM_PHRASES: tuple[str, ...] = (
+    "backward compatible",
+    "backwards compatible",
+    "backwards-compatible",
+    "backward-compatible",
+    "maintains backward",
+    "maintain backward",
+    "remains backward",
+    "remain backward",
+    "fully compatible",
+    "non-breaking",
+    "non breaking",
+    "without breaking",
+    "no breaking change",
+    "no breaking changes",
+    "does not break",
+    "doesn't break",
+    "defaulted kw-only",
+    "defaulted keyword-only",
+    "optional kw-only",
+    "optional keyword-only",
+    "keyword-only default",
+    "kw-only default",
+    "with a default",
+    "with default false",
+    "default false",
+    "defaults to false",
+    "defaulting to false",
+    "rely on the default",
+    "relies on the default",
+    "existing callers",
+    "existing positional",
+)
+
+
+def _plan_has_breaking_marker(plan: CommitPlan) -> bool:
+    """True when the plan claims a breaking change via flag, bang type, or footer text.
+
+    Orphan ``breaking_change_description`` values are ignored when
+    ``breaking_change`` is false: ``CommitPlan.render()`` only emits the
+    BREAKING footer when the flag is set, so description-only state is not
+    operator-visible craft evidence.
+    """
+    if bool(getattr(plan, "breaking_change", False)):
+        return True
+    primary = plan.primary_intent
+    cc = str(getattr(primary, "cc_type", "") or "")
+    if cc.endswith("!"):
+        return True
+    # Rendered footer / subject bang (operator-visible).
+    try:
+        rendered = plan.render().lower()
+    except Exception:
+        rendered = ""
+    if "breaking change:" in rendered or "breaking-change:" in rendered:
+        return True
+    subject_line = rendered.splitlines()[0] if rendered else ""
+    return "!:" in subject_line or ")!:" in subject_line
+
+
+def _check_breaking_compat_contradiction(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_BREAKING_COMPAT_CONTRADICTION`` for craft-incoherent breaking claims.
+
+    Fires when a BREAKING marker coexists with body/subject claims of backward
+    compatibility or defaulted/optional kw-only safety. Pure validator; not in
+    ``STRICT_FAIL_CODES`` (Issue #212 nice-to-have / PC5).
+    """
+    if not _plan_has_breaking_marker(plan):
+        return []
+
+    blob = _message_blob(plan, include_rationale=False)
+    # Also scan breaking description itself for self-contradiction hedges.
+    bdesc = str(getattr(plan, "breaking_change_description", "") or "").lower()
+    scan = f"{blob}\n{bdesc}"
+    hits = [phrase for phrase in _BREAKING_COMPAT_CLAIM_PHRASES if phrase in scan]
+    if not hits:
+        return []
+
+    return [
+        GoldFinding(
+            code="GOLD_BREAKING_COMPAT_CONTRADICTION",
+            message=(
+                "BREAKING marker contradicts compatibility/defaulted-kw-only claims "
+                f"({', '.join(hits[:4])}); drop the breaking footer/flag or remove "
+                "backward-compatible framing."
+            ),
+        )
+    ]
+
+
+# High-risk theme concept tokens for rendered-text coverage (Issue #204 NTH).
+# Presentation wording pressure only — not in STRICT_FAIL_CODES (nice-to-have lint).
+_HIGH_RISK_THEME_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "telemetry_fallback_transitions": (
+        "fallback-reason",
+        "fallback reason",
+        "fallback_reason",
+        "overwrite",
+        "pre-populated",
+        "presentation fallback",
+    ),
+    "telemetry_closed_enum_tags": (
+        "closed-enum",
+        "closed enum",
+        "closed-vocabulary",
+        "closed vocabulary",
+        "free-text redaction",
+        "hash-only",
+    ),
+    "telemetry_scrub_list_deltas": (
+        "scrub",
+        "allow/deny",
+        "allowlist",
+        "denylist",
+        "frame-variable",
+        "list delta",
+    ),
+    "telemetry_redaction_failure_token": (
+        "[redacted]",
+        "redaction failure",
+        "literal token",
+        "never python none",
+    ),
+    "telemetry_no_secret_leakage": (
+        "no secret",
+        "secret material",
+        "token",
+        "raw plan",
+        "payload",
+        "leak",
+    ),
+    "main_channel4_directive_free": (
+        "directive-free",
+        "directive free",
+        "channel-4",
+        "channel 4",
+        "preferred_type",
+        "no prefer",
+        "no must",
+        "no should",
+    ),
+    "main_fallback_error_visibility": (
+        "fallback",
+        "mask",
+        "real error",
+        "error visibility",
+        "presentation fallback reason",
+    ),
+    "scoped_history_policy_b_lifetime": (
+        "policy b",
+        "policy-b",
+        "shadow lifetime",
+        "refresh",
+        "flag-off",
+        "stats",
+    ),
+    "intent_closed_enrichment_markers": (
+        "closed marker",
+        "enrichment",
+        "presentation pressure",
+        "second ranker",
+    ),
+    "regeneration_contract_lock_visibility": (
+        "contract-lock",
+        "contract lock",
+        "regeneration",
+        "lock rejection",
+        "fallthrough",
+        "not silent",
+    ),
+    "secrets_path_handling": (
+        "secrets-path",
+        "secrets path",
+        "security path evidence",
+        "docs/adr",
+        "authority",
+        "redaction",
+    ),
+}
+
+
+def _check_high_risk_theme_coverage(plan: CommitPlan, signals: DiffSignals) -> list[GoldFinding]:
+    """Emit ``GOLD_HIGH_RISK_THEME_MISSING`` when staged high-risk themes lack wording.
+
+    Pure validator only. Does not mutate the plan, does not steer ranking, and is
+    intentionally excluded from ``STRICT_FAIL_CODES`` (Issue #204 nice-to-have).
+    """
+    paths = [p for p in (getattr(signals, "files", None) or []) if p]
+    if not paths:
+        return []
+
+    # Lazy import keeps gold free of commit_quality import cycles at module load.
+    from git_cg.commit_quality import build_high_risk_checklist_themes
+
+    themes = build_high_risk_checklist_themes(paths)
+    if not themes:
+        return []
+
+    blob = _message_blob(plan, include_rationale=False)
+    missing: list[str] = []
+    for theme_id in themes:
+        concepts = _HIGH_RISK_THEME_CONCEPTS.get(theme_id)
+        if not concepts:
+            continue
+        if not any(tok in blob for tok in concepts):
+            missing.append(theme_id)
+
+    if not missing:
+        return []
+
+    return [
+        GoldFinding(
+            code="GOLD_HIGH_RISK_THEME_MISSING",
+            message=(
+                "High-risk staged surfaces lack body/subject coverage for theme(s): "
+                + ", ".join(missing[:8])
+                + ". Cover each applicable theme in body_summary and/or Included-changes."
+            ),
         )
     ]
 
@@ -823,6 +1326,7 @@ def check_commit_gold(
     signals: DiffSignals,
     ranked_intents: list | None = None,
     path_summary: object | None = None,
+    presentation_overlay_applied: bool = False,
 ) -> GoldReport:
     """Run the pure gold checks over a structured, post-enforce commit plan.
 
@@ -839,6 +1343,11 @@ def check_commit_gold(
             ``None`` to skip coverage findings.
         path_summary (object | None): Optional precomputed cache only — never
             treated as a second source of truth (O-P1.5).
+        presentation_overlay_applied (bool): When True, Issue #204 presentation
+            overlay has already adjusted rendered presentation fields. Gold keeps
+            identity + wording checks, but skips matrix equality on presentation-
+            owned SemVer/type/group fields. Default False preserves legacy strict
+            behaviour for direct callers/tests.
 
     Returns:
         GoldReport: Immutable findings; the plan/contract are never mutated.
@@ -849,10 +1358,21 @@ def check_commit_gold(
     findings.extend(_check_body_inventory(plan))
     findings.extend(_check_subject_inventory(plan))
     findings.extend(_check_group_coherence(plan))
-    findings.extend(_check_type_group_coherence(plan))
-    findings.extend(_check_semver_matrix(plan))
+    findings.extend(_check_type_group_coherence(plan, presentation_overlay_applied=presentation_overlay_applied))
+    findings.extend(_check_semver_matrix(plan, presentation_overlay_applied=presentation_overlay_applied))
     findings.extend(_check_scope_filename(plan))
     findings.extend(_check_subject_title_case(plan))
     findings.extend(_check_included_changes(plan, signals, ranked_intents))
-    findings.extend(_check_contract_smoke(plan, contract))
+    findings.extend(
+        _check_contract_smoke(
+            plan,
+            contract,
+            presentation_overlay_applied=presentation_overlay_applied,
+        )
+    )
+    # P-S12 truth fails: skeleton provenance, process-meta, path-class ceilings.
+    findings.extend(_check_skeleton_and_process_meta(plan))
+    findings.extend(_check_path_class_truth(plan, signals))
+    findings.extend(_check_breaking_compat_contradiction(plan))
+    findings.extend(_check_high_risk_theme_coverage(plan, signals))
     return GoldReport(findings=tuple(findings))
