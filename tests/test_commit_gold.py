@@ -59,6 +59,8 @@ def _plan(
     *,
     body: str | None = None,
     split: bool = False,
+    breaking: bool = False,
+    breaking_desc: str | None = None,
 ) -> CommitPlan:
     """Construct a structured plan WITHOUT model validators (direct fixture)."""
     return CommitPlan.model_construct(
@@ -67,8 +69,8 @@ def _plan(
         split_recommended=split,
         rationale="fixture rationale",
         body_summary=body,
-        breaking_change=False,
-        breaking_change_description=None,
+        breaking_change=breaking,
+        breaking_change_description=breaking_desc,
     )
 
 
@@ -1020,3 +1022,91 @@ def test_high_risk_theme_skipped_for_low_risk_paths() -> None:
     signals = DiffSignals(files=["docs/usage.md"])
     report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
     assert "GOLD_HIGH_RISK_THEME_MISSING" not in report.codes()
+
+
+# ---------------------------------------------------------------------------
+# Issue #212 NTH / PC5 — BREAKING vs backward-compatible craft contradiction
+# ---------------------------------------------------------------------------
+
+
+def test_breaking_compat_contradiction_when_footer_claims_backward_compatible() -> None:
+    """BREAKING + backward-compatible body emits GOLD_BREAKING_COMPAT_CONTRADICTION."""
+    primary = _intent(
+        "breaking_change",
+        "💥",
+        "feat",
+        "MAJOR",
+        "Changed",
+        scope="greeter",
+        description="add excited flag and greet_many",
+    )
+    plan = _plan(
+        primary,
+        body=(
+            "Refactors greet to accept an optional excited keyword argument. "
+            "Maintains backward compatibility for existing callers while expanding demo capabilities."
+        ),
+        breaking=True,
+        breaking_desc=(
+            "The greet function signature now requires a keyword-only excited parameter. "
+            "Existing positional calls may break if not updated to use keyword syntax or "
+            "rely on the default False value."
+        ),
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" in report.codes()
+    # Nice-to-have: not a strict-fail code (PC5 / #212 NTH).
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in STRICT_FAIL_CODES
+    assert report.ok_for_mode("strict")
+
+
+def test_breaking_compat_contradiction_for_defaulted_kwonly_claims() -> None:
+    """Defaulted kw-only safety claims contradict BREAKING markers."""
+    primary = _intent(
+        "breaking_change",
+        "💥",
+        "feat",
+        "MAJOR",
+        "Changed",
+        scope="api",
+        description="add optional excited flag",
+    )
+    plan = _plan(
+        primary,
+        body="Add optional kw-only excited flag with default false for existing callers.",
+        breaking=True,
+        breaking_desc="keyword-only excited parameter",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" in report.codes()
+
+
+def test_breaking_without_compat_claims_is_clean() -> None:
+    """True breaking wording without compatibility hedges does not fire the craft lint."""
+    primary = _intent(
+        "breaking_change",
+        "💥",
+        "feat",
+        "MAJOR",
+        "Changed",
+        scope="api",
+        description="remove legacy greet positional overload",
+    )
+    plan = _plan(
+        primary,
+        body="Remove the positional greet overload and require the new keyword-only API.",
+        breaking=True,
+        breaking_desc="positional greet(name) overload removed; callers must pass keywords.",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/api.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()
+
+
+def test_non_breaking_backward_compatible_wording_is_clean() -> None:
+    """Compatibility claims are fine when no BREAKING marker is present."""
+    plan = _plan(
+        FEAT,
+        body="Add greet_many while remaining backward compatible for existing callers.",
+    )
+    report = check_commit_gold(plan, None, signals=DiffSignals(files=["src/demo/greeter.py"]))
+    assert "GOLD_BREAKING_COMPAT_CONTRADICTION" not in report.codes()

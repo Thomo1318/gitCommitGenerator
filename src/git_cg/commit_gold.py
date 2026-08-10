@@ -1095,6 +1095,95 @@ def _check_path_class_truth(plan: CommitPlan, signals: DiffSignals) -> list[Gold
     return findings
 
 
+# Craft contradiction: BREAKING marker vs compatibility claims (Issue #212 NTH / PC5).
+# Presentation wording pressure only — not in STRICT_FAIL_CODES (nice-to-have lint).
+_BREAKING_COMPAT_CLAIM_PHRASES: tuple[str, ...] = (
+    "backward compatible",
+    "backwards compatible",
+    "backwards-compatible",
+    "backward-compatible",
+    "maintains backward",
+    "maintain backward",
+    "remains backward",
+    "remain backward",
+    "fully compatible",
+    "non-breaking",
+    "non breaking",
+    "without breaking",
+    "no breaking change",
+    "no breaking changes",
+    "does not break",
+    "doesn't break",
+    "defaulted kw-only",
+    "defaulted keyword-only",
+    "optional kw-only",
+    "optional keyword-only",
+    "keyword-only default",
+    "kw-only default",
+    "with a default",
+    "with default false",
+    "default false",
+    "defaults to false",
+    "defaulting to false",
+    "rely on the default",
+    "relies on the default",
+    "existing callers",
+    "existing positional",
+)
+
+
+def _plan_has_breaking_marker(plan: CommitPlan) -> bool:
+    """True when the plan claims a breaking change via flag, bang type, or footer text."""
+    if bool(getattr(plan, "breaking_change", False)):
+        return True
+    desc = str(getattr(plan, "breaking_change_description", "") or "").strip()
+    if desc:
+        return True
+    primary = plan.primary_intent
+    cc = str(getattr(primary, "cc_type", "") or "")
+    if cc.endswith("!"):
+        return True
+    # Rendered footer / subject bang (operator-visible).
+    try:
+        rendered = plan.render().lower()
+    except Exception:
+        rendered = ""
+    if "breaking change:" in rendered or "breaking-change:" in rendered:
+        return True
+    subject_line = rendered.splitlines()[0] if rendered else ""
+    return "!:" in subject_line or ")!:" in subject_line
+
+
+def _check_breaking_compat_contradiction(plan: CommitPlan) -> list[GoldFinding]:
+    """Emit ``GOLD_BREAKING_COMPAT_CONTRADICTION`` for craft-incoherent breaking claims.
+
+    Fires when a BREAKING marker coexists with body/subject claims of backward
+    compatibility or defaulted/optional kw-only safety. Pure validator; not in
+    ``STRICT_FAIL_CODES`` (Issue #212 nice-to-have / PC5).
+    """
+    if not _plan_has_breaking_marker(plan):
+        return []
+
+    blob = _message_blob(plan, include_rationale=False)
+    # Also scan breaking description itself for self-contradiction hedges.
+    bdesc = str(getattr(plan, "breaking_change_description", "") or "").lower()
+    scan = f"{blob}\n{bdesc}"
+    hits = [phrase for phrase in _BREAKING_COMPAT_CLAIM_PHRASES if phrase in scan]
+    if not hits:
+        return []
+
+    return [
+        GoldFinding(
+            code="GOLD_BREAKING_COMPAT_CONTRADICTION",
+            message=(
+                "BREAKING marker contradicts compatibility/defaulted-kw-only claims "
+                f"({', '.join(hits[:4])}); drop the breaking footer/flag or remove "
+                "backward-compatible framing."
+            ),
+        )
+    ]
+
+
 # High-risk theme concept tokens for rendered-text coverage (Issue #204 NTH).
 # Presentation wording pressure only — not in STRICT_FAIL_CODES (nice-to-have lint).
 _HIGH_RISK_THEME_CONCEPTS: dict[str, tuple[str, ...]] = {
@@ -1281,5 +1370,6 @@ def check_commit_gold(
     # P-S12 truth fails: skeleton provenance, process-meta, path-class ceilings.
     findings.extend(_check_skeleton_and_process_meta(plan))
     findings.extend(_check_path_class_truth(plan, signals))
+    findings.extend(_check_breaking_compat_contradiction(plan))
     findings.extend(_check_high_risk_theme_coverage(plan, signals))
     return GoldReport(findings=tuple(findings))
