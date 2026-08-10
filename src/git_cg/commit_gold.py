@@ -1093,6 +1093,138 @@ def _check_path_class_truth(plan: CommitPlan, signals: DiffSignals) -> list[Gold
     return findings
 
 
+# High-risk theme concept tokens for rendered-text coverage (Issue #204 NTH).
+# Presentation wording pressure only — not in STRICT_FAIL_CODES (nice-to-have lint).
+_HIGH_RISK_THEME_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "telemetry_fallback_transitions": (
+        "fallback-reason",
+        "fallback reason",
+        "fallback_reason",
+        "overwrite",
+        "pre-populated",
+        "presentation fallback",
+    ),
+    "telemetry_closed_enum_tags": (
+        "closed-enum",
+        "closed enum",
+        "closed-vocabulary",
+        "closed vocabulary",
+        "free-text redaction",
+        "hash-only",
+    ),
+    "telemetry_scrub_list_deltas": (
+        "scrub",
+        "allow/deny",
+        "allowlist",
+        "denylist",
+        "frame-variable",
+        "list delta",
+    ),
+    "telemetry_redaction_failure_token": (
+        "[redacted]",
+        "redaction failure",
+        "literal token",
+        "never python none",
+    ),
+    "telemetry_no_secret_leakage": (
+        "no secret",
+        "secret material",
+        "token",
+        "raw plan",
+        "payload",
+        "leak",
+    ),
+    "main_channel4_directive_free": (
+        "directive-free",
+        "directive free",
+        "channel-4",
+        "channel 4",
+        "preferred_type",
+        "no prefer",
+        "no must",
+        "no should",
+    ),
+    "main_fallback_error_visibility": (
+        "fallback",
+        "mask",
+        "real error",
+        "error visibility",
+        "presentation fallback reason",
+    ),
+    "scoped_history_policy_b_lifetime": (
+        "policy b",
+        "policy-b",
+        "shadow lifetime",
+        "refresh",
+        "flag-off",
+        "stats",
+    ),
+    "intent_closed_enrichment_markers": (
+        "closed marker",
+        "enrichment",
+        "presentation pressure",
+        "second ranker",
+    ),
+    "regeneration_contract_lock_visibility": (
+        "contract-lock",
+        "contract lock",
+        "regeneration",
+        "lock rejection",
+        "fallthrough",
+        "not silent",
+    ),
+    "secrets_path_handling": (
+        "secrets-path",
+        "secrets path",
+        "security path evidence",
+        "docs/adr",
+        "authority",
+        "redaction",
+    ),
+}
+
+
+def _check_high_risk_theme_coverage(plan: CommitPlan, signals: DiffSignals) -> list[GoldFinding]:
+    """Emit ``GOLD_HIGH_RISK_THEME_MISSING`` when staged high-risk themes lack wording.
+
+    Pure validator only. Does not mutate the plan, does not steer ranking, and is
+    intentionally excluded from ``STRICT_FAIL_CODES`` (Issue #204 nice-to-have).
+    """
+    paths = [p for p in (getattr(signals, "files", None) or []) if p]
+    if not paths:
+        return []
+
+    # Lazy import keeps gold free of commit_quality import cycles at module load.
+    from git_cg.commit_quality import build_high_risk_checklist_themes
+
+    themes = build_high_risk_checklist_themes(paths)
+    if not themes:
+        return []
+
+    blob = _message_blob(plan, include_rationale=False)
+    missing: list[str] = []
+    for theme_id in themes:
+        concepts = _HIGH_RISK_THEME_CONCEPTS.get(theme_id)
+        if not concepts:
+            continue
+        if not any(tok in blob for tok in concepts):
+            missing.append(theme_id)
+
+    if not missing:
+        return []
+
+    return [
+        GoldFinding(
+            code="GOLD_HIGH_RISK_THEME_MISSING",
+            message=(
+                "High-risk staged surfaces lack body/subject coverage for theme(s): "
+                + ", ".join(missing[:8])
+                + ". Cover each applicable theme in body_summary and/or Included-changes."
+            ),
+        )
+    ]
+
+
 def check_commit_gold(
     plan: CommitPlan,
     contract: ResolvedCommitContract | None,
@@ -1147,4 +1279,5 @@ def check_commit_gold(
     # P-S12 truth fails: skeleton provenance, process-meta, path-class ceilings.
     findings.extend(_check_skeleton_and_process_meta(plan))
     findings.extend(_check_path_class_truth(plan, signals))
+    findings.extend(_check_high_risk_theme_coverage(plan, signals))
     return GoldReport(findings=tuple(findings))

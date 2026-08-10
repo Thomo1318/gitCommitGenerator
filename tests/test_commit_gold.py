@@ -970,3 +970,53 @@ def test_docs_implementation_claim_fires_for_non_docs_cc_type() -> None:
     )
     assert "GOLD_DOCS_IMPLEMENTATION_CLAIM" in report.codes()
     assert not report.ok_for_mode("strict")
+
+
+# ---------------------------------------------------------------------------
+# Issue #204 NTH — high-risk theme phrase coverage (warn-only)
+# ---------------------------------------------------------------------------
+
+
+def test_high_risk_theme_missing_when_body_omits_concepts() -> None:
+    """Staged telemetry without theme wording emits GOLD_HIGH_RISK_THEME_MISSING."""
+    plan = _plan(
+        FEAT,
+        body="Improve operator messaging for commit presentation quality.",
+    )
+    signals = DiffSignals(files=["src/git_cg/telemetry.py"])
+    report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
+    assert "GOLD_HIGH_RISK_THEME_MISSING" in report.codes()
+    # Nice-to-have: not a strict-fail code.
+    assert "GOLD_HIGH_RISK_THEME_MISSING" not in STRICT_FAIL_CODES
+
+
+def test_high_risk_theme_covered_when_body_hits_concepts() -> None:
+    """Body covering telemetry must-cover themes clears the high-risk lint."""
+    primary = _intent(
+        "bug_fix",
+        "🐛",
+        "fix",
+        "PATCH",
+        "Fixed",
+        scope="telemetry",
+        description="cover telemetry redaction",
+    )
+    plan = _plan(
+        primary,
+        body=(
+            "Cover telemetry fallback-reason transitions and closed-enum tags. "
+            "Scrub allow/deny list deltas when redaction coverage changes. "
+            "Redaction failure yields the literal token [REDACTED]. "
+            "No secret material in payloads."
+        ),
+    )
+    signals = DiffSignals(files=["src/git_cg/telemetry.py"])
+    report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
+    assert "GOLD_HIGH_RISK_THEME_MISSING" not in report.codes()
+
+
+def test_high_risk_theme_skipped_for_low_risk_paths() -> None:
+    plan = _plan(FEAT, body="Document operator usage for presentation quality.")
+    signals = DiffSignals(files=["docs/usage.md"])
+    report = check_commit_gold(plan, None, signals=signals, ranked_intents=None)
+    assert "GOLD_HIGH_RISK_THEME_MISSING" not in report.codes()
