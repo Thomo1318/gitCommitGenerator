@@ -2527,3 +2527,48 @@ def test_slice8_guard_and_gold_share_single_ceiling(monkeypatch, capsys, tmp_pat
     final = telemetry_events[-1]
     assert final.get("gold_regen_attempts") == 2
     assert final.get("hallucination_guard_fired") is True
+
+
+def test_preflight_json_paths_override() -> None:
+    """Read-only preflight prints path-class JSON without invoking LLM/ranker."""
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    result = CliRunner().invoke(
+        app,
+        ["preflight", "--json", "src/git_cg/telemetry.py", "tests/test_telemetry.py"],
+        color=False,
+    )
+    assert result.exit_code == 0, result.output
+    import json
+
+    payload = json.loads(result.output)
+    assert payload["path_count"] == 2
+    assert "telemetry.py" in payload["paths"][0] or payload["paths"][0].endswith("telemetry.py")
+    assert payload["diff_class"]
+    assert "high_risk_surfaces" in payload
+    assert "included_change_stubs" in payload
+    assert payload["empty_or_unknown"] is False
+
+
+def test_preflight_help_lists_json_flag() -> None:
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    result = CliRunner().invoke(app, ["preflight", "--help"], color=False)
+    assert result.exit_code == 0, result.output
+    help_text = _strip_ansi(result.output)
+    assert "--json" in help_text
+    assert "--verbose" in help_text or "-v" in help_text
+
+
+def test_root_help_lists_preflight_command() -> None:
+    from typer.testing import CliRunner
+
+    from git_cg.main import app
+
+    result = CliRunner().invoke(app, ["--help"], color=False)
+    assert result.exit_code == 0, result.output
+    assert "preflight" in _strip_ansi(result.output)

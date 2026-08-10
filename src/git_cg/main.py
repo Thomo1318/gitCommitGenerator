@@ -4017,6 +4017,172 @@ def commit(
     )
 
 
+@app.command("preflight")
+def preflight(
+    paths: list[str] | None = typer.Argument(
+        None,
+        help="Optional staged-path overrides. Defaults to `git diff --cached --name-only`.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable JSON instead of human tables.",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Include stub notes and theme bullets."),
+) -> None:
+    """Print a read-only diff-class / path-class preflight summary (Issue #204).
+
+    Does not invoke the LLM, ranker, hooks, or git writes. Safe for CI and local
+    operator dry-runs before commit generation.
+    """
+    import json as _json
+    import subprocess as _subprocess
+
+    from git_cg.commit_quality import (
+        build_high_risk_checklist_themes,
+        build_included_change_stubs,
+        classify_diff_class,
+        constraints_from_paths,
+        derive_trailer_priors,
+        detect_high_risk_surfaces,
+        format_high_risk_body_checklist,
+        presentation_constraints,
+        semver_presentation_ceiling,
+    )
+
+    resolved: list[str] = []
+    if paths:
+        resolved = [str(p).strip() for p in paths if str(p).strip()]
+    else:
+        try:
+            proc = _subprocess.run(
+                ["git", "diff", "--cached", "--name-only", "-z"],
+                check=False,
+                capture_output=True,
+                text=False,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                resolved = [p.decode("utf-8", "surrogateescape") for p in proc.stdout.split(b"\0") if p]
+        except OSError as exc:
+            console.print(f"[red]preflight could not read staged paths: {type(exc).__name__}[/red]")
+            raise typer.Exit(code=1) from exc
+
+    # Preserve order, drop blanks/dupes.
+    seen: set[str] = set()
+    clean_paths: list[str] = []
+    for raw in resolved:
+        item = raw.strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        clean_paths.append(item)
+
+    diff_class = classify_diff_class(clean_paths)
+    cons = constraints_from_paths(clean_paths)
+    # constraints_from_paths may already embed class; keep presentation_constraints as fallback.
+    if cons is None:
+        cons = presentation_constraints(diff_class)
+    priors = derive_trailer_priors(clean_paths)
+    ceiling = semver_presentation_ceiling(clean_paths)
+    surfaces = detect_high_risk_surfaces(clean_paths)
+    themes = build_high_risk_checklist_themes(clean_paths)
+    stubs = build_included_change_stubs(clean_paths)
+
+    payload = {
+        "paths": clean_paths,
+        "path_count": len(clean_paths),
+        "diff_class": getattr(diff_class, "name", str(diff_class)),
+        "has_runtime_surface": bool(getattr(diff_class, "has_runtime_surface", False)),
+        "force_cc_type": getattr(getattr(cons, "force_cc_type", None), "value", None),
+        "forbid_cc_types": sorted(getattr(cons, "forbid_cc_types", ()) or ()),
+        "force_semver": getattr(getattr(cons, "force_semver", None), "value", None),
+        "force_scope": getattr(cons, "force_scope", None),
+        "force_changelog_group": getattr(cons, "force_changelog_group", None),
+        "semver_ceiling": getattr(ceiling, "value", str(ceiling)),
+        "priors": {
+            "role": getattr(priors, "role", None),
+            "cc_type": getattr(getattr(priors, "cc_type", None), "value", None),
+            "semver_impact": getattr(getattr(priors, "semver_impact", None), "value", None),
+            "changelog_group": getattr(priors, "changelog_group", None),
+            "scope_hint": getattr(priors, "scope_hint", None),
+        },
+        "high_risk_surfaces": list(surfaces),
+        "high_risk_themes": list(themes),
+        "included_change_stubs": [
+            {
+                "role": s.role,
+                "surface": s.surface,
+                "suggested_cc_type": s.suggested_cc_type.value,
+                "scope": s.scope,
+                "note": s.note,
+                "claim_tags": list(s.claim_tags),
+                "source": s.source,
+            }
+            for s in stubs
+        ],
+        "empty_or_unknown": not clean_paths,
+    }
+
+    if json_out:
+        typer.echo(_json.dumps(payload, indent=2, sort_keys=True))
+        raise typer.Exit(code=0)
+
+    console.print(Panel("[bold green]git-cg preflight[/bold green] (read-only · no LLM · no ranker)"))
+    if not clean_paths:
+        console.print("[yellow]No paths resolved (empty staged set or unknown).[/yellow]")
+    else:
+        console.print(f"[cyan]paths[/cyan] ({len(clean_paths)}):")
+        for p in clean_paths[:40]:
+            console.print(f"  - {p}")
+        if len(clean_paths) > 40:
+            console.print(f"  … +{len(clean_paths) - 40} more")
+
+    table = Table(title="Path-class envelope", show_lines=True)
+    table.add_column("Field", style="magenta")
+    table.add_column("Value", style="white")
+    table.add_row("diff_class", str(payload["diff_class"]))
+    table.add_row("has_runtime_surface", str(payload["has_runtime_surface"]))
+    table.add_row("force_cc_type", str(payload["force_cc_type"]))
+    table.add_row("forbid_cc_types", ", ".join(payload["forbid_cc_types"]) or "—")
+    table.add_row("force_semver", str(payload["force_semver"]))
+    table.add_row("semver_ceiling", str(payload["semver_ceiling"]))
+    table.add_row("force_scope", str(payload["force_scope"]))
+    table.add_row("force_changelog_group", str(payload["force_changelog_group"]))
+    table.add_row("prior.role", str(payload["priors"]["role"]))
+    table.add_row("prior.cc_type", str(payload["priors"]["cc_type"]))
+    table.add_row("prior.scope_hint", str(payload["priors"]["scope_hint"]))
+    console.print(table)
+
+    if surfaces or themes:
+        console.print("[cyan]high-risk surfaces[/cyan]: " + (", ".join(surfaces) if surfaces else "—"))
+        console.print("[cyan]high-risk themes[/cyan]: " + (", ".join(themes) if themes else "—"))
+        if verbose:
+            checklist = format_high_risk_body_checklist(clean_paths, themes=themes)
+            if checklist:
+                console.print(Panel(checklist, title="High-risk checklist", border_style="yellow"))
+    else:
+        console.print("[dim]No high-risk surfaces detected.[/dim]")
+
+    if stubs:
+        stub_table = Table(title="Included-change stubs", show_lines=False)
+        stub_table.add_column("role")
+        stub_table.add_column("surface")
+        stub_table.add_column("cc_type")
+        stub_table.add_column("scope")
+        if verbose:
+            stub_table.add_column("note")
+        for s in stubs:
+            row = [s.role, s.surface, s.suggested_cc_type.value, str(s.scope or "")]
+            if verbose:
+                row.append(str(s.note or ""))
+            stub_table.add_row(*row)
+        console.print(stub_table)
+    else:
+        console.print("[dim]No included-change stubs (single-surface / no pressure).[/dim]")
+
+    raise typer.Exit(code=0)
+
+
 @app.command("sop")
 def show_sop() -> None:
     """Display the GitOps SOP matrices and workflows."""

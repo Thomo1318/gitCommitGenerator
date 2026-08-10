@@ -53,6 +53,11 @@ cmd commit help="Generate an AI commit message based on staged changes." {
     arg "[COMMIT_MSG_FILE]" help="Path to the commit message file" required=#false default=".git/COMMIT_EDITMSG"
     arg "[COMMIT_SOURCE]" help="Source of the commit message (e.g., 'message', 'template', 'merge', 'squash', 'commit'). Set GIT_CG_SKIP_PREPARE=1 to no-op prepare-commit-msg generation for message-only rebuilds." required=#false default=""
 }
+cmd preflight help="Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes)." {
+    flag --json help="Emit machine-readable JSON instead of human tables."
+    flag "-v --verbose" help="Include stub notes and high-risk checklist bullets."
+    arg "[PATHS]" help="Optional path overrides; defaults to staged paths from git diff --cached --name-only." required=#false
+}
 cmd sop help="Display the GitOps SOP matrices and workflows."
 cmd release help="Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions into changed files, and generate Changelog." {
     flag --pre-release help="Add or bump a pre-release identifier (e.g., 'alpha', 'rc')" {

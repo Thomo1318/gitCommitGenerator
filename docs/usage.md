@@ -126,6 +126,28 @@ AI engine to use (e.g. omlx, mtplx).
 
 **Default:** `mtplx`
 
+## `git-cg preflight`
+
+- **Usage**: `git-cg preflight [--json] [-v --verbose] [PATHS]`
+
+Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes).
+
+### Arguments
+
+#### `[PATHS]`
+
+Optional path overrides; defaults to staged paths from git diff --cached --name-only.
+
+### Flags
+
+#### `--json`
+
+Emit machine-readable JSON instead of human tables.
+
+#### `-v --verbose`
+
+Include stub notes and high-risk checklist bullets.
+
 ## `git-cg sop`
 
 - **Usage**: `git-cg sop`

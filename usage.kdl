@@ -104,6 +104,20 @@ cmd "commit" {
 }
 
 
+cmd "preflight" {
+    help "Read-only diff-class / path-class preflight printer (no LLM, no ranker, no git writes)."
+    arg "<PATHS>" {
+        help "Optional path overrides; defaults to staged paths from git diff --cached --name-only."
+        required #false
+    }
+    flag "--json" {
+        help "Emit machine-readable JSON instead of human tables."
+    }
+    flag "-v --verbose" {
+        help "Include stub notes and high-risk checklist bullets."
+    }
+}
+
 cmd "sop" {
     help "Display the GitOps SOP matrices and workflows."
 }
