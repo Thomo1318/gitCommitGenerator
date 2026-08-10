@@ -3407,6 +3407,9 @@ def _run_commit_generation(
                 # Deterministic wording repair first (security-noun scrub and
                 # docs/tests craft openers — issue #214). This keeps gold-strict
                 # usable without skeleton provenance when repair clears the dirty set.
+                # Capture pre-repair codes before try_repair overwrites the report
+                # with the clean post-repair evaluation (needed for operator copy).
+                _pre_repair_codes = set(_guard_report.codes())
                 commit_plan, _guard_report, _guard_repaired = try_repair_presentation_guards(
                     commit_plan,
                     paths=_guard_paths,
@@ -3419,9 +3422,15 @@ def _run_commit_generation(
                     review_state.commit_plan = commit_plan
                     guard_guidance = None
                     if verbose or gold_mode != "off":
+                        # Keep security-noun wording for the single-code security path so
+                        # Slice 8 harnesses and operators still see the established phrase;
+                        # craft-only repairs use the generic wording label (#214).
+                        if _pre_repair_codes == {"GUARD_SECURITY_NOUN"}:
+                            _repair_label = "deterministic security-noun repair"
+                        else:
+                            _repair_label = "deterministic wording repair"
                         console.print(
-                            "[yellow]Presentation guard: applied deterministic wording "
-                            "repair (no skeleton provenance).[/yellow]"
+                            f"[yellow]Presentation guard: applied {_repair_label} (no skeleton provenance).[/yellow]"
                         )
                     # Fall through to gold with the repaired plan.
                 else:
