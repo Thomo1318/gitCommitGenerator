@@ -417,6 +417,78 @@ class TestPromptfooConfig:
         js_assertions = [a for a in first_case["assert"] if a["type"] == "javascript"]
         assert len(js_assertions) >= 2, f"Expected at least 2 JS assertions, got {len(js_assertions)}"
 
+    # -----------------------------------------------------------------------
+    # Issue #204 NTH - promptfoo live-LLM cases A-N (config contract only)
+    # -----------------------------------------------------------------------
+
+    def test_slice9_letters_a_to_n_present(self):
+        """promptfooconfig.yaml must declare live cases A-N for Slice 9."""
+        data = _load_promptfoo_yaml()
+        letters = {
+            case.get("vars", {}).get("letter")
+            for case in data["tests"]
+            if isinstance(case.get("vars"), dict) and case["vars"].get("letter")
+        }
+        expected = {chr(c) for c in range(ord("A"), ord("N") + 1)}
+        assert letters == expected, f"missing/extra letters: {sorted(expected ^ letters)}"
+
+    def test_slice9_letter_map_matches_corpus(self):
+        """Each A-N case_id must match tests/fixtures/commit_quality/corpus.json letter_map."""
+        import json
+
+        corpus = json.loads((REPO_ROOT / "tests/fixtures/commit_quality/corpus.json").read_text(encoding="utf-8"))
+        letter_map = corpus["eval_harness"]["letter_map"]
+        data = _load_promptfoo_yaml()
+        by_letter = {
+            case["vars"]["letter"]: case
+            for case in data["tests"]
+            if isinstance(case.get("vars"), dict) and case["vars"].get("letter")
+        }
+        for letter, case_id in letter_map.items():
+            assert letter in by_letter, letter
+            assert by_letter[letter]["vars"]["case_id"] == case_id
+            assert case_id in by_letter[letter].get("description", "")
+
+    def test_slice9_cases_include_staged_paths_and_unified_diff(self):
+        """Live A-N cases must carry staged_paths and a path-shaped unified diff."""
+        data = _load_promptfoo_yaml()
+        for case in data["tests"]:
+            vars_ = case.get("vars") or {}
+            letter = vars_.get("letter")
+            if not letter:
+                continue
+            paths = vars_.get("staged_paths")
+            assert isinstance(paths, list) and paths, letter
+            diff = vars_["diff"]
+            assert "diff --git" in diff
+            for path in paths:
+                assert path in diff, f"{letter}: diff missing {path}"
+
+    def test_slice9_cases_keep_hybrid_header_assertions(self):
+        """Every A-N case retains length + hybrid-header javascript assertions."""
+        data = _load_promptfoo_yaml()
+        for case in data["tests"]:
+            if not (case.get("vars") or {}).get("letter"):
+                continue
+            js_values = [a["value"] for a in case["assert"] if a.get("type") == "javascript"]
+            assert any("length" in v and "72" in v for v in js_values), case.get("description")
+            assert any(".test(" in v for v in js_values), case.get("description")
+
+    def test_slice9_a_bans_security_tokens(self):
+        """Letter A must ban security framing tokens in live assertions."""
+        data = _load_promptfoo_yaml()
+        case = next(c for c in data["tests"] if (c.get("vars") or {}).get("letter") == "A")
+        blob = "\n".join(a["value"] for a in case["assert"] if a.get("type") == "javascript")
+        for token in ("secrets", "credentials", "security"):
+            assert token in blob.lower(), token
+
+    def test_smoke_case_remains_first(self):
+        """Baseline smoke case stays index 0 so legacy first-case tests remain stable."""
+        data = _load_promptfoo_yaml()
+        first = data["tests"][0]
+        assert not (first.get("vars") or {}).get("letter")
+        assert "diff --git" in first["vars"]["diff"]
+
 
 # ===========================================================================
 # New mise.toml tests for eval:promptfoo task (added in this PR)

@@ -1,25 +1,591 @@
-description: "Git Commit Generator - MTPLX Evaluation"
-
+description: Git Commit Generator - MTPLX Evaluation
 prompts:
-  - "Write a short commit message for the following diff: {{diff}}"
-
+- 'Write a short commit message for the following diff: {{diff}}'
 providers:
-  - id: "openai:chat:MTPLX"
-    config:
-      apiBaseUrl: "http://localhost:8000/v1"
-      apiKey: "dummy"
-
+- id: openai:chat:MTPLX
+  config:
+    apiBaseUrl: http://localhost:8000/v1
+    apiKey: dummy
 redteam:
   plugins:
-    - hijacking
-    - indirect-prompt-injection
-    - pii:direct
-
+  - hijacking
+  - indirect-prompt-injection
+  - pii:direct
 tests:
-  - vars:
-      diff: "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old line\n+new line"
-    assert:
-      - type: "javascript"
-        value: "output.trim().length > 5 && output.trim().length <= 72"
-      - type: "javascript"
-        value: "/^[\\p{Emoji_Presentation}\\p{Extended_Pictographic}\\u200d\\uFE0F]+\\s[a-z_]+(\\([^)]+\\))?!?: .+$/u.test(output.trim())"
+- description: 'smoke: conventional subject length + hybrid header shape'
+  vars:
+    diff: |-
+      diff --git a/file.txt b/file.txt
+      --- a/file.txt
+      +++ b/file.txt
+      @@ -1 +1 @@
+      -old line
+      +new line
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+- description: '#204 Slice9 A/TIP-G2: fixtures README authority/auth prose → test/NONE; reject security'
+  vars:
+    letter: A
+    case_id: TIP-G2
+    staged_paths:
+    - tests/fixtures/scoped_history/README.md
+    diff: |-
+      diff --git a/tests/fixtures/scoped_history/README.md b/tests/fixtures/scoped_history/README.md
+      --- a/tests/fixtures/scoped_history/README.md
+      +++ b/tests/fixtures/scoped_history/README.md
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G2 letter A path tests/fixtures/scoped_history/README.md
+      +Document fixture authority matrix and local auth flows.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('test(') || /\stest:/.test(output) || output.includes('test:')
+  - type: javascript
+    value: '!output.includes("\ud83d\udd10")'
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''secrets'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''credentials'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''security'')'
+- description: '#204 Slice9 B/TIP-G3: ADR status + index → docs(adr)/NONE; reject chore/Security'
+  vars:
+    letter: B
+    case_id: TIP-G3
+    staged_paths:
+    - docs/ADRs/ADR-0163-scoped-reasoning-history.md
+    - docs/ADRs/index.md
+    diff: |-
+      diff --git a/docs/ADRs/ADR-0163-scoped-reasoning-history.md b/docs/ADRs/ADR-0163-scoped-reasoning-history.md
+      --- a/docs/ADRs/ADR-0163-scoped-reasoning-history.md
+      +++ b/docs/ADRs/ADR-0163-scoped-reasoning-history.md
+      @@ -1,1 +1,2 @@
+       baseline 0
+      +TIP-G3 letter B path docs/ADRs/ADR-0163-scoped-reasoning-history.md
+      diff --git a/docs/ADRs/index.md b/docs/ADRs/index.md
+      --- a/docs/ADRs/index.md
+      +++ b/docs/ADRs/index.md
+      @@ -1,1 +1,2 @@
+       baseline 1
+      +TIP-G3 letter B path docs/ADRs/index.md
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('docs(') || /\sdocs:/.test(output) || output.includes('docs:')
+  - type: javascript
+    value: '!(output.includes(''chore('') || /\schore:/.test(output) || output.includes(''chore:''))'
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''security'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''secrets'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''credentials'')'
+- description: '#204 Slice9 C/TIP-G4: usage + CHANGELOG historical fixes → docs/NONE; reject runtime fix'
+  vars:
+    letter: C
+    case_id: TIP-G4
+    staged_paths:
+    - docs/usage.md
+    - CHANGELOG.md
+    - DEVELOPMENT.md
+    diff: |-
+      diff --git a/docs/usage.md b/docs/usage.md
+      --- a/docs/usage.md
+      +++ b/docs/usage.md
+      @@ -1,1 +1,2 @@
+       baseline 0
+      +TIP-G4 letter C path docs/usage.md
+      diff --git a/CHANGELOG.md b/CHANGELOG.md
+      --- a/CHANGELOG.md
+      +++ b/CHANGELOG.md
+      @@ -1,1 +1,4 @@
+       baseline 1
+      +TIP-G4 letter C path CHANGELOG.md
+      +### Fixed
+      +- historical recovery note (anti-signal only)
+      diff --git a/DEVELOPMENT.md b/DEVELOPMENT.md
+      --- a/DEVELOPMENT.md
+      +++ b/DEVELOPMENT.md
+      @@ -1,1 +1,2 @@
+       baseline 2
+      +TIP-G4 letter C path DEVELOPMENT.md
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('docs(') || /\sdocs:/.test(output) || output.includes('docs:')
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''handle'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''recover'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''fallback errors'')'
+- description: '#204 Slice9 D/TIP-G1: multi-test + claim tags → test inventory; reject Title Case Add tests'
+  vars:
+    letter: D
+    case_id: TIP-G1
+    staged_paths:
+    - tests/test_scoped_history.py
+    - tests/test_scoped_history_telemetry.py
+    - tests/test_main.py
+    - tests/test_semantic.py
+    diff: |-
+      diff --git a/tests/test_scoped_history.py b/tests/test_scoped_history.py
+      --- a/tests/test_scoped_history.py
+      +++ b/tests/test_scoped_history.py
+      @@ -1,1 +1,2 @@
+       baseline 0
+      +TIP-G1 letter D path tests/test_scoped_history.py
+      diff --git a/tests/test_scoped_history_telemetry.py b/tests/test_scoped_history_telemetry.py
+      --- a/tests/test_scoped_history_telemetry.py
+      +++ b/tests/test_scoped_history_telemetry.py
+      @@ -1,1 +1,2 @@
+       baseline 1
+      +TIP-G1 letter D path tests/test_scoped_history_telemetry.py
+      diff --git a/tests/test_main.py b/tests/test_main.py
+      --- a/tests/test_main.py
+      +++ b/tests/test_main.py
+      @@ -1,1 +1,2 @@
+       baseline 2
+      +TIP-G1 letter D path tests/test_main.py
+      diff --git a/tests/test_semantic.py b/tests/test_semantic.py
+      --- a/tests/test_semantic.py
+      +++ b/tests/test_semantic.py
+      @@ -1,1 +1,2 @@
+       baseline 3
+      +TIP-G1 letter D path tests/test_semantic.py
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('test(') || /\stest:/.test(output) || output.includes('test:')
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!/Add\s+.+tests/i.test(output)'
+- description: '#204 Slice9 E/S9-E: graph_unavailable/redaction docs remain docs; reject runtime fix'
+  vars:
+    letter: E
+    case_id: S9-E
+    staged_paths:
+    - docs/usage.md
+    - docs/ADRs/0163-scoped-reasoning-history.md
+    diff: |-
+      diff --git a/docs/usage.md b/docs/usage.md
+      --- a/docs/usage.md
+      +++ b/docs/usage.md
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +S9-E letter E path docs/usage.md
+      +Notes graph_unavailable and redaction sentinel wording.
+      diff --git a/docs/ADRs/0163-scoped-reasoning-history.md b/docs/ADRs/0163-scoped-reasoning-history.md
+      --- a/docs/ADRs/0163-scoped-reasoning-history.md
+      +++ b/docs/ADRs/0163-scoped-reasoning-history.md
+      @@ -1,1 +1,3 @@
+       baseline 1
+      +S9-E letter E path docs/ADRs/0163-scoped-reasoning-history.md
+      +Notes graph_unavailable and redaction sentinel wording.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('docs(') || /\sdocs:/.test(output) || output.includes('docs:')
+  - type: javascript
+    value: '!output.includes("\ud83e\udd45")'
+  - type: javascript
+    value: '!output.includes("\ud83d\udd10")'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''security'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''secrets'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''credentials'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''recover'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''handle'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''fail-open-fix'')'
+- description: '#204 Slice9 F/TIP-G5: main+telemetry+sentry correctness → fix/PATCH; reject feat/MAJOR'
+  vars:
+    letter: F
+    case_id: TIP-G5
+    staged_paths:
+    - src/git_cg/main.py
+    - src/git_cg/telemetry.py
+    - src/git_cg/sentry_config.py
+    diff: |-
+      diff --git a/src/git_cg/main.py b/src/git_cg/main.py
+      --- a/src/git_cg/main.py
+      +++ b/src/git_cg/main.py
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G5 letter F path src/git_cg/main.py
+      +Harden fallback scrub and redaction sentinel paths.
+      diff --git a/src/git_cg/telemetry.py b/src/git_cg/telemetry.py
+      --- a/src/git_cg/telemetry.py
+      +++ b/src/git_cg/telemetry.py
+      @@ -1,1 +1,3 @@
+       baseline 1
+      +TIP-G5 letter F path src/git_cg/telemetry.py
+      +Harden fallback scrub and redaction sentinel paths.
+      diff --git a/src/git_cg/sentry_config.py b/src/git_cg/sentry_config.py
+      --- a/src/git_cg/sentry_config.py
+      +++ b/src/git_cg/sentry_config.py
+      @@ -1,1 +1,3 @@
+       baseline 2
+      +TIP-G5 letter F path src/git_cg/sentry_config.py
+      +Harden fallback scrub and redaction sentinel paths.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('fix(') || /\sfix:/.test(output) || output.includes('fix:')
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!/\bimprove\b/i.test(output)'
+- description: '#204 Slice9 G/TIP-G6: tests + ADR rename + docs retargets → test + Documentation'
+  vars:
+    letter: G
+    case_id: TIP-G6
+    staged_paths:
+    - tests/test_scoped_history.py
+    - tests/test_scoped_history_telemetry.py
+    - tests/test_main.py
+    - tests/test_semantic.py
+    - tests/fixtures/scoped_history/README.md
+    - docs/ADRs/0163-scoped-reasoning-history.md
+    - docs/ADRs/index.md
+    - docs/usage.md
+    - DEVELOPMENT.md
+    diff: |-
+      diff --git a/tests/test_scoped_history.py b/tests/test_scoped_history.py
+      --- a/tests/test_scoped_history.py
+      +++ b/tests/test_scoped_history.py
+      @@ -1,1 +1,2 @@
+       baseline 0
+      +TIP-G6 letter G path tests/test_scoped_history.py
+      diff --git a/tests/test_scoped_history_telemetry.py b/tests/test_scoped_history_telemetry.py
+      --- a/tests/test_scoped_history_telemetry.py
+      +++ b/tests/test_scoped_history_telemetry.py
+      @@ -1,1 +1,2 @@
+       baseline 1
+      +TIP-G6 letter G path tests/test_scoped_history_telemetry.py
+      diff --git a/tests/test_main.py b/tests/test_main.py
+      --- a/tests/test_main.py
+      +++ b/tests/test_main.py
+      @@ -1,1 +1,2 @@
+       baseline 2
+      +TIP-G6 letter G path tests/test_main.py
+      diff --git a/tests/test_semantic.py b/tests/test_semantic.py
+      --- a/tests/test_semantic.py
+      +++ b/tests/test_semantic.py
+      @@ -1,1 +1,2 @@
+       baseline 3
+      +TIP-G6 letter G path tests/test_semantic.py
+      diff --git a/tests/fixtures/scoped_history/README.md b/tests/fixtures/scoped_history/README.md
+      --- a/tests/fixtures/scoped_history/README.md
+      +++ b/tests/fixtures/scoped_history/README.md
+      @@ -1,1 +1,2 @@
+       baseline 4
+      +TIP-G6 letter G path tests/fixtures/scoped_history/README.md
+      diff --git a/docs/ADRs/0163-scoped-reasoning-history.md b/docs/ADRs/0163-scoped-reasoning-history.md
+      --- a/docs/ADRs/0163-scoped-reasoning-history.md
+      +++ b/docs/ADRs/0163-scoped-reasoning-history.md
+      @@ -1,1 +1,2 @@
+       baseline 5
+      +TIP-G6 letter G path docs/ADRs/0163-scoped-reasoning-history.md
+      diff --git a/docs/ADRs/index.md b/docs/ADRs/index.md
+      --- a/docs/ADRs/index.md
+      +++ b/docs/ADRs/index.md
+      @@ -1,1 +1,2 @@
+       baseline 6
+      +TIP-G6 letter G path docs/ADRs/index.md
+      diff --git a/docs/usage.md b/docs/usage.md
+      --- a/docs/usage.md
+      +++ b/docs/usage.md
+      @@ -1,1 +1,2 @@
+       baseline 7
+      +TIP-G6 letter G path docs/usage.md
+      diff --git a/DEVELOPMENT.md b/DEVELOPMENT.md
+      --- a/DEVELOPMENT.md
+      +++ b/DEVELOPMENT.md
+      @@ -1,1 +1,2 @@
+       baseline 8
+      +TIP-G6 letter G path DEVELOPMENT.md
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('test(') || /\stest:/.test(output) || output.includes('test:')
+- description: '#204 Slice9 H/S9-H: no-gpg-sign fixture must surface signing inventory'
+  vars:
+    letter: H
+    case_id: S9-H
+    staged_paths:
+    - tests/test_scoped_history.py
+    - tests/fixtures/scoped_history/README.md
+    - tests/fixtures/scoped_history/no-gpg-sign.md
+    diff: |-
+      diff --git a/tests/test_scoped_history.py b/tests/test_scoped_history.py
+      --- a/tests/test_scoped_history.py
+      +++ b/tests/test_scoped_history.py
+      @@ -1,1 +1,2 @@
+       baseline 0
+      +S9-H letter H path tests/test_scoped_history.py
+      diff --git a/tests/fixtures/scoped_history/README.md b/tests/fixtures/scoped_history/README.md
+      --- a/tests/fixtures/scoped_history/README.md
+      +++ b/tests/fixtures/scoped_history/README.md
+      @@ -1,1 +1,2 @@
+       baseline 1
+      +S9-H letter H path tests/fixtures/scoped_history/README.md
+      diff --git a/tests/fixtures/scoped_history/no-gpg-sign.md b/tests/fixtures/scoped_history/no-gpg-sign.md
+      --- a/tests/fixtures/scoped_history/no-gpg-sign.md
+      +++ b/tests/fixtures/scoped_history/no-gpg-sign.md
+      @@ -1,1 +1,3 @@
+       baseline 2
+      +S9-H letter H path tests/fixtures/scoped_history/no-gpg-sign.md
+      +Enable commit.gpgsign=false / --no-gpg-sign fixture path.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('test(') || /\stest:/.test(output) || output.includes('test:')
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''security'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''secrets'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''credentials'')'
+- description: '#204 Slice9 I/TIP-G7: scoped-history producer correctness → fix/PATCH scoped-history'
+  vars:
+    letter: I
+    case_id: TIP-G7
+    staged_paths:
+    - src/git_cg/main.py
+    - src/git_cg/scoped_history.py
+    diff: |-
+      diff --git a/src/git_cg/main.py b/src/git_cg/main.py
+      --- a/src/git_cg/main.py
+      +++ b/src/git_cg/main.py
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G7 letter I path src/git_cg/main.py
+      +Fix NUL rename and literal fallback enum handling.
+      diff --git a/src/git_cg/scoped_history.py b/src/git_cg/scoped_history.py
+      --- a/src/git_cg/scoped_history.py
+      +++ b/src/git_cg/scoped_history.py
+      @@ -1,1 +1,3 @@
+       baseline 1
+      +TIP-G7 letter I path src/git_cg/scoped_history.py
+      +Fix NUL rename and literal fallback enum handling.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('fix(') || /\sfix:/.test(output) || output.includes('fix:')
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+- description: '#204 Slice9 J/TIP-G8: scoped-history tests + ADR claim-lock → test/NONE'
+  vars:
+    letter: J
+    case_id: TIP-G8
+    staged_paths:
+    - tests/test_scoped_history.py
+    - docs/ADRs/0163-scoped-reasoning-history.md
+    diff: |-
+      diff --git a/tests/test_scoped_history.py b/tests/test_scoped_history.py
+      --- a/tests/test_scoped_history.py
+      +++ b/tests/test_scoped_history.py
+      @@ -1,1 +1,2 @@
+       baseline 0
+      +TIP-G8 letter J path tests/test_scoped_history.py
+      diff --git a/docs/ADRs/0163-scoped-reasoning-history.md b/docs/ADRs/0163-scoped-reasoning-history.md
+      --- a/docs/ADRs/0163-scoped-reasoning-history.md
+      +++ b/docs/ADRs/0163-scoped-reasoning-history.md
+      @@ -1,1 +1,2 @@
+       baseline 1
+      +TIP-G8 letter J path docs/ADRs/0163-scoped-reasoning-history.md
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('test(') || /\stest:/.test(output) || output.includes('test:')
+- description: '#204 Slice9 K/TIP-G9: wording-only directive drop + consider ban → fix+test PATCH'
+  vars:
+    letter: K
+    case_id: TIP-G9
+    staged_paths:
+    - src/git_cg/scoped_history.py
+    - tests/test_scoped_history.py
+    diff: |-
+      diff --git a/src/git_cg/scoped_history.py b/src/git_cg/scoped_history.py
+      --- a/src/git_cg/scoped_history.py
+      +++ b/src/git_cg/scoped_history.py
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G9 letter K path src/git_cg/scoped_history.py
+      +Drop directive verb and ban consider guidance.
+      diff --git a/tests/test_scoped_history.py b/tests/test_scoped_history.py
+      --- a/tests/test_scoped_history.py
+      +++ b/tests/test_scoped_history.py
+      @@ -1,1 +1,3 @@
+       baseline 1
+      +TIP-G9 letter K path tests/test_scoped_history.py
+      +Drop directive verb and ban consider guidance.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('fix(') || /\sfix:/.test(output) || output.includes('fix:')
+  - type: javascript
+    value: '!(output.includes(''feat('') || /\sfeat:/.test(output) || output.includes(''feat:''))'
+- description: '#204 Slice9 L/TIP-G10: semantic free-harvest hub/complex → feat PATCH + tests'
+  vars:
+    letter: L
+    case_id: TIP-G10
+    staged_paths:
+    - src/git_cg/semantic.py
+    - tests/test_semantic.py
+    diff: |-
+      diff --git a/src/git_cg/semantic.py b/src/git_cg/semantic.py
+      --- a/src/git_cg/semantic.py
+      +++ b/src/git_cg/semantic.py
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G10 letter L path src/git_cg/semantic.py
+      +Harvest free hub/complex callers without new capability.
+      diff --git a/tests/test_semantic.py b/tests/test_semantic.py
+      --- a/tests/test_semantic.py
+      +++ b/tests/test_semantic.py
+      @@ -1,1 +1,3 @@
+       baseline 1
+      +TIP-G10 letter L path tests/test_semantic.py
+      +Harvest free hub/complex callers without new capability.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+- description: '#204 Slice9 M/TIP-G11: preflight carry-through elevation → feat PATCH scoped-history'
+  vars:
+    letter: M
+    case_id: TIP-G11
+    staged_paths:
+    - src/git_cg/main.py
+    - tests/test_semantic.py
+    diff: |-
+      diff --git a/src/git_cg/main.py b/src/git_cg/main.py
+      --- a/src/git_cg/main.py
+      +++ b/src/git_cg/main.py
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G11 letter M path src/git_cg/main.py
+      +Carry preflight_groups_count into split evidence only.
+      diff --git a/tests/test_semantic.py b/tests/test_semantic.py
+      --- a/tests/test_semantic.py
+      +++ b/tests/test_semantic.py
+      @@ -1,1 +1,3 @@
+       baseline 1
+      +TIP-G11 letter M path tests/test_semantic.py
+      +Carry preflight_groups_count into split evidence only.
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''phase 0.5 product'')'
+- description: '#204 Slice9 N/TIP-G12: ADR mermaid + usage Related → docs(adr)/NONE; reject runtime fix'
+  vars:
+    letter: N
+    case_id: TIP-G12
+    staged_paths:
+    - docs/ADRs/0163-scoped-reasoning-history.md
+    - docs/usage.md
+    diff: |-
+      diff --git a/docs/ADRs/0163-scoped-reasoning-history.md b/docs/ADRs/0163-scoped-reasoning-history.md
+      --- a/docs/ADRs/0163-scoped-reasoning-history.md
+      +++ b/docs/ADRs/0163-scoped-reasoning-history.md
+      @@ -1,1 +1,3 @@
+       baseline 0
+      +TIP-G12 letter N path docs/ADRs/0163-scoped-reasoning-history.md
+      +Mermaid fail-open/fallback diagram (docs only).
+      diff --git a/docs/usage.md b/docs/usage.md
+      --- a/docs/usage.md
+      +++ b/docs/usage.md
+      @@ -1,1 +1,2 @@
+       baseline 1
+      +TIP-G12 letter N path docs/usage.md
+  assert:
+  - type: javascript
+    value: output.trim().length > 5 && output.trim().length <= 72
+  - type: javascript
+    value: '/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\u200d\uFE0F]+\s[a-z_]+(\([^)]+\))?!?: .+$/u.test(output.trim())'
+  - type: javascript
+    value: output.includes('docs(') || /\sdocs:/.test(output) || output.includes('docs:')
+  - type: javascript
+    value: '!output.includes("\ud83e\udd45")'
+  - type: javascript
+    value: '!(output.includes(''fix('') || /\sfix:/.test(output) || output.includes(''fix:''))'
+  - type: javascript
+    value: '!/Clarify\b/.test(output)'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''recover'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''handle'')'
+  - type: javascript
+    value: '!output.toLowerCase().includes(''fail-open-fix'')'
