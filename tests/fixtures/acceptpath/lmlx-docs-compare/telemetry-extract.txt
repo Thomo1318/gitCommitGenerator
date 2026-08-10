@@ -1,0 +1,10 @@
+bytes 3355
+top_keys ['affected_flows_count', 'blast_radius_size', 'blueprint_applied', 'body_similarity_avg', 'body_similarity_min', 'changelog_antisignal_applied', 'commit_plan_json', 'contract_lift_applied', 'contract_lift_from_semver', 'contract_locked_semver', 'contract_violation', 'diff_hash', 'diff_output', 'engine', 'fingerprint_class_counts', 'fingerprint_files_compared', 'fingerprint_grammar_version', 'fingerprint_latency_ms', 'fingerprint_markers', 'generated_message']
+engine='lmlx'
+model_name='Youssofal/Qwen3.6-27B-MTPLX-Optimized-Speed'
+path_class_gate='empty'
+gold_self_correction_outcome='not_needed'
+gold_finding_codes=[]
+plan_persisted_semver='PATCH'
+contract_locked_semver='PATCH'
+generated_message='[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]'
