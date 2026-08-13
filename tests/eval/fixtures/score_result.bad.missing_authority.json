@@ -1,0 +1,6 @@
+{
+  "metric_id": "a.final_message_present",
+  "polarity": "pass_fail",
+  "source": "local_wrapper",
+  "value": true
+}

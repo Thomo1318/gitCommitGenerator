@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "artifact_class": {
+      "description": "Closed set; unknown must fail closed",
+      "enum": [
+        "final_accept",
+        "fixture_expected",
+        "fixture",
+        "live_regen",
+        "Git-raw",
+        "Git-mid",
+        "Gold-final",
+        "Rewrite-map-confirmed",
+        "Opik-unbound",
+        "plan_only",
+        "trajectory_only",
+        "train_row",
+        "export_batch"
+      ],
+      "type": "string"
+    },
+    "authority": {
+      "enum": [
+        "law",
+        "advisory",
+        "lab",
+        "ops",
+        "projection"
+      ],
+      "type": "string"
+    },
+    "family": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "Cprime",
+        "human",
+        "lab",
+        "dogfood",
+        "gate",
+        "binding",
+        "export",
+        "nlp"
+      ],
+      "type": "string"
+    },
+    "feedback_target": {
+      "enum": [
+        "trace",
+        "span",
+        "thread",
+        "artifact"
+      ],
+      "type": "string"
+    },
+    "input_artifact": {
+      "enum": [
+        "final_message",
+        "plan",
+        "bundle",
+        "trajectory",
+        "fixture_envelope",
+        "judge_input"
+      ],
+      "type": "string"
+    },
+    "non_empty_string": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "pin_ref": {
+      "pattern": "^[a-z0-9_]+_v[0-9]+@[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "polarity": {
+      "enum": [
+        "higher_is_better",
+        "lower_is_better",
+        "pass_fail"
+      ],
+      "type": "string"
+    },
+    "provenance_label": {
+      "enum": [
+        "Git-raw",
+        "Git-mid",
+        "Gold-final",
+        "Rewrite-map-confirmed",
+        "Opik-unbound",
+        "final_accept",
+        "live_regen",
+        "fixture"
+      ],
+      "type": "string"
+    },
+    "redaction_profile": {
+      "description": "R14 owner redaction ladder",
+      "enum": [
+        "public_ci",
+        "default_scrub",
+        "private_message",
+        "train_rich",
+        "antipattern_vault",
+        "message_only",
+        "meta_eval_scrub",
+        "raw_dev_unsafe"
+      ],
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "block",
+        "warn",
+        "info"
+      ],
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "local_wrapper",
+        "lane_c_judge",
+        "human",
+        "lab_meta",
+        "export_health"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://git-cg.local/schemas/eval/diag_issue_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Deterministic diagnostic issue + fingerprint. S0 stub: identifiers + closed enums + representative required fields.",
+  "properties": {
+    "code": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "fingerprint": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "meta": {
+      "type": "object"
+    },
+    "metric_catalog": {
+      "$ref": "#/$defs/pin_ref"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "schema_pack": {
+      "$ref": "#/$defs/pin_ref"
+    },
+    "schema_version": {
+      "const": "diag_issue_v1"
+    },
+    "severity": {
+      "$ref": "#/$defs/severity"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "fingerprint",
+    "code"
+  ],
+  "title": "diag_issue_v1",
+  "type": "object"
+}

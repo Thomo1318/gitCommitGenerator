@@ -1,0 +1,10 @@
+{
+  "artifact_class": "fixture",
+  "bound": false,
+  "case_id": "leak",
+  "generation_task_input": {
+    "diff_summary": "x",
+    "expected_final_message": "should not be here"
+  },
+  "schema_version": "ape_bundle_v1"
+}

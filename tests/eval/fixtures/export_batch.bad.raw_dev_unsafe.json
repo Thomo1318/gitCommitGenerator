@@ -1,0 +1,6 @@
+{
+  "batch_id": "b1",
+  "id": "export-bad",
+  "redaction_profile": "raw_dev_unsafe",
+  "schema_version": "export_batch_v1"
+}

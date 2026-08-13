@@ -1,0 +1,17 @@
+{
+  "artifact_class": "final_accept",
+  "bound": true,
+  "case_id": "session12-regime-a-seed",
+  "failure_ids": [],
+  "final_message": "\ud83d\udcdd docs(eval): freeze schema pack\n\nRefs: #220\nSemVer-Impact: PATCH\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "generation_task_input": {
+    "diff_summary": "docs only",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "path_class_gate": "docs_only",
+  "provenance_label": "final_accept",
+  "redaction_profile": "default_scrub",
+  "regime": "A",
+  "schema_version": "ape_bundle_v1"
+}

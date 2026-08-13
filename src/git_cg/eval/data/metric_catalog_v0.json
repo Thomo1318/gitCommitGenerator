@@ -1,0 +1,1538 @@
+{
+  "catalog_id": "metric_catalog_v0",
+  "closed_enums": {
+    "artifact_class": [
+      "final_accept",
+      "fixture_expected",
+      "fixture",
+      "live_regen",
+      "Git-raw",
+      "Git-mid",
+      "Gold-final",
+      "Rewrite-map-confirmed",
+      "Opik-unbound",
+      "plan_only",
+      "trajectory_only",
+      "train_row",
+      "export_batch"
+    ],
+    "authority": [
+      "law",
+      "advisory",
+      "lab",
+      "ops",
+      "projection"
+    ],
+    "family": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "Cprime",
+      "human",
+      "lab",
+      "dogfood",
+      "gate",
+      "binding",
+      "export",
+      "nlp"
+    ],
+    "polarity": [
+      "higher_is_better",
+      "lower_is_better",
+      "pass_fail"
+    ],
+    "redaction_profile": [
+      "public_ci",
+      "default_scrub",
+      "private_message",
+      "train_rich",
+      "antipattern_vault",
+      "message_only",
+      "meta_eval_scrub",
+      "raw_dev_unsafe"
+    ],
+    "severity": [
+      "block",
+      "warn",
+      "info"
+    ],
+    "source": [
+      "local_wrapper",
+      "lane_c_judge",
+      "human",
+      "lab_meta",
+      "export_health"
+    ]
+  },
+  "description": "Machine-readable metric catalog pin. Train/advisory metrics never imply gate.deterministic_pass alone (M11). Polarity is always explicit (M1).",
+  "dual_axis": {
+    "gate_authority": "deterministic product-wrapped metrics / gate.* only",
+    "training_corpus_retention": "R14 owner ladder; record ≠ gate (M11)"
+  },
+  "find025_reference_matrix_stub": {
+    "entries": [
+      {
+        "forbid": "peer-gate builtins",
+        "local_use": "ScoreResult envelope shape",
+        "opik_doc": "metrics/overview"
+      },
+      {
+        "forbid": "eval-only product policy",
+        "local_use": "preferred authoritative path (S2 wrappers)",
+        "opik_doc": "metrics/custom_metric"
+      },
+      {
+        "forbid": "sole Hybrid/gold law",
+        "local_use": "diagnostic/lab only",
+        "opik_doc": "metrics/heuristic_metrics"
+      },
+      {
+        "forbid": "gate.deterministic_pass",
+        "local_use": "Lane C advisory",
+        "opik_doc": "metrics/g_eval"
+      },
+      {
+        "forbid": "unpinned latest",
+        "local_use": "mirror/experiments later",
+        "opik_doc": "evaluation/evaluate_prompt"
+      }
+    ],
+    "rule": "metric IDs and polarity are local catalog law; Opik docs inform shape only",
+    "status": "design-stub",
+    "title": "Official Opik reference matrix stub (FIND-025)"
+  },
+  "laws": [
+    {
+      "law_id": "M0",
+      "title": "Every score is a ScoreResult with stable metric_id"
+    },
+    {
+      "law_id": "M1",
+      "title": "Polarity is explicit; never inherit Opik builtin polarity blindly"
+    },
+    {
+      "law_id": "M5",
+      "title": "Catalog is pinned on CI/accept-path suites"
+    },
+    {
+      "law_id": "M10",
+      "title": "Severity parity — eval severity must not exceed product severity"
+    },
+    {
+      "law_id": "M11",
+      "title": "Record ≠ gate — advisory/lab/train may be retained without implying gate.deterministic_pass"
+    }
+  ],
+  "metrics": [
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.artifact_class_known",
+      "name": "Artifact class known",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.binding_complete",
+      "name": "Binding complete",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.binding_unbound_explicit",
+      "name": "Unbound explicitly labeled",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.bundle_schema_valid",
+      "name": "Bundle schema valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.final_bytes_stable",
+      "name": "Final bytes stable",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.final_message_present",
+      "name": "Final message present",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "A",
+      "metric_id": "a.scored_target_order_ok",
+      "name": "Scored target order ok",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.cc_type_known",
+      "name": "CC type known",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.gitmoji_present",
+      "name": "Gitmoji present",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.header_shape",
+      "name": "Hybrid header shape",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.scope_shape",
+      "name": "Scope shape",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.structured_envelope",
+      "name": "Structured envelope",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.subject_length",
+      "name": "Subject length",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.trailers_change_types",
+      "name": "Change-Types trailer",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.trailers_changelog_groups",
+      "name": "Changelog-Groups trailer",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.trailers_issue_ref",
+      "name": "Issue ref trailer",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.trailers_parse",
+      "name": "Trailers parse",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "B",
+      "metric_id": "b.trailers_semver",
+      "name": "SemVer trailer",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.changelog_antisignal",
+      "name": "Changelog antisignal",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.contract_smoke",
+      "name": "Contract smoke",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.diff_class_resolved",
+      "name": "Diff class resolved",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.evidence_surface_precision",
+      "name": "Evidence surface precision",
+      "notes": "",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.evidence_surface_recall",
+      "name": "Evidence surface recall",
+      "notes": "",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.scope_forced_ok",
+      "name": "Forced scope ok",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.security_claim_evidence",
+      "name": "Security claim evidence",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.semver_ceiling",
+      "name": "SemVer ceiling",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "C",
+      "metric_id": "c.type_allowed",
+      "name": "Type allowed for path-class",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.answer_relevance",
+      "name": "Answer relevance",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.conversation_thread",
+      "name": "Conversation thread",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.flakiness_std",
+      "name": "Flakiness std",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "lower_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.geval_craft",
+      "name": "GEval craft",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.geval_relevance",
+      "name": "GEval relevance",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.hallucination_narrative",
+      "name": "Hallucination narrative",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "lower_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.jury_aggregate",
+      "name": "Jury aggregate",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.meaning_match",
+      "name": "Meaning match",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "Cprime",
+      "metric_id": "cprime.usefulness",
+      "name": "Usefulness",
+      "notes": "Secondary Lane C; never sole gate",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.body_inventory",
+      "name": "Body inventory",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.breaking_compat",
+      "name": "Breaking compat",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.docs_implementation_claim",
+      "name": "Docs implementation claim",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.fixture_product_framing",
+      "name": "Fixture product framing",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.gold_report_ok",
+      "name": "Gold report ok",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.group_primary_match",
+      "name": "Group primary match",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.high_risk_theme_coverage",
+      "name": "High-risk theme coverage",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.included_changes_coverage",
+      "name": "Included changes coverage",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.path_class_semver",
+      "name": "Path-class SemVer",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.path_class_type",
+      "name": "Path-class type",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.process_meta_body",
+      "name": "Process meta body",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.scope_filename",
+      "name": "Scope filename",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.semver_matrix",
+      "name": "SemVer matrix",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.skeleton_fallback_final",
+      "name": "Skeleton fallback final (NON-WEAKEN)",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.strict_fail_set",
+      "name": "Strict fail set count",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "lower_is_better",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.subject_inventory",
+      "name": "Subject inventory",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.subject_title_case",
+      "name": "Subject title case",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "D",
+      "metric_id": "d.type_group_coherent",
+      "name": "Type/group coherent",
+      "notes": "Wraps commit_gold; do not weaken GOLD_SKELETON_FALLBACK_FINAL",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "advisory",
+      "family": "dogfood",
+      "metric_id": "dogfood.geval_last",
+      "name": "Dogfood GEval last",
+      "notes": "",
+      "polarity": "higher_is_better",
+      "severity": "info",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "dogfood",
+      "metric_id": "dogfood.geval_latency_ms",
+      "name": "Dogfood GEval latency",
+      "notes": "",
+      "polarity": "lower_is_better",
+      "severity": "info",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "advisory",
+      "family": "dogfood",
+      "metric_id": "dogfood.geval_pin_ok",
+      "name": "Dogfood GEval pin ok",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "lane_c_judge"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.banned_craft_openers",
+      "name": "Banned craft openers",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.changelog_groups_allowlisted",
+      "name": "Changelog groups allowlisted",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.docs_tests_craft",
+      "name": "Docs/tests craft",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.low_confidence_posture",
+      "name": "Low confidence posture",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.min_included_bullets",
+      "name": "Min included bullets",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.presentation_constraints_applied",
+      "name": "Presentation constraints applied",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.secondary_intent_fill_legal",
+      "name": "Secondary intent fill legal",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.skeleton_avoidance",
+      "name": "Skeleton avoidance",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "E",
+      "metric_id": "e.stub_inventory_coherent",
+      "name": "Stub inventory coherent",
+      "notes": "Wraps commit_quality presentation",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.body_attribution",
+      "name": "Body attribution",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.claim_evidence_alignment",
+      "name": "Claim evidence alignment",
+      "notes": "",
+      "polarity": "higher_is_better",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.counter_integrity",
+      "name": "Counter integrity",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.included_changes_vs_diff",
+      "name": "Included changes vs diff",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.security_claims_need_paths",
+      "name": "Security claims need paths",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.staged_path_allowlist",
+      "name": "Staged path allowlist",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "F",
+      "metric_id": "f.subject_attribution",
+      "name": "Subject attribution",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "G",
+      "metric_id": "g.issue_null_policy",
+      "name": "Null issue policy",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "G",
+      "metric_id": "g.no_eval_policy_fork",
+      "name": "No eval policy fork",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "G",
+      "metric_id": "g.ranked_identity_preserved",
+      "name": "Ranked identity preserved",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "G",
+      "metric_id": "g.secrets_not_in_message",
+      "name": "Secrets not in message",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "G",
+      "metric_id": "g.semantic_contract_bound",
+      "name": "Semantic contract bound",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "G",
+      "metric_id": "g.sop_not_mutated",
+      "name": "SOP not mutated",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "gate",
+      "metric_id": "gate.deterministic_pass",
+      "name": "Deterministic gate pass",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "gate",
+      "metric_id": "gate.golden_promotion_eligible",
+      "name": "Golden promotion eligible",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "gate",
+      "metric_id": "gate.semantic_cohort_eligible",
+      "name": "Semantic cohort eligible",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.catalog_pinned",
+      "name": "Catalog pinned",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.compat_hash_resume",
+      "name": "Compat hash resume",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.doctor_green",
+      "name": "Doctor green",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.eval_error_fanout_bounded",
+      "name": "Eval error fanout bounded",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.eval_input_nonempty",
+      "name": "Eval input nonempty",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.eval_input_size_ok",
+      "name": "Eval input size ok",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.evaluator_error_free",
+      "name": "Evaluator error free",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.export_config_resolved",
+      "name": "Export config resolved",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.export_nonblocking",
+      "name": "Export nonblocking",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.export_status_classified",
+      "name": "Export status classified",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.flush_bounded",
+      "name": "Flush bounded",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.graph_version_known",
+      "name": "Graph version known",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.judge_input_isolated",
+      "name": "Judge input isolated",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.layer_a_before_export",
+      "name": "Layer A before export",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.local_bundle_durable",
+      "name": "Local bundle durable",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.offline_complete",
+      "name": "Offline complete",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.online_scores_match_product_card",
+      "name": "Online scores match product card",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.pin_integrity",
+      "name": "Pin integrity",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.prompt_pack_hash_known",
+      "name": "Prompt pack hash known",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.prompt_pack_pinned",
+      "name": "Prompt pack pinned",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.prompt_pack_suite_fresh",
+      "name": "Prompt pack suite fresh",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.score_envelope_valid",
+      "name": "Score envelope valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.structured_bundle_compliance",
+      "name": "Structured bundle compliance",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.suite_snapshot_pinned",
+      "name": "Suite snapshot pinned",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.trajectory_stages_declared",
+      "name": "Trajectory stages declared",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "H",
+      "metric_id": "h.trajectory_stages_observed",
+      "name": "Trajectory stages observed",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "advisory",
+      "family": "human",
+      "metric_id": "human.craft_rating",
+      "name": "Human craft rating",
+      "notes": "",
+      "polarity": "higher_is_better",
+      "severity": "info",
+      "source_default": "human"
+    },
+    {
+      "authority": "advisory",
+      "family": "human",
+      "metric_id": "human.gold_dispute",
+      "name": "Human gold dispute",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "human"
+    },
+    {
+      "authority": "advisory",
+      "family": "human",
+      "metric_id": "human.notes_present",
+      "name": "Human notes present",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "human"
+    },
+    {
+      "authority": "advisory",
+      "family": "human",
+      "metric_id": "human.regime_label",
+      "name": "Human regime label",
+      "notes": "A/B adjudication aid; not gate authority",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "human"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.attempt_order_valid",
+      "name": "Attempt order valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.correlation_envelope_valid",
+      "name": "Correlation envelope valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.counter_span_consistent",
+      "name": "Counter span consistent",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.export_status_classified",
+      "name": "Export status classified",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.finalization_observed",
+      "name": "Finalization observed",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.graph_observed_matches_declared",
+      "name": "Graph observed matches declared",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.lifecycle_complete",
+      "name": "Lifecycle complete",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.no_cross_case_contamination",
+      "name": "No cross-case contamination",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.replay_lineage_valid",
+      "name": "Replay lineage valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.required_spans_present",
+      "name": "Required spans present",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.span_order_valid",
+      "name": "Span order valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.span_parentage_valid",
+      "name": "Span parentage valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.span_tree_valid",
+      "name": "Span tree valid",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.thread_continuity",
+      "name": "Thread continuity",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.thread_id_present",
+      "name": "Thread id present",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "law",
+      "family": "I",
+      "metric_id": "i.trace_root_present",
+      "name": "Trace root present",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "block",
+      "source_default": "local_wrapper"
+    },
+    {
+      "authority": "lab",
+      "family": "lab",
+      "metric_id": "lab.judge_equals_label",
+      "name": "Judge equals label",
+      "notes": "",
+      "polarity": "pass_fail",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "lab",
+      "family": "lab",
+      "metric_id": "lab.judge_fn_rate",
+      "name": "Judge FN rate",
+      "notes": "",
+      "polarity": "lower_is_better",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "lab",
+      "family": "lab",
+      "metric_id": "lab.judge_fp_rate",
+      "name": "Judge FP rate",
+      "notes": "",
+      "polarity": "lower_is_better",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "lab",
+      "family": "nlp",
+      "metric_id": "nlp.bertscore",
+      "name": "nlp.bertscore",
+      "notes": "R10 diagnostic only; never sole law",
+      "polarity": "higher_is_better",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "lab",
+      "family": "nlp",
+      "metric_id": "nlp.bleu",
+      "name": "nlp.bleu",
+      "notes": "R10 diagnostic only; never sole law",
+      "polarity": "higher_is_better",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "lab",
+      "family": "nlp",
+      "metric_id": "nlp.levenshtein",
+      "name": "nlp.levenshtein",
+      "notes": "R10 diagnostic only; never sole law",
+      "polarity": "higher_is_better",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "lab",
+      "family": "nlp",
+      "metric_id": "nlp.rouge",
+      "name": "nlp.rouge",
+      "notes": "R10 diagnostic only; never sole law",
+      "polarity": "higher_is_better",
+      "severity": "info",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "ops",
+      "family": "lab",
+      "metric_id": "ops.compliance_risk",
+      "name": "Compliance risk mapped carefully",
+      "notes": "Risk polarity is lower_is_better (mapped carefully; not compliance health).",
+      "polarity": "lower_is_better",
+      "severity": "warn",
+      "source_default": "lab_meta"
+    },
+    {
+      "authority": "ops",
+      "family": "lab",
+      "metric_id": "ops.moderation_flag",
+      "name": "Moderation flag",
+      "notes": "R6 off-by-default",
+      "polarity": "pass_fail",
+      "severity": "warn",
+      "source_default": "lab_meta"
+    }
+  ],
+  "plan_version": "0.9.2-body-ingest",
+  "polarity_registry": [
+    {
+      "local_handling": "remap via catalog; never inherit blindly",
+      "local_polarity_if_used": "lower_is_better",
+      "typical_vendor_polarity": "higher_is_worse",
+      "vendor_name": "Hallucination"
+    },
+    {
+      "local_handling": "ops/lab only; remap",
+      "local_polarity_if_used": "lower_is_better",
+      "typical_vendor_polarity": "higher_is_worse",
+      "vendor_name": "Moderation"
+    },
+    {
+      "local_handling": "Lane C advisory only",
+      "local_polarity_if_used": "higher_is_better",
+      "typical_vendor_polarity": "higher_is_better",
+      "vendor_name": "GEval"
+    },
+    {
+      "local_handling": "advisory",
+      "local_polarity_if_used": "higher_is_better",
+      "typical_vendor_polarity": "higher_is_better",
+      "vendor_name": "AnswerRelevance"
+    },
+    {
+      "local_handling": "SoT for dashboards & gates",
+      "local_polarity_if_used": "n/a",
+      "typical_vendor_polarity": "explicit enum",
+      "vendor_name": "local ScoreResult.polarity"
+    }
+  ],
+  "version": "0.1.0"
+}

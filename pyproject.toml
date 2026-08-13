@@ -9,6 +9,7 @@ dependencies = [
   "hf-transfer>=0.1.9",
   "httpx>=0.28.0",
   "instructor>=1.15.1",
+  "jsonschema>=4.26.0",
   "mlx-lm>=0.31.3",
   "onepassword-sdk>=0.1.2",
   "openai>=2.38.0",
