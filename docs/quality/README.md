@@ -24,6 +24,18 @@ One versioned in-repo package that is the single place to:
 
 ---
 
+## Governing epics (SSOT pointers)
+
+| Epic | Role vs this package | Authoritative paths |
+|:---|:---|:---|
+| **[#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204)** | Presentation-quality epic + gold-miss **corpus** | This tree (`METHOD`, taxonomy, prevention, `cases/204/**`). Issue body = locks/V12-A until fully mirrored. Comments = archive after promote. |
+| **[#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)** | Opik evaluation harness **consumer** | Harness design SSOT: [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md). Must **cite** F*/P*/regimes/cases here — must **not** fork gold-miss law. Issue #217 body = executive governance index. |
+| Session 12 seed | Residual close-out proof pack | [`cases/204/session-12.md`](./cases/204/session-12.md) (G1) · [`cases/204/session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · F72–F80 · P-S12-1…9 |
+
+**Rule:** after promotion, repo paths are living SSOT; GitHub comments remain intake evidence only (`process/promotion-from-issue-comment.md`).
+
+---
+
 ## Start here
 
 | If you need to… | Open |
@@ -134,17 +146,19 @@ miss detected
 | B | `METHOD.md` + case templates | **done** |
 | A | Tree + README + process + stubs | **done (this change)** |
 | | Quality package Regime B dogfood case | **done** ([`cases/204/quality-package-regime-b.md`](./cases/204/quality-package-regime-b.md)) |
-| | Promote S12 full cases | pending |
+| | Promote S12 full cases | **partial** — G1 + synthesis **active**; G2–G4/dogfood pending |
 | | Substrate indexes (F1–F71 full prose, S1–11 stubs) | pending / skeleton |
 | | `cases/220/s0-schema-freeze.md` | pending |
-| | #204 / #217 pointers to this SSOT | pending |
+| | #204 / #217 pointers to this SSOT | **done** (package + eval plan + issue comment pointers) |
 
 ---
 
 ## Related docs
 
 * [`docs/plans/README.md`](../plans/README.md) — plan class rules  
-* [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) — eval SSOT (consumes Session-12 seed IDs)  
+* [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) — eval design SSOT (#217); **consumes** Session-12 seed IDs / regimes from this package  
+* [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204) — corpus epic (comments archive; cases live here)  
+* [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217) — harness governance index (not gold-miss law host)  
 * [`docs/eval/README.md`](../eval/README.md) — S0 pins  
 * Product: `commit_gold` / `commit_quality` / Hybrid hooks  
 

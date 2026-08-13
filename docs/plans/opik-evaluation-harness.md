@@ -7,7 +7,10 @@
 > **This document:** authoritative living plan for the Opik evaluation harness (S0–S7)  
 > **Path:** `docs/plans/opik-evaluation-harness.md`  
 > **Related ADRs:** ADR-0010 (Opik telemetry), ADR-0011 (E2E observability stack)  
-> **Authority order:** product ranker/SOP/Hybrid/`commit_gold`/`commit_quality`/path-class ▸ ADR-0010/0011 ▸ this plan ▸ #217 governance pointer/comments ▸ vendor Opik docs/skills  
+> **Authority order:** product ranker/SOP/Hybrid/`commit_gold`/`commit_quality`/path-class ▸ ADR-0010/0011 ▸ **gold-miss package** [`docs/quality/`](../quality/README.md) (METHOD · F*/P* · cases) ▸ this plan ▸ #217 governance pointer/comments ▸ vendor Opik docs/skills  
+> **#204 / #217 split:** #204 = corpus epic + intake; living gold-miss SSOT = `docs/quality/`. #217 = harness governance index; living harness design SSOT = **this plan**. Do not re-host Session 12 case novels or F*/P* prose in #217.
+>
+> **Gold-miss package SSOT:** [`docs/quality/README.md`](../quality/README.md) · Session 12 synthesis [`session-12-synthesis.md`](../quality/cases/204/session-12-synthesis.md) · G1 [`session-12.md`](../quality/cases/204/session-12.md)  
 
 ---
 
@@ -2097,14 +2100,16 @@ commit_session_thread + message_versions + scores
 
 ### 7.4 #204 corpus encoding requirements
 
-#204 archive material is **corpus law**, not narrative scrap.
+#204 archive material is **corpus law**, not narrative scrap.  
+**Living homes (repo SSOT):** [`docs/quality/`](../quality/README.md) — especially [`METHOD.md`](../quality/METHOD.md), [`FAILURE_TAXONOMY.md`](../quality/FAILURE_TAXONOMY.md), [`PREVENTION_BACKLOG.md`](../quality/PREVENTION_BACKLOG.md), [`cases/204/session-12.md`](../quality/cases/204/session-12.md) (G1 Regime A), [`cases/204/session-12-synthesis.md`](../quality/cases/204/session-12-synthesis.md) (A+B systems map), [`cases/204/quality-package-regime-b.md`](../quality/cases/204/quality-package-regime-b.md) (later Regime B dogfood).  
+GitHub #204 comments are intake/archive after promotion; #217 must **cite** these paths, not duplicate them.
 
 | Field | Required | Values / notes |
 |:---|:---:|:---|
 | `corpus.source` | ✅ | `204_archive` |
 | `corpus.regime` | ✅ | `A` = detectable deterministic/process failure class; `B` = looks-good false-green / attribution-semantic risk |
 | `corpus.instance_kind` | ✅ when applicable | `A` / `B` instance encoding from archive |
-| `corpus.session_tags` | ✅ when known | must include `session-12-seed` for Session 12 seeds |
+| `corpus.session_tags` | ✅ when known | must include `session-12-seed` for Session 12 seeds (proof: `docs/quality/cases/204/session-12.md` + `session-12-synthesis.md`) |
 | `corpus.failure_ids` | ✅ | stable IDs from archive taxonomy (not only prose) |
 | `corpus.prevention_ids` | ✅ when known | prevention checklist IDs |
 | `corpus.provenance` | ✅ | origin path/issue link; capturer; no secrets |

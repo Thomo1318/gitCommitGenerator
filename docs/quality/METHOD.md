@@ -6,8 +6,8 @@
 > **Status:** active (ratification core)  
 > **Genre authority:** Session 12 (Opik-bound forensic reconstruction)  
 > **Substrate:** Sessions 1–11 + #204 body (law, F1–F71, matrices, tip corpus)  
-> **Sources:** #204 comments `5213748048`, `5215148242`, `5215440216`, `5215611559`, dogfood `5226058599` / `5226058718` / `5226058788`  
-> **Last harvest:** 2026-08-13  
+> **Sources:** promoted SSOT `cases/204/session-12.md` + `session-12-synthesis.md`; archive comments `5213748048`, `5215148242`, `5215440216`, `5215611559`; dogfood `5226058599` / `5226058718` / `5226058788`  
+> **Last harvest:** 2026-08-13 (S12 G1 + synthesis promoted)  
 > **Companion:** [`templates/CASE_TEMPLATE.md`](./templates/CASE_TEMPLATE.md)
 
 ---
@@ -55,9 +55,16 @@ Run a full gold-miss case when **any** of the following is true:
    METHOD · GOLD_STANDARD · FAILURE_TAXONOMY · PREVENTION_BACKLOG · cases
 3. #204 issue body (behavioural locks / V12-A / anti-patterns until fully mirrored)
 4. #204 comment archives (intake evidence; non-authoritative after promotion)
-5. Eval plan (#217 / docs/plans/opik-evaluation-harness.md)
+5. Eval plan (#217 / docs/plans/opik-evaluation-harness.md) — consumer only
 6. Chat / scratch (residue only)
 ```
+
+**Epic split**
+
+| Issue | Owns | Does **not** own |
+|:---|:---|:---|
+| **#204** | Corpus motivation + historical intake; locks in body until mirrored | Living case library after promote (paths under `docs/quality/cases/204/` win) |
+| **#217** | Harness governance index + eval plan pointer | Gold-miss METHOD, F*/P* definitions, case prose (cite this package) |
 
 Eval metrics **wrap** product authorities and **cite** package F*/P* IDs. They must not invent parallel presentation law.
 
@@ -325,7 +332,7 @@ Gold is the **message the project would keep**, not “Hybrid-parseable.”
 | Operator checklist | `process/gold-miss-review-checklist.md` |
 | Message-only rewrite | `process/message-only-rewrite.md` |
 | Promote from GitHub | `process/promotion-from-issue-comment.md` |
-| Worked proofs | `cases/204/session-12*.md` (promote target) |
+| Worked proofs | [`cases/204/session-12.md`](./cases/204/session-12.md) (G1) · [`session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · G2–G4 pending |
 | First forward case | `cases/220/s0-schema-freeze.md` |
 
 ---
@@ -355,14 +362,14 @@ Anything less is **intake notes**, not package SSOT.
 
 | S12 element | Method location |
 |:---|:---|
-| G1 fallback/process-meta catastrophe | Regime A exemplar |
-| G2–G4 clean wrong accept | Regime B exemplar |
+| G1 fallback/process-meta catastrophe | Regime A exemplar → [`cases/204/session-12.md`](./cases/204/session-12.md) |
+| G2–G4 clean wrong accept | Regime B exemplar → synthesis + pending G2–G4 cases |
 | F72–F80 | Taxonomy + every residual close-out checklist |
 | P-S12-1…9 | Prevention backlog systems floor |
 | Direct/Reconstructed matrix | §6.3 / provenance process |
 | Empty `path_class_gate` / `staged_paths` | §6 §10 evidence channels |
 | prepare re-entry | F80 · process/message-only-rewrite |
-| Cross-commit synthesis | Template + cases/204/session-12-synthesis |
+| Cross-commit synthesis | Template + [`cases/204/session-12-synthesis.md`](./cases/204/session-12-synthesis.md) **active** |
 
 Sessions 1–11 supply the **law and ID substrate** this method assumes (diff-class matrices, R1–R25, F1–F71, accept/reject stacks, tip index). They do not define a weaker genre.
 
@@ -375,7 +382,7 @@ Sessions 1–11 supply the **law and ID substrate** this method assumes (diff-cl
 | Package version | `1.0.0-combine` |
 | Method status | Active ratification core (B) |
 | Scaffold status | Tree + companions (A) |
-| Next content harvest | Promote S12 full cases · substrate indexes · #220 case |
+| Next content harvest | S12 G2–G4 + dogfood · substrate indexes · #220 case |
 | Owners | git-cg maintainers / gold-miss reviewers |
 
 When this file conflicts with a historical #204 comment on **procedure**, this file wins.  

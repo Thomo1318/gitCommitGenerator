@@ -70,15 +70,15 @@ When a new case needs Fn≤71, paste a one-line definition into this file at tha
 
 | ID | Failure mode | Regime | Prevention | Proof |
 |:---|:---|:---|:---|:---|
-| **F72** | Guard/skeleton fallback shipped as final | A | P-S12-1 | S12-G1 |
-| **F73** | Process meta leaked into body | A | P-S12-2 | S12-G1 |
-| **F74** | Snake scope vs series canon | A (also craft) | P-S12-3 | S12-G1 |
-| **F75** | Type/SemVer collapse on product API/law add | A | P-S12-5 | S12-G1 |
-| **F76** | fixtures/tests typed `fix` | B | P-S12-4 | S12-G2/G3 |
-| **F77** | docs_only typed `fix` + attribution bleed | B | P-S12-4 / P-S12-7 | S12-G4 |
-| **F78** | Inventory under-claim / generic collapse | A+B | P-S12-6 | S12 all |
-| **F79** | validate/enforce overclaim on pure pins | B | P-S12-8 | S12-G2–G4 |
-| **F80** | prepare-commit-msg still runs on message-only rebuild | process | P-S12-9 | S12 series |
+| **F72** | Guard/skeleton fallback shipped as final | A | P-S12-1 | [S12-G1](./cases/204/session-12.md) |
+| **F73** | Process meta leaked into body | A | P-S12-2 | [S12-G1](./cases/204/session-12.md) |
+| **F74** | Snake scope vs series canon | A (also craft) | P-S12-3 | [S12-G1](./cases/204/session-12.md) |
+| **F75** | Type/SemVer collapse on product API/law add | A | P-S12-5 | [S12-G1](./cases/204/session-12.md) |
+| **F76** | fixtures/tests typed `fix` | B | P-S12-4 | S12-G2/G3 (pending promote) |
+| **F77** | docs_only typed `fix` + attribution bleed | B | P-S12-4 / P-S12-7 | S12-G4 (pending promote) |
+| **F78** | Inventory under-claim / generic collapse | A+B | P-S12-6 | [S12 synth](./cases/204/session-12-synthesis.md) |
+| **F79** | validate/enforce overclaim on pure pins | B | P-S12-8 | S12-G2–G4 (pending promote) |
+| **F80** | prepare-commit-msg still runs on message-only rebuild | process | P-S12-9 | [S12 synth](./cases/204/session-12-synthesis.md) |
 | **F81** | Tautological path-kind scope (`docs(docs)`) vs dominant package slug (`quality`) | B | P-S12-10 | 204-QP-RB |
 | **F82** | Docs-only tip ships `Miscellaneous` in Changelog-Groups | B | P-S12-11 | 204-QP-RB |
 | **F83** | Issue-governed tip omits required issue trailer (`Refs`/`Resolves`/…) | B | P-S12-12 | 204-QP-RB |
