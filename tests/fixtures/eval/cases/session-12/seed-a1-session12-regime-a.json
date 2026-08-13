@@ -1,0 +1,37 @@
+{
+  "case_id": "seed-a1-session12-regime-a",
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound",
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "A",
+  "instance_kind": "A",
+  "final_message": "chore(commit_quality): complete residual close-out with fallback path\n\nContext: regeneration exhausted under gold_strict\nChanges: shipped skeleton/process-meta body as successful final\n\nNull: #0\nSemVer-Impact: NONE\nChange-Types: chore\nChangelog-Groups: Miscellaneous\n",
+  "expected_final_message": "✨ feat(commit-quality): add Session 6 scope, capability, and guard laws\n\nRefs: #204\nSemVer-Impact: MINOR\nChange-Types: feat\nChangelog-Groups: Added\n",
+  "expected_gold_codes": [
+    "GOLD_SKELETON_FALLBACK_FINAL",
+    "GOLD_PROCESS_META_BODY"
+  ],
+  "failure_ids": ["F72", "F73", "F74", "F75", "F78"],
+  "prevention_ids": ["P-S12-1", "P-S12-2", "P-S12-3", "P-S12-5", "P-S12-6"],
+  "path_class_gate": "product_src",
+  "generation_task_input": {
+    "diff_summary": "src/git_cg/commit_quality.py product law changes",
+    "path_class_gate": "product_src",
+    "ranked_intent_id": "feature_addition"
+  },
+  "tags": ["session-12-seed", "regime-a", "204-archive", "seed-a1"],
+  "meta": {
+    "corpus_source": "204_archive",
+    "seed_id": "SEED-A1",
+    "quality_case": "docs/quality/cases/204/session-12.md",
+    "series": "204-S12",
+    "case_archive_id": "204-S12-G1",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Regime A recovery-poison / fallback-as-final seed. final_message is historical miss bytes; expected_* is gold target for later S2, never generation input."
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "case_id": "seed-v1-valid-fixture",
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "unbound_reason": "synthetic_offline_fixture",
+  "provenance_label": "fixture",
+  "redaction_profile": "default_scrub",
+  "regime": "n/a",
+  "final_message": "📝 docs(eval): add offline fixture seed\n\nRefs: #223\nSemVer-Impact: PATCH\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "expected_final_message": "📝 docs(eval): add offline fixture seed\n\nRefs: #223\nSemVer-Impact: PATCH\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "expected_gold_codes": [],
+  "path_class_gate": "docs_only",
+  "generation_task_input": {
+    "diff_summary": "docs/eval README only",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": ["seed-v1", "cm-eval-fixtures-core"],
+  "meta": {
+    "corpus_source": "synthetic",
+    "seed_id": "SEED-V1"
+  }
+}
