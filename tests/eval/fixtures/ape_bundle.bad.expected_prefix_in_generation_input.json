@@ -1,0 +1,10 @@
+{
+  "artifact_class": "final_accept",
+  "bound": true,
+  "case_id": "case-1",
+  "generation_task_input": {
+    "diff_summary": "docs",
+    "expected_gold_final": "should not be here"
+  },
+  "schema_version": "ape_bundle_v1"
+}

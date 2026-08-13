@@ -1,0 +1,7 @@
+{
+  "id": "cfg-m",
+  "mode": "mirror",
+  "project_name": "git-cg-eval",
+  "redaction_profile": "default_scrub",
+  "schema_version": "git_cg_opik_config_v1"
+}

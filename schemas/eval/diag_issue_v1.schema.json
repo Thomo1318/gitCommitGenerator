@@ -76,7 +76,7 @@
       "type": "string"
     },
     "pin_ref": {
-      "pattern": "^[a-z0-9_]+_v[0-9]+@([a-f0-9]{64}|[A-Za-z0-9._-]+)$",
+      "pattern": "^[a-z0-9_]+_v[0-9]+@[a-f0-9]{64}$",
       "type": "string"
     },
     "polarity": {
@@ -143,7 +143,7 @@
   "description": "Deterministic diagnostic issue + fingerprint. S0 stub: identifiers + closed enums + representative required fields.",
   "properties": {
     "code": {
-      "type": "string"
+      "$ref": "#/$defs/non_empty_string"
     },
     "fingerprint": {
       "$ref": "#/$defs/non_empty_string"
@@ -155,13 +155,13 @@
       "type": "object"
     },
     "metric_catalog": {
-      "type": "string"
+      "$ref": "#/$defs/pin_ref"
     },
     "notes": {
       "type": "string"
     },
     "schema_pack": {
-      "type": "string"
+      "$ref": "#/$defs/pin_ref"
     },
     "schema_version": {
       "const": "diag_issue_v1"

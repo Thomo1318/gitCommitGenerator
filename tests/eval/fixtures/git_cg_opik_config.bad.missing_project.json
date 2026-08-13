@@ -1,0 +1,6 @@
+{
+  "id": "cfg-bad",
+  "mode": "mirror",
+  "redaction_profile": "public_ci",
+  "schema_version": "git_cg_opik_config_v1"
+}

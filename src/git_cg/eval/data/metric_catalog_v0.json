@@ -73,7 +73,7 @@
   "description": "Machine-readable metric catalog pin. Train/advisory metrics never imply gate.deterministic_pass alone (M11). Polarity is always explicit (M1).",
   "dual_axis": {
     "gate_authority": "deterministic product-wrapped metrics / gate.* only",
-    "training_corpus_retention": "R14 owner ladder; record \u2260 gate (M11)"
+    "training_corpus_retention": "R14 owner ladder; record ≠ gate (M11)"
   },
   "find025_reference_matrix_stub": {
     "entries": [
@@ -122,11 +122,11 @@
     },
     {
       "law_id": "M10",
-      "title": "Severity parity \u2014 eval severity must not exceed product severity"
+      "title": "Severity parity — eval severity must not exceed product severity"
     },
     {
       "law_id": "M11",
-      "title": "Record \u2260 gate \u2014 advisory/lab/train may be retained without implying gate.deterministic_pass"
+      "title": "Record ≠ gate — advisory/lab/train may be retained without implying gate.deterministic_pass"
     }
   ],
   "metrics": [
@@ -1485,8 +1485,8 @@
       "family": "lab",
       "metric_id": "ops.compliance_risk",
       "name": "Compliance risk mapped carefully",
-      "notes": "",
-      "polarity": "higher_is_better",
+      "notes": "Risk polarity is lower_is_better (mapped carefully; not compliance health).",
+      "polarity": "lower_is_better",
       "severity": "warn",
       "source_default": "lab_meta"
     },

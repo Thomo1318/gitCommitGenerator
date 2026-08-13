@@ -1,0 +1,6 @@
+{
+  "id": "cfg-off",
+  "mode": "off",
+  "redaction_profile": "public_ci",
+  "schema_version": "git_cg_opik_config_v1"
+}

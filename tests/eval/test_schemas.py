@@ -80,3 +80,53 @@ def test_s0_a_expected_not_in_generation_task_input() -> None:
             "ape_bundle_v1",
             _load("ape_bundle.bad.expected_in_generation_input.json"),
         )
+
+
+def test_s0_a_expected_prefix_rejected_in_generation_task_input() -> None:
+    with pytest.raises(SchemaPackError):
+        validate_instance(
+            "ape_bundle_v1",
+            _load("ape_bundle.bad.expected_prefix_in_generation_input.json"),
+        )
+
+
+def test_s0_a_bound_false_requires_unbound_reason() -> None:
+    with pytest.raises(SchemaPackError):
+        validate_instance(
+            "ape_bundle_v1",
+            _load("ape_bundle.bad.bound_false_missing_reason.json"),
+        )
+
+
+def test_s0_a_pin_fields_require_sha256() -> None:
+    with pytest.raises(SchemaPackError):
+        validate_instance("eval_suite_v1", _load("eval_suite.bad.short_pin.json"))
+    validate_instance("eval_suite_v1", _load("eval_suite.good.json"))
+
+
+def test_s0_a_export_batch_rejects_raw_dev_unsafe() -> None:
+    with pytest.raises(SchemaPackError):
+        validate_instance(
+            "export_batch_v1",
+            _load("export_batch.bad.raw_dev_unsafe.json"),
+        )
+
+
+def test_s0_a_opik_config_requires_project_when_enabled() -> None:
+    with pytest.raises(SchemaPackError):
+        validate_instance(
+            "git_cg_opik_config_v1",
+            _load("git_cg_opik_config.bad.missing_project.json"),
+        )
+    validate_instance(
+        "git_cg_opik_config_v1",
+        _load("git_cg_opik_config.good.off.json"),
+    )
+    validate_instance(
+        "git_cg_opik_config_v1",
+        _load("git_cg_opik_config.good.mirror.json"),
+    )
+
+
+def test_s0_a_human_review_advisory_authority_and_redaction() -> None:
+    validate_instance("human_review_v1", _load("human_review.good.json"))

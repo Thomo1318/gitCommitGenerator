@@ -1,0 +1,8 @@
+{
+  "authority": "advisory",
+  "id": "hr-1",
+  "rating": 4,
+  "redaction_profile": "meta_eval_scrub",
+  "reviewer": "reviewer-opaque-01",
+  "schema_version": "human_review_v1"
+}

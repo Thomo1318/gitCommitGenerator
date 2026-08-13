@@ -5,5 +5,6 @@
   ],
   "id": "thread-1",
   "schema_version": "commit_session_thread_v1",
-  "session_thread_id": "sess-abc"
+  "session_thread_id": "sess-abc",
+  "redaction_profile": "private_message"
 }
