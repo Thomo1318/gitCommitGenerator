@@ -1,6 +1,6 @@
 # Opik Evaluation Harness — Design & Implementation Plan
 
-> **Status:** v0.9.1 live-briefing locks (FIND-026…028; empty-output fan-out / artifact-bind / prompt-drift) · v0.9.0 comment-depth + v0.8.1 training-corpus locked · §14 filing gate next  
+> **Status:** v0.9.2 body-residual ingest (#217 issue-body pedagogy + scaffold gap + Session-12 seed AC) · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate next  
 > **Document class:** formal design + implementation SSOT (promoted from scratch)  
 > **Parent epic:** #216 — E2E Observability Stack  
 > **Governing issue:** #217 — formalise Opik commit-message evaluation harness  
@@ -15,11 +15,11 @@
 
 | Field | Value |
 |:---|:---|
-| Version | `0.9.1-live-briefing-locks` |
-| Stage | Formal design SSOT promoted from scratch · compilation complete + training-corpus axis locked + #217 comment-depth + **live Opik Daily Briefing locks** — filing gate next |
+| Version | `0.9.2-body-ingest` |
+| Stage | Formal design SSOT · body residual pedagogy ingested · comment-depth + briefing locks locked — filing gate next |
 | Location | `docs/plans/opik-evaluation-harness.md` (versioned; was `scratch/0.OpikIntegration/opik.md`) |
-| Filled from | #217 (all 26 comments) + full plan compile + owner training-corpus / thread / redaction-ladder approval (2026-08-13) + comment-depth integration (2026-08-13) + live Daily Briefing incident locks (2026-08-13) |
-| Not yet filled | §14 operational ticks only (pointer comment + Q1 + S0 file command) |
+| Filled from | #217 body residual (2026-08-13) + #217 (all 26 comments) + full plan compile + owner training-corpus / thread / redaction-ladder approval + comment-depth + live Daily Briefing locks |
+| Filled through §14 gate | SSOT pointer in #217 body + Q1=A + S0 filed as #220; implement S0 next |
 | Companion artefacts (planned) | optional YAML machine map under `docs/plans/`; optional per-slice briefs |
 | Out of scope for this file | Runtime product behaviour changes; Promptfoo deep design (#219); Sentry deep design (#218) |
 
@@ -62,6 +62,7 @@
 9. **Owner-chosen redaction ladder** — The owner selects retained payload depth for maintainer sinks (`public_ci` → `train_rich` / `antipattern_vault`). Thin defaults remain for basic users, CI public logs, and unscoped exports. Training intent **may** justify richer bodies/diffs under scrub + pin + scope tags; it never justifies secret leak or making judges product law.
 10. **#217 comment-depth contracts (v0.9.0)** — Tracing topology, no-Ollie debug/diagnostics, score placement, config/flush, two-layer export durability, replay lineage, promotion/split laws, and official Opik URL matrix are **first-class plan law** (FIND-019…025). Comments written before R11–R14 are reanalysed under current relaxations (see §18.1); agents must implement from **this document**, not from raw issue comments.
 11. **Live Opik Daily Briefing locks (v0.9.1)** — Current cloud “quality collapse” symptoms (empty-output ×N evaluator errors; near-zero `header_length_ok`/`has_body`; stale cloud experiments vs prompt churn; acceptance≫format gap) are treated as **live Opik-plane misconfiguration / wrong scored artifact**, not evidence that Hybrid/SOP product law is wrong. Fixes land naturally as S2–S6 evaluation-suite work (FIND-026…028, §18.13). **Do not** relax 72-char/body/SOP thresholds from unbinding online scores.
+12. **#217 issue-body residual (v0.9.2)** — The original GitHub #217 **body** (pre-R11–R14) remains a primary source for **scaffold indictment, Regime A/B teaching, Session-12 seed requirements, #204 provenance/ID namespaces, and operator “what good looks like.”** Living design law is **this plan**; the issue body is governance + executive index. On conflict: **this plan ▸ #217 body ▸ comments**. Body-era absolute “thin export / regen-only thread / mirror-only forever” readings are superseded by R13/R14/dual-axis (§18.1, §18.14).
 
 
 ### 0.4 #217 comment-depth integration checklist (v0.9.0)
@@ -215,9 +216,24 @@ The harness scores the **real accepted final message** against product authoriti
 
 | Layer | Done means |
 |:---|:---|
-| Design (#217) | Locks + catalogs + maps ratified; no code required to close design |
-| This plan doc | Findings compiled; issue graph filable without re-debate; §14 checklist green |
+| Design (#217) | Locks + catalogs + maps ratified in **this plan**; #217 body points at path+version; no code required to close design |
+| This plan doc | Findings compiled (incl. body residual pedagogy); issue graph filable without re-debate; §14 checklist green |
 | Implementation | Grandchildren S0–S7 ship; Opik pillar of #216 advances without authority inversion |
+
+### 1.6 Operator “what good looks like” (from #217 body; normative intent)
+
+These are **design/pilot success pictures**, not alternate product law:
+
+1. Offline suite reproduces Session-12 **Regime A and B** without LLM/network.
+2. Final rendered accept-path message bytes are the primary scored product artifact.
+3. Historical **`Opik-unbound`** evidence is importable and explicitly labeled (never fake-bound).
+4. Gold counter / findings / blocked / regen integrity failures are machine-detectable.
+5. Empty `path_class_gate` + green shallow score-card **cannot** become golden.
+6. Semantic judges **cannot** greenlight a deterministic-illegal envelope.
+7. Experiments compare raw vs gold vs post-fix with pinned engine/prompt/harness/catalog versions.
+8. Optional Opik REST/bulk export is projection-only, batched, idempotent, size-bounded (default **≤4MB**/batch), non-blocking.
+9. Maintainer train/dogfood enrichment may be rich under R14 without becoming gates (dual axis).
+10. Basic users never need Opik installed, configured, or healthy to commit.
 
 ---
 ## 2. Authority model & hard floor
@@ -240,6 +256,8 @@ The harness scores the **real accepted final message** against product authoriti
 | F9 | Slice order | Authoritative offline A/B (S0–S2/S3) before Lane C / judge lab (S5) and before trusting mirrors as operator UX (S4). Design-first on #217; implementation via grandchildren only. |
 
 **Amendment rule:** weakening any F0–F9 is a constitution change, not a Slice PR and not an R-item.
+
+**Product non-weaken (from #217 body):** Gold remains a **validator**. Do **not** weaken `GOLD_SKELETON_FALLBACK_FINAL` / skeleton provenance law to chase online scorecards. Evaluation must detect when gold counters/findings/blocked/regen state disagree with the final rendered message (Family D + Family I counters).
 
 ### 2.2 Lane model
 
@@ -392,6 +410,8 @@ opik_owner_lake             ⊇  scrubbed train rows  (non-blocking projection)
 | `environment` | `development` \| `dogfood` \| `ci` \| `eval` \| `staging` \| `production` | Free-text only tags |
 | Layer A | Local durable bundle/scores/topology/correlation | SDK temp SQLite |
 | Layer B | Optional Opik SDK offline SQLite park/replay | Accept-path evidence SoT |
+| `provenance_label` | Closed #204/body enum for message/evidence origin (§7.4.2) | Free-text blog provenance only |
+| `Opik-unbound` | Explicit label: no trustworthy Opik bind for this case | Silent missing trace treated as bound |
 
 **Topology (normative):**
 
@@ -474,6 +494,8 @@ Do **not** treat these as R-series items:
 * Replacing Families A–H with vendor heuristic packs  
 * Unpinned Prompt Library runtime fetch on accept-path/CI  
 * Local Runner / `opik connect` as required commit-path UX  
+* Weakening `GOLD_SKELETON_FALLBACK_FINAL` / gold-strict skeleton provenance to greenwash online dashboards  
+* Scoring live regen (or raw model dumps) as if they were final accept-path bytes without explicit `artifact_class`  
 
 ### 3.4 One-line relaxation policy
 
@@ -1032,7 +1054,7 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `d.semver_matrix` | pass_fail | `GOLD_SEMVER_MATRIX_MISMATCH` | SOP matrix |
 | `d.scope_filename` | pass_fail | `GOLD_SCOPE_FILENAME` | |
 | `d.subject_title_case` | pass_fail | `GOLD_SUBJECT_TITLE_CASE` | |
-| `d.skeleton_fallback_final` | pass_fail | `GOLD_SKELETON_FALLBACK_FINAL` | final must not be skeleton |
+| `d.skeleton_fallback_final` | pass_fail | `GOLD_SKELETON_FALLBACK_FINAL` | final must not be skeleton · **non-weaken** product code |
 | `d.process_meta_body` | pass_fail | `GOLD_PROCESS_META_BODY` | |
 | `d.path_class_semver` | pass_fail | `GOLD_PATH_CLASS_SEMVER_CEILING` | may alias C for dual emit once |
 | `d.path_class_type` | pass_fail | `GOLD_PATH_CLASS_TYPE_MISMATCH` | |
@@ -1043,6 +1065,8 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `d.strict_fail_set` | lower_is_better | count(`STRICT_FAIL_CODES` ∩ findings) | value=count; pass iff 0 in strict suites |
 
 **Emit rule:** prefer one wrapper invocation of `check_commit_gold` → fan-out ScoreResults (don’t N-scan the message).
+
+**Body lock:** gold is a validator, not optional cosmetic — counters/findings/`gold_blocked`/`gold_regen_attempts` must be consistency-checked against the final message (Session-12 / Regime A recovery-poison class).
 
 ---
 
@@ -2024,6 +2048,27 @@ prompt_pack_v1:
 | `train-negative` | train | hard_negative / preference_rejected / antipattern_vault | local vault + labels mandatory | optional restricted |
 | `judge-meta-hm` | lab | R2 hallucination/moderation labeled meta-eval | lab-only; scrubbed | optional |
 
+#### 7.3.2 Dataset ID aliases (historical #217 body names)
+
+| Stable `dataset_id` (this plan) | #217 body / design alias | Notes |
+|:---|:---|:---|
+| `cm-eval-fixtures-core` | `cm-eval-fixtures-core` | unchanged |
+| `204-archive` | `cm-eval-204-archive` | encoder/docs MAY accept alias |
+| `acceptpath-live` | `cm-eval-acceptpath-live` | |
+| `gold-counter-integrity` | `cm-eval-gold-counter-integrity` | |
+| `semantic-cohort` | `cm-eval-semantic-cohort` | |
+| `regression-queue` | `cm-eval-regression-queue` | |
+| `dogfood-rolling` | — (post-body) | R12 |
+| `train-positive` / `train-negative` | — (post-body) | R14 train axis |
+
+**Experiment naming (S4 / operator convention):**
+
+```text
+eval_<lane>_<catalog_version>_<gitsha>_<utc>
+```
+
+Pins required on every experiment: harness, metric catalog, prompt-pack/hash, engine/model, artifact class, lane, dataset/suite snapshot hash (never unpinned `latest`).
+
 **Promotion paths:**
 
 ```text
@@ -2075,11 +2120,67 @@ commit_session_thread + message_versions + scores
 | **A** | Failure should be caught by deterministic product/harness gates | A–E, G–H, much of D/F |
 | **B** | Plausible message that still violates attribution/contract/truth | C, D, F (+ E craft lie detectors) |
 
-**Encoding bans:**
+#### 7.4.1 Regime A/B teaching table (#217 body; corpus pedagogy)
+
+| Regime | Pattern | Symptom | Harness must catch |
+|:---|:---|:---|:---|
+| **A** | Controls fire, recovery poisons final | skeleton / process-meta catastrophe after regen | gold findings, hostile regen, fallback provenance, counter truth (Family D + I) |
+| **B** | Controls never fire; wrong envelope looks perfect | empty `path_class_gate`, green shallow score-card, wrong type/SemVer/inventory | path-class authority, inventory/attribution, silent wrong acceptance (Families C/F + gates) |
+
+Instance **A ≠ B** encoding from the #204 archive is mandatory when the archive distinguishes them (`corpus.instance_kind`).
+
+#### 7.4.2 Provenance label enum (#217 body / #204)
+
+Closed labels (store on bundle / corpus; extend only via catalog/schema bump):
+
+| Label | Meaning |
+|:---|:---|
+| `Git-raw` | Raw tip / pre-repair git message bytes |
+| `Git-mid` | Mid-pipeline rewrite (pre-final) |
+| `Gold-final` | Post-gold / gold-accepted final |
+| `Rewrite-map-confirmed` | Rewrite map confirmed path |
+| `Opik-unbound` | No trustworthy Opik bind (explicit; importable) |
+| `final_accept` | Bound accept-path / `COMMIT_EDITMSG` final bytes (primary product score class) |
+| `live_regen` | Explicit secondary live regeneration artifact |
+| `fixture` | Synthetic / committed fixture final |
+
+Unbound historical evidence **must** remain importable under `Opik-unbound` — never silently coerced to bound.
+
+#### 7.4.3 #204 / Session failure & prevention ID namespaces
+
+Preserve archive strings as first-class `failure_ids` / `prevention_ids` (not prose-only):
+
+| Namespace | Examples (indicative) | Role |
+|:---|:---|:---|
+| Instance B failures | `F-IB*` | Regime/instance taxonomy |
+| Session numeric failures | `F72`–`F80`, … | Archive failure IDs |
+| Instance B preventions | `P-IB-*` | Prevention checklist |
+| Session 12 preventions | `P-S12-1`…`P-S12-9` | Session-12 proof map |
+
+S1 encoder **MUST** round-trip these strings when `corpus.source=204_archive`.
+
+#### 7.4.4 Session-12 seed suite requirements (S1 AC fuel)
+
+Session 12 is the **seed proof pack**, not a full archive import bar. Seed fixtures / tags (`session-12-seed`) must collectively exercise:
+
+| # | Residual gap (from #217 body) | Harness ownership | Notes |
+|:---:|:---|:---|:---|
+| 1 | Authoritative staged-path harvesting | S1/S3 bundle fields + Family F | |
+| 2 | Concrete `path_class_gate` | S2 Family C + telemetry bind | |
+| 3 | Final rendered-message gold blocking | S2 Family D + S3 final bytes | |
+| 4 | Regeneration attempt accounting | Family I counters + D consistency | |
+| 5 | Stable-ID / inventory enforcement | Family F | |
+| 6 | Hook isolation (`GIT_CG_SKIP_PREPARE`) | **Historical / shipped outside this harness** | Cite only; do not re-open as #217 S1 scope |
+| 7 | Both Regime A and Regime B coverage | §7.4.1 fixtures | hard S1 intent; exact counts = Q8 |
+
+#### 7.4.5 Encoding bans
+
 * ❌ Dropping failure_ids and keeping only blog prose  
 * ❌ Re-running live regen as silent replacement of archive final bytes  
 * ❌ Merging expected labels into task input  
 * ❌ Using Regime tags as LLM judge sole authority  
+* ❌ Mixing Instance A and Instance B evidence without `instance_kind`  
+* ❌ Encoding only happy-path fixtures and dropping Regime A recovery-poison cases  
 
 ---
 
@@ -2279,7 +2380,7 @@ schemas/eval/
 | **Primary paths** | `src/git_cg/eval/corpus/**`, `tests/fixtures/eval/**`, `tests/eval/test_corpus*.py`, thin wrapper retiring bits of `scripts/compile_opik_dataset.py` / `eval_commit_message.py` inputs |
 | **R-items** | R9 filters may exist as data tags only |
 | **Findings** | FIND-004 cases may be fixture-tagged for later |
-| **AC** | ☐ `cm-eval-fixtures-core` snapshot builds offline and validates all cases. ☐ Each case has stable `case_id`, `artifact_class`, `bundle_ref`. ☐ #204 sample(s) carry regime, failure_ids, provenance (or explicit skip with reason). ☐ expected_* never appears in a “task_input” projection helper. ☐ Re-encode is deterministic (stable hashes). ☐ `just test` (or targeted pytest) green offline. |
+| **AC** | ☐ `cm-eval-fixtures-core` snapshot builds offline and validates all cases. ☐ Each case has stable `case_id`, `artifact_class`, `bundle_ref`. ☐ #204 sample(s) carry regime, failure_ids, prevention_ids when known, provenance_label enum, instance_kind when applicable (or explicit skip with reason). ☐ At least one `session-12-seed` path covering Regime A **and** B intent (§7.4.4; counts per Q8). ☐ Alias acceptance for `cm-eval-204-archive` → `204-archive` (and siblings in §7.3.2) documented or implemented. ☐ expected_* never appears in a “task_input” projection helper. ☐ Re-encode is deterministic (stable hashes). ☐ `just test` (or targeted pytest) green offline. |
 | **Exit risk** | Boiling the ocean on full #204 import — seed + import path OK; full archive can ramp. |
 
 ---
@@ -2337,11 +2438,11 @@ schemas/eval/
 | **Goal** | Project **precomputed local** results to Opik for operator compare **and owner training/longitudinal corpus lake**; never scoring engine of record / CI sole green. |
 | **Depends on** | S1–S3 (need something real to export) |
 | **Network** | optional; all flows degrade safe |
-| **Delivers** | (1) `export_batch_v1` builder. (2) REST/SDK upload path, batched, idempotent, size-bounded. (3) Pinned project/lane — no Default Project dump. (4) **R14 redaction ladder** on export (not only thin default). (5) Export failure classification; cannot flip `gate.deterministic_pass`. (6) Dataset mapping + **commit_session_thread** projection. (7) Optional train-positive/negative dataset projections. (8) Tests with mocked transport + scrub/quarantine. (9) Absorb/retire `scripts/compile_opik_dataset.py` upload parts as library calls. |
+| **Delivers** | (1) `export_batch_v1` builder. (2) REST/SDK upload path, batched, idempotent, size-bounded with **default max batch payload 4MB** (configurable downward; raise only with explicit owner note). (3) Experiment naming `eval_<lane>_<catalog_version>_<gitsha>_<utc>` + full pin set. (4) Pinned project/lane — no Default Project dump. (5) **R14 redaction ladder** on export (not only thin default). (6) Export failure classification; cannot flip `gate.deterministic_pass`. (7) Dataset mapping + **commit_session_thread** projection. (8) Optional train-positive/negative dataset projections. (9) Prefer publishing product deterministic score_card / final-bytes-bound scores (FIND-027). (10) Tests with mocked transport + scrub/quarantine. (11) Absorb/retire `scripts/compile_opik_dataset.py` upload parts as library calls. |
 | **Non-goals** | Cloud SoT; online score execution; Ollie; requiring export on commit. |
 | **Primary paths** | `src/git_cg/eval/mirror/**`, `tests/eval/test_mirror*.py` |
 | **R-items** | **R3, R14** (corpus lake + redaction ladder) |
-| **AC** | ☐ Offline suite remains green if export throws. ☐ Idempotent re-export does not duplicate corruptly (keys). ☐ Secrets always scrubbed; richer bodies only under owner ladder profile. ☐ Scrub fail quarantines fields (no silent ambient leak). ☐ Pin missing → fail export validation, not product gate. ☐ Optional train-positive/negative dataset projection. ☐ Session thread projection when present. ☐ Documented `git-cg eval export` or `just eval-export` dev-only. |
+| **AC** | ☐ Offline suite remains green if export throws. ☐ Idempotent re-export does not duplicate corruptly (keys). ☐ Default batch builder refuses >4MB uncompressed payload (or splits). ☐ Experiment names follow convention + pins present. ☐ Secrets always scrubbed; richer bodies only under owner ladder profile. ☐ Scrub fail quarantines fields (no silent ambient leak). ☐ Pin missing → fail export validation, not product gate. ☐ Optional train-positive/negative dataset projection. ☐ Session thread projection when present. ☐ Documented `git-cg eval export` or `just eval-export` dev-only. |
 | **Exit risk** | Pulling scoring into Opik task fns — forbid. |
 
 ---
@@ -2480,6 +2581,30 @@ File S1 → implement S1
 ## 9. Opik mapping (keep / redesign / do-not-collapse)
 
 [x] **Purpose:** freeze what we keep from today’s scaffold, what we redesign into `src/git_cg/eval/`, and what must never collapse into the Opik pillar.
+
+### 9.0 Current scaffold gap matrix (#217 body indictment)
+
+> **Source:** original #217 issue body “Current eval scaffold is insufficient.”  
+> **Use:** justifies S0–S4 without re-arguing; update rows when scripts are absorbed.
+
+| Surface | Current state (body-era) | Gap | Primary slice |
+|:---|:---|:---|:---:|
+| `scripts/opik_metrics.py` | shallow `FormatMetric` | does not consume `commit_gold` / `commit_quality` / path-class contracts | S2 |
+| `scripts/eval_commit_message.py` | live LLM regen + format/GEval | wrong default artifact; live-model dependent | S1–S6 |
+| `scripts/compile_opik_dataset.py` | promote by `user_acceptance` | popularity ≠ correctness; Regime B can look “good” | S1/S4 |
+| `scripts/setup_opik_eval_rule.py` | generic GPT-4o judges | not Hybrid/SOP/gold/path-class vocabulary | S5 |
+| `scripts/opik_trace_triage.py` | acceptance thresholds only | no regime / gold-integrity / unbound triage | S6 |
+| acceptpath + commit_quality fixtures | strong local evidence packs | not yet encoded as versioned eval bundles | S1 |
+| runtime `GenerationTelemetry` | rich fields exist | not systematically evaluated for binding/counter integrity | S2–S3 |
+| Opik workspace | project + traces + prompt versions + old experiments | comparison plane exists; evaluation semantics do not | S4–S6 |
+
+**Redesign target modes for the eval runner (body → package law):**
+
+| Mode | Default? | Role |
+|:---|:---:|:---|
+| `fixture_offline` | **yes** (offline CI) | Lane A |
+| `acceptpath_bound` | **yes** (bound scoring) | Lane B |
+| `live_regen` | **opt-in only** | secondary artifact class; never silent primary |
 
 ### 9.1 Keep (import posture)
 
@@ -2624,6 +2749,12 @@ Fields below are **eval-layer** (bundle/experiment/brief). Prefer reusing produc
 | `failure_ids` / `prevention_ids` | string[] | #204 |
 | `instance_kind` | A\|B\|other? | #204 |
 | `session_tags` | string[] | e.g. session-12-seed |
+| `provenance_label` | enum | §7.4.2 |
+| `presentation_fallback_reason` | closed enum? | product telemetry reuse |
+| `gold_blocked` | bool | consistency with final under mode |
+| `gold_regen_attempts` | int | consistency with regeneration spans |
+| `gold_self_correction_outcome` | closed enum? | product telemetry reuse |
+| `harness.metric_catalog_version` | string | pin alias of catalog |
 
 #### 10.1.3 Scores & gates (eval)
 
@@ -2637,6 +2768,8 @@ Fields below are **eval-layer** (bundle/experiment/brief). Prefer reusing produc
 | `dogfood.mode` | enum | R12 |
 | `dogfood.last_score` | number? | advisory |
 | `export.status` | enum | projection |
+| `user_acceptance` | feedback score | provenance/edit only — **never** sole golden |
+| evaluator exceptions | **Sentry breadcrumb/exception only** | ops path; not product score cardinality |
 
 #### 10.1.4 Explicit non-fields (default deny)
 
@@ -3047,7 +3180,7 @@ looks valuable inside the floor.
 
 | ID | Question | Owner | Blocks | Slice | Status | Notes / options |
 |:---|:---|:---|:---|:---:|:---:|:---|
-| **Q1** | Exact GH filing moment: pointer comment on #217 only, then S0, or S0–S1 together? | owner | filing | 0–1 | open | Default recommendation: pointer + **S0 only**; file S1 after S0 schema merged or same day if schema frozen in plan |
+| **Q1** | Exact GH filing moment: SSOT pointer on #217 (**body preferred**) then S0, or S0–S1 together? | owner | filing | 0–1 | resolved | Default recommendation: **body pointer + S0 only**; file S1 after S0 schema merged or same day if schema frozen in plan |
 | **Q2** | Package path final: only `src/git_cg/eval/` vs migrate any `evals/` remnant? | impl | S0 layout | 0 | open | Plan assumes single `eval/`; confirm tree at S0 start |
 | **Q3** | CI home for Lane A offline job: existing workflow vs new `eval.yml`? | owner | S6 CI recipe | 6 | open | Must remain offline/no Opik creds; start as non-required if flake unknown |
 | **Q4** | R12 sync budgets: lock numbers after first M4 Max measurement, or keep §3 targets until then? | owner | soft-warn enable | 6 | open | Until measured: **async-only** dogfood default; no sync-warn default |
@@ -3129,7 +3262,7 @@ looks valuable inside the floor.
 - [x] Parked non-goals  
 - [x] Resolved decisions trace  
 - [x] Decision hygiene  
-- [ ] Owner resolves Q1 (filing sequence) before first `gh issue create`  
+- [x] Owner resolves Q1 (filing sequence) before first `gh issue create` → [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220)  
 
 ---
 ## 14. Filing checklist (when leaving skeleton stage)
@@ -3149,10 +3282,13 @@ looks valuable inside the floor.
 - [x] §13 open questions / parked / resolved compiled  
 - [x] §0.3.6–9 + §2.8 training-corpus / dual-axis laws compiled  
 - [x] R13/R14 + FIND-009…018 owner-approved and logged  
-- [ ] Pointer comment on #217 → this file path + version (`0.8.1-training-corpus`)  
+- [x] **v0.9.2 body-residual ingest** (scaffold gap, Regime pedagogy, Session-12 seed, provenance enum, aliases, 4MB/naming)  
+- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.2-body-ingest` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217))  
+- [x] **S0 filed:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) `eval(S0): freeze schema pack + metric catalog pins`
+- [x] **Q1=A** resolved (body pointer + S0 only; S1–S7 not filed)
 - [x] Owner decisions recorded on §17 FIND-* rows (approved 2026-08-12 + 2026-08-13)  
-- [ ] Owner resolves §13 Q1 (filing sequence); Q15–Q16 defaults recommended  
-- [ ] Only then open S0 grandchild (explicit owner file command)  
+- [x] Owner resolves §13 Q1 (filing sequence); default **pointer-in-body + S0 only** → [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220)
+- [x] Only then open S0 grandchild (explicit owner file command) → [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220)  
 
 ---
 
@@ -3163,6 +3299,7 @@ looks valuable inside the floor.
 | Source (chat / #217 comment theme) | Target section(s) | Compiled? |
 |:---|:---|:---:|
 | #217 issue body (lanes, D1–D6, catalog, slices) | §1 §2 §6 §7 §8 §9 | [x] core design sections landed |
+| #217 issue body residual pedagogy (scaffold gap, Regime A/B table, Session-12 seed, provenance enum, F/P namespaces, what-good-looks-like, 4MB/naming, gold non-weaken, dataset aliases) | §1.6 §2.1 §3.3 §7.3.2 §7.4.* §8.1 §8.4 §9.0 §10.1 §18.14 | [x] **v0.9.2** |
 | Full evaluation suite inclusion map | §5 | [x] |
 | H/M cookbook restrictions (superseded by full map; keep deltas if any) | §5.4 | [x] |
 | Relax/remove trade-offs | §5.5 §3 | [x] |
@@ -3179,6 +3316,7 @@ looks valuable inside the floor.
 
 0. [x] **v0.9.0 #217 comment-depth ingest** — INT-01…45 / FIND-019…025 compiled into plan (§0.4, §2.9, §5.7, §6.1b/6.9b, §7.2.12–18, §8 addenda, §10.6–10.7, §18).  
 0b. [x] **v0.9.1 live Daily Briefing locks** — FIND-026…028 / INT-46…52 / §18.13 (empty-output fan-out, artifact bind, prompt-drift; no SOP relax from unbound online scores).  
+0c. [x] **v0.9.2 #217 body-residual ingest** — §1.6 / §7.4 pedagogy / §9.0 scaffold gap / aliases / S4 4MB+naming / body supersession §18.14.  
 
 1. [x] Skeleton structure locked (`v0.1.0-skeleton`).  
 2. [x] **§1 mission / non-goals** compiled.  
@@ -3199,7 +3337,7 @@ looks valuable inside the floor.
 12. [x] **§12 risks & watchlist**.  
 13. [x] **§13 open questions / parked / resolved**.  
 13b. [x] **Training-corpus mission** — FIND-009…018 / R13–R14 / dual axis / I10–I12 / M10–M11 (2026-08-13).  
-14. [ ] **§14 operational gate** — pointer comment on #217 + owner Q1 decision.  
+14. [ ] **§14 operational gate** — SSOT pointer **in #217 body** (preferred) + owner Q1 decision.  
 15. [ ] §14 green + **explicit owner file command** → open S0 grandchild only.  
 16. Optional later: `docs/plans/opik-evaluation-harness.inclusion-map.yaml` (Q10).  
 17. After S0: S1 → **S2a** (unblock capture/R12-MVP) → S2b/c → S3 threads; do not open S5 as merge gate.  
@@ -3259,6 +3397,12 @@ looks valuable inside the floor.
 | `.agents/skills/opik` | SDK reference only |
 | `.agents/skills/instrument` | Emit audit reference only |
 | Opik Evaluation docs | Vendor surface under §5 |
+| #23 | Early repeatable eval precursor — partial/generic; superseded in depth by #217 + this plan |
+| #118 / #119 | Opik Phase D/E scaffold — closed; too shallow post-#204; supersession notes only (PK13) |
+| #204 | Failure archive / Regime A/B / Session-12 evidence base |
+| #212 / #214 | Acceptpath path-class spine + docs craft residual — fixture truth inputs |
+
+**Supersession one-liner:** closed #118/#119 scaffolds and generic #23 do **not** satisfy post-#204 evaluation law; do not reopen them as live gates.
 
 ---
 
@@ -3278,6 +3422,7 @@ looks valuable inside the floor.
 | 2026-08-13 | Post-edit consistency audit fixes | R1–R14 headings/slices/docs; §7.6 ladder; thread vocab; S0/S3/S4/S6/S7 R-item alignment |
 | 2026-08-13 | **Compile #217 comment-depth contracts** into plan (v0.9.0) | FIND-019…025; INT-01…45; no authority inversion; pre-R11–R14 comments reanalysed under current floor |
 | 2026-08-13 | **Live Opik Daily Briefing locks** (v0.9.1) | FIND-026…028; INT-46…52; treat briefing as live-plane misconfig evidence; **no SOP/Hybrid threshold relax** from unbound online scores; fixes via eval-suite S2–S6 |
+| 2026-08-13 | **#217 body-residual ingest** (v0.9.2) | Scaffold gap matrix; Regime A/B teaching; Session-12 seed AC; provenance enum; F/P ID namespaces; what-good-looks-like; dataset aliases; experiment naming; default 4MB batch; gold skeleton non-weaken; plan ▸ body on conflict; SSOT pointer prefers issue body |
 
 **Approved finding dispositions (implementation binding):**
 
@@ -3357,6 +3502,11 @@ looks valuable inside the floor.
 | Semantic evaluation only on deterministic-pass rows | Separate semantic eligibility from corpus capture; failing hard negatives may be retained (`capture_on`) |
 | Playground / optimizer / Ollie as control plane | Rejected (F8); retain local/pattern semantics only |
 | Opaque LLM diagnostics or clustering | Deterministic fingerprints + explain (§18.3–18.4) |
+| #217 body “regen/accept chains only” thread wording | R13 full commit-session thread + optional subchain (§2.9) |
+| #217 body absolute thin export / no-body vibe | R14 owner ladder; ambient/basic/CI stay thin |
+| #217 body “Opik mirror/compare only” forever | Dual purpose: mirror **+** owner corpus lake; local remains SoT |
+| #217 body “this issue body is the design SSOT” | This plan file is living design/implementation SSOT; body = governance index |
+| #217 body old follow-up title list (mixed emoji) | §8.8 formal `eval(S0)…` / `docs(S7)…` titles |
 
 ### 18.2 Operator E-LOOP SOP (INT-27)
 
@@ -3565,5 +3715,28 @@ has_body = message_has_body_or_trailers(final)
 
 ---
 
-*End of v0.9.1-live-briefing-locks — FIND-026…028 / INT-46…52 compiled. Prior v0.9.0 comment-depth + v0.8.1 training-corpus remain locked. Next: §14 operational gate (pointer comment + Q1 + owner file command for S0).*
+### 18.14 #217 body residual compilation (v0.9.2)
+
+> Completes the body→plan gap left after comment-depth ingest. Does **not** re-open body as competing SSOT.
+
+| Body residual | Plan home | Relaxation applied |
+|:---|:---|:---|
+| Scaffold insufficiency table | §9.0 | none — still true until S2–S6 absorb scripts |
+| Regime A/B teaching + Instance A≠B | §7.4.1 | none |
+| Session-12 seven-gap seed list | §7.4.4 | gap 6 hook isolation = historical/shipped |
+| Provenance enum | §7.4.2 / glossary | unbound kept; train/thread labels additive |
+| F-\* / P-\* namespaces | §7.4.3 | none |
+| What good looks like | §1.6 | #9 dual-axis train richness added |
+| Experiment naming + ≤4MB batches | §7.3.2 / S4 | 4MB = default ceiling |
+| `GOLD_SKELETON_FALLBACK_FINAL` non-weaken | §2.1 / §3.3 / Family D | **not** relaxed |
+| `cm-eval-*` dataset names | §7.3.2 aliases | short ids remain stable |
+| Task modes fixture_offline / acceptpath_bound / live_regen | §9.0 + suite modes | live_regen opt-in only |
+| Evaluator errors → Sentry only | §10.1.3 | none |
+| Body-era thin export / regen-only thread / body=SSOT | §18.1 | R13/R14/dual-axis / plan-wins |
+
+**Conflict rule:** `docs/plans/opik-evaluation-harness.md` (this file) wins over the #217 GitHub body on design detail. The body must point here by path + version.
+
+---
+
+*End of v0.9.2-body-ingest — #217 body residual compiled. Prior v0.9.1 briefing locks + v0.9.0 comment-depth + v0.8.1 training-corpus remain locked. Next: implement **S0** only (#220). Do not file S1–S7 yet. Push plan v0.9.2 when ready so `main` blob matches body pointer.*
 
