@@ -9,13 +9,13 @@
 | `5186554544` | Instance A findings | `cases/204/instance-a-precursor.md` | pending |
 | `5210122501` | Instance B 0→5 | `cases/204/instance-b-slices-0-5.md` | pending |
 | `5210137590` | Slices 5.5→11 | `cases/204/sessions-06-11.md` | pending |
-| `5213748048` | S12 primary G1+G2 · F72–F80 intro | `cases/204/session-12.md` (**G1 active full**); G2 still in comment | **G1 promoted**; G2 pending |
-| `5215148242` | S12-G3 | `cases/204/session-12-g3.md` | pending |
-| `5215440216` | S12-G4 | `cases/204/session-12-g4.md` | pending |
+| `5213748048` | S12 primary G1+G2 · F72–F80 intro | `cases/204/session-12.md` (**G1**) · `cases/204/session-12-g2.md` (**G2**) | **promoted** |
+| `5215148242` | S12-G3 | `cases/204/session-12-g3.md` | **promoted** |
+| `5215440216` | S12-G4 | `cases/204/session-12-g4.md` | **promoted** |
 | `5215611559` | S12 synthesis · regimes · P-S12 | `cases/204/session-12-synthesis.md` · METHOD · PREVENTION_BACKLOG | **promoted** (METHOD/P + case) |
-| `5226058599` | dogfood G2 | `cases/204/session-12-dogfood-g2-g4.md` | pending |
-| `5226058718` | dogfood G3 | same | pending |
-| `5226058788` | dogfood G4 | same | pending |
+| `5226058599` | dogfood G2 | `cases/204/session-12-dogfood-g2-g4.md` | **promoted** |
+| `5226058718` | dogfood G3 | same | **promoted** |
+| `5226058788` | dogfood G4 | same | **promoted** |
 
 ## Related non-204
 

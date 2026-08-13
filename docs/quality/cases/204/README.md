@@ -20,11 +20,11 @@
 | Instance B 0–5 | implementation dogfood | `instance-b-slices-0-5.md` | `5210122501` |
 | S6–11 | tip audits / residuals | `sessions-06-11.md` | `5210137590` |
 | **Session 12 G1** | residual close-out · Regime A exemplar | [`session-12.md`](./session-12.md) **active full** | `5213748048` |
-| Session 12 G2 | residual · Regime B | pending promote from `5213748048` | `5213748048` |
-| Session 12 G3 | residual · Regime B | `session-12-g3.md` placeholder | `5215148242` |
-| Session 12 G4 | residual · Regime B | `session-12-g4.md` placeholder | `5215440216` |
+| **Session 12 G2** | residual · Regime B exemplar | [`session-12-g2.md`](./session-12-g2.md) **active full** | `5213748048` |
+| **Session 12 G3** | residual · Regime B exemplar | [`session-12-g3.md`](./session-12-g3.md) **active full** | `5215148242` |
+| **Session 12 G4** | residual · Regime B exemplar | [`session-12-g4.md`](./session-12-g4.md) **active full** | `5215440216` |
 | **Session 12 synthesis** | regimes A/B · F72–F80 · P-S12 systems | [`session-12-synthesis.md`](./session-12-synthesis.md) **active full** | `5215611559` |
-| S12 dogfood | post-control | `session-12-dogfood-g2-g4.md` | `5226058599`… |
+| **S12 dogfood G2–G4** | post-control · Regime B | [`session-12-dogfood-g2-g4.md`](./session-12-dogfood-g2-g4.md) **active full** | `5226058599`… |
 
 ## Promotion priority
 
@@ -39,10 +39,14 @@
 | Case | Regime | Status | Path |
 |:---|:---|:---|:---|
 | Session 12 G1 (residual) | **A** | **active full** | [`session-12.md`](./session-12.md) |
+| Session 12 G2 (fixtures envelope) | **B** | **active full** | [`session-12-g2.md`](./session-12-g2.md) |
+| Session 12 G3 (V12-A proof pack) | **B** | **active full** | [`session-12-g3.md`](./session-12-g3.md) |
+| Session 12 G4 (docs attribution) | **B** | **active full** | [`session-12-g4.md`](./session-12-g4.md) |
 | Session 12 cross-commit synthesis | **A+B** | **active full** | [`session-12-synthesis.md`](./session-12-synthesis.md) |
+| Session 12 dogfood G2–G4 | **B** | **active full** | [`session-12-dogfood-g2-g4.md`](./session-12-dogfood-g2-g4.md) |
 | Quality package self-dogfood four-tip series | **B** | **active full** | [`quality-package-regime-b.md`](./quality-package-regime-b.md) |
 
 Promotion notes:
 
-* S12 G1 + synthesis promoted from comments `5213748048` / `5215611559` — comments remain archive evidence.  
+* S12 G1–G4 + synthesis + dogfood G2–G4 promoted from comments `5213748048` / `5215148242` / `5215440216` / `5215611559` / `5226058599`–`5226058788` — comments remain archive evidence; package paths are SSOT.  
 * Quality-package Regime B case is native SSOT (not a GitHub comment promote). It proves clean-wrong-accept against the quality package landing messages themselves.

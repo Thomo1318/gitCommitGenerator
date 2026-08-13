@@ -6,7 +6,7 @@
 > **Template:** [`../../templates/CASE_TEMPLATE.md`](../../templates/CASE_TEMPLATE.md)  
 > **Package version:** `1.0.0-combine`  
 > **Series:** Session 12 · Session 6 residual close-out · message-only rebuild  
-> **Sibling cases:** G2 pending promote from same comment · [`session-12-g3.md`](./session-12-g3.md) · [`session-12-g4.md`](./session-12-g4.md) · [`session-12-synthesis.md`](./session-12-synthesis.md)  
+> **Sibling cases:** [`session-12-g2.md`](./session-12-g2.md) · [`session-12-g3.md`](./session-12-g3.md) · [`session-12-g4.md`](./session-12-g4.md) · [`session-12-synthesis.md`](./session-12-synthesis.md) · [`session-12-dogfood-g2-g4.md`](./session-12-dogfood-g2-g4.md)  
 > **Consumer:** eval harness [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217) / [`docs/plans/opik-evaluation-harness.md`](../../../plans/opik-evaluation-harness.md) (`session-12-seed`)  
 > **Authority:** this file is package SSOT for S12-G1. The GitHub comment is intake/archive evidence only.
 
@@ -65,7 +65,7 @@ S12-G1 ✅  ✨ feat(commit-quality): add Session 6 scope, capability, and guard
 |:---|:---|
 | Failure IDs | [`../../FAILURE_TAXONOMY.md`](../../FAILURE_TAXONOMY.md) F72–F75 |
 | Prevention | [`../../PREVENTION_BACKLOG.md`](../../PREVENTION_BACKLOG.md) P-S12-1/2/3/5/6 |
-| Series synthesis | [`session-12-synthesis.md`](./session-12-synthesis.md) |
+| Series synthesis | [`session-12-g2.md`](./session-12-g2.md) · [`session-12-g3.md`](./session-12-g3.md) · [`session-12-g4.md`](./session-12-g4.md) · [`session-12-synthesis.md`](./session-12-synthesis.md) |
 | Source map | [`../../references/source-map.md`](../../references/source-map.md) |
 | Method exemplar | Regime A — METHOD §4 / §13 |
 
@@ -81,7 +81,7 @@ S12-G1 ✅  ✨ feat(commit-quality): add Session 6 scope, capability, and guard
 | Scope of series | multi-group residual (G1–G4); this file = G1 only |
 | Planned split | G1 product laws · G2 fixtures · G3 V12-A pack · G4 docs |
 | Message-only rebuild? | **yes** (tree preserved) |
-| Notes | Not a grouping failure. File split matched plan. G2–G4 homes: synthesis + pending g3/g4 promotes. |
+| Notes | Not a grouping failure. File split matched plan. G2–G4 homes: `session-12-g2.md` · `session-12-g3.md` · `session-12-g4.md` · dogfood + synthesis (all active full). |
 
 ### Rewrite map
 
@@ -969,7 +969,7 @@ Therefore, G1 was caused by **contradictory presentation instructions combined w
 
 | Need | Link |
 |:---|:---|
-| Series systems reading | [`session-12-synthesis.md`](./session-12-synthesis.md) |
+| Series systems reading | [`session-12-g2.md`](./session-12-g2.md) · [`session-12-g3.md`](./session-12-g3.md) · [`session-12-g4.md`](./session-12-g4.md) · [`session-12-synthesis.md`](./session-12-synthesis.md) |
 | Later Regime B self-dogfood on this package | [`quality-package-regime-b.md`](./quality-package-regime-b.md) |
 | F72–F80 registry | [`../../FAILURE_TAXONOMY.md`](../../FAILURE_TAXONOMY.md) |
 | P-S12-1…9 registry | [`../../PREVENTION_BACKLOG.md`](../../PREVENTION_BACKLOG.md) |
@@ -983,7 +983,7 @@ Therefore, G1 was caused by **contradictory presentation instructions combined w
 |:---|:---|
 | Promoted on | 2026-08-13 |
 | From | #204 comment `5213748048` · G1 `<details>` body |
-| G2 status | **not** in this file — still pending promote from same comment |
+| Sibling status | G2–G4 + dogfood promoted to package SSOT (`session-12-g2.md` · `session-12-g3.md` · `session-12-g4.md` · `session-12-dogfood-g2-g4.md`) |
 | SSOT rule | Package path wins over GitHub comment after promote |
 
 ---

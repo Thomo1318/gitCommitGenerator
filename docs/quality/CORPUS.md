@@ -47,7 +47,7 @@ Session 12 G3 gold: named proof pack a01–a45.
 
 | Tag / seed | Package proof | Notes |
 |:---|:---|:---|
-| `session-12-seed` | [`cases/204/session-12.md`](./cases/204/session-12.md) + [`session-12-synthesis.md`](./cases/204/session-12-synthesis.md) (**active**); G2–G4 pending | regimes A/B, F72–F80, P-S12 |
+| `session-12-seed` | [`cases/204/session-12.md`](./cases/204/session-12.md) · [`session-12-g2.md`](./cases/204/session-12-g2.md) · [`session-12-g3.md`](./cases/204/session-12-g3.md) · [`session-12-g4.md`](./cases/204/session-12-g4.md) · [`session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · [`session-12-dogfood-g2-g4.md`](./cases/204/session-12-dogfood-g2-g4.md) (**all active full**) | regimes A/B, F72–F80, P-S12, post-control dogfood |
 | F72–F80 codes | `FAILURE_TAXONOMY.md` | harness may emit |
 | P-S12-1…9 | `PREVENTION_BACKLOG.md` | control map |
 
@@ -62,13 +62,13 @@ Session 12 is the **seed proof pack**, not a requirement to import the entire #2
 | `5186554544` | Instance A findings |
 | `5210122501` | Instance B 0→5 |
 | `5210137590` | Slices 5.5→11 |
-| `5213748048` | S12 primary G1+G2 · **G1 →** `cases/204/session-12.md` |
-| `5215148242` | S12-G3 |
-| `5215440216` | S12-G4 |
+| `5213748048` | S12 primary G1+G2 · **G1 →** `cases/204/session-12.md` · **G2 →** `cases/204/session-12-g2.md` |
+| `5215148242` | S12-G3 · **→** `cases/204/session-12-g3.md` |
+| `5215440216` | S12-G4 · **→** `cases/204/session-12-g4.md` |
 | `5215611559` | S12 synthesis · **→** `cases/204/session-12-synthesis.md` |
-| `5226058599` | dogfood G2 |
-| `5226058718` | dogfood G3 |
-| `5226058788` | dogfood G4 |
+| `5226058599` | dogfood G2 · **→** `cases/204/session-12-dogfood-g2-g4.md` |
+| `5226058718` | dogfood G3 · **→** same |
+| `5226058788` | dogfood G4 · **→** same |
 
 See [`references/source-map.md`](./references/source-map.md).
 
@@ -80,7 +80,7 @@ See [`references/source-map.md`](./references/source-map.md).
 |:---|:---|:---|
 | [#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204) | Presentation quality corpus epic | `docs/quality/**` (this package) |
 | [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217) | Opik harness governance index | Design: `docs/plans/opik-evaluation-harness.md`; gold-miss law: this package |
-| Session 12 residual series | Method exemplars + seed tags | `cases/204/session-12.md`, `session-12-synthesis.md` |
+| Session 12 residual series | Method exemplars + seed tags | `cases/204/session-12.md`, `session-12-g2.md`, `session-12-g3.md`, `session-12-g4.md`, `session-12-synthesis.md`, `session-12-dogfood-g2-g4.md` |
 
 ---
 

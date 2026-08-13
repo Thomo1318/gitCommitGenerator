@@ -5,7 +5,7 @@
 > **Method:** [`../../METHOD.md`](../../METHOD.md) §4 regimes + §13  
 > **Template:** [`../../templates/CROSS_COMMIT_SYNTHESIS_TEMPLATE.md`](../../templates/CROSS_COMMIT_SYNTHESIS_TEMPLATE.md)  
 > **Package version:** `1.0.0-combine`  
-> **Per-tip homes:** [`session-12.md`](./session-12.md) (G1 full) · G2 pending · [`session-12-g3.md`](./session-12-g3.md) · [`session-12-g4.md`](./session-12-g4.md)  
+> **Per-tip homes:** [`session-12.md`](./session-12.md) (G1) · [`session-12-g2.md`](./session-12-g2.md) (G2) · [`session-12-g3.md`](./session-12-g3.md) (G3) · [`session-12-g4.md`](./session-12-g4.md) (G4) · [`session-12-dogfood-g2-g4.md`](./session-12-dogfood-g2-g4.md) (dogfood)  
 > **Related dogfood:** [`quality-package-regime-b.md`](./quality-package-regime-b.md) (later Regime B on this package)  
 > **Consumer:** eval harness [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217) — `session-12-seed`, F72–F80, P-S12-1…9  
 > **Authority:** this file is package SSOT for Session 12 systems synthesis. GitHub comment is intake/archive only.
@@ -43,9 +43,9 @@ last_updated: 2026-08-13
 | Group | Path focus | Severity | Regime | Gold subject (short) | Case link |
 |:---|:---|:---|:---|:---|:---|
 | G1 | `src/git_cg/commit_quality.py` | Critical | **A** | `feat(commit-quality): add Session 6 scope, capability, and guard laws` | [`session-12.md`](./session-12.md) |
-| G2 | fixtures / corpus / goldens | Critical | **B** | `test(fixtures): pin Session 6 corpus rows TIP-G13–G17` | archive `5213748048` (pending promote) |
-| G3 | `tests/test_v12_a_claims.py` | Critical | **B** | `test(commit-quality): add V12-A named proof pack a01–a45` | [`session-12-g3.md`](./session-12-g3.md) (placeholder) |
-| G4 | `README.md` + `CHANGELOG.md` | High | **B** | `docs(readme): document Session 6 residuals and V12-A proof pack` | [`session-12-g4.md`](./session-12-g4.md) (placeholder) |
+| G2 | fixtures / corpus / goldens | Critical | **B** | `test(fixtures): pin Session 6 corpus rows TIP-G13–G17` | [`session-12-g2.md`](./session-12-g2.md) |
+| G3 | `tests/test_v12_a_claims.py` | Critical | **B** | `test(commit-quality): add V12-A named proof pack a01–a45` | [`session-12-g3.md`](./session-12-g3.md) |
+| G4 | `README.md` + `CHANGELOG.md` | High | **B** | `docs(readme): document Session 6 residuals and V12-A proof pack` | [`session-12-g4.md`](./session-12-g4.md) |
 
 ### Archive open summary (promoted)
 
@@ -59,9 +59,9 @@ last_updated: 2026-08-13
 | Tip | Paths | Severity | Failure class | Gold subject (short) | Full depth |
 | --- | --- | --- | --- | --- | --- |
 | **G1** | `src/git_cg/commit_quality.py` | **Critical** | Fallback / process-meta | `feat(commit-quality): add Session 6 scope, capability, and guard laws` | [G1 case](./session-12.md) |
-| **G2** | fixtures / corpus / goldens / harness | **Critical** | Clean wrong acceptance | `test(fixtures): pin Session 6 corpus rows TIP-G13–G17` | archive [`5213748048`](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5213748048) (pending promote) |
-| **G3** | `tests/test_v12_a_claims.py` | **Critical** | Clean wrong acceptance | `test(commit-quality): add V12-A named proof pack a01–a45` | [5215148242](./session-12-g3.md) · [archive](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215148242) |
-| **G4** | `README.md` + `CHANGELOG.md` | **High** | Clean wrong acceptance + attribution bleed | `docs(readme): document Session 6 residuals and V12-A proof pack` | [5215440216](./session-12-g4.md) · [archive](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215440216) |
+| **G2** | fixtures / corpus / goldens / harness | **Critical** | Clean wrong acceptance | `test(fixtures): pin Session 6 corpus rows TIP-G13–G17` | [G2 case](./session-12-g2.md) · [archive](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5213748048) |
+| **G3** | `tests/test_v12_a_claims.py` | **Critical** | Clean wrong acceptance | `test(commit-quality): add V12-A named proof pack a01–a45` | [G3 case](./session-12-g3.md) · [archive](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215148242) |
+| **G4** | `README.md` + `CHANGELOG.md` | **High** | Clean wrong acceptance + attribution bleed | `docs(readme): document Session 6 residuals and V12-A proof pack` | [G4 case](./session-12-g4.md) · [archive](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215440216) |
 
 > [!IMPORTANT]
 > ### Series one-line diagnosis:
@@ -411,9 +411,9 @@ The gold tip series (`4aa90a8` → `f5e55b7` → `19bd551` → `3b96ed6`) is the
 | Group | Full-depth case | GitHub archive | Opik (final telemetry family) |
 |:---|:---|:---|:---|
 | G1 | [`session-12.md`](./session-12.md) **active full** | [5213748048](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5213748048) | `019fda92-4f84-…` |
-| G2 | pending promote (same primary archive) | [5213748048](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5213748048) | `019fdaa0-7067-…` |
-| G3 | [`session-12-g3.md`](./session-12-g3.md) placeholder | [5215148242](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215148242) | `019fdaac-e249-…` |
-| G4 | [`session-12-g4.md`](./session-12-g4.md) placeholder | [5215440216](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215440216) | `019fdabf-61fb-…` |
+| G2 | [`session-12-g2.md`](./session-12-g2.md) **active full** | [5213748048](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5213748048) | `019fdaa0-7067-…` |
+| G3 | [`session-12-g3.md`](./session-12-g3.md) **active full** | [5215148242](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215148242) | `019fdaac-e249-…` |
+| G4 | [`session-12-g4.md`](./session-12-g4.md) **active full** | [5215440216](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215440216) | `019fdabf-61fb-…` |
 | Synthesis | **this file** | [5215611559](https://github.com/Thomo1318/gitCommitGenerator/issues/204#issuecomment-5215611559) | series-level |
 
 ### Eval / epic pointers
