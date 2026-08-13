@@ -15,10 +15,6 @@
     "corpus_source": "synthetic",
     "producer": "fixture_encoder_s1",
     "seed_id": "SEED-V1",
-    "session_tags": [
-      "seed-v1",
-      "cm-eval-fixtures-core"
-    ],
     "suite_id": "cm-eval-fixtures-core",
     "tags": [
       "seed-v1",

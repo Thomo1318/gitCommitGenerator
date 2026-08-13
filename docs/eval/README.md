@@ -72,7 +72,7 @@ Lane A local source of truth: committed fixtures encode into validated
 | `tests/fixtures/eval/cases/session-12/` | Session-12 Regime A/B seeds (SEED-A1 / SEED-B1) |
 | `tests/fixtures/eval/cases/204-archive/` | #204 archive ramp rows (suite `204-archive`; not Q8 close-gate) |
 | `tests/fixtures/eval/cases/invalid/` | Fail-closed probes (SEED-N1 / SEED-I1) |
-| `tests/fixtures/eval/snapshots/` | Optional notes; hashes are built at runtime |
+| `tests/fixtures/eval/snapshots/` | Checked-in `dataset_snapshot_v1` goldens; runtime re-encoding verifies hashes |
 | `tests/fixtures/eval/bundles/` | Checked-in golden `ape_bundle_v1` dumps |
 | `tests/fixtures/eval/FIXTURE_INDEX.md` | Auto-generated fixture index |
 

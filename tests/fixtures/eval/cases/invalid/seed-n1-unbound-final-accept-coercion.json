@@ -3,6 +3,6 @@
   "artifact_class": "final_accept",
   "bound": false,
   "unbound_reason": "should_fail",
-  "provenance_label": "final_accept",
+  "provenance_label": "Opik-unbound",
   "final_message": "x"
 }

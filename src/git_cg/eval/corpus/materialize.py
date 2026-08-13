@@ -77,15 +77,13 @@ def materialize_core_goldens(*, fixture_root: Path | None = None) -> dict[str, A
     root = fixture_root or default_fixture_root()
     bundles = materialize_suite_bundles("cm-eval-fixtures-core", fixture_root=root)
     snapshot = materialize_suite_snapshot("cm-eval-fixtures-core", fixture_root=root)
-    # archive ramp may exist
+    # archive ramp is optional only when the suite manifest is absent.
     archive_paths: list[Path] = []
     archive_snap = None
-    try:
+    archive_suite_path = root / "suites" / "204-archive.json"
+    if archive_suite_path.is_file():
         archive_paths = materialize_suite_bundles("204-archive", fixture_root=root)
         archive_snap = materialize_suite_snapshot("204-archive", fixture_root=root)
-    except Exception:
-        # suite optional during early ramps
-        pass
     return {
         "core_bundles": bundles,
         "core_snapshot": snapshot,

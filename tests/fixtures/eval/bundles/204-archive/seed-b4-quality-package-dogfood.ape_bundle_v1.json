@@ -36,13 +36,6 @@
     "quality_case": "docs/quality/cases/204/quality-package-regime-b.md",
     "seed_id": "SEED-B4",
     "series": "204-QP-RB",
-    "session_tags": [
-      "204-archive",
-      "regime-b",
-      "seed-b4",
-      "quality-package-dogfood",
-      "session-quality-package"
-    ],
     "suite_id": "204-archive",
     "tags": [
       "204-archive",

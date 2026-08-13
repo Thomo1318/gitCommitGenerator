@@ -21,13 +21,23 @@ DATASET_ID_ALIASES: Final[dict[str, frozenset[str]]] = {
     "judge-meta-hm": frozenset({"judge-meta-hm"}),
 }
 
-_ALIAS_TO_STABLE: Final[dict[str, str]] = {
-    alias: stable for stable, aliases in DATASET_ID_ALIASES.items() for alias in aliases
-}
-
 
 class DatasetAliasError(ValueError):
     """Unknown or ambiguous dataset id / alias."""
+
+
+def _build_alias_index() -> dict[str, str]:
+    index: dict[str, str] = {}
+    for stable, aliases in DATASET_ID_ALIASES.items():
+        for alias in aliases:
+            existing = index.get(alias)
+            if existing is not None and existing != stable:
+                raise DatasetAliasError(f"ambiguous dataset alias {alias!r}: maps to {existing!r} and {stable!r}")
+            index[alias] = stable
+    return index
+
+
+_ALIAS_TO_STABLE: Final[dict[str, str]] = _build_alias_index()
 
 
 def resolve_dataset_id(dataset_id: str) -> str:

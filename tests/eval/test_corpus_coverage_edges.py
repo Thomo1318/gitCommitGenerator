@@ -21,6 +21,7 @@ from git_cg.eval.corpus.index import build_fixture_index, main as index_main, wr
 from git_cg.eval.corpus.materialize import (
     main as materialize_main,
     materialize_core_goldens,
+    materialize_suite_bundles,
 )
 from git_cg.eval.corpus.snapshots import SnapshotBuildError, build_core_snapshot, build_snapshot
 from git_cg.eval.corpus.suites import SuiteLoadError, load_suite, materialize_suite
@@ -74,6 +75,41 @@ def test_resolve_dataset_id_rejects_empty_and_unknown() -> None:
     with pytest.raises(DatasetAliasError, match="unknown dataset"):
         resolve_dataset_id("not-a-real-dataset")
     assert canonicalize_dataset_id("cm-eval-204-archive") == "204-archive"
+
+
+def test_canonical_json_rejects_nan() -> None:
+    import math
+
+    from git_cg.eval.corpus.canonical import canonical_json_bytes
+
+    with pytest.raises(ValueError):
+        canonical_json_bytes({"x": math.nan})
+
+
+def test_counter_span_values_reject_non_integers() -> None:
+    fix = _minimal_fixture(
+        meta={
+            "evidence": {
+                "require_counter_span_consistent": True,
+                "counters": {"gold_regen_attempts": 2.7},
+                "span_counts": {"regeneration": 1},
+            }
+        }
+    )
+    with pytest.raises(CorpusEncodeError, match="counter/span values must be integers"):
+        encode_fixture(fix)
+
+    fix2 = _minimal_fixture(
+        meta={
+            "evidence": {
+                "require_counter_span_consistent": True,
+                "counters": {"gold_regen_attempts": True},
+                "span_counts": {"regeneration": 1},
+            }
+        }
+    )
+    with pytest.raises(CorpusEncodeError, match="counter/span values must be integers"):
+        encode_fixture(fix2)
 
 
 # ---------------------------------------------------------------------------
@@ -185,8 +221,22 @@ def test_encode_fixture_type_and_enum_errors() -> None:
         encode_fixture(_minimal_fixture(artifact_class="not-real"))
     with pytest.raises(CorpusEncodeError, match="bound must be a boolean"):
         encode_fixture(_minimal_fixture(bound="yes"))  # type: ignore[arg-type]
-    with pytest.raises(CorpusEncodeError, match="final_accept requires bound=true"):
-        encode_fixture(_minimal_fixture(bound=False, provenance_label="final_accept"))
+    with pytest.raises(CorpusEncodeError, match="provenance_label=final_accept requires bound=true"):
+        encode_fixture(
+            _minimal_fixture(
+                bound=False,
+                artifact_class="fixture_expected",
+                provenance_label="final_accept",
+            )
+        )
+    with pytest.raises(CorpusEncodeError, match="artifact_class=final_accept requires bound=true"):
+        encode_fixture(
+            _minimal_fixture(
+                bound=False,
+                artifact_class="final_accept",
+                provenance_label="Opik-unbound",
+            )
+        )
     with pytest.raises(CorpusEncodeError, match="incompatible with provenance_label=Opik-unbound"):
         encode_fixture(_minimal_fixture(bound=True, provenance_label="Opik-unbound", unbound_reason=None))
     with pytest.raises(CorpusEncodeError, match="redaction_profile must be a string"):
@@ -486,43 +536,72 @@ def test_build_core_snapshot_live() -> None:
 
 
 def test_materialize_main_all_and_suite(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
-    # use live fixtures root for suite path; write outputs to tmp via --root? main only
-    # supports root override for fixtures; write into temp by pointing root at a mini tree
-    # easier: call main with suite all against live tree (writes goldens - already checked-in)
-    rc = materialize_main(["--suite", "cm-eval-fixtures-core"])
+    import shutil
+
+    from git_cg.eval.corpus.fixtures import default_fixture_root
+
+    src = default_fixture_root()
+    root = tmp_path / "fx"
+    (root / "suites").mkdir(parents=True)
+    (root / "cases").mkdir(parents=True)
+    shutil.copytree(src / "suites", root / "suites", dirs_exist_ok=True)
+    shutil.copytree(src / "cases", root / "cases", dirs_exist_ok=True)
+
+    rc = materialize_main(["--suite", "cm-eval-fixtures-core", "--root", str(root)])
     assert rc == 0
     out = capsys.readouterr().out
     assert "bundles" in out
     assert "snapshot" in out
 
-    rc2 = materialize_main(["--suite", "all"])
+    rc2 = materialize_main(["--suite", "all", "--root", str(root)])
     assert rc2 == 0
     out2 = capsys.readouterr().out
     assert "core_snapshot" in out2
     assert "core_bundles" in out2
 
 
-def test_materialize_core_goldens_archive_optional(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # force archive failure branch
+def test_materialize_core_goldens_archive_optional_when_manifest_absent(tmp_path: Path) -> None:
+    import shutil
+
+    from git_cg.eval.corpus.fixtures import default_fixture_root
+
+    src = default_fixture_root()
+    root = tmp_path / "fx"
+    (root / "suites").mkdir(parents=True)
+    (root / "cases").mkdir(parents=True)
+    # core only — no 204-archive suite manifest
+    core_suite = json.loads((src / "suites/cm-eval-fixtures-core.json").read_text(encoding="utf-8"))
+    (root / "suites/cm-eval-fixtures-core.json").write_text(json.dumps(core_suite), encoding="utf-8")
+    shutil.copytree(src / "cases", root / "cases", dirs_exist_ok=True)
+
+    result = materialize_core_goldens(fixture_root=root)
+    assert result["archive_bundles"] == []
+    assert result["archive_snapshot"] is None
+    assert result["core_snapshot"].is_file()
+
+
+def test_materialize_core_goldens_archive_errors_propagate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil
+
+    from git_cg.eval.corpus.fixtures import default_fixture_root
+
+    src = default_fixture_root()
+    root = tmp_path / "fx"
+    (root / "suites").mkdir(parents=True)
+    (root / "cases").mkdir(parents=True)
+    shutil.copytree(src / "suites", root / "suites", dirs_exist_ok=True)
+    shutil.copytree(src / "cases", root / "cases", dirs_exist_ok=True)
+
     def boom(*_a: Any, **_k: Any) -> list[Path]:
-        raise RuntimeError("no archive")
+        raise RuntimeError("archive encode failed")
 
     monkeypatch.setattr(
         materialize,
         "materialize_suite_bundles",
-        lambda suite_id, **kw: boom() if suite_id == "204-archive" else [tmp_path / "b.json"],
+        lambda suite_id, **kw: boom() if suite_id == "204-archive" else materialize_suite_bundles(suite_id, **kw),
     )
-    monkeypatch.setattr(
-        materialize,
-        "materialize_suite_snapshot",
-        lambda suite_id, **kw: tmp_path / f"{suite_id}.json",
-    )
-    # ensure core path returns files
-    (tmp_path / "b.json").write_text("{}", encoding="utf-8")
-    (tmp_path / "cm-eval-fixtures-core.json").write_text("{}", encoding="utf-8")
-    result = materialize_core_goldens(fixture_root=tmp_path)
-    assert result["archive_bundles"] == []
-    assert result["archive_snapshot"] is None
+    with pytest.raises(RuntimeError, match="archive encode failed"):
+        materialize_core_goldens(fixture_root=root)
 
 
 def test_index_main_write_and_print(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

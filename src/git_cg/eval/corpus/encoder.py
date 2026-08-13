@@ -121,11 +121,14 @@ def _validate_topology_and_evidence(meta: Mapping[str, Any]) -> None:
             )
         regen_attempts = counters.get("gold_regen_attempts", 0)
         regen_spans = span_counts.get("regeneration", 0)
-        try:
-            regen_attempts_n = int(regen_attempts)
-            regen_spans_n = int(regen_spans)
-        except (TypeError, ValueError) as exc:
-            raise CorpusEncodeError("counter/span values must be integers") from exc
+        for field, value in (
+            ("counters.gold_regen_attempts", regen_attempts),
+            ("span_counts.regeneration", regen_spans),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise CorpusEncodeError(f"counter/span values must be integers: {field}={value!r}")
+        regen_attempts_n = regen_attempts
+        regen_spans_n = regen_spans
         if regen_attempts_n > 0 and regen_spans_n <= 0:
             raise CorpusEncodeError(
                 "counter/span mismatch: gold_regen_attempts>0 but regeneration span count is 0 "
@@ -213,6 +216,11 @@ def encode_fixture(
     provenance_label = _validate_enum(provenance_label, PROVENANCE_LABEL, "provenance_label")
 
     # Fail closed: never silently promote unbound historical evidence to final_accept.
+    if bound is False and artifact_class == "final_accept":
+        raise CorpusEncodeError(
+            "artifact_class=final_accept requires bound=true; "
+            "unbound historical evidence must not use final_accept artifact class"
+        )
     if bound is False and provenance_label == "final_accept":
         raise CorpusEncodeError(
             "provenance_label=final_accept requires bound=true; "
@@ -314,7 +322,7 @@ def encode_fixture(
         "suite_id": suite_id,
         "tags": session_tags,
         "corpus_source": corpus_source,
-        "session_tags": [t for t in session_tags if t == "session-12-seed"] or session_tags,
+        "session_tags": [t for t in session_tags if t == "session-12-seed"],
     }
     # drop Nones from meta_extra
     meta_extra = {k: v for k, v in meta_extra.items() if v not in (None, [], "")}

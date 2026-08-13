@@ -33,12 +33,6 @@
     "quality_case": "docs/quality/cases/204/instance-a-precursor.md",
     "seed_id": "SEED-A2",
     "series": "204-IA",
-    "session_tags": [
-      "204-archive",
-      "regime-a",
-      "seed-a2",
-      "instance-a-precursor"
-    ],
     "suite_id": "204-archive",
     "tags": [
       "204-archive",

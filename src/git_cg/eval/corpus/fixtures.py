@@ -33,17 +33,22 @@ def load_fixture_dict(path: Path | str) -> dict[str, Any]:
 
 
 def _resolve_case_path(fixture_root: Path, rel: str) -> Path:
-    candidate = (fixture_root / rel).resolve()
     root = fixture_root.resolve()
-    if not str(candidate).startswith(str(root)):
-        raise FixtureLoadError(f"case path escapes fixture root: {rel}")
+
+    def resolve_under_root(path: Path) -> Path:
+        candidate = path.resolve()
+        if not candidate.is_relative_to(root):
+            raise FixtureLoadError(f"case path escapes fixture root: {rel}")
+        return candidate
+
+    candidate = resolve_under_root(root / rel)
     if not candidate.is_file():
         # allow bare case_id lookup under cases/
-        alt = fixture_root / "cases" / f"{rel}.json"
+        alt = resolve_under_root(root / "cases" / f"{rel}.json")
         if alt.is_file():
             return alt
         # allow path without extension
-        alt2 = fixture_root / f"{rel}.json"
+        alt2 = resolve_under_root(root / f"{rel}.json")
         if alt2.is_file():
             return alt2
         raise FixtureLoadError(f"missing case fixture: {rel}")

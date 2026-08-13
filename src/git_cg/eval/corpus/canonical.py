@@ -9,7 +9,13 @@ from typing import Any
 
 def canonical_json_bytes(obj: Any) -> bytes:
     """Return deterministic UTF-8 JSON bytes (sorted keys, compact separators)."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return json.dumps(
+        obj,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
 
 
 def canonical_json_text(obj: Any) -> str:
