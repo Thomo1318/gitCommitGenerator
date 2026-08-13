@@ -1,6 +1,6 @@
 # Opik Evaluation Harness — Design & Implementation Plan
 
-> **Status:** v0.9.2 body-residual ingest (#217 issue-body pedagogy + scaffold gap + Session-12 seed AC) · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate next  
+> **Status:** v0.9.2 body-residual ingest (#217 issue-body pedagogy + scaffold gap + Session-12 seed AC) · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed) · #220 S0 delivery next  
 > **Document class:** formal design + implementation SSOT (promoted from scratch)  
 > **Parent epic:** #216 — E2E Observability Stack  
 > **Governing issue:** #217 — formalise Opik commit-message evaluation harness  
@@ -2100,7 +2100,7 @@ commit_session_thread + message_versions + scores
 
 ### 7.4 #204 corpus encoding requirements
 
-#204 archive material is **corpus law**, not narrative scrap.  
+Issue `#204` archive material is **corpus law**, not narrative scrap.  
 **Living homes (repo SSOT):** [`docs/quality/`](../quality/README.md) — especially [`METHOD.md`](../quality/METHOD.md), [`FAILURE_TAXONOMY.md`](../quality/FAILURE_TAXONOMY.md), [`PREVENTION_BACKLOG.md`](../quality/PREVENTION_BACKLOG.md), [`cases/204/session-12.md`](../quality/cases/204/session-12.md) (G1 Regime A), [`cases/204/session-12-synthesis.md`](../quality/cases/204/session-12-synthesis.md) (A+B systems map), [`cases/204/quality-package-regime-b.md`](../quality/cases/204/quality-package-regime-b.md) (later Regime B dogfood).  
 GitHub #204 comments are intake/archive after promotion; #217 must **cite** these paths, not duplicate them.
 
@@ -3342,13 +3342,13 @@ looks valuable inside the floor.
 12. [x] **§12 risks & watchlist**.  
 13. [x] **§13 open questions / parked / resolved**.  
 13b. [x] **Training-corpus mission** — FIND-009…018 / R13–R14 / dual axis / I10–I12 / M10–M11 (2026-08-13).  
-14. [ ] **§14 operational gate** — SSOT pointer **in #217 body** (preferred) + owner Q1 decision.  
-15. [ ] §14 green + **explicit owner file command** → open S0 grandchild only.  
+14. [x] **§14 operational gate** — SSOT pointer **in #217 body** + owner Q1 decision (**Q1=A**).  
+15. [x] §14 green + **explicit owner file command** → open S0 grandchild only → [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220).  
 16. Optional later: `docs/plans/opik-evaluation-harness.inclusion-map.yaml` (Q10).  
 17. After S0: S1 → **S2a** (unblock capture/R12-MVP) → S2b/c → S3 threads; do not open S5 as merge gate.  
 18. [x] Maintainer defaults locked: Q15 `train_rich`, Q16 `capture_on=all`, Q17 pairs on bytes-change.
 19. [x] Post-edit consistency audit (stale R1–R12/§7.6/thread vocab/slice R-items) applied under approve-all.
-20. [ ] Still blocked on filing until §14 pointer + Q1 + explicit S0 file command.
+20. [ ] Remaining after §14: implement [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) S0 schema/metric-catalog freeze (filing gate complete; delivery open).
 
 ---
 
