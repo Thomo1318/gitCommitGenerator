@@ -1,7 +1,7 @@
 version = 1
 
 [trust]
-github_orgs = ["getsentry", "tirth8205", "mandarange"]
+github_orgs = ["getsentry", "tirth8205", "mandarange", "comet-ml"]
 
 github_repos = [
   "upstash/context7",
@@ -246,6 +246,18 @@ source = "path:.agents/skills/web-design-guidelines"
 [[skills]]
 name = "webapp-testing"
 source = "path:.agents/skills/webapp-testing"
+
+[[skills]]
+name = "*"
+source = "comet-ml/opik-skills"
+
+[[skills]]
+name = "mermaid-diagrams"
+source = "path:.agents/skills/mermaid-diagrams"
+
+[[skills]]
+name = "uv-package-manager"
+source = "path:.agents/skills/uv-package-manager"
 
 [[mcp]]
 name = "deepwiki"
