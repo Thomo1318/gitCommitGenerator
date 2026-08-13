@@ -211,4 +211,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-69.1ms | 738 files checked | 21/539 tools matched
+52.7ms | 738 files checked | 21/539 tools matched
