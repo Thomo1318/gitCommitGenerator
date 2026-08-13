@@ -1,0 +1,9 @@
+{
+  "artifact_class": "train_row",
+  "gate_pass": false,
+  "id": "train-1",
+  "notes": "record \u2260 gate",
+  "redaction_profile": "train_rich",
+  "schema_version": "train_row_v1",
+  "train_label": "hard_negative"
+}

@@ -1,0 +1,10 @@
+{
+  "case_ids": [
+    "session12-regime-a-seed"
+  ],
+  "id": "suite-1",
+  "metric_catalog_pin": "metric_catalog_v0@cafebabe",
+  "schema_pack_pin": "schema_pack_v0@deadbeef",
+  "schema_version": "eval_suite_v1",
+  "suite_id": "offline-smoke"
+}

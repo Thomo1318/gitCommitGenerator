@@ -1,0 +1,10 @@
+{
+  "capture_on": "all",
+  "export_id": "export-1",
+  "id": "export-1",
+  "redaction_profile": "train_rich",
+  "row_ids": [
+    "train-1"
+  ],
+  "schema_version": "train_export_v1"
+}

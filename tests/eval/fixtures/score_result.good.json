@@ -1,0 +1,10 @@
+{
+  "authority": "law",
+  "metric_id": "a.final_message_present",
+  "passed": true,
+  "polarity": "pass_fail",
+  "reason": "final present",
+  "severity": "block",
+  "source": "local_wrapper",
+  "value": true
+}
