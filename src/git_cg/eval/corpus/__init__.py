@@ -21,6 +21,7 @@ __all__ = [
     "SuiteLoadError",
     "TaskInputError",
     "build_core_snapshot",
+    "build_fixture_index",
     "build_snapshot",
     "canonicalize_dataset_id",
     "default_fixture_root",
@@ -28,7 +29,38 @@ __all__ = [
     "load_fixture_dict",
     "load_suite",
     "load_suite_fixtures",
+    "materialize_core_goldens",
     "materialize_suite",
+    "materialize_suite_bundles",
+    "materialize_suite_snapshot",
     "project_generation_task_input",
     "resolve_dataset_id",
+    "write_fixture_index",
 ]
+
+
+def __getattr__(name: str):
+    if name in {"build_fixture_index", "write_fixture_index"}:
+        from git_cg.eval.corpus.index import build_fixture_index, write_fixture_index
+
+        return {
+            "build_fixture_index": build_fixture_index,
+            "write_fixture_index": write_fixture_index,
+        }[name]
+    if name in {
+        "materialize_core_goldens",
+        "materialize_suite_bundles",
+        "materialize_suite_snapshot",
+    }:
+        from git_cg.eval.corpus.materialize import (
+            materialize_core_goldens,
+            materialize_suite_bundles,
+            materialize_suite_snapshot,
+        )
+
+        return {
+            "materialize_core_goldens": materialize_core_goldens,
+            "materialize_suite_bundles": materialize_suite_bundles,
+            "materialize_suite_snapshot": materialize_suite_snapshot,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

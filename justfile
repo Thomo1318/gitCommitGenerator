@@ -73,3 +73,11 @@ uninstall:
 # Print reproducible S0 schema pack + metric catalog pins (offline)
 eval-schema-hash:
     uv run python -c "from git_cg.eval import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
+
+# Materialize checked-in eval golden bundles + snapshots (offline)
+eval-materialize:
+    uv run python -m git_cg.eval.corpus.materialize
+
+# Regenerate tests/fixtures/eval/FIXTURE_INDEX.md
+eval-fixture-index:
+    uv run python -m git_cg.eval.corpus.index --write

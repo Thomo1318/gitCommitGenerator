@@ -70,12 +70,15 @@ Lane A local source of truth: committed fixtures encode into validated
 | `tests/fixtures/eval/suites/` | Suite definitions (`eval_suite_v1` shape + encoder `case_paths`) |
 | `tests/fixtures/eval/cases/valid/` | Ordinary valid fixtures (SEED-V1) |
 | `tests/fixtures/eval/cases/session-12/` | Session-12 Regime A/B seeds (SEED-A1 / SEED-B1) |
-| `tests/fixtures/eval/cases/204-archive/` | Future full #204 archive rows (not an S1 completeness gate) |
+| `tests/fixtures/eval/cases/204-archive/` | #204 archive ramp rows (suite `204-archive`; not Q8 close-gate) |
 | `tests/fixtures/eval/cases/invalid/` | Fail-closed probes (SEED-N1 / SEED-I1) |
 | `tests/fixtures/eval/snapshots/` | Optional notes; hashes are built at runtime |
-| `tests/fixtures/eval/bundles/` | Optional materialized bundle dumps |
+| `tests/fixtures/eval/bundles/` | Checked-in golden `ape_bundle_v1` dumps |
+| `tests/fixtures/eval/FIXTURE_INDEX.md` | Auto-generated fixture index |
 
 Core offline suite: **`cm-eval-fixtures-core`** (V1 + A1 + B1).
+
+Archive ramp suite: **`204-archive`** (A1/B1 + B2/B3/B4/A2).
 
 ### Encoder / snapshot usage
 
@@ -111,6 +114,8 @@ Package surface: `src/git_cg/eval/corpus/`
 * `encoder.py` — fixture → `ape_bundle_v1` + `eval_case_v1`
 * `task_input.py` — fail-closed `generation_task_input` projection
 * `suites.py` / `fixtures.py` / `snapshots.py` — suite load + ordered snapshot hash
+* `materialize.py` — checked-in golden bundles + snapshots
+* `index.py` — auto-generated fixture index markdown
 * `canonical.py` — sorted-keys compact JSON + SHA-256
 
 ### Local SoT vs Opik mirror
@@ -149,7 +154,7 @@ later meta-eval (S2+). They must **never** appear in `generation_task_input`.
 
 ### Seed matrix vs full #204 archive
 
-S1 commits a **seed** matrix only:
+S1 **close bar (Q8)** remains the core seed matrix:
 
 | Seed | Case | Notes |
 |:---|:---|:---|
@@ -159,8 +164,49 @@ S1 commits a **seed** matrix only:
 | SEED-N1 | `cases/invalid/*` | Invalid envelope / class / unbound coercion probes |
 | SEED-I1 | `seed-i1-*-task-input` | expected/gold isolation negatives |
 
-Full #204 archive completeness is **not** an S1 blocker. Archive migration
-stays under later slices; ad-hoc scripts must not become product SoT.
+**Archive ramp (optional suite `204-archive` / alias `cm-eval-204-archive`):**
+
+| Seed | Case | Notes |
+|:---|:---|:---|
+| SEED-B2 | `seed-b2-session12-g3` | Session-12 G3 Regime B tests-as-fix |
+| SEED-B3 | `seed-b3-session12-g4` | Session-12 G4 docs attribution bleed |
+| SEED-B4 | `seed-b4-quality-package-dogfood` | quality-package Regime B (F81–F83) |
+| SEED-A2 | `seed-a2-instance-a-precursor` | Instance-A precursor Regime A |
+
+Full historical #204 completeness remains **not** a merge blocker; the ramp is
+the committed import path + expansion surface.
+
+### Topology / split / judge negatives (§8.1 addendum)
+
+Offline encoder fail-closed probes (full Family I scoring remains S2+):
+
+| Probe | Case | Contract |
+|:---|:---|:---|
+| Incomplete topology | `seed-n-topology-incomplete` | `require_complete_for_encode` |
+| Counter/span mismatch | `seed-n-counter-mismatch` | Session-12 class regen counter vs spans |
+| Split contamination | `seed-n-split-contamination` | train + gate co-membership |
+| JUDGE-INPUT leak | `seed-n-judge-input-leak` | `judge_*` in `generation_task_input` |
+| Replay lineage gap | `seed-n-replay-lineage-missing` | replay missing parent ids |
+| Valid topology control | `seed-v-topology-complete` | encodes cleanly |
+
+### Golden bundles + fixture index
+
+```bash
+# Materialize checked-in ape_bundle_v1 + dataset_snapshot_v1 goldens
+uv run python -m git_cg.eval.corpus.materialize
+
+# Regenerate auto fixture index markdown
+uv run python -m git_cg.eval.corpus.index --write
+```
+
+| Path | Role |
+|:---|:---|
+| `tests/fixtures/eval/bundles/<suite>/*.ape_bundle_v1.json` | Checked-in golden bundles |
+| `tests/fixtures/eval/snapshots/<suite>.dataset_snapshot_v1.json` | Checked-in snapshot goldens |
+| `tests/fixtures/eval/FIXTURE_INDEX.md` | Auto-generated suite/case index |
+
+Identity remains proven by runtime re-encode equality tests; goldens bind the
+current S0 pin identities for review/CI drift detection.
 
 ### Migration boundary
 
@@ -173,6 +219,6 @@ stays under later slices; ad-hoc scripts must not become product SoT.
 | Slice | Still out of scope here |
 |:---|:---|
 | **S0** | Scoring runtime, Opik network client, accept-path binder |
-| **S1** | S2–S7 metrics/judges, accept-path binding (S3), Opik upload (S4), full #204 migration |
+| **S1** | S2–S7 metrics/judges, accept-path binding (S3), Opik upload (S4), remaining full #204 historical completeness |
 
 Basic `git-cg` users do **not** need Opik installed.
