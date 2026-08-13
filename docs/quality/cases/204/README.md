@@ -21,3 +21,11 @@
 2. Dogfood G2–G4  
 3. Substrate stubs for A / B / S6–11  
 4. Mark comments superseded-as-SSOT
+
+## Live dogfood (in-repo)
+
+| Case | Regime | Status | Path |
+|:---|:---|:---|:---|
+| Quality package self-dogfood four-tip series | **B** | **active full** | [`quality-package-regime-b.md`](./quality-package-regime-b.md) |
+
+Promotion note: this case is native SSOT (not a GitHub comment promote). It proves Regime B clean-wrong-accept against the quality package landing messages themselves.

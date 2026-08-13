@@ -133,6 +133,7 @@ miss detected
 |:---:|:---|:---|
 | B | `METHOD.md` + case templates | **done** |
 | A | Tree + README + process + stubs | **done (this change)** |
+| | Quality package Regime B dogfood case | **done** ([`cases/204/quality-package-regime-b.md`](./cases/204/quality-package-regime-b.md)) |
 | | Promote S12 full cases | pending |
 | | Substrate indexes (F1–F71 full prose, S1–11 stubs) | pending / skeleton |
 | | `cases/220/s0-schema-freeze.md` | pending |

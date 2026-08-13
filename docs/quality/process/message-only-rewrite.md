@@ -61,3 +61,16 @@ After rewrite, complete METHOD case with:
 * Git-raw / Gold-final  
 * Rewrite-map-confirmed  
 * Note whether prepare re-entry was observed pre-mitigation (F80)
+
+## Environment note — hk-managed hooks (2026-08-13 / 204-QP-RB)
+
+In this repository, hooks are driven by **hk** (`hk.pkl` `prepare-commit-msg` → `git-cg`), not only files under `.git/hooks`.
+
+Observed:
+
+* `git -c core.hooksPath=/dev/null commit -F <msgfile>` **still ran** hk `prepare-commit-msg` and `commit-msg` steps during a gold message landing.
+* Message bytes may survive if `git-cg` chooses not to overwrite a supplied `-F` body, but **re-entry still happens** (Opik/telemetry side effects, rewrite risk).
+* **Reliable message-only construction without prepare re-entry:** `git commit-tree <tree> -p <parent> < msgfile` then `git reset --hard <new>` (set `GIT_AUTHOR_*` / `GIT_COMMITTER_*` as needed).
+
+Until product/install exposes a guaranteed `GIT_CG_SKIP_PREPARE=1` short-circuit that hk also honours, treat **commit-tree** as the gold standard for multi-tip rebuilds (F80 / P-S12-9).
+

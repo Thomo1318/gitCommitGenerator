@@ -100,6 +100,7 @@ Cumulative S2→S5 style gates for human/agent amend review:
 
 - [ ] Snake scope where hyphen canon exists (`commit_quality`, `scoped_history`)  
 - [ ] Package scope `git_cg` when a dominant module/behaviour slug exists  
+- [ ] Tautological path-kind scope (`docs(docs)`, `test(tests)`) when a dominant package/module slug exists (`quality`, …) — **F81 / P-S12-10**  
 - [ ] Title Case subjects; vague “improve/enhance …”  
 - [ ] “Add … tests” / “add guard” framing on claim-lock / wording-only  
 - [ ] validate/enforce/implement verbs on pure pins, proof packs, docs-of-prior-work (F79 / P-S12-8)
@@ -109,6 +110,8 @@ Cumulative S2→S5 style gates for human/agent amend review:
 - [ ] `Context:` / `Changes:` templates  
 - [ ] Process-meta: `Cleared guard codes`, `Deterministic presentation fallback`, guard exhaustion prose (F73)  
 - [ ] Miscellaneous-only changelog on test+docs surfaces  
+- [ ] Any `Miscellaneous` on **pure docs** tips — Documentation allowlist only (**F82 / P-S12-11**)  
+- [ ] Issue-governed work missing `Refs|Resolves|Closes|Fixes` trailer (**F83 / P-S12-12**)  
 - [ ] Thin `Included changes` when stable IDs exist (TIP-G*, V12-A*, GUARD_*, pins)  
 - [ ] Attribution to unshipped phase/product or docs claiming to implement earlier product guards (F77 / P-S12-7)  
 - [ ] Primary-surface inversion (test-only inventory on product+test diff)
