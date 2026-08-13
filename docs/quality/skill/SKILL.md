@@ -2,7 +2,7 @@
 name: failure-analysis-package
 description: Run METHOD-compliant gold-miss failure analysis for git-cg commit messages using docs/quality/ (cases, taxonomy, prevention, Opik binding, promotion).
 when_to_use: "Use when analyzing a commit-message gold miss, filing/promoting a docs/quality case, classifying Regime A/B failures, minting F*/P* IDs, performing message-only gold rewrites, or feeding #217 eval from Session 12 seed materials. NOT for generic code review, product feature implementation without a gold-miss case, inventing parallel presentation law, or treating GitHub issue comments as living SSOT after promotion."
-allowed-tools: Read, Write, Edit, Grep, Glob, Bash, opik-mcp
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, opik-mcp, code-review-graph
 effort: high
 version: 1.0.0-combine
 ---
@@ -316,7 +316,7 @@ Follow `docs/quality/process/message-only-rewrite.md`. Hard rules:
 - Tree must stay identical (`Rewrite-map-confirmed`).
 - **Do not** rely on `--no-verify` alone (F80).
 - Prefer `git commit-tree` / approved hooksPath or skip flag paths documented in process file.
-- Under `hk`, `core.hooksPath=/dev/null` may still be insufficient — treat **commit-tree** as gold standard until `GIT_CG_SKIP_PREPARE=1` is wired through hk+git-cg.
+- Under `hk`, prefer `GIT_CG_SKIP_PREPARE=1` (truthy: `1`/`true`/`yes`/`on`) for amend paths; `core.hooksPath=/dev/null` is unsupported as a prepare short-circuit. Use **commit-tree** + clean-worktree reset when object-level rebuild is required.
 - Prefer the project File Method for multi-line messages:
   ```bash
   # write perfect message to .git/NEW_COMMIT_MSG then:
@@ -386,8 +386,9 @@ Do not amend prior promotion commits unless a concrete defect is found and the u
 
 - Prefer `rg` / `fd` over `grep` / `find`.
 - Prefer `trash` over `rm`.
+- **Graph-first repository exploration:** before any `Read` / `Grep` / `Glob` (or equivalent) repository scans for product/code context, use code-review-graph tools (`get_minimal_context`, `semantic_search_nodes`, `query_graph`, `detect_changes`, `get_impact_radius`, `get_affected_flows`, `get_review_context`). Fall back to file scans only when the graph lacks the needed information.
 - For Opik evidence: use `opik-mcp` when available; otherwise mark unbound.
-- For product blast radius around presentation code, use code-review-graph tools **after** case identity is established — graph does not replace METHOD depth.
+- Graph tools aid blast-radius and code location; they do **not** replace METHOD forensic depth or case identity fields.
 - Secrets/redaction: never paste tokens, raw `.env`, or unredacted sensitive diffs into cases.
 
 ## Quick Start Recipes
