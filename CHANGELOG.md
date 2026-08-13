@@ -29,6 +29,42 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.14.0
+
+### Miscellaneous
+
+- 📝 docs(llms): auto-update llms.txt
+- 📝 docs(eval): document dual-axis pins and hash recipe (#220)
+- Merge pull request #222 from Thomo1318/evals/220-freeze-schema-pack-metric-catalog-pins
+
+### Documentation
+
+- 📝 docs(development): link offline S0 eval contracts (#220)
+- 📝 docs(eval): document dual-axis pins and hash recipe (#220)
+
+### Tests
+
+- 🥅 fix(eval): harden S0 pin, isolation, and export contracts (#220)
+- ✅ test(eval): lock schema_pack loader error and cache branches (#220)
+- ✅ test(eval): lock S0 schema pack and catalog pins offline (#220)
+
+### Changed
+
+- 🥅 fix(eval): close residual CodeRabbit S0 contract gaps (#220)
+
+### Fixed
+
+- 🥅 fix(eval): close residual CodeRabbit S0 contract gaps (#220)
+- 🥅 fix(eval): harden S0 pin, isolation, and export contracts (#220)
+
+### Build
+
+- 🥅 fix(eval): close residual CodeRabbit S0 contract gaps (#220)
+
+### Added
+
+- ✨ feat(eval): add offline contract package and metric catalog (#220)
+- ✨ feat(schemas): freeze offline eval schema pack v0 (#220)
 
 ## v0.13.2
 
