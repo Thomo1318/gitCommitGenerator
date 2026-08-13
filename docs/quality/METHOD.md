@@ -132,7 +132,7 @@ healthy extract → contaminated signals / empty path_class_gate
 ### Shared process defect
 
 **F80 / P-S12-9** — `prepare-commit-msg` still re-enters `git-cg` on message-only rebuilds.  
-`--no-verify` alone is insufficient. Use `core.hooksPath=/dev/null` or `GIT_CG_SKIP_PREPARE=1` (see [`process/message-only-rewrite.md`](./process/message-only-rewrite.md)).
+`--no-verify` alone is insufficient. Prefer `GIT_CG_SKIP_PREPARE=1` (truthy: `1`/`true`/`yes`/`on`). Under hk-managed installs, do not rely on `core.hooksPath=/dev/null` as a prepare short-circuit (see [`process/message-only-rewrite.md`](./process/message-only-rewrite.md)).
 
 ---
 
