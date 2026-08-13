@@ -124,6 +124,10 @@ name = "documentation-templates"
 source = "path:.agents/skills/documentation-templates"
 
 [[skills]]
+name = "failure-analysis-package"
+source = "path:.agents/skills/failure-analysis-package"
+
+[[skills]]
 name = "frontend-architecture"
 source = "path:.agents/skills/frontend-architecture"
 
