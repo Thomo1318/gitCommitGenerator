@@ -8,7 +8,7 @@ Lockfile: package-lock.json
 **Package Manager:** Hatch (`hatch env create`)
 **Package Manager:** uv (`uv sync`)
 Lockfile: uv.lock
-Dependencies: 20 runtime, 1 dev
+Dependencies: 21 runtime, 1 dev
 
 ## Scripts (Justfile)
 
@@ -26,14 +26,15 @@ Dependencies: 20 runtime, 1 dev
 | all | `just all` |
 | test | `just test` |
 | uninstall | `just uninstall` |
+| eval-schema-hash | `just eval-schema-hash` |
 
 ## Scripts (package.json)
 
 | Name | Command |
 |------|---------|
+| release | `uv run python -m git_cg.main release` |
 | test | `echo "Error: no test specified" && exit 1` |
 | validate | `node scripts/validate_commit.mjs` |
-| release | `uv run python -m git_cg.main release` |
 
 
 ## Tools
@@ -208,4 +209,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-67.9ms | 738 files checked | 21/539 tools matched
+69.7ms | 738 files checked | 21/539 tools matched
