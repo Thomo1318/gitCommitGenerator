@@ -29,10 +29,13 @@ Or:
 just eval-schema-hash
 ```
 
-Pins are content hashes:
+Pins are content hashes (`name@sha256`):
 
-* `schema_pack_v0@<sha256>`
-* `metric_catalog_v0@<sha256>`
+* Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
+  * `schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6`
+  * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
+* Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
+* Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
 
 ## Layout
 

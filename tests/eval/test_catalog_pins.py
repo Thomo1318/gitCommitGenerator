@@ -85,6 +85,35 @@ def test_s0_b05_pins_stable_across_two_invocations() -> None:
     assert m1.startswith("metric_catalog_v0@")
     assert len(s1.split("@", 1)[1]) == 64
     assert len(m1.split("@", 1)[1]) == 64
+    # Frozen S0 identities (content hashes). Drift fails closed here.
+    assert s1 == ("schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6")
+    assert m1 == ("metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75")
+
+
+def test_s0_b08_numeric_scores_accept_strict_int() -> None:
+    ok = ScoreResultV1(
+        metric_id="d.strict_fail_set",
+        polarity=Polarity.LOWER_IS_BETTER,
+        authority=Authority.LAW,
+        source=Source.LOCAL_WRAPPER,
+        value=3,
+        threshold=0,
+        duration_ms=12,
+    )
+    assert ok.value == 3
+    assert ok.threshold == 0
+    assert ok.duration_ms == 12
+
+
+def test_s0_b09_whitespace_metric_id_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ScoreResultV1(
+            metric_id="   ",
+            polarity=Polarity.PASS_FAIL,
+            authority=Authority.LAW,
+            source=Source.LOCAL_WRAPPER,
+            value=True,
+        )
 
 
 def test_s0_b06_redaction_profiles_include_train_ladder() -> None:

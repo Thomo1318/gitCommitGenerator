@@ -58,9 +58,18 @@ def test_s0_c04_bool_value_requires_pass_fail_polarity() -> None:
         )
 
 
-def test_s0_c05_train_rich_is_not_law_authority_by_itself() -> None:
+def test_s0_c05_redaction_profiles_do_not_encode_gate_authority() -> None:
+    """Retention ladder is orthogonal to gate authority (M11 dual-axis).
+
+    S0 freezes the ladder enum and ScoreResult authority field separately.
+    RedactionProfile must never contain gate-authority values; promotion of
+    gate.deterministic_pass remains a later policy surface, not a profile value.
+    """
     assert RedactionProfile.TRAIN_RICH.value == "train_rich"
-    assert "law" not in {p.value for p in RedactionProfile}
+    profile_values = {p.value for p in RedactionProfile}
+    assert "law" not in profile_values
+    # Authority and redaction remain distinct closed sets.
+    assert {a.value for a in Authority}.isdisjoint(profile_values)
 
 
 def test_s0_c06_json_schema_enforces_pass_fail_bool() -> None:
