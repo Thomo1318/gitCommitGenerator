@@ -1,0 +1,43 @@
+{
+  "case_id": "seed-n-topology-incomplete",
+  "artifact_class": "fixture",
+  "bound": false,
+  "unbound_reason": "topology_negative_probe",
+  "provenance_label": "fixture",
+  "final_message": "\ud83d\udcdd docs(eval): topology incomplete probe\n",
+  "generation_task_input": {
+    "diff_summary": "probe incomplete topology",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": [
+    "seed-n-topology",
+    "topology-negative",
+    "family-i"
+  ],
+  "meta": {
+    "seed_id": "SEED-N-TOPO",
+    "corpus_source": "synthetic",
+    "topology": {
+      "schema_version": "trace_topology_v1",
+      "status": "incomplete",
+      "required_spans": [
+        "generation",
+        "regeneration",
+        "accept_path_finalization",
+        "score_emit"
+      ],
+      "observed_spans": [
+        "generation"
+      ],
+      "missing_spans": [
+        "regeneration",
+        "accept_path_finalization",
+        "score_emit"
+      ],
+      "terminal_state": "open",
+      "require_complete_for_encode": true
+    },
+    "notes": "Invalid/incomplete topology: missing required spans. S1 encoder fail-closed when require_complete_for_encode."
+  }
+}

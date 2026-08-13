@@ -63,6 +63,106 @@ def _meta_with_producer(meta: Mapping[str, Any] | None, *, extra: dict[str, Any]
     return out
 
 
+def _as_mapping(value: Any, field: str) -> Mapping[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise CorpusEncodeError(f"{field} must be an object when present")
+    return value
+
+
+def _validate_topology_and_evidence(meta: Mapping[str, Any]) -> None:
+    """Optional S1 fail-closed probes for topology / counters / split / replay.
+
+    Full Family I scoring is S2+. S1 only enforces fixture-declared require_*
+    contracts so seed negatives and valid controls can live offline today.
+    """
+    topology = _as_mapping(meta.get("topology"), "meta.topology")
+    if topology is not None:
+        status = topology.get("status")
+        if status is not None and status not in {
+            "complete",
+            "incomplete",
+            "present",
+            "absent",
+            "unknown",
+        }:
+            raise CorpusEncodeError(f"unknown topology status: {status!r}")
+        required = topology.get("required_spans")
+        observed = topology.get("observed_spans")
+        missing = topology.get("missing_spans")
+        if required is not None and (not isinstance(required, list) or not all(isinstance(x, str) for x in required)):
+            raise CorpusEncodeError("meta.topology.required_spans must be an array of strings")
+        if observed is not None and (not isinstance(observed, list) or not all(isinstance(x, str) for x in observed)):
+            raise CorpusEncodeError("meta.topology.observed_spans must be an array of strings")
+        if missing is not None and (not isinstance(missing, list) or not all(isinstance(x, str) for x in missing)):
+            raise CorpusEncodeError("meta.topology.missing_spans must be an array of strings")
+
+        require_complete = bool(topology.get("require_complete_for_encode"))
+        if require_complete:
+            if status == "incomplete":
+                raise CorpusEncodeError("topology incomplete: require_complete_for_encode=true and status=incomplete")
+            if isinstance(required, list) and isinstance(observed, list):
+                missing_calc = sorted(set(required) - set(observed))
+                if missing_calc:
+                    raise CorpusEncodeError("topology incomplete: missing required spans: " + ", ".join(missing_calc))
+            if isinstance(missing, list) and missing:
+                raise CorpusEncodeError(
+                    "topology incomplete: missing_spans non-empty under require_complete_for_encode"
+                )
+
+    evidence = _as_mapping(meta.get("evidence"), "meta.evidence")
+    if evidence is not None and bool(evidence.get("require_counter_span_consistent")):
+        counters = evidence.get("counters")
+        span_counts = evidence.get("span_counts")
+        if not isinstance(counters, Mapping) or not isinstance(span_counts, Mapping):
+            raise CorpusEncodeError(
+                "counter/span consistency check requires meta.evidence.counters and span_counts objects"
+            )
+        regen_attempts = counters.get("gold_regen_attempts", 0)
+        regen_spans = span_counts.get("regeneration", 0)
+        try:
+            regen_attempts_n = int(regen_attempts)
+            regen_spans_n = int(regen_spans)
+        except (TypeError, ValueError) as exc:
+            raise CorpusEncodeError("counter/span values must be integers") from exc
+        if regen_attempts_n > 0 and regen_spans_n <= 0:
+            raise CorpusEncodeError(
+                "counter/span mismatch: gold_regen_attempts>0 but regeneration span count is 0 "
+                "(Session-12 class / i.counter_span_consistent)"
+            )
+        if regen_attempts_n == 0 and regen_spans_n > 0:
+            raise CorpusEncodeError("counter/span mismatch: regeneration spans present but gold_regen_attempts==0")
+
+    split = _as_mapping(meta.get("split"), "meta.split")
+    if split is not None and bool(split.get("forbid_train_and_gate_co_membership")):
+        train_lane = split.get("train_lane")
+        gate_lane = split.get("gate_lane")
+        contaminated = bool(split.get("contaminated"))
+        if contaminated or (
+            isinstance(train_lane, str)
+            and train_lane.startswith("train_")
+            and isinstance(gate_lane, str)
+            and gate_lane.startswith("gate_")
+        ):
+            raise CorpusEncodeError(
+                "split contamination: fixture claims both train and gate lane membership "
+                f"(train_lane={train_lane!r}, gate_lane={gate_lane!r})"
+            )
+
+    replay = _as_mapping(meta.get("replay"), "meta.replay")
+    if replay is not None and bool(replay.get("require_lineage_fields")) and bool(replay.get("is_replay")):
+        parent_trace = replay.get("parent_trace_id")
+        parent_thread = replay.get("parent_session_thread_id")
+        missing_fields = []
+        if not (isinstance(parent_trace, str) and parent_trace.strip()):
+            missing_fields.append("parent_trace_id")
+        if not (isinstance(parent_thread, str) and parent_thread.strip()):
+            missing_fields.append("parent_session_thread_id")
+        if missing_fields:
+            raise CorpusEncodeError("replay lineage incomplete: missing " + ", ".join(missing_fields))
+
+
 def encode_fixture(
     fixture: Mapping[str, Any],
     *,
@@ -152,6 +252,10 @@ def encode_fixture(
         # empty list is allowed only if key present; require key via above
         if "session-12-seed" in tags and regime not in {"A", "B"}:
             raise CorpusEncodeError("session-12-seed fixtures require regime A or B")
+
+    # Optional topology / evidence / split / replay fail-closed probes (S1 seed negatives).
+    if isinstance(meta_in, Mapping):
+        _validate_topology_and_evidence(meta_in)
 
     try:
         gti = project_generation_task_input(fixture.get("generation_task_input"), strict=True)

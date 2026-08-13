@@ -1,0 +1,28 @@
+{
+  "case_id": "seed-n-replay-lineage-missing",
+  "artifact_class": "fixture",
+  "bound": false,
+  "unbound_reason": "replay_lineage_probe",
+  "provenance_label": "fixture",
+  "final_message": "\ud83d\udcdd docs(eval): replay lineage probe\n",
+  "generation_task_input": {
+    "diff_summary": "probe missing replay lineage",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": [
+    "seed-n-replay",
+    "replay-lineage-negative"
+  ],
+  "meta": {
+    "seed_id": "SEED-N-REPLAY",
+    "corpus_source": "synthetic",
+    "replay": {
+      "is_replay": true,
+      "parent_session_thread_id": "thread-s12-demo",
+      "parent_trace_id": null,
+      "require_lineage_fields": true
+    },
+    "notes": "Replay row missing parent_trace_id / lineage fields \u2014 fail closed."
+  }
+}
