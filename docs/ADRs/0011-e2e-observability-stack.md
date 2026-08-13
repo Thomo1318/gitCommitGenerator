@@ -44,6 +44,10 @@ superseded_by: []
 >
 > Do NOT attempt to consolidate all three into a single vendor pipeline. The architectural strength comes from their targeted specialization.
 
+## Related Plans
+
+- **Opik evaluation harness (living SSOT):** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) — #217 governing design/implementation plan (S0–S7). Complements this ADR’s Opik pillar without replacing Promptfoo (#219) or Sentry (#218) scope.
+
 ## 1. Introduction and Goals
 
 This Architectural Decision Record (ADR) documents the comprehensive expansion of the `git-cg` LLMOps and observability ecosystem.

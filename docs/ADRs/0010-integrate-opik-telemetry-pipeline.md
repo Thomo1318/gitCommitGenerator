@@ -31,6 +31,10 @@ supersedes: []
 superseded_by: []
 ```
 
+## Related Plans
+
+- **Opik evaluation harness (living SSOT):** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) — design + implementation plan for #217 (S0–S7). This ADR remains the telemetry/ecosystem decision record; the plan is the executable harness SSOT.
+
 ## Catalyst
 
 As our reliance on LLMs for git commit generation grows, we are shifting from a static execution model to a continuous improvement lifecycle. Currently, our AI integration is a "fire-and-forget" mechanism: we generate a message and lose all visibility into its performance, user adjustments, and long-term efficacy. 
