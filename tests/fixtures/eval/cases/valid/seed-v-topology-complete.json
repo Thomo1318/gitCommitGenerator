@@ -1,0 +1,52 @@
+{
+  "case_id": "seed-v-topology-complete",
+  "artifact_class": "fixture",
+  "bound": false,
+  "unbound_reason": "synthetic_offline_fixture",
+  "provenance_label": "fixture",
+  "final_message": "\ud83d\udcdd docs(eval): topology complete control\n\nRefs: #223\nSemVer-Impact: PATCH\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "generation_task_input": {
+    "diff_summary": "topology complete control fixture",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": [
+    "seed-v-topology",
+    "topology-valid",
+    "family-i"
+  ],
+  "meta": {
+    "seed_id": "SEED-V-TOPO",
+    "corpus_source": "synthetic",
+    "topology": {
+      "schema_version": "trace_topology_v1",
+      "status": "complete",
+      "required_spans": [
+        "generation",
+        "accept_path_finalization",
+        "score_emit"
+      ],
+      "observed_spans": [
+        "generation",
+        "accept_path_finalization",
+        "score_emit"
+      ],
+      "missing_spans": [],
+      "terminal_state": "finalized",
+      "require_complete_for_encode": true
+    },
+    "evidence": {
+      "counters": {
+        "gold_regen_attempts": 0,
+        "llm_calls": 1
+      },
+      "span_counts": {
+        "generation": 1,
+        "regeneration": 0,
+        "accept_path_finalization": 1,
+        "score_emit": 1
+      },
+      "require_counter_span_consistent": true
+    }
+  }
+}

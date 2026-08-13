@@ -1,0 +1,28 @@
+{
+  "case_id": "seed-n-judge-input-leak",
+  "artifact_class": "fixture",
+  "bound": false,
+  "unbound_reason": "judge_input_leak_probe",
+  "provenance_label": "fixture",
+  "final_message": "\ud83d\udcdd docs(eval): judge input leak probe\n",
+  "expected_final_message": "must stay on envelope",
+  "generation_task_input": {
+    "diff_summary": "probe judge labels in task input",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update",
+    "judge_labels": [
+      "pass"
+    ],
+    "judge_target": "final_message"
+  },
+  "tags": [
+    "seed-n-judge",
+    "judge-input-leak",
+    "isolation"
+  ],
+  "meta": {
+    "seed_id": "SEED-N-JUDGE",
+    "corpus_source": "synthetic",
+    "notes": "JUDGE-INPUT leak attempt: judge_* keys inside generation_task_input."
+  }
+}

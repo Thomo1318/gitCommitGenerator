@@ -1,0 +1,20 @@
+{
+  "case_id": "seed-i1-expected-in-task-input",
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "unbound_reason": "isolation_probe",
+  "provenance_label": "fixture",
+  "final_message": "📝 docs(eval): isolation probe\n",
+  "expected_final_message": "should stay on envelope only",
+  "generation_task_input": {
+    "diff_summary": "probe",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update",
+    "expected_final_message": "LEAK"
+  },
+  "tags": ["seed-i1", "isolation"],
+  "meta": {
+    "seed_id": "SEED-I1",
+    "corpus_source": "synthetic"
+  }
+}

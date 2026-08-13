@@ -1,0 +1,37 @@
+{
+  "case_id": "seed-b1-session12-regime-b",
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound",
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "B",
+  "instance_kind": "B",
+  "final_message": "🦺 fix(fixtures): add TIP-G13–G17 validation goldens\n\nRefs: #204\nSemVer-Impact: PATCH\nChange-Types: fix\nChangelog-Groups: Fixed\n",
+  "expected_final_message": "✅ test(fixtures): pin Session 6 corpus rows TIP-G13–G17\n\nRefs: #204\nSemVer-Impact: NONE\nChange-Types: test\nChangelog-Groups: Tests\n",
+  "expected_gold_codes": [
+    "GOLD_WRONG_TYPE_ENVELOPE",
+    "GOLD_PATH_CLASS_MISS"
+  ],
+  "failure_ids": ["F76", "F78", "F79", "F80"],
+  "prevention_ids": ["P-S12-4", "P-S12-6", "P-S12-8", "P-S12-9"],
+  "path_class_gate": "",
+  "generation_task_input": {
+    "diff_summary": "fixtures/corpus/golden pins only",
+    "path_class_gate": "",
+    "ranked_intent_id": "validation_update"
+  },
+  "tags": ["session-12-seed", "regime-b", "204-archive", "seed-b1"],
+  "meta": {
+    "corpus_source": "204_archive",
+    "seed_id": "SEED-B1",
+    "quality_case": "docs/quality/cases/204/session-12-g2.md",
+    "series": "204-S12",
+    "case_archive_id": "204-S12-G2",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Regime B clean-wrong-acceptance seed. Polished message with empty path_class_gate and wrong type/SemVer envelope."
+  }
+}

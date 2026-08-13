@@ -1,0 +1,8 @@
+{
+  "case_id": "seed-n1-bound-false-missing-reason",
+  "artifact_class": "fixture",
+  "bound": false,
+  "provenance_label": "fixture",
+  "final_message": "x",
+  "unbound_reason": ""
+}

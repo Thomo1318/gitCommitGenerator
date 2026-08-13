@@ -1,0 +1,7 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "unbound_reason": "invalid_seed",
+  "provenance_label": "fixture",
+  "final_message": "x"
+}

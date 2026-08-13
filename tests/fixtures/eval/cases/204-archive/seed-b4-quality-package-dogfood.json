@@ -1,0 +1,57 @@
+{
+  "case_id": "seed-b4-quality-package-dogfood",
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound",
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "B",
+  "instance_kind": "B",
+  "final_message": "\ud83d\udcdd docs(docs): document quality analysis package\n\nEstablishes the foundational documentation for the commit-message quality analysis package.\n\nNull: #0\nSemVer-Impact: NONE\nChange-Types: docs\nChangelog-Groups: Documentation, Miscellaneous\n",
+  "expected_final_message": "\ud83d\udcdd docs(quality): scaffold quality package indices and case shelves\n\nIncluded changes:\n- \ud83d\udcdd docs(quality): METHOD and case templates\n- \ud83d\udcdd docs(quality): FAILURE_TAXONOMY / PREVENTION_BACKLOG shelves\n- \ud83d\udcdd docs(quality): cases/204 scaffold\n\nRefs: #204\nSemVer-Impact: NONE\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "expected_gold_codes": [
+    "GOLD_SCOPE_CANON_MISS",
+    "GOLD_INVENTORY_UNDERCLAIM",
+    "GOLD_CHANGELOG_IMPURITY",
+    "GOLD_ISSUE_TRAILER_MISSING"
+  ],
+  "failure_ids": [
+    "F78",
+    "F81",
+    "F82",
+    "F83",
+    "F80"
+  ],
+  "prevention_ids": [
+    "P-S12-6",
+    "P-S12-9",
+    "P-S12-10",
+    "P-S12-11",
+    "P-S12-12"
+  ],
+  "path_class_gate": "docs_only",
+  "generation_task_input": {
+    "diff_summary": "docs/quality/** package dogfood multi-file tip",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": [
+    "204-archive",
+    "regime-b",
+    "seed-b4",
+    "quality-package-dogfood",
+    "session-quality-package"
+  ],
+  "meta": {
+    "corpus_source": "204_archive",
+    "seed_id": "SEED-B4",
+    "quality_case": "docs/quality/cases/204/quality-package-regime-b.md",
+    "series": "204-QP-RB",
+    "case_archive_id": "204-QP-RB-G1",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Quality-package Regime B dogfood: docs(docs) scope, thin inventory, Missing Refs, Miscellaneous impurity."
+  }
+}

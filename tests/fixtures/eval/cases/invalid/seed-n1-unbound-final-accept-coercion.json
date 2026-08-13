@@ -1,0 +1,8 @@
+{
+  "case_id": "seed-n1-unbound-final-accept-coercion",
+  "artifact_class": "final_accept",
+  "bound": false,
+  "unbound_reason": "should_fail",
+  "provenance_label": "Opik-unbound",
+  "final_message": "x"
+}

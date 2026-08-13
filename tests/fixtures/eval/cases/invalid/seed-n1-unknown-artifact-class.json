@@ -1,0 +1,8 @@
+{
+  "case_id": "seed-n1-unknown-artifact-class",
+  "artifact_class": "not_a_real_class",
+  "bound": false,
+  "unbound_reason": "invalid_seed",
+  "provenance_label": "fixture",
+  "final_message": "x"
+}

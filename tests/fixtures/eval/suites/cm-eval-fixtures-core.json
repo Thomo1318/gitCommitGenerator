@@ -1,0 +1,23 @@
+{
+  "schema_version": "eval_suite_v1",
+  "id": "suite:cm-eval-fixtures-core",
+  "suite_id": "cm-eval-fixtures-core",
+  "case_ids": [
+    "seed-v1-valid-fixture",
+    "seed-a1-session12-regime-a",
+    "seed-b1-session12-regime-b"
+  ],
+  "case_paths": {
+    "seed-v1-valid-fixture": "cases/valid/seed-v1-valid-fixture.json",
+    "seed-a1-session12-regime-a": "cases/session-12/seed-a1-session12-regime-a.json",
+    "seed-b1-session12-regime-b": "cases/session-12/seed-b1-session12-regime-b.json"
+  },
+  "notes": "Lane A offline core suite (S1). Seed matrix: V1 + Session-12 Regime A/B. Invalid/isolation probes live beside the suite and are exercised by negative tests, not this green path.",
+  "meta": {
+    "lane": "A",
+    "mode_default": "fixture_offline",
+    "network_policy": "offline_required",
+    "seed_matrix": ["SEED-V1", "SEED-A1", "SEED-B1"],
+    "q8_lock": true
+  }
+}

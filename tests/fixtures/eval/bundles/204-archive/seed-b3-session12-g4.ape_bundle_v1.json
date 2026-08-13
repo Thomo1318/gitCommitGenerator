@@ -1,0 +1,63 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "case_id": "seed-b3-session12-g4",
+  "expected_final_message": "\ud83d\udcdd docs(commit-quality): document residual Session-12 close-out guards\n\nRefs: #204\nSemVer-Impact: NONE\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "expected_gold_codes": [
+    "GOLD_WRONG_TYPE_ENVELOPE",
+    "GOLD_ATTRIBUTION_BLEED"
+  ],
+  "failure_ids": [
+    "F77",
+    "F78",
+    "F79",
+    "F80"
+  ],
+  "final_message": "\ud83e\uddba fix(docs): establish residual close-out docs guards\n\nRefs: #204\nSemVer-Impact: PATCH\nChange-Types: fix\nChangelog-Groups: Fixed\n",
+  "final_message_sha256": "53911712e8a0d03f90195b45c4dfbfcac7d85d25c76387534fbe84b10227087f",
+  "generation_task_input": {
+    "diff_summary": "docs/** residual close-out documentation only",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "instance_kind": "B",
+  "meta": {
+    "case_archive_id": "204-S12-G4",
+    "corpus_source": "204_archive",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Session-12 G4 Regime B docs typed fix + attribution bleed class.",
+    "producer": "fixture_encoder_s1",
+    "quality_case": "docs/quality/cases/204/session-12-g4.md",
+    "seed_id": "SEED-B3",
+    "series": "204-S12",
+    "session_tags": [
+      "session-12-seed"
+    ],
+    "suite_id": "204-archive",
+    "tags": [
+      "session-12-seed",
+      "regime-b",
+      "204-archive",
+      "seed-b3",
+      "204-S12-G4"
+    ]
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "path_class_gate": "docs_only",
+  "prevention_ids": [
+    "P-S12-4",
+    "P-S12-6",
+    "P-S12-7",
+    "P-S12-8",
+    "P-S12-9"
+  ],
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "B",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "ape_bundle_v1",
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound"
+}

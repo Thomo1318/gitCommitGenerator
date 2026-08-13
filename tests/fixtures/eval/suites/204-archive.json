@@ -1,0 +1,37 @@
+{
+  "schema_version": "eval_suite_v1",
+  "id": "suite:204-archive",
+  "suite_id": "204-archive",
+  "case_ids": [
+    "seed-a1-session12-regime-a",
+    "seed-b1-session12-regime-b",
+    "seed-b2-session12-g3",
+    "seed-b3-session12-g4",
+    "seed-b4-quality-package-dogfood",
+    "seed-a2-instance-a-precursor"
+  ],
+  "case_paths": {
+    "seed-a1-session12-regime-a": "cases/session-12/seed-a1-session12-regime-a.json",
+    "seed-b1-session12-regime-b": "cases/session-12/seed-b1-session12-regime-b.json",
+    "seed-b2-session12-g3": "cases/204-archive/seed-b2-session12-g3.json",
+    "seed-b3-session12-g4": "cases/204-archive/seed-b3-session12-g4.json",
+    "seed-b4-quality-package-dogfood": "cases/204-archive/seed-b4-quality-package-dogfood.json",
+    "seed-a2-instance-a-precursor": "cases/204-archive/seed-a2-instance-a-precursor.json"
+  },
+  "notes": "Broader #204 archive ramp suite (S1 optional). Includes Session-12 G1\u2013G4, quality-package dogfood, and Instance-A precursor. Not a close-gate for Q8 core.",
+  "meta": {
+    "lane": "A",
+    "mode_default": "fixture_offline",
+    "network_policy": "offline_required",
+    "seed_matrix": [
+      "SEED-A1",
+      "SEED-B1",
+      "SEED-B2",
+      "SEED-B3",
+      "SEED-B4",
+      "SEED-A2"
+    ],
+    "q8_lock": false,
+    "archive_ramp": true
+  }
+}

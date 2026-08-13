@@ -1,0 +1,54 @@
+{
+  "case_id": "seed-n-counter-mismatch",
+  "artifact_class": "fixture",
+  "bound": false,
+  "unbound_reason": "counter_mismatch_probe",
+  "provenance_label": "fixture",
+  "final_message": "\ud83d\udcdd docs(eval): counter mismatch probe\n",
+  "generation_task_input": {
+    "diff_summary": "probe counter vs span mismatch",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": [
+    "seed-n-counter",
+    "counter-mismatch",
+    "session-12-class",
+    "family-i"
+  ],
+  "meta": {
+    "seed_id": "SEED-N-COUNTER",
+    "corpus_source": "synthetic",
+    "topology": {
+      "schema_version": "trace_topology_v1",
+      "status": "present",
+      "required_spans": [
+        "generation",
+        "regeneration",
+        "accept_path_finalization"
+      ],
+      "observed_spans": [
+        "generation",
+        "accept_path_finalization"
+      ],
+      "missing_spans": [
+        "regeneration"
+      ],
+      "terminal_state": "finalized",
+      "require_complete_for_encode": false
+    },
+    "evidence": {
+      "counters": {
+        "gold_regen_attempts": 2,
+        "llm_calls": 3
+      },
+      "span_counts": {
+        "generation": 1,
+        "regeneration": 0,
+        "accept_path_finalization": 1
+      },
+      "require_counter_span_consistent": true
+    },
+    "notes": "Session-12 class: counters claim regen but span tree lacks regeneration children."
+  }
+}

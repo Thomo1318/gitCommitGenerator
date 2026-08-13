@@ -407,15 +407,16 @@ same-filesystem local checkouts when measuring refresh latency.
 Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
 telemetry field (no separate payload key).
 
-## Offline evaluation contracts (S0)
+## Offline evaluation contracts (S0–S1)
 
-Frozen schema pack + metric catalog pins for the offline eval lane live under:
+Frozen schema pack + metric catalog pins (S0) and offline fixture/corpus encoder (S1) live under:
 
-* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), and S0 non-goals
-* Package: `src/git_cg/eval/` · schemas: `schemas/eval/`
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0/S1 boundaries, encoder/snapshot flow
+* Package: `src/git_cg/eval/` · corpus encoder: `src/git_cg/eval/corpus/` · schemas: `schemas/eval/`
+* Fixtures (Lane A SoT): `tests/fixtures/eval/` · recipes: `just eval-schema-hash`, `just eval-materialize`, `just eval-fixture-index`
 
-S0 is offline-only and does **not** touch `GenerationTelemetry`, hooks, or the live commit path.
-Follow-on slices (corpus/scoring/Opik accept-path) are tracked on #217.
+S0/S1 are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path.
+S1 does **not** require Opik/network. Follow-on slices (scoring/accept-path/Opik mirror/CLI) are tracked on #217 (S2–S7; thin eval CLI deferred to S6).
 
 ## Promptfoo evaluation (offline)
 

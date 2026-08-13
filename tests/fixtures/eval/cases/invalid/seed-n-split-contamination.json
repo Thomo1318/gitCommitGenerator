@@ -1,0 +1,30 @@
+{
+  "case_id": "seed-n-split-contamination",
+  "artifact_class": "fixture",
+  "bound": false,
+  "unbound_reason": "split_contamination_probe",
+  "provenance_label": "fixture",
+  "final_message": "\ud83d\udcdd docs(eval): split contamination probe\n",
+  "generation_task_input": {
+    "diff_summary": "probe train/gate split contamination",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "tags": [
+    "seed-n-split",
+    "split-contamination",
+    "train_positive",
+    "gate_deterministic"
+  ],
+  "meta": {
+    "seed_id": "SEED-N-SPLIT",
+    "corpus_source": "synthetic",
+    "split": {
+      "train_lane": "train_positive",
+      "gate_lane": "gate_deterministic",
+      "contaminated": true,
+      "forbid_train_and_gate_co_membership": true
+    },
+    "notes": "Train-positive row also tagged into gate_deterministic \u2014 split contamination fail-closed at encode."
+  }
+}

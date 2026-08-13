@@ -1,0 +1,58 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "case_id": "seed-a2-instance-a-precursor",
+  "expected_final_message": "\u2728 feat(commit-quality): land Session-6 capability floor\n\nRefs: #204\nSemVer-Impact: MINOR\nChange-Types: feat\nChangelog-Groups: Added\n",
+  "expected_gold_codes": [
+    "GOLD_SKELETON_FALLBACK_FINAL",
+    "GOLD_PROCESS_META_BODY"
+  ],
+  "failure_ids": [
+    "F72",
+    "F73",
+    "F74",
+    "F75"
+  ],
+  "final_message": "chore(main): finish residual close-out via fallback path\n\nContext: guards thrash then skeleton shipped as success\n\nNull: #0\nSemVer-Impact: NONE\nChange-Types: chore\nChangelog-Groups: Miscellaneous\n",
+  "final_message_sha256": "1e820243d040f38e57557844d6de5860563684f5049e0aa8800eaf59d4efa09b",
+  "generation_task_input": {
+    "diff_summary": "src/git_cg product residual precursor",
+    "path_class_gate": "product_src",
+    "ranked_intent_id": "feature_addition"
+  },
+  "instance_kind": "A",
+  "meta": {
+    "case_archive_id": "204-IA-PRE",
+    "corpus_source": "204_archive",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Instance-A precursor Regime A recovery-poison / fallback class beyond Session-12 G1.",
+    "producer": "fixture_encoder_s1",
+    "quality_case": "docs/quality/cases/204/instance-a-precursor.md",
+    "seed_id": "SEED-A2",
+    "series": "204-IA",
+    "suite_id": "204-archive",
+    "tags": [
+      "204-archive",
+      "regime-a",
+      "seed-a2",
+      "instance-a-precursor"
+    ]
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "path_class_gate": "product_src",
+  "prevention_ids": [
+    "P-S12-1",
+    "P-S12-2",
+    "P-S12-3",
+    "P-S12-5"
+  ],
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "A",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "ape_bundle_v1",
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound"
+}

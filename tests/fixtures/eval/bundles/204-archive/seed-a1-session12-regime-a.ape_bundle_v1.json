@@ -1,0 +1,63 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "case_id": "seed-a1-session12-regime-a",
+  "expected_final_message": "\u2728 feat(commit-quality): add Session 6 scope, capability, and guard laws\n\nRefs: #204\nSemVer-Impact: MINOR\nChange-Types: feat\nChangelog-Groups: Added\n",
+  "expected_gold_codes": [
+    "GOLD_SKELETON_FALLBACK_FINAL",
+    "GOLD_PROCESS_META_BODY"
+  ],
+  "failure_ids": [
+    "F72",
+    "F73",
+    "F74",
+    "F75",
+    "F78"
+  ],
+  "final_message": "chore(commit_quality): complete residual close-out with fallback path\n\nContext: regeneration exhausted under gold_strict\nChanges: shipped skeleton/process-meta body as successful final\n\nNull: #0\nSemVer-Impact: NONE\nChange-Types: chore\nChangelog-Groups: Miscellaneous\n",
+  "final_message_sha256": "88f84eb74732376d801d3a482c072b6138e0d6d73333286db7e574263abf4e5f",
+  "generation_task_input": {
+    "diff_summary": "src/git_cg/commit_quality.py product law changes",
+    "path_class_gate": "product_src",
+    "ranked_intent_id": "feature_addition"
+  },
+  "instance_kind": "A",
+  "meta": {
+    "case_archive_id": "204-S12-G1",
+    "corpus_source": "204_archive",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Regime A recovery-poison / fallback-as-final seed. final_message is historical miss bytes; expected_* is gold target for later S2, never generation input.",
+    "producer": "fixture_encoder_s1",
+    "quality_case": "docs/quality/cases/204/session-12.md",
+    "seed_id": "SEED-A1",
+    "series": "204-S12",
+    "session_tags": [
+      "session-12-seed"
+    ],
+    "suite_id": "204-archive",
+    "tags": [
+      "session-12-seed",
+      "regime-a",
+      "204-archive",
+      "seed-a1"
+    ]
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "path_class_gate": "product_src",
+  "prevention_ids": [
+    "P-S12-1",
+    "P-S12-2",
+    "P-S12-3",
+    "P-S12-5",
+    "P-S12-6"
+  ],
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "A",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "ape_bundle_v1",
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound"
+}

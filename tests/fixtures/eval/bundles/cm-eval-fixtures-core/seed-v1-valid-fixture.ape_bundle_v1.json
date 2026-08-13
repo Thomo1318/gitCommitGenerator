@@ -1,0 +1,32 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "case_id": "seed-v1-valid-fixture",
+  "expected_final_message": "\ud83d\udcdd docs(eval): add offline fixture seed\n\nRefs: #223\nSemVer-Impact: PATCH\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "expected_gold_codes": [],
+  "final_message": "\ud83d\udcdd docs(eval): add offline fixture seed\n\nRefs: #223\nSemVer-Impact: PATCH\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "final_message_sha256": "d472dd7274b36cf4d34fad40aa1da57266dc0f6fac9afa664e2be552204292c1",
+  "generation_task_input": {
+    "diff_summary": "docs/eval README only",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "meta": {
+    "corpus_source": "synthetic",
+    "producer": "fixture_encoder_s1",
+    "seed_id": "SEED-V1",
+    "suite_id": "cm-eval-fixtures-core",
+    "tags": [
+      "seed-v1",
+      "cm-eval-fixtures-core"
+    ]
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "path_class_gate": "docs_only",
+  "provenance_label": "fixture",
+  "redaction_profile": "default_scrub",
+  "regime": "n/a",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "ape_bundle_v1",
+  "unbound_reason": "synthetic_offline_fixture"
+}

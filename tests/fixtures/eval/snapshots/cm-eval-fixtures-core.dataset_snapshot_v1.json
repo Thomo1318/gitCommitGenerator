@@ -1,0 +1,42 @@
+{
+  "id": "snapshot:cm-eval-fixtures-core",
+  "item_count": 3,
+  "meta": {
+    "case_ids": [
+      "seed-v1-valid-fixture",
+      "seed-a1-session12-regime-a",
+      "seed-b1-session12-regime-b"
+    ],
+    "items": [
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "6f2a3f1991cd3f5c37d1dc5268a22019531e8ed895303910fb80acc6bbcb184d",
+        "bundle_ref": "bundle:seed-v1-valid-fixture@6f2a3f1991cd3f5c37d1dc5268a22019531e8ed895303910fb80acc6bbcb184d",
+        "case_hash": "48818947f2ebf7418f099b77e138128b450bc0916a7ced88b86fcaedeba0cbb7",
+        "case_id": "seed-v1-valid-fixture"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "ccad4b9cb4d670abbb0d6045a620b58c06cf53a4af3534df3e15f3fb4d28084c",
+        "bundle_ref": "bundle:seed-a1-session12-regime-a@ccad4b9cb4d670abbb0d6045a620b58c06cf53a4af3534df3e15f3fb4d28084c",
+        "case_hash": "d41d1231d3b72ae19bcec9c4691e407fdab84dd1860bf831901368e39f48310b",
+        "case_id": "seed-a1-session12-regime-a"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "2b6ccfd6117bec480219cc4417e693d3c0aae2743590f8bc5c94f300e6b5541a",
+        "bundle_ref": "bundle:seed-b1-session12-regime-b@2b6ccfd6117bec480219cc4417e693d3c0aae2743590f8bc5c94f300e6b5541a",
+        "case_hash": "2c9e4753b6af5ee694fc690f53c1e6c447834194c356778ed61585aabbe63139",
+        "case_id": "seed-b1-session12-regime-b"
+      }
+    ],
+    "network_policy": "offline_required",
+    "producer": "fixture_encoder_s1",
+    "suite_id": "cm-eval-fixtures-core"
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "notes": "Offline Lane A snapshot for cm-eval-fixtures-core",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "dataset_snapshot_v1",
+  "snapshot_hash": "5af09ada1981e44517e46014f3d93be422cb20bead0406410033414b9f3e7513"
+}
