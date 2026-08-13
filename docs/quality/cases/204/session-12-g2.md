@@ -98,7 +98,7 @@ S12-G2 ✅  ✅ test(fixtures): pin Session 6 corpus rows TIP-G13–G17 · NONE
 > Authoritative G2 reconstruction from comment `5213748048`. Heading levels normalised to package case style.
 
 
-**Scope for this section:** G2 only. G3–G4 remain in the collapsible full analysis below until expanded to the same depth.
+**Scope for this section:** G2 only. Sibling full-depth cases: [`session-12-g3.md`](./session-12-g3.md), [`session-12-g4.md`](./session-12-g4.md).
 
 | Field | Value |
 | --- | --- |

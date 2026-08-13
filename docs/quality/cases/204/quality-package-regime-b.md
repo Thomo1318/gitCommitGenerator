@@ -555,7 +555,7 @@ Registry rows minted in [`FAILURE_TAXONOMY.md`](../../FAILURE_TAXONOMY.md) / [`P
 | Regime confidence | **High** (Direct message+tree evidence; clean accept pattern) |
 | Residual risk | Until P-S12-10..12 land in product/gold_strict, any `docs/quality/**` tip can clean-miss the same way |
 | Blocks release / epic? | no product runtime block; **blocks claiming package self-hosting is dogfood-green** |
-| Follow-ups | implement P-S12-10..12; bind Opik on next package tip; promote remaining S12 archive cases |
+| Follow-ups | implement P-S12-6 inventory enforcement + regression fixture; implement P-S12-10..12; bind Opik on next package tip; promote remaining S12 archive cases |
 
 ---
 

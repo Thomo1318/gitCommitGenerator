@@ -178,7 +178,7 @@ Prepare-commit-msg still invokes `git-cg` on message-only rebuilds even with `--
 | G3 | `validation_update` | **100.5** | `tests_update` | **26.0** | medium 20.5; still `skipped_high_medium` |
 | G4 | `validation_update` | **100.5** | `documentation_update` | **21.5** | **high 38.0**; arbitration skipped |
 
-**Invariant:** once false validation markers exist and path-class is empty, `validation_update@100.5` is the Session 12 attractor for every non-product tip.
+**Invariant (observed across documented G2–G4):** once false validation markers exist and path-class is empty, `validation_update@100.5` is the Session 12 attractor for the documented non-product tips in this series. Do not generalise beyond G2–G4 without additional evidence.
 
 ### Signal sources that poisoned Regime B
 
@@ -219,7 +219,7 @@ Parser health was **not** the discriminator. G3/G4 parsers “succeeded.” The 
 
 | Rule | Requirement | Closes | Why series proves it |
 | --- | --- | --- | --- |
-| **P-S12-1** | If `presentation_fallback_reason != none` **or** body matches skeleton/fallback templates, gold-strict **must fail** (`GOLD_FALLBACK_NOT_FINAL`). | F72 | G1 wrote fallback as success |
+| **P-S12-1** | If `presentation_fallback_reason != none` **or** body matches skeleton/fallback templates, gold-strict **must fail** (`GOLD_SKELETON_FALLBACK_FINAL`). | F72 | G1 wrote fallback as success |
 | **P-S12-2** | Body denylist: `Cleared guard codes`, `Deterministic presentation fallback`, `guard exhaustion`, `presentation-safe`, `apply staged presentation-safe changes`. | F73 | G1 process-meta leakage |
 | **P-S12-3** | Force hyphenated scopes (`commit-quality`, …). Reject snake `commit_quality`. | F74 | G1 scope canon break |
 | **P-S12-4** | Hard live envelope: pure `tests/**` ⇒ `test`+`NONE`; fixtures corpus/goldens ⇒ primary `test` (docs secondary); pure docs ⇒ `docs`+`NONE`. | F76 / F77 | G2–G4 attractor |
@@ -227,7 +227,7 @@ Parser health was **not** the discriminator. G3/G4 parsers “succeeded.” The 
 | **P-S12-6** | Characterisation / docs commits must inventory stable IDs and named surfaces (TIP-G13–G17; V12-A01–A45; named guards/capabilities; README/CHANGELOG rows). | F78 | all four tips under-claimed |
 | **P-S12-7** | Docs-only tips may reference prior laws by name but must not claim to add/implement product guards from earlier commits. | F77 | G4 “add/establish” on docs-only |
 | **P-S12-8** | Ban validate/enforce/implement framing on pure fixture pins, proof packs, and docs-of-prior-work; prefer pin/lock/cover/freeze/characterise/document/record. | F79 | G2–G4 verb overclaim |
-| **P-S12-9** | Message-only rebuild: disable prepare-commit-msg git-cg (`core.hooksPath=/dev/null` or `GIT_CG_SKIP_PREPARE=1`). `--no-verify` alone is insufficient. | F80 | G2–G4 re-entry (+ rebuild methodology) |
+| **P-S12-9** | Message-only rebuild: primary control is `GIT_CG_SKIP_PREPARE=1` (truthy: `1`/`true`/`yes`/`on`). Under hk, `core.hooksPath=/dev/null` is unsupported as a prepare short-circuit. `--no-verify` alone is insufficient. | F80 | G2–G4 re-entry (+ rebuild methodology) |
 
 ### Control stack that would have saved the series
 
@@ -343,20 +343,20 @@ F80 is methodological: File Method / `--no-verify` does not isolate `git-cg` fro
 
 ### P1 — remove the attractor fuel
 
-4. **Signal quarantine** by path class:
+1. **Signal quarantine** by path class:
    * fixtures/tests: demote validation/capability/runtime from fixture JSON and test AST alone
    * docs: demote runtime/validation/secret from Markdown/changelog prose alone
    * enable changelog anti-signal for Unreleased bullets on docs-only tips
-5. **Contradictory prompt assembly fix** (G1): never inject Context:/Changes skeleton when guard bans it; on `GUARD_CONTEXT_CHANGES_TEMPLATE`, switch body strategy instead of replaying.
+2. **Contradictory prompt assembly fix** (G1): never inject Context:/Changes skeleton when guard bans it; on `GUARD_CONTEXT_CHANGES_TEMPLATE`, switch body strategy instead of replaying.
 
 ### P2 — restore truthful inventory and scope canon
 
-6. **Stable-ID / surface harvest** (P-S12-6) for TIP-G*, V12-A*, GUARD_*, CAPABILITY_*, INVALID_FINAL_SCOPES, README rows, Unreleased bullets.
-7. **Scope canon** (P-S12-3/5): hyphenated module scopes; product law tips stay `commit-quality`; proof packs don’t collapse to `test`.
+1. **Stable-ID / surface harvest** (P-S12-6) for TIP-G*, V12-A*, GUARD_*, CAPABILITY_*, INVALID_FINAL_SCOPES, README rows, Unreleased bullets.
+2. **Scope canon** (P-S12-3/5): hyphenated module scopes; product law tips stay `commit-quality`; proof packs don’t collapse to `test`.
 
 ### P3 — rebuild methodology
 
-8. **P-S12-9** default for message-only gold rebuilds: `core.hooksPath=/dev/null` or `GIT_CG_SKIP_PREPARE=1`.
+1. **P-S12-9** default for message-only gold rebuilds: prefer `GIT_CG_SKIP_PREPARE=1` (hk-compatible); do not rely on `core.hooksPath=/dev/null` under hk-managed installs.
 
 ### Acceptance tests the series itself demands
 

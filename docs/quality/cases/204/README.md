@@ -29,8 +29,8 @@
 ## Promotion priority
 
 1. ~~Session 12 G1 + synthesis~~ **done** (method exemplars)  
-2. Session 12 G2 / G3 / G4 full depth  
-3. Dogfood G2–G4  
+2. ~~Session 12 G2 / G3 / G4 full depth~~ **done**  
+3. ~~Dogfood G2–G4~~ **done**  
 4. Substrate stubs for A / B / S6–11  
 5. Operator: mark promoted GitHub comments superseded-as-SSOT (header note)
 

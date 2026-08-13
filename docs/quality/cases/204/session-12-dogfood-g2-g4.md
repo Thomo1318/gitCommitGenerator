@@ -47,6 +47,7 @@ last_updated: 2026-08-13
 ---
 
 ## Dogfood G2 (promoted from `5226058599`)
+
 ## #204 Session 12 dogfood failure analysis — G2 (path-class envelope)
 
 > [!NOTE]
@@ -91,6 +92,7 @@ last_updated: 2026-08-13
 
 
 ### Full analysis — dogfood G2
+
 ### Executive finding
 
 G2 implemented the product controls that force fixtures into the test-family envelope and treat empty/unknown path evidence as non-forcing. The **accepted message did not name those controls**. Ranking selected `validation_update` with scope `presentation`; low-confidence skeleton guidance compressed the body; gold-strict recorded **zero findings** and did not block.
@@ -177,6 +179,7 @@ Message-only amend applied; tree `9db8a373…` preserved.
 
 ---
 ## Dogfood G3 (promoted from `5226058718`)
+
 ## #204 Session 12 dogfood failure analysis — G3 (gold-strict truth)
 
 > [!NOTE]
@@ -221,6 +224,7 @@ Message-only amend applied; tree `9db8a373…` preserved.
 
 
 ### Full analysis — dogfood G3
+
 ### Executive finding
 
 G3’s diff is exactly the gold-strict truth plane: `GOLD_SKELETON_FALLBACK_FINAL`, `GOLD_PROCESS_META_BODY`, path-class SemVer/type mismatch codes, fixture product framing, docs implementation claims, plus exhaustion-harness seed alignment. The **message failed to name those codes**. Worse, regeneration moved from a nearer-gold first subject to a vaguer final subject, and telemetry still looked “clean.”
@@ -319,6 +323,7 @@ Applied via in-progress rebase amend + continue; tree `6fdd76e0…` preserved. F
 
 ---
 ## Dogfood G4 (promoted from `5226058788`)
+
 ## #204 Session 12 dogfood failure analysis — G4 (fixture corpus pins)
 
 > [!NOTE]
@@ -361,6 +366,7 @@ Applied via in-progress rebase amend + continue; tree `6fdd76e0…` preserved. F
 
 
 ### Full analysis — dogfood G4
+
 ### Executive finding
 
 G4 is a **fixtures-only + claims-test** pin commit. Gold law is hard: `✅ test(fixtures)`, `SemVer-Impact: NONE`, `Change-Types: test, docs`, `Changelog-Groups: Tests, Documentation`, with named TIP-G2 / P9-G5 / S9-H / V12-A inventory. Actual shipped `🦺 fix` / `PATCH` / `Fixed` because path-class never gated the contract and content signals still looked like “validation.”

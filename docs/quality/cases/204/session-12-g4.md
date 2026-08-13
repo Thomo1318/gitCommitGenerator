@@ -575,6 +575,7 @@ Supported directly by Opik + raw Git:
 **S12-G4 is complete at full depth in this continuation archive.**
 
 **Cross-commit synthesis:** [5215611559](./session-12-synthesis.md).
+
 ---
 
 ## Package cross-links
