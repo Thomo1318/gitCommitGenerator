@@ -7,7 +7,7 @@
 > **Genre authority:** Session 12 (Opik-bound forensic reconstruction)  
 > **Substrate:** Sessions 1–11 + #204 body (law, F1–F71, matrices, tip corpus)  
 > **Sources:** promoted SSOT `cases/204/session-12.md` + `session-12-synthesis.md`; archive comments `5213748048`, `5215148242`, `5215440216`, `5215611559`; dogfood `5226058599` / `5226058718` / `5226058788`  
-> **Last harvest:** 2026-08-13 (S12 G1 + synthesis promoted)  
+> **Last harvest:** 2026-08-13 (S12 G1–G4 + synthesis + dogfood promoted)  
 > **Companion:** [`templates/CASE_TEMPLATE.md`](./templates/CASE_TEMPLATE.md)
 
 ---
@@ -332,7 +332,8 @@ Gold is the **message the project would keep**, not “Hybrid-parseable.”
 | Operator checklist | `process/gold-miss-review-checklist.md` |
 | Message-only rewrite | `process/message-only-rewrite.md` |
 | Promote from GitHub | `process/promotion-from-issue-comment.md` |
-| Worked proofs | [`cases/204/session-12.md`](./cases/204/session-12.md) (G1) · [`session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · G2–G4 pending |
+| Agent skill | [`skill/SKILL.md`](./skill/SKILL.md) (`failure-analysis-package`) |
+| Worked proofs | [`cases/204/session-12.md`](./cases/204/session-12.md) (G1) · [`session-12-g2.md`](./cases/204/session-12-g2.md) · [`session-12-g3.md`](./cases/204/session-12-g3.md) · [`session-12-g4.md`](./cases/204/session-12-g4.md) · [`session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · [`session-12-dogfood-g2-g4.md`](./cases/204/session-12-dogfood-g2-g4.md) |
 | First forward case | `cases/220/s0-schema-freeze.md` |
 
 ---
@@ -363,7 +364,7 @@ Anything less is **intake notes**, not package SSOT.
 | S12 element | Method location |
 |:---|:---|
 | G1 fallback/process-meta catastrophe | Regime A exemplar → [`cases/204/session-12.md`](./cases/204/session-12.md) |
-| G2–G4 clean wrong accept | Regime B exemplar → synthesis + pending G2–G4 cases |
+| G2–G4 clean wrong accept | Regime B exemplar → [`session-12-g2.md`](./cases/204/session-12-g2.md)–[`g4.md`](./cases/204/session-12-g4.md) + [`session-12-dogfood-g2-g4.md`](./cases/204/session-12-dogfood-g2-g4.md) + synthesis |
 | F72–F80 | Taxonomy + every residual close-out checklist |
 | P-S12-1…9 | Prevention backlog systems floor |
 | Direct/Reconstructed matrix | §6.3 / provenance process |
@@ -382,7 +383,7 @@ Sessions 1–11 supply the **law and ID substrate** this method assumes (diff-cl
 | Package version | `1.0.0-combine` |
 | Method status | Active ratification core (B) |
 | Scaffold status | Tree + companions (A) |
-| Next content harvest | S12 G2–G4 + dogfood · substrate indexes · #220 case |
+| Next content harvest | substrate indexes (F1–F71 full prose) · S1–11 stubs · #220 forward case |
 | Owners | git-cg maintainers / gold-miss reviewers |
 
 When this file conflicts with a historical #204 comment on **procedure**, this file wins.  

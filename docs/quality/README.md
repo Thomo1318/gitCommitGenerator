@@ -30,7 +30,7 @@ One versioned in-repo package that is the single place to:
 |:---|:---|:---|
 | **[#204](https://github.com/Thomo1318/gitCommitGenerator/issues/204)** | Presentation-quality epic + gold-miss **corpus** | This tree (`METHOD`, taxonomy, prevention, `cases/204/**`). Issue body = locks/V12-A until fully mirrored. Comments = archive after promote. |
 | **[#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)** | Opik evaluation harness **consumer** | Harness design SSOT: [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md). Must **cite** F*/P*/regimes/cases here — must **not** fork gold-miss law. Issue #217 body = executive governance index. |
-| Session 12 seed | Residual close-out proof pack | [`cases/204/session-12.md`](./cases/204/session-12.md) (G1) · [`cases/204/session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · F72–F80 · P-S12-1…9 |
+| Session 12 seed | Residual close-out + post-control dogfood proof pack | [`cases/204/session-12.md`](./cases/204/session-12.md) · [`session-12-g2.md`](./cases/204/session-12-g2.md) · [`session-12-g3.md`](./cases/204/session-12-g3.md) · [`session-12-g4.md`](./cases/204/session-12-g4.md) · [`session-12-synthesis.md`](./cases/204/session-12-synthesis.md) · [`session-12-dogfood-g2-g4.md`](./cases/204/session-12-dogfood-g2-g4.md) · F72–F83 · P-S12-1…12 |
 
 **Rule:** after promotion, repo paths are living SSOT; GitHub comments remain intake evidence only (`process/promotion-from-issue-comment.md`).
 
@@ -51,6 +51,7 @@ One versioned in-repo package that is the single place to:
 | TIP / V12-A / Instance map | [`CORPUS.md`](./CORPUS.md) |
 | Worked cases | [`cases/README.md`](./cases/README.md) |
 | Comment → path map | [`references/source-map.md`](./references/source-map.md) |
+| Agent skill | [`skill/SKILL.md`](./skill/SKILL.md) · local load path `.agents/skills/failure-analysis-package/SKILL.md` (symlink → package SSOT) |
 
 ---
 
@@ -82,7 +83,7 @@ Eval metrics **wrap** product authorities and **cite** F*/P* from this package.
 
 | Source | Role in package |
 |:---|:---|
-| **Session 12** | Method spine, depth floor, regimes A/B, F72–F80, P-S12-1…9, full-depth case exemplars |
+| **Session 12** | Method spine, depth floor, regimes A/B, F72–F83, P-S12-1…12, full-depth case exemplars |
 | **Sessions 1–11 + body** | Gold matrices, accept/reject, F1–F71, R1–R25, TIP/V12-A index, Instance A/B, rewrite ritual precursors |
 
 * Definitional law / matrix / ID / checklist → shared docs  
@@ -102,6 +103,7 @@ docs/quality/
   PREVENTION_BACKLOG.md     ← P*
   CORPUS.md                 ← TIP / V12-A / series map
   process/
+  skill/                 # agent SKILL.md (failure-analysis-package)
   templates/
   cases/
     204/                    ← presentation-quality epic corpus
@@ -146,7 +148,7 @@ miss detected
 | B | `METHOD.md` + case templates | **done** |
 | A | Tree + README + process + stubs | **done (this change)** |
 | | Quality package Regime B dogfood case | **done** ([`cases/204/quality-package-regime-b.md`](./cases/204/quality-package-regime-b.md)) |
-| | Promote S12 full cases | **partial** — G1 + synthesis **active**; G2–G4/dogfood pending |
+| | Promote S12 full cases | **done** — G1–G4 + synthesis + dogfood **active full** |
 | | Substrate indexes (F1–F71 full prose, S1–11 stubs) | pending / skeleton |
 | | `cases/220/s0-schema-freeze.md` | pending |
 | | #204 / #217 pointers to this SSOT | **done** (package + eval plan + issue comment pointers) |
