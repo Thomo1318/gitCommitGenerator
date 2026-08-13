@@ -1,0 +1,120 @@
+{
+  "$id": "https://git-cg.local/schemas/eval/_enums.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Closed enums for S0 fail-closed validation",
+  "properties": {
+    "artifact_class": {
+      "enum": [
+        "final_accept",
+        "fixture_expected",
+        "fixture",
+        "live_regen",
+        "Git-raw",
+        "Git-mid",
+        "Gold-final",
+        "Rewrite-map-confirmed",
+        "Opik-unbound",
+        "plan_only",
+        "trajectory_only",
+        "train_row",
+        "export_batch"
+      ]
+    },
+    "authority": {
+      "enum": [
+        "law",
+        "advisory",
+        "lab",
+        "ops",
+        "projection"
+      ]
+    },
+    "family": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "Cprime",
+        "human",
+        "lab",
+        "dogfood",
+        "gate",
+        "binding",
+        "export",
+        "nlp"
+      ]
+    },
+    "feedback_target": {
+      "enum": [
+        "trace",
+        "span",
+        "thread",
+        "artifact"
+      ]
+    },
+    "input_artifact": {
+      "enum": [
+        "final_message",
+        "plan",
+        "bundle",
+        "trajectory",
+        "fixture_envelope",
+        "judge_input"
+      ]
+    },
+    "polarity": {
+      "enum": [
+        "higher_is_better",
+        "lower_is_better",
+        "pass_fail"
+      ]
+    },
+    "provenance_label": {
+      "enum": [
+        "Git-raw",
+        "Git-mid",
+        "Gold-final",
+        "Rewrite-map-confirmed",
+        "Opik-unbound",
+        "final_accept",
+        "live_regen",
+        "fixture"
+      ]
+    },
+    "redaction_profile": {
+      "enum": [
+        "public_ci",
+        "default_scrub",
+        "private_message",
+        "train_rich",
+        "antipattern_vault",
+        "message_only",
+        "meta_eval_scrub",
+        "raw_dev_unsafe"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "block",
+        "warn",
+        "info"
+      ]
+    },
+    "source": {
+      "enum": [
+        "local_wrapper",
+        "lane_c_judge",
+        "human",
+        "lab_meta",
+        "export_health"
+      ]
+    }
+  },
+  "title": "eval_closed_enums_v0"
+}

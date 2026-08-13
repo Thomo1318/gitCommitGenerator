@@ -1,0 +1,274 @@
+{
+  "$defs": {
+    "artifact_class": {
+      "description": "Closed set; unknown must fail closed",
+      "enum": [
+        "final_accept",
+        "fixture_expected",
+        "fixture",
+        "live_regen",
+        "Git-raw",
+        "Git-mid",
+        "Gold-final",
+        "Rewrite-map-confirmed",
+        "Opik-unbound",
+        "plan_only",
+        "trajectory_only",
+        "train_row",
+        "export_batch"
+      ],
+      "type": "string"
+    },
+    "authority": {
+      "enum": [
+        "law",
+        "advisory",
+        "lab",
+        "ops",
+        "projection"
+      ],
+      "type": "string"
+    },
+    "family": {
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "Cprime",
+        "human",
+        "lab",
+        "dogfood",
+        "gate",
+        "binding",
+        "export",
+        "nlp"
+      ],
+      "type": "string"
+    },
+    "feedback_target": {
+      "enum": [
+        "trace",
+        "span",
+        "thread",
+        "artifact"
+      ],
+      "type": "string"
+    },
+    "input_artifact": {
+      "enum": [
+        "final_message",
+        "plan",
+        "bundle",
+        "trajectory",
+        "fixture_envelope",
+        "judge_input"
+      ],
+      "type": "string"
+    },
+    "non_empty_string": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "pin_ref": {
+      "pattern": "^[a-z0-9_]+_v[0-9]+@([a-f0-9]{64}|[A-Za-z0-9._-]+)$",
+      "type": "string"
+    },
+    "polarity": {
+      "enum": [
+        "higher_is_better",
+        "lower_is_better",
+        "pass_fail"
+      ],
+      "type": "string"
+    },
+    "provenance_label": {
+      "enum": [
+        "Git-raw",
+        "Git-mid",
+        "Gold-final",
+        "Rewrite-map-confirmed",
+        "Opik-unbound",
+        "final_accept",
+        "live_regen",
+        "fixture"
+      ],
+      "type": "string"
+    },
+    "redaction_profile": {
+      "description": "R14 owner redaction ladder",
+      "enum": [
+        "public_ci",
+        "default_scrub",
+        "private_message",
+        "train_rich",
+        "antipattern_vault",
+        "message_only",
+        "meta_eval_scrub",
+        "raw_dev_unsafe"
+      ],
+      "type": "string"
+    },
+    "severity": {
+      "enum": [
+        "block",
+        "warn",
+        "info"
+      ],
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "local_wrapper",
+        "lane_c_judge",
+        "human",
+        "lab_meta",
+        "export_health"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://git-cg.local/schemas/eval/ape_bundle_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Accept-path evaluation bundle v1. Primary product score target is final accept-path message bytes when artifact_class=final_accept. expected_* fields are fixture/meta-eval only and MUST NOT be treated as generation task input.",
+  "properties": {
+    "artifact_class": {
+      "$ref": "#/$defs/artifact_class"
+    },
+    "bound": {
+      "type": "boolean"
+    },
+    "case_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "expected_final_message": {
+      "description": "FIXTURE/META-EVAL ONLY — never generation input",
+      "type": "string"
+    },
+    "expected_gold_codes": {
+      "description": "FIXTURE/META-EVAL ONLY — never generation input",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "failure_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "final_message": {
+      "description": "Final rendered message bytes (primary scored artifact when final_accept)",
+      "type": "string"
+    },
+    "final_message_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "generation_task_input": {
+      "additionalProperties": true,
+      "description": "Optional recorded generation input snapshot. Must NOT include expected_* gold fields.",
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "expected_final_message"
+            ]
+          },
+          {
+            "required": [
+              "expected_gold_codes"
+            ]
+          },
+          {
+            "required": [
+              "expected"
+            ]
+          }
+        ]
+      },
+      "properties": {
+        "diff_summary": {
+          "type": "string"
+        },
+        "path_class_gate": {
+          "type": "string"
+        },
+        "ranked_intent_id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "instance_kind": {
+      "type": "string"
+    },
+    "meta": {
+      "description": "Non-generation metadata only",
+      "type": "object"
+    },
+    "metric_catalog": {
+      "type": "string"
+    },
+    "path_class_gate": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "prevention_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "provenance_label": {
+      "$ref": "#/$defs/provenance_label"
+    },
+    "redaction_profile": {
+      "$ref": "#/$defs/redaction_profile"
+    },
+    "regime": {
+      "enum": [
+        "A",
+        "B",
+        "unknown",
+        "n/a"
+      ],
+      "type": "string"
+    },
+    "schema_pack": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "ape_bundle_v1"
+    },
+    "session_thread_id": {
+      "type": "string"
+    },
+    "trajectory_ref": {
+      "type": "string"
+    },
+    "unbound_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "case_id",
+    "artifact_class",
+    "bound"
+  ],
+  "title": "ape_bundle_v1",
+  "type": "object"
+}
