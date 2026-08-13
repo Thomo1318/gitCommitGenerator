@@ -1,6 +1,6 @@
 [project]
 name = "gitcommitgenerator"
-version = "0.13.1"
+version = "0.13.2"
 description = "Terminal native agentic gitops workflow utilizing gum"
 readme = "README.md"
 requires-python = ">=3.14, <4.0"

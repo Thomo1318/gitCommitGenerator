@@ -29,6 +29,40 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+
+## v0.13.2
+
+### Miscellaneous
+
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #221 from Thomo1318/docs/quality-failure-analysis-package
+- 🔧 chore(agents): trust comet-ml and register Opik skills
+
+### Documentation
+
+- 📝 docs(plans): mark §14 filing gate complete (#217)
+- 📝 docs(skill): require graph-first skill exploration (#204)
+- 📝 docs(cases): close #204 case SSOT and markdown hygiene (#204)
+- 📝 docs(quality): align prevention IDs and promotion gates (#204)
+- 📝 docs(quality): harden message-only rewrite controls (#204)
+- 📝 docs(quality): point package indexes at Session 12 SSOT (#204)
+- 📝 docs(quality): add failure-analysis-package agent skill (#204)
+- 📝 docs(quality): close Session 12 promotion indexes (#204)
+- 📝 docs(quality): promote Session 12 post-control dogfood G2–G4 (#204)
+- 📝 docs(quality): promote Session 12 G4 Regime B gold-miss case (#204)
+- 📝 docs(quality): promote Session 12 G3 Regime B gold-miss case (#204)
+- 📝 docs(quality): promote Session 12 G2 Regime B gold-miss case (#204)
+- 📝 docs(quality): point #204 and #217 at gold-miss package SSOT (#204)
+- 📝 docs(quality): promote Session 12 residual series synthesis (#204)
+- 📝 docs(quality): promote Session 12 G1 Regime A gold-miss case (#204)
+- 📝 docs(quality): record Regime B self-dogfood on package landing (#204)
+- 📝 docs(quality): scaffold case shelves and plans catalogue pointer (#204)
+- 📝 docs(quality): pin gold envelope, F72–F80 taxonomy, and P-S12 backlog (#204)
+- 📝 docs(quality): add gold-miss operator process runbooks (#204)
+- 📝 docs(quality): add Session 12 gold-miss METHOD and case templates (#204)
+- 📝 docs(plans): ingest #217 body residual (#217)
+- 📝 docs(plans): promote Opik evaluation harness SSOT from scratch (#217)
+
 ## v0.13.1
 
 ### Miscellaneous
