@@ -5,6 +5,7 @@ Living design and implementation plans that are too large or too operational to 
 | Plan | Governing issue | Related ADRs | Notes |
 |:---|:---|:---|:---|
 | [Opik evaluation harness](./opik-evaluation-harness.md) | #217 (parent epic #216) | ADR-0010, ADR-0011 | Formal SSOT for the Opik commit-message evaluation harness (S0–S7). Promoted from `scratch/0.OpikIntegration/opik.md`. |
+| [Commit-message failure analysis](../quality/README.md) | #204 (corpus) · feeds #217 | Hybrid / commit_gold / commit_quality | Combined S1–11 substrate + Session 12 forensic METHOD; gold-miss SSOT under `docs/quality/`. |
 
 ## Document class rules
 
