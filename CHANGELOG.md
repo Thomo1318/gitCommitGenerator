@@ -29,6 +29,48 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.15.0
+
+### Miscellaneous
+
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #224 from Thomo1318/evals/223-encode-offline-fixtures-as-ape_bundle_v1
+
+### Fixed
+
+- 🦺 fix(eval): harden S1 corpus encoder from CodeRabbit review (#223)
+
+### Tests
+
+- ✨ feat(eval): materialize checked-in ape_bundle goldens (#223)
+- ✨ feat(eval): fail closed on topology and split seed probes (#223)
+- 🦺 fix(eval): harden S1 corpus encoder from CodeRabbit review (#223)
+- ✅ test(eval): lock corpus package edge coverage offline (#223)
+- ✅ test(fixtures): expand 204-archive offline ramp seeds (#223)
+- ✅ test(eval): lock corpus encoder, isolation, and snapshots (#223)
+- ✅ test(fixtures): pin S1 seed matrix and core suite (#223)
+- 📝 docs(eval): add fixture index and archive golden workflows (#223)
+
+### Documentation
+
+- ✨ feat(eval): materialize checked-in ape_bundle goldens (#223)
+- 🦺 fix(eval): harden S1 corpus encoder from CodeRabbit review (#223)
+- ✅ test(fixtures): expand 204-archive offline ramp seeds (#223)
+- ✅ test(fixtures): pin S1 seed matrix and core suite (#223)
+- 📝 docs(dev): point offline eval section at S0–S1 corpus (#223)
+- 📝 docs(eval): add fixture index and archive golden workflows (#223)
+- 📝 docs(eval): document S1 fixture encoder and seed boundary (#223)
+
+### Added
+
+- ✨ feat(eval): materialize checked-in ape_bundle goldens (#223)
+- ✨ feat(eval): add offline corpus encoder for ape_bundle_v1 (#223)
+- 📝 docs(eval): add fixture index and archive golden workflows (#223)
+
+### Changed
+
+- ✨ feat(eval): fail closed on topology and split seed probes (#223)
+
 ## v0.14.0
 
 ### Miscellaneous
