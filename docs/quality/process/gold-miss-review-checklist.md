@@ -37,6 +37,7 @@
 - [ ] Controls + regression test pointers
 - [ ] Case indexed in `cases/README.md`
 - [ ] Source-map updated if promoted from GitHub
+- [ ] Promoted SSOT contains **no placeholders/template markers** (`pending`, `to fill`, `TODO`, `TBD`, unfilled `<!-- -->` template holes); reject promotion if any remain
 
 ## Message-only gold rewrite (if doing rewrite now)
 

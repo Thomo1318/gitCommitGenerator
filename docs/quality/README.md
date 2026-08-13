@@ -13,7 +13,7 @@
 One versioned in-repo package that is the single place to:
 
 1. Know what **gold** looks like  
-2. **Classify** a miss (F* / R* / regime A|B)  
+2. **Classify** a miss (`F*` / `R*` / regime A|B)  
 3. **Reconstruct** why (Opik-bound stage chain — Session 12 depth)  
 4. Record **prevention** (P* → product / eval work)  
 5. **Promote** cases out of GitHub comments into durable SSOT  

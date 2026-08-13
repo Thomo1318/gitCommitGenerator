@@ -12,10 +12,10 @@
 
 ## Steps
 
-1. Copy content into `cases/<issue>/…` using CASE_TEMPLATE / synthesis template structure.  
+1. Copy content into `docs/quality/cases/<issue>/…` using CASE_TEMPLATE / synthesis template structure.  
 2. Split oversized comments into multiple case files if needed (G1, G2, … + synthesis).  
-3. Register IDs in FAILURE_TAXONOMY / PREVENTION_BACKLOG.  
-4. Add row to `cases/README.md` and `references/source-map.md`.  
+3. Register IDs in `docs/quality/FAILURE_TAXONOMY.md` / `docs/quality/PREVENTION_BACKLOG.md`.  
+4. Add row to `docs/quality/cases/README.md` and `docs/quality/references/source-map.md`.  
 5. Add header note on the GitHub comment (operator):
 
    > Superseded as SSOT by `docs/quality/cases/...`. Retained as intake evidence.
