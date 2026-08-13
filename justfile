@@ -69,3 +69,7 @@ uninstall:
     @sudo rm -f /usr/local/bin/git-cg
     @rm -f ~/.zfunc/_git-cg
     @echo "✅ git-cg uninstalled."
+
+# Print reproducible S0 schema pack + metric catalog pins (offline)
+eval-schema-hash:
+    uv run python -c "from git_cg.eval import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
