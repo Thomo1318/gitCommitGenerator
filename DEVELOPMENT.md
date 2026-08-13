@@ -407,6 +407,16 @@ same-filesystem local checkouts when measuring refresh latency.
 Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
 telemetry field (no separate payload key).
 
+## Offline evaluation contracts (S0)
+
+Frozen schema pack + metric catalog pins for the offline eval lane live under:
+
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), and S0 non-goals
+* Package: `src/git_cg/eval/` · schemas: `schemas/eval/`
+
+S0 is offline-only and does **not** touch `GenerationTelemetry`, hooks, or the live commit path.
+Follow-on slices (corpus/scoring/Opik accept-path) are tracked on #217.
+
 ## Promptfoo evaluation (offline)
 
 Offline **eval + red-team** against local MTPLX (not the live commit/hook path):
