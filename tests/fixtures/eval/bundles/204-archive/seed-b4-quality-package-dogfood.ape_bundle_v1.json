@@ -1,0 +1,70 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "case_id": "seed-b4-quality-package-dogfood",
+  "expected_final_message": "\ud83d\udcdd docs(quality): scaffold quality package indices and case shelves\n\nIncluded changes:\n- \ud83d\udcdd docs(quality): METHOD and case templates\n- \ud83d\udcdd docs(quality): FAILURE_TAXONOMY / PREVENTION_BACKLOG shelves\n- \ud83d\udcdd docs(quality): cases/204 scaffold\n\nRefs: #204\nSemVer-Impact: NONE\nChange-Types: docs\nChangelog-Groups: Documentation\n",
+  "expected_gold_codes": [
+    "GOLD_SCOPE_CANON_MISS",
+    "GOLD_INVENTORY_UNDERCLAIM",
+    "GOLD_CHANGELOG_IMPURITY",
+    "GOLD_ISSUE_TRAILER_MISSING"
+  ],
+  "failure_ids": [
+    "F78",
+    "F81",
+    "F82",
+    "F83",
+    "F80"
+  ],
+  "final_message": "\ud83d\udcdd docs(docs): document quality analysis package\n\nEstablishes the foundational documentation for the commit-message quality analysis package.\n\nNull: #0\nSemVer-Impact: NONE\nChange-Types: docs\nChangelog-Groups: Documentation, Miscellaneous\n",
+  "final_message_sha256": "afb1167ad4b6da680c829a30c3c68b603e18a015b40958ffd39ad17d5c1dd35f",
+  "generation_task_input": {
+    "diff_summary": "docs/quality/** package dogfood multi-file tip",
+    "path_class_gate": "docs_only",
+    "ranked_intent_id": "documentation_update"
+  },
+  "instance_kind": "B",
+  "meta": {
+    "case_archive_id": "204-QP-RB-G1",
+    "corpus_source": "204_archive",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Quality-package Regime B dogfood: docs(docs) scope, thin inventory, Missing Refs, Miscellaneous impurity.",
+    "producer": "fixture_encoder_s1",
+    "quality_case": "docs/quality/cases/204/quality-package-regime-b.md",
+    "seed_id": "SEED-B4",
+    "series": "204-QP-RB",
+    "session_tags": [
+      "204-archive",
+      "regime-b",
+      "seed-b4",
+      "quality-package-dogfood",
+      "session-quality-package"
+    ],
+    "suite_id": "204-archive",
+    "tags": [
+      "204-archive",
+      "regime-b",
+      "seed-b4",
+      "quality-package-dogfood",
+      "session-quality-package"
+    ]
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "path_class_gate": "docs_only",
+  "prevention_ids": [
+    "P-S12-6",
+    "P-S12-9",
+    "P-S12-10",
+    "P-S12-11",
+    "P-S12-12"
+  ],
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "B",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "ape_bundle_v1",
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound"
+}

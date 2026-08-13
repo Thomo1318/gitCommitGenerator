@@ -1,0 +1,61 @@
+{
+  "artifact_class": "fixture_expected",
+  "bound": false,
+  "case_id": "seed-b1-session12-regime-b",
+  "expected_final_message": "\u2705 test(fixtures): pin Session 6 corpus rows TIP-G13\u2013G17\n\nRefs: #204\nSemVer-Impact: NONE\nChange-Types: test\nChangelog-Groups: Tests\n",
+  "expected_gold_codes": [
+    "GOLD_WRONG_TYPE_ENVELOPE",
+    "GOLD_PATH_CLASS_MISS"
+  ],
+  "failure_ids": [
+    "F76",
+    "F78",
+    "F79",
+    "F80"
+  ],
+  "final_message": "\ud83e\uddba fix(fixtures): add TIP-G13\u2013G17 validation goldens\n\nRefs: #204\nSemVer-Impact: PATCH\nChange-Types: fix\nChangelog-Groups: Fixed\n",
+  "final_message_sha256": "c7c1c9ab5feb1dfbb62ad7e3d27089b442c590b2f0885f764f31efcb0befb291",
+  "generation_task_input": {
+    "diff_summary": "fixtures/corpus/golden pins only",
+    "path_class_gate": "",
+    "ranked_intent_id": "validation_update"
+  },
+  "instance_kind": "B",
+  "meta": {
+    "case_archive_id": "204-S12-G2",
+    "corpus_source": "204_archive",
+    "links": [
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/204",
+      "https://github.com/Thomo1318/gitCommitGenerator/issues/223"
+    ],
+    "notes": "Regime B clean-wrong-acceptance seed. Polished message with empty path_class_gate and wrong type/SemVer envelope.",
+    "producer": "fixture_encoder_s1",
+    "quality_case": "docs/quality/cases/204/session-12-g2.md",
+    "seed_id": "SEED-B1",
+    "series": "204-S12",
+    "session_tags": [
+      "session-12-seed"
+    ],
+    "suite_id": "204-archive",
+    "tags": [
+      "session-12-seed",
+      "regime-b",
+      "204-archive",
+      "seed-b1"
+    ]
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "path_class_gate": "",
+  "prevention_ids": [
+    "P-S12-4",
+    "P-S12-6",
+    "P-S12-8",
+    "P-S12-9"
+  ],
+  "provenance_label": "Opik-unbound",
+  "redaction_profile": "default_scrub",
+  "regime": "B",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "ape_bundle_v1",
+  "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound"
+}

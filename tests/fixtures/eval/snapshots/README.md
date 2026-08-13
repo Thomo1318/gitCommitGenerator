@@ -1,7 +1,13 @@
 # Snapshots
 
-S1 builds `dataset_snapshot_v1` at test/runtime via
-`git_cg.eval.corpus.snapshots.build_core_snapshot()`.
+`dataset_snapshot_v1` objects are built at test/runtime via
+`git_cg.eval.corpus.snapshots.build_snapshot()`.
 
-Checked-in golden snapshot hashes are optional. Determinism is proven by
-re-encode equality tests rather than brittle timestamped files.
+Optional checked-in goldens:
+
+```bash
+uv run python -m git_cg.eval.corpus.materialize
+```
+
+Produces `*.dataset_snapshot_v1.json` beside this README. Determinism remains
+proven by re-encode equality tests rather than brittle timestamped files.

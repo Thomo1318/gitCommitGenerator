@@ -1,0 +1,8 @@
+{
+  "bundle_hash": "7405254a5e6803190bcedcc5104564216cc6b8bc0b68fd80b062b194eb755d24",
+  "bundle_ref": "bundle:seed-b4-quality-package-dogfood@7405254a5e6803190bcedcc5104564216cc6b8bc0b68fd80b062b194eb755d24",
+  "case_hash": "625cb200b20d9069da2f1363fda56ab49befec1cd04e52820f70c4223c7ed5fc",
+  "case_id": "seed-b4-quality-package-dogfood",
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6"
+}

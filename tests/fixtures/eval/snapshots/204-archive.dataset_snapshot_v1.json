@@ -1,0 +1,66 @@
+{
+  "id": "snapshot:204-archive",
+  "item_count": 6,
+  "meta": {
+    "case_ids": [
+      "seed-a1-session12-regime-a",
+      "seed-b1-session12-regime-b",
+      "seed-b2-session12-g3",
+      "seed-b3-session12-g4",
+      "seed-b4-quality-package-dogfood",
+      "seed-a2-instance-a-precursor"
+    ],
+    "items": [
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "ba23ca3160585afb20a2a15df405dfda3800f1895f6f74fa98d84f91e6b1a71f",
+        "bundle_ref": "bundle:seed-a1-session12-regime-a@ba23ca3160585afb20a2a15df405dfda3800f1895f6f74fa98d84f91e6b1a71f",
+        "case_hash": "052d472da9adb47ade9520d137f714ed5c541d8814bae82d0512cf5af72a617c",
+        "case_id": "seed-a1-session12-regime-a"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "3b9e2557237bb53d93c6e8f885843bfa4cb8b09cac0ce184494ef0d24646fe8e",
+        "bundle_ref": "bundle:seed-b1-session12-regime-b@3b9e2557237bb53d93c6e8f885843bfa4cb8b09cac0ce184494ef0d24646fe8e",
+        "case_hash": "26200e1c779419ead233225de08153cb86fcc3ecf58e68cd7f8b6916bd38e743",
+        "case_id": "seed-b1-session12-regime-b"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "ba2eae79c8090a99ee62a844cc7fb38a6198f56ca0d7d678221d16ce462aa5a2",
+        "bundle_ref": "bundle:seed-b2-session12-g3@ba2eae79c8090a99ee62a844cc7fb38a6198f56ca0d7d678221d16ce462aa5a2",
+        "case_hash": "7759bfe6a260edf820c7538cbd5752ff67d83983f6877e8868ab07ed1d562da7",
+        "case_id": "seed-b2-session12-g3"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "92b4850e89688a616e65d9e5d6684d0a13ffab9846b3365525526a9e4bd15615",
+        "bundle_ref": "bundle:seed-b3-session12-g4@92b4850e89688a616e65d9e5d6684d0a13ffab9846b3365525526a9e4bd15615",
+        "case_hash": "882cb4e2f9256ee95c8f0b5e2a5ab84add17459f2e47cda0afaba4baf77a4e23",
+        "case_id": "seed-b3-session12-g4"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "7405254a5e6803190bcedcc5104564216cc6b8bc0b68fd80b062b194eb755d24",
+        "bundle_ref": "bundle:seed-b4-quality-package-dogfood@7405254a5e6803190bcedcc5104564216cc6b8bc0b68fd80b062b194eb755d24",
+        "case_hash": "625cb200b20d9069da2f1363fda56ab49befec1cd04e52820f70c4223c7ed5fc",
+        "case_id": "seed-b4-quality-package-dogfood"
+      },
+      {
+        "artifact_class": "fixture_expected",
+        "bundle_hash": "7b5e187769c48a41a0a47bc37aa30aa1037590c7660d6ad118e7b61b361a3c42",
+        "bundle_ref": "bundle:seed-a2-instance-a-precursor@7b5e187769c48a41a0a47bc37aa30aa1037590c7660d6ad118e7b61b361a3c42",
+        "case_hash": "25835e2b58bdc65ded3a533f06d239a97e669cd4c7f46a23261563dd455a28c5",
+        "case_id": "seed-a2-instance-a-precursor"
+      }
+    ],
+    "network_policy": "offline_required",
+    "producer": "fixture_encoder_s1",
+    "suite_id": "204-archive"
+  },
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "notes": "Offline Lane A snapshot for 204-archive",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_version": "dataset_snapshot_v1",
+  "snapshot_hash": "3a86e96b22120da383bd96e97eb9e90d84254cef05d79b03c5e37529d0464330"
+}

@@ -1,0 +1,8 @@
+{
+  "bundle_hash": "e67e69d2bb4caaae25e837a05633a9c115e983cd0480bb99b92cd5b996cab3bc",
+  "bundle_ref": "bundle:seed-v1-valid-fixture@e67e69d2bb4caaae25e837a05633a9c115e983cd0480bb99b92cd5b996cab3bc",
+  "case_hash": "76c8bd5a87c7303f16451014636ccba627e919a36d93462d38db3398257a3835",
+  "case_id": "seed-v1-valid-fixture",
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6"
+}

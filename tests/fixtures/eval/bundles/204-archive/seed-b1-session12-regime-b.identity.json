@@ -1,0 +1,8 @@
+{
+  "bundle_hash": "3b9e2557237bb53d93c6e8f885843bfa4cb8b09cac0ce184494ef0d24646fe8e",
+  "bundle_ref": "bundle:seed-b1-session12-regime-b@3b9e2557237bb53d93c6e8f885843bfa4cb8b09cac0ce184494ef0d24646fe8e",
+  "case_hash": "26200e1c779419ead233225de08153cb86fcc3ecf58e68cd7f8b6916bd38e743",
+  "case_id": "seed-b1-session12-regime-b",
+  "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6"
+}
