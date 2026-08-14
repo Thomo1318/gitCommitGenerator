@@ -47,7 +47,7 @@ _TRAILER_PREFIXES = (
     "Signed-off-by:",
 )
 
-# Gold code → Family D metric_id (catalog).
+# Gold code → Family D metric_id (catalog). GOLD_CONTRACT_SMOKE is C-only.
 GOLD_CODE_TO_D_METRIC: dict[str, str] = {
     "GOLD_BODY_INVENTORY": "d.body_inventory",
     "GOLD_SUBJECT_INVENTORY": "d.subject_inventory",
@@ -68,6 +68,9 @@ GOLD_CODE_TO_D_METRIC: dict[str, str] = {
 }
 
 D_METRIC_TO_GOLD_CODE: dict[str, str] = {v: k for k, v in GOLD_CODE_TO_D_METRIC.items()}
+
+# Codes skipped when ranked_intents is None (product F4) — not absent-code passes.
+RANKED_DEPENDENT_GOLD_CODES: frozenset[str] = frozenset({"GOLD_INCLUDED_CHANGES_MISSING"})
 
 
 def parse_hybrid_header(message: str) -> dict[str, Any]:
@@ -186,9 +189,16 @@ def signals_from_context(
     path_class_gate: str | None,
     generation_task_input: dict[str, str] | None,
     files: list[str] | None = None,
+    allow_placeholder_paths: bool = True,
 ) -> DiffSignals:
-    """Project lightweight ``DiffSignals`` from fixture/path-class context only."""
-    paths = list(files or [])
+    """Project lightweight ``DiffSignals`` from fixture/path-class context only.
+
+    Path-class placeholders are **scaffolding only** for gold path-class checks
+    (S2a default). They are **not** staged-path or security evidence (D35/T13).
+    C/F path-security metrics must pass explicit ``ctx.files`` only and must not
+    treat these placeholders as product path evidence.
+    """
+    paths = [p for p in list(files or []) if isinstance(p, str) and p.strip()]
     gti = generation_task_input or {}
     gate = (path_class_gate or gti.get("path_class_gate") or "").strip().lower()
     summary = (gti.get("diff_summary") or "").lower()
@@ -198,14 +208,16 @@ def signals_from_context(
     only_fixtures = gate in {"fixtures_only", "fixtures"} or "fixture" in gate
     product_src = gate in {"product_src", "src", "product"}
 
-    if only_docs and not paths:
-        paths = ["docs/eval/README.md"]
-    elif only_tests and not paths:
-        paths = ["tests/eval/test_placeholder.py"]
-    elif only_fixtures and not paths:
-        paths = ["tests/fixtures/eval/cases/valid/seed.json"]
-    elif product_src and not paths:
-        paths = ["src/git_cg/commit_quality.py"]
+    # Placeholders are gold/path-class scaffolding only — never security evidence.
+    if allow_placeholder_paths and not paths:
+        if only_docs:
+            paths = ["docs/eval/README.md"]
+        elif only_tests:
+            paths = ["tests/eval/test_placeholder.py"]
+        elif only_fixtures:
+            paths = ["tests/fixtures/eval/cases/valid/seed.json"]
+        elif product_src:
+            paths = ["src/git_cg/commit_quality.py"]
 
     return DiffSignals(
         files=paths,
@@ -223,13 +235,15 @@ def run_gold_once(
     signals: DiffSignals,
     *,
     gold_mode: str = "strict",
+    contract: Any | None = None,
+    ranked_intents: list | None = None,
 ) -> tuple[GoldReport, frozenset[str], bool]:
     """Invoke product ``check_commit_gold`` once; return report, strict set, mode-ok."""
     report = check_commit_gold(
         plan,
-        None,
+        contract,
         signals=signals,
-        ranked_intents=None,
+        ranked_intents=ranked_intents,
         presentation_overlay_applied=False,
     )
     strict_hits = report.codes() & STRICT_FAIL_CODES
@@ -279,17 +293,29 @@ def issue_ref_ok(trailers: dict[str, str]) -> tuple[bool, str | None]:
     return True, None
 
 
+def explicit_path_evidence(files: list[str] | tuple[str, ...] | None) -> list[str]:
+    """Normalize explicit product-bound paths; empty/missing ⇒ no evidence."""
+    if not files:
+        return []
+    return [p.strip() for p in files if isinstance(p, str) and p.strip()]
+
+
 __all__ = [
     "D_METRIC_TO_GOLD_CODE",
     "GOLD_CODE_TO_D_METRIC",
+    "RANKED_DEPENDENT_GOLD_CODES",
     "STRICT_FAIL_CODES",
+    "check_commit_gold",
     "deterministic_card_from_plan",
+    "explicit_path_evidence",
     "extract_trailers",
     "issue_ref_ok",
     "known_cc_type",
     "known_semver",
     "parse_hybrid_header",
     "parse_message_to_plan",
+    "reverse_parse_commit_message",
+    "run_deterministic_checks",
     "run_gold_once",
     "signals_from_context",
 ]
