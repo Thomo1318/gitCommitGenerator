@@ -402,8 +402,8 @@ def test_scoring_does_not_import_opik_metrics() -> None:
 
     root = Path(__file__).resolve().parents[1] / "src" / "git_cg" / "eval" / "scoring"
     hits = []
-    for path in root.glob("*.py"):
+    for path in root.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
         if "opik_metrics" in text or "scripts.opik_metrics" in text:
-            hits.append(path.name)
-    assert hits == []
+            hits.append(str(path.relative_to(root)))
+    assert hits == [], f"scoring must not reference legacy opik_metrics: {hits}"

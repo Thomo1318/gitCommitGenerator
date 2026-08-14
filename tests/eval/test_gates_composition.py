@@ -101,11 +101,8 @@ def test_semantic_cohort_deferred_s2a() -> None:
     gates = compose_gates(rows, bound=True)
     sc = next(x for x in gates if x.metric_id == "gate.semantic_cohort_eligible")
     assert sc.passed is False
-    # S2b: offline/later-lane wording (not stale S2a/C-prime deferred string)
-    assert sc.reason in {
-        "cprime_deferred_s2a",  # legacy accept during transition
-        "semantic_cohort_deferred_offline_later_lane",
-    }
+    # S2b: offline/later-lane wording only (stale S2a/C-prime string must not pass)
+    assert sc.reason == "semantic_cohort_deferred_offline_later_lane"
     assert "deferred" in (sc.reason or "")
 
 
