@@ -62,7 +62,6 @@ def score_family_f(
 
     report = gold_slot.report if gold_slot is not None else None
     codes = report.codes() if report is not None else frozenset()
-    gold_error = gold_slot.error if gold_slot is not None else "gold_slot_missing"
 
     built_plan = plan or (gold_slot.plan if gold_slot is not None else None)
     if built_plan is None and msg:
@@ -145,18 +144,8 @@ def score_family_f(
         if "GOLD_INCLUDED_CHANGES_MISSING" in codes:
             ic_ok, ic_reason = False, "GOLD_INCLUDED_CHANGES_MISSING"
         else:
-            # Soft path-token alignment for secondary descriptions
-            path_blob = " ".join(paths).lower()
-            bad = []
-            for s in secondary:
-                desc = str(getattr(s, "description", "") or "").lower()
-                if not desc:
-                    continue
-                tokens = [t for t in re.split(r"[^a-z0-9_]+", desc) if len(t) >= 4]
-                if tokens and not any(t in path_blob for t in tokens):
-                    # not necessarily fail — inventory may be thematic
-                    bad.append(desc)
-            # Only fail hard on gold code; thematic misses stay pass with evidence
+            # Only fail hard on gold inventory code; thematic path-token misses are
+            # not block authority for this metric (see f.claim_evidence_alignment).
             ic_ok, ic_reason = True, None
     scores.append(
         make_score(
@@ -190,14 +179,21 @@ def score_family_f(
         sp_ok, sp_reason = True, None
     else:
         bad_paths = []
-        for p in paths:
+        nul = chr(0)
+        slash = chr(92)
+        for pth in paths:
+            # Git tracks spaces/commas/non-ASCII; still reject absolute, URL,
+            # traversal, NUL, and Windows-separator leakage.
             if (
-                p.startswith("/")
-                or "://" in p
-                or ".." in p.split("/")
-                or not re.match(r"^[A-Za-z0-9._@+-]+(/[A-Za-z0-9._@+-]+)*$", p)
+                not pth
+                or pth.startswith("/")
+                or "://" in pth
+                or slash in pth
+                or nul in pth
+                or ".." in pth.split("/")
+                or any(seg == "" for seg in pth.split("/"))
             ):
-                bad_paths.append(p)
+                bad_paths.append(pth)
         sp_ok = not bad_paths
         sp_reason = None if sp_ok else "staged_path_not_allowlisted"
     scores.append(
@@ -248,6 +244,4 @@ def score_family_f(
         )
     )
 
-    # Silence unused in some branches
-    _ = gold_error
     return scores
