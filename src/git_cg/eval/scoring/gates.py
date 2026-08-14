@@ -121,7 +121,9 @@ def compose_gates(
     gold_row = by_id.get("d.gold_report_ok")
     skel_row = by_id.get("d.skeleton_fallback_final")
     gold_pass = bool(gold_row and gold_row.passed)
-    skel_clean = bool(skel_row is None or skel_row.passed)
+    # Fail-closed: missing skeleton row must block promotion even if a custom
+    # require_block omitted ``d.skeleton_fallback_final``.
+    skel_clean = bool(skel_row and skel_row.passed)
     promo_ok = det_ok and gold_pass and skel_clean and (bound is not False)
     gates.append(
         make_score(

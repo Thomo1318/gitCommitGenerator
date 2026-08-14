@@ -86,3 +86,17 @@ def test_promotion_requires_bound_and_gold() -> None:
     gates = compose_gates(rows, bound=False)
     promo = next(x for x in gates if x.metric_id == "gate.golden_promotion_eligible")
     assert promo.passed is False
+
+
+def test_promotion_requires_explicit_skeleton_row() -> None:
+    """Custom require_block that omits skeleton must not promote as clean."""
+    custom_block = tuple(m for m in S2A_REQUIRE_BLOCK if m != "d.skeleton_fallback_final")
+    assert "d.gold_report_ok" in custom_block
+    assert "d.skeleton_fallback_final" not in custom_block
+    rows = [_pass_row(m) for m in custom_block]
+    gates = compose_gates(rows, bound=True, require_block=custom_block)
+    det = next(x for x in gates if x.metric_id == "gate.deterministic_pass")
+    promo = next(x for x in gates if x.metric_id == "gate.golden_promotion_eligible")
+    assert det.passed is True
+    assert promo.passed is False
+    assert (promo.evidence or {}).get("skeleton_clean") is False
