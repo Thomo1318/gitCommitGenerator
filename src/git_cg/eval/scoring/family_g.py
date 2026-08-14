@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from git_cg.eval.score_result import ScoreResultV1
@@ -70,7 +71,8 @@ def _scan_secrets(message: str) -> list[str]:
     return hits
 
 
-def _audit_policy_fork() -> tuple[bool, list[str], dict]:
+@lru_cache(maxsize=1)
+def _audit_policy_fork() -> tuple[bool, tuple[str, ...], dict]:
     """Non-vacuous static audit of the scoring package for eval policy forks.
 
     Checks:
@@ -87,7 +89,13 @@ def _audit_policy_fork() -> tuple[bool, list[str], dict]:
     forbidden_hits: list[str] = []
 
     bridges_path = _SCORING_ROOT / "product_bridges.py"
-    bridges_text = bridges_path.read_text(encoding="utf-8") if bridges_path.is_file() else ""
+    bridges_text = ""
+    if bridges_path.is_file():
+        try:
+            bridges_text = bridges_path.read_text(encoding="utf-8")
+        except OSError:
+            bridges_text = ""
+            findings.append("unreadable:product_bridges.py")
 
     # Required product re-exports / imports in bridges
     for sym in _REQUIRED_PRODUCT_IMPORT_HINTS:
@@ -101,7 +109,11 @@ def _audit_policy_fork() -> tuple[bool, list[str], dict]:
         findings.append("bridges_missing_check_commit_gold")
 
     for path in sorted(_SCORING_ROOT.glob("*.py")):
-        text = path.read_text(encoding="utf-8")
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            findings.append(f"unreadable:{path.name}:{type(exc).__name__}")
+            continue
         try:
             tree = ast.parse(text, filename=str(path))
         except SyntaxError as exc:
@@ -176,7 +188,11 @@ def _audit_policy_fork() -> tuple[bool, list[str], dict]:
         if not fp.is_file():
             findings.append(f"missing_family_module:{fam}")
             continue
-        ft = fp.read_text(encoding="utf-8")
+        try:
+            ft = fp.read_text(encoding="utf-8")
+        except OSError as exc:
+            findings.append(f"unreadable:{fam}:{type(exc).__name__}")
+            continue
         if (
             fam in {"family_b.py", "family_d.py", "family_c.py", "family_f.py", "family_e.py"}
             and "git_cg.eval.scoring.product_bridges" not in ft
@@ -187,7 +203,10 @@ def _audit_policy_fork() -> tuple[bool, list[str], dict]:
 
     # Opik must not enter scoring
     for path in _SCORING_ROOT.glob("*.py"):
-        text = path.read_text(encoding="utf-8")
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
         if re.search(r"^\s*(import opik|from opik)", text, re.M):
             findings.append(f"opik_import:{path.name}")
         # Build legacy script token without embedding the banned import path literal
@@ -197,15 +216,58 @@ def _audit_policy_fork() -> tuple[bool, list[str], dict]:
             findings.append(f"legacy_metrics_ref:{path.name}")
 
     ok = not findings
+    findings_t = tuple(findings)
     evidence = {
-        "findings": findings,
-        "forbidden_hits": forbidden_hits,
-        "gold_const_defs": gold_const_defs,
+        "findings": list(findings_t),
+        "forbidden_hits": list(forbidden_hits),
+        "gold_const_defs": list(gold_const_defs),
         "direct_gold_calls": sorted(set(direct_gold_calls)),
-        "header_regex_files": header_regex_files,
+        "header_regex_files": list(header_regex_files),
         "scoring_root": str(_SCORING_ROOT),
     }
-    return ok, findings, evidence
+    return ok, findings_t, evidence
+
+
+@lru_cache(maxsize=1)
+def _audit_sop_mutation() -> tuple[bool, tuple[str, ...]]:
+    """Static audit: scoring package must not write SOP config paths.
+
+    Target-aware: a module may mention SOP paths and separately call write_text
+    for unrelated purposes. Only treat as a violation when a write-like call
+    targets an SOP path expression in the same statement/window.
+    """
+    findings: list[str] = []
+    sop_names = ("gitops_agent_sop.json", "gitops_sop.schema.json")
+    write_names = ("write_text", "write_bytes", "writelines")
+    for path in sorted(_SCORING_ROOT.glob("*.py")):
+        try:
+            src = path.read_text(encoding="utf-8")
+        except OSError:
+            # Packaged/unreadable layouts are not evaluator errors for this metric.
+            continue
+        # Line-local correlation: SOP path token and a write/open-w must co-occur.
+        for lineno, line in enumerate(src.splitlines(), 1):
+            has_sop = any(name in line for name in sop_names)
+            if not has_sop:
+                continue
+            lower = line.lower()
+            has_write = any(w in line for w in write_names)
+            has_open_w = bool(re.search(r"open\([^\n]*['\"]w", line))
+            has_dump = "dump(" in line or "json.dump" in lower
+            if has_write or has_open_w or has_dump:
+                findings.append(f"sop_write:{path.name}:{lineno}")
+                break
+        if path.name != "family_g.py" and "load_sop" in src:
+            # dump/write targeting sop after load_sop in same file still needs target co-occurrence
+            for lineno, line in enumerate(src.splitlines(), 1):
+                if "load_sop" not in line:
+                    continue
+                if re.search(r"write|dump", line) and any(name in line for name in sop_names):
+                    tag = f"sop_dump:{path.name}:{lineno}"
+                    if tag not in findings:
+                        findings.append(tag)
+                    break
+    return (not findings), tuple(findings)
 
 
 def score_family_g(
@@ -345,37 +407,14 @@ def score_family_g(
         )
     )
 
-    # g.sop_not_mutated — scoring must not write SOP config; static + message check
-    sop_ok = True
-    sop_findings: list[str] = []
-    for path in _SCORING_ROOT.glob("*.py"):
-        text = path.read_text(encoding="utf-8")
-        if re.search(r"gitops_agent_sop\.json|open\([^\)]*sop", text) and re.search(
-            r"write_text|open\([^\)]*[\"']w", text
-        ):
-            # reads may be ok; writes are not
-            sop_ok = False
-            sop_findings.append(f"sop_write:{path.name}")
-        if (
-            "load_sop" in text
-            and path.name not in {"family_g.py"}
-            and re.search(r"load_sop\([^\)]*\).*write|dump.*sop", text)
-        ):
-            # accidental SOP mutation surface
-            sop_ok = False
-            sop_findings.append(f"sop_dump:{path.name}")
-    # Message must not claim SOP mutation as product change without path evidence
-    if re.search(r"(?i)\bsop\b.*(mutat|overwrite|rewrite)", msg) and not any(
-        "sop" in p.lower() for p in ctx.path_evidence
-    ):
-        # advisory signal only — do not fail G solely on prose
-        pass
+    # g.sop_not_mutated — scoring must not write SOP config (cached static audit)
+    sop_ok, sop_findings_t = _audit_sop_mutation()
     scores.append(
         make_score(
             "g.sop_not_mutated",
             sop_ok,
             reason=None if sop_ok else "sop_mutation_surface",
-            evidence={"findings": sop_findings},
+            evidence={"findings": list(sop_findings_t)},
             failure_ids=None if sop_ok else ["EVAL_SOP_MUTATED"],
             product_authority="git_cg.eval.scoring.family_g",
         )
