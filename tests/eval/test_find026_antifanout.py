@@ -36,11 +36,7 @@ def test_empty_input_short_circuits_message_families() -> None:
     # Fanout bounded
     assert by["h.eval_error_fanout_bounded"].passed is True
     # Exactly one FIND-026 owner among scores (H input metric)
-    find026_owners = [
-        s.metric_id
-        for s in result.scores
-        if s.failure_ids and "FIND-026" in s.failure_ids and s.metric_id.startswith("h.eval_input")
-    ]
+    find026_owners = [s.metric_id for s in result.scores if s.failure_ids and "FIND-026" in s.failure_ids]
     assert find026_owners == ["h.eval_input_nonempty"]
 
 
@@ -65,3 +61,21 @@ def test_no_family_b_clone_of_empty_failure() -> None:
         and any(str(f).startswith("EVAL_INPUT") or f == "FIND-026" for f in s.failure_ids)
     ]
     assert leaked == []
+
+
+def test_oversize_product_card_when_final_empty() -> None:
+    """Empty final_message must not hide an oversize product_card (FIND-026)."""
+    b = _empty_bundle()
+    b["final_message"] = ""
+    b["product_card"] = {"blob": "x" * 5000, "nested": {"k": "v" * 100}}
+    result = score_bundle(b, suite_snapshot_pin="pin@1", max_eval_bytes=64)
+    assert result.short_circuit is True
+    by = result.by_id()
+    assert result.context is not None
+    assert result.context.scored_target == "product_card"
+    assert result.context.input_size_bytes > 64
+    assert by["h.eval_input_nonempty"].passed is True
+    assert by["h.eval_input_size_ok"].passed is False
+    assert "FIND-026" in (by["h.eval_input_size_ok"].failure_ids or [])
+    assert "b.header_shape" not in by
+    assert by["h.eval_error_fanout_bounded"].passed is True

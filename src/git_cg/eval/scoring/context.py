@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -70,9 +71,25 @@ class ScoreContext:
 
     @property
     def input_size_bytes(self) -> int:
-        if self.final_message is not None:
-            return len(self.final_message.encode("utf-8"))
-        return len(str(self.product_card).encode("utf-8")) if self.product_card else 0
+        """Byte length of the *selected* scored target (FIND-026/027).
+
+        Empty/whitespace ``final_message`` must not hide an oversize product card:
+        measure the same artifact that ``scored_target`` selected.
+        """
+        if self.scored_target == "final_message":
+            return len((self.final_message or "").encode("utf-8"))
+        if self.scored_target == "product_card":
+            if not self.product_card:
+                return 0
+            # Deterministic serialization — never rely on ``str(dict)`` repr.
+            payload = json.dumps(
+                self.product_card,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+            return len(payload.encode("utf-8"))
+        return 0
 
     @property
     def input_size_ok(self) -> bool:
