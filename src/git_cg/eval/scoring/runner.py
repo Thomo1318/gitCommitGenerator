@@ -1,4 +1,4 @@
-"""S2a offline Plane A scoring runner over ``ape_bundle_v1`` fixtures."""
+"""S2 offline Plane A scoring runner over ``ape_bundle_v1`` fixtures."""
 
 from __future__ import annotations
 
@@ -15,9 +15,14 @@ from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.context import ScoreContext, ScoreContextError, project_score_context
 from git_cg.eval.scoring.family_a import score_family_a
 from git_cg.eval.scoring.family_b import score_family_b
+from git_cg.eval.scoring.family_c import score_family_c
 from git_cg.eval.scoring.family_d import GoldBridge, score_family_d
+from git_cg.eval.scoring.family_e import score_family_e
+from git_cg.eval.scoring.family_f import score_family_f
+from git_cg.eval.scoring.family_g import score_family_g
 from git_cg.eval.scoring.family_h import score_family_h
 from git_cg.eval.scoring.gates import S2A_REQUIRE_BLOCK, compose_gates
+from git_cg.eval.scoring.gold_slot import build_gold_slot
 from git_cg.eval.scoring.preconditions import evaluate_preconditions
 from git_cg.eval.scoring.result_builder import make_score
 
@@ -28,6 +33,38 @@ __all__ = [
     "score_case",
     "score_suite",
 ]
+
+
+def _recovery_context(
+    bundle: Any,
+    suite: dict[str, Any] | None,
+    case_id: str | None,
+    exc: BaseException,
+) -> ScoreContext:
+    """Minimal ScoreContext when projection fails (H still emits FIND-026)."""
+    bid = case_id or (bundle.get("case_id") if isinstance(bundle, dict) else None) or "unknown"
+    return ScoreContext(
+        case_id=str(bid),
+        bundle=dict(bundle) if isinstance(bundle, dict) else {},
+        suite=dict(suite) if isinstance(suite, dict) else None,
+        final_message=None,
+        final_message_sha256=None,
+        artifact_class="unknown",
+        bound=False,
+        unbound_reason="context_projection_failed",
+        schema_pack=None,
+        metric_catalog=None,
+        expected_final_message=None,
+        expected_gold_codes=(),
+        failure_ids=(),
+        path_class_gate=None,
+        generation_task_input=None,
+        product_card={},
+        scored_target="missing",
+        warnings=(f"context_error:{exc}",),
+        score_card={},
+        files=(),
+    )
 
 
 @dataclass(slots=True)
@@ -41,6 +78,8 @@ class ScoreCaseResult:
     short_circuit: bool = False
     evaluator_errors: list[str] = field(default_factory=list)
     suite_snapshot_pin: str | None = None
+    gold_call_count: int = 0
+    gold_call_identity: str | None = None
 
     @property
     def all_results(self) -> list[ScoreResultV1]:
@@ -56,8 +95,19 @@ class ScoreCaseResult:
         return None
 
     def by_id(self) -> dict[str, ScoreResultV1]:
-        """Index ``all_results`` by ``metric_id`` (last write wins on dup ids)."""
-        return {s.metric_id: s for s in self.all_results}
+        """Index ``all_results`` by ``metric_id``.
+
+        Duplicate metric IDs are rejected (fail closed) — last-write-wins is banned.
+        """
+        out: dict[str, ScoreResultV1] = {}
+        dups: list[str] = []
+        for s in self.all_results:
+            if s.metric_id in out:
+                dups.append(s.metric_id)
+            out[s.metric_id] = s
+        if dups:
+            raise ValueError(f"duplicate metric_id in case results: {sorted(set(dups))}")
+        return out
 
 
 @dataclass(slots=True)
@@ -72,7 +122,9 @@ class ScoreSuiteResult:
 
     @property
     def all_pass(self) -> bool:
-        """True only if every case has ``deterministic_pass is True`` (fail-closed)."""
+        """True only if there is at least one case and every case passes (fail-closed)."""
+        if not self.cases:
+            return False
         return all(c.deterministic_pass is True for c in self.cases)
 
 
@@ -90,12 +142,15 @@ def score_bundle(
 ) -> ScoreCaseResult:
     """Score one already-encoded ``ape_bundle_v1`` mapping offline (Plane A).
 
-    Order: context → FIND-026 preconditions → A → (B/D if runnable) → H → gates.
-    No Opik client, network I/O, or product commit-path mutation. Family/gate
-    exceptions become evaluator errors + fail-closed gate composition.
+    Order: context → FIND-026 preconditions → A → (B/C/D/E/F/G if runnable with
+    one shared gold slot) → H → gates. No Opik client, network I/O, or product
+    commit-path mutation. Family/gate exceptions become evaluator errors +
+    fail-closed gate composition.
     """
     errors: list[str] = []
     scores: list[ScoreResultV1] = []
+    gold_call_count = 0
+    gold_call_identity: str | None = None
 
     try:
         kwargs: dict[str, Any] = {"suite": suite, "case_id": case_id}
@@ -104,57 +159,17 @@ def score_bundle(
         ctx = project_score_context(bundle, **kwargs)
     except ScoreContextError as exc:
         errors.append(f"context:{exc}")
-        # Minimal recovery context so H can still emit FIND-026
-        bid = case_id or (bundle.get("case_id") if isinstance(bundle, dict) else None) or "unknown"
-        ctx = ScoreContext(
-            case_id=str(bid),
-            bundle=dict(bundle) if isinstance(bundle, dict) else {},
-            suite=dict(suite) if isinstance(suite, dict) else None,
-            final_message=None,
-            final_message_sha256=None,
-            artifact_class="unknown",
-            bound=False,
-            unbound_reason="context_projection_failed",
-            schema_pack=None,
-            metric_catalog=None,
-            expected_final_message=None,
-            expected_gold_codes=(),
-            failure_ids=(),
-            path_class_gate=None,
-            generation_task_input=None,
-            product_card={},
-            scored_target="missing",
-            warnings=(f"context_error:{exc}",),
-        )
+        ctx = _recovery_context(bundle, suite, case_id, exc)
     except Exception as exc:
         errors.append(f"context:{type(exc).__name__}: {exc}")
-        bid = case_id or (bundle.get("case_id") if isinstance(bundle, dict) else None) or "unknown"
-        ctx = ScoreContext(
-            case_id=str(bid),
-            bundle=dict(bundle) if isinstance(bundle, dict) else {},
-            suite=dict(suite) if isinstance(suite, dict) else None,
-            final_message=None,
-            final_message_sha256=None,
-            artifact_class="unknown",
-            bound=False,
-            unbound_reason="context_projection_failed",
-            schema_pack=None,
-            metric_catalog=None,
-            expected_final_message=None,
-            expected_gold_codes=(),
-            failure_ids=(),
-            path_class_gate=None,
-            generation_task_input=None,
-            product_card={},
-            scored_target="missing",
-            warnings=(f"context_error:{exc}",),
-        )
+        ctx = _recovery_context(bundle, suite, case_id, exc)
 
     pre = evaluate_preconditions(ctx)
     req = require_block if require_block is not None else S2A_REQUIRE_BLOCK
 
     if pre.short_circuit:
-        # FIND-026: skip B/D; still run A + H + gates
+        # FIND-026: skip message-dependent families (B/C/D/E/F/G); still run A + H + gates.
+        # Zero gold calls on short-circuit.
         try:
             scores.extend(score_family_a(ctx))
         except Exception as exc:
@@ -173,14 +188,37 @@ def score_bundle(
         except Exception as exc:
             errors.append(f"family_h:{type(exc).__name__}: {exc}")
     else:
-        for name, fn in (
+        # Runner-owned gold slot: exactly one gold call for evaluable messages.
+        slot = build_gold_slot(ctx, gold_mode=gold_mode, gold_bridge=gold_bridge, short_circuit=False)
+        gold_call_count = slot.call_count
+        gold_call_identity = slot.call_identity
+
+        family_runners: list[tuple[str, Any]] = [
             ("family_a", lambda: score_family_a(ctx)),
             ("family_b", lambda: score_family_b(ctx)),
             (
-                "family_d",
-                lambda: score_family_d(ctx, gold_mode=gold_mode, gold_bridge=gold_bridge),
+                "family_c",
+                lambda: score_family_c(ctx, gold_slot=slot, plan=slot.plan, signals=slot.signals),
             ),
-        ):
+            (
+                "family_d",
+                lambda: score_family_d(
+                    ctx,
+                    gold_mode=gold_mode,
+                    gold_bridge=None,  # must not call gold when slot supplied
+                    gold_slot=slot,
+                    plan=slot.plan,
+                    signals=slot.signals,
+                ),
+            ),
+            (
+                "family_e",
+                lambda: score_family_e(ctx, gold_slot=slot, plan=slot.plan, signals=slot.signals),
+            ),
+            ("family_f", lambda: score_family_f(ctx, gold_slot=slot, plan=slot.plan)),
+            ("family_g", lambda: score_family_g(ctx, gold_slot=slot, plan=slot.plan)),
+        ]
+        for name, fn in family_runners:
             try:
                 scores.extend(fn())
             except Exception as exc:
@@ -262,6 +300,8 @@ def score_bundle(
         short_circuit=pre.short_circuit,
         evaluator_errors=errors,
         suite_snapshot_pin=suite_snapshot_pin,
+        gold_call_count=gold_call_count,
+        gold_call_identity=gold_call_identity,
     )
 
 

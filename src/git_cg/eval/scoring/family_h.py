@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
+from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.context import ScoreContext, live_pin_refs
 from git_cg.eval.scoring.preconditions import PreconditionResult
@@ -201,6 +202,36 @@ def score_family_h(
                                 "score_passed": s.passed,
                             }
                         )
+    # FIND-002: structured bundle / score envelope compliance
+    structured_ok = True
+    structured_errors: list[str] = []
+    try:
+        validate_instance("ape_bundle_v1", ctx.bundle)
+    except SchemaPackError as exc:
+        structured_ok = False
+        structured_errors.append(f"bundle:{exc}")
+    except Exception as exc:
+        structured_ok = False
+        structured_errors.append(f"bundle:{type(exc).__name__}: {exc}")
+    # Prior family score envelopes must already be ScoreResultV1-valid
+    for s in family_scores:
+        try:
+            ScoreResultV1.model_validate(s.model_dump(mode="json"))
+        except Exception as exc:
+            structured_ok = False
+            structured_errors.append(f"score:{s.metric_id}:{exc}")
+            break
+    scores.append(
+        make_score(
+            "h.structured_bundle_compliance",
+            structured_ok,
+            reason=None if structured_ok else "structured_bundle_noncompliant",
+            evidence={"errors": structured_errors[:8], "finding": "FIND-002"},
+            failure_ids=None if structured_ok else ["FIND-002", "EVAL_STRUCTURED_BUNDLE"],
+            product_authority="git_cg.eval.schema_pack.validate_instance+ScoreResultV1",
+        )
+    )
+
     scores.append(
         make_score(
             "h.online_scores_match_product_card",
