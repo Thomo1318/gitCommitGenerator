@@ -126,14 +126,22 @@ def score_family_d(
     )
 
     strict_count = len(strict_hits)
+    strict_evaluated = build_err is None
+    strict_passed = strict_evaluated and strict_count == 0
     scores.append(
         make_score(
             "d.strict_fail_set",
             strict_count,
-            passed=strict_count == 0 and build_err is None,
-            reason=None if strict_count == 0 else "strict_codes_present",
-            evidence={"strict_hits": sorted(strict_hits), "count": strict_count},
-            failure_ids=None if strict_count == 0 else list(sorted(strict_hits)),
+            passed=strict_passed,
+            reason=(None if strict_passed else ("gold_evaluation_error" if build_err else "strict_codes_present")),
+            evidence={
+                "strict_hits": sorted(strict_hits),
+                "count": strict_count,
+                "error": build_err,
+            },
+            failure_ids=(
+                None if strict_passed else (["EVAL_GOLD_BUILD_ERROR"] if build_err else list(sorted(strict_hits)))
+            ),
             product_authority="git_cg.commit_gold.STRICT_FAIL_CODES",
         )
     )

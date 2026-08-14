@@ -72,3 +72,21 @@ def test_family_d_product_gold_on_valid_v1() -> None:
     by = {s.metric_id: s for s in scores}
     assert by["d.gold_report_ok"].evidence.get("call_count") == 1
     assert by["d.skeleton_fallback_final"].passed is True
+
+
+def test_family_d_gold_build_error_preserved_on_strict_fail_set() -> None:
+    ctx = _ctx()
+
+    def bridge(plan: CommitPlan, signals: DiffSignals, mode: str):
+        raise RuntimeError("gold boom")
+
+    scores = score_family_d(ctx, gold_bridge=bridge, gold_mode="strict")
+    by = {s.metric_id: s for s in scores}
+    assert by["d.gold_report_ok"].passed is False
+    assert "EVAL_GOLD_BUILD_ERROR" in (by["d.gold_report_ok"].failure_ids or [])
+    strict = by["d.strict_fail_set"]
+    assert strict.passed is False
+    assert strict.reason == "gold_evaluation_error"
+    assert "EVAL_GOLD_BUILD_ERROR" in (strict.failure_ids or [])
+    assert (strict.evidence or {}).get("error")
+    assert (strict.evidence or {}).get("count") == 0
