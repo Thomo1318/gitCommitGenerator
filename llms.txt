@@ -34,9 +34,9 @@ Dependencies: 21 runtime, 1 dev
 
 | Name | Command |
 |------|---------|
+| release | `uv run python -m git_cg.main release` |
 | test | `echo "Error: no test specified" && exit 1` |
 | validate | `node scripts/validate_commit.mjs` |
-| release | `uv run python -m git_cg.main release` |
 
 
 ## Tools
@@ -211,4 +211,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-73.1ms | 738 files checked | 21/539 tools matched
+68.1ms | 738 files checked | 21/539 tools matched
