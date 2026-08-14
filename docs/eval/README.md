@@ -1,6 +1,6 @@
-# Evaluation harness contracts (S0–S1)
+# Evaluation harness contracts (S0–S2a)
 
-Offline **schema pack + metric catalog pins** (S0) and **fixture/corpus encoder** (S1) for the Opik evaluation harness.
+Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), and **Plane A score runner** (S2a) for the Opik evaluation harness.
 
 > **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.2-body-ingest`
 > **Implementation issue:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220)
@@ -44,11 +44,94 @@ Pins are content hashes (`name@sha256`):
 | `schemas/eval/*.schema.json` | Frozen JSON Schemas (§7.8) |
 | `src/git_cg/eval/` | Offline package (enums, ScoreResult, pins) |
 | `src/git_cg/eval/corpus/` | S1 fixture encoder + snapshot builder |
+| `src/git_cg/eval/scoring/` | S2a offline Plane A runner (A/B/D/H + gates) |
 | `tests/fixtures/eval/` | Lane A committed fixtures / suites |
 | `src/git_cg/eval/data/metric_catalog_v0.json` | Machine catalog (Families A–I + secondary) |
 | `tests/eval/` | Offline fail-closed tests |
 
 Legacy `src/git_cg/evals/` (soak/report helpers) is **not** the contract home. S0 uses singular `eval/`.
+
+
+## S2a — offline Plane A score runner
+
+> **Implementation issue:** [#225](https://github.com/Thomo1318/gitCommitGenerator/issues/225)
+> **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
+
+S2a scores committed S1 `ape_bundle_v1` fixtures **offline** using product authorities
+(Hybrid parse + `commit_gold`), not eval-only rule forks.
+
+### What basic users need
+
+**Nothing.** Normal `git-cg commit` does **not** import `git_cg.eval.scoring`.
+S2a is an opt-in evaluation surface for harness developers and CI offline gates.
+
+### Authorities (wrap, do not fork)
+
+| Family | Product authority |
+|:---|:---|
+| **B Hybrid** | `git_cg.telemetry.reverse_parse_commit_message`, `run_deterministic_checks`, Hybrid header shape aligned with hooks |
+| **D Gold** | **one** call to `git_cg.commit_gold.check_commit_gold` → fan-out findings / `STRICT_FAIL_CODES` |
+| **A Binding** | S1 bundle schema + artifact-class enum + FIND-027 target order |
+| **H Harness** | S0 pins, suite snapshot pin, offline flag, score envelope, FIND-026 anti-fan-out |
+| **Gates** | `compose_gates(..., require_block=S2A_REQUIRE_BLOCK)` — **ignores C′ / lab / human / NLP / export** |
+
+Gold remains a **validator**. Do **not** weaken `GOLD_SKELETON_FALLBACK_FINAL`.
+
+### FIND-026 / FIND-027
+
+* **FIND-026:** empty or oversize scored input emits a single classified H failure and **short-circuits** Families B/D (no message-dependent fan-out).
+* **FIND-027:** score the **final rendered message** (or explicit product card fallback). Never default to `raw_model_output` / `generation_json` / trace blobs.
+
+### Gate law
+
+```text
+gate.deterministic_pass = all(require_block metrics passed)
+```
+
+* Default require block: `git_cg.eval.scoring.S2A_REQUIRE_BLOCK` (A + B + D core + H core).
+* Suite documents may override via `metrics.require_block`.
+* Mean pass-rate, C′, lab, human, NLP, export scores do **not** veto the deterministic gate.
+* `gate.semantic_cohort_eligible` is deferred offline-honest (`cprime_deferred_s2a`).
+
+### Offline score API
+
+```bash
+# Score the core fixture suite
+uv run python - <<PY
+from git_cg.eval.scoring import score_suite
+res = score_suite("cm-eval-fixtures-core")
+for c in res.cases:
+    print(c.case_id, c.deterministic_pass, c.short_circuit)
+print("snapshot", res.suite_snapshot_pin)
+PY
+```
+
+### Package layout
+
+| Path | Role |
+|:---|:---|
+| `src/git_cg/eval/scoring/runner.py` | `score_bundle` / `score_case` / `score_suite` |
+| `src/git_cg/eval/scoring/context.py` | FIND-027 score context projection |
+| `src/git_cg/eval/scoring/preconditions.py` | FIND-026 short-circuit |
+| `src/git_cg/eval/scoring/family_{a,b,d,h}.py` | Family evaluators |
+| `src/git_cg/eval/scoring/gates.py` | `compose_gates` + `S2A_REQUIRE_BLOCK` |
+| `src/git_cg/eval/scoring/product_bridges.py` | Thin bridges into product modules |
+| `scripts/opik_metrics.py` | **Legacy/advisory only** — not S2 law |
+
+### Verification
+
+```bash
+uv run pytest tests/eval/test_score_runner.py \
+  tests/eval/test_gates_composition.py \
+  tests/eval/test_family_*.py \
+  tests/eval/test_find026_antifanout.py \
+  tests/eval/test_find027_artifact_bind.py \
+  tests/eval/test_no_eval_policy_fork.py -q
+```
+
+### Deferred (not S2a)
+
+S2b/S2c families, Lane C judges, accept-path binding (S3), Opik upload (S4), and S5–S7 remain out of scope.
 
 ## expected_* isolation
 
@@ -219,6 +302,6 @@ current S0 pin identities for review/CI drift detection.
 | Slice | Still out of scope here |
 |:---|:---|
 | **S0** | Scoring runtime, Opik network client, accept-path binder |
-| **S1** | S2–S7 metrics/judges, accept-path binding (S3), Opik upload (S4), remaining full #204 historical completeness |
+| **S2a** | S2b/S2c family expansion, Lane C judges, accept-path binding (S3), Opik upload (S4), S5–S7 |
 
 Basic `git-cg` users do **not** need Opik installed.

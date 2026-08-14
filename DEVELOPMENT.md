@@ -407,16 +407,29 @@ same-filesystem local checkouts when measuring refresh latency.
 Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
 telemetry field (no separate payload key).
 
-## Offline evaluation contracts (S0–S1)
+## Offline evaluation contracts (S0–S2a)
 
-Frozen schema pack + metric catalog pins (S0) and offline fixture/corpus encoder (S1) live under:
+Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), and offline Plane A score runner (S2a) live under:
 
-* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0/S1 boundaries, encoder/snapshot flow
-* Package: `src/git_cg/eval/` · corpus encoder: `src/git_cg/eval/corpus/` · schemas: `schemas/eval/`
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S2a boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, and deferred S2b+
+* Package: `src/git_cg/eval/` · corpus: `src/git_cg/eval/corpus/` · scoring: `src/git_cg/eval/scoring/` · schemas: `schemas/eval/`
 * Fixtures (Lane A SoT): `tests/fixtures/eval/` · recipes: `just eval-schema-hash`, `just eval-materialize`, `just eval-fixture-index`
 
-S0/S1 are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path.
-S1 does **not** require Opik/network. Follow-on slices (scoring/accept-path/Opik mirror/CLI) are tracked on #217 (S2–S7; thin eval CLI deferred to S6).
+S0–S2a are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path. Normal `git-cg commit` must not import `git_cg.eval.scoring`.
+
+Offline S2a smoke (no Opik / network):
+
+```bash
+uv run python - <<'PY'
+from git_cg.eval.scoring import score_suite
+res = score_suite("cm-eval-fixtures-core")
+for c in res.cases:
+    print(c.case_id, c.deterministic_pass, c.short_circuit)
+print("snapshot", res.suite_snapshot_pin)
+PY
+```
+
+S2b/S2c family expansion, accept-path binding, Opik mirror, Lane C′/GEval, operator UX, and ADR rewrite remain deferred on #217 / #225 (thin eval CLI deferred to S6).
 
 ## Promptfoo evaluation (offline)
 
