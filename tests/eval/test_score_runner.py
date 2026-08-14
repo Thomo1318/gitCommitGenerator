@@ -85,3 +85,27 @@ def test_require_block_list_nonempty() -> None:
     assert len(S2A_REQUIRE_BLOCK) >= 20
     # No C-prime metrics in S2a require block
     assert not any(m.startswith("c.") for m in S2A_REQUIRE_BLOCK)
+
+
+def test_score_suite_rejects_divergent_suite_path(tmp_path: Path) -> None:
+    """suite_path with same suite_id but different case_ids must not pin the wrong corpus."""
+    import json
+
+    import pytest
+
+    core = json.loads((FIXTURE_ROOT / "suites" / "cm-eval-fixtures-core.json").read_text(encoding="utf-8"))
+    divergent = dict(core)
+    divergent["case_ids"] = ["seed-v1-valid-fixture"]
+    if "case_paths" in divergent:
+        divergent["case_paths"] = {
+            "seed-v1-valid-fixture": divergent["case_paths"].get("seed-v1-valid-fixture")
+            or "cases/valid/seed-v1-valid-fixture.json"
+        }
+    path = tmp_path / "divergent-core.json"
+    path.write_text(json.dumps(divergent, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="suite_path case_ids diverge"):
+        score_suite(
+            "cm-eval-fixtures-core",
+            fixture_root=FIXTURE_ROOT,
+            suite_path=path,
+        )

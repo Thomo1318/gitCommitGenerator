@@ -314,9 +314,19 @@ def score_suite(
     else:
         req = S2A_REQUIRE_BLOCK
 
-    # Snapshot pin (content-addressed)
+    # Snapshot pin (content-addressed) always binds the *canonical* committed suite.
+    # suite_path is a test override only — reject it when case membership diverges
+    # so the pin cannot claim one corpus while we score another.
     snapshot = build_snapshot(sid, fixture_root=root, validate=True)
     suite_pin = str(snapshot.get("snapshot_hash") or snapshot.get("id") or "")
+    pinned_suite = snapshot.get("suite") if isinstance(snapshot.get("suite"), dict) else {}
+    pinned_case_ids = list(pinned_suite.get("case_ids") or [])
+    scored_case_ids = list(suite_doc.get("case_ids") or [])
+    if suite_path is not None and scored_case_ids != pinned_case_ids:
+        raise ValueError(
+            "suite_path case_ids diverge from canonical suite "
+            f"{sid!r}: scored={scored_case_ids!r} pinned={pinned_case_ids!r}"
+        )
 
     pairs = load_suite_fixtures(suite_doc, fixture_root=root)
     cases_out: list[ScoreCaseResult] = []
