@@ -29,6 +29,40 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.16.0
+
+### Miscellaneous
+
+- 📝 Add docstrings to `eval/225-s2a-offline-score-runner`
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #226 from Thomo1318/eval/225-s2a-offline-score-runner
+
+### Documentation
+
+- 📝 docs(eval): extend DEVELOPMENT contracts to S0–S2a (#225)
+- 📝 docs(eval): complete S2a scoring package docstring coverage (#225)
+- 📝 docs(eval): document S2a offline Plane A score runner (#225)
+
+### Tests
+
+- 🦺 fix(eval): reject divergent suite_path snapshot pins (#225)
+- 🦺 fix(eval): require skeleton row for golden promotion (#225)
+- 🦺 fix(eval): preserve gold build errors on strict_fail_set (#225)
+- 🦺 fix(eval): measure selected scored target for FIND-026 (#225)
+- ✅ test(eval): lock S2a scoring package edge coverage offline (#225)
+- ✅ test(eval): lock S2a score runner and gate law offline (#225)
+
+### Fixed
+
+- 🦺 fix(eval): reject divergent suite_path snapshot pins (#225)
+- 🦺 fix(eval): require skeleton row for golden promotion (#225)
+- 🦺 fix(eval): preserve gold build errors on strict_fail_set (#225)
+- 🦺 fix(eval): measure selected scored target for FIND-026 (#225)
+
+### Added
+
+- ✨ feat(eval): add S2a offline Plane A score runner (#225)
+
 ## v0.15.0
 
 ### Miscellaneous
