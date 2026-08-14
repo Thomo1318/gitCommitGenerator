@@ -34,6 +34,35 @@ _PA_CLASS = "git_cg.commit_quality.classify_diff_class"
 _PA_GOLD = "git_cg.commit_gold.check_commit_gold"
 _PA_SEC = "git_cg.commit_quality.security_claims_without_path_evidence"
 
+# Exact product gate codes (substring matching is rejected — false positives on
+# unrelated tokens such as SCOPE/TYPE/SEMVER embedded in other codes).
+_SCOPE_GATE_CODES = frozenset({"GATE_PATH_SCOPE_MISMATCH"})
+_TYPE_GATE_CODES = frozenset(
+    {
+        "GATE_TYPE_FORCE_MISMATCH",
+        "GATE_TYPE_FORBIDDEN",
+        "GATE_TYPE_DOMINANT_MISMATCH",
+        "GATE_TYPE_GROUP_MISSING",
+        "GATE_TYPE_REQUIRED_GROUP_MISSING",
+        "GATE_TYPE_SINGLE_GROUP_ONLY",
+    }
+)
+_SEMVER_GATE_CODES = frozenset(
+    {
+        "GATE_SEMVER_FORCE_MISMATCH",
+        "GATE_SEMVER_FORBIDDEN",
+        "GATE_SEMVER_CEILING",
+        "GATE_SEMVER_SECONDARY_CEILING",
+    }
+)
+_CHANGELOG_GATE_CODES = frozenset(
+    {
+        "PATH_CLASS_CHANGELOG_ANTISIGNAL",
+        "GATE_PATH_CLASS_CHANGELOG_ANTISIGNAL",
+        "CHANGELOG_ANTISIGNAL",
+    }
+)
+
 
 def score_family_c(
     ctx: ScoreContext,
@@ -126,12 +155,11 @@ def score_family_c(
         except Exception as exc:
             gate_codes = {f"GATE_EVAL_ERROR:{type(exc).__name__}"}
 
-    def _gate_pass(code_substrings: tuple[str, ...], *, status_keys: tuple[str, ...] = ()) -> tuple[bool, str | None]:
+    def _gate_pass(allowed_codes: frozenset[str], *, status_keys: tuple[str, ...] = ()) -> tuple[bool, str | None]:
         if gate_report is None:
             return False, "gates_not_evaluated"
         for c in gate_codes:
-            cl = c.lower()
-            if any(s.lower() in cl for s in code_substrings):
+            if c in allowed_codes:
                 return False, c
         for sk in status_keys:
             st = gate_status.get(sk)
@@ -139,9 +167,9 @@ def score_family_c(
                 return False, f"gate_status:{sk}={st}"
         return True, None
 
-    # scope_forced_ok
+    # scope_forced_ok — exact product gate codes only (no substring false positives)
     scope_ok, scope_reason = _gate_pass(
-        ("SCOPE", "FORCED_SCOPE", "GATE_SCOPE"),
+        _SCOPE_GATE_CODES,
         status_keys=("scope", "path_class", "craft"),
     )
     # Prefer explicit constraint force-scope check when available.
@@ -169,7 +197,7 @@ def score_family_c(
     type_from_gold = None
     if gold_slot is not None and gold_slot.report is not None:
         type_from_gold = type_code in gold_slot.report.codes()
-    type_gate_fail = any("TYPE" in c and "PATH" in c for c in gate_codes) or any(
+    type_gate_fail = any(c in _TYPE_GATE_CODES for c in gate_codes) or any(
         k == "type" and v not in {"pass", "ok", "skipped"} for k, v in gate_status.items()
     )
     if type_from_gold is True:
@@ -199,7 +227,7 @@ def score_family_c(
     sem_from_gold = None
     if gold_slot is not None and gold_slot.report is not None:
         sem_from_gold = sem_code in gold_slot.report.codes()
-    sem_gate_fail = any("SEMVER" in c for c in gate_codes) or any(
+    sem_gate_fail = any(c in _SEMVER_GATE_CODES for c in gate_codes) or any(
         k == "semver" and v not in {"pass", "ok", "skipped"} for k, v in gate_status.items()
     )
     if sem_from_gold is True:
@@ -225,7 +253,7 @@ def score_family_c(
 
     # changelog_antisignal (warn)
     anti_ok, anti_reason = _gate_pass(
-        ("CHANGELOG_ANTISIGNAL", "ANTISIGNAL", "PATH_CLASS_CHANGELOG"),
+        _CHANGELOG_GATE_CODES,
         status_keys=("changelog",),
     )
     scores.append(
