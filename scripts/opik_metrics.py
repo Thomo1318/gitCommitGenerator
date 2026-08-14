@@ -1,3 +1,9 @@
+"""LEGACY ADVISORY ONLY — not S2 scoring law.
+
+Demoted in S2b (#227). Do not import from git_cg.eval.scoring, CI gates,
+or product commit paths. Format heuristics here are not gold/Hybrid authority.
+"""
+
 import re
 
 from opik.evaluation.metrics import BaseMetric

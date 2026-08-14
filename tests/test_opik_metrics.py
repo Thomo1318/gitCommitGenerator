@@ -1,3 +1,9 @@
+"""Legacy FormatMetric tests — advisory only (S2b demoted).
+
+Not part of Plane A scoring law. Kept to prevent accidental re-promotion
+of scripts/opik_metrics.py as gate authority; scoring must not import it.
+"""
+
 import os
 import sys
 
@@ -388,3 +394,16 @@ def test_multi_char_emoji_prefix_matches_regex(format_metric):
     msg = "🐛✨ fix(scope): multi emoji prefix"
     result = format_metric.score(msg)
     assert "does not match convention" not in result.reason
+
+
+def test_scoring_does_not_import_opik_metrics() -> None:
+    """S2 scoring package must not import legacy opik_metrics (S2b demotion lock)."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "src" / "git_cg" / "eval" / "scoring"
+    hits = []
+    for path in root.glob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if "opik_metrics" in text or "scripts.opik_metrics" in text:
+            hits.append(path.name)
+    assert hits == []
