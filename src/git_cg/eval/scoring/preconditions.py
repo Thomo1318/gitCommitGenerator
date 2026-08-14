@@ -19,10 +19,12 @@ class PreconditionResult:
 
 
 def evaluate_preconditions(ctx: ScoreContext) -> PreconditionResult:
-    """Evaluate empty/missing and oversize guards.
-
-    When input is empty/missing or oversize, remaining message-dependent
-    evaluators must short-circuit (FIND-026) — only A/H harness metrics run.
+    """
+    Evaluate input preconditions for scoring.
+    
+    Returns:
+        PreconditionResult: The input validity, short-circuit status, reason, and
+            applicable failure identifiers.
     """
     if not ctx.input_nonempty:
         return PreconditionResult(

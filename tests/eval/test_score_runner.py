@@ -88,7 +88,7 @@ def test_require_block_list_nonempty() -> None:
 
 
 def test_score_suite_rejects_divergent_suite_path(tmp_path: Path) -> None:
-    """suite_path with same suite_id but different case_ids must not pin the wrong corpus."""
+    """Verify that scoring rejects a suite manifest whose case IDs differ from the pinned corpus."""
     import json
 
     import pytest

@@ -12,6 +12,15 @@ _POL = {m["metric_id"]: m["polarity"] for m in load_metric_catalog()["metrics"]}
 
 
 def _pass_row(metric_id: str) -> ScoreResultV1:
+    """
+    Create a passing score result for a metric using its configured polarity.
+    
+    Parameters:
+    	metric_id (str): Identifier of the metric for which to create the score.
+    
+    Returns:
+    	ScoreResultV1: A passing score result with a polarity-appropriate value.
+    """
     pol = _POL[metric_id]
     if pol == "lower_is_better":
         return make_score(metric_id, 0, passed=True)
@@ -21,6 +30,7 @@ def _pass_row(metric_id: str) -> ScoreResultV1:
 
 
 def _fail_row(metric_id: str) -> ScoreResultV1:
+    """Create a failed score result using a polarity-appropriate failing value for the specified metric."""
     pol = _POL[metric_id]
     if pol == "lower_is_better":
         return make_score(metric_id, 2, passed=False)

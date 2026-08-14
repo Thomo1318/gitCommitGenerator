@@ -218,6 +218,13 @@ def test_deterministic_card_from_plan_dict_paths(monkeypatch: pytest.MonkeyPatch
 
     class DumpCard:
         def model_dump(self) -> dict[str, Any]:
+            """
+            Provide the deterministic card representation used for scoring.
+            
+            Returns:
+                dict[str, Any]: A mapping indicating a valid header length and the
+                ``model_dump`` conversion path.
+            """
             return {"header_length_ok": True, "via": "model_dump"}
 
     monkeypatch.setattr(
@@ -446,6 +453,14 @@ def test_family_h_pin_envelope_fanout_and_card_match() -> None:
         passed = True
 
         def model_dump(self, mode: str = "json") -> dict[str, Any]:
+            """Return a deliberately invalid metric-card representation for test coverage.
+            
+            Parameters:
+            	mode (str): Serialisation mode.
+            
+            Returns:
+            	dict[str, Any]: A dictionary containing an invalid metric-card shape.
+            """
             return {"metric_id": "not-valid-shape"}
 
     h2 = score_family_h(
@@ -676,6 +691,11 @@ def test_project_score_context_validation_and_fallbacks() -> None:
 
 def test_score_bundle_context_error_recovery(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(*_a: Any, **_k: Any) -> None:
+        """Raise a projected-context error regardless of the supplied arguments.
+        
+        Raises:
+            ScoreContextError: Always raised with the message ``"projected poorly"``.
+        """
         raise ScoreContextError("projected poorly")
 
     monkeypatch.setattr("git_cg.eval.scoring.runner.project_score_context", _raise)
@@ -690,6 +710,7 @@ def test_score_bundle_context_error_recovery(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_score_bundle_generic_context_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(*_a: Any, **_k: Any) -> None:
+        """Raise a runtime error indicating an unexpected condition."""
         raise RuntimeError("unexpected")
 
     monkeypatch.setattr("git_cg.eval.scoring.runner.project_score_context", _raise)
@@ -769,12 +790,14 @@ def test_score_bundle_rewrites_evaluator_error_free_and_drops_bad_envelope(
         metric_id = "ghost.metric"
 
         def model_dump(self, mode: str = "json") -> dict[str, Any]:
+            """Raise an error when serialisation is requested for this object."""
             raise ValueError("cannot dump")
 
     def _fake_a(_ctx: ScoreContext) -> list[Any]:
         return [good, _BadEnv()]
 
     def _empty_rest(*_a: Any, **_k: Any) -> list[ScoreResultV1]:
+        """Return an empty collection of score results."""
         return []
 
     monkeypatch.setattr("git_cg.eval.scoring.runner.score_family_a", _fake_a)
@@ -864,6 +887,7 @@ def test_family_b_scope_illegal_and_empty_message() -> None:
     real_parse = parse_hybrid_header
 
     def _bad_scope(message: str) -> dict[str, Any]:
+        """Create a parsed message with an intentionally invalid scope."""
         h = real_parse(message)
         h["scope"] = "bad scope!!"
         h["ok"] = True
@@ -1128,6 +1152,7 @@ def test_runner_h_fallback_make_score_exception(monkeypatch: pytest.MonkeyPatch)
     real_make = make_score
 
     def _flaky_make(metric_id: str, *a: Any, **k: Any):
+        """Create a metric result, raising an error when emitting the input-nonempty fallback metric."""
         if metric_id == "h.eval_input_nonempty":
             raise RuntimeError("cannot emit fallback")
         return real_make(metric_id, *a, **k)

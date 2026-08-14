@@ -39,7 +39,9 @@ def test_family_modules_import_product_bridges_not_local_sop_tables() -> None:
 
 
 def test_gold_code_map_covers_strict_fail_codes() -> None:
-    """Every STRICT_FAIL_CODE maps to a Family D metric when catalog has it."""
+    """
+    Verify that every strict-failure code maps to a metric present in the scoring catalogue.
+    """
     from git_cg.eval.scoring.product_bridges import GOLD_CODE_TO_D_METRIC
     from git_cg.eval.scoring.result_builder import metric_row
 

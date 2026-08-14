@@ -13,6 +13,11 @@ _CATALOG_INDEX: dict[str, dict[str, Any]] | None = None
 
 
 def _catalog_index() -> dict[str, dict[str, Any]]:
+    """Build and cache an index of metric catalogue rows by metric ID.
+    
+    Returns:
+        dict[str, dict[str, Any]]: The cached metric catalogue index.
+    """
     global _CATALOG_INDEX
     if _CATALOG_INDEX is None:
         cat = load_metric_catalog()
@@ -21,12 +26,24 @@ def _catalog_index() -> dict[str, dict[str, Any]]:
 
 
 def clear_catalog_index() -> None:
-    """Drop cached catalog index (tests)."""
+    """
+    Clear the cached metric catalog index.
+    
+    Primarily used to reset catalog state between tests.
+    """
     global _CATALOG_INDEX
     _CATALOG_INDEX = None
 
 
 def metric_row(metric_id: str) -> dict[str, Any] | None:
+    """Return the catalog entry for a metric identifier.
+    
+    Parameters:
+    	metric_id (str): Identifier of the metric to look up.
+    
+    Returns:
+    	dict[str, Any] | None: The catalog row for the metric, or `None` when no matching entry exists.
+    """
     return _catalog_index().get(metric_id)
 
 
@@ -43,7 +60,21 @@ def make_score(
     severity: Severity | str | None = None,
     name: str | None = None,
 ) -> ScoreResultV1:
-    """Build a ScoreResultV1 populated from the frozen catalog row."""
+    """
+    Build a catalog-aligned score result for a metric.
+    
+    Parameters:
+    	metric_id (str): Identifier of a metric defined in the catalog.
+    	value (bool | int | float): Observed metric value.
+    	passed (bool | None): Explicit pass status; inferred from the metric polarity when omitted.
+    	severity (Severity | str | None): Severity override for the result.
+    
+    Returns:
+    	ScoreResultV1: A populated score result using catalog metadata and supplied overrides.
+    
+    Raises:
+    	KeyError: If `metric_id` is not defined in the catalog.
+    """
     row = metric_row(metric_id)
     if row is None:
         raise KeyError(f"unknown metric_id not in catalog: {metric_id}")

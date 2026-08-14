@@ -28,10 +28,21 @@ GoldBridge = Callable[[CommitPlan, DiffSignals, str], tuple[GoldReport, frozense
 
 
 def _default_bridge(plan: CommitPlan, signals: DiffSignals, mode: str) -> tuple[GoldReport, frozenset[str], bool]:
+    """Run a single gold evaluation using the supplied commit plan, diff signals, and mode.
+    
+    Parameters:
+    	plan (CommitPlan): Commit plan to evaluate.
+    	signals (DiffSignals): Diff signals used by the evaluation.
+    	mode (str): Gold evaluation mode.
+    
+    Returns:
+    	tuple[GoldReport, frozenset[str], bool]: The gold report, strict-failure codes, and evaluation success status.
+    """
     return run_gold_once(plan, signals, gold_mode=mode)
 
 
 def _metric_exists(metric_id: str) -> bool:
+    """Determine whether a metric is registered."""
     return metric_row(metric_id) is not None
 
 
@@ -43,7 +54,19 @@ def score_family_d(
     plan: CommitPlan | None = None,
     signals: DiffSignals | None = None,
 ) -> list[ScoreResultV1]:
-    """Score Family D from one product gold call."""
+    """
+    Score Family D using a single product gold evaluation.
+    
+    Parameters:
+    	ctx (ScoreContext): Scoring context containing the final message and evaluation inputs.
+    	gold_mode (str): Gold evaluation mode.
+    	gold_bridge (GoldBridge | None): Optional gold evaluation callable.
+    	plan (CommitPlan | None): Optional pre-built commit plan.
+    	signals (DiffSignals | None): Optional pre-built diff signals.
+    
+    Returns:
+    	list[ScoreResultV1]: Scores for the Family D metrics derived from the gold evaluation.
+    """
     bridge = gold_bridge or _default_bridge
     scores: list[ScoreResultV1] = []
 
@@ -55,6 +78,7 @@ def score_family_d(
     call_count = 0
 
     def _counting_bridge(p: CommitPlan, s: DiffSignals, mode: str) -> tuple[GoldReport, frozenset[str], bool]:
+        """Invoke the gold bridge while recording the number of invocations."""
         nonlocal call_count
         call_count += 1
         return bridge(p, s, mode)

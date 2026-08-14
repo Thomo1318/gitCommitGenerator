@@ -44,16 +44,27 @@ class ScoreCaseResult:
 
     @property
     def all_results(self) -> list[ScoreResultV1]:
+        """Return all metric scores and gate results for the case."""
         return [*self.scores, *self.gates]
 
     @property
     def deterministic_pass(self) -> bool | None:
+        """Determine the deterministic pass status for this case.
+        
+        Returns:
+        	bool | None: The gate status, or `None` when the deterministic pass gate is absent.
+        """
         for g in self.gates:
             if g.metric_id == "gate.deterministic_pass":
                 return g.passed
         return None
 
     def by_id(self) -> dict[str, ScoreResultV1]:
+        """Map each metric ID to its corresponding score result.
+        
+        Returns:
+        	dict[str, ScoreResultV1]: Score results keyed by metric ID.
+        """
         return {s.metric_id: s for s in self.all_results}
 
 
@@ -69,6 +80,11 @@ class ScoreSuiteResult:
 
     @property
     def all_pass(self) -> bool:
+        """Determine whether every case in the suite passed its deterministic gate.
+        
+        Returns:
+        	bool: `True` if every case has a deterministic pass, `False` otherwise.
+        """
         return all(c.deterministic_pass is True for c in self.cases)
 
 
@@ -84,7 +100,23 @@ def score_bundle(
     max_eval_bytes: int | None = None,
     case_id: str | None = None,
 ) -> ScoreCaseResult:
-    """Score one ``ape_bundle_v1`` mapping (already loaded/encoded)."""
+    """
+    Score an already loaded and encoded ``ape_bundle_v1`` mapping.
+    
+    Parameters:
+        bundle (dict[str, Any]): The encoded bundle to score.
+        suite (dict[str, Any] | None): Optional suite metadata used to project scoring context.
+        suite_snapshot_pin (str | None): Content pin identifying the suite snapshot.
+        require_block (tuple[str, ...] | None): Gate block required for the result.
+        gold_mode (str): Gold-scoring mode.
+        gold_bridge (GoldBridge | None): Optional bridge for gold-data evaluation.
+        offline (bool): Whether scoring must run without external services.
+        max_eval_bytes (int | None): Maximum evaluation-input size.
+        case_id (str | None): Case identifier to use when projecting context.
+    
+    Returns:
+        ScoreCaseResult: Case scores, composed gates, projected context, execution status, and evaluator errors.
+    """
     errors: list[str] = []
     scores: list[ScoreResultV1] = []
 
@@ -267,7 +299,15 @@ def score_case(
     case_id: str | None = None,
     suite_id: str | None = None,
 ) -> ScoreCaseResult:
-    """Load a fixture case JSON file, encode via S1, and score the bundle."""
+    """
+    Load a fixture case from a JSON file and score its encoded bundle.
+    
+    Parameters:
+        case_path (str | Path): Path to the fixture case JSON file.
+    
+    Returns:
+        ScoreCaseResult: The scored case result.
+    """
     path = Path(case_path)
     fixture = json.loads(path.read_text(encoding="utf-8"))
     cid = case_id or fixture.get("case_id") or path.stem
@@ -294,7 +334,24 @@ def score_suite(
     offline: bool = True,
     suite_path: str | Path | None = None,
 ) -> ScoreSuiteResult:
-    """Score every case in a committed suite using S1 loaders + snapshot pin."""
+    """
+    Score every case in a suite and aggregate the results under a canonical snapshot.
+    
+    Parameters:
+    	suite_id (str): Identifier of the suite to score.
+    	fixture_root (str | Path | None): Root directory containing the suite fixtures.
+    	require_block (tuple[str, ...] | None): Gate block required for scoring.
+    	gold_mode (str): Mode used for gold evaluation.
+    	gold_bridge (GoldBridge | None): Optional bridge for gold evaluation.
+    	offline (bool): Whether to run scoring in offline mode.
+    	suite_path (str | Path | None): Optional path to a suite definition used instead of the standard loader.
+    
+    Returns:
+    	ScoreSuiteResult: Scores for all suite cases, including their snapshot pin and aggregate configuration.
+    
+    Raises:
+    	ValueError: If a test suite path specifies case membership that differs from the canonical suite snapshot.
+    """
     root = Path(fixture_root) if fixture_root else default_fixture_root()
 
     # Optional path form for tests

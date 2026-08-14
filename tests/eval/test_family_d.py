@@ -17,6 +17,12 @@ VALID = FIXTURE_ROOT / "cases" / "valid" / "seed-v1-valid-fixture.json"
 
 
 def _ctx():
+    """
+    Build a project scoring context from the valid evaluation fixture.
+    
+    Returns:
+        The project scoring context for the valid fixture.
+    """
     fx = json.loads(VALID.read_text(encoding="utf-8"))
     enc = encode_fixture(fx)
     return project_score_context(enc["bundle"])
@@ -26,6 +32,17 @@ def test_family_d_calls_gold_once_and_maps_codes() -> None:
     calls: list[tuple] = []
 
     def bridge(plan: CommitPlan, signals: DiffSignals, mode: str):
+        """
+        Record a gold-evaluation call and return findings for skeleton-fallback and title-case checks.
+        
+        Parameters:
+            plan (CommitPlan): Commit plan supplied to the evaluation.
+            signals (DiffSignals): Diff signals supplied to the evaluation.
+            mode (str): Evaluation mode used to determine report status.
+        
+        Returns:
+            tuple: The gold report, its strict-failure codes, and whether it is valid for the requested mode.
+        """
         calls.append((plan, signals, mode))
         findings = (
             GoldFinding(code="GOLD_SKELETON_FALLBACK_FINAL", message="skeleton"),
@@ -78,6 +95,16 @@ def test_family_d_gold_build_error_preserved_on_strict_fail_set() -> None:
     ctx = _ctx()
 
     def bridge(plan: CommitPlan, signals: DiffSignals, mode: str):
+        """Raise an error to simulate a gold evaluation failure.
+        
+        Parameters:
+            plan (CommitPlan): The commit plan supplied to the evaluation.
+            signals (DiffSignals): The diff signals supplied to the evaluation.
+            mode (str): The evaluation mode.
+        
+        Raises:
+            RuntimeError: Always raised with the message ``"gold boom"``.
+        """
         raise RuntimeError("gold boom")
 
     scores = score_family_d(ctx, gold_bridge=bridge, gold_mode="strict")

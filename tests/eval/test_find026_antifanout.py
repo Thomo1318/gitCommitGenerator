@@ -13,6 +13,11 @@ VALID = FIXTURE_ROOT / "cases" / "valid" / "seed-v1-valid-fixture.json"
 
 
 def _empty_bundle() -> dict:
+    """Create an evaluation bundle with an empty final message and no derived cards or hashes.
+    
+    Returns:
+    	dict: A valid fixture bundle prepared for empty-input evaluation tests.
+    """
     fx = json.loads(VALID.read_text(encoding="utf-8"))
     b = dict(encode_fixture(fx)["bundle"])
     b["final_message"] = ""
