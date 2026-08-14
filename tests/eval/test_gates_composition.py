@@ -5,7 +5,7 @@ from __future__ import annotations
 from git_cg.eval.catalog import load_metric_catalog
 from git_cg.eval.enums import Authority, Family, Polarity, Source
 from git_cg.eval.score_result import ScoreResultV1
-from git_cg.eval.scoring.gates import S2A_REQUIRE_BLOCK, compose_gates
+from git_cg.eval.scoring.gates import S2A_REQUIRE_BLOCK, S2B_REQUIRE_BLOCK, compose_gates
 from git_cg.eval.scoring.result_builder import make_score
 
 _POL = {m["metric_id"]: m["polarity"] for m in load_metric_catalog()["metrics"]}
@@ -55,11 +55,11 @@ def test_failed_required_fails_gate() -> None:
 
 
 def test_cprime_failure_ignored() -> None:
-    """C-prime / advisory failures must not veto deterministic_pass."""
+    """True C-prime / lab advisory failures must not veto deterministic_pass."""
     rows = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
     rows.append(
         ScoreResultV1(
-            metric_id="c.fake_advisory",
+            metric_id="cprime.fake_advisory",
             polarity=Polarity.PASS_FAIL,
             authority=Authority.ADVISORY,
             source=Source.LANE_C_JUDGE,
@@ -72,7 +72,28 @@ def test_cprime_failure_ignored() -> None:
     g = next(x for x in gates if x.metric_id == "gate.deterministic_pass")
     assert g.passed is True
     ignored = (g.evidence or {}).get("ignored_advisory_failures") or []
-    assert any(x.startswith("c.") for x in ignored)
+    assert any(x.startswith("cprime") for x in ignored)
+
+
+def test_unrequested_c_failure_not_labeled_advisory() -> None:
+    """Unrequested Plane A c.* failures must not be ignored_advisory_failures."""
+    rows = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
+    rows.append(
+        ScoreResultV1(
+            metric_id="c.contract_smoke",
+            polarity=Polarity.PASS_FAIL,
+            authority=Authority.LAW,
+            source=Source.LOCAL_WRAPPER,
+            value=False,
+            passed=False,
+            family=Family.C,
+        )
+    )
+    gates = compose_gates(rows, bound=True)
+    g = next(x for x in gates if x.metric_id == "gate.deterministic_pass")
+    assert g.passed is True  # not in S2A require block
+    ignored = (g.evidence or {}).get("ignored_advisory_failures") or []
+    assert "c.contract_smoke" not in ignored
 
 
 def test_semantic_cohort_deferred_s2a() -> None:
@@ -80,7 +101,12 @@ def test_semantic_cohort_deferred_s2a() -> None:
     gates = compose_gates(rows, bound=True)
     sc = next(x for x in gates if x.metric_id == "gate.semantic_cohort_eligible")
     assert sc.passed is False
-    assert sc.reason == "cprime_deferred_s2a"
+    # S2b: offline/later-lane wording (not stale S2a/C-prime deferred string)
+    assert sc.reason in {
+        "cprime_deferred_s2a",  # legacy accept during transition
+        "semantic_cohort_deferred_offline_later_lane",
+    }
+    assert "deferred" in (sc.reason or "")
 
 
 def test_promotion_requires_bound_and_gold() -> None:
@@ -102,3 +128,32 @@ def test_promotion_requires_explicit_skeleton_row() -> None:
     assert det.passed is True
     assert promo.passed is False
     assert (promo.evidence or {}).get("skeleton_clean") is False
+
+
+def test_s2b_require_block_is_68_unique_catalog_ids() -> None:
+    assert len(S2B_REQUIRE_BLOCK) == 68
+    assert len(set(S2B_REQUIRE_BLOCK)) == 68
+    assert set(S2A_REQUIRE_BLOCK).issubset(set(S2B_REQUIRE_BLOCK))
+    assert "h.structured_bundle_compliance" in S2B_REQUIRE_BLOCK
+    # warn rows stay out
+    for mid in (
+        "c.changelog_antisignal",
+        "c.evidence_surface_precision",
+        "c.evidence_surface_recall",
+        "e.docs_tests_craft",
+        "e.low_confidence_posture",
+        "e.min_included_bullets",
+        "e.stub_inventory_coherent",
+        "f.claim_evidence_alignment",
+        "h.eval_input_size_ok",
+    ):
+        assert mid not in S2B_REQUIRE_BLOCK
+
+
+def test_compose_gates_rejects_duplicate_metric_ids() -> None:
+    import pytest
+
+    rows = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
+    rows.append(_pass_row("a.final_message_present"))
+    with pytest.raises(ValueError, match="duplicate metric_id"):
+        compose_gates(rows, bound=True)

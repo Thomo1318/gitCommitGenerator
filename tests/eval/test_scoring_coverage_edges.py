@@ -1009,21 +1009,21 @@ def test_gates_skips_existing_gate_rows() -> None:
     rows.append(make_score("gate.deterministic_pass", True, passed=True))
     rows.append(
         ScoreResultV1(
-            metric_id="e.lab_noise",
+            metric_id="lab.noise",
             polarity=Polarity.PASS_FAIL,
             authority=Authority.ADVISORY,
             source=Source.LANE_C_JUDGE,
             value=False,
             passed=False,
-            family=Family.CPRIME,
+            family=Family.LAB,
         )
     )
     gates = compose_gates(rows, bound=True)
     det = next(g for g in gates if g.metric_id == "gate.deterministic_pass")
-    # deterministic_pass recomputed; advisory e.* ignored
+    # deterministic_pass recomputed; true advisory lab.* ignored (S2b: e.* is gate-capable)
     assert det.passed is True
     ignored = (det.evidence or {}).get("ignored_advisory_failures") or []
-    assert "e.lab_noise" in ignored
+    assert "lab.noise" in ignored
 
 
 def test_family_h_card_vals_non_dict_and_dict_match() -> None:
