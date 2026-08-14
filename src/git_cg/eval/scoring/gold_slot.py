@@ -90,6 +90,7 @@ def build_gold_slot(
     slot.contract_provided = contract is not None
     slot.ranked_intents_provided = ranked_intents is not None
 
+    attempted = False
     try:
         built_plan = plan or parse_message_to_plan(msg)
         # Gold path-class scaffolding may use placeholders; C/F path-security
@@ -105,6 +106,8 @@ def build_gold_slot(
         slot.signals = built_signals
 
         bridge = gold_bridge
+        # Count only real gold invocations — parse/signal failures stay at 0.
+        attempted = True
         if bridge is not None:
             report, strict_hits, ok = bridge(built_plan, built_signals, gold_mode)
         else:
@@ -124,9 +127,8 @@ def build_gold_slot(
         slot.report = None
         slot.strict_hits = frozenset()
         slot.ok = False
-        # call_count stays 0 if bridge never returned; if bridge raised after
-        # entry we still count the attempt as one failed call.
-        if slot.call_count == 0:
+        # Count one failed call only when the gold call was actually entered.
+        if slot.call_count == 0 and attempted:
             slot.call_count = 1
 
     return slot

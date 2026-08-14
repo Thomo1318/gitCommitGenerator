@@ -202,11 +202,14 @@ def score_family_h(
                                 "score_passed": s.passed,
                             }
                         )
-    # FIND-002: structured bundle / score envelope compliance
+    # FIND-002: structured bundle / score envelope compliance.
+    # ctx.bundle may carry post-encode injection keys (score_card/files) that are
+    # not schema fields; strip them for validation only — leave ctx.bundle intact.
     structured_ok = True
     structured_errors: list[str] = []
     try:
-        validate_instance("ape_bundle_v1", ctx.bundle)
+        bundle_for_schema = {k: v for k, v in dict(ctx.bundle or {}).items() if k not in {"score_card", "files"}}
+        validate_instance("ape_bundle_v1", bundle_for_schema)
     except SchemaPackError as exc:
         structured_ok = False
         structured_errors.append(f"bundle:{exc}")

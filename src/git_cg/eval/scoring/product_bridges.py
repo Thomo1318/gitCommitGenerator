@@ -293,13 +293,6 @@ def issue_ref_ok(trailers: dict[str, str]) -> tuple[bool, str | None]:
     return True, None
 
 
-def explicit_path_evidence(files: list[str] | tuple[str, ...] | None) -> list[str]:
-    """Normalize explicit product-bound paths; empty/missing ⇒ no evidence."""
-    if not files:
-        return []
-    return [p.strip() for p in files if isinstance(p, str) and p.strip()]
-
-
 __all__ = [
     "D_METRIC_TO_GOLD_CODE",
     "GOLD_CODE_TO_D_METRIC",
@@ -307,7 +300,6 @@ __all__ = [
     "STRICT_FAIL_CODES",
     "check_commit_gold",
     "deterministic_card_from_plan",
-    "explicit_path_evidence",
     "extract_trailers",
     "issue_ref_ok",
     "known_cc_type",
