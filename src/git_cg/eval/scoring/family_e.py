@@ -101,12 +101,8 @@ def score_family_e(
                     break
             if banned_hit:
                 break
+    # Fail closed when guards are unevaluable, regardless of direct opener hits.
     banned_ok = not banned_hit and guard is not None
-    if guard is None and not msg:
-        banned_ok = False
-    elif guard is None and msg and not banned_hit:
-        # guards unevaluable but no direct hit — fail closed
-        banned_ok = False
     scores.append(
         make_score(
             "e.banned_craft_openers",
@@ -289,7 +285,8 @@ def score_family_e(
         and "GOLD_SKELETON_FALLBACK_FINAL" in gold_slot.report.codes()
     ):
         skel = True
-    if "LOW-CONFIDENCE BODY SKELETON" in msg or "SKELETON" in msg:
+    # Product fallback marker only — bare "SKELETON" falsely fails legitimate prose.
+    if "LOW-CONFIDENCE BODY SKELETON" in msg.upper():
         skel = True
     skel_ok = not skel and (guard is not None or bool(msg))
     if guard is None and not msg:
