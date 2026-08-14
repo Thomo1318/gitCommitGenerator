@@ -58,15 +58,7 @@ _IGNORE_FAMILY_PREFIXES = (
 
 
 def _is_advisory(metric_id: str) -> bool:
-    """
-    Determine whether a metric is advisory rather than required for deterministic gating.
-    
-    Parameters:
-    	metric_id (str): Metric identifier to classify.
-    
-    Returns:
-    	bool: `True` if the metric belongs to an advisory family, `False` otherwise.
-    """
+    """True for C-prime / lab / human / NLP / export metrics (never gate veto)."""
     return metric_id.startswith(_IGNORE_FAMILY_PREFIXES) or metric_id.startswith("cprime")
 
 
@@ -78,18 +70,13 @@ def compose_gates(
     require_topology: bool = False,
     gold_mode: str = "strict",
 ) -> list[ScoreResultV1]:
-    """
-    Compose deterministic, golden-promotion, and semantic-cohort gate metrics from score rows.
-    
-    Parameters:
-    	results (Sequence[ScoreResultV1]): Score rows to evaluate.
-    	require_block (Iterable[str] | None): Metric IDs required for deterministic gating; defaults to the S2a required block.
-    	bound (bool | None): Whether the evaluated result is within the configured bound.
-    	require_topology (bool): Whether topology was required for the evaluation evidence.
-    	gold_mode (str): Gold evaluation mode recorded in deterministic gate evidence.
-    
-    Returns:
-    	list[ScoreResultV1]: Gate results for deterministic evaluation, golden-promotion eligibility, and semantic-cohort eligibility. Missing or failed required metrics block deterministic gating; semantic-cohort eligibility remains false while C-prime is deferred.
+    """Compose ``gate.*`` metrics from score rows.
+
+    ``gate.deterministic_pass`` uses only metrics in ``require_block``
+    (default ``S2A_REQUIRE_BLOCK``). C-prime / lab / human / NLP / export never
+    veto. Missing required metrics fail closed. Golden promotion additionally
+    requires an explicit passing skeleton row (not merely require_block absence).
+    Semantic cohort stays false while C-prime is deferred (S2b).
     """
     req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
     by_id: dict[str, ScoreResultV1] = {r.metric_id: r for r in results}

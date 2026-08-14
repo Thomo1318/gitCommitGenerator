@@ -62,11 +62,7 @@ class ScoreContext:
 
     @property
     def input_nonempty(self) -> bool:
-        """Determine whether the selected scoring target contains usable content.
-        
-        Returns:
-        	bool: `True` if the selected target contains content, `False` otherwise.
-        """
+        """True when FIND-027 selected target has non-whitespace content."""
         if self.scored_target == "missing":
             return False
         if self.scored_target == "final_message":
@@ -76,11 +72,11 @@ class ScoreContext:
 
     @property
     def input_size_bytes(self) -> int:
-        """
-        Measure the selected scoring target in UTF-8 bytes.
-        
-        Returns:
-            int: The byte length of the final message or serialised product card, or 0 when no target is selected.
+        """UTF-8 byte length of the *selected* scored target (FIND-026/027).
+
+        Empty/whitespace ``final_message`` must not hide an oversize product card:
+        measure the same artifact that ``scored_target`` selected. Product cards
+        use deterministic JSON (sorted keys, compact separators).
         """
         if self.scored_target == "final_message":
             return len((self.final_message or "").encode("utf-8"))
@@ -99,23 +95,12 @@ class ScoreContext:
 
     @property
     def input_size_ok(self) -> bool:
-        """Determine whether the selected scoring target is within the evaluation size limit.
-        
-        Returns:
-        	bool: `true` if the target size is less than or equal to the configured limit, `false` otherwise.
-        """
+        """True when selected-target bytes are within ``max_eval_bytes`` (FIND-026)."""
         return self.input_size_bytes <= self.max_eval_bytes
 
 
 def _as_dict(value: Any) -> dict[str, Any] | None:
-    """Convert a mapping to a dictionary.
-    
-    Parameters:
-        value (Any): The value to convert.
-    
-    Returns:
-        dict[str, Any] | None: A dictionary copy when the value is a mapping; otherwise, `None`.
-    """
+    """Shallow ``dict`` copy for mappings; otherwise ``None``."""
     if value is None:
         return None
     if isinstance(value, Mapping):
@@ -124,7 +109,7 @@ def _as_dict(value: Any) -> dict[str, Any] | None:
 
 
 def _str_tuple(value: Any) -> tuple[str, ...]:
-    """Convert a sequence's string elements to a tuple."""
+    """Coerce a non-string sequence to a ``tuple[str, ...]``; else empty."""
     if value is None:
         return ()
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
@@ -141,22 +126,11 @@ def project_score_context(
     max_eval_bytes: int = DEFAULT_MAX_EVAL_BYTES,
     allow_wrong_artifact: bool = False,
 ) -> ScoreContext:
-    """
-    Project a bundle and optional suite into a validated FIND-027 score context.
-    
-    Parameters:
-    	bundle (Mapping[str, Any]): Evaluation bundle to project.
-    	suite (Mapping[str, Any] | None): Optional evaluation suite metadata.
-    	case_id (str | None): Case identifier, overriding the value in the bundle.
-    	product_card (Mapping[str, Any] | None): Optional product card to use as a scoring target.
-    	max_eval_bytes (int): Maximum permitted size for the selected evaluation target.
-    	allow_wrong_artifact (bool): Whether raw model artefacts may be considered as scoring targets.
-    
-    Returns:
-    	ScoreContext: The validated and normalised scoring context.
-    
-    Raises:
-    	ScoreContextError: If the bundle or its required fields contain invalid values.
+    """Project a bundle (+ optional suite) into a FIND-027 score context.
+
+    Prefer ``bundle.final_message``. Never default format scoring onto raw model
+    dumps / generation JSON keys unless ``allow_wrong_artifact`` (tests only).
+    Pins come from live S0 loaders; missing identity fields fail closed.
     """
     if not isinstance(bundle, Mapping):
         raise ScoreContextError("bundle must be an object")

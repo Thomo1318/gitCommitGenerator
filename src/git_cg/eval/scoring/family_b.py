@@ -32,15 +32,7 @@ _PA = "git_cg.telemetry.reverse_parse_commit_message+hybrid_header"
 
 
 def score_family_b(ctx: ScoreContext) -> list[ScoreResultV1]:
-    """
-    Score a Family B hybrid commit message against its required format and metadata.
-    
-    Parameters:
-    	ctx (ScoreContext): Context containing the final commit message to score.
-    
-    Returns:
-    	list[ScoreResultV1]: Scores covering the hybrid header, trailers, issue references, and structured commit envelope.
-    """
+    """Score Family B Hybrid header/trailers via product bridges (no eval fork)."""
     msg = ctx.final_message or ""
     header = parse_hybrid_header(msg)
     trailers = extract_trailers(msg)

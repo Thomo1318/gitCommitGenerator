@@ -33,18 +33,10 @@ def score_family_h(
     offline: bool = True,
     evaluator_errors: list[str] | None = None,
 ) -> list[ScoreResultV1]:
-    """
-    Emit Family H health metrics after evaluating prior family scores.
-    
-    Parameters:
-    	pre (PreconditionResult): Input precondition results used to assess evaluation input.
-    	family_scores (list[ScoreResultV1]): Scores from previously evaluated families.
-    	suite_snapshot_pin (str | None): Pin identifying the suite snapshot used for evaluation.
-    	offline (bool): Whether evaluation completed without network access.
-    	evaluator_errors (list[str] | None): Evaluator errors to report.
-    
-    Returns:
-    	list[ScoreResultV1]: Generated Family H metric scores.
+    """Emit Family H pin/offline/envelope/anti-fan-out metrics.
+
+    Runs after A/B/D so ``h.score_envelope_valid`` can validate prior rows.
+    Live S0 pin identity + suite snapshot pin are fail-closed.
     """
     errors = list(evaluator_errors or [])
     scores: list[ScoreResultV1] = []

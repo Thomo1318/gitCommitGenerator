@@ -71,15 +71,7 @@ D_METRIC_TO_GOLD_CODE: dict[str, str] = {v: k for k, v in GOLD_CODE_TO_D_METRIC.
 
 
 def parse_hybrid_header(message: str) -> dict[str, Any]:
-    """
-    Parse the first line of a Hybrid commit message into structured header fields.
-    
-    Parameters:
-    	message (str): The commit message to parse.
-    
-    Returns:
-    	dict[str, Any]: Parsed header details, including validity, header text, length, commit type, scope, subject, and breaking-change status. Invalid or empty messages include a reason; shape mismatches may include a soft-parsed result.
-    """
+    """Parse Hybrid subject line shape for Family B (wrap product grammar only)."""
     if not message or not str(message).strip():
         return {"ok": False, "reason": "empty_message", "header": "", "header_len": 0}
     header = message.splitlines()[0].strip()
@@ -114,11 +106,7 @@ def parse_hybrid_header(message: str) -> dict[str, Any]:
 
 
 def extract_trailers(message: str) -> dict[str, str]:
-    """Extract recognised machine trailers from a rendered commit message.
-    
-    Returns:
-    	dict[str, str]: A mapping of trailer keys to their stripped values.
-    """
+    """Extract machine trailers by product line-prefix contract."""
     trailers: dict[str, str] = {}
     if not message:
         return trailers
@@ -133,15 +121,7 @@ def extract_trailers(message: str) -> dict[str, str]:
 
 
 def parse_message_to_plan(message: str, *, rationale: str | None = None) -> CommitPlan:
-    """
-    Build a validated commit plan from a rendered commit message.
-    
-    Parameters:
-        rationale (str | None): Optional rationale to use instead of the parsed rationale.
-    
-    Returns:
-        CommitPlan: The normalised commit plan.
-    """
+    """Build ``CommitPlan`` via product ``reverse_parse_commit_message`` + normalize."""
     parsed = reverse_parse_commit_message(message)
     if not parsed:
         raise ValueError("reverse_parse_commit_message returned empty plan")
@@ -207,17 +187,7 @@ def signals_from_context(
     generation_task_input: dict[str, str] | None,
     files: list[str] | None = None,
 ) -> DiffSignals:
-    """
-    Builds diff signals from path-class and generation-task context.
-    
-    Parameters:
-    	path_class_gate (str | None): Path classification that identifies the change category.
-    	generation_task_input (dict[str, str] | None): Generation metadata containing optional path-class and diff-summary values.
-    	files (list[str] | None): File paths associated with the change.
-    
-    Returns:
-    	DiffSignals: Derived file paths, change count, and documentation, test, and fixture indicators.
-    """
+    """Project lightweight ``DiffSignals`` from fixture/path-class context only."""
     paths = list(files or [])
     gti = generation_task_input or {}
     gate = (path_class_gate or gti.get("path_class_gate") or "").strip().lower()
@@ -254,15 +224,7 @@ def run_gold_once(
     *,
     gold_mode: str = "strict",
 ) -> tuple[GoldReport, frozenset[str], bool]:
-    """
-    Run product gold validation for a commit plan and its diff signals.
-    
-    Parameters:
-        gold_mode (str): Validation mode used to determine the overall success status.
-    
-    Returns:
-        tuple: The gold report, strict-failure codes found in the report, and the mode-specific success status.
-    """
+    """Invoke product ``check_commit_gold`` once; return report, strict set, mode-ok."""
     report = check_commit_gold(
         plan,
         None,
@@ -276,14 +238,7 @@ def run_gold_once(
 
 
 def deterministic_card_from_plan(plan: CommitPlan) -> dict[str, Any]:
-    """Convert deterministic plan checks into a plain dictionary of evidence fields.
-    
-    Parameters:
-    	plan (CommitPlan): The commit plan to evaluate.
-    
-    Returns:
-    	dict[str, Any]: The deterministic check results as a plain dictionary.
-    """
+    """Wrap product ``run_deterministic_checks`` into a plain evidence dict."""
     card = run_deterministic_checks(plan)
     if hasattr(card, "model_dump"):
         return card.model_dump()
@@ -297,39 +252,17 @@ def deterministic_card_from_plan(plan: CommitPlan) -> dict[str, Any]:
 
 
 def known_cc_type(cc_type: str | None) -> bool:
-    """Determine whether a value is a recognised commit type.
-    
-    Parameters:
-    	cc_type (str | None): The commit type to validate.
-    
-    Returns:
-    	`true` if the value is a recognised commit type, `false` otherwise.
-    """
+    """True when ``cc_type`` is in the product conventional-commit set."""
     return bool(cc_type) and str(cc_type) in _CC_TYPES
 
 
 def known_semver(value: str | None) -> bool:
-    """Determine whether a value is a recognised semantic-version impact.
-    
-    Parameters:
-    	value (str | None): The value to check.
-    
-    Returns:
-    	`true` if the value matches a recognised semantic-version impact, `false` otherwise.
-    """
+    """True when value is a known SemVer-Impact token (case-insensitive)."""
     return bool(value) and str(value).upper() in _SEMVER_VALUES
 
 
 def issue_ref_ok(trailers: dict[str, str]) -> tuple[bool, str | None]:
-    """
-    Validate issue-reference trailer presence and format.
-    
-    Parameters:
-    	trailers (dict[str, str]): Trailer names and values to validate.
-    
-    Returns:
-    	tuple[bool, str | None]: A success flag and an error code when validation fails.
-    """
+    """Validate issue-ref trailer form; ``Null`` must be ``#0`` only."""
     present = [k for k in ("Refs", "Resolves", "Closes", "Fixes", "Null") if k in trailers]
     if not present:
         return False, "missing_issue_ref"

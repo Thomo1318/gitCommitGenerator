@@ -15,15 +15,7 @@ VALID = FIXTURE_ROOT / "cases" / "valid" / "seed-v1-valid-fixture.json"
 
 
 def _bundle_with_message(msg: str) -> dict:
-    """
-    Create a fixture bundle with the supplied final commit message.
-    
-    Parameters:
-    	msg (str): The final commit message to place in the bundle.
-    
-    Returns:
-    	dict: The bundle with its previous message hash removed for recomputation.
-    """
+    """Clone valid bundle with overridden ``final_message`` (hash cleared)."""
     fx = json.loads(VALID.read_text(encoding="utf-8"))
     enc = encode_fixture(fx)
     b = dict(enc["bundle"])

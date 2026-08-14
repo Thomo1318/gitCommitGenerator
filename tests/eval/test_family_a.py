@@ -14,15 +14,7 @@ VALID = FIXTURE_ROOT / "cases" / "valid" / "seed-v1-valid-fixture.json"
 
 
 def _ctx_from_fixture(path: Path = VALID):
-    """
-    Create a scoring context from a JSON fixture.
-    
-    Parameters:
-        path (Path): Path to the fixture file.
-    
-    Returns:
-        The scoring context created from the fixture's encoded bundle.
-    """
+    """Encode fixture JSON → FIND-027 ``ScoreContext``."""
     fx = json.loads(path.read_text(encoding="utf-8"))
     enc = encode_fixture(fx)
     return project_score_context(enc["bundle"])

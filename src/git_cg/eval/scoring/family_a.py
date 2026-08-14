@@ -21,15 +21,7 @@ FAMILY_A_S2A = (
 
 
 def score_family_a(ctx: ScoreContext) -> list[ScoreResultV1]:
-    """
-    Evaluate Family A artifact and binding conditions for a scoring context.
-    
-    Parameters:
-    	ctx (ScoreContext): Context containing the bundle, artifact classification, binding state, final message, and scoring metadata.
-    
-    Returns:
-    	list[ScoreResultV1]: Results for schema validity, artifact classification, final-message presence, binding status and completeness, byte stability, and scoring-target order.
-    """
+    """Score Family A schema/artifact/binding + FIND-027 target-order metrics."""
     scores: list[ScoreResultV1] = []
 
     schema_ok = False

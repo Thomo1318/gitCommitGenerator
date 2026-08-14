@@ -13,11 +13,7 @@ _CATALOG_INDEX: dict[str, dict[str, Any]] | None = None
 
 
 def _catalog_index() -> dict[str, dict[str, Any]]:
-    """Build and cache an index of metric catalogue rows by metric ID.
-    
-    Returns:
-        dict[str, dict[str, Any]]: The cached metric catalogue index.
-    """
+    """Lazy index of frozen S0 metric catalog rows by ``metric_id``."""
     global _CATALOG_INDEX
     if _CATALOG_INDEX is None:
         cat = load_metric_catalog()
@@ -26,24 +22,13 @@ def _catalog_index() -> dict[str, dict[str, Any]]:
 
 
 def clear_catalog_index() -> None:
-    """
-    Clear the cached metric catalog index.
-    
-    Primarily used to reset catalog state between tests.
-    """
+    """Drop cached catalog index (tests / pin reload)."""
     global _CATALOG_INDEX
     _CATALOG_INDEX = None
 
 
 def metric_row(metric_id: str) -> dict[str, Any] | None:
-    """Return the catalog entry for a metric identifier.
-    
-    Parameters:
-    	metric_id (str): Identifier of the metric to look up.
-    
-    Returns:
-    	dict[str, Any] | None: The catalog row for the metric, or `None` when no matching entry exists.
-    """
+    """Return frozen catalog row for ``metric_id``, or ``None`` if unknown."""
     return _catalog_index().get(metric_id)
 
 
@@ -60,20 +45,10 @@ def make_score(
     severity: Severity | str | None = None,
     name: str | None = None,
 ) -> ScoreResultV1:
-    """
-    Build a catalog-aligned score result for a metric.
-    
-    Parameters:
-    	metric_id (str): Identifier of a metric defined in the catalog.
-    	value (bool | int | float): Observed metric value.
-    	passed (bool | None): Explicit pass status; inferred from the metric polarity when omitted.
-    	severity (Severity | str | None): Severity override for the result.
-    
-    Returns:
-    	ScoreResultV1: A populated score result using catalog metadata and supplied overrides.
-    
-    Raises:
-    	KeyError: If `metric_id` is not defined in the catalog.
+    """Build ``ScoreResultV1`` from the frozen catalog row (fail-closed unknown id).
+
+    Polarity default: higher-is-better treats truthy/`>=1` as pass; lower-is-better
+    and unknown polarities require explicit ``passed`` or fail closed.
     """
     row = metric_row(metric_id)
     if row is None:
