@@ -132,7 +132,7 @@ uv run pytest tests/eval/test_score_runner.py \
 ### Deferred (not S2a baseline)
 
 Lane C judges, accept-path binding (S3), Opik upload (S4), and S5–S7 remain out of scope.
-S2b (C/E/F/G product-authority metrics) and S2c (Family I topology) are documented below.
+S2b (C/E/F/G product-authority metrics) shipped in v0.17.0 / PR #227; S2c (Family I topology) is documented below.
 
 ## S2c — Family I topology / lifecycle validators
 
@@ -170,7 +170,7 @@ When `require_topology=true`:
 ### Runner order
 
 ```text
-Short-circuit: A → I → H → gates
+Short-circuit: A → I → H → envelope validate → gates
 Normal:        A–G → I → H → envelope validate → gates
 ```
 
