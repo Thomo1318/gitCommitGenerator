@@ -163,7 +163,7 @@ def score_family_c(
                 return False, c
         for sk in status_keys:
             st = gate_status.get(sk)
-            if st and st not in {"pass", "ok", "skipped", "na", "n/a"}:
+            if st and st not in {"pass", "ok", "skip", "skipped", "na", "n/a"}:
                 return False, f"gate_status:{sk}={st}"
         return True, None
 
@@ -198,7 +198,7 @@ def score_family_c(
     if gold_slot is not None and gold_slot.report is not None:
         type_from_gold = type_code in gold_slot.report.codes()
     type_gate_fail = any(c in _TYPE_GATE_CODES for c in gate_codes) or any(
-        k == "type" and v not in {"pass", "ok", "skipped"} for k, v in gate_status.items()
+        k == "type" and v not in {"pass", "ok", "skip", "skipped", "na", "n/a"} for k, v in gate_status.items()
     )
     if type_from_gold is True:
         type_ok, type_reason = False, type_code
@@ -228,7 +228,7 @@ def score_family_c(
     if gold_slot is not None and gold_slot.report is not None:
         sem_from_gold = sem_code in gold_slot.report.codes()
     sem_gate_fail = any(c in _SEMVER_GATE_CODES for c in gate_codes) or any(
-        k == "semver" and v not in {"pass", "ok", "skipped"} for k, v in gate_status.items()
+        k == "semver" and v not in {"pass", "ok", "skip", "skipped", "na", "n/a"} for k, v in gate_status.items()
     )
     if sem_from_gold is True:
         sem_ok, sem_reason = False, sem_code

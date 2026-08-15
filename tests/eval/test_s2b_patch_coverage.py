@@ -80,7 +80,30 @@ def _plan(*, secondary: list[CommitIntent] | None = None, **primary_kw: Any) -> 
 
 
 def _by(scores: list) -> dict[str, Any]:
-    return {s.metric_id: s for s in scores}
+    out: dict[str, Any] = {}
+    dups: list[str] = []
+    for s in scores:
+        if s.metric_id in out:
+            dups.append(s.metric_id)
+        else:
+            out[s.metric_id] = s
+    if dups:
+        raise AssertionError(f"duplicate metric_id emitted: {sorted(set(dups))}")
+    return out
+
+
+@pytest.fixture
+def clear_family_g_audit_caches():
+    """Always restore Family G audit lru_caches, including assertion-failure paths."""
+    import git_cg.eval.scoring.family_g as fg
+
+    fg._audit_policy_fork.cache_clear()
+    fg._audit_sop_mutation.cache_clear()
+    try:
+        yield fg
+    finally:
+        fg._audit_policy_fork.cache_clear()
+        fg._audit_sop_mutation.cache_clear()
 
 
 def _clean_gold(
@@ -165,11 +188,11 @@ def test_family_c_gate_eval_error_status_and_forced_scope(monkeypatch: pytest.Mo
     by = _by(score_family_c(ctx, gold_slot=_clean_gold(plan=plan), plan=plan))
     assert by["c.scope_forced_ok"].passed is False
     assert by["c.scope_forced_ok"].reason == "forced_scope_mismatch"
-    # Gate exception still leaves gate_report None → type unevaluable unless gold present
-    assert by["c.type_allowed"].passed is True or by["c.type_allowed"].reason in {
-        "path_class_type_unevaluable",
-        None,
-    }
+    # Clean shared gold report present ⇒ type/semver prefer gold absences over gate boom.
+    assert by["c.type_allowed"].passed is True
+    assert by["c.type_allowed"].reason is None
+    assert by["c.semver_ceiling"].passed is True
+    assert by["c.semver_ceiling"].reason is None
 
 
 def test_family_c_exact_gate_codes_and_status_fail(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -263,8 +286,10 @@ def test_family_c_security_and_evidence_surface(monkeypatch: pytest.MonkeyPatch)
     by = _by(score_family_c(ctx, gold_slot=_clean_gold(plan=plan), plan=plan))
     assert by["c.security_claim_evidence"].passed is False
     assert by["c.evidence_surface_precision"].value < 1.0 or by["c.evidence_surface_precision"].passed is False
-    # Recall should improve when path stem appears in message body.
-    assert "family_c" in msg or by["c.evidence_surface_recall"].value <= 1.0
+    # Path stem is absent from the body, so recall must be strictly below 1.0.
+    assert "family_c" not in msg.lower()
+    assert by["c.evidence_surface_recall"].value < 1.0
+    assert by["c.evidence_surface_recall"].passed is False
 
     # Claims without any paths → precision/recall fail-closed warn path.
     bare = project_score_context(_bundle(final_message=msg), files=())
@@ -652,12 +677,10 @@ def test_family_g_card_intent_mismatch_and_plan_missing() -> None:
     assert by_empty["g.semantic_contract_bound"].reason == "plan_unbound"
 
 
-def test_family_g_policy_and_sop_audit_cache_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    import git_cg.eval.scoring.family_g as fg
-
-    # Clear caches so monkeypatches are observed.
-    fg._audit_policy_fork.cache_clear()
-    fg._audit_sop_mutation.cache_clear()
+def test_family_g_policy_and_sop_audit_cache_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, clear_family_g_audit_caches
+) -> None:
+    fg = clear_family_g_audit_caches
 
     # Point scoring root at a tiny synthetic package that triggers findings.
     root = tmp_path / "scoring"
@@ -745,6 +768,36 @@ def test_family_g_parse_exception_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert by["g.semantic_contract_bound"].reason == "plan_unbound"
 
 
+def test_family_c_type_semver_accept_product_skip_and_neutral_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Product gate_status uses pass|fail|skip; neutrals must not fail type/semver."""
+    import git_cg.eval.scoring.family_c as fc
+
+    plan = _plan()
+    gate = SimpleNamespace(
+        codes=(),
+        gate_status=(
+            ("type", "skip"),
+            ("semver", "na"),
+            ("scope", "n/a"),
+        ),
+    )
+    monkeypatch.setattr(fc, "evaluate_presentation_gates", lambda *a, **k: gate)
+    monkeypatch.setattr(fc, "classify_diff_class", lambda _p: SimpleNamespace(value="product_src"))
+    monkeypatch.setattr(
+        fc,
+        "presentation_constraints",
+        lambda _dc: SimpleNamespace(force_scope=None, forced_scope=None),
+    )
+    ctx = project_score_context(_bundle(final_message=VALID_MSG), files=("src/a.py",))
+    by = _by(score_family_c(ctx, gold_slot=None, plan=plan))
+    assert by["c.type_allowed"].passed is True
+    assert by["c.type_allowed"].reason is None
+    assert by["c.semver_ceiling"].passed is True
+    assert by["c.semver_ceiling"].reason is None
+
+
 def test_family_c_type_semver_gate_only_without_gold(monkeypatch: pytest.MonkeyPatch) -> None:
     import git_cg.eval.scoring.family_c as fc
 
@@ -790,7 +843,7 @@ def test_family_e_is_low_confidence_exception(monkeypatch: pytest.MonkeyPatch) -
         files=("src/a.py",),
     )
     by = _by(score_family_e(ctx, plan=plan))
-    # Exceptions degrade closed but should not crash.
+    # These helper exceptions degrade open (need/low default False/0) and must not crash scoring.
     assert by["e.low_confidence_posture"].passed is True
     assert by["e.min_included_bullets"].passed is True
 
@@ -896,9 +949,9 @@ def test_family_g_identity_missing_gitmoji_and_nested_card() -> None:
 
 
 def test_family_g_audit_attribute_annassign_direct_call_and_missing_modules(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, clear_family_g_audit_caches
 ) -> None:
-    import git_cg.eval.scoring.family_g as fg
+    fg = clear_family_g_audit_caches
 
     root = tmp_path / "scoring2"
     root.mkdir()
