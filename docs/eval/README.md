@@ -1,6 +1,6 @@
-# Evaluation harness contracts (S0–S2a)
+# Evaluation harness contracts (S0–S2c)
 
-Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), and **Plane A score runner** (S2a) for the Opik evaluation harness.
+Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), and **Plane A score runner** (S2a/S2b/S2c) for the Opik evaluation harness.
 
 > **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.2-body-ingest`
 > **Implementation issue:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220)
@@ -44,7 +44,7 @@ Pins are content hashes (`name@sha256`):
 | `schemas/eval/*.schema.json` | Frozen JSON Schemas (§7.8) |
 | `src/git_cg/eval/` | Offline package (enums, ScoreResult, pins) |
 | `src/git_cg/eval/corpus/` | S1 fixture encoder + snapshot builder |
-| `src/git_cg/eval/scoring/` | S2a offline Plane A runner (A/B/D/H + gates) |
+| `src/git_cg/eval/scoring/` | S2a–S2c offline Plane A runner (A–I + gates) |
 | `tests/fixtures/eval/` | Lane A committed fixtures / suites |
 | `src/git_cg/eval/data/metric_catalog_v0.json` | Machine catalog (Families A–I + secondary) |
 | `tests/eval/` | Offline fail-closed tests |
@@ -129,9 +129,89 @@ uv run pytest tests/eval/test_score_runner.py \
   tests/eval/test_no_eval_policy_fork.py -q
 ```
 
-### Deferred (not S2a)
+### Deferred (not S2a baseline)
 
-S2b/S2c families, Lane C judges, accept-path binding (S3), Opik upload (S4), and S5–S7 remain out of scope.
+Lane C judges, accept-path binding (S3), Opik upload (S4), and S5–S7 remain out of scope.
+S2b (C/E/F/G product-authority metrics) and S2c (Family I topology) are documented below.
+
+## S2c — Family I topology / lifecycle validators
+
+> **Implementation issue:** [#229](https://github.com/Thomo1318/gitCommitGenerator/issues/229)
+
+Family I always emits **16** offline topology/lifecycle rows on every scored case
+(including FIND-026 short-circuit). Topology is **not** message-dependent.
+
+### Policy: `require_topology`
+
+| Source | Behaviour |
+|:---|:---|
+| Explicit `require_topology=` on `score_bundle` / `score_case` / `score_suite` | Wins when a real `bool` |
+| `suite["meta"]["require_topology"]` | Used when the value is a real `bool` |
+| Default | `false` |
+
+Never inferred from `bound` / `ctx.bound`.
+
+When `require_topology=false` (default):
+
+* Family I still runs and records failures honestly.
+* Failures **do not** join `S2A_REQUIRE_BLOCK` / `S2B_REQUIRE_BLOCK`.
+* Golden promotion uses the S2b baseline only (det + gold + skeleton + bound).
+
+When `require_topology=true`:
+
+* Effective gate block is the stable unique union of the base require block and
+  `S2C_TOPOLOGY_BLOCK` (12 catalog `severity=block` IDs).
+* Golden promotion additionally requires passing:
+  * `i.lifecycle_complete`
+  * `i.required_spans_present`
+
+`S2C_TOPOLOGY_BLOCK` is **never** stuffed into the frozen S2A/S2B constants.
+
+### Runner order
+
+```text
+Short-circuit: A → I → H → gates
+Normal:        A–G → I → H → envelope validate → gates
+```
+
+Family I evaluator exceptions recover **fail-closed** as 16 failed I rows
+(`synthesize_family_i_fail_closed`) and force `h.evaluator_error_free=false`.
+
+### Suite two-pass thread index (N14)
+
+`score_suite` always:
+
+1. Encodes every case.
+2. Builds a read-only `session_thread_id → case_ids` index (`build_session_thread_index`).
+3. Scores each case with that index (cross-case contamination checks).
+
+No process-global mutable index. Fixture-level non-empty `session_thread_id` is
+copied onto the bundle root by the S1 encoder (schema field; pins unchanged).
+
+### Package surface
+
+| Export | Role |
+|:---|:---|
+| `score_family_i` | 16-row Family I evaluator |
+| `FAMILY_I_METRIC_IDS` | Frozen 16-id emission order |
+| `S2C_TOPOLOGY_BLOCK` | Opt-in 12-id gate union |
+| `build_session_thread_index` | Suite-level read-only thread map |
+| `resolve_require_topology` | N19 policy helper |
+| `compose_gates(..., require_topology=False)` | Gate law (default false) |
+
+### Verification
+
+```bash
+uv run pytest tests/eval/test_family_i.py \
+  tests/eval/test_gates_composition.py \
+  tests/eval/test_score_runner.py \
+  tests/eval/test_corpus_encoder.py \
+  tests/eval/test_find026_antifanout.py -q
+
+uv run pytest tests/eval/test_topology_split_negatives.py -q
+uv run ruff check
+uv run pyright
+```
 
 ## expected_* isolation
 
@@ -261,7 +341,7 @@ the committed import path + expansion surface.
 
 ### Topology / split / judge negatives (§8.1 addendum)
 
-Offline encoder fail-closed probes (full Family I scoring remains S2+):
+Offline encoder fail-closed probes (S1). Full Family I scoring is S2c (`score_family_i`):
 
 | Probe | Case | Contract |
 |:---|:---|:---|
@@ -302,6 +382,6 @@ current S0 pin identities for review/CI drift detection.
 | Slice | Still out of scope here |
 |:---|:---|
 | **S0** | Scoring runtime, Opik network client, accept-path binder |
-| **S2a** | S2b/S2c family expansion, Lane C judges, accept-path binding (S3), Opik upload (S4), S5–S7 |
+| **S2a–S2c** | Lane C judges, accept-path binding (S3), Opik upload (S4), S5–S7 |
 
 Basic `git-cg` users do **not** need Opik installed.
