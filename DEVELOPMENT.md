@@ -407,17 +407,17 @@ same-filesystem local checkouts when measuring refresh latency.
 Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
 telemetry field (no separate payload key).
 
-## Offline evaluation contracts (S0–S2a)
+## Offline evaluation contracts (S0–S2c)
 
-Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), and offline Plane A score runner (S2a) live under:
+Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), and offline Plane A score runner (S2a/S2b/S2c) live under:
 
-* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S2a boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, and deferred S2b+
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S2c boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), and remaining S3+
 * Package: `src/git_cg/eval/` · corpus: `src/git_cg/eval/corpus/` · scoring: `src/git_cg/eval/scoring/` · schemas: `schemas/eval/`
 * Fixtures (Lane A SoT): `tests/fixtures/eval/` · recipes: `just eval-schema-hash`, `just eval-materialize`, `just eval-fixture-index`
 
-S0–S2a are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path. Normal `git-cg commit` must not import `git_cg.eval.scoring`.
+S0–S2c are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path. Normal `git-cg commit` must not import `git_cg.eval.scoring`. Family I is harness/eval law only — not Hybrid prose / product-accept failure by itself.
 
-Offline S2a smoke (no Opik / network):
+Offline S2 smoke (no Opik / network):
 
 ```bash
 uv run python - <<'PY'
@@ -429,7 +429,7 @@ print("snapshot", res.suite_snapshot_pin)
 PY
 ```
 
-S2b/S2c family expansion, accept-path binding, Opik mirror, Lane C′/GEval, operator UX, and ADR rewrite remain deferred on #217 / #225 (thin eval CLI deferred to S6).
+S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. Accept-path binding/emitters (S3), Opik mirror (S4), Lane C′/GEval (S5), operator UX (S6), and ADR rewrite (S7) remain deferred on #217 / #225 (thin eval CLI deferred to S6). Track residual S2 polish / typecheck debt on #225.
 
 ## Promptfoo evaluation (offline)
 

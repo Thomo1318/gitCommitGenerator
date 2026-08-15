@@ -480,3 +480,542 @@ def test_counter_span_consistent_regen_mismatch() -> None:
     ctx = project_score_context(b)
     by = _by(score_family_i(ctx))
     assert by["i.counter_span_consistent"].passed is False
+
+
+# ---------------------------------------------------------------------------
+# N12 fixture matrix via direct injection + split-oracle assertions
+# ---------------------------------------------------------------------------
+
+INVALID = FIXTURE_ROOT / "cases" / "invalid"
+N_INCOMPLETE = INVALID / "seed-n-topology-incomplete.json"
+N_COUNTER = INVALID / "seed-n-counter-mismatch.json"
+N_REPLAY = INVALID / "seed-n-replay-lineage-missing.json"
+
+
+def _bundle_from_negative_fixture(path: Path, **mut: Any) -> dict[str, Any]:
+    """Project encoder-negative fixtures into a scoreable bundle without weakening S1 floors.
+
+    S1 still fail-closes these probes under encode_fixture (even validate=False) because
+    topology/counter/replay guards are encoder law. N12 therefore scores via direct
+    injection: encode a valid carrier fixture, then overlay the negative fixture's
+    case_id / meta evidence for Family I only.
+    """
+    fx = json.loads(path.read_text(encoding="utf-8"))
+    carrier = _bundle_from_fixture(VALID)
+    carrier["case_id"] = fx.get("case_id", carrier.get("case_id"))
+    # Preserve carrier message/schema; overlay topology-class evidence from the probe.
+    meta = dict(carrier.get("meta") or {})
+    fx_meta = dict(fx.get("meta") or {})
+    meta.update(fx_meta)
+    carrier["meta"] = meta
+    if "session_thread_id" in fx and isinstance(fx.get("session_thread_id"), str):
+        carrier["session_thread_id"] = fx["session_thread_id"]
+    if "bound" in fx:
+        carrier["bound"] = fx["bound"]
+    if "artifact_class" in fx:
+        carrier["artifact_class"] = fx["artifact_class"]
+    carrier.update(mut)
+    return carrier
+
+
+def test_n12_seed_v_topology_complete_is_split_oracle_not_all_green() -> None:
+    """N12 / S2C-B: complete shallow control is a split oracle, not all-green."""
+    bundle = _bundle_from_fixture(TOPO_VALID)
+    ctx = project_score_context(bundle)
+    by = _by(score_family_i(ctx, require_topology=False))
+
+    # Must-pass after alias/terminal/counter projection
+    assert by["i.lifecycle_complete"].passed is True
+    assert by["i.required_spans_present"].passed is True
+    assert by["i.counter_span_consistent"].passed is True
+    # Name-only parentage is inapplicable-pass, not invented IDs
+    assert by["i.span_parentage_valid"].passed is True
+    assert by["i.span_parentage_valid"].reason == "parentage_ids_not_provided"
+    # Unclaimed surfaces stay honest inapplicable passes
+    assert by["i.correlation_envelope_valid"].reason == "correlation_not_claimed"
+    assert by["i.replay_lineage_valid"].reason == "replay_not_claimed"
+    assert by["i.export_status_classified"].reason == "export_not_claimed"
+    # Missing root evidence remains honest failure
+    assert by["i.trace_root_present"].passed is False
+    assert by["i.trace_root_present"].reason == "root_trace_missing"
+
+
+def test_n12_seed_n_topology_incomplete_scores_via_direct_injection() -> None:
+    """N12: incomplete topology fails required-spans + open lifecycle under Family I."""
+    bundle = _bundle_from_negative_fixture(N_INCOMPLETE)
+    # Overlay preserves shallow topology evidence for Family I scoring.
+    assert bundle["meta"]["topology"]["status"] == "incomplete"
+    ctx = project_score_context(bundle)
+    by = _by(score_family_i(ctx, require_topology=True))
+    assert by["i.lifecycle_complete"].passed is False
+    assert by["i.lifecycle_complete"].reason == "terminal_missing_or_open"
+    assert by["i.required_spans_present"].passed is False
+    missing = (by["i.required_spans_present"].evidence or {}).get("missing_required_spans") or []
+    assert "regeneration" in missing
+    assert "accept_path_finalization" in missing
+    assert "final_render" in missing  # score_emit aliased
+    # Finalization claimed via required_spans → fail when absent
+    assert by["i.finalization_observed"].passed is False
+
+
+def test_n12_seed_n_counter_mismatch_scores_via_direct_injection() -> None:
+    """N12 / Session-12: counter claims regen but observed regeneration spans are 0."""
+    bundle = _bundle_from_negative_fixture(N_COUNTER)
+    ctx = project_score_context(bundle)
+    by = _by(score_family_i(ctx))
+    row = by["i.counter_span_consistent"]
+    assert row.passed is False
+    assert row.reason == "counter_span_mismatch_regen"
+    assert (row.evidence or {}).get("blame_span") == "regeneration"
+
+
+def test_n12_seed_n_replay_lineage_missing_scores_via_direct_injection() -> None:
+    """N12: is_replay + missing parent_trace_id fails replay lineage under Family I."""
+    bundle = _bundle_from_negative_fixture(N_REPLAY)
+    ctx = project_score_context(bundle)
+    by = _by(score_family_i(ctx))
+    row = by["i.replay_lineage_valid"]
+    assert row.passed is False
+    assert row.reason == "replay_lineage_incomplete"
+    assert "parent_trace_id" in ((row.evidence or {}).get("missing_fields") or [])
+
+
+# ---------------------------------------------------------------------------
+# Named claims S2C-A … S2C-H
+# ---------------------------------------------------------------------------
+
+
+def test_s2c_a_family_i_emits_16_schema_valid_rows_normal_and_find026_and_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S2C-A: 16 schema-valid I rows on normal, FIND-026, and N18 recovery paths."""
+    # Normal path
+    normal = score_case(VALID, suite_snapshot_pin="pin@1")
+    nby = normal.by_id()
+    for mid in FAMILY_I_METRIC_IDS:
+        row = nby[mid]
+        ScoreResultV1.model_validate(row.model_dump(mode="json"))
+        assert bool(row.value) == bool(row.passed)
+
+    # FIND-026 short-circuit still emits I
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    b = dict(encode_fixture(fx)["bundle"])
+    b["final_message"] = ""
+    b.pop("final_message_sha256", None)
+    short = score_bundle(b, suite_snapshot_pin="pin@1")
+    assert short.short_circuit is True
+    sby = short.by_id()
+    for mid in FAMILY_I_METRIC_IDS:
+        ScoreResultV1.model_validate(sby[mid].model_dump(mode="json"))
+
+    # N18 recovery
+    def _boom(*_a: Any, **_k: Any) -> list[ScoreResultV1]:
+        raise RuntimeError("s2c_a_recovery")
+
+    monkeypatch.setattr("git_cg.eval.scoring.runner.score_family_i", _boom)
+    recovered = score_case(VALID, suite_snapshot_pin="pin@1")
+    rby = recovered.by_id()
+    for mid in FAMILY_I_METRIC_IDS:
+        assert rby[mid].passed is False
+        ScoreResultV1.model_validate(rby[mid].model_dump(mode="json"))
+        assert bool(rby[mid].value) is False
+    assert rby["h.evaluator_error_free"].passed is False
+
+
+def test_s2c_b_adapter_aliases_and_declared_required_set() -> None:
+    """S2C-B: N3 aliases + declared required_spans win offline required-set checks."""
+    bundle = _bundle_from_fixture(TOPO_VALID)
+    ctx = project_score_context(bundle)
+    ev = project_topology_evidence(bundle, meta=ctx.meta)
+    assert ev is not None
+    names = {n.name for n in ev.nodes}
+    assert names == {"llm_generation", "accept_path_finalization", "final_render"}
+    assert "generation" not in names
+    assert "score_emit" not in names
+    assert set(ev.required_spans) == names
+    by = _by(score_family_i(ctx))
+    assert by["i.required_spans_present"].passed is True
+    # Incomplete declared set fails after aliasing score_emit → final_render
+    bad = _bundle_from_negative_fixture(N_INCOMPLETE)
+    by2 = _by(score_family_i(project_score_context(bad)))
+    assert by2["i.required_spans_present"].passed is False
+
+
+def test_s2c_c_negative_validators_fail_closed() -> None:
+    """S2C-C: lifecycle/parentage/counter/replay/contamination/correlation fail-closed."""
+    # lifecycle + required (N12 incomplete)
+    inc = _by(score_family_i(project_score_context(_bundle_from_negative_fixture(N_INCOMPLETE))))
+    assert inc["i.lifecycle_complete"].passed is False
+    assert inc["i.required_spans_present"].passed is False
+
+    # counters
+    ctr = _by(score_family_i(project_score_context(_bundle_from_negative_fixture(N_COUNTER))))
+    assert ctr["i.counter_span_consistent"].passed is False
+
+    # replay
+    rep = _by(score_family_i(project_score_context(_bundle_from_negative_fixture(N_REPLAY))))
+    assert rep["i.replay_lineage_valid"].passed is False
+
+    # parentage dangling
+    b = _bundle_from_fixture(TOPO_VALID)
+    b["topology"] = {
+        "root_trace_id": "r1",
+        "terminal_state": "ok",
+        "required_spans": ["llm_generation"],
+        "spans": [{"name": "llm_generation", "span_id": "s1", "parent_span_id": "missing"}],
+    }
+    par = _by(score_family_i(project_score_context(b)))
+    assert par["i.span_parentage_valid"].passed is False
+    assert par["i.span_parentage_valid"].reason == "dangling_parent"
+
+    # cross-case contamination (N14)
+    b1 = _bundle_from_fixture(VALID)
+    b1["session_thread_id"] = "shared-s2c-c"
+    b2 = _bundle_from_fixture(VALID)
+    b2["case_id"] = "peer-case"
+    b2["session_thread_id"] = "shared-s2c-c"
+    index = build_session_thread_index([("seed-v1-valid-fixture", b1), ("peer-case", b2)])
+    x = _by(
+        score_family_i(
+            project_score_context(b1, case_id="seed-v1-valid-fixture"),
+            session_thread_index=index,
+        )
+    )
+    assert x["i.no_cross_case_contamination"].passed is False
+
+    # correlation claimed but missing id
+    b3 = _bundle_from_fixture(TOPO_VALID)
+    b3["meta"]["correlation"] = {"multi_process": True, "hook_phase": "post-commit"}
+    corr = _by(score_family_i(project_score_context(b3)))
+    assert corr["i.correlation_envelope_valid"].passed is False
+    assert corr["i.correlation_envelope_valid"].reason == "correlation_id_missing"
+
+
+def test_s2c_d_require_topology_joins_s2c_block_only_when_true() -> None:
+    """S2C-D: require_topology true unions S2C block; default false; no bound inference."""
+    rows = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
+    rows.extend(_fail_row(m) for m in S2C_TOPOLOGY_BLOCK)
+    off = compose_gates(rows, bound=True, require_topology=False)
+    det_off = next(g for g in off if g.metric_id == "gate.deterministic_pass")
+    assert det_off.passed is True
+
+    on = compose_gates(rows, bound=True, require_topology=True)
+    det_on = next(g for g in on if g.metric_id == "gate.deterministic_pass")
+    assert det_on.passed is False
+    req = (det_on.evidence or {}).get("require_block") or []
+    for mid in S2C_TOPOLOGY_BLOCK:
+        assert mid in req
+
+    # Explicit false beats suite meta true (N19)
+    assert resolve_require_topology(False, {"meta": {"require_topology": True}}) is False
+    # Bound inference banned
+    assert resolve_require_topology(None, {"meta": {}, "bound": True}) is False
+
+
+def test_s2c_e_golden_couples_lifecycle_and_required_only_when_topology_required() -> None:
+    """S2C-E: golden couples to lifecycle+required spans iff require_topology=true."""
+    rows = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
+    rows.extend(_pass_row(m) for m in S2C_TOPOLOGY_BLOCK)
+    rows = [r for r in rows if r.metric_id not in {"i.lifecycle_complete", "i.required_spans_present"}]
+    rows.append(_fail_row("i.lifecycle_complete"))
+    rows.append(_fail_row("i.required_spans_present"))
+
+    gates_on = compose_gates(rows, bound=True, require_topology=True)
+    promo_on = next(g for g in gates_on if g.metric_id == "gate.golden_promotion_eligible")
+    assert promo_on.passed is False
+
+    rows_off = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
+    rows_off.append(_fail_row("i.lifecycle_complete"))
+    rows_off.append(_fail_row("i.required_spans_present"))
+    gates_off = compose_gates(rows_off, bound=True, require_topology=False)
+    promo_off = next(g for g in gates_off if g.metric_id == "gate.golden_promotion_eligible")
+    assert promo_off.passed is True
+
+
+def test_s2c_f_honest_degrade_no_fake_topology_greens_when_required() -> None:
+    """S2C-F: missing topology evidence fails closed under require_topology=true."""
+    result = score_case(VALID, suite_snapshot_pin="pin@1", require_topology=True)
+    by = result.by_id()
+    assert by["i.lifecycle_complete"].passed is False
+    assert by["i.lifecycle_complete"].reason == "topology_evidence_absent"
+    assert by["i.required_spans_present"].passed is False
+    assert by["gate.deterministic_pass"].passed is False
+    # No invented root/tree green
+    assert by["i.trace_root_present"].passed is False
+    assert by["i.span_tree_valid"].passed is False
+
+
+def test_s2c_g_rca_evidence_fields_attached_when_computable() -> None:
+    """S2C-G: N11 RCA evidence fields attach on relevant I failures (no S6 CLI)."""
+    b = _bundle_from_fixture(TOPO_VALID)
+    b["topology"] = {
+        "root_trace_id": "tr-rca",
+        "terminal_state": "ok",
+        "required_spans": ["llm_generation", "accept_path_finalization", "final_render"],
+        "observed_spans": [
+            {"name": "llm_generation", "span_id": "s1", "parent_span_id": None},
+            {"name": "mystery_probe_span", "span_id": "s2", "parent_span_id": "s1"},
+        ],
+    }
+    by = _by(score_family_i(project_score_context(b)))
+    req = by["i.required_spans_present"]
+    assert req.passed is False
+    ev = req.evidence or {}
+    assert "accept_path_finalization" in (ev.get("missing_required_spans") or [])
+    assert "final_render" in (ev.get("missing_required_spans") or [])
+    assert "mystery_probe_span" in (ev.get("unexpected_spans") or [])
+    assert ev.get("blame_span") in {"accept_path_finalization", "final_render"}
+    assert ev.get("first_divergent_span") == ev.get("blame_span")
+    fp = ev.get("diag_fingerprint_inputs") or {}
+    assert "metric_ids" in fp
+    assert "missing_required_spans" in fp
+    assert "unexpected_spans" in fp
+    # N11 exclusions — no raw message / absolute paths / trace ids in fingerprint inputs
+    blob = json.dumps(fp)
+    assert "tr-rca" not in blob
+    assert "/Users/" not in blob
+    assert "docs(eval)" not in blob
+
+
+def test_s2c_h_no_s3_s4_thread_star_or_pin_drift_and_docs_boundary() -> None:
+    """S2C-H: isolation + docs boundary; no thread.* rows; pins unchanged."""
+    import git_cg.eval.scoring as scoring_pkg
+
+    # No thread.* metric emission on a scored case
+    result = score_case(VALID, suite_snapshot_pin="pin@1")
+    for mid in result.by_id():
+        assert not mid.startswith("thread."), mid
+    # Public S2c surface present; S2A/S2B lengths frozen
+    assert callable(scoring_pkg.score_family_i)
+    assert len(scoring_pkg.S2C_TOPOLOGY_BLOCK) == 12
+    assert len(scoring_pkg.S2A_REQUIRE_BLOCK) == 30
+    assert len(scoring_pkg.S2B_REQUIRE_BLOCK) == 68
+    # Docs state S2c / Family I and no longer call S2c merely deferred
+    repo_root = Path(__file__).resolve().parents[2]
+    readme = (repo_root / "docs" / "eval" / "README.md").read_text(encoding="utf-8")
+    dev = (repo_root / "DEVELOPMENT.md").read_text(encoding="utf-8")
+    assert "S2c — Family I topology" in readme
+    assert "require_topology" in readme
+    assert "S2C_TOPOLOGY_BLOCK" in readme
+    assert "Family I is harness/eval law only" in dev
+    assert "S2b/S2c family expansion" not in dev
+    assert "remain deferred on #217 / #225" in dev  # S3+ still deferred
+    # Pin identity unchanged
+    from git_cg.eval import metric_catalog_pin, schema_pack_pin
+
+    assert schema_pack_pin().endswith("91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6")
+    assert metric_catalog_pin().endswith("430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75")
+    # No S3 accept-path emitter / S4 Opik client surface under scoring package.
+    import re
+
+    scoring_root = repo_root / "src" / "git_cg" / "eval" / "scoring"
+    import_re = re.compile(r"^\s*(import\s+opik\b|from\s+opik\b)", re.M)
+    for py in scoring_root.glob("*.py"):
+        src = py.read_text(encoding="utf-8")
+        assert import_re.search(src) is None, f"unexpected opik import in {py.name}"
+    assert not (scoring_root / "emitters.py").exists()
+    assert not (scoring_root / "accept_path.py").exists()
+
+
+# ---------------------------------------------------------------------------
+# N15-N17 edge coverage (synthetic canonical objects)
+# ---------------------------------------------------------------------------
+
+
+def _score_topo(topology: dict[str, Any], **bundle_mut: Any) -> dict[str, ScoreResultV1]:
+    b = _bundle_from_fixture(TOPO_VALID)
+    b.update(bundle_mut)
+    b["topology"] = topology
+    # Neutralise lower-precedence shallow topology so synthetic object wins.
+    if isinstance(b.get("meta"), dict):
+        b["meta"] = dict(b["meta"])
+        b["meta"].pop("topology", None)
+    return _by(score_family_i(project_score_context(b)))
+
+
+def test_n15_duplicate_singleton_name_fails_tree() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation", "llm_generation"],
+        }
+    )
+    assert by["i.span_tree_valid"].passed is False
+    assert by["i.span_tree_valid"].reason == "duplicate_singleton_span_names"
+
+
+def test_n15_repeatable_regeneration_duplicates_allowed() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "regeneration", "final_render"],
+            "observed_spans": ["llm_generation", "regeneration", "regeneration", "final_render"],
+        }
+    )
+    assert by["i.span_tree_valid"].passed is True
+
+
+def test_n15_duplicate_span_ids_self_parent_orphan_cycle_multiple_roots() -> None:
+    # duplicate ids
+    dups = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None},
+                {"name": "final_render", "span_id": "s1", "parent_span_id": None},
+            ],
+        }
+    )
+    assert dups["i.span_tree_valid"].passed is False
+    assert dups["i.span_tree_valid"].reason == "duplicate_span_ids"
+
+    # self-parent
+    self_p = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "spans": [{"name": "llm_generation", "span_id": "s1", "parent_span_id": "s1"}],
+        }
+    )
+    assert self_p["i.span_tree_valid"].passed is False
+    assert self_p["i.span_tree_valid"].reason == "self_parent"
+    assert self_p["i.span_parentage_valid"].passed is False
+
+    # dangling / orphan parent
+    orphan = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "spans": [{"name": "llm_generation", "span_id": "s1", "parent_span_id": "nope"}],
+        }
+    )
+    assert orphan["i.span_parentage_valid"].passed is False
+    assert orphan["i.span_parentage_valid"].reason == "dangling_parent"
+
+    # cycle
+    cycle = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": "s2"},
+                {"name": "final_render", "span_id": "s2", "parent_span_id": "s1"},
+            ],
+        }
+    )
+    assert cycle["i.span_tree_valid"].passed is False
+    assert cycle["i.span_tree_valid"].reason == "cycle_detected"
+
+    # multiple roots
+    multi = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None},
+                {"name": "final_render", "span_id": "s2", "parent_span_id": None},
+            ],
+        }
+    )
+    assert multi["i.span_tree_valid"].passed is False
+    assert multi["i.span_tree_valid"].reason == "multiple_roots"
+
+
+def test_n16_correlation_unclaimed_vs_claimed() -> None:
+    # unclaimed
+    bare = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+        }
+    )
+    assert bare["i.correlation_envelope_valid"].passed is True
+    assert bare["i.correlation_envelope_valid"].reason == "correlation_not_claimed"
+
+    # claimed valid
+    ok = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+            "correlation": {
+                "correlation_id": "corr-1",
+                "hook_phase": "pre-commit",
+                "process_id_token": "p1",
+            },
+        }
+    )
+    assert ok["i.correlation_envelope_valid"].passed is True
+
+    # claimed invalid (no id)
+    bad = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+            "correlation": {"multi_process": True},
+        }
+    )
+    assert bad["i.correlation_envelope_valid"].passed is False
+
+
+def test_n17_declared_graph_pin_only_match_and_mismatch() -> None:
+    # pin-only → inapplicable pass
+    pin = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "observed_spans": ["llm_generation", "final_render"],
+            "declared_graph": "git_cg_pipeline_graph_v1@deadbeef",
+        }
+    )
+    assert pin["i.graph_observed_matches_declared"].passed is True
+    assert pin["i.graph_observed_matches_declared"].reason == "declared_graph_object_unavailable"
+
+    # matching inline graph (name-only consecutive edges)
+    match = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "observed_spans": ["llm_generation", "final_render"],
+            "declared_graph": {
+                "nodes": ["llm_generation", "final_render"],
+                "edges": [["llm_generation", "final_render"]],
+            },
+        }
+    )
+    assert match["i.graph_observed_matches_declared"].passed is True
+
+    # mismatch missing node
+    mismatch = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+            "declared_graph": {
+                "nodes": ["llm_generation", "accept_path_finalization"],
+                "edges": [["llm_generation", "accept_path_finalization"]],
+            },
+        }
+    )
+    g = mismatch["i.graph_observed_matches_declared"]
+    assert g.passed is False
+    assert g.reason == "graph_observed_mismatch"
+    # warn-only: not in S2C block
+    assert "i.graph_observed_matches_declared" not in S2C_TOPOLOGY_BLOCK
