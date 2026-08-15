@@ -173,21 +173,12 @@ def encode_fixture(
     suite_id: str | None = None,
     validate: bool = True,
 ) -> dict[str, Any]:
-    """
-    Encode a fixture into an evaluation bundle, case record, and content identities.
-    
-    Parameters:
-        fixture (Mapping[str, Any]): Fixture data to validate and encode.
-        case_id (str | None): Optional case identifier overriding the fixture value.
-        suite_id (str | None): Optional suite identifier included in generated metadata.
-        validate (bool): Whether to validate the generated records against their schemas.
-    
-    Returns:
-        dict[str, Any]: The generated bundle, case, bundle reference, hashes, and
-            canonical JSON representations.
-    
-    Raises:
-        CorpusEncodeError: If the fixture or generated records fail validation.
+    """Encode a committed fixture object into bundle + case + identities.
+
+    Returns a mapping with ``bundle``, ``case``, ``bundle_ref``, ``bundle_hash``,
+    ``case_hash``, ``canonical_bundle``, and ``canonical_case``. Raises
+    ``CorpusEncodeError`` when the fixture or generated records fail validation.
+    Fixture-level ``session_thread_id`` is strip-normalised before bundle identity.
     """
     if not isinstance(fixture, Mapping):
         raise CorpusEncodeError("fixture must be an object")
@@ -325,7 +316,8 @@ def encode_fixture(
     # copy only non-empty strings. Does not alter schema pins.
     session_thread_id = _optional_str(fixture, "session_thread_id")
     if session_thread_id is not None:
-        bundle["session_thread_id"] = session_thread_id
+        # Normalize at encode boundary so bundle identity matches scoring resolve.
+        bundle["session_thread_id"] = session_thread_id.strip()
 
     session_tags = tags
     meta_extra: dict[str, Any] = {
