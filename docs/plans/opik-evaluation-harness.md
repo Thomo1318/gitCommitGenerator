@@ -1,6 +1,6 @@
 # Opik Evaluation Harness — Design & Implementation Plan
 
-> **Status:** v0.9.2 body-residual ingest (#217 issue-body pedagogy + scaffold gap + Session-12 seed AC) · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed) · #220 S0 delivery next  
+> **Status:** v0.9.3 S2b clarifications (#227 T1–T12 implementation locks) · v0.9.2 body-residual ingest · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed)  
 > **Document class:** formal design + implementation SSOT (promoted from scratch)  
 > **Parent epic:** #216 — E2E Observability Stack  
 > **Governing issue:** #217 — formalise Opik commit-message evaluation harness  
@@ -18,8 +18,8 @@
 
 | Field | Value |
 |:---|:---|
-| Version | `0.9.2-body-ingest` |
-| Stage | Formal design SSOT · body residual pedagogy ingested · comment-depth + briefing locks locked — filing gate next |
+| Version | `0.9.3-s2b-clarifications` |
+| Stage | Formal design SSOT · S2b T1–T12 locks compiled into §6.4–§6.11 / §8.2 / §8.9 · body residual + briefing locks remain |
 | Location | `docs/plans/opik-evaluation-harness.md` (versioned; was `scratch/0.OpikIntegration/opik.md`) |
 | Filled from | #217 body residual (2026-08-13) + #217 (all 26 comments) + full plan compile + owner training-corpus / thread / redaction-ladder approval + comment-depth + live Daily Briefing locks |
 | Filled through §14 gate | SSOT pointer in #217 body + Q1=A + S0 filed as #220; implement S0 next |
@@ -898,7 +898,8 @@ Basic-user blast radius if Opik coupled to accept    ≈ unacceptable
 ## 6. Metric catalog v0 (design compile)
 
 [x] **Catalog pin id:** `metric_catalog_v0` · **Status:** design-approved with FIND-001…025 / R11–R14 / M10–M12 / Family I  
-**Rule:** metric *IDs* and *polarity* are law for the harness; implementations wrap product modules — they do not fork SOP/Hybrid/gold rules into eval-only prompts.
+**Rule:** metric *IDs* and *polarity* are law for the harness; implementations wrap product modules — they do not fork SOP/Hybrid/gold rules into eval-only prompts.  
+**Count footnote (T7):** the frozen catalog has **137** metrics counted by the `family` field (A7 B11 C9 Cprime9 D18 E9 F7 G6 H26 I16 gate3 lab5 human4 nlp4 dogfood3). Naive first-letter counting is invalid.
 
 ### 6.0 Catalog laws
 
@@ -1021,8 +1022,8 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 ### 6.4 Family C — Path-class / contract
 
 **Authority:** law · **Plane:** A · **Slice:** S2  
-**Product authority:** `commit_quality.classify_diff_class` / `presentation_constraints` / path-class gates; contract smoke adjacency  
-**Gate role:** block when presentation violates path-class ceilings
+**Product authority:** `commit_quality.classify_diff_class` / `presentation_constraints` / `evaluate_presentation_gates`; contract smoke adjacency. **Do not** call `evaluate_presentation_guards` or invent a third presentation table.  
+**Gate role:** block when presentation violates path-class ceilings. Catalog warn rows (`c.changelog_antisignal`, FIND-004 evidence-surface) stay out of default S2b `require_block` unless a suite promotes them.
 
 | metric_id | Polarity | Severity | Product wrap | Failure IDs | Notes |
 |:---|:---|:---|:---|:---|:---|
@@ -1031,7 +1032,7 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `c.type_allowed` | pass_fail | block | forbid/force type matrices | `GOLD_PATH_CLASS_TYPE_MISMATCH` | |
 | `c.scope_forced_ok` | pass_fail | block | force_scope / hints | `PATH_CLASS_SCOPE` | |
 | `c.security_claim_evidence` | pass_fail | block | security path evidence helpers | `PATH_CLASS_SECURITY_EVIDENCE` | claim vs path |
-| `c.changelog_antisignal` | pass_fail | warn/block | changelog path antisignal | `PATH_CLASS_CHANGELOG_ANTISIGNAL` | |
+| `c.changelog_antisignal` | pass_fail | **warn** | changelog path antisignal | `PATH_CLASS_CHANGELOG_ANTISIGNAL` | catalog warn; not in default S2b block |
 | `c.contract_smoke` | pass_fail | block | `GOLD_CONTRACT_SMOKE` path | `GOLD_CONTRACT_SMOKE` | primary fields ↔ contract |
 | `c.evidence_surface_precision` | higher_is_better | warn‡ | deterministic allowlist (FIND-004) | `EVAL_EVIDENCE_SURFACE_NOISE` | claims outside staged/path-class/contract surfaces |
 | `c.evidence_surface_recall` | higher_is_better | warn‡ | deterministic required surfaces | `EVAL_EVIDENCE_SURFACE_GAP` | required surfaces unmentioned when policy says required |
@@ -1067,7 +1068,13 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `d.high_risk_theme_coverage` | pass_fail | `GOLD_HIGH_RISK_THEME_MISSING` | |
 | `d.strict_fail_set` | lower_is_better | count(`STRICT_FAIL_CODES` ∩ findings) | value=count; pass iff 0 in strict suites |
 
-**Emit rule:** prefer one wrapper invocation of `check_commit_gold` → fan-out ScoreResults (don’t N-scan the message).
+**Shared API (S2b / #227 T11):** `score_family_d(...) -> tuple[list[ScoreResultV1], GoldReport | None]` **or** an equivalent runner-owned slot. Exactly **one** `check_commit_gold` call per evaluable case. The runner retains the report; Family F consumes it and never invokes gold independently. Add a call-count test.
+
+**Emit rule (evaluable messages):** emit every mapped catalog D row from that one report. Present gold code ⇒ failed; absent code ⇒ passed; gold build/parse error ⇒ fail closed, especially `d.strict_fail_set`. Do **not** N-scan the message.
+
+**Empty / oversize exception (T3):** missing, empty, or oversize selected targets emit H precondition / A/H health rows and **skip message-dependent families, including mapped D**. Never mint an empty-input `d.strict_fail_set` gold pass. Compatibility rows, if retained, are `unevaluable`/`skipped`, not pass. Preserve FIND-026 anti-fan-out. `h.eval_input_size_ok` is catalog **warn** and only blocks through explicit suite promotion.
+
+**C/D dual emission (T2):** one product/gold finding may be represented in Family C and the mapped Family D row from **shared** evidence/`GoldReport`. Requiring both IDs must not trigger a second gold scan or double-count. Evidence must identify the shared source. Add a C∩D consistency test.
 
 **Body lock:** gold is a validator, not optional cosmetic — counters/findings/`gold_blocked`/`gold_regen_attempts` must be consistency-checked against the final message (Session-12 / Regime A recovery-poison class).
 
@@ -1076,8 +1083,8 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 ### 6.6 Family E — Craft / presentation
 
 **Authority:** law · **Plane:** A · **Slice:** S2  
-**Product authority:** `commit_quality` presentation overlays, stubs inventory, low-confidence posture, craft bans not already gold  
-**Gate role:** block when product craft gate would; else warn
+**Product authority:** `evaluate_presentation_guards` and craft helpers only (`changelog_groups_allowlisted`, `min_included_change_bullets`, secondary-fill, low-confidence posture, banned openers). **Do not** call `evaluate_presentation_gates` or invent a third presentation table.  
+**Gate role:** block when product craft gate would; else warn. Catalog warn rows stay out of the default S2b block tuple.
 
 | metric_id | Polarity | Severity | Intent |
 |:---|:---|:---|:---|
@@ -1109,6 +1116,8 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `f.claim_evidence_alignment` | higher_is_better | warn | FIND-004 family rollup (precision×recall style deterministic) |
 | `f.security_claims_need_paths` | pass_fail | block | `security_claims_without_path_evidence` |
 
+**Shared gold:** Family F consumes Family D’s retained `GoldReport` and **never** calls `check_commit_gold` independently.
+
 **Explicit non-goal:** Opik `Hallucination()` as implementation of Family F.
 
 ---
@@ -1124,9 +1133,9 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `g.ranked_identity_preserved` | pass_fail | block | final message respects ranked semantic contract identity |
 | `g.sop_not_mutated` | pass_fail | block | no claim/path that mutates SOP via eval overlay |
 | `g.semantic_contract_bound` | pass_fail | block | selected contract still bound at score time |
-| `g.no_eval_policy_fork` | pass_fail | block | metric path used product modules (harness self-check) |
+| `g.no_eval_policy_fork` | pass_fail | block | **non-vacuous** source/import-surface self-check: fail on a second gold/Hybrid/path-class/header authority, eval-only `GOLD_*`, or duplicate header regex law; require product-symbol wrapping/imports |
 | `g.issue_null_policy` | pass_fail | block | `Null` issue id is `#0` only (owner law) |
-| `g.secrets_not_in_message` | pass_fail | block | deterministic secret-shape denylist on final message (local) |
+| `g.secrets_not_in_message` | pass_fail | block | named **local** deterministic secret-shape helper on the **final message only**; no `git_cg.secrets`, `resolve_secret`, `.env`, 1Password, vault, live store, or environment discovery |
 
 **Not in G:** LLM moderation, compliance-risk builtins (→ R6 ops / #219).
 
@@ -1168,7 +1177,7 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | `h.graph_version_known` | pass_fail | warn | pipeline graph pin present when topology asserted |
 | `h.judge_input_isolated` | pass_fail | block (suite) | F6/JUDGE-INPUT hold for the run |
 | `h.eval_input_nonempty` | pass_fail | block (eval row) | scored artifact present after bind; empty ⇒ single classified fail (FIND-026) |
-| `h.eval_input_size_ok` | pass_fail | warn/block | artifact under max eval bytes; oversized ⇒ unevaluable, not N× 504 storm |
+| `h.eval_input_size_ok` | pass_fail | **warn** | artifact under max eval bytes; oversized ⇒ classify/unevaluable and short-circuit; **not** a default S2b veto (blocks only if a suite explicitly promotes it); never N× 504 storm |
 | `h.eval_error_fanout_bounded` | pass_fail | block (harness) | one bad row must not multiply into K identical evaluator exceptions |
 | `h.online_scores_match_product_card` | pass_fail | block (bound export) | live feedback for product checks matches local `score_card` / final bytes (FIND-027) |
 | `h.prompt_pack_suite_fresh` | pass_fail | warn (doctor) | prompt pack change has local suite pin/result (FIND-028) |
@@ -1332,6 +1341,13 @@ commit accept-path success (product) =
     product validators / hooks only
     ⊭ Opik export, C′, R12, human.*, lab, Family I alone as Hybrid prose fail
 ```
+
+**S2b / #227 interpretation (does not repeal later S2c/S3 topology law):**
+
+* Offline S2b implements Families **A–H** only and adds H FIND-002. Family I validators/emitters, live topology metrics, and `suite.require_topology=true` remain **S2c/S3** and are not #227 close-bar items.
+* `c.` / `e.` / `f.` / `g.` are Plane A. Requested C/E/F/G already participate in `gate.deterministic_pass` and fail closed. Removing those prefixes from `_IGNORE_FAMILY_PREFIXES` corrects **stale advisory labeling** of *unrequested* failures; it is not a veto-path invention.
+* Still advisory / record≠gate: C′ / `cprime`, lab, human, NLP, export, dogfood.
+* Keep `gate.semantic_cohort_eligible=False` in offline S2b. C is not C′. Replace stale “S2a/C-prime deferred (S2b)” wording with offline-S2b / later Lane C or S2c wording.
 
 ---
 
@@ -2393,16 +2409,17 @@ schemas/eval/
 ### 8.2 Slice 2 — Authoritative deterministic metrics
 
 > **v0.9.0 addendum:** implement Family I validators (lifecycle/parentage/required spans/counter consistency), RCA field emitters (`blame_span`, missing spans), fingerprint inputs, STRUCT-LOCAL schema compliance scores, and score placement metadata on `ScoreResult_v1`.  
-> **v0.9.1 addendum (FIND-026/027):** evaluators receive **bound final-message / product `score_card` fields only**; empty/missing input short-circuits with **one** classified row error (`h.eval_input_nonempty`) — no N× fan-out; prefer wrapping `run_deterministic_checks` / Hybrid authorities over re-parsing raw Opik blobs; `header_length_ok`/`has_body` must use header/body parse of the final Hybrid message (same law as `telemetry.run_deterministic_checks`).
+> **v0.9.1 addendum (FIND-026/027):** evaluators receive **bound final-message / product `score_card` fields only**; empty/missing input short-circuits with **one** classified row error (`h.eval_input_nonempty`) — no N× fan-out; prefer wrapping `run_deterministic_checks` / Hybrid authorities over re-parsing raw Opik blobs; `header_length_ok`/`has_body` must use header/body parse of the final Hybrid message (same law as `telemetry.run_deterministic_checks`).  
+> **v0.9.3 S2b addendum (#227 T1–T12):** split S2 as **S2a** (landed A/B/D-core/H-core) → **S2b** (this lock: complete C/E/F/G + remaining D/H FIND-002) → **S2c** (Family I / topology). S2b locks: (1) empty/oversize skips message-dependent families including mapped D and never mints an empty `d.strict_fail_set` pass; (2) shared `GoldReport` API/slot, one gold call, F consumes D; (3) C/D dual emission from shared evidence, no double-count; (4) remove `c.`/`e.`/`f.`/`g.` from advisory prefixes (labeling fix; requested IDs already veto); (5) C = `evaluate_presentation_gates`, E = `evaluate_presentation_guards`; (6) local secret-shape helper only; (7) non-vacuous `g.no_eval_policy_fork`; (8) opt-in S2b block tuple = `S2A_REQUIRE_BLOCK` ∪ catalog block C/E/F/G ∪ remaining catalog block D ∪ `h.structured_bundle_compliance` (68 ids); warn/info stay out. Family I / `require_topology` stay S2c.
 
 | Field | Content |
 |:---|:---|
-| **Issue title** | `eval(S2): Families A–H product-authority metrics` (prefer **S2a/S2b/S2c** split per FIND-017) |
-| **Goal** | Score bundles with dual-plane **Plane A** metrics wrapping real product authorities; compute `gate.deterministic_pass`. **S2a** must unblock capture/R12-MVP without waiting for every family. |
-| **Depends on** | S0–S1 |
+| **Issue title** | Split: **S2a** landed (`eval(S2a): Families A/B/D-core/H-core`); **S2b** = #227 (`eval(S2b): complete product-authority metrics C–G and harden offline scoring`); **S2c** = Family I / `suite.require_topology=true` |
+| **Goal** | Score bundles with dual-plane **Plane A** metrics wrapping real product authorities; compute `gate.deterministic_pass`. **S2a** unblocks capture/R12-MVP. **S2b** completes C/E/F/G + remaining D + H FIND-002 and hardens empty/oversize, GoldReport, dual emission, and gate labels. **S2c** is Family I only. |
+| **Depends on** | S0–S1; S2b depends on landed S2a |
 | **Network** | none required |
-| **Forbids** | builtin H/M/G-Eval/NLP as authority; eval-only regex forks of gold/Hybrid/path-class |
-| **Delivers** | (1) Score runner over `require_block` metrics. (2) Family modules A–H per §6. (3) Single `check_commit_gold` fan-out → D metrics. (4) Path-class/quality wraps → C/E/F. (5) Hybrid wraps → B. (6) Harness health H (catalog pin, envelope valid, offline_complete). (7) FIND-002 structured compliance. (8) FIND-004 evidence-surface diagnostics (warn default). (9) Gate composition §6.11. (10) pytest per family + gold code mapping. (11) Retire/adapter `scripts/opik_metrics.py` Hybrid-ish heuristics **or** mark advisory-only non-CI. |
+| **Forbids** | builtin H/M/G-Eval/NLP as authority; eval-only regex forks of gold/Hybrid/path-class; Family I / live topology as S2b close-bar |
+| **Delivers** | **S2a (landed):** A/B/D-core/H-core + `S2A_REQUIRE_BLOCK` (30). **S2b (#227):** (1) C via `classify_diff_class` / `presentation_constraints` / `evaluate_presentation_gates` only. (2) E via `evaluate_presentation_guards` + craft helpers only. (3) Remaining catalog-block D rows + shared `GoldReport` API, exactly one gold call, F consumes D. (4) C/D dual emission from shared evidence, no double-count. (5) G local secret-shape helper + non-vacuous `g.no_eval_policy_fork`. (6) H FIND-002 (`h.structured_bundle_compliance`); `h.eval_input_size_ok` stays warn. (7) Empty/oversize skip of message-dependent families including mapped D; never mint empty `d.strict_fail_set` pass. (8) Remove `c.`/`e.`/`f.`/`g.` from `_IGNORE_FAMILY_PREFIXES` (labeling only). (9) Opt-in 68-id S2b block tuple. (10) Absorb/demote/delete `scripts/opik_metrics.py` **and** `tests/test_opik_metrics.py` together. **S2c:** Family I + `require_topology`. |
 | **Non-goals** | Opik mirror; Lane C judges; dogfood profile; amend-brief UX (can emit scores only). |
 | **Primary paths** | `src/git_cg/eval/scoring/**`, `tests/eval/test_family_*.py`, bridges into `commit_gold.py`, `commit_quality.py`, Hybrid validators |
 | **R-items** | none required; R10 not in this slice as law |
@@ -2533,7 +2550,7 @@ schemas/eval/
 
 | Current surface | Target | Slice | Notes |
 |:---|:---|:---:|:---|
-| `scripts/opik_metrics.py` | `eval/scoring/` adapters or delete-as-law | S2 | Format heuristics ≠ gold law |
+| `scripts/opik_metrics.py` **and** `tests/test_opik_metrics.py` | absorb/delete/demote **together** into `eval/scoring/` or delete-as-law | S2b | Format heuristics ≠ gold law. Surviving script is advisory-only and **not** imported by scoring, CI, or gates; rewrite/retire the existing test. |
 | `scripts/eval_commit_message.py` | `eval` runner CLI | S1–S6 | split encode/score/export |
 | `scripts/compile_opik_dataset.py` | corpus + mirror | S1/S4 | local snapshot first |
 | `scripts/opik_trace_triage.py` | `eval` triage / doctor | S6 | |
@@ -2594,7 +2611,7 @@ File S1 → implement S1
 
 | Surface | Current state (body-era) | Gap | Primary slice |
 |:---|:---|:---|:---:|
-| `scripts/opik_metrics.py` | shallow `FormatMetric` | does not consume `commit_gold` / `commit_quality` / path-class contracts | S2 |
+| `scripts/opik_metrics.py` + `tests/test_opik_metrics.py` | shallow `FormatMetric` + parallel test | does not consume `commit_gold` / `commit_quality` / path-class contracts; absorb/retire together in S2b | S2b |
 | `scripts/eval_commit_message.py` | live LLM regen + format/GEval | wrong default artifact; live-model dependent | S1–S6 |
 | `scripts/compile_opik_dataset.py` | promote by `user_acceptance` | popularity ≠ correctness; Regime B can look “good” | S1/S4 |
 | `scripts/setup_opik_eval_rule.py` | generic GPT-4o judges | not Hybrid/SOP/gold/path-class vocabulary | S5 |
@@ -2639,7 +2656,7 @@ File S1 → implement S1
 
 | Current surface | Target | Slice | Redesign notes |
 |:---|:---|:---:|:---|
-| `scripts/opik_metrics.py` | `src/git_cg/eval/scoring/` | S2 | Today’s header/format ScoreResult helpers are **not** gold/Hybrid law. Replace with product wrappers; any leftover NLP/format heuristic → R10 diagnostic or delete from CI. |
+| `scripts/opik_metrics.py` + `tests/test_opik_metrics.py` | `src/git_cg/eval/scoring/` or delete-as-law | S2b | Today’s header/format ScoreResult helpers are **not** gold/Hybrid law. Absorb/retire script **and** test together; leftover NLP/format heuristic → R10 diagnostic or delete from CI. Surviving script is advisory-only and outside scoring/CI/gates. |
 | `scripts/eval_commit_message.py` | `eval` runner (`cli` + suite runner) | S1–S6 | Split: encode → score → (optional) export. Default mode `fixture_offline`. |
 | `scripts/compile_opik_dataset.py` | `eval/corpus` + `eval/mirror` | S1/S4 | Local snapshot builder is primary; Opik dataset push is projection. |
 | `scripts/opik_trace_triage.py` | `eval doctor` / triage commands | S6 | Surface pin/export/offline health; don’t invent second score law. |
@@ -3288,7 +3305,8 @@ looks valuable inside the floor.
 - [x] §0.3.6–9 + §2.8 training-corpus / dual-axis laws compiled  
 - [x] R13/R14 + FIND-009…018 owner-approved and logged  
 - [x] **v0.9.2 body-residual ingest** (scaffold gap, Regime pedagogy, Session-12 seed, provenance enum, aliases, 4MB/naming)  
-- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.2-body-ingest` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217))  
+- [x] **v0.9.3 S2b clarifications** (#227 T1–T12: gate-label, C/D dual-emit, empty/oversize, GoldReport API, C/E helper split, S2b block tuple, secret/policy-fork, joint script/test absorption, Family I out of S2b)  
+- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.3-s2b-clarifications` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217); S2b locks also on [#227](https://github.com/Thomo1318/gitCommitGenerator/issues/227))  
 - [x] **S0 filed:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) `eval(S0): freeze schema pack + metric catalog pins`
 - [x] **Q1=A** resolved (body pointer + S0 only; S1–S7 not filed)
 - [x] Owner decisions recorded on §17 FIND-* rows (approved 2026-08-12 + 2026-08-13)  
@@ -3322,6 +3340,7 @@ looks valuable inside the floor.
 0. [x] **v0.9.0 #217 comment-depth ingest** — INT-01…45 / FIND-019…025 compiled into plan (§0.4, §2.9, §5.7, §6.1b/6.9b, §7.2.12–18, §8 addenda, §10.6–10.7, §18).  
 0b. [x] **v0.9.1 live Daily Briefing locks** — FIND-026…028 / INT-46…52 / §18.13 (empty-output fan-out, artifact bind, prompt-drift; no SOP relax from unbound online scores).  
 0c. [x] **v0.9.2 #217 body-residual ingest** — §1.6 / §7.4 pedagogy / §9.0 scaffold gap / aliases / S4 4MB+naming / body supersession §18.14.  
+0d. [x] **v0.9.3 S2b clarifications** — §6.4–§6.9 / §6.11 / §8.2 / §8.9 T1–T12 locks for #227.  
 
 1. [x] Skeleton structure locked (`v0.1.0-skeleton`).  
 2. [x] **§1 mission / non-goals** compiled.  
@@ -3428,6 +3447,7 @@ looks valuable inside the floor.
 | 2026-08-13 | **Compile #217 comment-depth contracts** into plan (v0.9.0) | FIND-019…025; INT-01…45; no authority inversion; pre-R11–R14 comments reanalysed under current floor |
 | 2026-08-13 | **Live Opik Daily Briefing locks** (v0.9.1) | FIND-026…028; INT-46…52; treat briefing as live-plane misconfig evidence; **no SOP/Hybrid threshold relax** from unbound online scores; fixes via eval-suite S2–S6 |
 | 2026-08-13 | **#217 body-residual ingest** (v0.9.2) | Scaffold gap matrix; Regime A/B teaching; Session-12 seed AC; provenance enum; F/P ID namespaces; what-good-looks-like; dataset aliases; experiment naming; default 4MB batch; gold skeleton non-weaken; plan ▸ body on conflict; SSOT pointer prefers issue body |
+| 2026-08-14 | **S2b T1–T12 clarifications** (v0.9.3) | #227 implementation locks: advisory-label (not veto-path) gate fix; C/D dual emission; empty/oversize overrides D always-emit; shared GoldReport API; C/E helper split; deterministic 68-id S2b block tuple; local secret-shape; non-vacuous policy-fork; joint `scripts/opik_metrics.py` + `tests/test_opik_metrics.py` absorption; Family I / `require_topology` deferred to S2c |
 
 **Approved finding dispositions (implementation binding):**
 
@@ -3490,6 +3510,23 @@ looks valuable inside the floor.
 | FIND-026 | Empty/oversize precondition + anti-fan-out; S2/S4/S6 |
 | FIND-027 | Live artifact bind to final message / product score_card; S2–S4 |
 | FIND-028 | Prompt drift without local suite pin → doctor-red; S6/S7 |
+
+**v0.9.3 S2b T1–T12 dispositions (#227):**
+
+| ID | Disposition |
+|:---|:---|
+| T1 | Requested C/E/F/G already veto. Removing `c.`/`e.`/`f.`/`g.` from `_IGNORE_FAMILY_PREFIXES` fixes stale advisory labeling of unrequested failures only. |
+| T2 | C/D dual emission from shared evidence/`GoldReport` is required. No second gold scan; no double-count. |
+| T3 | Empty/oversize skips message-dependent families including mapped D. Never mint empty-input `d.strict_fail_set` pass. |
+| T4 | C = `evaluate_presentation_gates`; E = `evaluate_presentation_guards`. No third presentation authority. |
+| T5 | Deterministic opt-in S2b block tuple = 68 catalog-derived IDs. Warn/info excluded by default. |
+| T6 | Keep `gate.semantic_cohort_eligible=False`. C is not C′. |
+| T7 | Frozen catalog count is **137** by `family` field. Naive first-letter counting is invalid. |
+| T8 | Absorb/demote/delete `scripts/opik_metrics.py` and `tests/test_opik_metrics.py` together. Survivor is advisory-only and outside scoring/CI/gates. |
+| T9 | Local final-message-only secret-shape helper. No `git_cg.secrets` / vault / env discovery. |
+| T10 | `g.no_eval_policy_fork` is a non-vacuous source/import-surface self-check. |
+| T11 | Shared `GoldReport` API or runner-owned slot. Exactly one gold call per evaluable case. F consumes D. |
+| T12 | Family I validators/emitters and `suite.require_topology=true` stay S2c/S3. Not #227 close-bar. |
 
 ---
 
@@ -3743,5 +3780,5 @@ has_body = message_has_body_or_trailers(final)
 
 ---
 
-*End of v0.9.2-body-ingest — #217 body residual compiled. Prior v0.9.1 briefing locks + v0.9.0 comment-depth + v0.8.1 training-corpus remain locked. Next: implement **S0** only (#220). Do not file S1–S7 yet. Push plan v0.9.2 when ready so `main` blob matches body pointer.*
+*End of v0.9.3-s2b-clarifications — #227 T1–T12 S2b locks compiled into §6.4–§6.11 / §8.2 / §8.9. Prior v0.9.2 body residual + v0.9.1 briefing locks + v0.9.0 comment-depth remain locked. S2a is on `main`; implement S2b from #227. Family I stays S2c.*
 
