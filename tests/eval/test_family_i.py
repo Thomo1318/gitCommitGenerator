@@ -38,7 +38,6 @@ _POL = {m["metric_id"]: m["polarity"] for m in load_metric_catalog()["metrics"]}
 
 
 def _pass_row(metric_id: str) -> ScoreResultV1:
-    """Create a passing score result for the specified metric using its scoring polarity."""
     pol = _POL[metric_id]
     if pol == "lower_is_better":
         return make_score(metric_id, 0, passed=True)
@@ -48,7 +47,6 @@ def _pass_row(metric_id: str) -> ScoreResultV1:
 
 
 def _fail_row(metric_id: str) -> ScoreResultV1:
-    """Create a failed score result using a value appropriate to the metric's polarity."""
     pol = _POL[metric_id]
     if pol == "lower_is_better":
         return make_score(metric_id, 2, passed=False)
@@ -58,22 +56,12 @@ def _fail_row(metric_id: str) -> ScoreResultV1:
 
 
 def _bundle_from_fixture(path: Path, **mut: Any) -> dict[str, Any]:
-    """Build an encoded bundle from a JSON fixture, applying the supplied field overrides.
-    
-    Parameters:
-    	path (Path): Path to the JSON fixture.
-    	**mut (Any): Fields to override in the loaded fixture.
-    
-    Returns:
-    	dict[str, Any]: The encoded fixture bundle.
-    """
     fx = json.loads(path.read_text(encoding="utf-8"))
     fx.update(mut)
     return encode_fixture(fx)["bundle"]
 
 
 def _by(rows: list[ScoreResultV1]) -> dict[str, ScoreResultV1]:
-    """Map metric identifiers to their corresponding score results."""
     return {r.metric_id: r for r in rows}
 
 
@@ -345,6 +333,46 @@ def test_runner_family_i_recovery_on_evaluator_exception(monkeypatch: pytest.Mon
     assert by["h.evaluator_error_free"].passed is False
 
 
+def test_runner_family_i_recovers_missing_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _drop_one(*_a: Any, **_k: Any) -> list[ScoreResultV1]:
+        rows = score_family_i(project_score_context(_bundle_from_fixture(VALID)))
+        # Drop one catalog id so the N18 missing-row path fills it.
+        return [r for r in rows if r.metric_id != "i.thread_id_present"]
+
+    monkeypatch.setattr("git_cg.eval.scoring.runner.score_family_i", _drop_one)
+    result = score_case(VALID, suite_snapshot_pin="pin@1")
+    by = result.by_id()
+    assert by["i.thread_id_present"].passed is False
+    assert by["i.thread_id_present"].reason == "family_i_row_missing_recovered"
+    assert any("family_i_missing:i.thread_id_present" in e for e in result.evaluator_errors)
+    for mid in FAMILY_I_METRIC_IDS:
+        assert mid in by
+
+
+def test_runner_family_i_recovers_value_passed_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _mismatch(*_a: Any, **_k: Any) -> list[ScoreResultV1]:
+        rows = score_family_i(project_score_context(_bundle_from_fixture(VALID)))
+        out: list[ScoreResultV1] = []
+        for r in rows:
+            if r.metric_id == "i.lifecycle_complete":
+                payload = r.model_dump(mode="json")
+                payload["value"] = True
+                payload["passed"] = False
+                out.append(ScoreResultV1.model_validate(payload))
+            else:
+                out.append(r)
+        return out
+
+    monkeypatch.setattr("git_cg.eval.scoring.runner.score_family_i", _mismatch)
+    result = score_case(VALID, suite_snapshot_pin="pin@1")
+    by = result.by_id()
+    assert by["i.lifecycle_complete"].passed is False
+    assert by["i.lifecycle_complete"].reason == "family_i_envelope_invalid"
+    assert any("family_i_envelope:i.lifecycle_complete" in e for e in result.evaluator_errors)
+    # Other I rows still present and not wholesale-replaced.
+    assert by["i.trace_root_present"].reason != "family_i_envelope_invalid"
+
+
 # ---------------------------------------------------------------------------
 # Thread index / encoder session_thread_id
 # ---------------------------------------------------------------------------
@@ -355,6 +383,13 @@ def test_encoder_copies_root_session_thread_id() -> None:
     fx["session_thread_id"] = "thread-encode-1"
     out = encode_fixture(fx)
     assert out["bundle"]["session_thread_id"] == "thread-encode-1"
+
+
+def test_encoder_strips_session_thread_id_whitespace() -> None:
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    fx["session_thread_id"] = "  thread-encode-pad  "
+    out = encode_fixture(fx)
+    assert out["bundle"]["session_thread_id"] == "thread-encode-pad"
 
 
 def test_encoder_ignores_empty_session_thread_id() -> None:
@@ -396,15 +431,12 @@ def test_build_session_thread_index_and_contamination() -> None:
     assert by3["i.no_cross_case_contamination"].passed is True
 
 
-def test_score_suite_two_pass_builds_thread_index(tmp_path: Path) -> None:
-    """suite scoring builds a read-only index before scoring cases."""
+def test_build_session_thread_index_and_score_bundle_contamination(tmp_path: Path) -> None:
+    """Hermetic index + score_bundle path for cross-case contamination evidence."""
     cases_dir = tmp_path / "cases"
     cases_dir.mkdir()
-    suites_dir = tmp_path / "suites"
-    suites_dir.mkdir()
 
     def _write_case(cid: str, thread: str) -> None:
-        """Write a valid case fixture with the specified case and session-thread identifiers."""
         fx = json.loads(VALID.read_text(encoding="utf-8"))
         fx["case_id"] = cid
         fx["session_thread_id"] = thread
@@ -413,10 +445,8 @@ def test_score_suite_two_pass_builds_thread_index(tmp_path: Path) -> None:
     _write_case("case-a", "thread-x")
     _write_case("case-b", "thread-x")
 
-    # Minimal suite matching the two synthetic cases. score_suite still pins
-    # against the canonical suite snapshot for sid, so use a unique suite_id
-    # and pass suite_path + fixture_root carefully.
-    # For hermetic coverage of the index path, call score_bundle via encoded pairs.
+    # score_suite still pins against the canonical suite snapshot for sid; keep
+    # this hermetic by exercising build_session_thread_index + score_bundle.
     from git_cg.eval.scoring.runner import score_bundle as _score_bundle
 
     pairs = []
@@ -506,15 +536,12 @@ N_REPLAY = INVALID / "seed-n-replay-lineage-missing.json"
 
 
 def _bundle_from_negative_fixture(path: Path, **mut: Any) -> dict[str, Any]:
-    """
-    Create a scoreable bundle by overlaying negative-fixture evidence onto a valid carrier bundle.
-    
-    Parameters:
-        path (Path): Path to the negative fixture.
-        **mut (Any): Additional bundle fields to override.
-    
-    Returns:
-        dict[str, Any]: A bundle retaining the valid carrier's encoding fields with the fixture's case and topology evidence applied.
+    """Project encoder-negative fixtures into a scoreable bundle without weakening S1 floors.
+
+    S1 still fail-closes these probes under encode_fixture (even validate=False) because
+    topology/counter/replay guards are encoder law. N12 therefore scores via direct
+    injection: encode a valid carrier fixture, then overlay the negative fixture's
+    case_id / meta evidence for Family I only.
     """
     fx = json.loads(path.read_text(encoding="utf-8"))
     carrier = _bundle_from_fixture(VALID)
@@ -626,7 +653,6 @@ def test_s2c_a_family_i_emits_16_schema_valid_rows_normal_and_find026_and_recove
 
     # N18 recovery
     def _boom(*_a: Any, **_k: Any) -> list[ScoreResultV1]:
-        """Raise the evaluator recovery error used by the test suite."""
         raise RuntimeError("s2c_a_recovery")
 
     monkeypatch.setattr("git_cg.eval.scoring.runner.score_family_i", _boom)
@@ -787,16 +813,25 @@ def test_s2c_g_rca_evidence_fields_attached_when_computable() -> None:
     assert "metric_ids" in fp
     assert "missing_required_spans" in fp
     assert "unexpected_spans" in fp
+    # Unknown producer names are digest-sanitized in fingerprint inputs (N11).
+    assert "mystery_probe_span" not in json.dumps(fp.get("unexpected_spans") or [])
+    assert any(str(x).startswith("unknown:") for x in (fp.get("unexpected_spans") or []))
+    # Canonical missing names may remain in fingerprint.
+    assert "accept_path_finalization" in (fp.get("missing_required_spans") or [])
     # N11 exclusions — no raw message / absolute paths / trace ids in fingerprint inputs
     blob = json.dumps(fp)
     assert "tr-rca" not in blob
     assert "/Users/" not in blob
     assert "docs(eval)" not in blob
+    assert "mystery_probe_span" not in blob
 
 
-def test_s2c_h_no_s3_s4_thread_star_or_pin_drift_and_docs_boundary() -> None:
-    """S2C-H: isolation + docs boundary; no thread.* rows; pins unchanged."""
+def test_s2c_h_no_s3_s4_thread_star_or_pin_drift() -> None:
+    """S2C-H: isolation invariants — no thread.* rows; pins unchanged; no Opik imports."""
+    import re
+
     import git_cg.eval.scoring as scoring_pkg
+    from git_cg.eval import metric_catalog_pin, schema_pack_pin
 
     # No thread.* metric emission on a scored case
     result = score_case(VALID, suite_snapshot_pin="pin@1")
@@ -807,24 +842,11 @@ def test_s2c_h_no_s3_s4_thread_star_or_pin_drift_and_docs_boundary() -> None:
     assert len(scoring_pkg.S2C_TOPOLOGY_BLOCK) == 12
     assert len(scoring_pkg.S2A_REQUIRE_BLOCK) == 30
     assert len(scoring_pkg.S2B_REQUIRE_BLOCK) == 68
-    # Docs state S2c / Family I and no longer call S2c merely deferred
-    repo_root = Path(__file__).resolve().parents[2]
-    readme = (repo_root / "docs" / "eval" / "README.md").read_text(encoding="utf-8")
-    dev = (repo_root / "DEVELOPMENT.md").read_text(encoding="utf-8")
-    assert "S2c — Family I topology" in readme
-    assert "require_topology" in readme
-    assert "S2C_TOPOLOGY_BLOCK" in readme
-    assert "Family I is harness/eval law only" in dev
-    assert "S2b/S2c family expansion" not in dev
-    assert "remain deferred on #217 / #225" in dev  # S3+ still deferred
     # Pin identity unchanged
-    from git_cg.eval import metric_catalog_pin, schema_pack_pin
-
     assert schema_pack_pin().endswith("91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6")
     assert metric_catalog_pin().endswith("430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75")
     # No S3 accept-path emitter / S4 Opik client surface under scoring package.
-    import re
-
+    repo_root = Path(__file__).resolve().parents[2]
     scoring_root = repo_root / "src" / "git_cg" / "eval" / "scoring"
     import_re = re.compile(r"^\s*(import\s+opik\b|from\s+opik\b)", re.M)
     for py in scoring_root.glob("*.py"):
@@ -834,22 +856,26 @@ def test_s2c_h_no_s3_s4_thread_star_or_pin_drift_and_docs_boundary() -> None:
     assert not (scoring_root / "accept_path.py").exists()
 
 
+def test_s2c_docs_boundary_anchors() -> None:
+    """Docs anchors for S2c / deferred S3+ (separate from isolation pin checks)."""
+    repo_root = Path(__file__).resolve().parents[2]
+    readme = (repo_root / "docs" / "eval" / "README.md").read_text(encoding="utf-8")
+    dev = (repo_root / "DEVELOPMENT.md").read_text(encoding="utf-8")
+    assert "## S2c — Family I topology / lifecycle validators" in readme
+    assert "require_topology" in readme
+    assert "S2C_TOPOLOGY_BLOCK" in readme
+    assert "envelope validate → gates" in readme
+    assert "Family I is harness/eval law only" in dev
+    assert "S2b/S2c family expansion" not in dev
+    assert "remain deferred on #217 / #225" in dev
+
+
 # ---------------------------------------------------------------------------
 # N15-N17 edge coverage (synthetic canonical objects)
 # ---------------------------------------------------------------------------
 
 
 def _score_topo(topology: dict[str, Any], **bundle_mut: Any) -> dict[str, ScoreResultV1]:
-    """
-    Score a synthetic topology fixture using the Family I evaluator.
-    
-    Parameters:
-        topology (dict[str, Any]): Topology data to evaluate.
-        **bundle_mut (Any): Bundle fields to override before scoring.
-    
-    Returns:
-        dict[str, ScoreResultV1]: Family I scores indexed by metric name.
-    """
     b = _bundle_from_fixture(TOPO_VALID)
     b.update(bundle_mut)
     b["topology"] = topology
@@ -1046,3 +1072,296 @@ def test_n17_declared_graph_pin_only_match_and_mismatch() -> None:
     assert g.reason == "graph_observed_mismatch"
     # warn-only: not in S2C block
     assert "i.graph_observed_matches_declared" not in S2C_TOPOLOGY_BLOCK
+
+
+def test_declared_order_index_detects_non_monotonic_span_order() -> None:
+    """Producer-declared order_index must drive i.span_order_valid (not list position)."""
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None, "order_index": 2},
+                {"name": "final_render", "span_id": "s2", "parent_span_id": "s1", "order_index": 1},
+            ],
+        }
+    )
+    assert by["i.span_order_valid"].passed is False
+    assert by["i.span_order_valid"].reason == "span_order_non_monotonic"
+    assert by["i.span_order_valid"].evidence is not None
+    assert by["i.span_order_valid"].evidence.get("indices") == [2, 1]
+
+
+def test_declared_order_index_detects_parent_before_child_violation() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None, "order_index": 5},
+                {"name": "final_render", "span_id": "s2", "parent_span_id": "s1", "order_index": 1},
+            ],
+            "declared_graph": {
+                "nodes": ["llm_generation", "final_render"],
+                "edges": [["llm_generation", "final_render"]],
+            },
+        }
+    )
+    assert by["i.span_order_valid"].passed is False
+    assert by["i.span_order_valid"].reason == "span_order_violation"
+
+
+def test_dangling_parent_fails_with_multiple_roots() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None},
+                {"name": "final_render", "span_id": "s2", "parent_span_id": "nope"},
+            ],
+        }
+    )
+    assert by["i.span_tree_valid"].passed is False
+    assert by["i.span_tree_valid"].reason == "multiple_roots"
+    assert by["i.span_parentage_valid"].passed is False
+    assert by["i.span_parentage_valid"].reason == "dangling_parent"
+    assert "nope" in ((by["i.span_parentage_valid"].evidence or {}).get("dangling_parents") or [])
+
+
+def test_deep_parent_chain_does_not_raise_or_fail_closed() -> None:
+    """Iterative cycle detection must tolerate deep valid ID chains."""
+    n = 2500
+    # regeneration is a legal repeatable span name; avoids singleton-name failures.
+    spans = []
+    for i in range(n):
+        spans.append(
+            {
+                "name": "llm_generation" if i == 0 else "regeneration",
+                "span_id": f"s{i}",
+                "parent_span_id": None if i == 0 else f"s{i - 1}",
+            }
+        )
+    by = _score_topo(
+        {
+            "root_trace_id": "r-deep",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "spans": spans,
+        }
+    )
+    assert by["i.span_tree_valid"].passed is True
+    assert by["i.span_parentage_valid"].passed is True
+    assert by["i.span_tree_valid"].reason != "family_i_evaluator_error"
+
+
+def test_optional_declared_graph_nodes_are_excluded_from_required_match() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "observed_spans": ["llm_generation", "final_render"],
+            "declared_graph": {
+                "nodes": [
+                    {"name": "llm_generation"},
+                    {"name": "final_render"},
+                    {"name": "opik_export", "optional": True},
+                ],
+                "edges": [["llm_generation", "final_render"]],
+            },
+        }
+    )
+    assert by["i.graph_observed_matches_declared"].passed is True
+
+
+def test_attempt_order_non_decreasing_allows_duplicates_and_flags_regressions() -> None:
+    ok = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+            "multi_attempt": True,
+            "attempt_indices": [1, 1, 2, 2],
+            "session_thread_id": "th-attempts",
+        }
+    )
+    assert ok["i.attempt_order_valid"].passed is True
+
+    bad = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+            "multi_attempt": True,
+            "attempt_indices": [2, 1],
+            "session_thread_id": "th-attempts-bad",
+        }
+    )
+    assert bad["i.attempt_order_valid"].passed is False
+    assert bad["i.attempt_order_valid"].reason == "attempt_order_non_monotonic"
+
+
+def test_fingerprint_sanitizes_pathlike_unexpected_span_names() -> None:
+    # Force a required-span failure so diag_fingerprint_inputs attaches.
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "accept_path_finalization"],
+            "observed_spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None},
+                {
+                    "name": "/Users/secret/proj/span https://evil.example/x?id=9",
+                    "span_id": "s2",
+                    "parent_span_id": "s1",
+                },
+            ],
+        }
+    )
+    req = by["i.required_spans_present"]
+    assert req.passed is False
+    # Row evidence may retain raw unexpected names for RCA; fingerprint must not.
+    assert any("Users/secret" in x for x in ((req.evidence or {}).get("unexpected_spans") or []))
+    fp = (req.evidence or {}).get("diag_fingerprint_inputs") or {}
+    blob = json.dumps(fp)
+    assert "/Users/secret" not in blob
+    assert "evil.example" not in blob
+    assert any(str(x).startswith("unknown:") for x in (fp.get("unexpected_spans") or []))
+
+
+def test_normalize_node_supports_index_alias_and_string_nodes() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None, "index": 0},
+                {"name": "final_render", "span_id": "s2", "parent_span_id": "s1", "index": 1},
+            ],
+        }
+    )
+    assert by["i.span_order_valid"].passed is True
+
+    # string node path still accepted via observed_spans / nodes
+    by2 = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "nodes": ["llm_generation", "  "],
+        }
+    )
+    assert by2["i.span_tree_valid"].passed is True
+
+
+def test_graph_sets_mapping_edges_and_id_aliases() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation", "final_render"],
+            "spans": [
+                {"span_name": "llm_generation", "id": "s1", "parent_id": None, "order_index": 0},
+                {"span_name": "final_render", "id": "s2", "parent_id": "s1", "order_index": 1},
+            ],
+            "declared_graph": {
+                "nodes": [
+                    {"id": "llm_generation"},
+                    {"name": "final_render"},
+                    "opik_export",
+                ],
+                "edges": [
+                    {"from": "llm_generation", "to": "final_render"},
+                    {"source": "final_render", "target": "opik_export"},
+                ],
+            },
+        }
+    )
+    # missing observed opik_export edge/node should mismatch
+    g = by["i.graph_observed_matches_declared"]
+    assert g.passed is False
+    assert g.reason == "graph_observed_mismatch"
+
+
+def test_id_mode_duplicate_singleton_names_fail_tree() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "spans": [
+                {"name": "llm_generation", "span_id": "s1", "parent_span_id": None},
+                {"name": "llm_generation", "span_id": "s2", "parent_span_id": "s1"},
+            ],
+        }
+    )
+    assert by["i.span_tree_valid"].passed is False
+    assert by["i.span_tree_valid"].reason == "duplicate_singleton_span_names"
+
+
+def test_multi_attempt_without_thread_id_continuity() -> None:
+    by = _score_topo(
+        {
+            "root_trace_id": "r",
+            "terminal_state": "ok",
+            "required_spans": ["llm_generation"],
+            "observed_spans": ["llm_generation"],
+            "multi_attempt": True,
+            "attempt_indices": [1, 2],
+        },
+    )
+    # no session_thread_id on topology → continuity unresolved / soft when require_topology false
+    assert by["i.thread_continuity"].reason in {
+        "thread_continuity_unresolved",
+        "thread_id_missing",
+        "single_attempt_no_continuity_claim",
+    }
+
+    # hard fail under require_topology
+    b = _bundle_from_fixture(VALID)
+    b["topology"] = {
+        "root_trace_id": "r",
+        "terminal_state": "ok",
+        "required_spans": ["llm_generation"],
+        "observed_spans": ["llm_generation"],
+        "multi_attempt": True,
+        "attempt_indices": [1, 2],
+    }
+    hard = _by(score_family_i(project_score_context(b), require_topology=True))
+    assert hard["i.thread_continuity"].passed is False
+    assert hard["i.thread_id_present"].passed is False
+
+
+def test_cross_case_index_present_without_thread_id() -> None:
+    b = _bundle_from_fixture(VALID)
+    b["topology"] = {
+        "root_trace_id": "r",
+        "terminal_state": "ok",
+        "required_spans": ["llm_generation"],
+        "observed_spans": ["llm_generation"],
+    }
+    index = {"some-thread": ("other",)}
+    by = _by(score_family_i(project_score_context(b), session_thread_index=index))
+    assert by["i.no_cross_case_contamination"].passed is True
+    assert by["i.no_cross_case_contamination"].reason == "cross_case_evidence_unavailable"
+
+
+def test_build_session_thread_index_skips_blank_case_ids() -> None:
+    b = _bundle_from_fixture(VALID)
+    b["session_thread_id"] = "t1"
+    index = build_session_thread_index(
+        [
+            ("", b),
+            ("   ", b),
+            ("case-ok", b),
+            ("case-ok", b),  # de-dupe
+        ]
+    )
+    assert index == {"t1": ("case-ok",)}
