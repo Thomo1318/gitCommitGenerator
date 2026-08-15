@@ -1,4 +1,4 @@
-"""Gate composition for S2a/S2b (required-block; true advisories never veto)."""
+"""Gate composition for S2a/S2b/S2c (required-block; true advisories never veto)."""
 
 from __future__ import annotations
 
@@ -105,6 +105,23 @@ S2B_REQUIRE_BLOCK: tuple[str, ...] = (
     "h.structured_bundle_compliance",
 )
 
+# S2c topology block (12 catalog severity=block Family I ids). Never silently
+# stuffed into S2A/S2B; joined only when require_topology=true (N7/N19).
+S2C_TOPOLOGY_BLOCK: tuple[str, ...] = (
+    "i.trace_root_present",
+    "i.lifecycle_complete",
+    "i.span_tree_valid",
+    "i.span_parentage_valid",
+    "i.required_spans_present",
+    "i.thread_id_present",
+    "i.thread_continuity",
+    "i.counter_span_consistent",
+    "i.finalization_observed",
+    "i.replay_lineage_valid",
+    "i.no_cross_case_contamination",
+    "i.correlation_envelope_valid",
+)
+
 # True advisory families only — never gate veto, even if placed in require_block.
 _ADVISORY_PREFIXES = (
     "cprime",
@@ -133,15 +150,22 @@ def compose_gates(
 ) -> list[ScoreResultV1]:
     """Compose ``gate.*`` metrics from score rows.
 
-    ``gate.deterministic_pass`` uses only metrics in ``require_block``
-    (default ``S2A_REQUIRE_BLOCK``). True advisory prefixes never veto — even
-    when explicitly listed in ``require_block``. Plane A ``c.``/``e.``/``f.``/``g.``
-    are gate-capable when requested. Unrequested C/E/F/G failures are not labeled
-    ``ignored_advisory_failures``. Duplicate metric IDs in ``results`` fail closed.
-    Missing required metrics fail closed. Golden promotion additionally requires an
-    explicit passing skeleton row. Semantic cohort stays false offline (later lane).
+    ``gate.deterministic_pass`` uses only metrics in the effective require block
+    (default ``S2A_REQUIRE_BLOCK``). When ``require_topology=true``, the block is
+    the stable unique union with ``S2C_TOPOLOGY_BLOCK`` (N7). True advisory
+    prefixes never veto — even when explicitly listed. Plane A ``c.``/``e.``/
+    ``f.``/``g.`` are gate-capable when requested. Unrequested C/E/F/G failures
+    are not labeled ``ignored_advisory_failures``. Duplicate metric IDs in
+    ``results`` fail closed. Missing required metrics fail closed.
+
+    Golden promotion uses the S2b baseline (det + gold + skeleton + bound).
+    When ``require_topology=true``, it additionally requires passing
+    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7). Semantic
+    cohort stays false offline (later lane).
     """
-    req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
+    base_req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
+    # Stable unique union; S2C_TOPOLOGY_BLOCK order preserved for new tails.
+    req = tuple(dict.fromkeys((*base_req, *S2C_TOPOLOGY_BLOCK))) if require_topology else base_req
 
     # Reject duplicate metric IDs in the score stream (silent last-write-wins banned).
     seen: dict[str, int] = {}
@@ -190,11 +214,13 @@ def compose_gates(
             reason=None if det_ok else "require_block_failed",
             evidence={
                 "require_block": list(req),
+                "base_require_block": list(base_req),
                 "missing": missing,
                 "failed": failed,
                 "ignored_advisory_failures": ignored_failures,
                 "bound": bound,
                 "require_topology": require_topology,
+                "s2c_topology_block": list(S2C_TOPOLOGY_BLOCK) if require_topology else [],
                 "gold_mode": gold_mode,
             },
             failure_ids=None if det_ok else (["GATE_REQUIRE_BLOCK"] + failed + [f"missing:{m}" for m in missing]),
@@ -207,7 +233,15 @@ def compose_gates(
     # Fail-closed: missing skeleton row must block promotion even if a custom
     # require_block omitted ``d.skeleton_fallback_final``.
     skel_clean = bool(skel_row and skel_row.passed)
-    promo_ok = det_ok and gold_pass and skel_clean and (bound is not False)
+    s2b_promo = det_ok and gold_pass and skel_clean and (bound is not False)
+
+    life_row = by_id.get("i.lifecycle_complete")
+    req_spans_row = by_id.get("i.required_spans_present")
+    life_ok = bool(life_row and life_row.passed is True)
+    req_spans_ok = bool(req_spans_row and req_spans_row.passed is True)
+    # I metrics are NOT consulted for golden when require_topology=false.
+    promo_ok = s2b_promo and life_ok and req_spans_ok if require_topology else s2b_promo
+
     gates.append(
         make_score(
             "gate.golden_promotion_eligible",
@@ -218,12 +252,16 @@ def compose_gates(
                 "gold_ok": gold_pass,
                 "skeleton_clean": skel_clean,
                 "bound": bound,
+                "require_topology": require_topology,
+                "lifecycle_complete": life_ok,
+                "required_spans_present": req_spans_ok,
+                "s2b_promo": s2b_promo,
             },
             failure_ids=None if promo_ok else ["GATE_PROMOTION_BLOCKED"],
         )
     )
 
-    # Offline S2b: C-prime / semantic cohort remains later-lane (not C).
+    # Offline S2b/S2c: C-prime / semantic cohort remains later-lane (not C).
     gates.append(
         make_score(
             "gate.semantic_cohort_eligible",
@@ -244,3 +282,13 @@ def assert_s2b_block_len() -> None:
         raise AssertionError(f"S2B_REQUIRE_BLOCK len={len(S2B_REQUIRE_BLOCK)} expected 68")
     if len(set(S2B_REQUIRE_BLOCK)) != 68:
         raise AssertionError("S2B_REQUIRE_BLOCK contains duplicates")
+
+
+def assert_s2c_block_len() -> None:
+    """Internal invariant: S2C_TOPOLOGY_BLOCK is exactly 12 unique catalog IDs."""
+    if len(S2C_TOPOLOGY_BLOCK) != 12:
+        raise AssertionError(f"S2C_TOPOLOGY_BLOCK len={len(S2C_TOPOLOGY_BLOCK)} expected 12")
+    if len(set(S2C_TOPOLOGY_BLOCK)) != 12:
+        raise AssertionError("S2C_TOPOLOGY_BLOCK contains duplicates")
+    if any(not mid.startswith("i.") for mid in S2C_TOPOLOGY_BLOCK):
+        raise AssertionError("S2C_TOPOLOGY_BLOCK must contain only Family I metric ids")

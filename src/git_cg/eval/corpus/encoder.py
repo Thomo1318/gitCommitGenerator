@@ -250,7 +250,8 @@ def encode_fixture(
     # Archive-shaped enforcement when source declares 204_archive.
     corpus_source = None
     tags = _optional_str_list(fixture, "tags") or []
-    meta_in = fixture.get("meta") if isinstance(fixture.get("meta"), Mapping) else {}
+    raw_meta = fixture.get("meta")
+    meta_in: Mapping[str, Any] = raw_meta if isinstance(raw_meta, Mapping) else {}
     corpus_source = meta_in.get("corpus_source") or fixture.get("corpus_source")
     if corpus_source == "204_archive":
         if regime not in {"A", "B", "unknown"}:
@@ -316,6 +317,12 @@ def encode_fixture(
         bundle["path_class_gate"] = path_class_gate
     if gti is not None:
         bundle["generation_task_input"] = gti
+
+    # Fixture-level session_thread_id (S2c / N14). Schema allows the root field;
+    # copy only non-empty strings. Does not alter schema pins.
+    session_thread_id = _optional_str(fixture, "session_thread_id")
+    if session_thread_id is not None:
+        bundle["session_thread_id"] = session_thread_id
 
     session_tags = tags
     meta_extra: dict[str, Any] = {
