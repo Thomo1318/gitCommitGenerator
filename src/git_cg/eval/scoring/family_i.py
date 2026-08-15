@@ -6,6 +6,7 @@ read live Opik traces, invent span IDs, or rewrite product accept-path.
 
 from __future__ import annotations
 
+import hashlib
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -159,21 +160,12 @@ class TopologyEvidence:
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any] | None:
-    """Return the value as a mapping when it has mapping semantics.
-    
-    Parameters:
-        value (Any): Value to inspect.
-    
-    Returns:
-        Mapping[str, Any] | None: The value when it is a mapping; otherwise, `None`.
-    """
     if isinstance(value, Mapping):
         return value
     return None
 
 
 def _non_empty_str(value: Any) -> str | None:
-    """Return the stripped string when the value is a non-empty string; otherwise return ``None``."""
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
@@ -191,14 +183,7 @@ def _alias_span_name(name: str) -> tuple[str, bool]:
 
 
 def _alias_terminal(raw: Any) -> str | None:
-    """Normalise a terminal state alias to its canonical value.
-    
-    Parameters:
-    	raw (Any): The raw terminal state value.
-    
-    Returns:
-    	str | None: The canonical terminal state, or `None` when the value is missing, invalid, or unknown.
-    """
+    """Map raw terminal strings to N4 legal terminals; open/unknown → None."""
     if raw is None:
         return None
     if not isinstance(raw, str):
@@ -213,14 +198,7 @@ def _alias_terminal(raw: Any) -> str | None:
 
 
 def _intish(value: Any) -> int | None:
-    """Convert an integer-like value to an integer.
-    
-    Parameters:
-    	value (Any): The value to convert.
-    
-    Returns:
-    	int | None: The integer value, or `None` when the value is not an integer or an integer-valued float.
-    """
+    """Accept int or integral float; reject bool and non-integrals."""
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -231,14 +209,7 @@ def _intish(value: Any) -> int | None:
 
 
 def _first_present_mapping(*candidates: Any) -> tuple[Mapping[str, Any] | None, str | None]:
-    """Select the first mapping from the supported topology sources.
-    
-    Parameters:
-    	candidates (Any): Candidate topology values checked in supported source order.
-    
-    Returns:
-    	tuple[Mapping[str, Any] | None, str | None]: The first valid mapping and its source label, or `(None, None)` when no candidate is a mapping.
-    """
+    """First mapping among fixed topology source labels, else ``(None, None)``."""
     labels = (
         "bundle.topology",
         "meta.topology_canonical",
@@ -253,15 +224,10 @@ def _first_present_mapping(*candidates: Any) -> tuple[Mapping[str, Any] | None, 
 
 
 def _normalize_node(raw: Any, *, order_index: int | None = None) -> SpanNode | None:
-    """
-    Normalise a raw span representation into a canonical span node.
-    
-    Parameters:
-    	raw (Any): A span name or mapping containing span details.
-    	order_index (int | None): The span's position when it is supplied externally.
-    
-    Returns:
-    	SpanNode | None: The normalised span node, or `None` when the input lacks a valid span name.
+    """Build a ``SpanNode`` from a name string or mapping (N15).
+
+    Prefers producer-declared ``order_index`` / ``index`` over the list-position
+    fallback so ``i.span_order_valid`` can fail closed on non-monotonic producers.
     """
     if isinstance(raw, str):
         name_raw = raw.strip()
@@ -287,11 +253,12 @@ def _normalize_node(raw: Any, *, order_index: int | None = None) -> SpanNode | N
     parent = _non_empty_str(m.get("parent_span_id"))
     if parent is None:
         parent = _non_empty_str(m.get("parent_id"))
-    idx = order_index
+    # Prefer producer-declared index when present; fall back to list position.
+    idx = _intish(m.get("order_index"))
     if idx is None:
-        idx = _intish(m.get("order_index"))
-        if idx is None:
-            idx = _intish(m.get("index"))
+        idx = _intish(m.get("index"))
+    if idx is None:
+        idx = order_index
     return SpanNode(
         name=canon,
         span_id=span_id,
@@ -302,14 +269,7 @@ def _normalize_node(raw: Any, *, order_index: int | None = None) -> SpanNode | N
 
 
 def _alias_name_list(values: Any) -> list[str]:
-    """Normalise a sequence of span names or node representations.
-    
-    Parameters:
-    	values (Any): Values to convert into canonical span names.
-    
-    Returns:
-    	list[str]: Canonical span names for valid entries.
-    """
+    """Canonical span-name list from strings or ``{name|id}`` mappings."""
     out: list[str] = []
     if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
         return out
@@ -325,14 +285,7 @@ def _alias_name_list(values: Any) -> list[str]:
 
 
 def _alias_count_map(values: Any) -> dict[str, Any]:
-    """Normalise span-count keys to canonical span names.
-    
-    Parameters:
-    	values (Any): A mapping of span names to their counts.
-    
-    Returns:
-    	dict[str, Any]: A mapping of canonical span names to their original count values.
-    """
+    """Alias span-count map keys into the closed taxonomy."""
     m = _as_mapping(values)
     if m is None:
         return {}
@@ -346,14 +299,7 @@ def _alias_count_map(values: Any) -> dict[str, Any]:
 
 
 def _extract_nodes(topo: Mapping[str, Any]) -> list[SpanNode]:
-    """Extracts normalised span nodes from topology data.
-    
-    Parameters:
-    	topo (Mapping[str, Any]): Topology data containing structured nodes or observed span names.
-    
-    Returns:
-    	list[SpanNode]: The extracted span nodes in their observed order.
-    """
+    """Prefer structured spans/nodes; else observed_spans name list (N15)."""
     nodes: list[SpanNode] = []
     # Prefer structured spans / nodes, else observed_spans name list.
     for key in ("spans", "nodes", "observed_nodes"):
@@ -379,16 +325,7 @@ def _resolve_session_thread_id(
     meta: Mapping[str, Any],
     topo: Mapping[str, Any] | None,
 ) -> str | None:
-    """Resolve the first available session thread identifier from bundle, topology, and metadata fields.
-    
-    Parameters:
-    	bundle (Mapping[str, Any]): Bundle data containing session information.
-    	meta (Mapping[str, Any]): Metadata containing session or topology information.
-    	topo (Mapping[str, Any] | None): Optional topology data containing session information.
-    
-    Returns:
-    	str | None: The resolved session thread identifier, or `None` when no valid identifier is available.
-    """
+    """First non-empty session_thread_id across bundle → topo → meta channels (N14)."""
     for candidate in (
         bundle.get("session_thread_id"),
         (topo or {}).get("session_thread_id") if topo else None,
@@ -407,16 +344,11 @@ def project_topology_evidence(
     meta: Mapping[str, Any] | None = None,
     topology: Mapping[str, Any] | None = None,
 ) -> TopologyEvidence | None:
-    """
-    Project raw bundle and metadata claims into canonical offline topology evidence.
-    
-    Parameters:
-        bundle (Mapping[str, Any] | None): Bundle containing topology and related evidence.
-        meta (Mapping[str, Any] | None): Optional metadata containing additional evidence.
-        topology (Mapping[str, Any] | None): Optional topology mapping that takes precedence over topology sources in the bundle.
-    
-    Returns:
-        TopologyEvidence | None: Normalised topology evidence, or `None` when no topology-related evidence is present.
+    """Project offline topology evidence into a canonical internal shape (N1-N5).
+
+    Explicit ``topology=`` wins over bundle/meta sources. Returns ``None`` only
+    when no topology object and no topology-class sibling claims are present.
+    Never invents span IDs, roots, parents, thread IDs, or correlation fields.
     """
     b = dict(bundle) if isinstance(bundle, Mapping) else {}
     m = dict(meta) if isinstance(meta, Mapping) else _as_mapping(b.get("meta")) or {}
@@ -640,14 +572,7 @@ def project_topology_evidence(
 
 
 def _observed_name_multiset(ev: TopologyEvidence) -> dict[str, int]:
-    """Count observed spans by canonical name, using span counts when structured nodes are unavailable.
-    
-    Parameters:
-    	ev (TopologyEvidence): Projected topology evidence containing observed nodes or span counts.
-    
-    Returns:
-    	dict[str, int]: A mapping of canonical span names to their observed counts.
-    """
+    """Node multiset when structured; else span_counts fallback."""
     counts: dict[str, int] = defaultdict(int)
     if ev.nodes:
         for n in ev.nodes:
@@ -667,16 +592,10 @@ def _resolve_required_set(
     bound: bool,
     require_topology: bool,
 ) -> tuple[list[str] | None, str | None]:
-    """
-    Resolve the required span set for topology validation.
-    
-    Parameters:
-    	ev (TopologyEvidence): Projected topology evidence used to determine requirements.
-    	bound (bool): Whether the evidence belongs to a bound accept path.
-    	require_topology (bool): Whether unresolved requirements should produce a failure reason.
-    
-    Returns:
-    	tuple[list[str] | None, str | None]: The ordered unique required span names and an optional failure reason. A `None` span list indicates that requirements are inapplicable or unresolved.
+    """Return ``(required_list, fail_reason)`` for required-span resolution (N5).
+
+    Declared required set wins; bound paths fall back to the always-required
+    accept-path taxonomy. ``None`` list + reason means fail/inapplicable upstream.
     """
     if ev.required_declared and ev.required_spans:
         # Preserve order, unique.
@@ -707,6 +626,14 @@ def _resolve_required_set(
     return None, None  # inapplicable
 
 
+def _fingerprint_span_name(name: str) -> str:
+    """Pass closed-taxonomy names; digest unknown/raw names for N11 fingerprints."""
+    key = name.strip()
+    if key in _CLOSED_TAXONOMY:
+        return key
+    return "unknown:" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+
+
 def _diag_fingerprint_inputs(
     *,
     metric_id: str,
@@ -719,16 +646,11 @@ def _diag_fingerprint_inputs(
     regime: Any,
     path_class: str | None,
 ) -> dict[str, Any]:
-    """
-    Builds a sanitised diagnostic fingerprint from stable classification fields.
-    
-    Parameters:
-    	metric_id (str): Identifier of the metric associated with the fingerprint.
-    	regime (Any): Optional classification regime; only non-empty strings are included.
-    	path_class (str | None): Optional path classification key, rather than a filesystem path.
-    
-    Returns:
-    	dict[str, Any]: Fingerprint fields containing no raw text, identifiers, paths, or URLs.
+    """Sanitised N11 fingerprint inputs only — no raw text / ids / paths / urls.
+
+    Closed-taxonomy span names pass through; unknown names are digested via
+    ``_fingerprint_span_name``. ``path_class`` is a path-class key, not a filesystem path.
+    Row-level evidence may still carry raw names for local debugging.
     """
     out: dict[str, Any] = {
         "metric_ids": [metric_id],
@@ -736,13 +658,13 @@ def _diag_fingerprint_inputs(
     if failure_ids:
         out["failure_ids"] = sorted(str(x) for x in failure_ids)
     if blame_span:
-        out["blame_span"] = blame_span
+        out["blame_span"] = _fingerprint_span_name(blame_span)
     if first_divergent:
-        out["first_divergent_span"] = first_divergent
+        out["first_divergent_span"] = _fingerprint_span_name(first_divergent)
     if missing:
-        out["missing_required_spans"] = sorted(set(missing))
+        out["missing_required_spans"] = sorted({_fingerprint_span_name(x) for x in missing})
     if unexpected:
-        out["unexpected_spans"] = sorted(set(unexpected))
+        out["unexpected_spans"] = sorted({_fingerprint_span_name(x) for x in unexpected})
     if artifact_class:
         out["artifact_class"] = artifact_class
     if isinstance(regime, str) and regime.strip():
@@ -779,16 +701,7 @@ def synthesize_family_i_fail_closed(
     reason: str = "family_i_evaluator_error",
     errors: Sequence[str] | None = None,
 ) -> list[ScoreResultV1]:
-    """
-    Emit a failed result for each Family I metric when evaluator recovery is required.
-    
-    Parameters:
-    	reason (str): Identifier describing the recovery reason.
-    	errors (Sequence[str] | None): Optional evaluator error messages included in the recovery evidence.
-    
-    Returns:
-    	list[ScoreResultV1]: The 16 Family I metric results, each marked as failed.
-    """
+    """Emit all 16 Family I rows fail-closed (N18 recovery)."""
     evidence = {
         "recovery": True,
         "reason": reason,
@@ -811,14 +724,11 @@ def synthesize_family_i_fail_closed(
 def _tree_and_parentage(
     ev: TopologyEvidence,
 ) -> tuple[bool, str | None, dict[str, Any], bool, str | None, dict[str, Any]]:
-    """
-    Validate observed span tree structure and parentage.
-    
-    Parameters:
-    	ev (TopologyEvidence): Normalised topology evidence containing observed span nodes and repeatability rules.
-    
-    Returns:
-    	tuple: Tree validity, tree failure reason, tree evidence, parentage validity, parentage failure reason, and parentage evidence.
+    """Return ``tree_ok/reason/ev`` and ``parentage_ok/reason/ev`` (ID or name-only).
+
+    ID mode uses iterative DFS cycle detection so deep valid chains cannot
+    ``RecursionError``. Dangling parents fail parentage even when multiple roots
+    dominate tree status.
     """
     tree_ev: dict[str, Any] = {"node_count": len(ev.nodes), "has_ids": ev.has_ids}
     par_ev: dict[str, Any] = {"has_ids": ev.has_ids}
@@ -863,39 +773,35 @@ def _tree_and_parentage(
         return False, "self_parent", tree_ev, False, "self_parent", par_ev
 
     dangling = sorted({n.parent_span_id for n in ev.nodes if n.parent_span_id and n.parent_span_id not in by_id})
-    # Cycle detection (DFS)
+    # Cycle detection (iterative DFS) — deep valid chains must not raise RecursionError.
     graph: dict[str, str | None] = {n.span_id: n.parent_span_id for n in ev.nodes if n.span_id}
     visiting: set[str] = set()
     visited: set[str] = set()
     cycle_found = False
 
-    def walk(node_id: str) -> bool:
-        """
-        Detect whether the parent chain from a node contains a cycle.
-        
-        Parameters:
-            node_id (str): Identifier of the node whose parent chain is inspected.
-        
-        Returns:
-            bool: `True` if a cycle is found, `False` otherwise.
-        """
-        nonlocal cycle_found
-        if node_id in visiting:
-            cycle_found = True
-            return True
-        if node_id in visited:
-            return False
-        visiting.add(node_id)
-        parent = graph.get(node_id)
-        if parent and parent in graph and walk(parent):
-            return True
-        visiting.remove(node_id)
-        visited.add(node_id)
-        return False
-
-    for sid in graph:
-        if walk(sid):
+    for start in graph:
+        if start in visited or cycle_found:
+            continue
+        stack: list[tuple[str, str]] = [(start, "enter")]
+        while stack:
+            node_id, phase = stack.pop()
+            if phase == "exit":
+                visiting.discard(node_id)
+                visited.add(node_id)
+                continue
+            if node_id in visiting:
+                cycle_found = True
+                break
+            if node_id in visited:
+                continue
+            visiting.add(node_id)
+            stack.append((node_id, "exit"))
+            parent = graph.get(node_id)
+            if parent and parent in graph:
+                stack.append((parent, "enter"))
+        if cycle_found:
             break
+
     if cycle_found:
         tree_ev["cycle"] = True
         return False, "cycle_detected", tree_ev, False, "cycle_detected", par_ev
@@ -905,13 +811,16 @@ def _tree_and_parentage(
     explicit_roots = [n.span_id for n in ev.nodes if n.span_id and not n.parent_span_id]
     root_ids = sorted(set(roots) | set(explicit_roots))
     tree_ev["roots"] = root_ids
+    if dangling:
+        par_ev["dangling_parents"] = dangling
     if len(root_ids) > 1:
         tree_ev["multiple_roots"] = True
+        # Dangling parentage still fails even when multiple roots dominate tree status.
+        if dangling:
+            return False, "multiple_roots", tree_ev, False, "dangling_parent", par_ev
         return False, "multiple_roots", tree_ev, True, None, par_ev
 
     if dangling:
-        par_ev["dangling_parents"] = dangling
-        # orphans/dangling fail parentage; tree may still be "parseable" but policy fails tree too
         # Contract: dangling parent / orphan in ID mode ⇒ fail parentage.
         return True, None, tree_ev, False, "dangling_parent", par_ev
 
@@ -928,19 +837,12 @@ def _tree_and_parentage(
 
 
 def _graph_sets(graph: Mapping[str, Any]) -> tuple[set[str], set[tuple[str, str]]]:
-    """
-    Extracts required graph nodes and directed edges from a declared graph.
-    
-    Parameters:
-    	graph (Mapping[str, Any]): Graph data containing node and edge declarations. Optional nodes are excluded from the returned node set.
-    
-    Returns:
-    	tuple[set[str], set[tuple[str, str]]]: Required canonical node names and canonical directed edges.
-    """
+    """Required canonical nodes (optional excluded) + directed edges from a declared graph."""
     nodes: set[str] = set()
     edges: set[tuple[str, str]] = set()
 
     raw_nodes = graph.get("nodes")
+    optional_nodes: set[str] = set()
     if isinstance(raw_nodes, Sequence) and not isinstance(raw_nodes, (str, bytes)):
         for item in raw_nodes:
             if isinstance(item, str) and item.strip():
@@ -948,18 +850,10 @@ def _graph_sets(graph: Mapping[str, Any]) -> tuple[set[str], set[tuple[str, str]
             elif isinstance(item, Mapping):
                 nm = item.get("name") or item.get("id")
                 if isinstance(nm, str) and nm.strip():
-                    nodes.add(_alias_span_name(nm.strip())[0])
-                if item.get("optional") is True:
-                    # optional nodes tracked separately by excluding from required compare later
-                    pass
-
-    optional_nodes: set[str] = set()
-    if isinstance(raw_nodes, Sequence) and not isinstance(raw_nodes, (str, bytes)):
-        for item in raw_nodes:
-            if isinstance(item, Mapping) and item.get("optional") is True:
-                nm = item.get("name") or item.get("id")
-                if isinstance(nm, str) and nm.strip():
-                    optional_nodes.add(_alias_span_name(nm.strip())[0])
+                    canon = _alias_span_name(nm.strip())[0]
+                    nodes.add(canon)
+                    if item.get("optional") is True:
+                        optional_nodes.add(canon)
 
     raw_edges = graph.get("edges")
     if isinstance(raw_edges, Sequence) and not isinstance(raw_edges, (str, bytes)):
@@ -987,16 +881,12 @@ def score_family_i(
     topology: Mapping[str, Any] | None = None,
     **_evidence_kwargs: Any,
 ) -> list[ScoreResultV1]:
-    """
-    Score the 16 Family I topology and lifecycle metrics from offline evidence.
-    
-    Parameters:
-    	require_topology (bool): Whether topology evidence is required for applicable claims.
-    	session_thread_index (Mapping[str, tuple[str, ...]] | None): Mapping of session thread IDs to case IDs used to detect cross-case sharing.
-    	topology (Mapping[str, Any] | None): Optional topology data to evaluate.
-    
-    Returns:
-    	list[ScoreResultV1]: One schema-valid score result for each Family I metric, in catalogue order.
+    """Score all 16 Family I topology/lifecycle metrics offline (S2c).
+
+    Always emits one schema-valid ``ScoreResultV1`` per frozen Family I catalog
+    id, in catalogue order. Never invents span/root/parent/thread/correlation
+    evidence. Missing topology shells fail honestly under ``require_topology``;
+    unclaimed correlation/replay/export rows pass without fabricating greens.
     """
     bundle = ctx.bundle if isinstance(ctx.bundle, Mapping) else {}
     meta = ctx.meta if isinstance(ctx.meta, Mapping) else {}
@@ -1299,10 +1189,8 @@ def score_family_i(
 
     # ----- attempt order -----
     if ev.attempt_indices:
-        attempt_ok = ev.attempt_indices == sorted(ev.attempt_indices)
-        # also strict unique monotonic non-decreasing is enough; duplicates ok if equal?
-        # Contract: attempt_index monotonic — non-decreasing.
-        attempt_ok = all(ev.attempt_indices[i] <= ev.attempt_indices[i + 1] for i in range(len(ev.attempt_indices) - 1))
+        # Contract: attempt_index monotonic non-decreasing; equal values are allowed.
+        attempt_ok = all(a <= b for a, b in pairwise(ev.attempt_indices))
         attempt_reason = None if attempt_ok else "attempt_order_non_monotonic"
         attempt_ev: dict[str, Any] = {"attempt_indices": list(ev.attempt_indices)}
     else:
@@ -1388,22 +1276,6 @@ def score_family_i(
         blame: str | None = None,
         divergent: str | None = None,
     ) -> ScoreResultV1:
-        """
-        Construct a topology evaluation result with normalised evidence and failure diagnostics.
-        
-        Parameters:
-            mid (str): Metric identifier.
-            ok (bool): Whether the metric passed.
-            reason (str | None): Explanation associated with the result.
-            evidence (dict[str, Any]): Additional evidence fields to include.
-            failure_ids (list[str] | None): Failure identifiers to attach when the metric fails.
-            missing (Sequence[str] | None): Required spans that were not observed.
-            blame (str | None): Span associated with the failure.
-            divergent (str | None): First span at which observed behaviour diverged.
-        
-        Returns:
-            ScoreResultV1: The populated metric result.
-        """
         evd = base_evidence(**evidence)
         if missing:
             evd["missing_required_spans"] = list(missing)
@@ -1551,7 +1423,7 @@ def score_family_i(
 
 
 def _ordered(rows: Iterable[ScoreResultV1]) -> list[ScoreResultV1]:
-    """Order Family I score results by the fixed metric catalogue and recover missing or inconsistent rows as failures."""
+    """Stable emission order matching ``FAMILY_I_METRIC_IDS``; fill gaps fail-closed."""
     by = {r.metric_id: r for r in rows}
     out: list[ScoreResultV1] = []
     for mid in FAMILY_I_METRIC_IDS:
@@ -1600,16 +1472,7 @@ def resolve_case_session_thread_id(bundle: Mapping[str, Any]) -> str | None:
 def build_session_thread_index(
     case_bundles: Sequence[tuple[str, Mapping[str, Any]]],
 ) -> dict[str, tuple[str, ...]]:
-    """
-    Build a deterministic index of session thread IDs to associated case IDs.
-    
-    Parameters:
-    	case_bundles: Case identifiers and their bundle mappings.
-    
-    Returns:
-    	A mapping whose keys are session thread IDs and whose values are sorted,
-    	unique tuples of associated case IDs.
-    """
+    """Build read-only ``thread_id → sorted unique case_ids`` mapping (N14)."""
     acc: dict[str, set[str]] = defaultdict(set)
     for case_id, bundle in case_bundles:
         if not isinstance(case_id, str) or not case_id.strip():
