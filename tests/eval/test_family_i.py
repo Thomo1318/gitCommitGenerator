@@ -38,6 +38,7 @@ _POL = {m["metric_id"]: m["polarity"] for m in load_metric_catalog()["metrics"]}
 
 
 def _pass_row(metric_id: str) -> ScoreResultV1:
+    """Create a passing score result for the specified metric using its scoring polarity."""
     pol = _POL[metric_id]
     if pol == "lower_is_better":
         return make_score(metric_id, 0, passed=True)
@@ -47,6 +48,7 @@ def _pass_row(metric_id: str) -> ScoreResultV1:
 
 
 def _fail_row(metric_id: str) -> ScoreResultV1:
+    """Create a failed score result using a value appropriate to the metric's polarity."""
     pol = _POL[metric_id]
     if pol == "lower_is_better":
         return make_score(metric_id, 2, passed=False)
@@ -56,12 +58,22 @@ def _fail_row(metric_id: str) -> ScoreResultV1:
 
 
 def _bundle_from_fixture(path: Path, **mut: Any) -> dict[str, Any]:
+    """Build an encoded bundle from a JSON fixture, applying the supplied field overrides.
+    
+    Parameters:
+    	path (Path): Path to the JSON fixture.
+    	**mut (Any): Fields to override in the loaded fixture.
+    
+    Returns:
+    	dict[str, Any]: The encoded fixture bundle.
+    """
     fx = json.loads(path.read_text(encoding="utf-8"))
     fx.update(mut)
     return encode_fixture(fx)["bundle"]
 
 
 def _by(rows: list[ScoreResultV1]) -> dict[str, ScoreResultV1]:
+    """Map metric identifiers to their corresponding score results."""
     return {r.metric_id: r for r in rows}
 
 
@@ -392,6 +404,7 @@ def test_score_suite_two_pass_builds_thread_index(tmp_path: Path) -> None:
     suites_dir.mkdir()
 
     def _write_case(cid: str, thread: str) -> None:
+        """Write a valid case fixture with the specified case and session-thread identifiers."""
         fx = json.loads(VALID.read_text(encoding="utf-8"))
         fx["case_id"] = cid
         fx["session_thread_id"] = thread
@@ -493,12 +506,15 @@ N_REPLAY = INVALID / "seed-n-replay-lineage-missing.json"
 
 
 def _bundle_from_negative_fixture(path: Path, **mut: Any) -> dict[str, Any]:
-    """Project encoder-negative fixtures into a scoreable bundle without weakening S1 floors.
-
-    S1 still fail-closes these probes under encode_fixture (even validate=False) because
-    topology/counter/replay guards are encoder law. N12 therefore scores via direct
-    injection: encode a valid carrier fixture, then overlay the negative fixture's
-    case_id / meta evidence for Family I only.
+    """
+    Create a scoreable bundle by overlaying negative-fixture evidence onto a valid carrier bundle.
+    
+    Parameters:
+        path (Path): Path to the negative fixture.
+        **mut (Any): Additional bundle fields to override.
+    
+    Returns:
+        dict[str, Any]: A bundle retaining the valid carrier's encoding fields with the fixture's case and topology evidence applied.
     """
     fx = json.loads(path.read_text(encoding="utf-8"))
     carrier = _bundle_from_fixture(VALID)
@@ -610,6 +626,7 @@ def test_s2c_a_family_i_emits_16_schema_valid_rows_normal_and_find026_and_recove
 
     # N18 recovery
     def _boom(*_a: Any, **_k: Any) -> list[ScoreResultV1]:
+        """Raise the evaluator recovery error used by the test suite."""
         raise RuntimeError("s2c_a_recovery")
 
     monkeypatch.setattr("git_cg.eval.scoring.runner.score_family_i", _boom)
@@ -823,6 +840,16 @@ def test_s2c_h_no_s3_s4_thread_star_or_pin_drift_and_docs_boundary() -> None:
 
 
 def _score_topo(topology: dict[str, Any], **bundle_mut: Any) -> dict[str, ScoreResultV1]:
+    """
+    Score a synthetic topology fixture using the Family I evaluator.
+    
+    Parameters:
+        topology (dict[str, Any]): Topology data to evaluate.
+        **bundle_mut (Any): Bundle fields to override before scoring.
+    
+    Returns:
+        dict[str, ScoreResultV1]: Family I scores indexed by metric name.
+    """
     b = _bundle_from_fixture(TOPO_VALID)
     b.update(bundle_mut)
     b["topology"] = topology

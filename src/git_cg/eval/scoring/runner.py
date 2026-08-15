@@ -47,10 +47,15 @@ def resolve_require_topology(
     require_topology: bool | None,
     suite: Mapping[str, Any] | None,
 ) -> bool:
-    """Resolve topology-require policy (N19).
-
-    Order: explicit API argument → ``suite.meta.require_topology`` (bool only) →
-    ``False``. Never inferred from ``bound``.
+    """
+    Resolve whether topology enforcement is required for scoring.
+    
+    Parameters:
+    	require_topology (bool | None): Explicit topology requirement, taking precedence when provided.
+    	suite (Mapping[str, Any] | None): Suite metadata that may define `meta.require_topology`.
+    
+    Returns:
+    	bool: The resolved topology requirement, defaulting to `False`.
     """
     if require_topology is not None:
         return bool(require_topology)
@@ -69,7 +74,18 @@ def _recovery_context(
     case_id: str | None,
     exc: BaseException,
 ) -> ScoreContext:
-    """Minimal ScoreContext when projection fails (H still emits FIND-026)."""
+    """
+    Create a minimal fail-closed scoring context when context projection fails.
+    
+    Parameters:
+    	bundle (Any): Bundle being scored.
+    	suite (dict[str, Any] | None): Optional suite metadata.
+    	case_id (str | None): Optional case identifier.
+    	exc (BaseException): Projection error to record in the context warnings.
+    
+    Returns:
+    	ScoreContext: Recovery context containing the available identifiers and failure details.
+    """
     bid = case_id or (bundle.get("case_id") if isinstance(bundle, dict) else None) or "unknown"
     return ScoreContext(
         case_id=str(bid),
@@ -102,7 +118,17 @@ def _run_family_i(
     session_thread_index: Mapping[str, tuple[str, ...]] | None,
     errors: list[str],
 ) -> list[ScoreResultV1]:
-    """Always emit 16 Family I rows; recover fail-closed on evaluator exceptions (N18)."""
+    """Produce all Family I metric results, recovering missing or invalid rows as failed results.
+    
+    Parameters:
+    	ctx (ScoreContext): Scoring context for the case.
+    	require_topology (bool): Whether topology enforcement is required.
+    	session_thread_index (Mapping[str, tuple[str, ...]] | None): Session-to-thread mapping used for topology checks.
+    	errors (list[str]): Collection for recording evaluator and result validation errors.
+    
+    Returns:
+    	list[ScoreResultV1]: The complete set of Family I metric results.
+    """
     try:
         rows = score_family_i(
             ctx,
@@ -231,13 +257,24 @@ def score_bundle(
     max_eval_bytes: int | None = None,
     case_id: str | None = None,
 ) -> ScoreCaseResult:
-    """Score one already-encoded ``ape_bundle_v1`` mapping offline (Plane A).
-
-    Order: context → FIND-026 preconditions → A → (B/C/D/E/F/G if runnable with
-    one shared gold slot) → **I** → H → gates. Short-circuit is A + I + H + gates
-    (topology is not message-dependent). No Opik client, network I/O, or product
-    commit-path mutation. Family/gate exceptions become evaluator errors +
-    fail-closed gate composition.
+    """
+    Score an encoded ``ape_bundle_v1`` mapping and return its Plane A results.
+    
+    Parameters:
+        bundle (dict[str, Any]): Encoded bundle to score.
+        suite (dict[str, Any] | None): Optional suite metadata used to resolve scoring policy.
+        suite_snapshot_pin (str | None): Snapshot pin associated with the suite.
+        require_block (tuple[str, ...] | None): Required metric identifiers for gate composition.
+        require_topology (bool | None): Explicit topology requirement, overriding suite metadata.
+        session_thread_index (Mapping[str, tuple[str, ...]] | None): Session-to-thread mapping used for topology scoring.
+        gold_mode (str): Gold evaluation mode.
+        gold_bridge (GoldBridge | None): Optional bridge for gold evaluation.
+        offline (bool): Whether to use offline scoring behaviour.
+        max_eval_bytes (int | None): Maximum evaluation input size.
+        case_id (str | None): Case identifier to associate with the results.
+    
+    Returns:
+        ScoreCaseResult: Family scores, gates, evaluation errors, and execution metadata.
     """
     errors: list[str] = []
     scores: list[ScoreResultV1] = []
@@ -436,7 +473,21 @@ def score_case(
     case_id: str | None = None,
     suite_id: str | None = None,
 ) -> ScoreCaseResult:
-    """Load fixture JSON, encode via S1, then ``score_bundle`` offline."""
+    """
+    Load a fixture from JSON, encode it, and score the resulting bundle.
+    
+    Parameters:
+        case_path (str | Path): Path to the fixture JSON file.
+        suite (dict[str, Any] | None): Optional suite metadata used during scoring.
+        require_block (tuple[str, ...] | None): Required metric identifiers.
+        require_topology (bool | None): Whether topology enforcement is required.
+        session_thread_index (Mapping[str, tuple[str, ...]] | None): Session-to-thread mapping for scoring.
+        case_id (str | None): Case identifier override.
+        suite_id (str | None): Suite identifier override.
+    
+    Returns:
+        ScoreCaseResult: The scored case result.
+    """
     path = Path(case_path)
     fixture = json.loads(path.read_text(encoding="utf-8"))
     cid = case_id or fixture.get("case_id") or path.stem
@@ -470,14 +521,26 @@ def score_suite(
     offline: bool = True,
     suite_path: str | Path | None = None,
 ) -> ScoreSuiteResult:
-    """Score every case in a committed suite under the canonical S1 snapshot pin.
-
-    Always content-addresses the suite via ``build_snapshot(suite_id)``. When
-    ``suite_path`` loads an alternate document with the same ``suite_id``, case
-    membership must match the pinned suite or scoring fails closed.
-
-    Two-pass flow (N14): encode all cases, build a read-only session-thread
-    index, then score each case with that index.
+    """
+    Score every case in a suite using a canonical, content-addressed snapshot.
+    
+    An alternate suite document must have the same case membership as the canonical suite. Cases are encoded and indexed before scoring so session-thread context is shared across the suite.
+    
+    Parameters:
+    	suite_id (str): Identifier of the suite to score.
+    	fixture_root (str | Path | None): Root directory containing fixture data.
+    	require_block (tuple[str, ...] | None): Required metric identifiers.
+    	require_topology (bool | None): Whether topology enforcement is required.
+    	gold_mode (str): Gold-evaluation mode.
+    	gold_bridge (GoldBridge | None): Optional bridge for gold evaluations.
+    	offline (bool): Whether to use offline scoring.
+    	suite_path (str | Path | None): Optional path to an alternate suite document.
+    
+    Returns:
+    	ScoreSuiteResult: Results for all scored cases, including snapshot, policy, and session-thread metadata.
+    
+    Raises:
+    	ValueError: If an alternate suite document has different case membership from the canonical suite.
     """
     root = Path(fixture_root) if fixture_root else default_fixture_root()
 

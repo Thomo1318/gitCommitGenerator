@@ -148,20 +148,21 @@ def compose_gates(
     require_topology: bool = False,
     gold_mode: str = "strict",
 ) -> list[ScoreResultV1]:
-    """Compose ``gate.*`` metrics from score rows.
-
-    ``gate.deterministic_pass`` uses only metrics in the effective require block
-    (default ``S2A_REQUIRE_BLOCK``). When ``require_topology=true``, the block is
-    the stable unique union with ``S2C_TOPOLOGY_BLOCK`` (N7). True advisory
-    prefixes never veto — even when explicitly listed. Plane A ``c.``/``e.``/
-    ``f.``/``g.`` are gate-capable when requested. Unrequested C/E/F/G failures
-    are not labeled ``ignored_advisory_failures``. Duplicate metric IDs in
-    ``results`` fail closed. Missing required metrics fail closed.
-
-    Golden promotion uses the S2b baseline (det + gold + skeleton + bound).
-    When ``require_topology=true``, it additionally requires passing
-    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7). Semantic
-    cohort stays false offline (later lane).
+    """
+    Compose deterministic, promotion, and semantic-cohort gate results from score rows.
+    
+    Parameters:
+    	results (Sequence[ScoreResultV1]): Score rows used to evaluate the gates.
+    	require_block (Iterable[str] | None): Required metric IDs; defaults to the S2a block.
+    	bound (bool | None): Whether the evaluation is bound.
+    	require_topology (bool): Whether to include S2c topology metrics and require topology checks for promotion.
+    	gold_mode (str): Gold evaluation mode recorded in gate evidence.
+    
+    Returns:
+    	list[ScoreResultV1]: The deterministic, golden-promotion, and semantic-cohort gate results.
+    
+    Raises:
+    	ValueError: If duplicate non-gate metric IDs are present in the score rows.
     """
     base_req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
     # Stable unique union; S2C_TOPOLOGY_BLOCK order preserved for new tails.
@@ -285,7 +286,11 @@ def assert_s2b_block_len() -> None:
 
 
 def assert_s2c_block_len() -> None:
-    """Internal invariant: S2C_TOPOLOGY_BLOCK is exactly 12 unique catalog IDs."""
+    """Validates the size, uniqueness, and Family I membership of the S2c topology metric block.
+    
+    Raises:
+        AssertionError: If the block does not contain exactly 12 unique Family I metric IDs.
+    """
     if len(S2C_TOPOLOGY_BLOCK) != 12:
         raise AssertionError(f"S2C_TOPOLOGY_BLOCK len={len(S2C_TOPOLOGY_BLOCK)} expected 12")
     if len(set(S2C_TOPOLOGY_BLOCK)) != 12:

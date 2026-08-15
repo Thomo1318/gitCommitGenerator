@@ -173,18 +173,21 @@ def encode_fixture(
     suite_id: str | None = None,
     validate: bool = True,
 ) -> dict[str, Any]:
-    """Encode a committed fixture object into bundle + case + identities.
-
+    """
+    Encode a fixture into an evaluation bundle, case record, and content identities.
+    
+    Parameters:
+        fixture (Mapping[str, Any]): Fixture data to validate and encode.
+        case_id (str | None): Optional case identifier overriding the fixture value.
+        suite_id (str | None): Optional suite identifier included in generated metadata.
+        validate (bool): Whether to validate the generated records against their schemas.
+    
     Returns:
-        {
-          "bundle": ape_bundle_v1,
-          "case": eval_case_v1,
-          "bundle_ref": str,
-          "bundle_hash": str,
-          "case_hash": str,
-          "canonical_bundle": str,
-          "canonical_case": str,
-        }
+        dict[str, Any]: The generated bundle, case, bundle reference, hashes, and
+            canonical JSON representations.
+    
+    Raises:
+        CorpusEncodeError: If the fixture or generated records fail validation.
     """
     if not isinstance(fixture, Mapping):
         raise CorpusEncodeError("fixture must be an object")
