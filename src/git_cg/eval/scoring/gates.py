@@ -1,4 +1,4 @@
-"""Gate composition for S2a (required-block only; C-prime ignored)."""
+"""Gate composition for S2a/S2b (required-block; true advisories never veto)."""
 
 from __future__ import annotations
 
@@ -45,21 +45,82 @@ S2A_REQUIRE_BLOCK: tuple[str, ...] = (
     "h.pin_integrity",
 )
 
-_IGNORE_FAMILY_PREFIXES = (
-    "c.",
-    "e.",
-    "f.",
-    "g.",
+# S2b opt-in 68-ID block = S2A (30) + C block (6) + E block (5) + F block (6)
+# + G (6) + remaining D (14) + h.structured_bundle_compliance (1).
+_S2B_C_BLOCK: tuple[str, ...] = (
+    "c.contract_smoke",
+    "c.diff_class_resolved",
+    "c.scope_forced_ok",
+    "c.security_claim_evidence",
+    "c.semver_ceiling",
+    "c.type_allowed",
+)
+_S2B_E_BLOCK: tuple[str, ...] = (
+    "e.banned_craft_openers",
+    "e.changelog_groups_allowlisted",
+    "e.presentation_constraints_applied",
+    "e.secondary_intent_fill_legal",
+    "e.skeleton_avoidance",
+)
+_S2B_F_BLOCK: tuple[str, ...] = (
+    "f.body_attribution",
+    "f.counter_integrity",
+    "f.included_changes_vs_diff",
+    "f.security_claims_need_paths",
+    "f.staged_path_allowlist",
+    "f.subject_attribution",
+)
+_S2B_G_BLOCK: tuple[str, ...] = (
+    "g.issue_null_policy",
+    "g.no_eval_policy_fork",
+    "g.ranked_identity_preserved",
+    "g.secrets_not_in_message",
+    "g.semantic_contract_bound",
+    "g.sop_not_mutated",
+)
+_S2B_D_REMAINING: tuple[str, ...] = (
+    "d.body_inventory",
+    "d.breaking_compat",
+    "d.docs_implementation_claim",
+    "d.fixture_product_framing",
+    "d.group_primary_match",
+    "d.high_risk_theme_coverage",
+    "d.included_changes_coverage",
+    "d.path_class_semver",
+    "d.path_class_type",
+    "d.scope_filename",
+    "d.semver_matrix",
+    "d.subject_inventory",
+    "d.subject_title_case",
+    "d.type_group_coherent",
+)
+
+S2B_REQUIRE_BLOCK: tuple[str, ...] = (
+    *S2A_REQUIRE_BLOCK,
+    *_S2B_C_BLOCK,
+    *_S2B_E_BLOCK,
+    *_S2B_F_BLOCK,
+    *_S2B_G_BLOCK,
+    *_S2B_D_REMAINING,
+    "h.structured_bundle_compliance",
+)
+
+# True advisory families only — never gate veto, even if placed in require_block.
+_ADVISORY_PREFIXES = (
+    "cprime",
     "lab.",
     "human.",
     "nlp.",
     "export.",
+    "dogfood.",
 )
 
 
-def _is_advisory(metric_id: str) -> bool:
-    """True for C-prime / lab / human / NLP / export metrics (never gate veto)."""
-    return metric_id.startswith(_IGNORE_FAMILY_PREFIXES) or metric_id.startswith("cprime")
+def _is_true_advisory(metric_id: str) -> bool:
+    """True for C-prime / lab / human / NLP / export / dogfood (never gate veto)."""
+    if metric_id.startswith("cprime"):
+        return True
+    return any(metric_id.startswith(p) for p in _ADVISORY_PREFIXES if p != "cprime")
 
 
 def compose_gates(
@@ -73,25 +134,44 @@ def compose_gates(
     """Compose ``gate.*`` metrics from score rows.
 
     ``gate.deterministic_pass`` uses only metrics in ``require_block``
-    (default ``S2A_REQUIRE_BLOCK``). C-prime / lab / human / NLP / export never
-    veto. Missing required metrics fail closed. Golden promotion additionally
-    requires an explicit passing skeleton row (not merely require_block absence).
-    Semantic cohort stays false while C-prime is deferred (S2b).
+    (default ``S2A_REQUIRE_BLOCK``). True advisory prefixes never veto — even
+    when explicitly listed in ``require_block``. Plane A ``c.``/``e.``/``f.``/``g.``
+    are gate-capable when requested. Unrequested C/E/F/G failures are not labeled
+    ``ignored_advisory_failures``. Duplicate metric IDs in ``results`` fail closed.
+    Missing required metrics fail closed. Golden promotion additionally requires an
+    explicit passing skeleton row. Semantic cohort stays false offline (later lane).
     """
     req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
+
+    # Reject duplicate metric IDs in the score stream (silent last-write-wins banned).
+    seen: dict[str, int] = {}
+    dups: list[str] = []
+    for r in results:
+        mid = r.metric_id
+        seen[mid] = seen.get(mid, 0) + 1
+    for mid, n in seen.items():
+        if n > 1 and not mid.startswith("gate."):
+            dups.append(mid)
+    if dups:
+        raise ValueError(f"duplicate metric_id in score stream: {sorted(dups)}")
+
     by_id: dict[str, ScoreResultV1] = {r.metric_id: r for r in results}
 
     missing: list[str] = []
     failed: list[str] = []
     ignored_failures: list[str] = []
 
+    # Label true-advisory failures only (not unrequested C/E/F/G).
     for mid, row in by_id.items():
         if mid.startswith("gate."):
             continue
-        if _is_advisory(mid) and mid not in req and row.passed is False:
+        if _is_true_advisory(mid) and row.passed is False:
             ignored_failures.append(mid)
 
     for mid in req:
+        if _is_true_advisory(mid):
+            # True advisories never veto even if explicitly required.
+            continue
         row = by_id.get(mid)
         if row is None:
             missing.append(mid)
@@ -143,16 +223,24 @@ def compose_gates(
         )
     )
 
-    # S2a does not run C-prime — offline-honest False
+    # Offline S2b: C-prime / semantic cohort remains later-lane (not C).
     gates.append(
         make_score(
             "gate.semantic_cohort_eligible",
             False,
             passed=False,
-            reason="cprime_deferred_s2a",
-            evidence={"cprime_ran": False},
-            failure_ids=["GATE_CPRIME_DEFERRED"],
+            reason="semantic_cohort_deferred_offline_later_lane",
+            evidence={"cprime_ran": False, "offline_s2b": True},
+            failure_ids=["GATE_SEMANTIC_COHORT_DEFERRED"],
         )
     )
 
     return gates
+
+
+def assert_s2b_block_len() -> None:
+    """Internal invariant: S2B_REQUIRE_BLOCK is exactly 68 unique catalog IDs."""
+    if len(S2B_REQUIRE_BLOCK) != 68:
+        raise AssertionError(f"S2B_REQUIRE_BLOCK len={len(S2B_REQUIRE_BLOCK)} expected 68")
+    if len(set(S2B_REQUIRE_BLOCK)) != 68:
+        raise AssertionError("S2B_REQUIRE_BLOCK contains duplicates")

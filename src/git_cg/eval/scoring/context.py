@@ -36,7 +36,9 @@ class ScoreContext:
     """Bound scoring inputs for one case/bundle.
 
     ``final_message`` is the sole default format/Hybrid target (FIND-027).
-    ``product_card`` may carry reverse-parsed / deterministic card fields.
+    ``product_card`` / ``score_card`` may carry reverse-parsed / deterministic
+    card fields when explicitly injected (kwargs or post-encode test fields).
+    ``files`` is the only path-evidence channel (D35/D44) — never fabricated.
     """
 
     case_id: str
@@ -59,6 +61,8 @@ class ScoreContext:
     max_eval_bytes: int = DEFAULT_MAX_EVAL_BYTES
     meta: dict[str, Any] = field(default_factory=dict)
     warnings: tuple[str, ...] = ()
+    score_card: dict[str, Any] = field(default_factory=dict)
+    files: tuple[str, ...] = ()
 
     @property
     def input_nonempty(self) -> bool:
@@ -68,7 +72,7 @@ class ScoreContext:
         if self.scored_target == "final_message":
             return bool(self.final_message and self.final_message.strip())
         # product_card target
-        return bool(self.product_card)
+        return bool(self.product_card) or bool(self.score_card)
 
     @property
     def input_size_bytes(self) -> int:
@@ -81,11 +85,11 @@ class ScoreContext:
         if self.scored_target == "final_message":
             return len((self.final_message or "").encode("utf-8"))
         if self.scored_target == "product_card":
-            if not self.product_card:
+            card = self.product_card or self.score_card
+            if not card:
                 return 0
-            # Deterministic serialization — never rely on ``str(dict)`` repr.
             payload = json.dumps(
-                self.product_card,
+                card,
                 sort_keys=True,
                 separators=(",", ":"),
                 ensure_ascii=False,
@@ -97,6 +101,11 @@ class ScoreContext:
     def input_size_ok(self) -> bool:
         """True when selected-target bytes are within ``max_eval_bytes`` (FIND-026)."""
         return self.input_size_bytes <= self.max_eval_bytes
+
+    @property
+    def path_evidence(self) -> tuple[str, ...]:
+        """Explicit product-bound paths only (D35/D44). Empty ⇒ no path evidence."""
+        return tuple(p for p in self.files if isinstance(p, str) and p.strip())
 
 
 def _as_dict(value: Any) -> dict[str, Any] | None:
@@ -113,7 +122,7 @@ def _str_tuple(value: Any) -> tuple[str, ...]:
     if value is None:
         return ()
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return tuple(str(x) for x in value if isinstance(x, str))
+        return tuple(str(x) for x in value if isinstance(x, str) and str(x).strip())
     return ()
 
 
@@ -123,6 +132,8 @@ def project_score_context(
     suite: Mapping[str, Any] | None = None,
     case_id: str | None = None,
     product_card: Mapping[str, Any] | None = None,
+    score_card: Mapping[str, Any] | None = None,
+    files: Sequence[str] | None = None,
     max_eval_bytes: int = DEFAULT_MAX_EVAL_BYTES,
     allow_wrong_artifact: bool = False,
 ) -> ScoreContext:
@@ -131,6 +142,12 @@ def project_score_context(
     Prefer ``bundle.final_message``. Never default format scoring onto raw model
     dumps / generation JSON keys unless ``allow_wrong_artifact`` (tests only).
     Pins come from live S0 loaders; missing identity fields fail closed.
+
+    Card / path injection (D10/D44):
+    * Explicit ``product_card`` / ``score_card`` / ``files`` kwargs win.
+    * Post-encode test dict keys are accepted as injection channels (frozen
+      ``ape_bundle_v1`` does not declare them; they are not schema fields).
+    * Explicit empty ``files=()`` stays empty — never fabricate paths.
     """
     if not isinstance(bundle, Mapping):
         raise ScoreContextError("bundle must be an object")
@@ -173,14 +190,21 @@ def project_score_context(
     if unbound_reason is not None and not isinstance(unbound_reason, str):
         raise ScoreContextError("unbound_reason must be a string")
 
-    card = _as_dict(product_card) or _as_dict(bundle.get("product_card")) or {}
-    # score_card alias
-    if not card:
-        card = _as_dict(bundle.get("score_card")) or {}
+    # Cards: explicit kwargs outrank injected dict keys (FIND-027 / D44).
+    card = _as_dict(product_card)
+    if card is None:
+        card = _as_dict(bundle.get("product_card")) or {}
+    s_card = _as_dict(score_card)
+    if s_card is None:
+        s_card = _as_dict(bundle.get("score_card")) or {}
+    # score_card may alias product_card when product_card empty (S2a compat).
+    if not card and s_card:
+        card = dict(s_card)
+        warnings.append("product_card_aliased_from_score_card")
 
     if isinstance(final_message, str) and final_message.strip():
         scored_target = "final_message"
-    elif card:
+    elif card or s_card:
         scored_target = "product_card"
         warnings.append("scored_target_fell_back_to_product_card")
     else:
@@ -194,6 +218,11 @@ def project_score_context(
     path_class = bundle.get("path_class_gate")
     if path_class is not None and not isinstance(path_class, str):
         path_class = str(path_class)
+
+    # Path evidence: explicit files only. Never invent staged_paths (D35/D44).
+    # Explicit kwargs win; otherwise allow post-encode injection via bundle files
+    # without synthesizing placeholders. Frozen schema has no staged_paths.
+    file_tuple = _str_tuple(files) if files is not None else _str_tuple(bundle.get("files"))
 
     meta = _as_dict(bundle.get("meta")) or {}
 
@@ -220,6 +249,8 @@ def project_score_context(
         max_eval_bytes=max_eval_bytes,
         meta=meta,
         warnings=tuple(warnings),
+        score_card=s_card,
+        files=file_tuple,
     )
 
 
