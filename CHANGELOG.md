@@ -29,6 +29,53 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.17.0
+
+### Miscellaneous
+
+- 🔧 chore(eval): demote legacy Opik format metrics to advisory (#227)
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #228 from Thomo1318/evals/227-S2b-complete-product-authority-metrics-and-harden-offline-scoring
+
+### Fixed
+
+- ✨ feat(eval): wire S2b runner, H bundle row, and 68-ID block (#227)
+- ✨ feat(eval): fan out remaining Family D gold-code metrics (#227)
+- ✨ feat(eval): add shared gold slot and honest path evidence (#227)
+- 🦺 fix(eval): count real gold calls; filter H injection keys (#227)
+- 🦺 fix(eval): accept real Git paths; drop dead Family F work (#227)
+- 🦺 fix(eval): tighten Family E banned-opener and skeleton checks (#227)
+- 🦺 fix(eval): match Family C gates by exact product codes (#227)
+- ✅ test(eval): harden S2b gate neutrals and patch-coverage locks (#227)
+- ⚡ fix(eval): cache Family G policy/SOP audits; target SOP writes (#227)
+
+### Tests
+
+- ✅ test(eval): harden S2b gate neutrals and patch-coverage locks (#227)
+- ✅ test(eval): lock S2b C/E/F/G fail-closed patch branches (#227)
+- ✅ test(eval): lock S2b CodeRabbit hardenings offline (#227)
+- 🔧 chore(eval): demote legacy Opik format metrics to advisory (#227)
+- ✅ test(eval): lock S2b C/E/F/G, shared gold, and gate law (#227)
+
+### Documentation
+
+- 📝 docs(eval): compile S2b T1–T12 locks into harness plan v0.9.3 (#227)
+
+### Changed
+
+- ✨ feat(eval): wire S2b runner, H bundle row, and 68-ID block (#227)
+- 🦺 fix(eval): count real gold calls; filter H injection keys (#227)
+- 🦺 fix(eval): accept real Git paths; drop dead Family F work (#227)
+- 🦺 fix(eval): tighten Family E banned-opener and skeleton checks (#227)
+- ⚡ fix(eval): cache Family G policy/SOP audits; target SOP writes (#227)
+
+### Added
+
+- ✨ feat(eval): wire S2b runner, H bundle row, and 68-ID block (#227)
+- ✨ feat(eval): add Families C/E/F/G product-authority scores (#227)
+- ✨ feat(eval): fan out remaining Family D gold-code metrics (#227)
+- ✨ feat(eval): add shared gold slot and honest path evidence (#227)
+
 ## v0.16.0
 
 ### Miscellaneous
