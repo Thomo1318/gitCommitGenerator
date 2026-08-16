@@ -29,6 +29,39 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.18.0
+
+### Miscellaneous
+
+- 📝 Add docstrings to `evals/229-s2c-implement-family-i-topology-and-lifecycle-validators`
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #230 from Thomo1318/evals/229-s2c-implement-family-i-topology-and-lifecycle-validators
+
+### Documentation
+
+- 🦺 fix(eval): strip session_thread_id at the encode boundary (#229)
+- 🦺 fix(eval): harden Family I topology order and fingerprints (#229)
+- ✅ test(eval): prove S2c N12 matrix and S2C-A–H claims (#229)
+- 📝 docs(eval): mark S2b shipped and short-circuit envelope validate (#229)
+- 📝 docs(eval): restore S2c runner and gate contract docs (#229)
+- 📝 docs(eval): document S2c Family I topology validators (#229)
+
+### Tests
+
+- ✅ test(eval): lock Family I review-hardening and recovery paths (#229)
+- ✅ test(eval): prove S2c N12 matrix and S2C-A–H claims (#229)
+- ✅ test(eval): lock S2c Family I, gate union, and thread index (#229)
+
+### Fixed
+
+- 🦺 fix(eval): strip session_thread_id at the encode boundary (#229)
+- 🦺 fix(eval): harden Family I topology order and fingerprints (#229)
+
+### Added
+
+- ✨ feat(eval): wire S2c topology gates and suite thread index (#229)
+- ✨ feat(eval): add Family I topology/lifecycle scores (#229)
+
 ## v0.17.0
 
 ### Miscellaneous
