@@ -104,6 +104,15 @@ def test_state_enriches_bind_and_twin(monkeypatch, tmp_path):
     # thread_id is correlation-only, never the session id (D9)
     assert data["session_thread_id"].startswith("sess_")
     assert data["meta"]["binding"]["thread_id"] == "repo-demo"
+    # Telemetry-state presence must not fabricate an opik_export observation (N19 F7).
+    observed = data["meta"]["trajectory"]["observed_stages"]
+    assert "accept_path_finalization" in observed
+    assert "opik_export" not in observed
+    # Trajectory id is digest-derived, not a filesystem path slice.
+    traj_id = data["meta"]["trajectory"]["id"]
+    assert traj_id.startswith("traj_")
+    assert "/" not in traj_id
+    assert "\\" not in traj_id
     # Twin carries message_versions: generated + edited + final_accept
     twin = json.loads((tmp_path / ".eval" / "sessions" / f"{res.session_thread_id}.json").read_text())
     kinds = [v["kind"] for v in twin["message_versions"]]
@@ -168,4 +177,5 @@ def test_bind_never_raises_on_write_error(monkeypatch, tmp_path):
     )
     # Binder reports the write error but does not raise.
     assert res.attempted is True
-    assert res.errors or res.hook_status in {"bound", "bind_error"}
+    assert res.paths_written == ()
+    assert res.errors

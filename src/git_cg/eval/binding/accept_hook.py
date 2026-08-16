@@ -50,7 +50,8 @@ __all__ = [
 #: are a subset of the D3 declared vocabulary; the hook only observes the
 #: accept-path finalization slice (generation stages are product-side and are
 #: not re-declared here). ``accept_path_finalization`` is always observed when
-#: the hook runs; ``opik_export`` only when product telemetry state existed.
+#: the hook runs. Do **not** infer ``opik_export`` from telemetry-state presence:
+#: export runs later on the product path and may be skipped or fail (N19 F7).
 _ACCEPT_OBSERVED_STAGES: tuple[str, ...] = ("accept_path_finalization",)
 
 
@@ -124,11 +125,12 @@ def bind_accept_path(
 
     # --- Trajectory evidence (D3/D10) under bundle.meta.trajectory. ---
     observed = list(_ACCEPT_OBSERVED_STAGES)
-    if telemetry_state is not None:
-        observed.append("opik_export")
+    # Token format is accept:{git_dir}:{digest}; derive id from the digest only
+    # so per-event ids stay distinct and local filesystem paths are not persisted.
+    traj_id = f"traj_{token.rpartition(':')[2][:32]}"
     try:
         trajectory = build_trajectory_evidence(
-            f"traj_{token.removeprefix('accept:')[:32]}",
+            traj_id,
             observed,
         )
     except Exception as exc:
