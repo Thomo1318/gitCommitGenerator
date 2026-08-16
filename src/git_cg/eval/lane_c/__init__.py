@@ -24,23 +24,33 @@ from git_cg.eval.lane_c.eligibility import (
     resolve_allows_lane_c,
     resolve_lab_override,
 )
+from git_cg.eval.lane_c.judge import (
+    JudgeOutcome,
+    resolve_judge_credentials,
+    run_pinned_judge,
+)
 from git_cg.eval.lane_c.prompt_pack import (
     PromptPackError,
     build_prompt_pack,
+    load_pack_prompt_text,
     prompt_pack_content_hash,
     resolve_judge_pack,
     validate_prompt_pack,
 )
 
 __all__ = [
+    "JudgeOutcome",
     "LaneCEligibility",
     "PromptPackError",
     "build_prompt_pack",
     "evaluate_semantic_cohort_eligibility",
     "judge_pins_resolvable",
+    "load_pack_prompt_text",
     "prompt_pack_content_hash",
     "resolve_allows_lane_c",
+    "resolve_judge_credentials",
     "resolve_judge_pack",
     "resolve_lab_override",
+    "run_pinned_judge",
     "validate_prompt_pack",
 ]

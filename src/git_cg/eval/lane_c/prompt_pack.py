@@ -38,6 +38,7 @@ __all__ = [
     "DEFAULT_PROMPT_ROOT",
     "PromptPackError",
     "build_prompt_pack",
+    "load_pack_prompt_text",
     "prompt_pack_content_hash",
     "resolve_judge_pack",
     "validate_prompt_pack",
@@ -85,6 +86,19 @@ def _load_prompt_files(pack_dir: Path) -> list[tuple[str, bytes]]:
     if not files:
         raise PromptPackError(f"empty prompt pack directory: {pack_dir}")
     return files
+
+
+def load_pack_prompt_text(pack_dir: Path) -> str:
+    """Return the concatenated prompt text for a pack directory.
+
+    Reads the same sorted ``.md``/``.txt`` files that
+    :func:`prompt_pack_content_hash` hashes, joined with blank lines, so the
+    text a judge sees is byte-identical to the content the pack's
+    ``content_sha256`` pins. Fails closed via :class:`PromptPackError` on a
+    missing/empty directory (same contract as the builder).
+    """
+    files = _load_prompt_files(pack_dir)
+    return "\n\n".join(content.decode("utf-8") for _name, content in files)
 
 
 def build_prompt_pack(
