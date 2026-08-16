@@ -24,6 +24,13 @@ FAMILY_H_S2A = (
     "h.online_scores_match_product_card",
 )
 
+# S3 (R7/N19.6): Family H owns the trajectory completeness/policy sink. These
+# consume the two existing catalog metrics — no new catalog ids are invented.
+FAMILY_H_S3 = (
+    "h.trajectory_stages_declared",
+    "h.trajectory_stages_observed",
+)
+
 
 def score_family_h(
     ctx: ScoreContext,
@@ -33,11 +40,18 @@ def score_family_h(
     suite_snapshot_pin: str | None,
     offline: bool = True,
     evaluator_errors: list[str] | None = None,
+    require_trajectory: bool = False,
 ) -> list[ScoreResultV1]:
-    """Emit Family H pin/offline/envelope/anti-fan-out metrics.
+    """Emit Family H pin/offline/envelope/anti-fan-out + trajectory metrics.
 
     Runs after A/B/D so ``h.score_envelope_valid`` can validate prior rows.
     Live S0 pin identity + suite snapshot pin are fail-closed.
+
+    S3 (R7/N19.6): trajectory evidence is read from ``ctx.meta["trajectory"]``
+    (inline at ``bundle.meta.trajectory``). Missing/incomplete trajectory is an
+    eval-class fail only when ``require_trajectory`` is set (suite policy);
+    otherwise it is advisory. Family H never treats trajectory as topology —
+    that plane stays with Family I.
     """
     errors = list(evaluator_errors or [])
     scores: list[ScoreResultV1] = []
@@ -245,4 +259,62 @@ def score_family_h(
         )
     )
 
+    # S3 (R7/N19.6): trajectory completeness/policy sink. Trajectory evidence
+    # is inlined at bundle.meta.trajectory (surfaced via ctx.meta["trajectory"]).
+    # Family H owns this plane; Family I never consumes trajectory as topology.
+    scores.extend(_score_trajectory(ctx, require_trajectory=require_trajectory))
+
     return scores
+
+
+def _score_trajectory(ctx: ScoreContext, *, require_trajectory: bool) -> list[ScoreResultV1]:
+    """Emit the two S3 trajectory metrics (existing catalog ids only).
+
+    ``h.trajectory_stages_declared`` — declared stage list is present and
+    non-empty. ``h.trajectory_stages_observed`` — observed stages are present
+    and behaviourally complete (``meta.complete``). Both are eval-class signals:
+    they fail only when ``require_trajectory`` is set (suite policy) and the
+    evidence is missing/incomplete; otherwise they are advisory passes.
+    """
+    trajectory = (ctx.meta or {}).get("trajectory")
+    declared: list[Any] = []
+    observed: list[Any] = []
+    meta_complete = False
+    present = isinstance(trajectory, dict)
+    if present:
+        declared = list(trajectory.get("declared_stages") or [])
+        observed = list(trajectory.get("observed_stages") or [])
+        traj_meta = trajectory.get("meta") or {}
+        meta_complete = bool(traj_meta.get("complete"))
+
+    declared_ok = present and len(declared) > 0
+    observed_ok = present and len(observed) > 0 and meta_complete
+
+    declared_pass = declared_ok or not require_trajectory
+    observed_pass = observed_ok or not require_trajectory
+
+    return [
+        make_score(
+            "h.trajectory_stages_declared",
+            declared_pass,
+            reason=None if declared_ok else "trajectory_declared_missing",
+            evidence={
+                "trajectory_present": present,
+                "declared_count": len(declared),
+                "require_trajectory": require_trajectory,
+            },
+            failure_ids=None if declared_pass else ["EVAL_TRAJECTORY_DECLARED"],
+        ),
+        make_score(
+            "h.trajectory_stages_observed",
+            observed_pass,
+            reason=None if observed_ok else "trajectory_observed_incomplete",
+            evidence={
+                "trajectory_present": present,
+                "observed_count": len(observed),
+                "meta_complete": meta_complete,
+                "require_trajectory": require_trajectory,
+            },
+            failure_ids=None if observed_pass else ["EVAL_TRAJECTORY_OBSERVED"],
+        ),
+    ]
