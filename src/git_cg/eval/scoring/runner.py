@@ -37,6 +37,7 @@ __all__ = [
     "ScoreCaseResult",
     "ScoreSuiteResult",
     "resolve_require_topology",
+    "resolve_require_trajectory",
     "score_bundle",
     "score_case",
     "score_suite",
@@ -58,6 +59,27 @@ def resolve_require_topology(
         meta = suite.get("meta")
         if isinstance(meta, Mapping):
             flag = meta.get("require_topology")
+            if isinstance(flag, bool):
+                return flag
+    return False
+
+
+def resolve_require_trajectory(
+    require_trajectory: bool | None,
+    suite: Mapping[str, Any] | None,
+) -> bool:
+    """Resolve trajectory-require policy (R7/N19.6).
+
+    Order: explicit API argument → ``suite.meta.require_trajectory`` (bool only)
+    → ``False``. Never inferred from ``bound`` or from topology policy — Family
+    H owns trajectory; Family I owns topology. The two planes stay separate.
+    """
+    if require_trajectory is not None:
+        return bool(require_trajectory)
+    if isinstance(suite, Mapping):
+        meta = suite.get("meta")
+        if isinstance(meta, Mapping):
+            flag = meta.get("require_trajectory")
             if isinstance(flag, bool):
                 return flag
     return False
@@ -228,6 +250,7 @@ def score_bundle(
     suite_snapshot_pin: str | None = None,
     require_block: tuple[str, ...] | None = None,
     require_topology: bool | None = None,
+    require_trajectory: bool | None = None,
     session_thread_index: Mapping[str, tuple[str, ...]] | None = None,
     gold_mode: str = "strict",
     gold_bridge: GoldBridge | None = None,
@@ -248,6 +271,7 @@ def score_bundle(
     gold_call_count = 0
     gold_call_identity: str | None = None
     topo_required = resolve_require_topology(require_topology, suite)
+    traj_required = resolve_require_trajectory(require_trajectory, suite)
 
     try:
         kwargs: dict[str, Any] = {"suite": suite, "case_id": case_id}
@@ -288,6 +312,7 @@ def score_bundle(
                     suite_snapshot_pin=suite_snapshot_pin,
                     offline=offline,
                     evaluator_errors=errors,
+                    require_trajectory=traj_required,
                 )
             )
         except Exception as exc:
@@ -346,6 +371,7 @@ def score_bundle(
                     suite_snapshot_pin=suite_snapshot_pin,
                     offline=offline,
                     evaluator_errors=errors,
+                    require_trajectory=traj_required,
                 )
             )
         except Exception as exc:

@@ -867,7 +867,7 @@ def test_s2c_docs_boundary_anchors() -> None:
     assert "envelope validate → gates" in readme
     assert "Family I is harness/eval law only" in dev
     assert "S2b/S2c family expansion" not in dev
-    assert "remain deferred on #217 / #225" in dev
+    assert "remain deferred on #217" in dev
 
 
 # ---------------------------------------------------------------------------

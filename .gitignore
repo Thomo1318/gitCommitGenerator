@@ -116,3 +116,6 @@ mermaid_github_guide.md
 # TEMPORARY IGNORE ITEMS
 src/evals
 best_practices.md
+
+# S3 eval capture: local accept-path bundles / session twins (never commit live captures)
+/.eval/

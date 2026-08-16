@@ -78,6 +78,12 @@ app = typer.Typer(
 )
 console = Console()
 
+# Thin corpus-helper sub-app (Issue #231, D11). Delegation-only: no binder, no
+# accept-path .eval writes, no network. Distinct from the `evals` benchmark cmd.
+from git_cg.eval.cli import eval_app  # noqa: E402
+
+app.add_typer(eval_app, name="eval")
+
 # Only generate for an interactive (empty) or template commit. Everything else
 # (-m/-F => "message", merge, squash, --amend/-c/-C => "commit") already has a
 # message we must NOT overwrite — critical for safe global-hook operation.
@@ -4324,17 +4330,21 @@ def record_telemetry(
     commit_msg_file: str = typer.Argument(".git/COMMIT_EDITMSG", help="Path to the final commit message file"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> None:
-    """
-    Record final commit telemetry in Opik.
+    """Record final commit telemetry and bind accepted final bytes (S3).
 
-    Classifies how the generated commit message was changed, logs the stored telemetry metadata, and clears the saved telemetry state afterwards.
+    Reads ``COMMIT_EDITMSG`` as exact bytes (hash authority), classifies how the
+    generated message was edited when telemetry state is present, records Opik
+    metadata, and best-effort binds accept-path evidence via
+    :func:`bind_accept_path`. Missing telemetry state or binding failures never
+    block product accept (N19 F8 / capture-off-by-default).
 
     Parameters:
-        commit_msg_file (str): Path to the final commit message file.
-        verbose (bool): Enables verbose output.
+        commit_msg_file: Path to the final commit message file.
+        verbose: Enables progress / error output.
     """
     import subprocess
 
+    from git_cg.eval.binding.accept_hook import bind_accept_path
     from git_cg.telemetry import (
         classify_edit,
         clear_telemetry_state,
@@ -4348,22 +4358,49 @@ def record_telemetry(
     except Exception:
         git_dir = ".git"
 
-    state = read_telemetry_state(git_dir)
-    if not state:
-        if verbose:
-            console.log("No git-cg telemetry state found. Skipping.")
-        raise typer.Exit(code=0)
-
+    # Read the exact accepted final bytes first — they are the authoritative
+    # scored artifact (N2/D4) and must be available even when telemetry state
+    # is absent (N19 F8). Text projection is derived from the bytes.
+    final_bytes: bytes | None = None
+    final_message = ""
     try:
-        with open(commit_msg_file, encoding="utf-8") as f:
-            final_message = f.read()
+        with open(commit_msg_file, "rb") as f:
+            final_bytes = f.read()
+        final_message = final_bytes.decode("utf-8", errors="replace")
     except Exception as e:
         if verbose:
             console.log(f"Failed to read final commit message: {e}")
         clear_telemetry_state(git_dir)
         raise typer.Exit(code=0) from e
 
-    provenance = classify_edit(state.generated_message, final_message)
+    # Telemetry state is optional enrichment, never a precondition (N19 F8).
+    state = read_telemetry_state(git_dir)
+
+    # S3 accept-path binding hook: bind exact bytes + emit trajectory/session
+    # twin. Gated off by default (D1); best-effort and never blocks accept.
+    # Runs before clearing state so state-derived fields can enrich the bind.
+    provenance_value: str | None = None
+    provenance = None
+    if state is not None:
+        provenance = classify_edit(state.generated_message, final_message)
+        provenance_value = provenance.value
+    try:
+        bind_accept_path(
+            final_bytes=final_bytes,
+            git_dir=git_dir,
+            telemetry_state=state,
+            edit_provenance=provenance_value,
+        )
+    except Exception as bind_exc:
+        if verbose:
+            console.log(f"Eval accept-path binding skipped: {bind_exc}")
+
+    if state is None or provenance is None:
+        if verbose:
+            console.log("No git-cg telemetry state found. Skipping Opik record.")
+        clear_telemetry_state(git_dir)
+        raise typer.Exit(code=0)
+
     if verbose:
         console.log(f"Edit classification: {provenance.value}")
 

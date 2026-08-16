@@ -42,7 +42,7 @@ def test_s0_c02_unknown_enum_values_fail() -> None:
 def test_s0_c03_docs_state_dual_axis() -> None:
     readme = Path("docs/eval/README.md").read_text(encoding="utf-8")
     assert "Train axis ≠ gate axis" in readme
-    assert "0.9.2-body-ingest" in readme
+    assert "0.9.3-s2b-clarifications" in readme
     assert "train_rich" in readme
     assert "gate" in readme.lower()
 

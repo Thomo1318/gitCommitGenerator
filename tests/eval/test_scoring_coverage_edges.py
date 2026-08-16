@@ -646,7 +646,10 @@ def test_project_score_context_validation_and_fallbacks() -> None:
     )
     assert "final_message_sha256_mismatch" in ctx.warnings
     assert ctx.final_message_sha256 is not None
-    assert ctx.final_message_sha256 != "0" * 64
+    # N19 F1: the stored hash is the authority and must be preserved (not
+    # clobbered by the recomputed text hash); the mismatch is surfaced via the
+    # warning above and scored by Family A's a.final_bytes_stable.
+    assert ctx.final_message_sha256 == "0" * 64
     assert ctx.product_card == {"a": 1}
     assert ctx.path_class_gate == "12"
     assert ctx.generation_task_input == {"diff_summary": "x"}
