@@ -133,3 +133,112 @@ def encode_fixture_cmd(
     typer.echo(f"case_hash {encoded['case_hash']}")
     typer.echo(f"bundle_ref {encoded['bundle_ref']}")
     raise typer.Exit(code=0)
+
+
+# --------------------------------------------------------------------------
+# S4b export commands (F4 fail-open; never block the product accept path).
+# --------------------------------------------------------------------------
+
+
+@eval_app.command("export-status")
+def export_status_cmd(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+) -> None:
+    """Show the Layer-A export queue status (read-only, offline)."""
+    from git_cg.eval.binding.paths import resolve_repo_root
+    from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
+
+    try:
+        repo = root if root is not None else resolve_repo_root()
+    except Exception as exc:
+        typer.echo(f"export-status: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+
+    qdir = export_queue_dir(repo)
+    counts: dict[str, int] = {}
+    if qdir.is_dir():
+        for path in sorted(qdir.glob("*.json")):
+            try:
+                item = load_queue_item(path.stem, repo_root=repo)
+            except Exception:
+                counts["unreadable"] = counts.get("unreadable", 0) + 1
+                continue
+            status = item.get("status", "unknown")
+            counts[status] = counts.get(status, 0) + 1
+
+    typer.echo(f"queue_dir {qdir}")
+    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
+        if status in counts:
+            typer.echo(f"{status} {counts[status]}")
+    if not counts:
+        typer.echo("queue empty")
+    raise typer.Exit(code=0)
+
+
+@eval_app.command("export-drain")
+def export_drain_cmd(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    max_items: int | None = typer.Option(None, "--max-items", help="Cap on rows processed this drain."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Resolve config + list pending rows; no upload."),
+) -> None:
+    """Drain the export queue through the Opik transport (F4 fail-open).
+
+    Always exits 0 unless the config is invalid (fail-closed). Transport and
+    secret failures are classified and recorded on the queue rows; they never
+    produce a non-zero exit that could block a hook.
+    """
+    from git_cg.eval.binding.paths import resolve_repo_root
+    from git_cg.eval.mirror.config import OpikConfigError, resolve_opik_config
+    from git_cg.eval.mirror.exporter import drain_queue, list_pending_items
+    from git_cg.eval.mirror.transport import OpikSdkTransport
+
+    try:
+        config = resolve_opik_config()
+    except OpikConfigError as exc:
+        typer.echo(f"export-drain: config invalid (fail-closed): {exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+    if config.get("mode", "off") == "off":
+        typer.echo("export-drain: mode=off; nothing to do")
+        raise typer.Exit(code=0)
+
+    try:
+        repo = root if root is not None else resolve_repo_root()
+    except Exception as exc:
+        typer.echo(f"export-drain: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=0) from None  # fail-open
+
+    if dry_run:
+        pending = list_pending_items(repo_root=repo)
+        typer.echo(f"mode {config.get('mode')}")
+        typer.echo(f"project {config.get('project_name', '')}")
+        typer.echo(f"pending {len(pending)}")
+        raise typer.Exit(code=0)
+
+    summary = drain_queue(
+        config,
+        transport=OpikSdkTransport(),
+        repo_root=repo,
+        max_items=max_items,
+    )
+    typer.echo(f"attempted {summary.attempted} exported {summary.exported} failed {summary.failed}")
+    if summary.error_classes:
+        typer.echo(f"error_classes {','.join(summary.error_classes)}")
+    # Fail-open: export failures never produce a blocking non-zero exit.
+    raise typer.Exit(code=0)
