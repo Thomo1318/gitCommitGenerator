@@ -78,13 +78,13 @@ class TrajectoryError(ValueError):
 def _as_name_list(observed: Iterable[str]) -> list[str]:
     """
     Convert observed stage values to trimmed, non-empty stage names.
-    
+
     Parameters:
     	observed (Iterable[str]): Observed stage-name values.
-    
+
     Returns:
     	list[str]: The trimmed stage names.
-    
+
     Raises:
     	TrajectoryError: If an observed value is not a string or is blank.
     """
@@ -102,13 +102,13 @@ def _as_name_list(observed: Iterable[str]) -> list[str]:
 def validate_observed_stages(observed: Iterable[str]) -> list[str]:
     """
     Validate observed stage names against the D3 declared vocabulary.
-    
+
     Parameters:
     	observed (Iterable[str]): Stage names observed during the trajectory.
-    
+
     Returns:
     	list[str]: Valid observed stage names in declared D3 order.
-    
+
     Raises:
     	TrajectoryError: If a stage name is unknown, duplicated, non-string, or blank.
     """
@@ -127,10 +127,10 @@ def validate_observed_stages(observed: Iterable[str]) -> list[str]:
 def is_complete(observed: Iterable[str]) -> bool:
     """
     Determines whether the observed stages satisfy the trajectory completeness requirements.
-    
+
     Parameters:
         observed (Iterable[str]): Stage names observed during the trajectory.
-    
+
     Returns:
         bool: `True` if `accept_path_finalization` and every required core stage are observed, `False` otherwise.
     """
@@ -145,10 +145,10 @@ def _normalise_details(
 ) -> list[dict[str, str]]:
     """
     Validate and normalise optional observed-stage detail entries.
-    
+
     Parameters:
         details (Iterable[dict[str, Any]] | None): Stage detail entries containing a declared stage name and an allowed status.
-    
+
     Returns:
         list[dict[str, str]]: Validated stage detail entries with stripped stage names.
     """
@@ -182,7 +182,7 @@ def build_trajectory_evidence(
 ) -> dict[str, Any]:
     """
     Build a deterministic ``trajectory_evidence_v1`` object from observed stages.
-    
+
     Parameters:
         evidence_id (str): Identifier for the evidence object.
         observed_stages (Iterable[str]): Stage names observed during the trajectory.
@@ -192,11 +192,11 @@ def build_trajectory_evidence(
         notes (str | None): Optional notes associated with the evidence.
         metric_catalog (str | None): Optional metric catalogue identifier.
         schema_pack (str | None): Optional schema pack identifier.
-    
+
     Returns:
         dict[str, Any]: Evidence containing ordered declared and observed stages,
             derived completeness metadata, and supplied optional metadata.
-    
+
     Raises:
         TrajectoryError: If the evidence identifier, stages, or stage details are
             invalid.

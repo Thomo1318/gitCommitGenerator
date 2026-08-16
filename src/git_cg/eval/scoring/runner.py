@@ -70,11 +70,11 @@ def resolve_require_trajectory(
 ) -> bool:
     """
     Resolve whether trajectory requirements apply to scoring.
-    
+
     Parameters:
     	require_trajectory (bool | None): Explicit trajectory requirement, taking precedence when provided.
     	suite (Mapping[str, Any] | None): Suite metadata that may define ``meta.require_trajectory``.
-    
+
     Returns:
     	bool: The explicit policy, the boolean value from suite metadata, or ``False`` when neither is provided.
     """
@@ -97,13 +97,13 @@ def _recovery_context(
 ) -> ScoreContext:
     """
     Create a fail-closed scoring context when context projection fails.
-    
+
     Parameters:
         bundle: The bundle from which to recover the case identifier and content.
         suite: Optional suite metadata to include in the recovered context.
         case_id: Optional explicit case identifier.
         exc: The exception raised during context projection.
-    
+
     Returns:
         A minimal scoring context containing the projection error and missing-value defaults.
     """
@@ -274,19 +274,19 @@ def score_bundle(
     case_id: str | None = None,
 ) -> ScoreCaseResult:
     """Score one encoded ``ape_bundle_v1`` mapping offline.
-    
+
     Evaluates the applicable scoring families, composes deterministic gates, and
     fails closed when context projection, family evaluation, result validation, or
     gate composition encounters an error. Message-dependent families are skipped
     when preconditions require short-circuiting; gold evaluation is otherwise
     limited to one shared call.
-    
+
     Parameters:
         bundle (dict[str, Any]): Encoded bundle to score.
         require_block (tuple[str, ...] | None): Required metric block for gate composition.
         require_topology (bool | None): Whether topology compliance is required.
         require_trajectory (bool | None): Whether trajectory compliance is required.
-    
+
     Returns:
         ScoreCaseResult: Per-case scores, gates, context, execution metadata, and
         evaluator errors.

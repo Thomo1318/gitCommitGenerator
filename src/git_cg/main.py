@@ -4332,9 +4332,9 @@ def record_telemetry(
 ) -> None:
     """
     Record final commit telemetry and bind the accepted commit message.
-    
+
     Reads the final message as UTF-8, classifies edits against the generated message when telemetry state is available, records the resulting metadata in Opik, and clears stored telemetry state. Missing telemetry state or binding failures do not prevent completion.
-    
+
     Parameters:
         commit_msg_file (str): Path to the final commit message file.
         verbose (bool): Whether to display progress and error messages.

@@ -139,11 +139,11 @@ def project_score_context(
 ) -> ScoreContext:
     """
     Build a score context from a bundle and optional suite.
-    
+
     Explicit product and score cards and file paths take precedence over bundle
     values. A non-blank final message is selected as the scoring target; otherwise
     a product or score card is used when available.
-    
+
     Parameters:
         bundle (Mapping[str, Any]): Bundle containing the score-context data.
         suite (Mapping[str, Any] | None): Optional suite data to preserve.
@@ -154,10 +154,10 @@ def project_score_context(
         max_eval_bytes (int): Maximum permitted evaluation payload size.
         allow_wrong_artifact (bool): Whether raw model-output fields may be
             considered scoring targets.
-    
+
     Returns:
         ScoreContext: The projected score context.
-    
+
     Raises:
         ScoreContextError: If the bundle or required typed fields are invalid.
     """

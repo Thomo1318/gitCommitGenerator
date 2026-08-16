@@ -46,17 +46,17 @@ class MessageVersionError(ValueError):
 def _item(kind: str, message: str, source: str) -> dict[str, Any]:
     """
     Create a validated message-version record with its SHA-256 hash.
-    
+
     Parameters:
         kind (str): Version kind, such as ``generated``, ``edited``, or
             ``final_accept``.
         message (str): Non-empty message text.
         source (str): Evidence source for the version.
-    
+
     Returns:
         dict[str, Any]: A message-version record containing the kind, message,
             SHA-256 hash, and source.
-    
+
     Raises:
         MessageVersionError: If the kind or source is unsupported, or the message
             is empty or not a string.
@@ -86,13 +86,13 @@ def build_message_versions(
 ) -> list[dict[str, Any]]:
     """
     Build chronologically ordered message-version records from observed message and edit evidence.
-    
+
     Parameters:
         generated_message (str | None): The generated draft message, when observed.
         final_message (str | None): The authoritative final commit message, when observed.
         edited_message (str | None): The edited message text, when explicitly observed.
         edited (bool | None): Whether edit evidence indicates that the generated and final messages differ.
-    
+
     Returns:
         list[dict[str, Any]]: Message-version records for observed generated, edited, and accepted final messages.
     """

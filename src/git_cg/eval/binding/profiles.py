@@ -59,10 +59,10 @@ def _parse_capture(value: str | None) -> bool | None:
 def capture_enabled(env: Mapping[str, str] | None = None) -> bool:
     """
     Determine whether capture is enabled by the environment configuration.
-    
+
     Parameters:
         env: Environment mapping to inspect; defaults to :data:`os.environ`.
-    
+
     Returns:
         ``True`` when the capture switch is enabled or the profile is
         ``maintainer``, ``train``, or ``dogfood``; ``False`` otherwise.

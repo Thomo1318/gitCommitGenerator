@@ -77,10 +77,10 @@ _UNBOUND_CLASSES = frozenset(
 def message_sha256_bytes(data: bytes | str) -> str:
     """
     Hash a message using its original bytes where available.
-    
+
     Parameters:
         data (bytes | str): Message bytes or text to hash.
-    
+
     Returns:
         str: The full 64-character hexadecimal SHA-256 digest.
     """
@@ -205,18 +205,18 @@ def bind_final_accept(
 ) -> BindResult:
     """
     Bind the exact final message to schema-valid ``final_accept`` evidence.
-    
+
     Capture-disabled, absent-message, unresolved-repository, and schema-invalid
     outcomes are returned as unbound results. Existing evidence may be reused when
     the repository, accept-event token, and message hash match. Persistence
     failures are reported in the result without blocking product acceptance.
-    
+
     Parameters:
         inp (BindInput): Final message and optional binding metadata.
         repo_root (Path | None): Repository root used for persistence and reuse
             scoping.
         write (bool): Whether to persist the evidence bundle.
-    
+
     Returns:
         BindResult: Binding status, bundle data, persistence paths, and any errors.
     """
@@ -327,16 +327,16 @@ def bind_unbound(
 ) -> BindResult:
     """
     Constructs validated evidence for an outcome that is explicitly unbound.
-    
+
     Parameters:
         reason (str): Explanation for why the evidence is unbound.
         final_message (str | None): Optional final message to include and hash.
         artifact_class (str): Allowed unbound evidence classification.
         **kwargs (Any): Optional bundle metadata, including ``case_id``.
-    
+
     Returns:
         BindResult: An unbound result containing the validated evidence bundle.
-    
+
     Raises:
         ValueError: If the reason is blank, the artifact class is unsupported, or
             the artifact class claims ``final_accept``.

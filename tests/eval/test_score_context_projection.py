@@ -19,7 +19,7 @@ MSG = "✨ feat(eval): accept-path binding\n"
 def _base() -> dict:
     """
     Create the minimal bound final-accept bundle used by the regression tests.
-    
+
     Returns:
     	dict: A bundle containing the case identifier, final message, bound status, and artifact class.
     """

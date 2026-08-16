@@ -45,7 +45,7 @@ def score_family_h(
 ) -> list[ScoreResultV1]:
     """
     Emit Family H metrics for pin integrity, offline execution, score validity, evaluation errors, input handling, product-card consistency, structured bundle compliance, and trajectory evidence.
-    
+
     Parameters:
         ctx (ScoreContext): Evaluation context containing bundle metadata and product-card data.
         pre (PreconditionResult): Input precondition results used to report input validity.
@@ -54,7 +54,7 @@ def score_family_h(
         offline (bool): Whether evaluation completed without online access.
         evaluator_errors (list[str] | None): Evaluator errors to report.
         require_trajectory (bool): Whether missing or incomplete trajectory evidence is an evaluation failure.
-    
+
     Returns:
         list[ScoreResultV1]: Family H metric results.
     """

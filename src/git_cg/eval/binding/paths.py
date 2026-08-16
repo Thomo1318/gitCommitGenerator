@@ -89,14 +89,14 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
 
 def resolve_repo_root(start: Path | None = None) -> Path:
     """Resolve the Git repository root for local Layer-A data.
-    
+
     Parameters:
         start (Path | None): Path from which to search for the repository. Defaults to
             the current working directory.
-    
+
     Returns:
         Path: The resolved repository root directory.
-    
+
     Raises:
         RepoRootUnresolvedError: If the repository root cannot be resolved.
     """
@@ -144,13 +144,13 @@ def eval_tree_root(repo_root: Path) -> Path:
 def _contained(repo_root: Path, target: Path) -> Path:
     """
     Ensure a path remains within the repository's `.eval/` directory.
-    
+
     Parameters:
         target (Path): Path to validate, interpreted relative to the `.eval/` directory when relative.
-    
+
     Returns:
         Path: The resolved, contained path.
-    
+
     Raises:
         LayerAPathError: If the path cannot be resolved or would escape the `.eval/` directory.
     """
@@ -202,7 +202,7 @@ def trajectories_dir(repo_root: Path) -> Path:
 def _ensure_dir(path: Path) -> None:
     """
     Create a directory and its parent directories with mode 0700.
-    
+
     Permission adjustments that fail are ignored.
     """
     path.mkdir(parents=True, exist_ok=True, mode=_DIR_MODE)
@@ -214,14 +214,14 @@ def _ensure_dir(path: Path) -> None:
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
     """
     Write a dictionary as UTF-8 JSON to a file using an atomic replacement.
-    
+
     The destination's parent directory is created when necessary. The resulting
     file uses restrictive permissions and is formatted with sorted keys and a
     trailing newline.
-    
+
     Parameters:
         payload (dict[str, Any]): JSON-serialisable data to write.
-    
+
     Returns:
         Path: The path of the written file.
     """

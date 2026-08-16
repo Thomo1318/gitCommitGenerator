@@ -90,7 +90,7 @@ def bind_accept_path(
 ) -> AcceptBindResult:
     """
     Bind the authoritative accepted message and create associated evidence and session data.
-    
+
     Parameters:
         final_bytes: Exact ``COMMIT_EDITMSG`` bytes to bind.
         git_dir: Resolved Git directory used to derive the accept-event token.
@@ -98,7 +98,7 @@ def bind_accept_path(
         telemetry_state: Optional state supplying the draft message, score card, and correlation IDs.
         edit_provenance: Optional product edit classification.
         write: Whether to persist the generated records.
-    
+
     Returns:
         AcceptBindResult: Structured outcome containing binding status, written paths, and errors.
     """
