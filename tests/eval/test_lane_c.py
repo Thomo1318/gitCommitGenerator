@@ -17,9 +17,9 @@ from git_cg.eval.lane_c import (
     resolve_allows_lane_c,
     resolve_lab_override,
 )
+from git_cg.eval.lane_c.judge import REASON_EMPTY_INPUT
 from git_cg.eval.lane_c.runner import (
     REASON_COHORT_INELIGIBLE,
-    REASON_JUDGE_NOT_RUN,
     run_lane_c,
 )
 from git_cg.eval.scoring import compose_gates
@@ -163,16 +163,19 @@ class TestRunLaneC:
             assert r.reason == REASON_COHORT_INELIGIBLE
             assert r.evidence and r.evidence["skipped"] is True
 
-    def test_eligible_but_judge_not_implemented(self) -> None:
+    def test_eligible_without_message_skips_gracefully(self) -> None:
+        # S5c: an eligible cohort with no message to score degrades to an honest
+        # empty-input skip (never a fabricated score, never a raise).
         env = {"GIT_CG_EVAL_JUDGE_MODEL": "m", "GIT_CG_EVAL_JUDGE_API_KEY": "k"}
         rows, elig = run_lane_c(
             ["cprime.geval_craft"],
             deterministic_pass=True,
             allows_lane_c=True,
             environ=env,
+            message="",
         )
         assert elig.eligible is True
-        assert rows[0].reason == REASON_JUDGE_NOT_RUN
+        assert rows[0].reason == REASON_EMPTY_INPUT
         assert rows[0].passed is None
         assert rows[0].authority is Authority.ADVISORY
 
