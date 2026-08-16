@@ -93,6 +93,21 @@ def test_incomplete_trajectory_fails_observed_when_required() -> None:
     assert by["h.trajectory_stages_observed"].evidence["meta_complete"] is False
 
 
+def test_invalid_trajectory_shape_fails_when_required() -> None:
+    """Non-list / invalid stage values must not count as present evidence."""
+    traj = {
+        "schema_version": "trajectory_evidence_v1",
+        "id": "ev-bad",
+        "declared_stages": "x",
+        "observed_stages": "x",
+        "meta": {"complete": True},
+    }
+    by = _score(_ctx_with_trajectory(traj), require_trajectory=True)
+    assert by["h.trajectory_stages_declared"].passed is False
+    assert by["h.trajectory_stages_observed"].passed is False
+    assert by["h.trajectory_stages_declared"].evidence["trajectory_valid"] is False
+
+
 def test_resolve_require_trajectory_precedence() -> None:
     assert resolve_require_trajectory(True, None) is True
     assert resolve_require_trajectory(False, {"meta": {"require_trajectory": True}}) is False

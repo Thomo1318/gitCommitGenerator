@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from git_cg.eval.binding.trajectory import TrajectoryError, validate_observed_stages
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 from git_cg.eval.score_result import ScoreResultV1
@@ -280,15 +281,25 @@ def _score_trajectory(ctx: ScoreContext, *, require_trajectory: bool) -> list[Sc
     declared: list[Any] = []
     observed: list[Any] = []
     meta_complete = False
+    trajectory_valid = False
     present = isinstance(trajectory, dict)
     if present:
-        declared = list(trajectory.get("declared_stages") or [])
-        observed = list(trajectory.get("observed_stages") or [])
-        traj_meta = trajectory.get("meta") or {}
-        meta_complete = bool(traj_meta.get("complete"))
+        raw_declared = trajectory.get("declared_stages")
+        raw_observed = trajectory.get("observed_stages")
+        traj_meta = trajectory.get("meta")
+        if isinstance(raw_declared, list) and isinstance(raw_observed, list):
+            try:
+                declared = validate_observed_stages(raw_declared)
+                observed = validate_observed_stages(raw_observed)
+                trajectory_valid = True
+            except TrajectoryError:
+                declared = []
+                observed = []
+                trajectory_valid = False
+        meta_complete = bool(traj_meta.get("complete")) if isinstance(traj_meta, dict) else False
 
-    declared_ok = present and len(declared) > 0
-    observed_ok = present and len(observed) > 0 and meta_complete
+    declared_ok = trajectory_valid and bool(declared)
+    observed_ok = trajectory_valid and bool(observed) and meta_complete
 
     declared_pass = declared_ok or not require_trajectory
     observed_pass = observed_ok or not require_trajectory
@@ -300,6 +311,7 @@ def _score_trajectory(ctx: ScoreContext, *, require_trajectory: bool) -> list[Sc
             reason=None if declared_ok else "trajectory_declared_missing",
             evidence={
                 "trajectory_present": present,
+                "trajectory_valid": trajectory_valid,
                 "declared_count": len(declared),
                 "require_trajectory": require_trajectory,
             },
@@ -311,6 +323,7 @@ def _score_trajectory(ctx: ScoreContext, *, require_trajectory: bool) -> list[Sc
             reason=None if observed_ok else "trajectory_observed_incomplete",
             evidence={
                 "trajectory_present": present,
+                "trajectory_valid": trajectory_valid,
                 "observed_count": len(observed),
                 "meta_complete": meta_complete,
                 "require_trajectory": require_trajectory,
