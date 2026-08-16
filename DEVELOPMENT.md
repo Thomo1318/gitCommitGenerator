@@ -407,15 +407,15 @@ same-filesystem local checkouts when measuring refresh latency.
 Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
 telemetry field (no separate payload key).
 
-## Offline evaluation contracts (S0–S2c)
+## Offline evaluation contracts (S0–S3)
 
-Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), and offline Plane A score runner (S2a/S2b/S2c) live under:
+Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), offline Plane A score runner (S2a/S2b/S2c), and accept-path final-bytes binding + trajectory evidence (S3) live under:
 
-* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S2c boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), and remaining S3+
-* Package: `src/git_cg/eval/` · corpus: `src/git_cg/eval/corpus/` · scoring: `src/git_cg/eval/scoring/` · schemas: `schemas/eval/`
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S3 boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), S3 capture defaults / `.eval` paths, and remaining S4+
+* Package: `src/git_cg/eval/` · corpus: `src/git_cg/eval/corpus/` · scoring: `src/git_cg/eval/scoring/` · binding: `src/git_cg/eval/binding/` · schemas: `schemas/eval/`
 * Fixtures (Lane A SoT): `tests/fixtures/eval/` · recipes: `just eval-schema-hash`, `just eval-materialize`, `just eval-fixture-index`
 
-S0–S2c are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path. Normal `git-cg commit` must not import `git_cg.eval.scoring`. Family I is harness/eval law only — not Hybrid prose / product-accept failure by itself.
+S0–S2c are offline-only and do **not** touch `GenerationTelemetry`, hooks, or the live commit path. S3 adds a **narrow**, capture-gated accept-path binder at `record-telemetry` (off by default; never blocks product accept). Normal `git-cg commit` must not import `git_cg.eval.scoring`. Family I is harness/eval law only — not Hybrid prose / product-accept failure by itself.
 
 Offline S2 smoke (no Opik / network):
 
@@ -429,7 +429,7 @@ print("snapshot", res.suite_snapshot_pin)
 PY
 ```
 
-S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. Accept-path binding/emitters (S3), Opik mirror (S4), Lane C′/GEval (S5), operator UX (S6), and ADR rewrite (S7) remain deferred on #217 / #225 (thin eval CLI deferred to S6). Track residual S2 polish / typecheck debt on #225.
+S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding/emitters (binder, trajectory, session twin, message_versions, thin `git-cg eval` corpus CLI) are implemented under `src/git_cg/eval/binding/` — capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. Opik mirror (S4), Lane C′/GEval (S5), operator UX (S6), and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225.
 
 ## Promptfoo evaluation (offline)
 

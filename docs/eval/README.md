@@ -1,9 +1,9 @@
-# Evaluation harness contracts (S0–S2c)
+# Evaluation harness contracts (S0–S3)
 
-Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), and **Plane A score runner** (S2a/S2b/S2c) for the Opik evaluation harness.
+Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), **Plane A score runner** (S2a/S2b/S2c), and **accept-path final-bytes binding + trajectory evidence** (S3) for the Opik evaluation harness.
 
-> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.2-body-ingest`
-> **Implementation issue:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220)
+> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.3-s2b-clarifications`
+> **Implementation issues:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) (S0) · [#231](https://github.com/Thomo1318/gitCommitGenerator/issues/231) (S3)
 > **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
 
 ## Dual axis (required)
@@ -45,6 +45,7 @@ Pins are content hashes (`name@sha256`):
 | `src/git_cg/eval/` | Offline package (enums, ScoreResult, pins) |
 | `src/git_cg/eval/corpus/` | S1 fixture encoder + snapshot builder |
 | `src/git_cg/eval/scoring/` | S2a–S2c offline Plane A runner (A–I + gates) |
+| `src/git_cg/eval/binding/` | S3 accept-path binder + trajectory/session/message-version emitters |
 | `tests/fixtures/eval/` | Lane A committed fixtures / suites |
 | `src/git_cg/eval/data/metric_catalog_v0.json` | Machine catalog (Families A–I + secondary) |
 | `tests/eval/` | Offline fail-closed tests |
@@ -131,7 +132,7 @@ uv run pytest tests/eval/test_score_runner.py \
 
 ### Deferred (not S2a baseline)
 
-Lane C judges, accept-path binding (S3), Opik upload (S4), and S5–S7 remain out of scope.
+Lane C judges, Opik upload (S4), and S5–S7 remain out of scope here. Accept-path binding (S3) is documented in its own section below.
 S2b (C/E/F/G product-authority metrics) shipped in v0.17.0 / PR #227; S2c (Family I topology) is documented below.
 
 ## S2c — Family I topology / lifecycle validators
@@ -383,5 +384,49 @@ current S0 pin identities for review/CI drift detection.
 |:---|:---|
 | **S0** | Scoring runtime, Opik network client, accept-path binder |
 | **S2a–S2c** | Lane C judges, accept-path binding (S3), Opik upload (S4), S5–S7 |
+| **S3** | Opik mirror/upload + corpus lake (S4), Lane C′ judges (S5), eval CLI/doctor/amend-brief (S6), ADR rewrite (S7) |
 
 Basic `git-cg` users do **not** need Opik installed.
+
+## S3 — accept-path final-bytes binding + trajectory evidence
+
+> **Implementation issue:** [#231](https://github.com/Thomo1318/gitCommitGenerator/issues/231)
+> **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
+
+S3 binds the **real accepted final message bytes** (exact `COMMIT_EDITMSG` / accept-path final bytes) into `ape_bundle_v1` with `artifact_class=final_accept`, emits R7 `trajectory_evidence_v1` (declared vs observed stages), writes an additive R13 `commit_session_thread_v1` local twin, and records chronological `message_versions` (draft/amend/final). It makes Lane B binding **live** without any Opik network/mirror work.
+
+### Capture is off by default (basic users unaffected)
+
+| Variable | Default | Meaning |
+|:---|:---|:---|
+| `GIT_CG_EVAL_CAPTURE` | **`off`** (unset/empty/unknown → off) | Master switch for S3 local bind + trajectory + session-twin capture |
+| `GIT_CG_EVAL_PROFILE` | unset | Optional alias read only when capture is unset: `basic`⇒off; `maintainer`/`train`/`dogfood`⇒on. Capture env wins if both set. |
+
+Truthy = `1`/`true`/`on`/`yes`; falsy = unset/empty/`0`/`false`/`off`/`no`; any other token fails closed to **off**. A normal `git-cg commit` makes **no** `.eval` writes and **no** network calls when capture is off.
+
+### Local Layer-A paths (repo-local, gitignored)
+
+```text
+.eval/
+  bundles/acceptpath/<session_thread_id>.json   # final_accept ape_bundle_v1
+  sessions/<session_thread_id>.json             # commit_session_thread_v1 twin
+```
+
+`/.eval/` is gitignored. Writes are atomic (temp + `os.replace`), mode `0600`/`0700`, and path-contained under the resolved repo root. Bundle JSON files are authoritative; any `index.json` is rebuildable cache only.
+
+### Product-pass vs eval-fail (mandatory split)
+
+A **valid final message with incomplete evidence** (missing trajectory, capture failure, unbound) is a **product pass + eval/observability fail** — never a Hybrid/gold prose rejection. Binding is best-effort and never blocks the accept path.
+
+### `.eval` privacy / retention (your responsibility)
+
+`.eval/` can contain **final commit messages and drafts**. Gitignore is **not** retention:
+
+* Local maintainer responsibility to delete/rotate `.eval/` contents.
+* Do **not** enable capture on shared/public repos without scrub.
+* No automatic cloud upload in S3 (that is S4); capture is off by default.
+* Default redaction profile is `default_scrub`; the final-message text is retained verbatim locally because it is the scored artifact (diffs/prompts/secrets are still scrubbed).
+
+### Boundary
+
+S3 **emits and binds local evidence only.** It does **not** upload to Opik / drain export queues (S4), run Lane C′/GEval judges (S5), provide the full eval CLI/doctor/amend-brief/review queue (S6), or rewrite ADR-0011 (S7).
