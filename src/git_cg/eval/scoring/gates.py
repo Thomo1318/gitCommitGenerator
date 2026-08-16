@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.result_builder import make_score
+
+if TYPE_CHECKING:  # avoid import cycle: lane_c.runner → result_builder ← gates
+    from git_cg.eval.lane_c.eligibility import LaneCEligibility
 
 # S2a required metric block — catalog has no require_block field; suite may override.
 S2A_REQUIRE_BLOCK: tuple[str, ...] = (
@@ -147,6 +151,7 @@ def compose_gates(
     bound: bool | None = None,
     require_topology: bool = False,
     gold_mode: str = "strict",
+    lane_c_eligibility: LaneCEligibility | None = None,
 ) -> list[ScoreResultV1]:
     """Compose ``gate.*`` metrics from score rows.
 
@@ -160,8 +165,14 @@ def compose_gates(
 
     Golden promotion uses the S2b baseline (det + gold + skeleton + bound).
     When ``require_topology=true``, it additionally requires passing
-    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7). Semantic
-    cohort stays false offline (later lane).
+    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7).
+
+    ``gate.semantic_cohort_eligible`` is **entry-only** (plan §6.11): it enables
+    Lane C-prime and never passes product. When ``lane_c_eligibility`` is ``None``
+    (the offline Lane A/B default), the gate stays ``False`` with the deferred
+    reason — offline behaviour is unchanged. When a
+    :class:`~git_cg.eval.lane_c.eligibility.LaneCEligibility` verdict is
+    supplied (an explicit Lane C-prime run), the gate reflects that verdict.
     """
     base_req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
     # Stable unique union; S2C_TOPOLOGY_BLOCK order preserved for new tails.
@@ -261,17 +272,36 @@ def compose_gates(
         )
     )
 
-    # Offline S2b/S2c: C-prime / semantic cohort remains later-lane (not C).
-    gates.append(
-        make_score(
-            "gate.semantic_cohort_eligible",
-            False,
-            passed=False,
-            reason="semantic_cohort_deferred_offline_later_lane",
-            evidence={"cprime_ran": False, "offline_s2b": True},
-            failure_ids=["GATE_SEMANTIC_COHORT_DEFERRED"],
+    # Semantic cohort is entry-only (plan §6.11). Offline Lane A/B (no verdict
+    # supplied) keeps the gate False with the deferred reason; an explicit Lane
+    # C-prime run threads its eligibility verdict through.
+    if lane_c_eligibility is None:
+        gates.append(
+            make_score(
+                "gate.semantic_cohort_eligible",
+                False,
+                passed=False,
+                reason="semantic_cohort_deferred_offline_later_lane",
+                evidence={"cprime_ran": False, "offline_s2b": True},
+                failure_ids=["GATE_SEMANTIC_COHORT_DEFERRED"],
+            )
         )
-    )
+    else:
+        elig = lane_c_eligibility
+        gates.append(
+            make_score(
+                "gate.semantic_cohort_eligible",
+                elig.eligible,
+                passed=elig.eligible,
+                reason=None if elig.eligible else elig.reason,
+                evidence={
+                    "cprime_ran": elig.eligible,
+                    "offline_s2b": False,
+                    **elig.evidence,
+                },
+                failure_ids=None if elig.eligible else ["GATE_SEMANTIC_COHORT_INELIGIBLE"],
+            )
+        )
 
     return gates
 
