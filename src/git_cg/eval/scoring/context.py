@@ -169,14 +169,23 @@ def project_score_context(
     if final_message is not None and not isinstance(final_message, str):
         raise ScoreContextError("final_message must be a string when present")
 
-    final_sha = bundle.get("final_message_sha256")
+    # Stored-vs-recomputed hash handling (N19 F1): the *stored* bundle hash is
+    # the authority carried on the context. A separate recomputed hash over the
+    # projected text is compared against it so tamper detection is not
+    # tautological. Family A's ``a.final_bytes_stable`` performs the comparison.
+    stored_sha = bundle.get("final_message_sha256")
+    if not isinstance(stored_sha, str) or not stored_sha:
+        stored_sha = None
     if isinstance(final_message, str) and final_message != "":
         computed = message_sha256(final_message)
-        if isinstance(final_sha, str) and final_sha and final_sha != computed:
+        if stored_sha is not None and stored_sha != computed:
             warnings.append("final_message_sha256_mismatch")
-        final_sha = computed
-    elif not isinstance(final_sha, str):
-        final_sha = None
+        elif stored_sha is None:
+            # No stored hash to preserve: fall back to the recomputed hash so
+            # downstream evidence still has a value, and flag it.
+            stored_sha = computed
+            warnings.append("final_message_sha256_computed_fallback")
+    final_sha = stored_sha
 
     artifact_class = bundle.get("artifact_class")
     if artifact_class is not None and not isinstance(artifact_class, str):
@@ -190,13 +199,22 @@ def project_score_context(
     if unbound_reason is not None and not isinstance(unbound_reason, str):
         raise ScoreContextError("unbound_reason must be a string")
 
-    # Cards: explicit kwargs outrank injected dict keys (FIND-027 / D44).
+    # Cards precedence (D10/D44): explicit kwargs → bundle.meta cards →
+    # top-level compat keys (only for non-schema-validated fixtures; frozen
+    # ape_bundle_v1 forbids top-level card fields).
+    meta = _as_dict(bundle.get("meta")) or {}
     card = _as_dict(product_card)
     if card is None:
-        card = _as_dict(bundle.get("product_card")) or {}
+        card = _as_dict(meta.get("product_card"))
+    if card is None:
+        card = _as_dict(bundle.get("product_card"))
+    card = card or {}
     s_card = _as_dict(score_card)
     if s_card is None:
-        s_card = _as_dict(bundle.get("score_card")) or {}
+        s_card = _as_dict(meta.get("score_card"))
+    if s_card is None:
+        s_card = _as_dict(bundle.get("score_card"))
+    s_card = s_card or {}
     # score_card may alias product_card when product_card empty (S2a compat).
     if not card and s_card:
         card = dict(s_card)
@@ -223,8 +241,6 @@ def project_score_context(
     # Explicit kwargs win; otherwise allow post-encode injection via bundle files
     # without synthesizing placeholders. Frozen schema has no staged_paths.
     file_tuple = _str_tuple(files) if files is not None else _str_tuple(bundle.get("files"))
-
-    meta = _as_dict(bundle.get("meta")) or {}
 
     return ScoreContext(
         case_id=bid,
