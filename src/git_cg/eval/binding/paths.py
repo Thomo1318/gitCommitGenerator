@@ -88,15 +88,17 @@ def _run_git(args: list[str], cwd: Path) -> str | None:
 
 
 def resolve_repo_root(start: Path | None = None) -> Path:
-    """Resolve the repo root for Layer-A writes (D13 primary, N20.5 fallback).
-
-    Order:
-        1. ``git rev-parse --show-toplevel`` (primary).
-        2. ``git rev-parse --git-dir`` fallback: when git-dir is ``$REPO/.git``
-           use its parent; otherwise use the git-dir itself (bare/odd layout).
-        3. Unresolvable ⇒ raise :class:`RepoRootUnresolvedError`.
-
-    The returned path is resolved (symlinks collapsed) and must be a directory.
+    """Resolve the Git repository root for local Layer-A data.
+    
+    Parameters:
+        start (Path | None): Path from which to search for the repository. Defaults to
+            the current working directory.
+    
+    Returns:
+        Path: The resolved repository root directory.
+    
+    Raises:
+        RepoRootUnresolvedError: If the repository root cannot be resolved.
     """
     cwd = Path(start) if start is not None else Path.cwd()
     try:
@@ -140,12 +142,17 @@ def eval_tree_root(repo_root: Path) -> Path:
 
 
 def _contained(repo_root: Path, target: Path) -> Path:
-    """Resolve ``target`` and refuse escape outside the ``.eval/`` tree.
-
-    Containment is enforced against the resolved repo-root ``.eval/`` tree so
-    symlink or ``..`` escapes fail closed (N19.3). Symlinks on existing path
-    ancestors are resolved before the comparison; non-existent trailing
-    components are re-appended so creation targets remain valid.
+    """
+    Ensure a path remains within the repository's `.eval/` directory.
+    
+    Parameters:
+        target (Path): Path to validate, interpreted relative to the `.eval/` directory when relative.
+    
+    Returns:
+        Path: The resolved, contained path.
+    
+    Raises:
+        LayerAPathError: If the path cannot be resolved or would escape the `.eval/` directory.
     """
     root = Path(repo_root).resolve()
     tree = root / EVAL_DIRNAME
@@ -193,7 +200,11 @@ def trajectories_dir(repo_root: Path) -> Path:
 
 
 def _ensure_dir(path: Path) -> None:
-    """Create ``path`` (and parents) with restrictive dir mode, best-effort."""
+    """
+    Create a directory and its parent directories with mode 0700.
+    
+    Permission adjustments that fail are ignored.
+    """
     path.mkdir(parents=True, exist_ok=True, mode=_DIR_MODE)
     # mkdir mode is subject to umask; tighten the leaf explicitly, best-effort.
     with contextlib.suppress(OSError):
@@ -201,17 +212,18 @@ def _ensure_dir(path: Path) -> None:
 
 
 def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
-    """Atomically write ``payload`` as UTF-8 JSON to ``path`` (N19.3).
-
-    Writes a temp file in the *target directory*, fsyncs, then ``os.replace``
-    onto the final path so an interrupted write never leaves a partially-valid
-    authoritative bundle under the final name. Final file mode is ``0600``.
-
-    The final ``path`` must already be containment-checked by the caller; this
-    helper re-verifies containment defensively when the path is under a
-    recognisable ``.eval/`` tree.
-
-    Returns the final path written.
+    """
+    Write a dictionary as UTF-8 JSON to a file using an atomic replacement.
+    
+    The destination's parent directory is created when necessary. The resulting
+    file uses restrictive permissions and is formatted with sorted keys and a
+    trailing newline.
+    
+    Parameters:
+        payload (dict[str, Any]): JSON-serialisable data to write.
+    
+    Returns:
+        Path: The path of the written file.
     """
     final = Path(path)
     _ensure_dir(final.parent)

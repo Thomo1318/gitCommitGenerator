@@ -137,17 +137,29 @@ def project_score_context(
     max_eval_bytes: int = DEFAULT_MAX_EVAL_BYTES,
     allow_wrong_artifact: bool = False,
 ) -> ScoreContext:
-    """Project a bundle (+ optional suite) into a FIND-027 score context.
-
-    Prefer ``bundle.final_message``. Never default format scoring onto raw model
-    dumps / generation JSON keys unless ``allow_wrong_artifact`` (tests only).
-    Pins come from live S0 loaders; missing identity fields fail closed.
-
-    Card / path injection (D10/D44):
-    * Explicit ``product_card`` / ``score_card`` / ``files`` kwargs win.
-    * Post-encode test dict keys are accepted as injection channels (frozen
-      ``ape_bundle_v1`` does not declare them; they are not schema fields).
-    * Explicit empty ``files=()`` stays empty — never fabricate paths.
+    """
+    Build a score context from a bundle and optional suite.
+    
+    Explicit product and score cards and file paths take precedence over bundle
+    values. A non-blank final message is selected as the scoring target; otherwise
+    a product or score card is used when available.
+    
+    Parameters:
+        bundle (Mapping[str, Any]): Bundle containing the score-context data.
+        suite (Mapping[str, Any] | None): Optional suite data to preserve.
+        case_id (str | None): Optional case identifier overriding the bundle value.
+        product_card (Mapping[str, Any] | None): Optional product card.
+        score_card (Mapping[str, Any] | None): Optional score card.
+        files (Sequence[str] | None): Explicit file paths to include as evidence.
+        max_eval_bytes (int): Maximum permitted evaluation payload size.
+        allow_wrong_artifact (bool): Whether raw model-output fields may be
+            considered scoring targets.
+    
+    Returns:
+        ScoreContext: The projected score context.
+    
+    Raises:
+        ScoreContextError: If the bundle or required typed fields are invalid.
     """
     if not isinstance(bundle, Mapping):
         raise ScoreContextError("bundle must be an object")

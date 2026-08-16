@@ -27,6 +27,7 @@ def _enable_capture(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _disable_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable evaluation capture and profile environment settings for a test."""
     monkeypatch.delenv("GIT_CG_EVAL_CAPTURE", raising=False)
     monkeypatch.delenv("GIT_CG_EVAL_PROFILE", raising=False)
 

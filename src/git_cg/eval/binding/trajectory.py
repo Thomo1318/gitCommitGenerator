@@ -76,10 +76,17 @@ class TrajectoryError(ValueError):
 
 
 def _as_name_list(observed: Iterable[str]) -> list[str]:
-    """Normalise observed stage names to a list of non-empty strings.
-
-    Fail closed on non-string or blank entries — observed stages are stage
-    *names* only (D10), never ``{name, status}`` objects.
+    """
+    Convert observed stage values to trimmed, non-empty stage names.
+    
+    Parameters:
+    	observed (Iterable[str]): Observed stage-name values.
+    
+    Returns:
+    	list[str]: The trimmed stage names.
+    
+    Raises:
+    	TrajectoryError: If an observed value is not a string or is blank.
     """
     names: list[str] = []
     for item in observed:
@@ -93,10 +100,17 @@ def _as_name_list(observed: Iterable[str]) -> list[str]:
 
 
 def validate_observed_stages(observed: Iterable[str]) -> list[str]:
-    """Validate observed stage names against the D3 closed vocabulary.
-
-    Returns the de-duplicated observed names in D3 declared order. Fails closed
-    on unknown stage names (never invent stages that did not run).
+    """
+    Validate observed stage names against the D3 declared vocabulary.
+    
+    Parameters:
+    	observed (Iterable[str]): Stage names observed during the trajectory.
+    
+    Returns:
+    	list[str]: Valid observed stage names in declared D3 order.
+    
+    Raises:
+    	TrajectoryError: If a stage name is unknown, duplicated, non-string, or blank.
     """
     names = _as_name_list(observed)
     unknown = [n for n in names if n not in _DECLARED_SET]
@@ -111,11 +125,14 @@ def validate_observed_stages(observed: Iterable[str]) -> list[str]:
 
 
 def is_complete(observed: Iterable[str]) -> bool:
-    """Behavioural completeness signal (D3/D10 ``meta.complete``).
-
-    ``True`` only when ``accept_path_finalization`` is observed **and** every
-    required core stage is present. This is an eval-class signal, never a
-    product fail.
+    """
+    Determines whether the observed stages satisfy the trajectory completeness requirements.
+    
+    Parameters:
+        observed (Iterable[str]): Stage names observed during the trajectory.
+    
+    Returns:
+        bool: `True` if `accept_path_finalization` and every required core stage are observed, `False` otherwise.
     """
     names = set(_as_name_list(observed))
     if "accept_path_finalization" not in names:
@@ -126,11 +143,14 @@ def is_complete(observed: Iterable[str]) -> bool:
 def _normalise_details(
     details: Iterable[dict[str, Any]] | None,
 ) -> list[dict[str, str]]:
-    """Validate optional ``meta.observed_stage_details`` entries.
-
-    Each entry must be ``{"name": <declared stage>, "status": <allowed>}``.
-    Names must be a subset of the declared vocabulary; detail is additive
-    telemetry only — consumers work from ``observed_stages`` strings alone.
+    """
+    Validate and normalise optional observed-stage detail entries.
+    
+    Parameters:
+        details (Iterable[dict[str, Any]] | None): Stage detail entries containing a declared stage name and an allowed status.
+    
+    Returns:
+        list[dict[str, str]]: Validated stage detail entries with stripped stage names.
     """
     if details is None:
         return []
@@ -160,13 +180,26 @@ def build_trajectory_evidence(
     metric_catalog: str | None = None,
     schema_pack: str | None = None,
 ) -> dict[str, Any]:
-    """Build a schema-valid ``trajectory_evidence_v1`` object (D10).
-
-    ``observed_stages`` are validated against the D3 closed vocabulary and
-    emitted in declared order. ``meta.complete`` is derived from the observed
-    set; optional ``meta.observed_stage_details`` carries additive
-    ``{name, status}`` telemetry. No top-level ``complete`` key is emitted
-    (frozen schema forbids it).
+    """
+    Build a deterministic ``trajectory_evidence_v1`` object from observed stages.
+    
+    Parameters:
+        evidence_id (str): Identifier for the evidence object.
+        observed_stages (Iterable[str]): Stage names observed during the trajectory.
+        declared_stages (Iterable[str] | None): Optional declared stage vocabulary.
+        observed_stage_details (Iterable[dict[str, Any]] | None): Optional status
+            telemetry for observed stages.
+        notes (str | None): Optional notes associated with the evidence.
+        metric_catalog (str | None): Optional metric catalogue identifier.
+        schema_pack (str | None): Optional schema pack identifier.
+    
+    Returns:
+        dict[str, Any]: Evidence containing ordered declared and observed stages,
+            derived completeness metadata, and supplied optional metadata.
+    
+    Raises:
+        TrajectoryError: If the evidence identifier, stages, or stage details are
+            invalid.
     """
     if not isinstance(evidence_id, str) or not evidence_id.strip():
         raise TrajectoryError("trajectory evidence id must be a non-empty string")

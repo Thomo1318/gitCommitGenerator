@@ -44,6 +44,23 @@ class MessageVersionError(ValueError):
 
 
 def _item(kind: str, message: str, source: str) -> dict[str, Any]:
+    """
+    Create a validated message-version record with its SHA-256 hash.
+    
+    Parameters:
+        kind (str): Version kind, such as ``generated``, ``edited``, or
+            ``final_accept``.
+        message (str): Non-empty message text.
+        source (str): Evidence source for the version.
+    
+    Returns:
+        dict[str, Any]: A message-version record containing the kind, message,
+            SHA-256 hash, and source.
+    
+    Raises:
+        MessageVersionError: If the kind or source is unsupported, or the message
+            is empty or not a string.
+    """
     if kind not in MESSAGE_VERSION_KINDS:
         raise MessageVersionError(f"message version kind must be one of {sorted(MESSAGE_VERSION_KINDS)}: {kind!r}")
     if source not in MESSAGE_VERSION_SOURCES:
@@ -67,20 +84,17 @@ def build_message_versions(
     edited_message: str | None = None,
     edited: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """Build the ``message_versions[]`` list from real evidence (D12/M7).
-
-    Inclusion law:
-
-    * ``generated`` — included when ``generated_message`` is present
-      (``GenerationTelemetry.generated_message``; best-effort redacted draft,
-      **not** guaranteed raw model output — NTH-U5).
-    * ``final_accept`` — included when ``final_message`` (authoritative
-      ``COMMIT_EDITMSG`` bytes) is present.
-    * ``edited`` — included only when there is real edit evidence: an explicit
-      ``edited_message``, or ``edited=True`` (e.g. ``classify_edit`` reports an
-      edit) with a draft that differs from the final. Never invented.
-
-    Versions are emitted in chronological order: generated → edited → final.
+    """
+    Build chronologically ordered message-version records from observed message and edit evidence.
+    
+    Parameters:
+        generated_message (str | None): The generated draft message, when observed.
+        final_message (str | None): The authoritative final commit message, when observed.
+        edited_message (str | None): The edited message text, when explicitly observed.
+        edited (bool | None): Whether edit evidence indicates that the generated and final messages differ.
+    
+    Returns:
+        list[dict[str, Any]]: Message-version records for observed generated, edited, and accepted final messages.
     """
     versions: list[dict[str, Any]] = []
 

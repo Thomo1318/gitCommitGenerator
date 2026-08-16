@@ -36,6 +36,15 @@ HAPPY_OBSERVED = (
 
 
 def _ctx_with_trajectory(trajectory: dict | None):
+    """
+    Create a scoring context from the valid fixture, optionally including trajectory evidence.
+    
+    Parameters:
+    	trajectory (dict | None): Trajectory evidence to add to the bundle, or `None` to omit it.
+    
+    Returns:
+    	The projected scoring context for the fixture.
+    """
     fx = json.loads(VALID.read_text(encoding="utf-8"))
     bundle = encode_fixture(fx)["bundle"]
     if trajectory is not None:
@@ -44,6 +53,15 @@ def _ctx_with_trajectory(trajectory: dict | None):
 
 
 def _score(ctx, *, require_trajectory: bool):
+    """
+    Score the context for Family H metrics using evaluated preconditions and Family A scores.
+    
+    Parameters:
+    	require_trajectory (bool): Whether trajectory evidence is required for scoring.
+    
+    Returns:
+    	dict: Family H scores keyed by metric identifier.
+    """
     pre = evaluate_preconditions(ctx)
     a_scores = score_family_a(ctx)
     h = score_family_h(

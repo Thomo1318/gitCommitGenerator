@@ -68,11 +68,15 @@ def resolve_require_trajectory(
     require_trajectory: bool | None,
     suite: Mapping[str, Any] | None,
 ) -> bool:
-    """Resolve trajectory-require policy (R7/N19.6).
-
-    Order: explicit API argument → ``suite.meta.require_trajectory`` (bool only)
-    → ``False``. Never inferred from ``bound`` or from topology policy — Family
-    H owns trajectory; Family I owns topology. The two planes stay separate.
+    """
+    Resolve whether trajectory requirements apply to scoring.
+    
+    Parameters:
+    	require_trajectory (bool | None): Explicit trajectory requirement, taking precedence when provided.
+    	suite (Mapping[str, Any] | None): Suite metadata that may define ``meta.require_trajectory``.
+    
+    Returns:
+    	bool: The explicit policy, the boolean value from suite metadata, or ``False`` when neither is provided.
     """
     if require_trajectory is not None:
         return bool(require_trajectory)
@@ -91,7 +95,18 @@ def _recovery_context(
     case_id: str | None,
     exc: BaseException,
 ) -> ScoreContext:
-    """Minimal ``ScoreContext`` when projection fails (H still emits FIND-026)."""
+    """
+    Create a fail-closed scoring context when context projection fails.
+    
+    Parameters:
+        bundle: The bundle from which to recover the case identifier and content.
+        suite: Optional suite metadata to include in the recovered context.
+        case_id: Optional explicit case identifier.
+        exc: The exception raised during context projection.
+    
+    Returns:
+        A minimal scoring context containing the projection error and missing-value defaults.
+    """
     bid = case_id or (bundle.get("case_id") if isinstance(bundle, dict) else None) or "unknown"
     return ScoreContext(
         case_id=str(bid),
@@ -258,13 +273,23 @@ def score_bundle(
     max_eval_bytes: int | None = None,
     case_id: str | None = None,
 ) -> ScoreCaseResult:
-    """Score one already-encoded ``ape_bundle_v1`` mapping offline (Plane A).
-
-    Order: context → FIND-026 preconditions → A → (B/C/D/E/F/G if runnable with
-    one shared gold slot) → **I** → H → envelope validate → gates. Short-circuit
-    is A + I + H + envelope validate + gates (topology is not message-dependent).
-    No Opik client, network I/O, or product commit-path mutation. Family/gate
-    exceptions become evaluator errors + fail-closed gate composition.
+    """Score one encoded ``ape_bundle_v1`` mapping offline.
+    
+    Evaluates the applicable scoring families, composes deterministic gates, and
+    fails closed when context projection, family evaluation, result validation, or
+    gate composition encounters an error. Message-dependent families are skipped
+    when preconditions require short-circuiting; gold evaluation is otherwise
+    limited to one shared call.
+    
+    Parameters:
+        bundle (dict[str, Any]): Encoded bundle to score.
+        require_block (tuple[str, ...] | None): Required metric block for gate composition.
+        require_topology (bool | None): Whether topology compliance is required.
+        require_trajectory (bool | None): Whether trajectory compliance is required.
+    
+    Returns:
+        ScoreCaseResult: Per-case scores, gates, context, execution metadata, and
+        evaluator errors.
     """
     errors: list[str] = []
     scores: list[ScoreResultV1] = []

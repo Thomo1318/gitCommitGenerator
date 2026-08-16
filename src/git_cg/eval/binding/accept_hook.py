@@ -88,19 +88,19 @@ def bind_accept_path(
     edit_provenance: str | None = None,
     write: bool = True,
 ) -> AcceptBindResult:
-    """Bind the accepted final bytes + emit trajectory/session twin (Slice 3).
-
+    """
+    Bind the authoritative accepted message and create associated evidence and session data.
+    
     Parameters:
-        final_bytes: Exact ``COMMIT_EDITMSG`` bytes (authoritative).
-        git_dir: Resolved git dir (used for the accept-event token).
-        repo_root: Optional repo root override (tests); resolved when omitted.
-        telemetry_state: Optional ``GenerationTelemetry`` (or mapping) — when
-            present, supplies the redacted draft, score card, and correlation
-            ids. Absent state must not prevent binding (N19 F8).
-        edit_provenance: Optional product ``classify_edit`` value.
-        write: When ``False``, build + validate only (no filesystem I/O).
-
-    Never raises for product-accept reasons.
+        final_bytes: Exact ``COMMIT_EDITMSG`` bytes to bind.
+        git_dir: Resolved Git directory used to derive the accept-event token.
+        repo_root: Optional repository root; resolved when omitted.
+        telemetry_state: Optional state supplying the draft message, score card, and correlation IDs.
+        edit_provenance: Optional product edit classification.
+        write: Whether to persist the generated records.
+    
+    Returns:
+        AcceptBindResult: Structured outcome containing binding status, written paths, and errors.
     """
     if not capture_enabled():
         return AcceptBindResult(attempted=False, hook_status="capture_disabled")

@@ -4331,13 +4331,13 @@ def record_telemetry(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> None:
     """
-    Record final commit telemetry in Opik.
-
-    Classifies how the generated commit message was changed, logs the stored telemetry metadata, and clears the saved telemetry state afterwards.
-
+    Record final commit telemetry and bind the accepted commit message.
+    
+    Reads the final message as UTF-8, classifies edits against the generated message when telemetry state is available, records the resulting metadata in Opik, and clears stored telemetry state. Missing telemetry state or binding failures do not prevent completion.
+    
     Parameters:
         commit_msg_file (str): Path to the final commit message file.
-        verbose (bool): Enables verbose output.
+        verbose (bool): Whether to display progress and error messages.
     """
     import subprocess
 
