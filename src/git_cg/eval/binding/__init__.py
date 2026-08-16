@@ -14,7 +14,9 @@ performs network or Opik I/O on the bind path.
 Public API (D4, locked): ``capture_enabled``, ``BindInput``, ``BindResult``,
 ``bind_final_accept``, ``bind_unbound``. Trajectory evidence (R7/D3/D10) is
 emitted via ``build_trajectory_evidence`` and the ``DECLARED_STAGES``
-vocabulary.
+vocabulary. Session-thread twins (R13/D12) via ``build_session_twin`` /
+``write_session_twin``; message_versions hooks (D12/M7) via
+``build_message_versions``.
 """
 
 from __future__ import annotations
@@ -26,7 +28,12 @@ from git_cg.eval.binding.binder import (
     bind_unbound,
     message_sha256_bytes,
 )
+from git_cg.eval.binding.message_versions import build_message_versions
 from git_cg.eval.binding.profiles import capture_enabled
+from git_cg.eval.binding.session_thread import (
+    build_session_twin,
+    write_session_twin,
+)
 from git_cg.eval.binding.trajectory import (
     DECLARED_STAGES,
     build_trajectory_evidence,
@@ -38,7 +45,10 @@ __all__ = [
     "BindResult",
     "bind_final_accept",
     "bind_unbound",
+    "build_message_versions",
+    "build_session_twin",
     "build_trajectory_evidence",
     "capture_enabled",
     "message_sha256_bytes",
+    "write_session_twin",
 ]
