@@ -4341,6 +4341,7 @@ def record_telemetry(
     """
     import subprocess
 
+    from git_cg.eval.binding.accept_hook import bind_accept_path
     from git_cg.telemetry import (
         classify_edit,
         clear_telemetry_state,
@@ -4354,20 +4355,46 @@ def record_telemetry(
     except Exception:
         git_dir = ".git"
 
-    state = read_telemetry_state(git_dir)
-    if not state:
-        if verbose:
-            console.log("No git-cg telemetry state found. Skipping.")
-        raise typer.Exit(code=0)
-
+    # Read the exact accepted final bytes first — they are the authoritative
+    # scored artifact (N2/D4) and must be available even when telemetry state
+    # is absent (N19 F8). Text projection is derived from the bytes.
+    final_bytes: bytes | None = None
+    final_message = ""
     try:
-        with open(commit_msg_file, encoding="utf-8") as f:
-            final_message = f.read()
+        with open(commit_msg_file, "rb") as f:
+            final_bytes = f.read()
+        final_message = final_bytes.decode("utf-8", errors="replace")
     except Exception as e:
         if verbose:
             console.log(f"Failed to read final commit message: {e}")
         clear_telemetry_state(git_dir)
         raise typer.Exit(code=0) from e
+
+    # Telemetry state is optional enrichment, never a precondition (N19 F8).
+    state = read_telemetry_state(git_dir)
+
+    # S3 accept-path binding hook: bind exact bytes + emit trajectory/session
+    # twin. Gated off by default (D1); best-effort and never blocks accept.
+    # Runs before clearing state so state-derived fields can enrich the bind.
+    provenance_value: str | None = None
+    if state is not None:
+        provenance_value = classify_edit(state.generated_message, final_message).value
+    try:
+        bind_accept_path(
+            final_bytes=final_bytes,
+            git_dir=git_dir,
+            telemetry_state=state,
+            edit_provenance=provenance_value,
+        )
+    except Exception as bind_exc:
+        if verbose:
+            console.log(f"Eval accept-path binding skipped: {bind_exc}")
+
+    if not state:
+        if verbose:
+            console.log("No git-cg telemetry state found. Skipping Opik record.")
+        clear_telemetry_state(git_dir)
+        raise typer.Exit(code=0)
 
     provenance = classify_edit(state.generated_message, final_message)
     if verbose:

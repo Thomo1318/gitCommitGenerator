@@ -21,6 +21,10 @@ vocabulary. Session-thread twins (R13/D12) via ``build_session_twin`` /
 
 from __future__ import annotations
 
+from git_cg.eval.binding.accept_hook import (
+    AcceptBindResult,
+    bind_accept_path,
+)
 from git_cg.eval.binding.binder import (
     BindInput,
     BindResult,
@@ -41,8 +45,10 @@ from git_cg.eval.binding.trajectory import (
 
 __all__ = [
     "DECLARED_STAGES",
+    "AcceptBindResult",
     "BindInput",
     "BindResult",
+    "bind_accept_path",
     "bind_final_accept",
     "bind_unbound",
     "build_message_versions",
