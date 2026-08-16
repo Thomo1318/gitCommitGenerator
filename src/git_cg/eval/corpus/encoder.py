@@ -175,16 +175,10 @@ def encode_fixture(
 ) -> dict[str, Any]:
     """Encode a committed fixture object into bundle + case + identities.
 
-    Returns:
-        {
-          "bundle": ape_bundle_v1,
-          "case": eval_case_v1,
-          "bundle_ref": str,
-          "bundle_hash": str,
-          "case_hash": str,
-          "canonical_bundle": str,
-          "canonical_case": str,
-        }
+    Returns a mapping with ``bundle``, ``case``, ``bundle_ref``, ``bundle_hash``,
+    ``case_hash``, ``canonical_bundle``, and ``canonical_case``. Raises
+    ``CorpusEncodeError`` when the fixture or generated records fail validation.
+    Fixture-level ``session_thread_id`` is strip-normalised before bundle identity.
     """
     if not isinstance(fixture, Mapping):
         raise CorpusEncodeError("fixture must be an object")
@@ -250,7 +244,8 @@ def encode_fixture(
     # Archive-shaped enforcement when source declares 204_archive.
     corpus_source = None
     tags = _optional_str_list(fixture, "tags") or []
-    meta_in = fixture.get("meta") if isinstance(fixture.get("meta"), Mapping) else {}
+    raw_meta = fixture.get("meta")
+    meta_in: Mapping[str, Any] = raw_meta if isinstance(raw_meta, Mapping) else {}
     corpus_source = meta_in.get("corpus_source") or fixture.get("corpus_source")
     if corpus_source == "204_archive":
         if regime not in {"A", "B", "unknown"}:
@@ -316,6 +311,13 @@ def encode_fixture(
         bundle["path_class_gate"] = path_class_gate
     if gti is not None:
         bundle["generation_task_input"] = gti
+
+    # Fixture-level session_thread_id (S2c / N14). Schema allows the root field;
+    # copy only non-empty strings. Does not alter schema pins.
+    session_thread_id = _optional_str(fixture, "session_thread_id")
+    if session_thread_id is not None:
+        # Normalize at encode boundary so bundle identity matches scoring resolve.
+        bundle["session_thread_id"] = session_thread_id.strip()
 
     session_tags = tags
     meta_extra: dict[str, Any] = {

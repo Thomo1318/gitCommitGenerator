@@ -5,7 +5,13 @@ from __future__ import annotations
 from git_cg.eval.catalog import load_metric_catalog
 from git_cg.eval.enums import Authority, Family, Polarity, Source
 from git_cg.eval.score_result import ScoreResultV1
-from git_cg.eval.scoring.gates import S2A_REQUIRE_BLOCK, S2B_REQUIRE_BLOCK, compose_gates
+from git_cg.eval.scoring.gates import (
+    S2A_REQUIRE_BLOCK,
+    S2B_REQUIRE_BLOCK,
+    S2C_TOPOLOGY_BLOCK,
+    assert_s2c_block_len,
+    compose_gates,
+)
 from git_cg.eval.scoring.result_builder import make_score
 
 _POL = {m["metric_id"]: m["polarity"] for m in load_metric_catalog()["metrics"]}
@@ -154,3 +160,23 @@ def test_compose_gates_rejects_duplicate_metric_ids() -> None:
     rows.append(_pass_row("a.final_message_present"))
     with pytest.raises(ValueError, match="duplicate metric_id"):
         compose_gates(rows, bound=True)
+
+
+def test_s2c_topology_block_constant() -> None:
+    """S2C topology block is exactly 12 unique i.* ids and is opt-in only."""
+    assert_s2c_block_len()
+    assert len(S2C_TOPOLOGY_BLOCK) == 12
+    assert len(set(S2C_TOPOLOGY_BLOCK)) == 12
+    assert all(mid.startswith("i.") for mid in S2C_TOPOLOGY_BLOCK)
+    for mid in S2C_TOPOLOGY_BLOCK:
+        assert mid not in S2A_REQUIRE_BLOCK
+        assert mid not in S2B_REQUIRE_BLOCK
+
+
+def test_compose_gates_require_topology_false_default() -> None:
+    rows = [_pass_row(m) for m in S2A_REQUIRE_BLOCK]
+    gates = compose_gates(rows, bound=True)
+    det = next(g for g in gates if g.metric_id == "gate.deterministic_pass")
+    assert det.passed is True
+    assert (det.evidence or {}).get("require_topology") is False
+    assert (det.evidence or {}).get("s2c_topology_block") == []

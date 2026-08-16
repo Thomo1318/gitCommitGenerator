@@ -26,6 +26,10 @@ def test_package_exports() -> None:
     assert isinstance(s.S2A_REQUIRE_BLOCK, tuple)
     assert "gate.deterministic_pass" not in s.S2A_REQUIRE_BLOCK
     assert "a.final_message_present" in s.S2A_REQUIRE_BLOCK
+    # S2c surface
+    assert isinstance(s.S2C_TOPOLOGY_BLOCK, tuple)
+    assert callable(s.score_family_i)
+    assert len(s.FAMILY_I_METRIC_IDS) == 16
 
 
 def test_score_case_valid_fixture() -> None:
