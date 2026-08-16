@@ -24,11 +24,23 @@ from git_cg.eval.lane_c.eligibility import (
     resolve_allows_lane_c,
     resolve_lab_override,
 )
+from git_cg.eval.lane_c.prompt_pack import (
+    PromptPackError,
+    build_prompt_pack,
+    prompt_pack_content_hash,
+    resolve_judge_pack,
+    validate_prompt_pack,
+)
 
 __all__ = [
     "LaneCEligibility",
+    "PromptPackError",
+    "build_prompt_pack",
     "evaluate_semantic_cohort_eligibility",
     "judge_pins_resolvable",
+    "prompt_pack_content_hash",
     "resolve_allows_lane_c",
+    "resolve_judge_pack",
     "resolve_lab_override",
+    "validate_prompt_pack",
 ]
