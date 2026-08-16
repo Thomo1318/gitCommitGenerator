@@ -43,12 +43,23 @@ class MessageVersionError(ValueError):
     """message_versions construction failure (fail closed)."""
 
 
-def _item(kind: str, message: str, source: str) -> dict[str, Any]:
+def _item(
+    kind: str,
+    message: str,
+    source: str,
+    *,
+    message_bytes: bytes | None = None,
+) -> dict[str, Any]:
     """Build one D12 message-version item: kind / message / sha256 / source.
 
     Fails closed on unknown ``kind``/``source`` or blank non-string messages.
-    Hash authority is :func:`message_sha256_bytes` so version hashes match the
-    bound final-bytes hash.
+
+    Hash authority is :func:`message_sha256_bytes`. When ``message_bytes`` is
+    provided (the exact accepted ``COMMIT_EDITMSG`` bytes for
+    ``final_accept``), those original bytes are hashed so the version hash
+    matches the bundle's ``final_message_sha256`` even if the stored text is a
+    UTF-8 replacement projection of invalid input. Without ``message_bytes``,
+    the UTF-8 encoding of ``message`` is hashed (Family A text compatibility).
     """
     if kind not in MESSAGE_VERSION_KINDS:
         raise MessageVersionError(f"message version kind must be one of {sorted(MESSAGE_VERSION_KINDS)}: {kind!r}")
@@ -61,7 +72,7 @@ def _item(kind: str, message: str, source: str) -> dict[str, Any]:
     return {
         "kind": kind,
         "message": message,
-        "message_sha256": message_sha256_bytes(message),
+        "message_sha256": message_sha256_bytes(message if message_bytes is None else message_bytes),
         "source": source,
     }
 
@@ -70,6 +81,7 @@ def build_message_versions(
     *,
     generated_message: str | None = None,
     final_message: str | None = None,
+    final_message_bytes: bytes | None = None,
     edited_message: str | None = None,
     edited: bool | None = None,
 ) -> list[dict[str, Any]]:
@@ -81,7 +93,10 @@ def build_message_versions(
       (``GenerationTelemetry.generated_message``; best-effort redacted draft,
       **not** guaranteed raw model output — NTH-U5).
     * ``final_accept`` — included when ``final_message`` (authoritative
-      ``COMMIT_EDITMSG`` bytes) is present.
+      ``COMMIT_EDITMSG`` text projection) is present. Pass
+      ``final_message_bytes`` whenever the exact accepted bytes are available
+      so the version hash stays aligned with the bundle hash under invalid
+      UTF-8 replacement projection (N19.4 / N20.3).
     * ``edited`` — included only when there is real edit evidence: an explicit
       ``edited_message``, or ``edited=True`` (e.g. ``classify_edit`` reports an
       edit) with a draft that differs from the final. Never invented.
@@ -106,6 +121,13 @@ def build_message_versions(
         versions.append(_item("edited", edit_text, "classify_edit"))
 
     if final_message is not None and final_message.strip():
-        versions.append(_item("final_accept", final_message, "commit_editmsg"))
+        versions.append(
+            _item(
+                "final_accept",
+                final_message,
+                "commit_editmsg",
+                message_bytes=final_message_bytes,
+            )
+        )
 
     return versions

@@ -195,6 +195,10 @@ def bind_accept_path(
             versions = build_message_versions(
                 generated_message=generated_message,
                 final_message=final_text,
+                # Exact accepted bytes remain hash authority (N19.4/N20.3):
+                # invalid UTF-8 projects to replacement text, but the version
+                # hash must still match bundle.final_message_sha256.
+                final_message_bytes=final_bytes,
                 edited=(edit_provenance not in (None, "ai_accepted", "ai_accepted_refs_only")),
             )
         except Exception as exc:

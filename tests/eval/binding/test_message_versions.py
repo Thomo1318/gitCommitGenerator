@@ -38,6 +38,17 @@ def test_final_only() -> None:
     assert versions[0]["source"] == "commit_editmsg"
 
 
+def test_final_message_bytes_override_preserves_original_hash() -> None:
+    """Invalid UTF-8: hash original bytes, not the replacement-decoded text."""
+    raw = b"\x80\xff invalid utf-8 \xfe"
+    projected = raw.decode("utf-8", errors="replace")
+    versions = build_message_versions(final_message=projected, final_message_bytes=raw)
+    assert [v["kind"] for v in versions] == ["final_accept"]
+    assert versions[0]["message"] == projected
+    assert versions[0]["message_sha256"] == message_sha256_bytes(raw)
+    assert versions[0]["message_sha256"] != message_sha256_bytes(projected)
+
+
 def test_draft_equals_final_is_not_an_edit() -> None:
     # draft == final ⇒ no edited version invented (M7)
     versions = build_message_versions(generated_message=FINAL, final_message=FINAL)

@@ -137,6 +137,15 @@ def test_invalid_utf8_projects_with_replace(monkeypatch, tmp_path):
     assert data["final_message_sha256"] == message_sha256_bytes(raw)
     assert data["meta"]["final_message_encoding"] == "utf-8-replace"
     assert data["meta"]["final_message_byte_length"] == len(raw)
+    # final_accept version hash must stay aligned with the bundle hash even
+    # when the stored text is a UTF-8 replacement projection (N19.4/N20.3).
+    twin_path = tmp_path / ".eval" / "sessions" / f"{res.session_thread_id}.json"
+    twin = json.loads(twin_path.read_text(encoding="utf-8"))
+    finals = [v for v in twin["message_versions"] if v["kind"] == "final_accept"]
+    assert len(finals) == 1
+    assert finals[0]["message_sha256"] == data["final_message_sha256"]
+    # Replacement text itself would hash differently — prove the override path.
+    assert finals[0]["message_sha256"] != message_sha256_bytes(finals[0]["message"])
 
 
 def test_scoped_reuse_same_event_same_bytes(monkeypatch, tmp_path):

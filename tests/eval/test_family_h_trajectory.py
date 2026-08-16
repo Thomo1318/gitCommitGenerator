@@ -110,6 +110,38 @@ def test_invalid_trajectory_shape_fails_when_required() -> None:
     assert by["h.trajectory_stages_declared"].evidence["trajectory_valid"] is False
 
 
+def test_invalid_stage_member_list_fails_when_required() -> None:
+    """List-shaped stages with invalid members must hit TrajectoryError handling."""
+    traj = {
+        "schema_version": "trajectory_evidence_v1",
+        "id": "ev-bad-member",
+        "declared_stages": ["not-a-stage"],
+        "observed_stages": ["not-a-stage"],
+        "meta": {"complete": True},
+    }
+    by = _score(_ctx_with_trajectory(traj), require_trajectory=True)
+    assert by["h.trajectory_stages_declared"].passed is False
+    assert by["h.trajectory_stages_observed"].passed is False
+    assert by["h.trajectory_stages_declared"].evidence["trajectory_valid"] is False
+    assert by["h.trajectory_stages_observed"].evidence["trajectory_valid"] is False
+
+
+def test_non_boolean_meta_complete_is_not_complete() -> None:
+    """Only exact boolean True counts as meta.complete under require_trajectory."""
+    base = {
+        "schema_version": "trajectory_evidence_v1",
+        "id": "ev-complete-type",
+        "declared_stages": list(HAPPY_OBSERVED),
+        "observed_stages": list(HAPPY_OBSERVED),
+    }
+    for bad in ("false", "true", 1, 0, "1", None):
+        traj = {**base, "meta": {"complete": bad}}
+        by = _score(_ctx_with_trajectory(traj), require_trajectory=True)
+        assert by["h.trajectory_stages_declared"].passed is True, bad
+        assert by["h.trajectory_stages_observed"].passed is False, bad
+        assert by["h.trajectory_stages_observed"].evidence["meta_complete"] is False, bad
+
+
 def test_resolve_require_trajectory_precedence() -> None:
     assert resolve_require_trajectory(True, None) is True
     assert resolve_require_trajectory(False, {"meta": {"require_trajectory": True}}) is False

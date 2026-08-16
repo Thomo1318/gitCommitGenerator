@@ -296,7 +296,9 @@ def _score_trajectory(ctx: ScoreContext, *, require_trajectory: bool) -> list[Sc
                 declared = []
                 observed = []
                 trajectory_valid = False
-        meta_complete = bool(traj_meta.get("complete")) if isinstance(traj_meta, dict) else False
+        # Accept only an exact boolean True — truthy strings/ints must not pass
+        # require_trajectory completeness (fail closed on malformed meta).
+        meta_complete = isinstance(traj_meta, dict) and traj_meta.get("complete") is True
 
     declared_ok = trajectory_valid and bool(declared)
     observed_ok = trajectory_valid and bool(observed) and meta_complete
