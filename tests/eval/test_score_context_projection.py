@@ -17,12 +17,7 @@ MSG = "✨ feat(eval): accept-path binding\n"
 
 
 def _base() -> dict:
-    """
-    Create the minimal bound final-accept bundle used by the regression tests.
-
-    Returns:
-    	dict: A bundle containing the case identifier, final message, bound status, and artifact class.
-    """
+    """Minimal bound ``final_accept`` bundle for projection regressions."""
     return {
         "case_id": "c1",
         "final_message": MSG,

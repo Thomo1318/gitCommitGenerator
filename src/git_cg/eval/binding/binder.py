@@ -75,14 +75,12 @@ _UNBOUND_CLASSES = frozenset(
 
 
 def message_sha256_bytes(data: bytes | str) -> str:
-    """
-    Hash a message using its original bytes where available.
+    """Return the full 64-hex SHA-256 of the *original* message bytes.
 
-    Parameters:
-        data (bytes | str): Message bytes or text to hash.
-
-    Returns:
-        str: The full 64-character hexadecimal SHA-256 digest.
+    Bytes-aware counterpart to :func:`git_cg.eval.corpus.canonical.message_sha256`
+    (N19.4): when given ``bytes`` it hashes them directly so the exact accepted
+    bytes remain the hash authority; when given ``str`` it matches the corpus
+    helper (UTF-8 encode) to preserve Family A text compatibility.
     """
     if isinstance(data, bytes):
         return hashlib.sha256(data).hexdigest()
@@ -203,22 +201,23 @@ def bind_final_accept(
     repo_root: Path | None = None,
     write: bool = True,
 ) -> BindResult:
-    """
-    Bind the exact final message to schema-valid ``final_accept`` evidence.
+    """Bind exact final bytes into ``final_accept`` evidence (D4).
 
-    Capture-disabled, absent-message, unresolved-repository, and schema-invalid
-    outcomes are returned as unbound results. Existing evidence may be reused when
-    the repository, accept-event token, and message hash match. Persistence
-    failures are reported in the result without blocking product acceptance.
+    Never raises for product-accept reasons. Behaviour:
 
-    Parameters:
-        inp (BindInput): Final message and optional binding metadata.
-        repo_root (Path | None): Repository root used for persistence and reuse
-            scoping.
-        write (bool): Whether to persist the evidence bundle.
-
-    Returns:
-        BindResult: Binding status, bundle data, persistence paths, and any errors.
+    * Capture disabled ⇒ ``bound=False, unbound_reason="capture_disabled"``,
+      zero writes (D1/N19.5).
+    * Empty/whitespace final message ⇒ ``bound=False,
+      unbound_reason="final_message_absent"``.
+    * Schema-invalid / unresolved-repo outcomes return unbound results with
+      reasons (never product-blocking).
+    * Same ``(repo_root, accept_event_token, final_message_sha256)`` may reuse
+      an existing bundle (N19.2); persistence failures are reported on the
+      result without blocking accept.
+    * Otherwise build a schema-valid ``ape_bundle_v1`` with
+      ``artifact_class=final_accept``, ``bound=true``, stored
+      ``final_message_sha256`` over the original bytes, and (when ``write``)
+      atomically persist under ``.eval/bundles/acceptpath/``.
     """
     if not capture_enabled():
         return BindResult(bound=False, unbound_reason="capture_disabled")
@@ -325,21 +324,11 @@ def bind_unbound(
     artifact_class: str = ArtifactClass.OPIK_UNBOUND.value,
     **kwargs: Any,
 ) -> BindResult:
-    """
-    Constructs validated evidence for an outcome that is explicitly unbound.
+    """Explicit unbound helper (N6). ``artifact_class`` must NOT be final_accept.
 
-    Parameters:
-        reason (str): Explanation for why the evidence is unbound.
-        final_message (str | None): Optional final message to include and hash.
-        artifact_class (str): Allowed unbound evidence classification.
-        **kwargs (Any): Optional bundle metadata, including ``case_id``.
-
-    Returns:
-        BindResult: An unbound result containing the validated evidence bundle.
-
-    Raises:
-        ValueError: If the reason is blank, the artifact class is unsupported, or
-            the artifact class claims ``final_accept``.
+    Fails closed when the reason is blank or the class is ``final_accept``
+    (``EVAL_FAKE_BOUND``). Does not write by default; the returned bundle (when
+    constructed) is honest unbound evidence for offline scoring.
     """
     if not reason or not reason.strip():
         raise ValueError("unbound bind requires a non-empty reason (EVAL_FAKE_BOUND)")

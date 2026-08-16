@@ -4330,14 +4330,17 @@ def record_telemetry(
     commit_msg_file: str = typer.Argument(".git/COMMIT_EDITMSG", help="Path to the final commit message file"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ) -> None:
-    """
-    Record final commit telemetry and bind the accepted commit message.
+    """Record final commit telemetry and bind accepted final bytes (S3).
 
-    Reads the final message as UTF-8, classifies edits against the generated message when telemetry state is available, records the resulting metadata in Opik, and clears stored telemetry state. Missing telemetry state or binding failures do not prevent completion.
+    Reads ``COMMIT_EDITMSG`` as exact bytes (hash authority), classifies how the
+    generated message was edited when telemetry state is present, records Opik
+    metadata, and best-effort binds accept-path evidence via
+    :func:`bind_accept_path`. Missing telemetry state or binding failures never
+    block product accept (N19 F8 / capture-off-by-default).
 
     Parameters:
-        commit_msg_file (str): Path to the final commit message file.
-        verbose (bool): Whether to display progress and error messages.
+        commit_msg_file: Path to the final commit message file.
+        verbose: Enables progress / error output.
     """
     import subprocess
 

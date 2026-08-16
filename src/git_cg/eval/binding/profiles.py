@@ -57,15 +57,17 @@ def _parse_capture(value: str | None) -> bool | None:
 
 
 def capture_enabled(env: Mapping[str, str] | None = None) -> bool:
-    """
-    Determine whether capture is enabled by the environment configuration.
+    """Return ``True`` only when capture law says on (D1).
 
     Parameters:
-        env: Environment mapping to inspect; defaults to :data:`os.environ`.
+        env: Environment mapping to read; defaults to :data:`os.environ`.
+            Tests pass an explicit mapping for determinism.
 
-    Returns:
-        ``True`` when the capture switch is enabled or the profile is
-        ``maintainer``, ``train``, or ``dogfood``; ``False`` otherwise.
+    Precedence:
+        1. ``GIT_CG_EVAL_CAPTURE`` when set to a non-empty token (win/lose).
+        2. ``GIT_CG_EVAL_PROFILE`` when the canonical switch is unset/empty:
+           ``maintainer``/``train``/``dogfood`` ⇒ on; ``basic``/unknown ⇒ off.
+        3. Default ⇒ off.
     """
     source = os.environ if env is None else env
     parsed = _parse_capture(source.get(CAPTURE_ENV))

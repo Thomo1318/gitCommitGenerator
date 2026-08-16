@@ -67,18 +67,9 @@ class SessionTwinResult:
 
 
 def _clean_str_list(values: Iterable[str] | None, *, field_name: str) -> list[str]:
-    """
-    Normalise an optional iterable of identifiers into a list of trimmed strings.
+    """Normalise an optional iterable of ids to a list of non-empty strings.
 
-    Parameters:
-        values (Iterable[str] | None): Identifier values to clean.
-        field_name (str): Field name used in validation errors.
-
-    Returns:
-        list[str]: The cleaned identifiers, or an empty list when values is None.
-
-    Raises:
-        SessionTwinError: If an entry is not a non-empty string.
+    Blank/non-string entries fail closed via :class:`SessionTwinError`.
     """
     if values is None:
         return []
@@ -107,20 +98,13 @@ def build_session_twin(
     schema_pack: str | None = None,
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Build a schema-valid ``commit_session_thread_v1`` session twin.
+    """Build a schema-valid ``commit_session_thread_v1`` twin (D12).
 
-    Parameters:
-        session_thread_id (str): Non-empty capture ID beginning with ``sess_``.
-        lifecycle (str): Session lifecycle state, either ``open`` or ``closed``.
-        existing_trace_span_ids (Iterable[str] | None): Known trace span IDs to preserve under the metadata.
-        meta (dict[str, Any] | None): Additional metadata merged without overriding established fields.
-
-    Returns:
-        dict[str, Any]: The validated session twin.
-
-    Raises:
-        SessionTwinError: If the session ID, lifecycle, or identifier values are invalid.
+    ``lifecycle`` is carried under ``meta.lifecycle`` and must be ``open`` or
+    ``closed``. Correlation ids (``trace_id`` / ``generation_thread_id`` /
+    ``existing_trace_span_ids``) are recorded under ``meta`` only — they never
+    become the session id (D9). No ids are invented: omit what is not known.
+    Caller ``meta`` is merged additively and cannot overwrite authority keys.
     """
     if not isinstance(session_thread_id, str) or not session_thread_id.strip():
         raise SessionTwinError("session_thread_id must be a non-empty string")
@@ -177,14 +161,17 @@ def write_session_twin(
     write: bool = True,
     **kwargs: Any,
 ) -> SessionTwinResult:
-    """Build a schema-validated session twin and optionally persist it under ``.eval/sessions/``.
+    """Build and (optionally) persist a session twin under ``.eval/sessions/``.
 
-    Capture-disabled, validation, repository-resolution, and persistence failures are
-    reported in the result rather than raised.
+    Never raises for product-accept reasons. Behaviour:
 
-    Returns:
-        SessionTwinResult: The constructed twin and persistence status, reason, path,
-        and errors where applicable.
+    * Capture disabled ⇒ ``written=False, reason="capture_disabled"``, zero
+      writes (D1/N19.5).
+    * ``write=False`` ⇒ build + validate only; no filesystem I/O.
+    * Repo root unresolvable ⇒ ``written=False, reason="repo_root_unresolved"``
+      (N20.5), no product fail.
+    * Schema/validation failures ⇒ ``written=False`` with reason/errors.
+    * Persistence failure is reported via ``errors`` and never blocks accept.
     """
     if not capture_enabled():
         return SessionTwinResult(written=False, reason="capture_disabled")

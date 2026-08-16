@@ -43,20 +43,16 @@ def score_family_h(
     evaluator_errors: list[str] | None = None,
     require_trajectory: bool = False,
 ) -> list[ScoreResultV1]:
-    """
-    Emit Family H metrics for pin integrity, offline execution, score validity, evaluation errors, input handling, product-card consistency, structured bundle compliance, and trajectory evidence.
+    """Emit Family H pin/offline/envelope/anti-fan-out + trajectory metrics.
 
-    Parameters:
-        ctx (ScoreContext): Evaluation context containing bundle metadata and product-card data.
-        pre (PreconditionResult): Input precondition results used to report input validity.
-        family_scores (list[ScoreResultV1]): Previously emitted family scores to validate.
-        suite_snapshot_pin (str | None): Expected suite snapshot pin.
-        offline (bool): Whether evaluation completed without online access.
-        evaluator_errors (list[str] | None): Evaluator errors to report.
-        require_trajectory (bool): Whether missing or incomplete trajectory evidence is an evaluation failure.
+    Runs after A/B/D so ``h.score_envelope_valid`` can validate prior rows.
+    Live S0 pin identity + suite snapshot pin are fail-closed.
 
-    Returns:
-        list[ScoreResultV1]: Family H metric results.
+    S3 (R7/N19.6): trajectory evidence is read from ``ctx.meta["trajectory"]``
+    (inline at ``bundle.meta.trajectory``). Missing/incomplete trajectory is an
+    eval-class fail only when ``require_trajectory`` is set (suite policy);
+    otherwise it is advisory. Family H never treats trajectory as topology —
+    that plane stays with Family I.
     """
     errors = list(evaluator_errors or [])
     scores: list[ScoreResultV1] = []

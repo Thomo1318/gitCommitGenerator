@@ -29,7 +29,7 @@ SESS = "sess_0123456789abcdef0123456789abcdef"
 
 @pytest.fixture(autouse=True)
 def _capture_on(monkeypatch: pytest.MonkeyPatch):
-    """Enable evaluation capture for a test and clear any configured evaluation profile."""
+    """Autouse fixture: force capture on and clear profile overrides."""
     monkeypatch.setenv("GIT_CG_EVAL_CAPTURE", "on")
     monkeypatch.delenv("GIT_CG_EVAL_PROFILE", raising=False)
 
