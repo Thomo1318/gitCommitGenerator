@@ -48,7 +48,7 @@ from git_cg.eval.binding import paths
 from git_cg.eval.binding.profiles import capture_enabled
 from git_cg.eval.corpus.canonical import message_sha256
 from git_cg.eval.enums import ArtifactClass, ProvenanceLabel, RedactionProfile
-from git_cg.eval.schema_pack import validate_instance
+from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
 __all__ = [
     "BindInput",
@@ -255,6 +255,10 @@ def bind_final_accept(
 
     meta: dict[str, Any] = {"producer": _PRODUCER}
     meta.update(encoding_meta)
+    if inp.meta:
+        # Additive non-authoritative fields only; never override binder authority.
+        for key, value in inp.meta.items():
+            meta.setdefault(key, value)
     if inp.score_card:
         meta["score_card"] = dict(inp.score_card)
     binding_meta: dict[str, Any] = {"state": "bound"}
@@ -268,8 +272,6 @@ def bind_final_accept(
             "token": inp.accept_event_token,
             "repo_root": str(root) if root is not None else None,
         }
-    if inp.meta:
-        meta.update(inp.meta)
 
     bundle: dict[str, Any] = {
         "schema_version": "ape_bundle_v1",
@@ -285,7 +287,11 @@ def bind_final_accept(
     }
 
     # Fail closed: the bundle we claim must validate against the frozen schema.
-    validate_instance("ape_bundle_v1", bundle)
+    # Schema drift / rejected caller meta must not escape the non-blocking path.
+    try:
+        validate_instance("ape_bundle_v1", bundle)
+    except SchemaPackError as exc:
+        return BindResult(bound=False, unbound_reason="schema_invalid", errors=(str(exc),))
 
     paths_written: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
@@ -293,7 +299,7 @@ def bind_final_accept(
         try:
             out = paths.acceptpath_bundles_dir(root) / f"{session_id}.json"
             paths.atomic_write_json(out, bundle)
-            paths_written = (str(out.relative_to(root)),)
+            paths_written = (out.relative_to(root).as_posix(),)
         except (OSError, paths.LayerAPathError) as exc:
             # Persistence failure must not block product accept; report honestly.
             errors = (f"bind_write_error: {exc}",)

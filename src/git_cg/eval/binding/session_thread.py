@@ -34,7 +34,7 @@ from typing import Any
 from git_cg.eval.binding import paths
 from git_cg.eval.binding.profiles import capture_enabled
 from git_cg.eval.enums import RedactionProfile
-from git_cg.eval.schema_pack import validate_instance
+from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
 __all__ = [
     "SESSION_LIFECYCLE_STATES",
@@ -173,7 +173,7 @@ def write_session_twin(
 
     try:
         twin = build_session_twin(session_thread_id, lifecycle=lifecycle, **kwargs)
-    except SessionTwinError as exc:
+    except (SessionTwinError, SchemaPackError) as exc:
         return SessionTwinResult(written=False, reason="invalid_twin", errors=(str(exc),))
 
     if not write:
@@ -190,7 +190,7 @@ def write_session_twin(
         return SessionTwinResult(
             written=True,
             session_thread=twin,
-            path_written=str(out.relative_to(root)),
+            path_written=out.relative_to(root).as_posix(),
         )
     except (OSError, paths.LayerAPathError) as exc:
         return SessionTwinResult(

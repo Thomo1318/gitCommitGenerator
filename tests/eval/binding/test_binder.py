@@ -29,6 +29,7 @@ import json
 import os
 import stat
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -204,6 +205,25 @@ def test_bind_score_card_lives_under_meta(tmp_path) -> None:
     assert "score_card" not in result.bundle  # M5: no illegal top-level card
 
 
+def test_caller_meta_cannot_overwrite_authority_keys(tmp_path) -> None:
+    """BindInput.meta is additive only; accept_event/binding/producer stay authoritative."""
+    result = _bind(
+        tmp_path,
+        meta={
+            "producer": "attacker",
+            "accept_event": {"token": "forged"},
+            "binding": {"state": "unbound"},
+            "trajectory": {"schema_version": "trajectory_evidence_v1"},
+        },
+    )
+    assert result.bound is True
+    meta = result.bundle["meta"]
+    assert meta["producer"] == "acceptpath_binder"
+    assert meta["accept_event"]["token"] == "ae_testtoken"
+    assert meta["binding"]["state"] == "bound"
+    assert meta["trajectory"]["schema_version"] == "trajectory_evidence_v1"
+
+
 # ---------------------------------------------------------------------------
 # N19.4 / N20.3 — bytes-aware binding
 # ---------------------------------------------------------------------------
@@ -346,6 +366,18 @@ def test_containment_refuses_escape(tmp_path) -> None:
         binding_paths._contained(tmp_path, tmp_path / ".eval" / ".." / "outside")
 
 
+def test_containment_refuses_symlink_escape(tmp_path) -> None:
+    """N19.3: a symlink under .eval that points outside the repo must fail closed."""
+    outside = tmp_path / "outside_target"
+    outside.mkdir()
+    eval_root = tmp_path / ".eval"
+    eval_root.mkdir()
+    link = eval_root / "escape_link"
+    link.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(binding_paths.LayerAPathError):
+        binding_paths._contained(tmp_path, Path("escape_link") / "bundle.json")
+
+
 def test_repo_root_unresolved_returns_unbound_not_raise(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     """AC23 / N20.5: unresolvable repo root ⇒ no writes, no product fail."""
 
@@ -385,7 +417,16 @@ def test_bind_path_does_not_import_opik(tmp_path) -> None:
     of the binding package's own modules rather than global interpreter state.
     """
     import importlib
+    import subprocess
 
+    # A clean interpreter must not gain ``opik`` from importing the binding package.
+    probe = (
+        "import sys; import git_cg.eval.binding; "
+        "sys.exit(1 if any(m == 'opik' or m.startswith('opik.') for m in sys.modules) else 0)"
+    )
+    assert subprocess.run([sys.executable, "-c", probe], check=False).returncode == 0, (
+        "importing git_cg.eval.binding must not import opik"
+    )
     binding_modules = [m for m in sys.modules if m.startswith("git_cg.eval.binding")]
     assert binding_modules, "binding package should be imported by this test"
     for name in binding_modules:

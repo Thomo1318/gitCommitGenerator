@@ -143,16 +143,35 @@ def _contained(repo_root: Path, target: Path) -> Path:
     """Resolve ``target`` and refuse escape outside the ``.eval/`` tree.
 
     Containment is enforced against the resolved repo-root ``.eval/`` tree so
-    symlink or ``..`` escapes fail closed (N19.3).
+    symlink or ``..`` escapes fail closed (N19.3). Symlinks on existing path
+    ancestors are resolved before the comparison; non-existent trailing
+    components are re-appended so creation targets remain valid.
     """
     root = Path(repo_root).resolve()
     tree = root / EVAL_DIRNAME
     resolved = Path(target)
     if not resolved.is_absolute():
         resolved = tree / resolved
-    # Resolve against the (possibly not-yet-created) tree without requiring it.
+    # Collapse ``..`` lexically, then resolve symlinks on the deepest existing
+    # ancestor and re-append the not-yet-created tail (N19.3).
     resolved = Path(os.path.normpath(str(resolved)))
-    tree_norm = Path(os.path.normpath(str(tree)))
+    existing = resolved
+    tail: list[str] = []
+    while not existing.exists() and existing != existing.parent:
+        tail.append(existing.name)
+        existing = existing.parent
+    try:
+        resolved = existing.resolve().joinpath(*reversed(tail))
+    except OSError as exc:
+        raise LayerAPathError(f"cannot resolve containment path: {exc}") from exc
+    try:
+        # Resolve via an existing parent so a missing .eval leaf still compares
+        # against the real repo-root path; resolve fully when .eval already exists.
+        tree_norm = tree.parent.resolve() / tree.name if tree.parent.exists() else Path(os.path.normpath(str(tree)))
+        if tree_norm.exists():
+            tree_norm = tree_norm.resolve()
+    except OSError as exc:
+        raise LayerAPathError(f"cannot resolve .eval containment root: {exc}") from exc
     if tree_norm != resolved and tree_norm not in resolved.parents:
         raise LayerAPathError(f"path escapes .eval containment root: {resolved}")
     return resolved
@@ -209,9 +228,15 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
         os.replace(tmp_path, final)
     except BaseException:
         # Never leave a partially-valid authoritative bundle behind.
-        try:
+        with contextlib.suppress(OSError):
             tmp_path.unlink(missing_ok=True)
-        finally:
-            pass
         raise
+    # Durably record the rename in the parent directory (N19.3). Best-effort:
+    # some platforms/filesystems do not support directory fsync.
+    with contextlib.suppress(OSError):
+        dir_fd = os.open(str(final.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
     return final

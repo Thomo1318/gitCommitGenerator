@@ -125,7 +125,6 @@ def is_complete(observed: Iterable[str]) -> bool:
 
 def _normalise_details(
     details: Iterable[dict[str, Any]] | None,
-    observed_names: list[str],
 ) -> list[dict[str, str]]:
     """Validate optional ``meta.observed_stage_details`` entries.
 
@@ -176,7 +175,7 @@ def build_trajectory_evidence(
     observed = validate_observed_stages(observed_stages)
 
     meta: dict[str, Any] = {"complete": is_complete(observed)}
-    details = _normalise_details(observed_stage_details, observed)
+    details = _normalise_details(observed_stage_details)
     if details:
         meta["observed_stage_details"] = details
 
