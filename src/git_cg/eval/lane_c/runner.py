@@ -4,30 +4,37 @@ This is the **only** entrypoint that may emit ``cprime.*`` scores. It is a
 separate, opt-in path from the offline :func:`score_bundle` plane: Lane A/B
 never import it and never require judge credentials (F4).
 
-S5a scope — **gating skeleton only**. No live LLM judge is called. The runner:
+S5c scope — **pinned GEval judge wired behind the eligibility gate**:
 
 1. Evaluates ``gate.semantic_cohort_eligible`` (plan §6.11).
 2. When the cohort is **ineligible**, emits a skip row per requested metric
    (``passed=None``, ``reason=...``) so dashboards record an honest non-run
    rather than a fabricated score.
-3. When **eligible**, S5a still performs no network call — it emits a
-   ``lab-fail``/not-implemented classification marking the runner as pending
-   the S5b pinned-judge implementation.
+3. When **eligible**, resolves the repo-owned prompt pack (INT-26) and runs the
+   pinned GEval judge via :func:`run_pinned_judge`. A parseable in-range score
+   becomes a real advisory row; any judge/pack/parse failure degrades to a
+   skip row — never an exception, never a fabricated score.
 
 Every emitted row carries ``authority=advisory`` (derived from the frozen
 catalog row by :func:`make_score`) and ``source=lane_c_judge`` — judges are
 never product law (F3). This function never raises on missing credentials,
-missing pins, or ineligible cohorts.
+missing pins, ineligible cohorts, or judge failure.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from git_cg.eval.lane_c.eligibility import (
     LaneCEligibility,
     evaluate_semantic_cohort_eligibility,
+)
+from git_cg.eval.lane_c.judge import (
+    JudgeFn,
+    resolve_judge_credentials,
+    run_pinned_judge,
 )
 from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.result_builder import make_score
@@ -36,8 +43,8 @@ from git_cg.eval.scoring.result_builder import make_score
 #: not eligible (gate closed). Recorded, never a veto.
 REASON_COHORT_INELIGIBLE = "lane_c_cohort_ineligible"
 
-#: Reason stamped when the cohort is eligible but no pinned judge ran (S5a has
-#: no live judge yet). A skip/lab-fail class, not a product failure.
+#: Reason stamped when the cohort is eligible but no pinned judge ran. Retained
+#: for back-compat with S5a callers; S5c no longer emits it on the live path.
 REASON_JUDGE_NOT_RUN = "lane_c_judge_not_implemented"
 
 
@@ -51,6 +58,10 @@ def run_lane_c(
     judge_model: str | None = None,
     judge_api_key: str | None = None,
     environ: Mapping[str, str] | None = None,
+    message: str = "",
+    diff_summary: str | None = None,
+    prompt_root: Path | None = None,
+    judge_fn: JudgeFn | None = None,
 ) -> tuple[list[ScoreResultV1], LaneCEligibility]:
     """Run the Lane C-prime secondary semantic cohort for ``metric_ids``.
 
@@ -60,8 +71,10 @@ def run_lane_c(
     :class:`KeyError` via :func:`make_score` — fail-closed on the metric
     vocabulary, never on credentials.
 
-    This function performs **no** network I/O and never raises on missing
-    judge credentials; an ineligible or un-pinned cohort yields skip rows.
+    When the cohort is eligible, the pinned judge runs against ``message``
+    (the accepted COMMIT_EDITMSG text) plus an optional gold-blind
+    ``diff_summary``. Judge/pack/parse failures and empty/oversize input all
+    degrade to ``passed=None`` skip rows; this function never raises on them.
     """
     eligibility = evaluate_semantic_cohort_eligibility(
         deterministic_pass=deterministic_pass,
@@ -74,8 +87,8 @@ def run_lane_c(
     )
 
     rows: list[ScoreResultV1] = []
-    for mid in metric_ids:
-        if not eligibility.eligible:
+    if not eligibility.eligible:
+        for mid in metric_ids:
             row = make_score(
                 mid,
                 0.0,
@@ -90,23 +103,44 @@ def run_lane_c(
                     "judge_pins_resolvable": eligibility.judge_pins_resolvable,
                 },
             )
+            # ``passed=None`` is the honest "not evaluated" skip marker. A skip is
+            # neither a pass nor a fail and must never be read as either (F3/M11).
+            rows.append(row.model_copy(update={"passed": None}))
+        return rows, eligibility
+
+    # Eligible: resolve the pinned judge credentials and run each metric.
+    model, key = resolve_judge_credentials(
+        judge_model=judge_model,
+        judge_api_key=judge_api_key,
+        environ=environ,
+    )
+    for mid in metric_ids:
+        outcome = run_pinned_judge(
+            mid,
+            message=message,
+            diff_summary=diff_summary,
+            judge_model=model,
+            judge_api_key=key,
+            prompt_root=prompt_root,
+            judge_fn=judge_fn,
+        )
+        if outcome.scored and outcome.score is not None:
+            row = make_score(
+                mid,
+                outcome.score,
+                passed=None,  # advisory: no product pass/fail threshold
+                reason=outcome.rationale or None,
+                evidence={"skipped": False, **outcome.evidence},
+            )
+            # Advisory GEval scores carry no boolean verdict (F3/M11).
+            rows.append(row.model_copy(update={"passed": None}))
         else:
-            # Eligible, but S5a ships no live judge. Record an honest
-            # not-run classification rather than a fabricated score.
             row = make_score(
                 mid,
                 0.0,
                 passed=None,
-                reason=REASON_JUDGE_NOT_RUN,
-                evidence={
-                    "skipped": True,
-                    "eligibility": eligibility.reason,
-                    "judge_model": eligibility.evidence.get("judge_model_pinned"),
-                    "pending": "S5b_pinned_judge",
-                },
+                reason=outcome.reason or "lane_c_judge_not_run",
+                evidence={"skipped": True, "eligibility": eligibility.reason, **outcome.evidence},
             )
-        # ``passed=None`` is the honest "not evaluated" skip marker; make_score
-        # would otherwise derive a boolean from the placeholder value. A skip is
-        # neither a pass nor a fail and must never be read as either (F3/M11).
-        rows.append(row.model_copy(update={"passed": None}))
+            rows.append(row.model_copy(update={"passed": None}))
     return rows, eligibility
