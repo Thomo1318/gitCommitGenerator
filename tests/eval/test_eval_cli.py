@@ -104,8 +104,13 @@ def test_encode_fixture_missing_path_fails() -> None:
 
 
 @pytest.mark.parametrize("extra", [[], ["--id", CORE_CASE_ID]])
-def test_encode_fixture_never_writes_acceptpath(tmp_path: Path, extra: list[str]) -> None:
+def test_encode_fixture_never_writes_acceptpath(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    extra: list[str],
+) -> None:
     """encode-fixture must not create .eval/bundles/acceptpath/** anywhere."""
+    monkeypatch.chdir(tmp_path)
     args = (
         ["eval", "encode-fixture", "--path", str(VALID_CASE)]
         if not extra

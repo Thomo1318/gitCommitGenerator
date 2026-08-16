@@ -429,7 +429,7 @@ print("snapshot", res.suite_snapshot_pin)
 PY
 ```
 
-S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding/emitters (binder, trajectory, session twin, message_versions, thin `git-cg eval` corpus CLI) are implemented under `src/git_cg/eval/binding/` — capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. Opik mirror (S4), Lane C′/GEval (S5), operator UX (S6), and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225.
+S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding emitters (binder, trajectory, session twin, message_versions) live under `src/git_cg/eval/binding/`; the thin `git-cg eval` corpus CLI is `src/git_cg/eval/cli.py` under `src/git_cg/eval/`. Capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. Opik mirror (S4), Lane C′/GEval (S5), operator UX (S6), and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225.
 
 ## Promptfoo evaluation (offline)
 
