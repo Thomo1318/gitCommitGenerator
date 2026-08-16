@@ -4377,8 +4377,10 @@ def record_telemetry(
     # twin. Gated off by default (D1); best-effort and never blocks accept.
     # Runs before clearing state so state-derived fields can enrich the bind.
     provenance_value: str | None = None
+    provenance = None
     if state is not None:
-        provenance_value = classify_edit(state.generated_message, final_message).value
+        provenance = classify_edit(state.generated_message, final_message)
+        provenance_value = provenance.value
     try:
         bind_accept_path(
             final_bytes=final_bytes,
@@ -4390,13 +4392,12 @@ def record_telemetry(
         if verbose:
             console.log(f"Eval accept-path binding skipped: {bind_exc}")
 
-    if not state:
+    if state is None or provenance is None:
         if verbose:
             console.log("No git-cg telemetry state found. Skipping Opik record.")
         clear_telemetry_state(git_dir)
         raise typer.Exit(code=0)
 
-    provenance = classify_edit(state.generated_message, final_message)
     if verbose:
         console.log(f"Edit classification: {provenance.value}")
 
