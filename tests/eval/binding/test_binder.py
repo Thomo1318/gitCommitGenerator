@@ -403,6 +403,141 @@ def test_write_disabled_produces_bundle_without_persist(tmp_path) -> None:
     validate_instance("ape_bundle_v1", result.bundle)
 
 
+def test_scan_reuse_skips_index_and_corrupt_files(tmp_path) -> None:
+    """Bundle JSON is authority; index.json + corrupt files must never be reused."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    # Cache-only index must be ignored even if it looks matching.
+    (bundles / "index.json").write_text(
+        json.dumps(
+            {
+                "final_message_sha256": message_sha256(FINAL_ACCEPTED),
+                "meta": {"accept_event": {"token": "ae_scan", "repo_root": str(tmp_path.resolve())}},
+                "session_thread_id": "sess_from_index",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (bundles / "corrupt.json").write_text("{not-json", encoding="utf-8")
+    (bundles / "not-object.json").write_text(json.dumps(["list"]), encoding="utf-8")
+    (bundles / "no-meta.json").write_text(
+        json.dumps({"final_message_sha256": message_sha256(FINAL_ACCEPTED), "meta": "x"}),
+        encoding="utf-8",
+    )
+    (bundles / "wrong-token.json").write_text(
+        json.dumps(
+            {
+                "final_message_sha256": message_sha256(FINAL_ACCEPTED),
+                "meta": {"accept_event": {"token": "other", "repo_root": str(tmp_path.resolve())}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (bundles / "wrong-root.json").write_text(
+        json.dumps(
+            {
+                "final_message_sha256": message_sha256(FINAL_ACCEPTED),
+                "meta": {"accept_event": {"token": "ae_scan", "repo_root": "/not/this/repo"}},
+                "session_thread_id": "sess_wrong_root",
+            }
+        ),
+        encoding="utf-8",
+    )
+    key = (str(tmp_path.resolve()), "ae_scan", message_sha256(FINAL_ACCEPTED))
+    assert _scan_reuse_key(bundles, key) is None
+    assert _scan_reuse_key(tmp_path / "missing", key) is None
+
+    # Authoritative match still works.
+    good = {
+        "final_message_sha256": message_sha256(FINAL_ACCEPTED),
+        "session_thread_id": "sess_good",
+        "case_id": "acceptpath:sess_good",
+        "meta": {"accept_event": {"token": "ae_scan", "repo_root": str(tmp_path.resolve())}},
+    }
+    (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
+    assert _scan_reuse_key(bundles, key)["session_thread_id"] == "sess_good"
+
+
+def test_bind_write_error_reports_without_raising(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_a, **_k):
+        raise binding_paths.LayerAPathError("containment boom")
+
+    monkeypatch.setattr(binding_paths, "atomic_write_json", _boom)
+    result = _bind(tmp_path)
+    assert result.bound is True
+    assert result.paths_written == ()
+    assert result.errors and result.errors[0].startswith("bind_write_error:")
+
+
+def test_schema_invalid_meta_returns_unbound(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval import schema_pack
+    from git_cg.eval.schema_pack import SchemaPackError
+
+    def _boom(name, instance):
+        raise SchemaPackError("forced schema invalid")
+
+    monkeypatch.setattr(schema_pack, "validate_instance", _boom)
+    # binder imports validate_instance into its module namespace
+    monkeypatch.setattr("git_cg.eval.binding.binder.validate_instance", _boom)
+    result = _bind(tmp_path)
+    assert result.bound is False
+    assert result.unbound_reason == "schema_invalid"
+    assert result.errors
+
+
+def test_reuse_ignores_blank_session_and_case_ids(tmp_path) -> None:
+    """Blank session/case strings in a matching bundle must not be reused."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    first = _bind(tmp_path, accept_event_token="ae_blankish")
+    assert first.bound is True
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    # Overwrite the authoritative file with blank identity fields.
+    blank = {
+        "final_message_sha256": first.bundle["final_message_sha256"],
+        "session_thread_id": "   ",
+        "case_id": "",
+        "meta": {
+            "accept_event": {
+                "token": "ae_blankish",
+                "repo_root": str(tmp_path.resolve()),
+            }
+        },
+    }
+    target = bundles / f"{first.bundle['session_thread_id']}.json"
+    target.write_text(json.dumps(blank), encoding="utf-8")
+    key = (str(tmp_path.resolve()), "ae_blankish", first.bundle["final_message_sha256"])
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    # Re-bind should mint a fresh session because blank ids are ignored.
+    second = _bind(tmp_path, accept_event_token="ae_blankish")
+    assert second.bound is True
+    assert second.bundle["session_thread_id"].startswith("sess_")
+    assert second.bundle["session_thread_id"].strip()
+    assert second.bundle["case_id"].startswith("acceptpath:")
+
+
+def test_bind_unbound_with_final_message_hashes() -> None:
+    result = bind_unbound(reason="fixture_only", final_message=FINAL_ACCEPTED, case_id="acceptpath:unbound-x")
+    assert result.bound is False
+    assert result.bundle["final_message"] == FINAL_ACCEPTED
+    assert result.bundle["final_message_sha256"] == message_sha256(FINAL_ACCEPTED)
+    assert result.bundle["case_id"] == "acceptpath:unbound-x"
+
+
+def test_bind_unbound_without_final_message() -> None:
+    """Cover bind_unbound path that omits final_message hashing (347->350)."""
+    from git_cg.eval.binding.binder import bind_unbound
+
+    result = bind_unbound(reason="no-message-path", artifact_class="fixture")
+    assert result.bound is False
+    assert result.unbound_reason == "no-message-path"
+    assert "final_message" not in result.bundle
+    assert "final_message_sha256" not in result.bundle
+
+
 # ---------------------------------------------------------------------------
 # Isolation — bind path must not require Opik
 # ---------------------------------------------------------------------------

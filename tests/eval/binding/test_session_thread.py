@@ -180,3 +180,55 @@ def test_invalid_twin_write_reports_not_raises(tmp_path: Path) -> None:
     assert res.written is False
     assert res.reason == "invalid_twin"
     assert res.errors
+
+
+def test_blank_attempt_id_fails_closed() -> None:
+    with pytest.raises(SessionTwinError, match="non-empty strings"):
+        build_session_twin(SESS, lifecycle="closed", attempt_ids=["ok", "  "])
+
+
+def test_write_repo_root_unresolved(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from git_cg.eval.binding import paths as binding_paths
+
+    def _boom(start=None):
+        raise binding_paths.RepoRootUnresolvedError("repo_root_unresolved")
+
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", _boom)
+    res = write_session_twin(SESS, lifecycle="closed", repo_root=None, write=True)
+    assert res.written is False
+    assert res.reason == "repo_root_unresolved"
+    assert res.session_thread is not None
+
+
+def test_write_persistence_error_is_non_blocking(tmp_path: Path) -> None:
+    blocker = tmp_path / ".eval"
+    blocker.write_text("not a dir", encoding="utf-8")
+    res = write_session_twin(SESS, lifecycle="closed", repo_root=tmp_path)
+    assert res.written is False
+    assert res.reason == "write_error"
+    assert res.errors and res.errors[0].startswith("session_write_error:")
+    assert res.session_thread is not None
+
+
+def test_optional_fields_and_additive_meta_merge() -> None:
+    """Cover notes/metric_catalog/schema_pack + additive meta.setdefault path."""
+    twin = build_session_twin(
+        SESS,
+        lifecycle="closed",
+        notes="optional-note",
+        metric_catalog="metric_catalog_v0@" + ("a" * 64),
+        schema_pack="schema_pack_v0@" + ("b" * 64),
+        meta={
+            "lifecycle": "open",  # must not overwrite authority lifecycle
+            "custom_note": "kept",
+            "trace_id": "should-not-overwrite",
+        },
+        trace_id="trace-authority",
+    )
+    assert twin["notes"] == "optional-note"
+    assert twin["metric_catalog"] == "metric_catalog_v0@" + ("a" * 64)
+    assert twin["schema_pack"] == "schema_pack_v0@" + ("b" * 64)
+    assert twin["meta"]["lifecycle"] == "closed"
+    assert twin["meta"]["custom_note"] == "kept"
+    assert twin["meta"]["trace_id"] == "trace-authority"
+    validate_instance("commit_session_thread_v1", twin)

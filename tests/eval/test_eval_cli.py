@@ -139,3 +139,81 @@ def test_materialize_core_goldens_writes_corpus_not_acceptpath(tmp_path: Path) -
     # No accept-path binder tree anywhere under the temp root.
     assert not (root / ".eval").exists()
     assert not list(root.rglob("acceptpath"))
+
+
+def test_materialize_core_goldens_failure_exits_nonzero(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_a, **_k):
+        raise ValueError("materialize exploded")
+
+    monkeypatch.setattr("git_cg.eval.corpus.materialize.materialize_core_goldens", _boom)
+    result = runner.invoke(app, ["eval", "materialize-core-goldens"])
+    assert result.exit_code == 1
+    assert "materialize-core-goldens failed" in result.output
+
+
+def test_encode_fixture_path_load_error(tmp_path: Path) -> None:
+    bad = tmp_path / "not-json.json"
+    bad.write_text("{nope", encoding="utf-8")
+    result = runner.invoke(app, ["eval", "encode-fixture", "--path", str(bad)])
+    assert result.exit_code == 1
+    assert "encode-fixture failed" in result.output
+
+
+def test_encode_fixture_id_suite_load_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_a, **_k):
+        raise RuntimeError("suite missing")
+
+    monkeypatch.setattr("git_cg.eval.corpus.suites.load_suite", _boom)
+    result = runner.invoke(app, ["eval", "encode-fixture", "--id", CORE_CASE_ID])
+    assert result.exit_code == 1
+    assert "failed to load suite" in result.output
+
+
+def test_encode_fixture_encode_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_a, **_k):
+        raise ValueError("encode exploded")
+
+    monkeypatch.setattr("git_cg.eval.corpus.encoder.encode_fixture", _boom)
+    result = runner.invoke(app, ["eval", "encode-fixture", "--path", str(VALID_CASE)])
+    assert result.exit_code == 1
+    assert "encode-fixture failed" in result.output
+
+
+def test_materialize_prints_archive_snapshot_when_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover archive_snapshot truthy branch in materialize-core-goldens output."""
+
+    def _fake(*_a, **_k):
+        return {
+            "core_snapshot": "core@abc",
+            "archive_snapshot": "archive@def",
+            "core_bundles": ["a", "b"],
+            "archive_bundles": ["c"],
+        }
+
+    monkeypatch.setattr("git_cg.eval.corpus.materialize.materialize_core_goldens", _fake)
+    result = runner.invoke(app, ["eval", "materialize-core-goldens"])
+    assert result.exit_code == 0
+    assert "core_snapshot core@abc" in result.output
+    assert "archive_snapshot archive@def" in result.output
+    assert "core_bundles 2" in result.output
+    assert "archive_bundles 1" in result.output
+
+
+def test_materialize_skips_archive_snapshot_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover archive_snapshot falsy branch (no archive line printed)."""
+
+    def _fake(*_a, **_k):
+        return {
+            "core_snapshot": "core@abc",
+            "archive_snapshot": None,
+            "core_bundles": ["a"],
+            "archive_bundles": [],
+        }
+
+    monkeypatch.setattr("git_cg.eval.corpus.materialize.materialize_core_goldens", _fake)
+    result = runner.invoke(app, ["eval", "materialize-core-goldens"])
+    assert result.exit_code == 0
+    assert "core_snapshot core@abc" in result.output
+    assert "archive_snapshot" not in result.output
+    assert "core_bundles 1" in result.output
+    assert "archive_bundles 0" in result.output

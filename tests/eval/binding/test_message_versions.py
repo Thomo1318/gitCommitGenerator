@@ -8,6 +8,8 @@ fail-closed validation.
 
 from __future__ import annotations
 
+import pytest
+
 from git_cg.eval.binding.binder import message_sha256_bytes
 from git_cg.eval.binding.message_versions import (
     MESSAGE_VERSION_KINDS,
@@ -76,3 +78,26 @@ def test_item_shape_keys() -> None:
     for v in versions:
         assert set(v.keys()) == {"kind", "message", "message_sha256", "source"}
         assert len(v["message_sha256"]) == 64
+
+
+def test_item_unknown_kind_fails_closed() -> None:
+    from git_cg.eval.binding.message_versions import MessageVersionError, _item
+
+    with pytest.raises(MessageVersionError, match="kind must be one of"):
+        _item("draft", FINAL, "telemetry_state")
+
+
+def test_item_unknown_source_fails_closed() -> None:
+    from git_cg.eval.binding.message_versions import MessageVersionError, _item
+
+    with pytest.raises(MessageVersionError, match="source must be one of"):
+        _item("final_accept", FINAL, "hand_waved")
+
+
+def test_item_blank_message_fails_closed() -> None:
+    from git_cg.eval.binding.message_versions import MessageVersionError, _item
+
+    with pytest.raises(MessageVersionError, match="non-empty message text"):
+        _item("final_accept", "   ", "commit_editmsg")
+    with pytest.raises(MessageVersionError, match="non-empty message text"):
+        _item("final_accept", None, "commit_editmsg")  # type: ignore[arg-type]

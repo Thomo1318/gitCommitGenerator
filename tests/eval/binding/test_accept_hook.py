@@ -180,3 +180,143 @@ def test_bind_never_raises_on_write_error(monkeypatch, tmp_path):
     assert res.attempted is True
     assert res.paths_written == ()
     assert res.errors
+
+
+def test_empty_final_bytes_is_absent(monkeypatch, tmp_path):
+    _enable_capture(monkeypatch)
+    res = bind_accept_path(
+        final_bytes=b"",
+        git_dir=str(tmp_path / ".git"),
+        repo_root=tmp_path,
+    )
+    assert res.attempted is False
+    assert res.hook_status == "final_message_absent"
+    assert res.paths_written == ()
+    assert not (tmp_path / ".eval").exists()
+
+
+def test_trajectory_build_error_is_non_blocking(monkeypatch, tmp_path):
+    """Trajectory construction failure must not block bind (best-effort)."""
+    _enable_capture(monkeypatch)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("traj exploded")
+
+    monkeypatch.setattr("git_cg.eval.binding.accept_hook.build_trajectory_evidence", _boom)
+    res = bind_accept_path(
+        final_bytes=FINAL.encode(),
+        git_dir=str(tmp_path / ".git"),
+        repo_root=tmp_path,
+    )
+    assert res.attempted is True
+    assert res.bound is True
+    assert res.hook_status == "bound"
+    assert any(e.startswith("trajectory_build_error:") for e in res.errors)
+    bundle_path = tmp_path / ".eval" / "bundles" / "acceptpath" / f"{res.session_thread_id}.json"
+    data = json.loads(bundle_path.read_text(encoding="utf-8"))
+    # Trajectory omitted when construction fails.
+    assert "trajectory" not in (data.get("meta") or {})
+
+
+def test_bind_exception_returns_bind_error(monkeypatch, tmp_path):
+    _enable_capture(monkeypatch)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("binder down")
+
+    monkeypatch.setattr("git_cg.eval.binding.accept_hook.bind_final_accept", _boom)
+    res = bind_accept_path(
+        final_bytes=FINAL.encode(),
+        git_dir=str(tmp_path / ".git"),
+        repo_root=tmp_path,
+    )
+    assert res.attempted is True
+    assert res.bound is False
+    assert res.hook_status == "bind_error"
+    assert res.errors and res.errors[0].startswith("bind_error:")
+
+
+def test_unbound_bind_result_propagates_reason_and_traj_error(monkeypatch, tmp_path):
+    _enable_capture(monkeypatch)
+
+    from git_cg.eval.binding.binder import BindResult
+
+    monkeypatch.setattr(
+        "git_cg.eval.binding.accept_hook.build_trajectory_evidence",
+        lambda *_a, **_k: (_ for _ in ()).throw(ValueError("bad traj")),
+    )
+    monkeypatch.setattr(
+        "git_cg.eval.binding.accept_hook.bind_final_accept",
+        lambda *_a, **_k: BindResult(
+            bound=False,
+            unbound_reason="schema_invalid",
+            errors=("schema boom",),
+        ),
+    )
+    res = bind_accept_path(
+        final_bytes=FINAL.encode(),
+        git_dir=str(tmp_path / ".git"),
+        repo_root=tmp_path,
+    )
+    assert res.attempted is True
+    assert res.bound is False
+    assert res.hook_status == "schema_invalid"
+    assert "schema boom" in res.errors
+    assert any(e.startswith("trajectory_build_error:") for e in res.errors)
+
+
+def test_message_versions_error_is_non_blocking(monkeypatch, tmp_path):
+    _enable_capture(monkeypatch)
+
+    def _boom(**_k):
+        raise RuntimeError("versions exploded")
+
+    monkeypatch.setattr("git_cg.eval.binding.accept_hook.build_message_versions", _boom)
+    res = bind_accept_path(
+        final_bytes=FINAL.encode(),
+        git_dir=str(tmp_path / ".git"),
+        repo_root=tmp_path,
+        telemetry_state=_State(),
+        edit_provenance="ai_edited_minor",
+    )
+    assert res.bound is True
+    assert any(e.startswith("message_versions_error:") for e in res.errors)
+    twin_path = tmp_path / ".eval" / "sessions" / f"{res.session_thread_id}.json"
+    twin = json.loads(twin_path.read_text(encoding="utf-8"))
+    # Twin still written; versions fall back to empty on construction error.
+    assert twin["message_versions"] == []
+
+
+def test_empty_score_card_and_falsey_session_skip_twin(monkeypatch, tmp_path):
+    """Empty score_card is ignored; non-str session id skips twin write."""
+    _enable_capture(monkeypatch)
+
+    class EmptyCardState:
+        def __init__(self) -> None:
+            self.generated_message = ""
+            self.score_card = {}  # empty dict must not become score_card enrichment
+            self.trace_id = ""
+            self.thread_id = ""
+
+    from git_cg.eval.binding.binder import BindResult
+
+    monkeypatch.setattr(
+        "git_cg.eval.binding.accept_hook.bind_final_accept",
+        lambda *_a, **_k: BindResult(
+            bound=True,
+            bundle={
+                "session_thread_id": 123,  # non-str → twin path skipped
+                "final_message": FINAL,
+            },
+            paths_written=(),
+        ),
+    )
+    res = bind_accept_path(
+        final_bytes=FINAL.encode(),
+        git_dir=str(tmp_path / ".git"),
+        repo_root=tmp_path,
+        telemetry_state=EmptyCardState(),
+    )
+    assert res.bound is True
+    assert res.session_thread_id is None
+    assert not (tmp_path / ".eval" / "sessions").exists()

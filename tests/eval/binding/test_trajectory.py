@@ -202,6 +202,20 @@ def test_empty_id_fails_closed() -> None:
         build_trajectory_evidence("   ", HAPPY_OBSERVED)
 
 
+def test_blank_stage_name_fails_closed() -> None:
+    with pytest.raises(TrajectoryError, match="non-empty"):
+        build_trajectory_evidence("ev-blank-stage", ("diff_extraction", "   "))
+
+
+def test_detail_entry_must_be_object() -> None:
+    with pytest.raises(TrajectoryError, match="must be objects"):
+        build_trajectory_evidence(
+            "ev-bad-detail-obj",
+            HAPPY_OBSERVED,
+            observed_stage_details=["not-an-object"],  # type: ignore[list-item]
+        )
+
+
 def test_invalid_detail_status_fails_closed() -> None:
     with pytest.raises(TrajectoryError, match="status must be one of"):
         build_trajectory_evidence(
