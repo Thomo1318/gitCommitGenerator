@@ -12,7 +12,9 @@ reimplements Hybrid, gold, ranker/SOP, or provenance policy, and it never
 performs network or Opik I/O on the bind path.
 
 Public API (D4, locked): ``capture_enabled``, ``BindInput``, ``BindResult``,
-``bind_final_accept``, ``bind_unbound``.
+``bind_final_accept``, ``bind_unbound``. Trajectory evidence (R7/D3/D10) is
+emitted via ``build_trajectory_evidence`` and the ``DECLARED_STAGES``
+vocabulary.
 """
 
 from __future__ import annotations
@@ -25,12 +27,18 @@ from git_cg.eval.binding.binder import (
     message_sha256_bytes,
 )
 from git_cg.eval.binding.profiles import capture_enabled
+from git_cg.eval.binding.trajectory import (
+    DECLARED_STAGES,
+    build_trajectory_evidence,
+)
 
 __all__ = [
+    "DECLARED_STAGES",
     "BindInput",
     "BindResult",
     "bind_final_accept",
     "bind_unbound",
+    "build_trajectory_evidence",
     "capture_enabled",
     "message_sha256_bytes",
 ]
