@@ -29,6 +29,50 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.19.0
+
+### Added
+
+- ✨ feat(eval-binding): add S3 accept-path final-bytes binder core (#231)
+- ✨ feat(eval-binding): bind accept-path final bytes into ape_bundle_v1 (#231)
+- ✨ feat(eval-cli): add thin git-cg eval corpus-helper sub-app (#231)
+- ✨ feat(eval-binding): add D3/D10 trajectory evidence emitter (#231)
+- ✨ feat(eval-scoring): wire Family H trajectory completeness sink (#231)
+- ✨ feat(eval-binding): add D12/M7 message_versions hooks (#231)
+- ✨ feat(eval-binding): add R13 commit_session_thread_v1 twin (#231)
+- ✨ feat(eval-binding): wire accept-path emit hook into record-telemetry (#231)
+
+### Fixed
+
+- 🦺 fix(eval-scoring): preserve stored hash authority and card precedence (#231)
+- 🦺 fix(eval-binding): stop false opik_export and path-sliced traj ids (#231)
+- 🦺 fix(eval-binding): harden authority meta and Layer-A I/O (#231)
+- 🦺 fix(eval-scoring): validate Family H trajectory shapes (#231)
+- 🦺 fix(eval): harden S3 hash authority and trajectory completeness (#231)
+- 🦺 fix(eval): resolve S2b residual pyright debt (#225)
+
+### Changed
+
+- ♻️ refactor(main): compute classify_edit once for telemetry (#231)
+
+### Tests
+
+- ✅ test(eval-binding): pin S3 accept-path binder contract (#231)
+- ✅ test(eval-binding): pin S3 accept-path binder contract locks (#231)
+- 🧪 test(eval): close S3 binding/CLI/Family H patch coverage gaps (#231)
+
+### Documentation
+
+- 📝 docs(eval): document S3 binding boundary and Layer-A capture law (#231)
+- 📝 docs(eval): correct S3 CLI path; isolate encode-fixture cwd (#231)
+- 📝 docs(eval): restore gold-standard S3 contract docstrings (#231)
+
+### Miscellaneous
+
+- 📝 Add docstrings to `evals/231-s3-binding`
+- 📝 docs(llms): auto-update llms.txt
+- Merge pull request #234 from Thomo1318/evals/231-s3-binding
+
 ## v0.18.0
 
 ### Miscellaneous
