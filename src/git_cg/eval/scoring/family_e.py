@@ -123,11 +123,12 @@ def score_family_e(
     cg_raw = trailers.get("Changelog-Groups", "")
     change_types = [x.strip() for x in ct_raw.split(",") if x.strip()]
     changelog_groups = [x.strip() for x in cg_raw.split(",") if x.strip()]
-    primary_cc = None
+    primary_cc: str | None = None
     if built_plan is not None:
-        primary_cc = getattr(built_plan.primary_intent, "cc_type", None)
-        if hasattr(primary_cc, "value"):
-            primary_cc = primary_cc.value
+        # CommitType enums expose ``.value``; plain strings (tests/stubs) do not.
+        raw_cc = getattr(built_plan.primary_intent, "cc_type", None)
+        raw_value = getattr(raw_cc, "value", raw_cc)
+        primary_cc = None if raw_value is None else str(raw_value)
     try:
         cg_ok = changelog_groups_allowlisted(
             change_types or [],

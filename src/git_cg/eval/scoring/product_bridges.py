@@ -6,6 +6,7 @@ S2 must wrap product modules — never reimplement Hybrid/gold/path-class law.
 from __future__ import annotations
 
 import re
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from git_cg.commit_gold import STRICT_FAIL_CODES, GoldReport, check_commit_gold
@@ -254,8 +255,15 @@ def run_gold_once(
 def deterministic_card_from_plan(plan: CommitPlan) -> dict[str, Any]:
     """Wrap product ``run_deterministic_checks`` into a plain evidence dict."""
     card = run_deterministic_checks(plan)
-    if hasattr(card, "model_dump"):
-        return card.model_dump()
+    # Product authority returns a dataclass ``DeterministicScoreCard``.
+    if is_dataclass(card) and not isinstance(card, type):
+        return asdict(card)
+    # Duck-typed fallbacks for test doubles / alternate card shapes.
+    model_dump = getattr(card, "model_dump", None)
+    if callable(model_dump):
+        dumped = model_dump()
+        if isinstance(dumped, dict):
+            return dumped
     if hasattr(card, "__dict__"):
         return {k: getattr(card, k) for k in vars(card) if not k.startswith("_")}
     return {
