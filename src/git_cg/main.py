@@ -78,6 +78,12 @@ app = typer.Typer(
 )
 console = Console()
 
+# Thin corpus-helper sub-app (Issue #231, D11). Delegation-only: no binder, no
+# accept-path .eval writes, no network. Distinct from the `evals` benchmark cmd.
+from git_cg.eval.cli import eval_app  # noqa: E402
+
+app.add_typer(eval_app, name="eval")
+
 # Only generate for an interactive (empty) or template commit. Everything else
 # (-m/-F => "message", merge, squash, --amend/-c/-C => "commit") already has a
 # message we must NOT overwrite — critical for safe global-hook operation.
