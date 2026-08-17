@@ -14,6 +14,8 @@ from git_cg.eval.mirror.config import (
     OpikEnvironment,
     OpikMode,
     mask_secret,
+    mode_fallback_token,
+    operator_config_health,
     public_config_view,
     resolve_opik_config,
 )
@@ -49,6 +51,22 @@ def test_unknown_mode_fails_closed_to_off_and_records() -> None:
     assert cfg["mode"] == "off"
     assert "mode_fallback" in cfg["meta"]
     assert "bogus" in cfg["meta"]["mode_fallback"]
+
+
+def test_e12_invalid_mode_surfaces_config_error_health() -> None:
+    """E12: unknown token remains capture-off, but operator health is config_error."""
+    cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "bogus"})
+    assert cfg["mode"] == "off"
+    assert mode_fallback_token(cfg) == "bogus"
+    assert operator_config_health(cfg) == ExportHealth.CONFIG_ERROR.value
+    # Legitimate off (unset) stays skipped_off — not config_error.
+    off = resolve_opik_config(env={})
+    assert mode_fallback_token(off) is None
+    assert operator_config_health(off) == ExportHealth.SKIPPED_OFF.value
+    local = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "local_only", "GIT_CG_OPIK_PROJECT_EVAL": "p"})
+    assert operator_config_health(local) == ExportHealth.DEFERRED.value
+    active = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "mirror", "GIT_CG_OPIK_PROJECT_EVAL": "p"})
+    assert operator_config_health(active) == ExportHealth.PENDING.value
 
 
 def test_legacy_local_aliases_to_local_only() -> None:

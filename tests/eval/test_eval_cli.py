@@ -326,3 +326,45 @@ def test_export_drain_dashed_alias_mode_off(monkeypatch: pytest.MonkeyPatch, tmp
     result = runner.invoke(app, ["eval", "export-drain", "--root", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "mode=off" in result.output
+
+
+def _clear_project_envs(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "GIT_CG_OPIK_PROJECT_LIVE",
+        "GIT_CG_OPIK_PROJECT_EVAL",
+        "GIT_CG_OPIK_PROJECT_CI",
+        "GIT_CG_OPIK_PROJECT_IMPORT",
+        "OPIK_PROJECT_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_export_drain_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """E12: bogus mode on drain surfaces config_error (not silent mode=off)."""
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "bogus")
+    _clear_project_envs(monkeypatch)
+    result = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path)])
+    assert result.exit_code == 2, result.output
+    assert "config_error" in result.output
+    assert "bogus" in result.output
+    assert '"health": "config_error"' in result.output or '"health":"config_error"' in result.output.replace(" ", "")
+
+
+def test_export_status_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "bogus")
+    _clear_project_envs(monkeypatch)
+    result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path)])
+    assert result.exit_code == 2, result.output
+    assert "health config_error" in result.output
+    assert "bogus" in result.output
+
+
+def test_config_show_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "bogus")
+    _clear_project_envs(monkeypatch)
+    # Support both naming variants if present.
+    result = runner.invoke(app, ["eval", "config", "show"])
+    if result.exit_code == 2 and "unknown" in (result.output or "").lower() and "config_error" not in result.output:
+        result = runner.invoke(app, ["eval", "opik-config-show"])
+    assert result.exit_code == 2, result.output
+    assert "config_error" in result.output

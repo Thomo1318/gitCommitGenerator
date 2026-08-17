@@ -17,6 +17,7 @@ from git_cg.eval.mirror.batch import build_export_batches
 from git_cg.eval.mirror.composition import build_export_plan
 from git_cg.eval.mirror.experiments import build_experiment
 from git_cg.eval.mirror.exporter import drain_queue, mirror_result_from_drain
+from git_cg.eval.mirror.health import ExportHealth
 from git_cg.eval.mirror.projections import (
     FEEDBACK_SOURCE,
     project_bundle_to_trace,
@@ -272,3 +273,19 @@ class TestCompositionDrainPath:
         assert export_result(result)["product_accept_blocked"] is False
         # Offline local evidence remains green after export throw.
         assert redacted["gate"]["deterministic_pass"] is True
+
+
+def test_e12_invalid_mode_fallback_is_config_error_on_composition(tmp_path: Path) -> None:
+    """E12: mode_fallback must not short-circuit as silent skipped_off only."""
+    from git_cg.eval.mirror.config import resolve_opik_config
+
+    cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "not-a-mode"})
+    plan = build_export_plan([_bundle()], cfg, repo_root=tmp_path, enqueue=False)
+    assert plan.mode == "off"
+    assert plan.health is ExportHealth.CONFIG_ERROR
+    assert plan.product_accept_blocked is False
+    assert "export_validation" in plan.error_classes
+    assert any("config_error" in n for n in plan.notes)
+    mirror = plan.as_mirror_result()
+    assert mirror.health is ExportHealth.CONFIG_ERROR
+    assert mirror.product_accept_blocked is False

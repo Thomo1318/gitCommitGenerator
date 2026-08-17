@@ -7,7 +7,10 @@ Law (plan §7.2.14 / §10.6 / P0-1):
 
 * **Mode:** ``GIT_CG_OPIK_MODE`` ∈ ``off|local_only|mirror|strict_mirror``.
   Unset/empty ⇒ ``off``. Unknown token ⇒ fail closed to ``off`` **and**
-  record the bad token in ``meta.mode_fallback``.
+  record the bad token in ``meta.mode_fallback`` (E12). Capture-off default
+  stays safe, but operator surfaces (config show / export status / drain /
+  composition) must treat ``meta.mode_fallback`` as ``ExportHealth.config_error``
+  — never only a quiet ambient disable.
   Legacy parse aliases only: ``local`` → ``local_only``,
   ``dogfood`` → ``strict_mirror``. Canonical serialized form is plan vocabulary.
 * **Environment:** ``development|dogfood|ci|eval|staging|production``
@@ -62,6 +65,10 @@ __all__ = [
     "OpikConfigError",
     "OpikEnvironment",
     "OpikMode",
+    "mask_secret",
+    "mode_fallback_token",
+    "operator_config_health",
+    "public_config_view",
     "resolve_opik_config",
 ]
 
@@ -324,6 +331,51 @@ def resolve_opik_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
         # already present when active
         pass
     return record
+
+
+def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
+    """Return the invalid mode token recorded by resolution (E12), if any.
+
+    Unset/empty modes resolve to ``off`` without a fallback token. Unknown
+    tokens still fail closed to ``off`` for capture safety, but leave the bad
+    token in ``meta.mode_fallback`` so operator surfaces can surface
+    ``config_error`` instead of a silent disable.
+    """
+    if not isinstance(record, Mapping):
+        return None
+    meta = record.get("meta")
+    if not isinstance(meta, Mapping):
+        return None
+    token = meta.get("mode_fallback")
+    if token is None:
+        return None
+    text_token = str(token).strip()
+    return text_token or None
+
+
+def operator_config_health(record: Mapping[str, Any] | None) -> str:
+    """Return the operator-visible export health token for a resolved config (E12).
+
+    Priority:
+    1. ``meta.mode_fallback`` → ``config_error`` (invalid token while export tooling runs)
+    2. mode ``off`` → ``skipped_off``
+    3. mode ``local_only`` → ``deferred``
+    4. otherwise → ``pending`` (active export modes awaiting drain/transport)
+    """
+    # Local import keeps config free of hard health-module cycles at import time
+    # for lightweight fixture helpers, while still returning stable §18.7 tokens.
+    from git_cg.eval.mirror.health import ExportHealth
+
+    if mode_fallback_token(record) is not None:
+        return ExportHealth.CONFIG_ERROR.value
+    mode = "off"
+    if isinstance(record, Mapping):
+        mode = str(record.get("mode") or "off")
+    if mode == "off":
+        return ExportHealth.SKIPPED_OFF.value
+    if mode in {"local_only", "local"}:
+        return ExportHealth.DEFERRED.value
+    return ExportHealth.PENDING.value
 
 
 def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:

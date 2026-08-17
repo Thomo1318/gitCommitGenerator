@@ -162,6 +162,8 @@ def config_cmd(
     from git_cg.eval.mirror.config import (
         OpikConfigError,
         mask_secret,
+        mode_fallback_token,
+        operator_config_health,
         public_config_view,
         resolve_opik_config,
     )
@@ -188,20 +190,25 @@ def config_cmd(
         "api_key": mask_secret(ambient_key) if ambient_key else None,
         "api_key_present": bool(ambient_key),
     }
+    health_hint = operator_config_health(config)
     payload = {
         "config": view,
         "secrets": masked,
-        "health_hint": (
-            ExportHealth.SKIPPED_OFF.value
-            if view.get("mode") == "off"
-            else (
-                ExportHealth.CONFIG_ERROR.value
-                if "mode_fallback" in (view.get("meta") or {})
-                else ExportHealth.PENDING.value
-            )
-        ),
+        "health_hint": health_hint,
+        "mirror_result": build_mirror_result(
+            mode=str(view.get("mode") or "off"),
+            health=ExportHealth(health_hint),
+            notes=(
+                (f"config_error: invalid mode token {mode_fallback_token(config)!r}",)
+                if mode_fallback_token(config)
+                else ()
+            ),
+        ).to_dict(),
     }
     typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    # E12: invalid mode is operator-visible config_error (exit 2), not silent off.
+    if health_hint == ExportHealth.CONFIG_ERROR.value:
+        raise typer.Exit(code=2)
     raise typer.Exit(code=0)
 
 
@@ -269,12 +276,28 @@ def export_status_cmd(
     ),
 ) -> None:
     """Show the Layer-A export queue status (read-only, offline)."""
+    from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
+
+    # E12: operator status surfaces invalid mode as config_error before queue counts.
+    try:
+        cfg = resolve_opik_config()
+    except Exception:
+        cfg = None
+    health_hint = operator_config_health(cfg) if cfg is not None else None
+    bad_mode = mode_fallback_token(cfg) if cfg is not None else None
+    if health_hint is not None:
+        typer.echo(f"health {health_hint}")
+    if bad_mode is not None:
+        typer.echo(f"config_error invalid mode token {bad_mode!r}", err=True)
+
     try:
         repo = _resolve_repo(root)
     except Exception as exc:
         typer.echo(f"export status: repo root unresolvable: {exc}", err=True)
         raise typer.Exit(code=1) from None
     _emit_status(repo)
+    if bad_mode is not None:
+        raise typer.Exit(code=2)
     raise typer.Exit(code=0)
 
 
@@ -394,8 +417,17 @@ def export_drain_cmd(
     secret failures are classified and recorded on the queue rows; they never
     produce a non-zero exit that could block a hook.
     """
-    from git_cg.eval.mirror.config import OpikConfigError, resolve_opik_config
+    import json
+
+    from git_cg.eval.mirror.config import (
+        OpikConfigError,
+        mode_fallback_token,
+        operator_config_health,
+        resolve_opik_config,
+    )
     from git_cg.eval.mirror.exporter import drain_queue, list_pending_items
+    from git_cg.eval.mirror.health import ExportHealth
+    from git_cg.eval.mirror.result import build_mirror_result, evaluation_job_result, export_result
     from git_cg.eval.mirror.transport import OpikSdkTransport
 
     try:
@@ -403,6 +435,35 @@ def export_drain_cmd(
     except OpikConfigError as exc:
         typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
         raise typer.Exit(code=2) from None
+
+    # E12: invalid mode token → config_error on drain (not silent mode=off success).
+    bad_mode = mode_fallback_token(config)
+    if bad_mode is not None:
+        result = build_mirror_result(
+            mode=str(config.get("mode") or "off"),
+            health=ExportHealth.CONFIG_ERROR,
+            notes=(f"config_error: invalid mode token {bad_mode!r}",),
+            error_classes=("export_validation",),
+        )
+        typer.echo(
+            f"export drain: config_error invalid mode token {bad_mode!r} (fail-closed to {config.get('mode')!r})",
+            err=True,
+        )
+        typer.echo(
+            json.dumps(
+                {
+                    "mirror_result": result.to_dict(),
+                    "export_result": export_result(result),
+                    "evaluation_job_result": evaluation_job_result(result),
+                    "health_hint": operator_config_health(config),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        # Fail-closed for config misconfiguration visibility; never product-blocking
+        # because basic commit path does not invoke export drain.
+        raise typer.Exit(code=2)
 
     if config.get("mode", "off") == "off":
         typer.echo("export drain: mode=off; nothing to do")
@@ -423,10 +484,7 @@ def export_drain_cmd(
         typer.echo(f"pending {len(pending)}")
         raise typer.Exit(code=0)
 
-    import json
-
     from git_cg.eval.mirror.exporter import mirror_result_from_drain
-    from git_cg.eval.mirror.result import evaluation_job_result, export_result
 
     summary = drain_queue(
         config,

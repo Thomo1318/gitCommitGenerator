@@ -25,6 +25,7 @@ from typing import Any, Final
 
 from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.batch import ExportSizeError, build_export_batches
+from git_cg.eval.mirror.config import mode_fallback_token
 from git_cg.eval.mirror.experiments import build_experiment
 from git_cg.eval.mirror.health import ExportHealth
 from git_cg.eval.mirror.projections import (
@@ -228,6 +229,23 @@ def build_export_plan(
 
     notes: list[str] = []
     error_classes: list[str] = []
+
+    # E12: invalid mode tokens fail closed to off for capture safety, but the
+    # composition join must surface config_error (not silent skipped_off only).
+    bad_mode = mode_fallback_token(cfg)
+    if bad_mode is not None:
+        n_objects = len(objects.bundles) + len(objects.session_threads)
+        return ExportPlanResult(
+            mode=mode,
+            health=ExportHealth.CONFIG_ERROR,
+            skipped=n_objects,
+            failed=0,
+            error_classes=("export_validation",),
+            notes=(
+                f"config_error: invalid mode token {bad_mode!r} "
+                f"(fail-closed to {mode!r}; operator export misconfiguration)",
+            ),
+        )
 
     if mode in _SHORT_CIRCUIT_MODES:
         health = ExportHealth.SKIPPED_OFF if mode in {"off"} else ExportHealth.DEFERRED
