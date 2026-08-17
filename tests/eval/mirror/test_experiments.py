@@ -181,3 +181,48 @@ class TestExperimentNameCollisionGuard:
     def test_bare_experiment_name_without_guard(self) -> None:
         when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
         assert experiment_name("mirror", "v0", "abc1234", when) == "eval_mirror_v0_abc1234_20260816T120000Z"
+
+    def test_same_second_json_like_content_keys_do_not_collide_after_hex_strip(self) -> None:
+        """Non-hex content keys must hash fully — stripping non-hex can collide."""
+        when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
+        a = build_experiment(
+            "mirror",
+            "v0",
+            git_sha="abc1234",
+            when=when,
+            content_key='{"a":1,"b":2}',
+        )
+        b = build_experiment(
+            "mirror",
+            "v0",
+            git_sha="abc1234",
+            when=when,
+            content_key='{"a":12,"b":""}',
+        )
+        assert a["experiment_name"] != b["experiment_name"]
+
+    def test_pins_json_content_keys_diverge_without_explicit_content_key(self) -> None:
+        when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
+        a = build_experiment(
+            "mirror",
+            "v0",
+            git_sha="abc1234",
+            when=when,
+            dataset_id="ds-a",
+            project="proj-a",
+        )
+        b = build_experiment(
+            "mirror",
+            "v0",
+            git_sha="abc1234",
+            when=when,
+            dataset_id="ds-b",
+            project="proj-b",
+        )
+        assert a["experiment_name"] != b["experiment_name"]
+
+    def test_pure_hex_content_key_passthrough_prefix(self) -> None:
+        when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
+        key = "abcdef0123456789"
+        rec = build_experiment("mirror", "v0", git_sha="abc1234", when=when, content_key=key)
+        assert rec["experiment_name"].endswith("_abcdef01")

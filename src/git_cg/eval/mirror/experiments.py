@@ -207,12 +207,16 @@ def _collision_suffix(
     stamp: str,
     content_key: str | None,
 ) -> str:
-    """Deterministic short suffix for same-second collisions (P2-5)."""
+    """Deterministic short suffix for same-second collisions (P2-5).
+
+    Only a full pure-hex content key may pass through (first 8 hex chars).
+    Stripping non-hex characters from arbitrary keys is forbidden — it can
+    map distinct JSON/pins materials onto the same suffix.
+    """
     if content_key:
-        digest = re.sub(r"[^a-f0-9]", "", content_key.lower())
-        if len(digest) >= 8:
-            return digest[:8]
-        # Non-hex content keys still get a stable hash.
+        token = content_key.strip().lower()
+        if token and re.fullmatch(r"[a-f0-9]+", token) and len(token) >= 8:
+            return token[:8]
         return hashlib.sha256(content_key.encode("utf-8")).hexdigest()[:8]
     material = json.dumps(
         {
