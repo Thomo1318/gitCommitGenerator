@@ -385,3 +385,29 @@ def test_off_mode_mirror_result_skipped() -> None:
     result = build_mirror_result(mode="off", notes=("skipped_off",))
     assert result.health is ExportHealth.SKIPPED_OFF
     assert result.strict_mirror_failed is False
+
+
+# --- Boolean env parsing ---------------------------------------------------
+
+
+def test_truthy_unknown_token_keeps_default_true_for_tls() -> None:
+    """Unknown non-empty tokens must not silently disable TLS (default True)."""
+    cfg = resolve_opik_config(env={"GIT_CG_OPIK_CHECK_TLS": "garbage"})
+    assert cfg["check_tls_certificate"] is True
+
+
+def test_truthy_explicit_false_tokens() -> None:
+    for token in ("0", "false", "no", "off", "FALSE", " Off "):
+        cfg = resolve_opik_config(env={"GIT_CG_OPIK_CHECK_TLS": token})
+        assert cfg["check_tls_certificate"] is False, token
+
+
+def test_truthy_explicit_true_tokens() -> None:
+    for token in ("1", "true", "yes", "on", "TRUE", " Yes "):
+        cfg = resolve_opik_config(env={"GIT_CG_OPIK_CHECK_TLS": token})
+        assert cfg["check_tls_certificate"] is True, token
+
+
+def test_truthy_empty_keeps_default() -> None:
+    cfg = resolve_opik_config(env={"GIT_CG_OPIK_CHECK_TLS": ""})
+    assert cfg["check_tls_certificate"] is True

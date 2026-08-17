@@ -143,9 +143,20 @@ class OpikConfigError(ValueError):
 
 
 def _truthy(raw: str | None, default: bool) -> bool:
+    """Parse common boolean env tokens; unknown non-empty values keep ``default``.
+
+    Explicit true tokens ⇒ True. Explicit false tokens ⇒ False. Missing/empty
+    and unrecognized non-empty tokens fall back to the supplied default so
+    TLS/track flags cannot flip open/closed on garbage operator input.
+    """
     if raw is None or raw == "":
         return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+    token = raw.strip().lower()
+    if token in {"1", "true", "yes", "on"}:
+        return True
+    if token in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 def _parse_mode(raw: str | None) -> tuple[OpikMode, str | None, str | None]:
