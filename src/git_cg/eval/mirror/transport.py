@@ -47,11 +47,11 @@ __all__ = [
 #: Closed export failure vocabulary (plan §7.2.10 export_batch_v1.error_class).
 EXPORT_ERROR_CLASSES = frozenset({"export_network", "export_auth", "export_validation", "export_size"})
 
-#: E5 — only allowed module-scope-or-lazy Opik import site, pinned by path:lineno.
-#: Update this constant in the same commit if the lazy ``import opik`` line moves.
+#: E5 — only allowed lazy Opik import site, pinned by path:enclosing_function.
+#: Line numbers are intentionally not part of the pin so nearby edits do not churn E5.
 LAZY_OPIK_IMPORT_ALLOWLIST: Final[frozenset[str]] = frozenset(
     {
-        "src/git_cg/eval/mirror/transport.py:206",
+        "src/git_cg/eval/mirror/transport.py:OpikSdkTransport.upload",
     }
 )
 
@@ -227,8 +227,75 @@ class OpikSdkTransport:
             raise classify_export_error(exc) from exc
 
     @staticmethod
-    def _project_trace_fields(payload: dict[str, Any], *, experiment_name: str) -> dict[str, Any]:
-        """Project a durable export_batch transport body onto the SDK surface.
+    def _project_one_item(
+        primary: dict[str, Any],
+        *,
+        experiment_name: str,
+        batch_payload: dict[str, Any],
+        item_ref: Any,
+        item_count: int,
+        item_index: int,
+    ) -> dict[str, Any]:
+        """Project a single nested export item onto one SDK trace surface."""
+        trace = primary.get("trace") if isinstance(primary.get("trace"), dict) else {}
+        thread = primary.get("thread") if isinstance(primary.get("thread"), dict) else {}
+        feedback = primary.get("feedback") if isinstance(primary.get("feedback"), list) else []
+        experiment = primary.get("experiment") if isinstance(primary.get("experiment"), dict) else {}
+
+        input_obj = trace.get("input") if isinstance(trace.get("input"), dict) else {}
+        output_obj = trace.get("output") if isinstance(trace.get("output"), dict) else {}
+        metadata: dict[str, Any] = {}
+        if isinstance(trace.get("metadata"), dict):
+            metadata.update(trace["metadata"])
+
+        metadata.setdefault("experiment_name", experiment.get("experiment_name") or experiment_name)
+        if batch_payload.get("schema_pack"):
+            metadata.setdefault("schema_pack", batch_payload.get("schema_pack"))
+        if batch_payload.get("metric_catalog"):
+            metadata.setdefault("metric_catalog", batch_payload.get("metric_catalog"))
+        if batch_payload.get("redaction_profile"):
+            metadata.setdefault("redaction_profile", batch_payload.get("redaction_profile"))
+        if thread:
+            metadata["thread"] = thread
+        if feedback:
+            metadata["feedback"] = feedback
+        if experiment:
+            metadata["experiment"] = experiment
+        if primary.get("authority") is not None:
+            metadata.setdefault("authority", primary.get("authority"))
+        if primary.get("gate") is not None:
+            metadata.setdefault("gate", primary.get("gate"))
+        if primary.get("score_card") is not None:
+            metadata.setdefault("score_card", primary.get("score_card"))
+        if primary.get("bundle_id") is not None:
+            metadata.setdefault("bundle_id", primary.get("bundle_id"))
+        if primary.get("artifact_class") is not None:
+            metadata.setdefault("artifact_class", primary.get("artifact_class"))
+
+        metadata["item_count"] = item_count
+        metadata["item_index"] = item_index
+        if item_ref is not None:
+            metadata.setdefault("item_ref", item_ref)
+
+        # Thread-only rows still need a usable input surface.
+        if not input_obj and thread:
+            input_obj = {
+                "thread_id": thread.get("thread_id"),
+                "experiment_name": thread.get("experiment_name") or experiment_name,
+            }
+        if not output_obj and thread:
+            output_obj = {"messages": thread.get("messages") or []}
+
+        return {
+            "name": experiment_name,
+            "input": input_obj if isinstance(input_obj, dict) else {},
+            "output": output_obj if isinstance(output_obj, dict) else {},
+            "metadata": metadata,
+        }
+
+    @staticmethod
+    def _project_trace_fields(payload: dict[str, Any], *, experiment_name: str) -> list[dict[str, Any]]:
+        """Project a durable export_batch transport body onto one SDK trace per item.
 
         Durable payloads are ``export_batch_v1`` transport bodies::
 
@@ -243,96 +310,56 @@ class OpikSdkTransport:
         projections from :mod:`git_cg.eval.mirror.projections`. Top-level
         ``input`` / ``output`` / ``metadata`` keys are accepted only as a
         narrow back-compat shape for unit fixtures.
+
+        Multi-item batches emit one projected trace per valid item so later
+        entries are not discarded.
         """
         items = payload.get("items")
         if isinstance(items, list) and items:
-            primary: dict[str, Any] = {}
+            valid_entries: list[tuple[Any, dict[str, Any]]] = []
             for entry in items:
                 if isinstance(entry, dict) and isinstance(entry.get("payload"), dict):
-                    primary = entry["payload"]
-                    break
+                    valid_entries.append((entry.get("item_ref"), entry["payload"]))
 
-            trace = primary.get("trace") if isinstance(primary.get("trace"), dict) else {}
-            thread = primary.get("thread") if isinstance(primary.get("thread"), dict) else {}
-            feedback = primary.get("feedback") if isinstance(primary.get("feedback"), list) else []
-            experiment = primary.get("experiment") if isinstance(primary.get("experiment"), dict) else {}
-
-            input_obj = trace.get("input") if isinstance(trace.get("input"), dict) else {}
-            output_obj = trace.get("output") if isinstance(trace.get("output"), dict) else {}
-            metadata: dict[str, Any] = {}
-            if isinstance(trace.get("metadata"), dict):
-                metadata.update(trace["metadata"])
-
-            metadata.setdefault("experiment_name", experiment.get("experiment_name") or experiment_name)
-            if payload.get("schema_pack"):
-                metadata.setdefault("schema_pack", payload.get("schema_pack"))
-            if payload.get("metric_catalog"):
-                metadata.setdefault("metric_catalog", payload.get("metric_catalog"))
-            if payload.get("redaction_profile"):
-                metadata.setdefault("redaction_profile", payload.get("redaction_profile"))
-            if thread:
-                metadata["thread"] = thread
-            if feedback:
-                metadata["feedback"] = feedback
-            if experiment:
-                metadata["experiment"] = experiment
-            if primary.get("authority") is not None:
-                metadata.setdefault("authority", primary.get("authority"))
-            if primary.get("gate") is not None:
-                metadata.setdefault("gate", primary.get("gate"))
-            if primary.get("score_card") is not None:
-                metadata.setdefault("score_card", primary.get("score_card"))
-            if primary.get("bundle_id") is not None:
-                metadata.setdefault("bundle_id", primary.get("bundle_id"))
-            if primary.get("artifact_class") is not None:
-                metadata.setdefault("artifact_class", primary.get("artifact_class"))
-
-            # Prefer first concrete item_ref for operator-facing identity.
-            first_ref = None
-            for entry in items:
-                if isinstance(entry, dict) and entry.get("item_ref"):
-                    first_ref = entry.get("item_ref")
-                    break
-            metadata["item_count"] = len(items)
-            if first_ref is not None:
-                metadata.setdefault("item_ref", first_ref)
-
-            # Thread-only rows still need a usable input surface.
-            if not input_obj and thread:
-                input_obj = {
-                    "thread_id": thread.get("thread_id"),
-                    "experiment_name": thread.get("experiment_name") or experiment_name,
-                }
-            if not output_obj and thread:
-                output_obj = {"messages": thread.get("messages") or []}
-
-            return {
-                "name": experiment_name,
-                "input": input_obj if isinstance(input_obj, dict) else {},
-                "output": output_obj if isinstance(output_obj, dict) else {},
-                "metadata": metadata,
-            }
+            if valid_entries:
+                item_count = len(items)
+                projected: list[dict[str, Any]] = []
+                for index, (item_ref, primary) in enumerate(valid_entries):
+                    projected.append(
+                        OpikSdkTransport._project_one_item(
+                            primary,
+                            experiment_name=experiment_name,
+                            batch_payload=payload,
+                            item_ref=item_ref,
+                            item_count=item_count,
+                            item_index=index,
+                        )
+                    )
+                return projected
 
         # Narrow back-compat: already-projected flat surfaces.
-        return {
-            "name": experiment_name,
-            "input": payload.get("input", {}) if isinstance(payload.get("input"), dict) else {},
-            "output": payload.get("output", {}) if isinstance(payload.get("output"), dict) else {},
-            "metadata": payload.get("metadata", {}) if isinstance(payload.get("metadata"), dict) else {},
-        }
+        return [
+            {
+                "name": experiment_name,
+                "input": payload.get("input", {}) if isinstance(payload.get("input"), dict) else {},
+                "output": payload.get("output", {}) if isinstance(payload.get("output"), dict) else {},
+                "metadata": payload.get("metadata", {}) if isinstance(payload.get("metadata"), dict) else {},
+            }
+        ]
 
     @staticmethod
     def _send(client: Any, *, experiment_name: str, payload: dict[str, Any]) -> None:
         """Project the durable payload onto the client trace surface.
 
         The durable body shape is owned by the queue/batch layer; this adapter
-        only maps it onto the SDK. Kept adaptive so fixture double surfaces and
-        real Opik clients can both accept the projected kwargs.
+        only maps it onto the SDK. One trace is emitted per export item so
+        multi-item batches retain every payload. Kept adaptive so fixture
+        double surfaces and real Opik clients can both accept the projected kwargs.
         """
         trace_fn = getattr(client, "trace", None)
         if callable(trace_fn):
-            projected = OpikSdkTransport._project_trace_fields(payload, experiment_name=experiment_name)
-            trace_fn(**projected)
+            for projected in OpikSdkTransport._project_trace_fields(payload, experiment_name=experiment_name):
+                trace_fn(**projected)
             return
         raise ExportTransportError("export_validation", "opik client exposes no usable trace surface")
 

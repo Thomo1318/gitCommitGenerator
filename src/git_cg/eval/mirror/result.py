@@ -99,6 +99,8 @@ def build_mirror_result(
 ) -> MirrorResult:
     """Construct a MirrorResult with strict_mirror / health defaults applied."""
     classes = tuple(error_classes or ())
+    # Materialize once: generators must survive both health inference and result storage.
+    note_items = tuple(notes or ())
     if health is None:
         health = _infer_health(
             mode=mode,
@@ -107,7 +109,7 @@ def build_mirror_result(
             failed=failed,
             deferred=deferred,
             error_classes=classes,
-            notes=tuple(notes or ()),
+            notes=note_items,
         )
     health_enum = health if isinstance(health, ExportHealth) else ExportHealth(str(health))
     strict_failed = mode == "strict_mirror" and (
@@ -131,7 +133,7 @@ def build_mirror_result(
         deferred=deferred,
         error_classes=classes,
         strict_mirror_failed=strict_failed,
-        notes=tuple(notes or ()),
+        notes=note_items,
     )
 
 

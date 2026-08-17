@@ -8,6 +8,7 @@ from git_cg.eval.mirror.train import (
     POSITIVE_GOLD,
     TRAIN_DATASET_ID,
     TRAIN_LABELS,
+    TrainProjectionError,
     build_train_projection,
     filter_positive_gold,
     normalize_train_label,
@@ -125,6 +126,26 @@ class TestBuildTrainProjection:
         assert len(proj["positive_gold"]) == 2
         assert len(proj["negatives"]) == 1
         assert {r.get("bundle_id") for r in proj["positive_gold"]} == {None, "p2"}
+
+    def test_overlapping_bundle_id_raises(self) -> None:
+        with pytest.raises(TrainProjectionError, match="overlap"):
+            build_train_projection(
+                [
+                    _bundle(bid="dup", label="positive"),
+                    _bundle(bid="dup", label="negative", regime="antipattern"),
+                ]
+            )
+
+    def test_missing_ids_do_not_collide(self) -> None:
+        proj = build_train_projection(
+            [
+                {"meta": {"train_label": "positive", "redaction_profile": "train_rich"}},
+                {"meta": {"train_label": "negative", "redaction_profile": "train_rich", "regime": "antipattern"}},
+            ]
+        )
+        assert len(proj["rows"]) == 2
+        assert len(proj["positive_gold"]) == 1
+        assert len(proj["negatives"]) == 1
 
     def test_s4_f01_rows_carry_labels_redaction_scope(self) -> None:
         proj = build_train_projection([_bundle(bid="p1", label="positive")])

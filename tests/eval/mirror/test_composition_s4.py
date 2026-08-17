@@ -180,7 +180,8 @@ class TestCompositionDrainPath:
 
         row = load_queue_item(qid, repo_root=tmp_path)
         assert row["status"] == "sent"
-        assert row.get("last_error_class") in (None, "", "null") or "export_" not in str(row.get("last_error_class"))
+        # Sent rows must not retain an export_* failure class.
+        assert not str(row.get("last_error_class") or "").startswith("export_")
 
         uploaded = transport.calls[0]["payload"]
         assert isinstance(uploaded, dict)
@@ -312,7 +313,8 @@ class TestCompositionAuthorityAndSessionFallback:
         assert payload.get("authority") == "projection"
         thread = payload.get("thread") or {}
         assert (thread.get("metadata") or {}).get("authority") == "projection"
-        assert "messages" not in (payload.get("authority") or {})
+        # Authority is the nested scalar, never the metadata map.
+        assert not isinstance(payload.get("authority"), dict)
 
     def test_session_correlation_prefers_source_bundle_id(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

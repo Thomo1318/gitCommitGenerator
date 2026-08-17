@@ -324,17 +324,18 @@ class TestOpikSdkTransport:
             Opik = FakeOpik
 
         monkeypatch.setitem(sys.modules, "opik", FakeModule())
-        # Force deadline into the past before flush returns.
+        # Advance the fake clock inside flush so the outer deadline is already past.
         real_monotonic = time.monotonic
-        state = {"n": 0}
+        offset = {"seconds": 0.0}
 
         def fake_monotonic() -> float:
-            state["n"] += 1
-            # First calls establish deadline; later call after flush exceeds it.
-            if state["n"] >= 4:
-                return real_monotonic() + 10.0
-            return real_monotonic()
+            return real_monotonic() + offset["seconds"]
 
+        def slow_flush(self: object, timeout: int | None = None) -> bool:
+            offset["seconds"] = 10.0
+            return True
+
+        monkeypatch.setattr(FakeOpik, "flush", slow_flush)
         monkeypatch.setattr(time, "monotonic", fake_monotonic)
         with pytest.raises(ExportTransportError) as ei:
             OpikSdkTransport().upload(
@@ -349,15 +350,15 @@ class TestOpikSdkTransport:
 
 class TestExportBatchTransportProjection:
     def test_send_projects_export_batch_transport_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Durable export_batch body must project nested item payload, not empty top-level fields."""
-        seen: dict[str, object] = {}
+        """Durable export_batch body must project every nested item payload, not only the first."""
+        seen: list[dict[str, object]] = []
 
         class FakeOpik:
             def __init__(self, **kwargs: object) -> None:
                 pass
 
             def trace(self, **kwargs: object) -> None:
-                seen["trace"] = kwargs
+                seen.append(dict(kwargs))
 
             def flush(self, timeout: int | None = None) -> bool:
                 return True
@@ -393,7 +394,21 @@ class TestExportBatchTransportProjection:
                         "gate": {"deterministic_pass": True},
                         "score_card": {"format_compliance": 1.0},
                     },
-                }
+                },
+                {
+                    "item_ref": "bundle_comp_2",
+                    "payload": {
+                        "trace": {
+                            "input": {"bundle_id": "bundle_comp_2", "attempt_count": 1},
+                            "output": {"final_message": "second", "scored_target": "final_message"},
+                            "metadata": {"experiment_name": "exp-real"},
+                        },
+                        "bundle_id": "bundle_comp_2",
+                        "artifact_class": "final_accept",
+                        "gate": {"deterministic_pass": True},
+                        "score_card": {"format_compliance": 0.9},
+                    },
+                },
             ],
             "schema_pack": "schema_pack_v0@" + ("a" * 64),
             "metric_catalog": "metric_catalog_v0@" + ("b" * 64),
@@ -407,12 +422,12 @@ class TestExportBatchTransportProjection:
             secrets=SECRETS,
             timeout_ms=1000,
         )
-        trace = seen["trace"]
-        assert isinstance(trace, dict)
-        assert trace["name"] == "exp-real"
-        assert trace["input"]["bundle_id"] == "bundle_comp_1"
-        assert trace["output"]["final_message"] == "ok"
-        metadata = trace["metadata"]
+        assert len(seen) == 2
+        first, second = seen
+        assert first["name"] == "exp-real"
+        assert first["input"]["bundle_id"] == "bundle_comp_1"
+        assert first["output"]["final_message"] == "ok"
+        metadata = first["metadata"]
         assert metadata["authority"]["cloud_rescore_forbidden"] is True
         assert metadata["thread"]["thread_id"] == "sess_comp_1"
         assert metadata["feedback"][0]["name"] == "format_compliance"
@@ -421,6 +436,16 @@ class TestExportBatchTransportProjection:
         assert metadata["redaction_profile"] == "default_scrub"
         assert metadata["item_ref"] == "bundle_comp_1"
         assert metadata["bundle_id"] == "bundle_comp_1"
+        assert metadata["item_count"] == 2
+        assert metadata["item_index"] == 0
+
+        assert second["input"]["bundle_id"] == "bundle_comp_2"
+        assert second["output"]["final_message"] == "second"
+        assert second["metadata"]["item_ref"] == "bundle_comp_2"
+        assert second["metadata"]["bundle_id"] == "bundle_comp_2"
+        assert second["metadata"]["item_count"] == 2
+        assert second["metadata"]["item_index"] == 1
+        assert second["metadata"]["schema_pack"].startswith("schema_pack_v0@")
 
 
 class TestE5ImportIsolation:
@@ -439,16 +464,35 @@ class TestE5ImportIsolation:
                     mod = node.module or ""
                     if mod == "opik" or mod.startswith("opik."):
                         pytest.fail(f"module-level from opik import in {rel}:{node.lineno}")
-            # Collect lazy import sites anywhere in the file.
+
+            # Parent map: child -> enclosing function/class-qualified function name.
+            parents: dict[ast.AST, ast.AST] = {}
+            for parent in ast.walk(tree):
+                for child in ast.iter_child_nodes(parent):
+                    parents[child] = parent
+
+            parent_map = parents
+
+            def _owner_name(node: ast.AST, *, _parents: dict[ast.AST, ast.AST] = parent_map) -> str:
+                parts: list[str] = []
+                cur: ast.AST | None = node
+                while cur is not None:
+                    if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        parts.append(cur.name)
+                    cur = _parents.get(cur)
+                return ".".join(reversed(parts)) if parts else "<module>"
+
             for node in ast.walk(tree):
+                names: list[str] = []
                 if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        if alias.name == "opik" or alias.name.startswith("opik."):
-                            lazy_sites.append(f"{rel}:{node.lineno}")
-                if isinstance(node, ast.ImportFrom):
-                    mod = node.module or ""
-                    if mod == "opik" or mod.startswith("opik."):
-                        lazy_sites.append(f"{rel}:{node.lineno}")
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    names = [node.module or ""]
+                else:
+                    continue
+                if not any(name == "opik" or name.startswith("opik.") for name in names):
+                    continue
+                lazy_sites.append(f"{rel}:{_owner_name(node)}")
         assert set(lazy_sites) == set(LAZY_OPIK_IMPORT_ALLOWLIST), (
             f"lazy opik import sites {lazy_sites} != allowlist {sorted(LAZY_OPIK_IMPORT_ALLOWLIST)}"
         )

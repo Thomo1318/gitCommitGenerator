@@ -387,6 +387,24 @@ def test_off_mode_mirror_result_skipped() -> None:
     assert result.strict_mirror_failed is False
 
 
+def test_build_mirror_result_preserves_generator_notes() -> None:
+    """Generator notes must survive health inference and result storage."""
+
+    def note_gen():
+        yield "diag_one"
+        yield "diag_two"
+
+    result = build_mirror_result(
+        mode="mirror",
+        attempted=1,
+        succeeded=1,
+        notes=note_gen(),
+    )
+    assert result.notes == ("diag_one", "diag_two")
+    assert "diag_one" in export_result(result)["notes"]
+    assert "diag_two" in evaluation_job_result(result)["notes"]
+
+
 # --- Boolean env parsing ---------------------------------------------------
 
 
