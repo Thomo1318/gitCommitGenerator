@@ -143,3 +143,51 @@ class TestDrainQueue:
         transport = MockTransport(fail_with=ExportTransportError("export_auth", "denied"))
         summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS)
         assert isinstance(summary, DrainSummary)
+
+
+class TestResolveSecretsModeGate:
+    """HYGIENE-1 / P0-1b — key requirement by resolved mode (Slice 0 stop-bleed)."""
+
+    def test_key_optional_for_off_and_local_tokens(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import git_cg.eval.mirror.exporter as exporter_mod
+
+        seen: list[bool] = []
+
+        def capture(*, require_key: bool = True):  # type: ignore[no-untyped-def]
+            seen.append(require_key)
+            return OpikRuntimeSecrets(api_key="", workspace=None, base_url=None)
+
+        monkeypatch.setattr(exporter_mod, "resolve_opik_secrets", capture)
+        for mode in ("off", "local", "local_only"):
+            seen.clear()
+            exporter_mod._resolve_secrets({**CONFIG, "mode": mode})
+            assert seen == [False], mode
+
+    def test_key_required_for_network_modes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import git_cg.eval.mirror.exporter as exporter_mod
+
+        seen: list[bool] = []
+
+        def capture(*, require_key: bool = True):  # type: ignore[no-untyped-def]
+            seen.append(require_key)
+            return SECRETS
+
+        monkeypatch.setattr(exporter_mod, "resolve_opik_secrets", capture)
+        for mode in ("mirror", "dogfood", "strict_mirror"):
+            seen.clear()
+            exporter_mod._resolve_secrets({**CONFIG, "mode": mode})
+            assert seen == [True], mode
+
+    def test_invented_key_bypass_token_still_requires_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import git_cg.eval.mirror.exporter as exporter_mod
+
+        seen: list[bool] = []
+
+        def capture(*, require_key: bool = True):  # type: ignore[no-untyped-def]
+            seen.append(require_key)
+            return SECRETS
+
+        monkeypatch.setattr(exporter_mod, "resolve_opik_secrets", capture)
+        # Former non-vocabulary bypass must NOT be key-optional.
+        exporter_mod._resolve_secrets({**CONFIG, "mode": "self_hosted_noauth"})
+        assert seen == [True]

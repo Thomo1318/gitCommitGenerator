@@ -54,9 +54,19 @@ def list_pending_items(repo_root: Path | None = None) -> list[dict[str, Any]]:
 
 
 def _resolve_secrets(config: dict[str, Any]) -> OpikRuntimeSecrets:
-    """Resolve secrets; ``require_key`` only when the mode needs auth."""
-    mode = config.get("mode", "off")
-    require_key = mode not in ("local", "self_hosted_noauth")
+    """Resolve secrets; ``require_key`` only when the mode needs network auth.
+
+    Key-optional modes (local durability / off):
+      * ``off`` — export skipped
+      * ``local`` — shipped legacy local durability token (pre P0-1)
+      * ``local_only`` — plan vocabulary (post P0-1)
+
+    Every other resolved mode (``mirror``, ``dogfood`` / ``strict_mirror``, …)
+    requires a resolved Opik API key. Invented key-bypass mode tokens are
+    not recognised — unknown or network modes fail closed at secret resolution.
+    """
+    mode = str(config.get("mode", "off") or "off")
+    require_key = mode not in {"off", "local", "local_only"}
     return resolve_opik_secrets(require_key=require_key)
 
 
