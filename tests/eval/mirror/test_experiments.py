@@ -10,8 +10,10 @@ import pytest
 from git_cg.eval.mirror import experiments as exp_mod
 from git_cg.eval.mirror.experiments import (
     UNRESOLVED_GIT_SHA,
+    ExperimentPins,
     ExportGitShaError,
     build_experiment,
+    build_experiment_pins,
     experiment_name,
     is_unresolved_git_sha,
     require_resolved_git_sha,
@@ -107,7 +109,9 @@ class TestBuildExperiment:
 
     def test_meta_additive(self) -> None:
         record = build_experiment("mirror", "v0", git_sha="abc1234", meta={"k": "v"})
-        assert record["meta"] == {"k": "v"}
+        assert record["meta"]["k"] == "v"
+        assert "pins" in record["meta"]
+        assert record["meta"]["pins"]["git_sha"] == "abc1234"
 
     def test_default_git_sha_resolves(self) -> None:
         record = build_experiment("mirror", "v0")
@@ -122,3 +126,58 @@ class TestExperimentsModuleSyntax:
         assert callable(exp.resolve_git_sha)
         assert callable(exp.build_experiment)
         assert callable(exp.require_resolved_git_sha)
+
+
+class TestExperimentPins:
+    def test_build_pins_explicit_nulls(self) -> None:
+        pins = build_experiment_pins(lane="mirror", catalog_version="v0", git_sha="abc1234")
+        assert isinstance(pins, ExperimentPins)
+        data = pins.to_dict()
+        # N/A optional fields are present keys with null, not omitted.
+        assert "prompt_pack_hash" in data
+        assert data["prompt_pack_hash"] is None
+        assert data["engine"] is None
+        assert data["model"] is None
+        assert data["lane"] == "mirror"
+        assert data["git_sha"] == "abc1234"
+        assert data["schema_pack"] and "@" in data["schema_pack"]
+        assert data["metric_catalog"] and "@" in data["metric_catalog"]
+        assert data["harness_version"]
+
+    def test_build_experiment_embeds_pins(self) -> None:
+        record = build_experiment(
+            "mirror",
+            "v0",
+            git_sha="abc1234",
+            environment="eval",
+            project="git-cg-eval",
+            dataset_id="corpus",
+            redaction_profile="default_scrub",
+        )
+        pins = record["meta"]["pins"]
+        assert pins["environment"] == "eval"
+        assert pins["project"] == "git-cg-eval"
+        assert pins["dataset_id"] == "corpus"
+        assert pins["redaction_profile"] == "default_scrub"
+        assert pins["artifact_class"] == "export_batch"
+        assert pins["prompt_pack_hash"] is None
+
+
+class TestExperimentNameCollisionGuard:
+    def test_same_second_different_content_diverges(self) -> None:
+        when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
+        a = build_experiment("mirror", "v0", git_sha="abc1234", when=when, content_key="one")
+        b = build_experiment("mirror", "v0", git_sha="abc1234", when=when, content_key="two")
+        assert a["experiment_name"] != b["experiment_name"]
+        assert a["experiment_name"].startswith("eval_mirror_v0_abc1234_20260816T120000Z_")
+        assert b["experiment_name"].startswith("eval_mirror_v0_abc1234_20260816T120000Z_")
+
+    def test_same_content_same_second_stable(self) -> None:
+        when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
+        a = build_experiment("mirror", "v0", git_sha="abc1234", when=when, content_key="same")
+        b = build_experiment("mirror", "v0", git_sha="abc1234", when=when, content_key="same")
+        assert a["experiment_name"] == b["experiment_name"]
+
+    def test_bare_experiment_name_without_guard(self) -> None:
+        when = datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC)
+        assert experiment_name("mirror", "v0", "abc1234", when) == "eval_mirror_v0_abc1234_20260816T120000Z"
