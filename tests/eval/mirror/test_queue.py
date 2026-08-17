@@ -75,6 +75,27 @@ def test_enqueue_does_not_reset_sent_row(tmp_path) -> None:
     assert load_queue_item(qid, repo_root=tmp_path)["status"] == "sent"
 
 
+def test_enqueue_does_not_reset_sending_row(tmp_path) -> None:
+    """Re-enqueue must not clear lease ownership or reset attempt_count."""
+    batch = _batch()
+    enqueue_export_batch(batch, repo_root=tmp_path)
+    qid = _qid(batch)
+    claimed = claim_queue_item(qid, repo_root=tmp_path, claimed_by="worker-a")
+    assert claimed is not None
+    before = load_queue_item(qid, repo_root=tmp_path)
+    assert before["status"] == "sending"
+    assert before["claimed_by"] == "worker-a"
+    assert int(before["attempt_count"]) >= 1
+    lease = before.get("lease_expires_at")
+
+    enqueue_export_batch(batch, repo_root=tmp_path)
+    after = load_queue_item(qid, repo_root=tmp_path)
+    assert after["status"] == "sending"
+    assert after["claimed_by"] == "worker-a"
+    assert after["attempt_count"] == before["attempt_count"]
+    assert after.get("lease_expires_at") == lease
+
+
 def test_enqueue_requires_idempotency_key(tmp_path) -> None:
     with pytest.raises(ExportQueueError, match="idempotency"):
         enqueue_export_batch({"schema_version": "export_batch_v1"}, repo_root=tmp_path)

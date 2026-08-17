@@ -149,8 +149,9 @@ def enqueue_export_batch(
     """Persist payload artifact + pending ``export_queue_item_v1`` for ``batch``.
 
     The queue row id is the batch ``idempotency_key`` (fallback ``batch_id``).
-    Re-enqueue of an identical logical batch is idempotent for non-terminal
-    rows; terminal ``sent`` rows are left untouched unless ``force=True``.
+    Re-enqueue is idempotent: any existing valid queue row is left untouched
+    unless ``force=True``. This preserves in-flight ``sending`` lease ownership
+    and attempt counters as well as terminal ``sent`` rows.
 
     When ``network_export=True`` (P1-12), an unresolved/zeroed git SHA fails
     closed as ``export_validation`` **before** any payload/queue write so
@@ -172,14 +173,14 @@ def enqueue_export_batch(
     if not queue_id:
         raise ExportQueueError("export batch carries no idempotency key / batch_id")
 
-    # Idempotent short-circuit for already-sent rows.
+    # Idempotent short-circuit: never reset an existing valid queue row.
     path = _queue_item_path(root, queue_id)
     if path.is_file() and not force:
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
         except OSError, json.JSONDecodeError:
             existing = None
-        if isinstance(existing, dict) and existing.get("status") == "sent":
+        if isinstance(existing, dict) and existing.get("status") in QUEUE_STATUSES:
             return path
 
     transport_body = _transport_body_from_batch(batch)
