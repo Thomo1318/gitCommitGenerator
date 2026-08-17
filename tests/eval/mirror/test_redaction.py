@@ -306,3 +306,22 @@ def test_no_ambient_forbidden_payload_by_default() -> None:
     assert "@@ -1 +1 @@" not in blob
     assert "evt-secret" not in blob
     assert "api_key" not in out.get("meta", {})
+
+
+def test_meta_allow_retains_split_and_provenance_labels() -> None:
+    """Train/split provenance keys are intentional non-secret meta allowlist entries."""
+    bundle = _bundle()
+    bundle["meta"] = {
+        **bundle.get("meta", {}),
+        "split": "train",
+        "split_group_id": "sg-allow-1",
+        "provenance_label": "Gold-final",
+        "api_key": "should-still-deny",
+    }
+    out = redact_bundle_for_export(bundle, RedactionProfile.DEFAULT_SCRUB)
+    meta = out["meta"]
+    assert meta["split"] == "train"
+    assert meta["split_group_id"] == "sg-allow-1"
+    assert meta["provenance_label"] == "Gold-final"
+    assert "api_key" not in meta
+    assert "meta.api_key" in meta["redaction_denied_keys"]

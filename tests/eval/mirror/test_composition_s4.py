@@ -12,6 +12,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.batch import build_export_batches
 from git_cg.eval.mirror.composition import build_export_plan
@@ -24,7 +26,7 @@ from git_cg.eval.mirror.projections import (
     project_score_card_to_feedback,
     project_session_thread,
 )
-from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item
+from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item, load_queue_payload
 from git_cg.eval.mirror.redaction import redact_bundle_for_export
 from git_cg.eval.mirror.result import evaluation_job_result, export_result
 from git_cg.eval.mirror.secrets import OpikRuntimeSecrets
@@ -289,3 +291,60 @@ def test_e12_invalid_mode_fallback_is_config_error_on_composition(tmp_path: Path
     mirror = plan.as_mirror_result()
     assert mirror.health is ExportHealth.CONFIG_ERROR
     assert mirror.product_accept_blocked is False
+
+
+class TestCompositionAuthorityAndSessionFallback:
+    def test_standalone_session_authority_is_nested(self, tmp_path: Path) -> None:
+        plan = build_export_plan(
+            {"bundles": [], "session_threads": [_session()], "include_train": False},
+            CONFIG,
+            repo_root=tmp_path,
+            git_sha="abc1234",
+            when=datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC),
+        )
+        assert plan.enqueued >= 1, plan.notes
+        qid = plan.queue_row_refs[0]
+        body = load_queue_payload(qid, repo_root=tmp_path)
+        items = body.get("items") or []
+        assert items
+        payload = items[0].get("payload") or {}
+        # Nested authority only — never the entire metadata map.
+        assert payload.get("authority") == "projection"
+        thread = payload.get("thread") or {}
+        assert (thread.get("metadata") or {}).get("authority") == "projection"
+        assert "messages" not in (payload.get("authority") or {})
+
+    def test_session_correlation_prefers_source_bundle_id(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Even if redaction dropped session_thread_id, source correlation still joins."""
+        from git_cg.eval.mirror import composition as composition_mod
+
+        bundle = _bundle()
+        session = _session()
+        assert bundle["session_thread_id"] == session["session_thread_id"]
+
+        real_redact = composition_mod.redact_bundle_for_export
+
+        def drop_session(bundle_in, profile):  # type: ignore[no-untyped-def]
+            out = real_redact(bundle_in, profile)
+            out = dict(out)
+            out.pop("session_thread_id", None)
+            meta = dict(out.get("meta") or {})
+            meta.pop("session_thread_id", None)
+            out["meta"] = meta
+            return out
+
+        monkeypatch.setattr(composition_mod, "redact_bundle_for_export", drop_session)
+        plan = build_export_plan(
+            {"bundles": [bundle], "session_threads": [session], "include_train": False},
+            CONFIG,
+            repo_root=tmp_path,
+            git_sha="abc1234",
+            when=datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC),
+        )
+        assert plan.projected >= 1
+        assert plan.enqueued >= 1, plan.notes
+        body = load_queue_payload(plan.queue_row_refs[0], repo_root=tmp_path)
+        item_payloads = [entry.get("payload") for entry in body.get("items", []) if isinstance(entry, dict)]
+        assert any(isinstance(p, dict) and "thread" in p for p in item_payloads)

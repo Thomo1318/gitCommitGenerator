@@ -312,8 +312,16 @@ def build_export_plan(
             trace = project_bundle_to_trace(redacted, experiment_name=exp_name)
             feedback = project_score_card_to_feedback(redacted, experiment_name=exp_name)
 
+            # Prefer source correlation before redacted/top-level fallthrough
+            # (defense-in-depth if redaction omits session ids under thin profiles).
+            source_meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
+            redacted_meta = redacted.get("meta") if isinstance(redacted.get("meta"), dict) else {}
             sid = str(
-                redacted.get("session_thread_id") or (redacted.get("meta") or {}).get("session_thread_id") or ""
+                bundle.get("session_thread_id")
+                or source_meta.get("session_thread_id")
+                or redacted.get("session_thread_id")
+                or redacted_meta.get("session_thread_id")
+                or ""
             ).strip()
             thread_payload = None
             if sid and sid in sessions_by_id:
@@ -374,7 +382,7 @@ def build_export_plan(
                     {
                         "thread": thread_payload,
                         "experiment": experiment,
-                        "authority": (thread_payload.get("metadata") or {}),
+                        "authority": (thread_payload.get("metadata") or {}).get("authority"),
                     },
                 )
             )

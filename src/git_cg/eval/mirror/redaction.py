@@ -179,6 +179,10 @@ _META_ALLOW: Final[frozenset[str]] = frozenset(
         "thread_id",
         "generation_thread_id",
         "redaction_profile",
+        # Train / split provenance (non-secret; used by train lake + projections)
+        "split",
+        "split_group_id",
+        "provenance_label",
         # Quarantine bookkeeping (written by this module)
         "redaction_quarantine",
         "redaction_quarantine_marker",
