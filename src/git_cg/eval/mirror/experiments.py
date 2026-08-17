@@ -33,6 +33,11 @@ def _slug(token: str) -> str:
 #: ``^[a-f0-9]{7,64}$`` — a zeroed SHA is the honest "unresolvable" sentinel.
 _UNRESOLVED_SHA = "0" * 40
 
+# OSError + SubprocessError → zeroed SHA sentinel (never raises).
+# Named tuple keeps the catch set explicit under ruff/py314 format,
+# which rewrites bare `except (A, B)` into comma form.
+_RESOLVE_GIT_SHA_ERRORS = (OSError, subprocess.SubprocessError)
+
 
 def resolve_git_sha(repo_root: Any | None = None) -> str:
     """Best-effort short git SHA; zeroed SHA when unresolvable (never raises)."""
@@ -45,7 +50,7 @@ def resolve_git_sha(repo_root: Any | None = None) -> str:
             timeout=10,
             check=False,
         )
-    except OSError, subprocess.SubprocessError:
+    except _RESOLVE_GIT_SHA_ERRORS:
         return _UNRESOLVED_SHA
     if proc.returncode != 0:
         return _UNRESOLVED_SHA

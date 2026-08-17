@@ -69,3 +69,12 @@ class TestBuildExperiment:
     def test_default_git_sha_resolves(self) -> None:
         record = build_experiment("mirror", "v0")
         assert all(c in "0123456789abcdef" for c in record["git_sha"])
+
+
+class TestExperimentsModuleSyntax:
+    def test_module_imports_cleanly(self) -> None:
+        """P0-6 — invalid except syntax must not prevent import."""
+        import git_cg.eval.mirror.experiments as exp
+
+        assert callable(exp.resolve_git_sha)
+        assert callable(exp.build_experiment)
