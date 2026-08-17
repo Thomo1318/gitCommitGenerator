@@ -18,8 +18,10 @@ S4a ships the offline core:
 * :mod:`git_cg.eval.mirror.batch` — ``export_batch_v1`` builder: deterministic
   idempotency key, pin set, default 4MB payload ceiling (split or
   ``export_size`` classification, never silent oversize).
-* :mod:`git_cg.eval.mirror.queue` — ``.eval/export_queue/`` Layer-A rows
-  (``export_queue_item_v1``) with the S3 atomic-write/containment law.
+* :mod:`git_cg.eval.mirror.payload` — content-addressed redacted bodies under
+  ``.eval/export_payloads/`` (P0-3 / E11).
+* :mod:`git_cg.eval.mirror.queue` — ``.eval/export_queue/`` Layer-A ops rows
+  (``export_queue_item_v1``) with claim/lease + S3 atomic-write law.
 
 S4b adds the network-facing half (still fail-open, never product-blocking):
 
@@ -48,8 +50,13 @@ from __future__ import annotations
 
 from git_cg.eval.mirror.batch import (
     DEFAULT_MAX_BATCH_BYTES,
+    EXPORT_STATUSES,
     ExportSizeError,
+    ExportStatus,
+    batch_idempotency_key,
     build_export_batches,
+    envelope_size_bytes,
+    map_queue_status_to_export_status,
 )
 from git_cg.eval.mirror.config import (
     OpikConfigError,
@@ -57,7 +64,15 @@ from git_cg.eval.mirror.config import (
     OpikMode,
     resolve_opik_config,
 )
-from git_cg.eval.mirror.experiments import build_experiment, experiment_name
+from git_cg.eval.mirror.experiments import (
+    UNRESOLVED_GIT_SHA,
+    ExportGitShaError,
+    build_experiment,
+    experiment_name,
+    is_unresolved_git_sha,
+    require_resolved_git_sha,
+    resolve_git_sha,
+)
 from git_cg.eval.mirror.exporter import (
     DrainSummary,
     drain_queue,
@@ -65,6 +80,14 @@ from git_cg.eval.mirror.exporter import (
     mirror_result_from_drain,
 )
 from git_cg.eval.mirror.health import ExportHealth, derive_export_health_rollup
+from git_cg.eval.mirror.payload import (
+    EXPORT_PAYLOADS_DIRNAME,
+    ExportPayloadError,
+    export_payloads_dir,
+    load_payload_artifact,
+    payload_ref_for_sha,
+    persist_payload_artifact,
+)
 from git_cg.eval.mirror.projections import (
     project_bundle_to_trace,
     project_score_card_to_feedback,
@@ -72,10 +95,14 @@ from git_cg.eval.mirror.projections import (
 )
 from git_cg.eval.mirror.queue import (
     EXPORT_QUEUE_DIRNAME,
+    QUEUE_STATUSES,
     ExportQueueError,
+    claim_queue_item,
     enqueue_export_batch,
     load_queue_item,
+    load_queue_payload,
     mark_queue_item,
+    release_stale_leases,
 )
 from git_cg.eval.mirror.redaction import (
     QUARANTINE_MARKER,
@@ -99,12 +126,19 @@ from git_cg.eval.mirror.transport import (
 __all__ = [
     "DEFAULT_MAX_BATCH_BYTES",
     "EXPORT_ERROR_CLASSES",
+    "EXPORT_PAYLOADS_DIRNAME",
     "EXPORT_QUEUE_DIRNAME",
+    "EXPORT_STATUSES",
     "QUARANTINE_MARKER",
+    "QUEUE_STATUSES",
+    "UNRESOLVED_GIT_SHA",
     "DrainSummary",
+    "ExportGitShaError",
     "ExportHealth",
+    "ExportPayloadError",
     "ExportQueueError",
     "ExportSizeError",
+    "ExportStatus",
     "ExportTransportError",
     "MirrorResult",
     "MirrorSecretError",
@@ -115,22 +149,35 @@ __all__ = [
     "OpikRuntimeSecrets",
     "OpikSdkTransport",
     "Transport",
+    "batch_idempotency_key",
     "build_experiment",
     "build_export_batches",
     "build_mirror_result",
+    "claim_queue_item",
     "derive_export_health_rollup",
     "drain_queue",
     "enqueue_export_batch",
+    "envelope_size_bytes",
     "evaluation_job_result",
     "experiment_name",
+    "export_payloads_dir",
     "export_result",
+    "is_unresolved_git_sha",
     "list_pending_items",
+    "load_payload_artifact",
     "load_queue_item",
+    "load_queue_payload",
+    "map_queue_status_to_export_status",
     "mark_queue_item",
     "mirror_result_from_drain",
+    "payload_ref_for_sha",
+    "persist_payload_artifact",
     "project_bundle_to_trace",
     "project_score_card_to_feedback",
     "project_session_thread",
     "redact_bundle_for_export",
+    "release_stale_leases",
+    "require_resolved_git_sha",
+    "resolve_git_sha",
     "resolve_opik_config",
 ]
