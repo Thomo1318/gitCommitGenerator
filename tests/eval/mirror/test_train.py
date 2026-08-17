@@ -113,6 +113,19 @@ class TestBuildTrainProjection:
         # Single dataset — both labels share dataset_id.
         assert {r["dataset_id"] for r in proj["rows"]} == {TRAIN_DATASET_ID}
 
+    def test_none_bundle_ids_do_not_false_positive_overlap(self) -> None:
+        """Missing bundle ids must not trip the positive/negative overlap guard."""
+        pos = _bundle(bid="tmp-pos", label="positive")
+        neg = _bundle(bid="tmp-neg", label="negative", regime="antipattern")
+        pos["id"] = None
+        neg["id"] = None
+        pos["meta"] = {**pos["meta"], "split_group_id": "sg-missing"}
+        neg["meta"] = {**neg["meta"], "split_group_id": "sg-missing-neg"}
+        proj = build_train_projection([pos, neg, _bundle(bid="p2", label="positive")])
+        assert len(proj["positive_gold"]) == 2
+        assert len(proj["negatives"]) == 1
+        assert {r.get("bundle_id") for r in proj["positive_gold"]} == {None, "p2"}
+
     def test_s4_f01_rows_carry_labels_redaction_scope(self) -> None:
         proj = build_train_projection([_bundle(bid="p1", label="positive")])
         row = proj["rows"][0]

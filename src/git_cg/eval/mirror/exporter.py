@@ -140,6 +140,11 @@ def drain_queue(
         resolved = secrets if secrets is not None else _resolve_secrets(config)
     except MirrorSecretError as exc:
         # Auth failure: claim + mark every pending row failed with export_auth.
+        # Counts only rows that successfully transition to failed (F4 fail-open,
+        # honest accounting when terminal queue writes themselves fail).
+        failed = 0
+        notes: list[str] = ["secret_resolution_failed"]
+        classes: list[str] = ["export_auth"]
         for row in rows:
             qid = str(row["queue_id"])
             claimed = export_queue.claim_queue_item(qid, repo_root=root, claimed_by="drain-auth")
@@ -147,24 +152,32 @@ def drain_queue(
                 try:
                     export_queue.mark_queue_item(qid, "sending", repo_root=root, claimed_by="drain-auth")
                 except export_queue.ExportQueueError:
+                    notes.append(f"{qid}: claim_or_mark_sending_failed")
                     continue
-            export_queue.mark_queue_item(
-                qid,
-                "failed",
-                repo_root=root,
-                notes=scrub_export_note(f"export_auth: {exc}"),
-                last_error_class="export_auth",
-                clear_lease=True,
-            )
+            try:
+                export_queue.mark_queue_item(
+                    qid,
+                    "failed",
+                    repo_root=root,
+                    notes=scrub_export_note(f"export_auth: {exc}"),
+                    last_error_class="export_auth",
+                    clear_lease=True,
+                )
+            except export_queue.ExportQueueError as mark_exc:
+                classes.append("export_validation")
+                notes.append(scrub_export_note(f"{qid}: terminal_mark_failed: {mark_exc}"))
+                continue
+            failed += 1
         return DrainSummary(
             attempted=0,
-            failed=len(rows),
-            error_classes=("export_auth",),
-            notes=("secret_resolution_failed",),
+            failed=failed,
+            error_classes=tuple(dict.fromkeys(classes)),
+            notes=tuple(dict.fromkeys(notes)),
         )
 
     attempted = exported = failed = 0
     classes: list[str] = []
+    notes: list[str] = []
     for row in rows:
         qid = str(row["queue_id"])
         claimed = export_queue.claim_queue_item(qid, repo_root=root)
@@ -175,20 +188,40 @@ def drain_queue(
         project = _row_project(claimed, config)
         experiment_name = _row_experiment_name(claimed, qid)
 
+        def _mark_terminal(
+            status: str,
+            *,
+            err_cls: str | None = None,
+            mark_notes: str | None = None,
+            _qid: str = qid,
+        ) -> bool:
+            """Best-effort terminal transition; never raise (F4)."""
+            try:
+                export_queue.mark_queue_item(
+                    _qid,
+                    status,
+                    repo_root=root,
+                    notes=mark_notes,
+                    last_error_class=err_cls,
+                    clear_lease=True,
+                )
+                return True
+            except export_queue.ExportQueueError as mark_exc:
+                classes.append("export_validation")
+                notes.append(scrub_export_note(f"{_qid}: terminal_mark_failed: {mark_exc}"))
+                return False
+
         try:
             payload = export_queue.load_queue_payload(qid, repo_root=root, row=claimed)
         except export_queue.ExportQueueError as exc:
-            failed += 1
             err_cls = getattr(exc, "error_class", "export_validation") or "export_validation"
             classes.append(err_cls)
-            export_queue.mark_queue_item(
-                qid,
+            if _mark_terminal(
                 "failed",
-                repo_root=root,
-                notes=scrub_export_note(str(exc)),
-                last_error_class=err_cls,
-                clear_lease=True,
-            )
+                err_cls=err_cls,
+                mark_notes=scrub_export_note(str(exc)),
+            ):
+                failed += 1
             continue
 
         try:
@@ -200,36 +233,31 @@ def drain_queue(
                 timeout_ms=flush_timeout_ms,
             )
         except ExportTransportError as exc:
-            failed += 1
             classes.append(exc.error_class)
-            export_queue.mark_queue_item(
-                qid,
+            if _mark_terminal(
                 "failed",
-                repo_root=root,
-                notes=scrub_export_note(str(exc)),
-                last_error_class=exc.error_class,
-                clear_lease=True,
-            )
+                err_cls=exc.error_class,
+                mark_notes=scrub_export_note(str(exc)),
+            ):
+                failed += 1
         except Exception as exc:  # last-resort: never propagate (F4)
-            failed += 1
             classes.append("export_network")
-            export_queue.mark_queue_item(
-                qid,
+            if _mark_terminal(
                 "failed",
-                repo_root=root,
-                notes=scrub_export_note(f"export_network: {type(exc).__name__}: {exc}"),
-                last_error_class="export_network",
-                clear_lease=True,
-            )
+                err_cls="export_network",
+                mark_notes=scrub_export_note(f"export_network: {type(exc).__name__}: {exc}"),
+            ):
+                failed += 1
         else:
-            exported += 1
-            export_queue.mark_queue_item(qid, "sent", repo_root=root, clear_lease=True)
+            if _mark_terminal("sent"):
+                exported += 1
 
     return DrainSummary(
         attempted=attempted,
         exported=exported,
         failed=failed,
         error_classes=tuple(dict.fromkeys(classes)),
+        notes=tuple(dict.fromkeys(notes)),
     )
 
 

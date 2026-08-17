@@ -26,10 +26,12 @@ def _load_script_module(*, mask_opik: bool = False, monkeypatch: pytest.MonkeyPa
     if mask_opik:
         assert monkeypatch is not None
         # Ensure script body never requires a real opik install.
-        monkeypatch.setitem(sys.modules, "opik", None)  # type: ignore[arg-type]
+        # Delete stale entries first, then install the None mask so the mask
+        # is not immediately removed by the cleanup loop.
         for key in list(sys.modules):
             if key == "opik" or key.startswith("opik."):
                 monkeypatch.delitem(sys.modules, key, raising=False)
+        monkeypatch.setitem(sys.modules, "opik", None)  # type: ignore[arg-type]
 
     spec = importlib.util.spec_from_file_location(
         "compile_opik_dataset_retired",

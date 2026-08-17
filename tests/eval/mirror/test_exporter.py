@@ -214,3 +214,31 @@ class TestResolveSecretsModeGate:
         monkeypatch.setattr(exporter_mod, "resolve_opik_secrets", capture)
         exporter_mod._resolve_secrets({**CONFIG, "mode": "self_hosted_noauth"})
         assert seen == [True]
+
+
+class TestTerminalMarkGuards:
+    def test_terminal_mark_failure_is_fail_open_and_honest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        qid = _enqueue(tmp_path, "item_1", {"x": 1})
+        transport = MockTransport()
+
+        import git_cg.eval.mirror.queue as queue_mod
+
+        real_mark = queue_mod.mark_queue_item
+
+        def flaky_mark(queue_id: str, status: str, *args, **kwargs):  # type: ignore[no-untyped-def]
+            if status in {"sent", "failed"}:
+                raise queue_mod.ExportQueueError("simulated terminal write failure")
+            return real_mark(queue_id, status, *args, **kwargs)
+
+        monkeypatch.setattr(queue_mod, "mark_queue_item", flaky_mark)
+        summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS)
+        assert summary.attempted == 1
+        # Upload may have succeeded, but terminal transition failed ⇒ not counted exported.
+        assert summary.exported == 0
+        assert "export_validation" in summary.error_classes
+        assert any("terminal_mark_failed" in n for n in summary.notes)
+        # Row remains non-terminal under flaky terminal writes (still sending/pending).
+        row = load_queue_item(qid, repo_root=tmp_path)
+        assert row["status"] in {"sending", "pending"}

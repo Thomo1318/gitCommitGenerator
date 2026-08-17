@@ -178,8 +178,10 @@ def build_train_projection(
     positives = filter_positive_gold(rows)
     negatives = [r for r in rows if r.get("label") == "negative"]
     # Invariant: no overlap by bundle id between positive_gold and negatives.
-    pos_ids = {r.get("bundle_id") for r in positives}
-    neg_ids = {r.get("bundle_id") for r in negatives}
+    # Ignore missing/None ids — those are not a real collision signal and would
+    # false-positive whenever two unlabeled-id rows land in opposite classes.
+    pos_ids = {r.get("bundle_id") for r in positives if r.get("bundle_id") not in (None, "")}
+    neg_ids = {r.get("bundle_id") for r in negatives if r.get("bundle_id") not in (None, "")}
     if pos_ids & neg_ids:
         raise TrainProjectionError("positive_gold/negative bundle_id overlap")
 
