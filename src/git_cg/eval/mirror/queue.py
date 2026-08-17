@@ -7,7 +7,7 @@ persisted as a content-addressed payload artifact.
 State machine (schema-closed ``QueueStatus`` — distinct from envelope ExportStatus):
 
     pending → sending → sent
-                  ↘ failed → (retry → sending) | dropped
+                  ↘ failed → (retry → pending|sending) | dropped
     pending → dropped
 
 Law:
@@ -78,7 +78,7 @@ DEFAULT_LEASE_SECONDS = 300
 _TRANSITIONS: dict[str, frozenset[str]] = {
     "pending": frozenset({"sending", "dropped"}),
     "sending": frozenset({"sent", "failed", "pending"}),  # pending = lease reclaim
-    "failed": frozenset({"sending", "dropped"}),
+    "failed": frozenset({"sending", "pending", "dropped"}),  # pending = operator retry (P1-4)
     "sent": frozenset(),
     "dropped": frozenset(),
 }

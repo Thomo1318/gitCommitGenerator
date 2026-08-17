@@ -217,3 +217,112 @@ def test_materialize_skips_archive_snapshot_when_absent(monkeypatch: pytest.Monk
     assert "archive_snapshot" not in result.output
     assert "core_bundles 1" in result.output
     assert "archive_bundles 0" in result.output
+
+
+# ---------------------------------------------------------------------------
+# S4 / P1-4 export CLI surface (nested + dashed aliases)
+# ---------------------------------------------------------------------------
+
+
+def test_export_nested_and_dashed_help_registered() -> None:
+    result = runner.invoke(app, ["eval", "--help"])
+    assert result.exit_code == 0
+    assert "export" in result.output
+    nested = runner.invoke(app, ["eval", "export", "--help"])
+    assert nested.exit_code == 0
+    assert "status" in nested.output
+    assert "retry" in nested.output
+    assert "drain" in nested.output
+
+
+def test_export_status_empty_queue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "queue empty" in result.output or "queue_dir" in result.output
+
+
+def test_export_status_dashed_alias(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["eval", "export-status", "--root", str(tmp_path)])
+    # root may be unresolvable without .git — either empty/status or fail code 1
+    assert result.exit_code in {0, 1}
+
+
+def test_export_retry_failed_rows(tmp_path: Path) -> None:
+    from git_cg.eval.mirror.batch import build_export_batches
+    from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item, mark_queue_item
+
+    batches = build_export_batches(
+        [("cli_retry_item", {"trace": {"ok": True}, "gate": {"deterministic_pass": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_cli_retry",
+    )
+    path = enqueue_export_batch(batches[0], repo_root=tmp_path)
+    qid = path.stem
+    mark_queue_item(qid, "sending", repo_root=tmp_path, claimed_by="t")
+    mark_queue_item(qid, "failed", repo_root=tmp_path, last_error_class="export_network", clear_lease=True)
+    assert load_queue_item(qid, repo_root=tmp_path)["status"] == "failed"
+
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "retried 1" in result.output
+    assert load_queue_item(qid, repo_root=tmp_path)["status"] == "pending"
+
+
+def test_export_retry_skips_validation_without_force(tmp_path: Path) -> None:
+    from git_cg.eval.mirror.batch import build_export_batches
+    from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item, mark_queue_item
+
+    batches = build_export_batches(
+        [("cli_retry_val", {"trace": {"ok": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_cli_val",
+    )
+    path = enqueue_export_batch(batches[0], repo_root=tmp_path)
+    qid = path.stem
+    mark_queue_item(qid, "sending", repo_root=tmp_path, claimed_by="t")
+    mark_queue_item(qid, "failed", repo_root=tmp_path, last_error_class="export_validation", clear_lease=True)
+
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "retried 0" in result.output
+    assert load_queue_item(qid, repo_root=tmp_path)["status"] == "failed"
+
+    forced = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--force"])
+    assert forced.exit_code == 0, forced.output
+    assert "retried 1" in forced.output
+    assert load_queue_item(qid, repo_root=tmp_path)["status"] == "pending"
+
+
+def test_export_drain_mode_off(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    # Ensure no leftover project envs force config_error.
+    for key in (
+        "GIT_CG_OPIK_PROJECT_LIVE",
+        "GIT_CG_OPIK_PROJECT_EVAL",
+        "GIT_CG_OPIK_PROJECT_CI",
+        "GIT_CG_OPIK_PROJECT_IMPORT",
+        "OPIK_PROJECT_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    result = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "mode=off" in result.output
+
+
+def test_export_drain_dashed_alias_mode_off(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    for key in (
+        "GIT_CG_OPIK_PROJECT_LIVE",
+        "GIT_CG_OPIK_PROJECT_EVAL",
+        "GIT_CG_OPIK_PROJECT_CI",
+        "GIT_CG_OPIK_PROJECT_IMPORT",
+        "OPIK_PROJECT_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    result = runner.invoke(app, ["eval", "export-drain", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "mode=off" in result.output

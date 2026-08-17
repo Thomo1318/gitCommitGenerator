@@ -1,11 +1,13 @@
 """Thin ``git-cg eval`` corpus-helper CLI (Issue #231, D11 / B1-b).
 
 This is a **delegation-only** Typer sub-app. It exposes corpus helpers
-(``materialize-core-goldens`` and ``encode-fixture``) and nothing else:
+(``materialize-core-goldens`` and ``encode-fixture``) plus the thin S4
+mirror surface (``config show``, nested ``export status|retry|drain``):
 
-* No binder invocation (``git_cg.eval.binding`` is never imported here).
+* No binder invocation at import time (``git_cg.eval.binding`` is never
+  imported by the module body; export commands may resolve repo paths).
 * No accept-path writes under ``.eval/bundles/acceptpath/**``.
-* No network, no capture enablement side effects, no Opik.
+* Opik SDK is imported only lazily inside drain transport construction.
 * Not the S6 doctor / review / amend-brief UX.
 
 ``materialize-core-goldens`` may write corpus golden files under
@@ -204,11 +206,57 @@ def config_cmd(
 
 
 # --------------------------------------------------------------------------
-# S4b export commands (F4 fail-open; never block the product accept path).
+# S4 export commands (P1-4 nested surface + temporary dashed aliases).
+# Canonical: git-cg eval export {status,retry,drain}
+# Aliases:   git-cg eval export-status / export-retry / export-drain (R2)
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("export-status")
+export_app = typer.Typer(
+    add_completion=False,
+    help="Layer-A export queue ops: status / retry / drain (F4 fail-open).",
+    no_args_is_help=True,
+)
+eval_app.add_typer(export_app, name="export")
+
+
+def _resolve_repo(root: Path | None) -> Path:
+    from git_cg.eval.binding.paths import resolve_repo_root
+
+    return root if root is not None else resolve_repo_root()
+
+
+def _queue_status_counts(repo: Path) -> dict[str, int]:
+    from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
+
+    qdir = export_queue_dir(repo)
+    counts: dict[str, int] = {}
+    if qdir.is_dir():
+        for path in sorted(qdir.glob("*.json")):
+            try:
+                item = load_queue_item(path.stem, repo_root=repo)
+            except Exception:
+                counts["unreadable"] = counts.get("unreadable", 0) + 1
+                continue
+            status = str(item.get("status", "unknown"))
+            counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _emit_status(repo: Path) -> None:
+    from git_cg.eval.mirror.queue import export_queue_dir
+
+    qdir = export_queue_dir(repo)
+    counts = _queue_status_counts(repo)
+    typer.echo(f"queue_dir {qdir}")
+    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
+        if status in counts:
+            typer.echo(f"{status} {counts[status]}")
+    if not counts:
+        typer.echo("queue empty")
+
+
+@export_app.command("status")
 def export_status_cmd(
     root: Path | None = typer.Option(
         None,
@@ -221,37 +269,112 @@ def export_status_cmd(
     ),
 ) -> None:
     """Show the Layer-A export queue status (read-only, offline)."""
-    from git_cg.eval.binding.paths import resolve_repo_root
-    from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
-
     try:
-        repo = root if root is not None else resolve_repo_root()
+        repo = _resolve_repo(root)
     except Exception as exc:
-        typer.echo(f"export-status: repo root unresolvable: {exc}", err=True)
+        typer.echo(f"export status: repo root unresolvable: {exc}", err=True)
         raise typer.Exit(code=1) from None
-
-    qdir = export_queue_dir(repo)
-    counts: dict[str, int] = {}
-    if qdir.is_dir():
-        for path in sorted(qdir.glob("*.json")):
-            try:
-                item = load_queue_item(path.stem, repo_root=repo)
-            except Exception:
-                counts["unreadable"] = counts.get("unreadable", 0) + 1
-                continue
-            status = item.get("status", "unknown")
-            counts[status] = counts.get(status, 0) + 1
-
-    typer.echo(f"queue_dir {qdir}")
-    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
-        if status in counts:
-            typer.echo(f"{status} {counts[status]}")
-    if not counts:
-        typer.echo("queue empty")
+    _emit_status(repo)
     raise typer.Exit(code=0)
 
 
-@eval_app.command("export-drain")
+@export_app.command("retry")
+def export_retry_cmd(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    queue_id: str | None = typer.Option(
+        None,
+        "--id",
+        help="Retry a single failed queue id (default: all failed rows).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Also retry export_validation / export_auth / export_size failures.",
+    ),
+    max_items: int | None = typer.Option(
+        None,
+        "--max-items",
+        help="Cap on failed rows re-queued this invocation.",
+    ),
+) -> None:
+    """Re-queue failed export rows for another drain attempt (P1-4 / P1-11).
+
+    Default policy: reclaim rows whose last_error_class is retryable
+    (``export_network`` / ``export_timeout`` / empty). Validation/auth/size
+    failures require ``--force``. Transitions ``failed → pending`` so the next
+    ``export drain`` can claim them. Never blocks product accept.
+    """
+    from git_cg.eval.mirror.queue import (
+        ExportQueueError,
+        export_queue_dir,
+        load_queue_item,
+        mark_queue_item,
+    )
+
+    try:
+        repo = _resolve_repo(root)
+    except Exception as exc:
+        typer.echo(f"export retry: repo root unresolvable: {exc}", err=True)
+        # Fail-open for product/hooks.
+        raise typer.Exit(code=0) from None
+
+    retryable = {"export_network", "export_timeout", ""}
+    qdir = export_queue_dir(repo)
+    targets: list[str] = []
+    if queue_id:
+        targets = [queue_id]
+    elif qdir.is_dir():
+        for path in sorted(qdir.glob("*.json")):
+            targets.append(path.stem)
+
+    retried = 0
+    skipped = 0
+    unreadable = 0
+    for qid in targets:
+        if max_items is not None and retried >= max_items:
+            break
+        try:
+            item = load_queue_item(qid, repo_root=repo)
+        except ExportQueueError:
+            unreadable += 1
+            continue
+        except Exception:
+            unreadable += 1
+            continue
+        if item.get("status") != "failed":
+            skipped += 1
+            continue
+        err = str(item.get("last_error_class") or "")
+        if not force and err not in retryable:
+            skipped += 1
+            continue
+        try:
+            mark_queue_item(
+                qid,
+                "pending",
+                repo_root=repo,
+                clear_lease=True,
+                notes="retry_requested",
+                last_error_class=err or None,
+            )
+            retried += 1
+        except ExportQueueError as exc:
+            typer.echo(f"export retry: {qid}: {exc}", err=True)
+            skipped += 1
+
+    typer.echo(f"retried {retried} skipped {skipped} unreadable {unreadable}")
+    raise typer.Exit(code=0)
+
+
+@export_app.command("drain")
 def export_drain_cmd(
     root: Path | None = typer.Option(
         None,
@@ -271,7 +394,6 @@ def export_drain_cmd(
     secret failures are classified and recorded on the queue rows; they never
     produce a non-zero exit that could block a hook.
     """
-    from git_cg.eval.binding.paths import resolve_repo_root
     from git_cg.eval.mirror.config import OpikConfigError, resolve_opik_config
     from git_cg.eval.mirror.exporter import drain_queue, list_pending_items
     from git_cg.eval.mirror.transport import OpikSdkTransport
@@ -279,17 +401,17 @@ def export_drain_cmd(
     try:
         config = resolve_opik_config()
     except OpikConfigError as exc:
-        typer.echo(f"export-drain: config invalid (fail-closed): {exc}", err=True)
+        typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
         raise typer.Exit(code=2) from None
 
     if config.get("mode", "off") == "off":
-        typer.echo("export-drain: mode=off; nothing to do")
+        typer.echo("export drain: mode=off; nothing to do")
         raise typer.Exit(code=0)
 
     try:
-        repo = root if root is not None else resolve_repo_root()
+        repo = _resolve_repo(root)
     except Exception as exc:
-        typer.echo(f"export-drain: repo root unresolvable: {exc}", err=True)
+        typer.echo(f"export drain: repo root unresolvable: {exc}", err=True)
         raise typer.Exit(code=0) from None  # fail-open
 
     if dry_run:
@@ -331,3 +453,9 @@ def export_drain_cmd(
     # Fail-open for product/hooks: export failures never produce a blocking
     # non-zero exit here. Eval wrappers may inspect evaluation_job_result.
     raise typer.Exit(code=0)
+
+
+# Temporary dashed aliases (R2) — one minor cycle; nested form is canonical.
+eval_app.command("export-status")(export_status_cmd)
+eval_app.command("export-retry")(export_retry_cmd)
+eval_app.command("export-drain")(export_drain_cmd)
