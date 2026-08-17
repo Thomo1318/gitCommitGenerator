@@ -7,8 +7,9 @@ product accept path — :func:`drain_queue` always returns a summary and never
 raises for transport reasons.
 
 Queue rows transition ``pending → sending → sent | failed`` under the queue's
-atomic state machine. A bounded flush timeout is honoured so a short-lived
-hook process cannot hang (FIND-022).
+atomic claim + lease state machine (P1-11). Drain loads the durable payload
+artifact by ``payload_ref`` and verifies sha256/size (P0-3 / E11) — never
+reconstructs from item ids alone.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from git_cg.eval.binding.paths import resolve_repo_root
 from git_cg.eval.mirror import queue as export_queue
 from git_cg.eval.mirror.health import ExportHealth
 from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
@@ -50,20 +52,9 @@ class DrainSummary:
 
 
 def list_pending_items(repo_root: Path | None = None) -> list[dict[str, Any]]:
-    """Return all ``pending`` queue rows (fail-open: unreadable rows skipped)."""
-    root = repo_root if repo_root is not None else export_queue.resolve_repo_root()
-    qdir = export_queue.export_queue_dir(root)
-    if not qdir.is_dir():
-        return []
-    out: list[dict[str, Any]] = []
-    for path in sorted(qdir.glob("*.json")):
-        try:
-            item = export_queue.load_queue_item(path.stem, repo_root=root)
-        except export_queue.ExportQueueError:
-            continue
-        if item.get("status") == "pending":
-            out.append(item)
-    return out
+    """Return claimable queue rows (pending after lease reclaim; fail-open)."""
+    root = repo_root if repo_root is not None else resolve_repo_root()
+    return export_queue.list_claimable_items(repo_root=root)
 
 
 def _resolve_secrets(config: Mapping[str, Any]) -> OpikRuntimeSecrets:
@@ -93,6 +84,23 @@ def _project_from_config(config: Mapping[str, Any]) -> str:
     return str(config.get("project_name") or "").strip()
 
 
+def _row_project(row: Mapping[str, Any], config: Mapping[str, Any]) -> str:
+    """Prefer first-class queue project; fall back to config lanes."""
+    queued = str(row.get("project") or "").strip()
+    if queued:
+        return queued
+    return _project_from_config(config)
+
+
+def _row_experiment_name(row: Mapping[str, Any], qid: str) -> str:
+    """Prefer first-class experiment identity on the queue row (P1-1)."""
+    exp = str(row.get("experiment_id") or "").strip()
+    if exp:
+        return exp
+    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    return str(meta.get("batch_id") or qid)
+
+
 def drain_queue(
     config: Mapping[str, Any],
     *,
@@ -110,11 +118,11 @@ def drain_queue(
         secrets: pre-resolved secrets; resolved on demand when omitted.
         max_items: optional cap on rows processed this drain.
 
-    Returns a :class:`DrainSummary`. All transport/secret failures are
+    Returns a :class:`DrainSummary`. All transport/secret/payload failures are
     classified and recorded on the row; the function itself never raises for
     export reasons (F4).
     """
-    root = repo_root if repo_root is not None else export_queue.resolve_repo_root()
+    root = repo_root if repo_root is not None else resolve_repo_root()
     mode = str(config.get("mode", "off") or "off")
     if mode == "off":
         return DrainSummary(notes=("skipped_off",))
@@ -126,17 +134,28 @@ def drain_queue(
     if not rows:
         return DrainSummary(notes=("queue_empty",))
 
-    project = _project_from_config(config)
     flush_timeout_ms = int(config.get("flush_timeout_ms", 5000))
 
     try:
         resolved = secrets if secrets is not None else _resolve_secrets(config)
     except MirrorSecretError as exc:
-        # Auth failure: mark every pending row failed with export_auth and stop.
+        # Auth failure: claim + mark every pending row failed with export_auth.
         for row in rows:
-            qid = row["queue_id"]
-            export_queue.mark_queue_item(qid, "sending", repo_root=root)
-            export_queue.mark_queue_item(qid, "failed", repo_root=root, notes=f"export_auth: {str(exc)[:160]}")
+            qid = str(row["queue_id"])
+            claimed = export_queue.claim_queue_item(qid, repo_root=root, claimed_by="drain-auth")
+            if claimed is None:
+                try:
+                    export_queue.mark_queue_item(qid, "sending", repo_root=root, claimed_by="drain-auth")
+                except export_queue.ExportQueueError:
+                    continue
+            export_queue.mark_queue_item(
+                qid,
+                "failed",
+                repo_root=root,
+                notes=f"export_auth: {str(exc)[:160]}",
+                last_error_class="export_auth",
+                clear_lease=True,
+            )
         return DrainSummary(
             attempted=0,
             failed=len(rows),
@@ -147,21 +166,50 @@ def drain_queue(
     attempted = exported = failed = 0
     classes: list[str] = []
     for row in rows:
-        qid = row["queue_id"]
-        export_queue.mark_queue_item(qid, "sending", repo_root=root)
+        qid = str(row["queue_id"])
+        claimed = export_queue.claim_queue_item(qid, repo_root=root)
+        if claimed is None:
+            # Lost the race or row left claimable set.
+            continue
         attempted += 1
+        project = _row_project(claimed, config)
+        experiment_name = _row_experiment_name(claimed, qid)
+
+        try:
+            payload = export_queue.load_queue_payload(qid, repo_root=root, row=claimed)
+        except export_queue.ExportQueueError as exc:
+            failed += 1
+            err_cls = getattr(exc, "error_class", "export_validation") or "export_validation"
+            classes.append(err_cls)
+            export_queue.mark_queue_item(
+                qid,
+                "failed",
+                repo_root=root,
+                notes=str(exc)[:200],
+                last_error_class=err_cls,
+                clear_lease=True,
+            )
+            continue
+
         try:
             transport.upload(
                 project=project,
-                experiment_name=row.get("meta", {}).get("batch_id") or qid,
-                payload=row.get("payload") or {"item_ids": row.get("meta", {}).get("item_ids", [])},
+                experiment_name=experiment_name,
+                payload=payload,
                 secrets=resolved,
                 timeout_ms=flush_timeout_ms,
             )
         except ExportTransportError as exc:
             failed += 1
             classes.append(exc.error_class)
-            export_queue.mark_queue_item(qid, "failed", repo_root=root, notes=str(exc)[:200])
+            export_queue.mark_queue_item(
+                qid,
+                "failed",
+                repo_root=root,
+                notes=str(exc)[:200],
+                last_error_class=exc.error_class,
+                clear_lease=True,
+            )
         except Exception as exc:  # last-resort: never propagate (F4)
             failed += 1
             classes.append("export_network")
@@ -170,10 +218,12 @@ def drain_queue(
                 "failed",
                 repo_root=root,
                 notes=f"export_network: {type(exc).__name__}: {str(exc)[:140]}",
+                last_error_class="export_network",
+                clear_lease=True,
             )
         else:
             exported += 1
-            export_queue.mark_queue_item(qid, "sent", repo_root=root)
+            export_queue.mark_queue_item(qid, "sent", repo_root=root, clear_lease=True)
 
     return DrainSummary(
         attempted=attempted,

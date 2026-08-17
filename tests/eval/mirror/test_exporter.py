@@ -1,4 +1,4 @@
-"""S4b export orchestration: queue drain, classification, F4 fail-open."""
+"""S4 export orchestration: queue drain, classification, F4 fail-open (Slice 3 durability)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from git_cg.eval.mirror.batch import build_export_batches
 from git_cg.eval.mirror.exporter import DrainSummary, drain_queue, list_pending_items
+from git_cg.eval.mirror.payload import export_payloads_dir
 from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item
 from git_cg.eval.mirror.secrets import OpikRuntimeSecrets
 from git_cg.eval.mirror.transport import ExportTransportError, MockTransport
@@ -33,8 +34,7 @@ CONFIG = {
 
 
 def _enqueue(repo: Path, item_id: str, payload: dict) -> str:
-    """Build + enqueue a batch; return its queue_id."""
-    batches = build_export_batches([(item_id, payload)], "default_scrub")
+    batches = build_export_batches([(item_id, payload)], "default_scrub", project="eval-project")
     path = enqueue_export_batch(batches[0], repo_root=repo)
     return path.stem
 
@@ -57,14 +57,21 @@ class TestDrainQueue:
         assert summary.attempted == 0
         assert "queue_empty" in summary.notes
 
-    def test_successful_export_marks_sent(self, tmp_path: Path) -> None:
+    def test_successful_export_marks_sent_and_uploads_payload(self, tmp_path: Path) -> None:
         qid = _enqueue(tmp_path, "item_1", {"x": 1})
         transport = MockTransport()
         summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS)
         assert summary.exported == 1
         assert summary.failed == 0
-        assert load_queue_item(qid, repo_root=tmp_path)["status"] == "sent"
+        row = load_queue_item(qid, repo_root=tmp_path)
+        assert row["status"] == "sent"
+        assert row["envelope_status"] == "ok"
         assert transport.calls[0]["project"] == "eval-project"
+        uploaded = transport.calls[0]["payload"]
+        assert isinstance(uploaded, dict)
+        assert "items" in uploaded
+        assert uploaded["items"][0]["payload"] == {"x": 1}
+        assert any(export_payloads_dir(tmp_path).glob("*.json"))
 
     def test_transport_failure_marks_failed_and_classifies(self, tmp_path: Path) -> None:
         qid = _enqueue(tmp_path, "item_1", {"x": 1})
@@ -75,7 +82,21 @@ class TestDrainQueue:
         assert "export_network" in summary.error_classes
         row = load_queue_item(qid, repo_root=tmp_path)
         assert row["status"] == "failed"
+        assert row["last_error_class"] == "export_network"
         assert "export_network" in row.get("notes", "")
+
+    def test_missing_payload_artifact_is_export_validation(self, tmp_path: Path) -> None:
+        qid = _enqueue(tmp_path, "item_1", {"x": 1})
+        row = load_queue_item(qid, repo_root=tmp_path)
+        for path in export_payloads_dir(tmp_path).glob("*.json"):
+            path.unlink()
+        summary = drain_queue(CONFIG, transport=MockTransport(), repo_root=tmp_path, secrets=SECRETS)
+        assert summary.failed == 1
+        assert "export_validation" in summary.error_classes
+        failed = load_queue_item(qid, repo_root=tmp_path)
+        assert failed["status"] == "failed"
+        assert failed["last_error_class"] == "export_validation"
+        assert failed["payload_ref"] == row["payload_ref"]
 
     def test_unexpected_exception_never_propagates(self, tmp_path: Path) -> None:
         class BadTransport:
@@ -83,7 +104,6 @@ class TestDrainQueue:
                 raise RuntimeError("totally unexpected")
 
         qid = _enqueue(tmp_path, "item_1", {"x": 1})
-        # Must not raise (F4).
         summary = drain_queue(CONFIG, transport=BadTransport(), repo_root=tmp_path, secrets=SECRETS)  # type: ignore[arg-type]
         assert summary.failed == 1
         assert "export_network" in summary.error_classes
@@ -97,7 +117,6 @@ class TestDrainQueue:
             def upload(self, **kwargs):  # type: ignore[no-untyped-def]
                 raise AssertionError("should not be called")
 
-        # Force secret resolution to fail by monkeypatching resolve.
         import git_cg.eval.mirror.exporter as exporter_mod
 
         def boom(*, require_key: bool = True):  # type: ignore[no-untyped-def]
@@ -124,7 +143,6 @@ class TestDrainQueue:
         summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS, max_items=2)
         assert summary.attempted == 2
         assert len(transport.calls) == 2
-        # One row remains pending.
         assert len(list_pending_items(repo_root=tmp_path)) == 1
 
     def test_mixed_outcomes(self, tmp_path: Path) -> None:
@@ -147,7 +165,6 @@ class TestDrainQueue:
         assert "export_validation" in summary.error_classes
 
     def test_summary_is_never_product_blocking(self, tmp_path: Path) -> None:
-        # Even total failure returns a DrainSummary, never raises.
         _enqueue(tmp_path, "item_1", {"x": 1})
         transport = MockTransport(fail_with=ExportTransportError("export_auth", "denied"))
         summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS)
@@ -155,8 +172,6 @@ class TestDrainQueue:
 
 
 class TestResolveSecretsModeGate:
-    """HYGIENE-1 / P0-1b — key requirement by resolved mode (Slice 0 stop-bleed)."""
-
     def test_key_optional_for_off_and_local_tokens(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import git_cg.eval.mirror.exporter as exporter_mod
 
@@ -197,6 +212,5 @@ class TestResolveSecretsModeGate:
             return SECRETS
 
         monkeypatch.setattr(exporter_mod, "resolve_opik_secrets", capture)
-        # Former non-vocabulary bypass must NOT be key-optional.
         exporter_mod._resolve_secrets({**CONFIG, "mode": "self_hosted_noauth"})
         assert seen == [True]
