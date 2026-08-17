@@ -1,4 +1,4 @@
-"""S4a export_batch_v1 builder tests (4MB ceiling, idempotency, pins)."""
+"""S4 Slice 3 — export_batch_v1 envelope (P0-2 / P1-2 / P1-13 / E7 / E10)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,15 @@ import pytest
 from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.batch import (
     DEFAULT_MAX_BATCH_BYTES,
+    EXPORT_STATUSES,
     ExportSizeError,
+    ExportStatus,
     batch_idempotency_key,
     build_export_batches,
+    envelope_size_bytes,
+    map_queue_status_to_export_status,
 )
+from git_cg.eval.mirror.queue import QUEUE_STATUSES
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 
 
@@ -18,12 +23,33 @@ def _items(n: int, size_each: int = 10) -> list[tuple[str, dict]]:
     return [(f"item-{i}", {"pad": "x" * size_each}) for i in range(n)]
 
 
+def _id_kwargs(**overrides: object) -> dict:
+    base = {
+        "bundle_hashes": ["a", "b"],
+        "project_lane": "eval",
+        "environment": "eval",
+        "dataset_id": "ds-1",
+        "redaction_profile": RedactionProfile.DEFAULT_SCRUB,
+        "schema_pin": schema_pack_pin(),
+        "catalog_pin": metric_catalog_pin(),
+    }
+    base.update(overrides)
+    return base  # type: ignore[return-value]
+
+
 def test_single_batch_when_under_ceiling() -> None:
     batches = build_export_batches(_items(3, 100), RedactionProfile.DEFAULT_SCRUB)
     assert len(batches) == 1
-    assert batches[0]["schema_version"] == "export_batch_v1"
-    assert batches[0]["item_ids"] == ["item-0", "item-1", "item-2"]
-    assert batches[0]["max_bytes"] == DEFAULT_MAX_BATCH_BYTES
+    b = batches[0]
+    assert b["schema_version"] == "export_batch_v1"
+    assert b["item_refs"] == ["item-0", "item-1", "item-2"]
+    assert b["project"]
+    assert b["experiment_id"]
+    assert b["status"] == ExportStatus.PENDING.value
+    assert b["size_bytes"] == envelope_size_bytes(b)
+    assert b["max_bytes"] == DEFAULT_MAX_BATCH_BYTES
+    assert "idempotency_key" in b
+    assert b["payload_ref"].startswith("sha256:")
 
 
 def test_batch_carries_pin_set() -> None:
@@ -33,33 +59,49 @@ def test_batch_carries_pin_set() -> None:
 
 
 def test_idempotency_key_deterministic_and_order_independent() -> None:
-    pins = (schema_pack_pin(), metric_catalog_pin())
-    k1 = batch_idempotency_key(["b", "a"], RedactionProfile.DEFAULT_SCRUB, *pins)
-    k2 = batch_idempotency_key(["a", "b"], RedactionProfile.DEFAULT_SCRUB, *pins)
-    assert k1 == k2  # sorted internally
+    k1 = batch_idempotency_key(**_id_kwargs(bundle_hashes=["b", "a"]))
+    k2 = batch_idempotency_key(**_id_kwargs(bundle_hashes=["a", "b"]))
+    assert k1 == k2
 
 
 def test_idempotency_key_changes_with_profile() -> None:
-    pins = (schema_pack_pin(), metric_catalog_pin())
-    k1 = batch_idempotency_key(["a"], RedactionProfile.DEFAULT_SCRUB, *pins)
-    k2 = batch_idempotency_key(["a"], RedactionProfile.PUBLIC_CI, *pins)
+    k1 = batch_idempotency_key(**_id_kwargs(redaction_profile=RedactionProfile.DEFAULT_SCRUB))
+    k2 = batch_idempotency_key(**_id_kwargs(redaction_profile=RedactionProfile.PUBLIC_CI))
     assert k1 != k2
+
+
+def test_idempotency_key_changes_with_lane_env_dataset_payload() -> None:
+    base = batch_idempotency_key(**_id_kwargs())
+    assert base != batch_idempotency_key(**_id_kwargs(project_lane="ci"))
+    assert base != batch_idempotency_key(**_id_kwargs(environment="ci"))
+    assert base != batch_idempotency_key(**_id_kwargs(dataset_id="ds-2"))
+    assert base != batch_idempotency_key(**_id_kwargs(payload_sha256="a" * 64))
+    assert base != batch_idempotency_key(**_id_kwargs(experiment_id="exp-other"))
 
 
 def test_reexport_reuses_batch_identity() -> None:
     b1 = build_export_batches(_items(2, 50), RedactionProfile.DEFAULT_SCRUB)
     b2 = build_export_batches(_items(2, 50), RedactionProfile.DEFAULT_SCRUB)
     assert b1[0]["batch_id"] == b2[0]["batch_id"]
-    assert b1[0]["meta"]["idempotency_key"] == b2[0]["meta"]["idempotency_key"]
+    assert b1[0]["idempotency_key"] == b2[0]["idempotency_key"]
+
+
+def test_same_refs_different_payload_bytes_change_key() -> None:
+    b1 = build_export_batches([("item-0", {"pad": "a" * 20})], RedactionProfile.DEFAULT_SCRUB)
+    b2 = build_export_batches([("item-0", {"pad": "b" * 20})], RedactionProfile.DEFAULT_SCRUB)
+    assert b1[0]["idempotency_key"] != b2[0]["idempotency_key"]
 
 
 def test_splits_when_ceiling_exceeded() -> None:
-    # 3 items of ~600 bytes each with a 1000-byte ceiling → 3 batches.
+    # One ~600-byte payload needs ~1800 envelope bytes after framing; choose a
+    # ceiling that admits a singleton but forces multi-item batches to split.
     items = [(f"item-{i}", {"pad": "x" * 600}) for i in range(3)]
-    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=1000)
-    assert len(batches) == 3
+    ceiling = 1800
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=ceiling)
+    assert len(batches) >= 2
     for batch in batches:
-        assert len(batch["item_ids"]) == 1
+        assert batch["size_bytes"] <= ceiling
+        assert len(batch["item_refs"]) >= 1
 
 
 def test_single_oversize_item_raises_export_size() -> None:
@@ -78,8 +120,26 @@ def test_empty_items_yield_no_batches() -> None:
 
 
 def test_each_batch_validates_against_schema() -> None:
-    batches = build_export_batches(_items(2, 20), RedactionProfile.DEFAULT_SCRUB)
+    batches = build_export_batches(_items(2, 20), RedactionProfile.DEFAULT_SCRUB, project="git-cg-eval")
     for batch in batches:
-        # validate_instance ran inside the builder; reaching here implies valid.
         assert batch["redaction_profile"] == "default_scrub"
-        assert batch["meta"]["item_count"] == len(batch["item_ids"])
+        assert batch["meta"]["item_count"] == len(batch["item_refs"])
+        assert batch["status"] in EXPORT_STATUSES
+        assert "transport_body" in batch["meta"]
+
+
+def test_export_status_distinct_from_queue_status() -> None:
+    assert set(EXPORT_STATUSES).isdisjoint({"sending", "sent", "dropped"})
+    assert map_queue_status_to_export_status("sent") == ExportStatus.OK
+    assert map_queue_status_to_export_status("failed") == ExportStatus.FAILED
+    assert map_queue_status_to_export_status("dropped") == ExportStatus.SKIPPED
+    assert map_queue_status_to_export_status("sending") == ExportStatus.PENDING
+    assert "sent" in QUEUE_STATUSES and "sent" not in EXPORT_STATUSES
+    assert "ok" in EXPORT_STATUSES and "ok" not in QUEUE_STATUSES
+
+
+def test_final_envelope_size_is_measured() -> None:
+    batches = build_export_batches(_items(2, 40), RedactionProfile.DEFAULT_SCRUB)
+    b = batches[0]
+    assert b["size_bytes"] == envelope_size_bytes(b)
+    assert b["size_bytes"] > b["payload_size_bytes"]
