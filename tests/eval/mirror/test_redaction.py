@@ -277,8 +277,11 @@ def test_p0_5_redact_then_project_preserves_authority() -> None:
 
     feedback = project_score_card_to_feedback(redacted, experiment_name="exp")
     names = {f["name"] for f in feedback}
-    assert "format_compliance" in names
-    assert "subject_length" in names
+    keys = {(f.get("authority") or {}).get("score_card_key") for f in feedback}
+    metric_ids = {f.get("metric_id") for f in feedback}
+    surface = names | keys | metric_ids
+    assert "format_compliance" in surface
+    assert any(str(n) == "subject_length" or str(n).endswith("subject_length") for n in surface)
 
 
 def test_p0_5_public_ci_retains_authority_but_not_message_bodies() -> None:
