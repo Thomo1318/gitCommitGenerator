@@ -227,21 +227,112 @@ class OpikSdkTransport:
             raise classify_export_error(exc) from exc
 
     @staticmethod
-    def _send(client: Any, *, experiment_name: str, payload: dict[str, Any]) -> None:
-        """Project the payload onto the client.
+    def _project_trace_fields(payload: dict[str, Any], *, experiment_name: str) -> dict[str, Any]:
+        """Project a durable export_batch transport body onto the SDK surface.
 
-        Uses the SDK's generic trace/feedback surface. The exact Opik object
-        shape is owned by :mod:`git_cg.eval.mirror.projections`; here we only
-        forward it. Kept minimal so the SDK surface is easy to adapt.
+        Durable payloads are ``export_batch_v1`` transport bodies::
+
+            {
+                "items": [{"item_ref": "...", "payload": {...}}],
+                "schema_pack": "...",
+                "metric_catalog": "...",
+                "redaction_profile": "...",
+            }
+
+        Nested item payloads may carry ``trace`` / ``thread`` / ``feedback``
+        projections from :mod:`git_cg.eval.mirror.projections`. Top-level
+        ``input`` / ``output`` / ``metadata`` keys are accepted only as a
+        narrow back-compat shape for unit fixtures.
+        """
+        items = payload.get("items")
+        if isinstance(items, list) and items:
+            primary: dict[str, Any] = {}
+            for entry in items:
+                if isinstance(entry, dict) and isinstance(entry.get("payload"), dict):
+                    primary = entry["payload"]
+                    break
+
+            trace = primary.get("trace") if isinstance(primary.get("trace"), dict) else {}
+            thread = primary.get("thread") if isinstance(primary.get("thread"), dict) else {}
+            feedback = primary.get("feedback") if isinstance(primary.get("feedback"), list) else []
+            experiment = primary.get("experiment") if isinstance(primary.get("experiment"), dict) else {}
+
+            input_obj = trace.get("input") if isinstance(trace.get("input"), dict) else {}
+            output_obj = trace.get("output") if isinstance(trace.get("output"), dict) else {}
+            metadata: dict[str, Any] = {}
+            if isinstance(trace.get("metadata"), dict):
+                metadata.update(trace["metadata"])
+
+            metadata.setdefault("experiment_name", experiment.get("experiment_name") or experiment_name)
+            if payload.get("schema_pack"):
+                metadata.setdefault("schema_pack", payload.get("schema_pack"))
+            if payload.get("metric_catalog"):
+                metadata.setdefault("metric_catalog", payload.get("metric_catalog"))
+            if payload.get("redaction_profile"):
+                metadata.setdefault("redaction_profile", payload.get("redaction_profile"))
+            if thread:
+                metadata["thread"] = thread
+            if feedback:
+                metadata["feedback"] = feedback
+            if experiment:
+                metadata["experiment"] = experiment
+            if primary.get("authority") is not None:
+                metadata.setdefault("authority", primary.get("authority"))
+            if primary.get("gate") is not None:
+                metadata.setdefault("gate", primary.get("gate"))
+            if primary.get("score_card") is not None:
+                metadata.setdefault("score_card", primary.get("score_card"))
+            if primary.get("bundle_id") is not None:
+                metadata.setdefault("bundle_id", primary.get("bundle_id"))
+            if primary.get("artifact_class") is not None:
+                metadata.setdefault("artifact_class", primary.get("artifact_class"))
+
+            # Prefer first concrete item_ref for operator-facing identity.
+            first_ref = None
+            for entry in items:
+                if isinstance(entry, dict) and entry.get("item_ref"):
+                    first_ref = entry.get("item_ref")
+                    break
+            metadata["item_count"] = len(items)
+            if first_ref is not None:
+                metadata.setdefault("item_ref", first_ref)
+
+            # Thread-only rows still need a usable input surface.
+            if not input_obj and thread:
+                input_obj = {
+                    "thread_id": thread.get("thread_id"),
+                    "experiment_name": thread.get("experiment_name") or experiment_name,
+                }
+            if not output_obj and thread:
+                output_obj = {"messages": thread.get("messages") or []}
+
+            return {
+                "name": experiment_name,
+                "input": input_obj if isinstance(input_obj, dict) else {},
+                "output": output_obj if isinstance(output_obj, dict) else {},
+                "metadata": metadata,
+            }
+
+        # Narrow back-compat: already-projected flat surfaces.
+        return {
+            "name": experiment_name,
+            "input": payload.get("input", {}) if isinstance(payload.get("input"), dict) else {},
+            "output": payload.get("output", {}) if isinstance(payload.get("output"), dict) else {},
+            "metadata": payload.get("metadata", {}) if isinstance(payload.get("metadata"), dict) else {},
+        }
+
+    @staticmethod
+    def _send(client: Any, *, experiment_name: str, payload: dict[str, Any]) -> None:
+        """Project the durable payload onto the client trace surface.
+
+        The durable body shape is owned by the queue/batch layer; this adapter
+        only maps it onto the SDK. Kept adaptive so fixture double surfaces and
+        real Opik clients can both accept the projected kwargs.
         """
         trace_fn = getattr(client, "trace", None)
         if callable(trace_fn):
-            trace_fn(
-                name=experiment_name,
-                input=payload.get("input", {}),
-                output=payload.get("output", {}),
-                metadata=payload.get("metadata", {}),
-            )
+            projected = OpikSdkTransport._project_trace_fields(payload, experiment_name=experiment_name)
+            trace_fn(**projected)
             return
         raise ExportTransportError("export_validation", "opik client exposes no usable trace surface")
 

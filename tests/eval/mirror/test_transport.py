@@ -347,6 +347,82 @@ class TestOpikSdkTransport:
         assert ei.value.error_class == "export_network"
 
 
+class TestExportBatchTransportProjection:
+    def test_send_projects_export_batch_transport_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Durable export_batch body must project nested item payload, not empty top-level fields."""
+        seen: dict[str, object] = {}
+
+        class FakeOpik:
+            def __init__(self, **kwargs: object) -> None:
+                pass
+
+            def trace(self, **kwargs: object) -> None:
+                seen["trace"] = kwargs
+
+            def flush(self, timeout: int | None = None) -> bool:
+                return True
+
+        class FakeModule:
+            Opik = FakeOpik
+
+        monkeypatch.setitem(sys.modules, "opik", FakeModule())
+
+        payload = {
+            "items": [
+                {
+                    "item_ref": "bundle_comp_1",
+                    "payload": {
+                        "trace": {
+                            "input": {"bundle_id": "bundle_comp_1", "attempt_count": 1},
+                            "output": {"final_message": "ok", "scored_target": "final_message"},
+                            "metadata": {
+                                "experiment_name": "exp-real",
+                                "authority": {"source": "local_wrapper", "cloud_rescore_forbidden": True},
+                                "gate": {"deterministic_pass": True},
+                            },
+                        },
+                        "thread": {
+                            "thread_id": "sess_comp_1",
+                            "messages": [{"role": "user", "content": "hi"}],
+                        },
+                        "feedback": [{"name": "format_compliance", "value": 1.0}],
+                        "experiment": {"experiment_name": "exp-real"},
+                        "authority": {"source": "local_wrapper"},
+                        "bundle_id": "bundle_comp_1",
+                        "artifact_class": "final_accept",
+                        "gate": {"deterministic_pass": True},
+                        "score_card": {"format_compliance": 1.0},
+                    },
+                }
+            ],
+            "schema_pack": "schema_pack_v0@" + ("a" * 64),
+            "metric_catalog": "metric_catalog_v0@" + ("b" * 64),
+            "redaction_profile": "default_scrub",
+        }
+
+        OpikSdkTransport().upload(
+            project="proj-eval",
+            experiment_name="exp-real",
+            payload=payload,
+            secrets=SECRETS,
+            timeout_ms=1000,
+        )
+        trace = seen["trace"]
+        assert isinstance(trace, dict)
+        assert trace["name"] == "exp-real"
+        assert trace["input"]["bundle_id"] == "bundle_comp_1"
+        assert trace["output"]["final_message"] == "ok"
+        metadata = trace["metadata"]
+        assert metadata["authority"]["cloud_rescore_forbidden"] is True
+        assert metadata["thread"]["thread_id"] == "sess_comp_1"
+        assert metadata["feedback"][0]["name"] == "format_compliance"
+        assert metadata["schema_pack"].startswith("schema_pack_v0@")
+        assert metadata["metric_catalog"].startswith("metric_catalog_v0@")
+        assert metadata["redaction_profile"] == "default_scrub"
+        assert metadata["item_ref"] == "bundle_comp_1"
+        assert metadata["bundle_id"] == "bundle_comp_1"
+
+
 class TestE5ImportIsolation:
     def test_static_no_module_level_opik_import(self) -> None:
         mirror_root = REPO_ROOT / "src" / "git_cg" / "eval" / "mirror"
