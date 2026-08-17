@@ -22,13 +22,20 @@ Hard laws:
   the fail-safe omission marker, the field is *removed* and its dotted path is
   recorded under ``meta.redaction_quarantine`` — the payload is never emitted
   in the clear (§7.6: "scrub failure quarantines/omits fields").
+* **P1-7:** recursive scrub over *all* retained strings with field-path
+  tracking; ``meta`` is a typed key allowlist (not blanket copy). Keys matching
+  secret/token/api_key/authorization/prompt/diff/environment/headers/cookie/
+  credential are denied unless the active profile explicitly permits them.
+* **P0-5:** authority surfaces required by projections (``gate``,
+  ``score_card``/``product_card``, bound ``attempts``/final-accept refs, bundle
+  ``id``) are retained under every export-capable profile; free-text leaves
+  inside them are still scrubbed.
 * The input bundle is **never mutated**; a redacted copy is returned.
 """
 
 from __future__ import annotations
 
-import copy
-from typing import Any
+from typing import Any, Final
 
 from git_cg.eval.enums import RedactionProfile
 from git_cg.telemetry import redact_payload
@@ -45,6 +52,35 @@ QUARANTINE_MARKER = "scrub_fail_quarantined"
 #: betterleaks fail-safe omission sentinel emitted by ``redact_payload``.
 _OMISSION_SENTINEL = "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
+#: Internal drop sentinel (never serialised).
+_DROP: Final = object()
+
+# Profiles that may retain allowlisted body-adjacent keys containing otherwise
+# denied tokens (still secret-scrubbed). Only train/vault/private planes.
+_OWNER_BODY_PROFILES: Final[frozenset[RedactionProfile]] = frozenset(
+    {
+        RedactionProfile.PRIVATE_MESSAGE,
+        RedactionProfile.TRAIN_RICH,
+        RedactionProfile.ANTIPATTERN_VAULT,
+    }
+)
+
+# Even on owner-body profiles these key tokens are never permitted.
+_ALWAYS_DENIED_KEY_TOKENS: Final[frozenset[str]] = frozenset(
+    {
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "authorization",
+        "cookie",
+        "credential",
+        "headers",
+        "environment",
+        "prompt",
+    }
+)
+
 
 class RedactionError(ValueError):
     """Redaction policy failure (fail-closed; ``export_validation`` class)."""
@@ -55,9 +91,8 @@ class RedactionError(ValueError):
 # Each profile maps to the set of top-level bundle fields *retained*. Anything
 # not listed is stripped. The policy is intentionally explicit (allowlist) so
 # a new bundle field cannot leak by default — fail closed on unknown fields.
-
-#: Fields that carry free-text and must pass the secret scrubber when kept.
-_TEXT_FIELDS = frozenset({"final_message", "expected_final_message"})
+#
+# P0-5 authority surfaces are unioned into every export-capable profile.
 
 #: Hashes / codes / gates / ids — the thinnest plane (public_ci).
 _PUBLIC_CI_FIELDS = frozenset(
@@ -81,6 +116,12 @@ _PUBLIC_CI_FIELDS = frozenset(
         "instance_kind",
         "unbound_reason",
         "meta",
+        # P0-5 authority surfaces (always export-capable).
+        "id",
+        "gate",
+        "score_card",
+        "product_card",
+        "attempts",
     }
 )
 
@@ -114,6 +155,46 @@ _POLICY: dict[RedactionProfile, frozenset[str]] = {
     RedactionProfile.META_EVAL_SCRUB: _PUBLIC_CI_FIELDS | _META_EVAL_EXTRA,
 }
 
+#: Typed meta key allowlist (P1-7). Unknown keys are dropped (fail closed).
+_META_ALLOW: Final[frozenset[str]] = frozenset(
+    {
+        # Producer / binding / session plumbing
+        "producer",
+        "binding",
+        "accept_event",
+        "encoding",
+        "final_encoding",
+        "source_encoding",
+        "decode_errors",
+        # Authority surfaces may also live under meta (binder layout)
+        "score_card",
+        "product_card",
+        "gate",
+        # Corpus / train labels (non-secret)
+        "train_label",
+        "capture_on",
+        "path_class",
+        "lifecycle",
+        "trace_id",
+        "thread_id",
+        "generation_thread_id",
+        "redaction_profile",
+        # Quarantine bookkeeping (written by this module)
+        "redaction_quarantine",
+        "redaction_quarantine_marker",
+        "redaction_denied_keys",
+        # Scope / pin tags (non-secret)
+        "scope",
+        "owner_pin",
+        "dataset_split",
+        "artifact_class",
+        "regime",
+    }
+)
+
+#: Sub-keys under ``accept_event`` that must never be retained.
+_ACCEPT_EVENT_DENY: Final[frozenset[str]] = frozenset({"token"})
+
 
 def _scrub_text(value: Any) -> tuple[Any, bool]:
     """Scrub a free-text value; return ``(scrubbed, quarantined)``.
@@ -130,6 +211,180 @@ def _scrub_text(value: Any) -> tuple[Any, bool]:
     return scrubbed, False
 
 
+def _key_denied(key: str, profile: RedactionProfile) -> bool:
+    """Return True when a retained dict key is forbidden under ``profile``.
+
+    Always-denied tokens (secrets/auth/prompt/env/headers/cookies) are never
+    owner-relaxable. ``diff`` keys are denied on thin/default profiles and only
+    permitted on owner-body profiles (values still secret-scrubbed).
+    """
+    lowered = key.lower().replace("-", "_")
+    # Always-denied secret/auth/prompt surfaces — never owner-relaxable.
+    if any(token in lowered for token in _ALWAYS_DENIED_KEY_TOKENS):
+        return True
+    # ``diff`` is stripped on non-owner-body profiles; owner-body profiles may
+    # keep structured diff *summaries* (values still scrubbed).
+    return "diff" in lowered and profile not in _OWNER_BODY_PROFILES
+
+
+def _join_path(prefix: str, key: str | int) -> str:
+    if prefix == "":
+        return str(key)
+    return f"{prefix}.{key}"
+
+
+def _scrub_tree(
+    value: Any,
+    *,
+    path: str,
+    profile: RedactionProfile,
+    quarantined: list[str],
+    denied: list[str],
+    deny_keys: bool,
+) -> Any:
+    """Deep-copy ``value`` while scrubbing strings and enforcing key policy.
+
+    Returns :data:`_DROP` when the entire node must be omitted.
+    """
+    if isinstance(value, str):
+        scrubbed, was_quarantined = _scrub_text(value)
+        if was_quarantined:
+            quarantined.append(path or "<root>")
+            return _DROP
+        return scrubbed
+
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for raw_key, child in value.items():
+            key = str(raw_key)
+            child_path = _join_path(path, key)
+            if deny_keys and _key_denied(key, profile):
+                denied.append(child_path)
+                continue
+            cleaned = _scrub_tree(
+                child,
+                path=child_path,
+                profile=profile,
+                quarantined=quarantined,
+                denied=denied,
+                deny_keys=deny_keys,
+            )
+            if cleaned is _DROP:
+                continue
+            out[key] = cleaned
+        return out
+
+    if isinstance(value, list):
+        out_list: list[Any] = []
+        for idx, child in enumerate(value):
+            child_path = _join_path(path, idx)
+            cleaned = _scrub_tree(
+                child,
+                path=child_path,
+                profile=profile,
+                quarantined=quarantined,
+                denied=denied,
+                deny_keys=deny_keys,
+            )
+            if cleaned is _DROP:
+                # Keep list alignment stable for attempt indices: use null slot
+                # only when intermediate; for free-text leaves, omit by skipping
+                # would shift indices — prefer null placeholder for attempts.
+                out_list.append(None)
+                continue
+            out_list.append(cleaned)
+        return out_list
+
+    if isinstance(value, tuple):
+        cleaned_items: list[Any] = []
+        for idx, child in enumerate(value):
+            child_path = _join_path(path, idx)
+            cleaned = _scrub_tree(
+                child,
+                path=child_path,
+                profile=profile,
+                quarantined=quarantined,
+                denied=denied,
+                deny_keys=deny_keys,
+            )
+            if cleaned is _DROP:
+                cleaned_items.append(None)
+            else:
+                cleaned_items.append(cleaned)
+        return tuple(cleaned_items)
+
+    # Numbers, bools, None, and other JSON-scalar-ish values pass through.
+    return value
+
+
+def _scrub_meta(
+    meta: dict[str, Any],
+    *,
+    profile: RedactionProfile,
+    quarantined: list[str],
+    denied: list[str],
+) -> dict[str, Any]:
+    """Typed meta allowlist + recursive scrub (P1-7)."""
+    out: dict[str, Any] = {}
+    for raw_key, child in meta.items():
+        key = str(raw_key)
+        path = f"meta.{key}"
+        if key not in _META_ALLOW:
+            denied.append(path)
+            continue
+        if _key_denied(key, profile):
+            denied.append(path)
+            continue
+        if key == "accept_event" and isinstance(child, dict):
+            # Never retain accept-event tokens (auth-adjacent).
+            cleaned_event: dict[str, Any] = {}
+            for ek, ev in child.items():
+                ek_s = str(ek)
+                if ek_s in _ACCEPT_EVENT_DENY or _key_denied(ek_s, profile):
+                    denied.append(f"{path}.{ek_s}")
+                    continue
+                cleaned = _scrub_tree(
+                    ev,
+                    path=f"{path}.{ek_s}",
+                    profile=profile,
+                    quarantined=quarantined,
+                    denied=denied,
+                    deny_keys=True,
+                )
+                if cleaned is _DROP:
+                    continue
+                cleaned_event[ek_s] = cleaned
+            out[key] = cleaned_event
+            continue
+        cleaned = _scrub_tree(
+            child,
+            path=path,
+            profile=profile,
+            quarantined=quarantined,
+            denied=denied,
+            deny_keys=True,
+        )
+        if cleaned is _DROP:
+            continue
+        out[key] = cleaned
+    return out
+
+
+def _promote_authority(out: dict[str, Any], meta: dict[str, Any]) -> None:
+    """Lift binder-layout authority from ``meta`` when top-level is empty (P0-5).
+
+    Projections read top-level ``gate`` / ``score_card`` / ``product_card``.
+    Accept-path binders currently nest ``score_card`` under ``meta``; promotion
+    keeps the export join honest without inventing values.
+    """
+    for key in ("gate", "score_card", "product_card"):
+        if key in out and out[key] not in (None, {}, []):
+            continue
+        nested = meta.get(key)
+        if nested not in (None, {}, []):
+            out[key] = nested
+
+
 def redact_bundle_for_export(
     bundle: dict[str, Any],
     profile: RedactionProfile | str,
@@ -138,11 +393,14 @@ def redact_bundle_for_export(
 
     The input is never mutated. The returned copy:
 
-    * retains only the profile's allowlisted top-level fields;
-    * scrubs retained free-text fields through betterleaks;
+    * retains only the profile's allowlisted top-level fields (incl. P0-5
+      authority surfaces on every export-capable profile);
+    * recursively scrubs every retained free-text string through betterleaks;
+    * applies a typed ``meta`` allowlist and denies ambient secret/prompt/diff
+      keys (P1-7);
     * **quarantines** any field whose scrub fails safe — the field is removed
-      and its name is appended to ``meta.redaction_quarantine`` so operators
-      can see that something was withheld (no silent ambient leak);
+      and its dotted path is appended to ``meta.redaction_quarantine`` so
+      operators can see that something was withheld (no silent ambient leak);
     * stamps ``redaction_profile`` to the applied profile.
 
     Raises:
@@ -160,43 +418,75 @@ def redact_bundle_for_export(
     allowed = _POLICY[prof]
     out: dict[str, Any] = {}
     quarantined: list[str] = []
+    denied: list[str] = []
 
     for key, value in bundle.items():
         if key not in allowed:
             continue
-        if key in _TEXT_FIELDS:
-            scrubbed, was_quarantined = _scrub_text(value)
-            if was_quarantined:
-                quarantined.append(key)
+        if key == "meta":
+            # Handled after the loop so quarantine/deny bookkeeping can merge.
+            continue
+        if key == "generation_task_input":
+            if not isinstance(value, dict):
+                cleaned = _scrub_tree(
+                    value,
+                    path=key,
+                    profile=prof,
+                    quarantined=quarantined,
+                    denied=denied,
+                    deny_keys=True,
+                )
+                if cleaned is not _DROP:
+                    out[key] = cleaned
                 continue
-            out[key] = scrubbed
-        elif key == "generation_task_input" and isinstance(value, dict):
-            # Scrub free-text leaves inside the task-input snapshot.
-            cleaned: dict[str, Any] = {}
-            for sub_key, sub_value in value.items():
-                if isinstance(sub_value, str):
-                    scrubbed_sub, sub_q = _scrub_text(sub_value)
-                    if sub_q:
-                        quarantined.append(f"generation_task_input.{sub_key}")
-                        continue
-                    cleaned[sub_key] = scrubbed_sub
-                else:
-                    cleaned[sub_key] = sub_value
-            out[key] = cleaned
-        else:
-            out[key] = copy.deepcopy(value)
+            cleaned_task = _scrub_tree(
+                value,
+                path=key,
+                profile=prof,
+                quarantined=quarantined,
+                denied=denied,
+                deny_keys=True,
+            )
+            if cleaned_task is _DROP:
+                continue
+            out[key] = cleaned_task
+            continue
+
+        cleaned = _scrub_tree(
+            value,
+            path=key,
+            profile=prof,
+            quarantined=quarantined,
+            denied=denied,
+            deny_keys=True,
+        )
+        if cleaned is _DROP:
+            continue
+        out[key] = cleaned
+
+    # Meta: typed allowlist + recursive scrub (start from input meta only).
+    raw_meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
+    meta_out = _scrub_meta(raw_meta, profile=prof, quarantined=quarantined, denied=denied)
+
+    # P0-5: promote binder-nested authority to top-level for projection join.
+    _promote_authority(out, meta_out)
 
     # Stamp the applied profile (the bundle's own claim may differ pre-export).
     out["redaction_profile"] = prof.value
 
-    # Record quarantines in meta (operators must see withheld fields).
     if quarantined:
-        meta = dict(out.get("meta") or {})
-        existing = list(meta.get("redaction_quarantine") or [])
-        meta["redaction_quarantine"] = sorted(set(existing) | set(quarantined))
-        meta["redaction_quarantine_marker"] = QUARANTINE_MARKER
-        out["meta"] = meta
-    elif "meta" in out and isinstance(out["meta"], dict):
-        out["meta"] = copy.deepcopy(out["meta"])
+        existing_q = list(meta_out.get("redaction_quarantine") or [])
+        meta_out["redaction_quarantine"] = sorted(set(existing_q) | set(quarantined))
+        meta_out["redaction_quarantine_marker"] = QUARANTINE_MARKER
+    if denied:
+        existing_d = list(meta_out.get("redaction_denied_keys") or [])
+        meta_out["redaction_denied_keys"] = sorted(set(existing_d) | set(denied))
+
+    if meta_out:
+        out["meta"] = meta_out
+    elif "meta" in allowed and bundle.get("meta") is not None:
+        # Preserve empty meta object only when input had meta and nothing remains
+        # after allowlist — omit entirely to avoid hollow noise.
+        pass
 
     return out
