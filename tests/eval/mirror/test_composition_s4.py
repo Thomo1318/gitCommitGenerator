@@ -1,0 +1,211 @@
+"""S4 composition / drain-path proofs (claims S4-D/E/F path, P0-5 join).
+
+Leaf unit tests are necessary but not sufficient. This module joins:
+redact → project → experiment pins → batch → enqueue → drain(mock)
+and asserts dual-axis / fail-open invariants on the composition path.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+
+from git_cg.eval.enums import RedactionProfile
+from git_cg.eval.mirror.batch import build_export_batches
+from git_cg.eval.mirror.experiments import build_experiment
+from git_cg.eval.mirror.exporter import drain_queue, mirror_result_from_drain
+from git_cg.eval.mirror.projections import (
+    project_bundle_to_trace,
+    project_score_card_to_feedback,
+    project_session_thread,
+)
+from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item
+from git_cg.eval.mirror.redaction import redact_bundle_for_export
+from git_cg.eval.mirror.result import evaluation_job_result, export_result
+from git_cg.eval.mirror.secrets import OpikRuntimeSecrets
+from git_cg.eval.mirror.train import build_train_projection
+from git_cg.eval.mirror.transport import ExportTransportError, MockTransport
+
+SECRETS = OpikRuntimeSecrets(api_key="k", workspace="w", base_url=None)
+CONFIG = {
+    "schema_version": "git_cg_opik_config_v1",
+    "id": "git_cg_opik_config_v1",
+    "mode": "mirror",
+    "environment": "eval",
+    "redaction_profile": "default_scrub",
+    "flush_timeout_ms": 5000,
+    "track_disable": False,
+    "check_tls_certificate": True,
+    "projects": {
+        "live": "eval-project",
+        "eval": "eval-project",
+        "ci": "eval-project",
+        "import": "eval-project",
+    },
+    "project_name": "eval-project",
+}
+
+
+def _bundle() -> dict:
+    return {
+        "id": "bundle_comp_1",
+        "schema_version": "ape_bundle_v1",
+        "artifact_class": "final_accept",
+        "gate": {"deterministic_pass": True, "authority": "product"},
+        "score_card": {"format_compliance": 1.0, "subject_length": 0.9},
+        "attempts": [
+            {
+                "final_message": "✨ feat(scope): subject",
+                "scored_target": "final_message",
+                "diff": "@@ forbidden @@",
+                "prompt": "full prompt text",
+                "api_key": "should-never-export",
+            }
+        ],
+        "meta": {
+            "redaction_profile": "default_scrub",
+            "train_label": "positive",
+            "split_group_id": "sg-comp-1",
+            "provenance_label": "acceptpath-live",
+            "regime": "A",
+            "api_key": "evt-secret",
+        },
+    }
+
+
+def _session() -> dict:
+    return {
+        "schema_version": "commit_session_thread_v1",
+        "session_thread_id": "sess_comp_1",
+        "message_versions": [{"role": "assistant", "content": "draft"}],
+        "attempt_ids": ["a1"],
+        "redaction_profile": "default_scrub",
+        "meta": {"lifecycle": "closed", "trace_id": "t1"},
+    }
+
+
+class TestCompositionDrainPath:
+    def test_redact_project_batch_enqueue_drain_preserves_authority(self, tmp_path: Path) -> None:
+        redacted = redact_bundle_for_export(_bundle(), RedactionProfile.DEFAULT_SCRUB)
+        blob = str(redacted).lower()
+        assert "should-never-export" not in blob
+        assert "full prompt text" not in blob
+        assert "@@ forbidden @@" not in blob
+
+        exp = build_experiment(
+            "mirror",
+            "v0",
+            git_sha="abc1234",
+            when=datetime(2026, 8, 16, 12, 0, 0, tzinfo=UTC),
+            environment="eval",
+            project="eval-project",
+            dataset_id="cm-eval-fixtures-core",
+            redaction_profile="default_scrub",
+            content_key=str(redacted.get("id") or "bundle_comp_1"),
+        )
+        assert exp["experiment_name"].startswith("eval_mirror_v0_abc1234_")
+        pins = exp["meta"]["pins"]
+        assert pins["schema_pack"] and "@" in pins["schema_pack"]
+        assert pins["metric_catalog"] and "@" in pins["metric_catalog"]
+        assert pins["git_sha"] == "abc1234"
+
+        trace = project_bundle_to_trace(redacted, experiment_name=exp["experiment_name"])
+        feedback = project_score_card_to_feedback(redacted, experiment_name=exp["experiment_name"])
+        thread = project_session_thread(_session(), experiment_name=exp["experiment_name"])
+
+        assert trace["metadata"]["deterministic_pass"] is True
+        assert trace["metadata"]["score_card"]["format_compliance"] == 1.0
+        assert {f["name"] for f in feedback} >= {"format_compliance", "subject_length"}
+        assert all(f["source"] == "deterministic_score_card" for f in feedback)
+        assert thread["thread_id"] == "sess_comp_1"
+
+        # Transport payload body is the projected local evidence (not re-scored).
+        transport_payload = {
+            "trace": trace,
+            "feedback": feedback,
+            "thread": thread,
+            "experiment": exp,
+            "gate": redacted.get("gate"),
+            "score_card": redacted.get("score_card"),
+        }
+        batches = build_export_batches(
+            [("bundle_comp_1", transport_payload)],
+            RedactionProfile.DEFAULT_SCRUB,
+            project="eval-project",
+            experiment_id=exp["experiment_name"],
+            environment="eval",
+            dataset_id="cm-eval-fixtures-core",
+            project_lane="eval",
+        )
+        assert len(batches) == 1
+        batch = batches[0]
+        assert batch["redaction_profile"] == "default_scrub"
+        assert batch["project"] == "eval-project"
+
+        path = enqueue_export_batch(batch, repo_root=tmp_path)
+        qid = path.stem
+
+        transport = MockTransport()
+        summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS)
+        assert summary.exported >= 1
+        assert summary.failed == 0
+        assert len(transport.calls) >= 1
+
+        row = load_queue_item(qid, repo_root=tmp_path)
+        assert row["status"] == "sent"
+        assert row.get("last_error_class") in (None, "", "null") or "export_" not in str(row.get("last_error_class"))
+
+        uploaded = transport.calls[0]["payload"]
+        assert isinstance(uploaded, dict)
+        # Authority markers survive the composition path.
+        items = uploaded.get("items") or []
+        assert items, uploaded
+        body = items[0].get("payload") or items[0]
+        assert body.get("gate", {}).get("deterministic_pass") is True
+        assert body.get("score_card", {}).get("format_compliance") == 1.0
+
+        result = mirror_result_from_drain(CONFIG, summary)
+        assert result.product_accept_blocked is False
+        er = export_result(result)
+        assert er["product_accept_blocked"] is False
+        ej = evaluation_job_result(result)
+        assert ej["product_accept_blocked"] is False
+
+        train = build_train_projection([redacted])
+        assert train["positive_gold"]
+        assert train["ci_sole_green"] is False
+        assert train["product_accept_authority"] is False
+
+    def test_transport_failure_is_fail_open_on_product_axis(self, tmp_path: Path) -> None:
+        redacted = redact_bundle_for_export(_bundle(), RedactionProfile.DEFAULT_SCRUB)
+        exp = build_experiment("mirror", "v0", git_sha="abc1234", content_key="fail-path")
+        payload = {
+            "trace": project_bundle_to_trace(redacted, experiment_name=exp["experiment_name"]),
+            "feedback": project_score_card_to_feedback(redacted, experiment_name=exp["experiment_name"]),
+            "experiment": exp,
+            "gate": redacted.get("gate"),
+            "score_card": redacted.get("score_card"),
+        }
+        batches = build_export_batches(
+            [("bundle_fail", payload)],
+            "default_scrub",
+            project="eval-project",
+            experiment_id=exp["experiment_name"],
+        )
+        path = enqueue_export_batch(batches[0], repo_root=tmp_path)
+        qid = path.stem
+
+        transport = MockTransport(fail_with=ExportTransportError("export_network", "boom"))
+        summary = drain_queue(CONFIG, transport=transport, repo_root=tmp_path, secrets=SECRETS)
+        assert summary.failed >= 1
+        assert "export_network" in summary.error_classes
+
+        row = load_queue_item(qid, repo_root=tmp_path)
+        assert row["status"] == "failed"
+        assert row["last_error_class"] == "export_network"
+
+        result = mirror_result_from_drain(CONFIG, summary)
+        assert result.product_accept_blocked is False
+        assert export_result(result)["product_accept_blocked"] is False
+        # Offline local evidence remains green after export throw.
+        assert redacted["gate"]["deterministic_pass"] is True
