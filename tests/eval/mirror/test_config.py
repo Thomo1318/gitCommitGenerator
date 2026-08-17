@@ -148,16 +148,60 @@ def test_redaction_profile_defaults_to_default_scrub() -> None:
 def test_raw_dev_unsafe_refused_on_export() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_REDACTION_PROFILE": "raw_dev_unsafe"})
     assert cfg["redaction_profile"] == "default_scrub"
+    assert cfg["meta"]["redaction_profile_fallback"] == "raw_dev_unsafe_refused"
 
 
 def test_unknown_profile_fails_closed() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_REDACTION_PROFILE": "yolo"})
     assert cfg["redaction_profile"] == "default_scrub"
+    assert cfg["meta"]["redaction_profile_fallback"] == "unknown_profile:yolo"
 
 
-def test_owner_profile_accepted() -> None:
+def test_owner_profile_requires_owner_export_flag() -> None:
+    """P1-6: richer profiles without owner flag fall closed to default_scrub."""
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_REDACTION_PROFILE": "train_rich"})
+    assert cfg["redaction_profile"] == "default_scrub"
+    assert cfg["meta"]["redaction_profile_fallback"] == "owner_export_required:train_rich"
+
+
+def test_owner_profile_accepted_with_owner_export_non_ci() -> None:
+    """P1-6: train_rich allowed with explicit owner export + non-CI env."""
+    cfg = resolve_opik_config(
+        env={
+            "GIT_CG_OPIK_REDACTION_PROFILE": "train_rich",
+            "GIT_CG_OPIK_OWNER_EXPORT": "1",
+            "GIT_CG_OPIK_ENVIRONMENT": "dogfood",
+        }
+    )
     assert cfg["redaction_profile"] == "train_rich"
+    assert cfg["meta"]["owner_export"] is True
+    assert "redaction_profile_fallback" not in cfg.get("meta", {})
+
+
+def test_owner_profile_blocked_in_ci_even_with_owner_flag() -> None:
+    """P1-6: CI sinks stay thin — owner flag cannot unlock train_rich in ci."""
+    cfg = resolve_opik_config(
+        env={
+            "GIT_CG_OPIK_REDACTION_PROFILE": "train_rich",
+            "GIT_CG_OPIK_OWNER_EXPORT": "true",
+            "GIT_CG_OPIK_ENVIRONMENT": "ci",
+        }
+    )
+    assert cfg["redaction_profile"] == "default_scrub"
+    assert cfg["meta"]["redaction_profile_fallback"] == "owner_profile_blocked_in_ci:train_rich"
+
+
+def test_thin_profiles_available_without_owner() -> None:
+    for profile in ("public_ci", "message_only", "default_scrub", "meta_eval_scrub"):
+        cfg = resolve_opik_config(env={"GIT_CG_OPIK_REDACTION_PROFILE": profile})
+        assert cfg["redaction_profile"] == profile, profile
+
+
+def test_private_message_and_antipattern_also_owner_gated() -> None:
+    for profile in ("private_message", "antipattern_vault"):
+        cfg = resolve_opik_config(env={"GIT_CG_OPIK_REDACTION_PROFILE": profile})
+        assert cfg["redaction_profile"] == "default_scrub", profile
+        assert "owner_export_required" in cfg["meta"]["redaction_profile_fallback"]
 
 
 def test_flush_timeout_default_and_override() -> None:

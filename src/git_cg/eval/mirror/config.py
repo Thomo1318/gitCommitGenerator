@@ -20,6 +20,10 @@ Law (plan §7.2.14 / §10.6 / P0-1):
   Opik's Default Project.
 * **Redaction profile:** valid R14 ladder token; unset ⇒ ``default_scrub``.
   ``raw_dev_unsafe`` is **refused** here — owner-local debug only.
+  Richer owner profiles (``private_message`` / ``train_rich`` /
+  ``antipattern_vault``) require explicit ``GIT_CG_OPIK_OWNER_EXPORT=1`` and a
+  non-CI environment (P1-6 / D14); otherwise fail closed to ``default_scrub``
+  with a non-secret ``meta.redaction_profile_fallback`` diagnostic.
 * **Flush bound:** positive int; default 5000 ms. Invalid ⇒ default.
 * **Secrets:** never read into this record — transport resolves at runtime.
 """
@@ -44,6 +48,7 @@ __all__ = [
     "ENV_ENVIRONMENT",
     "ENV_FLUSH_TIMEOUT_MS",
     "ENV_MODE",
+    "ENV_OWNER_EXPORT",
     "ENV_PROJECT_CI",
     "ENV_PROJECT_EVAL",
     "ENV_PROJECT_IMPORT",
@@ -52,6 +57,7 @@ __all__ = [
     "ENV_TRACK_DISABLE",
     "ENV_WORKSPACE",
     "OPIK_ENV_PROJECT_NAME",
+    "OWNER_ONLY_REDACTION_PROFILES",
     "PROJECT_LANES",
     "OpikConfigError",
     "OpikEnvironment",
@@ -69,6 +75,7 @@ ENV_PROJECT_EVAL = "GIT_CG_OPIK_PROJECT_EVAL"
 ENV_PROJECT_CI = "GIT_CG_OPIK_PROJECT_CI"
 ENV_PROJECT_IMPORT = "GIT_CG_OPIK_PROJECT_IMPORT"
 ENV_REDACTION_PROFILE = "GIT_CG_OPIK_REDACTION_PROFILE"
+ENV_OWNER_EXPORT = "GIT_CG_OPIK_OWNER_EXPORT"
 ENV_FLUSH_TIMEOUT_MS = "GIT_CG_OPIK_FLUSH_TIMEOUT_MS"
 ENV_ENDPOINT = "GIT_CG_OPIK_ENDPOINT"
 ENV_WORKSPACE = "GIT_CG_OPIK_WORKSPACE"
@@ -82,6 +89,16 @@ DEFAULT_FLUSH_TIMEOUT_MS = 5000
 DEFAULT_ENVIRONMENT = "development"
 
 PROJECT_LANES: Final[tuple[str, ...]] = ("live", "eval", "ci", "import")
+
+#: Richer R14 profiles that require explicit owner export selection + non-CI (P1-6).
+OWNER_ONLY_REDACTION_PROFILES: Final[frozenset[RedactionProfile]] = frozenset(
+    {
+        RedactionProfile.PRIVATE_MESSAGE,
+        RedactionProfile.TRAIN_RICH,
+        RedactionProfile.ANTIPATTERN_VAULT,
+    }
+)
+
 
 # Legacy parse aliases → canonical plan vocabulary (P0-1).
 _MODE_ALIASES: Final[Mapping[str, str]] = {
@@ -148,24 +165,42 @@ def _parse_environment(raw: str | None) -> tuple[OpikEnvironment, str | None]:
         return OpikEnvironment(DEFAULT_ENVIRONMENT), token
 
 
-def _parse_redaction_profile(raw: str | None) -> RedactionProfile:
+def _parse_redaction_profile(
+    raw: str | None,
+    *,
+    owner_export: bool,
+    environment: OpikEnvironment,
+) -> tuple[RedactionProfile, str | None]:
     """Parse the R14 profile fail-closed to ``default_scrub``.
 
     ``raw_dev_unsafe`` and unknown tokens both fail closed — the export path
     ceiling for non-owner sinks is ``default_scrub`` (§7.6).
+
+    Richer owner profiles (P1-6 / D14) additionally require:
+
+    * explicit owner selection via ``GIT_CG_OPIK_OWNER_EXPORT`` truthy, and
+    * a non-CI environment (CI sinks stay ≤ ``default_scrub`` / ``public_ci``).
+
+    Returns ``(profile, fallback_reason)`` where ``fallback_reason`` is a
+    non-secret diagnostic token when the requested profile was downgraded.
     """
     if raw is None:
-        return RedactionProfile.DEFAULT_SCRUB
+        return RedactionProfile.DEFAULT_SCRUB, None
     token = raw.strip().lower()
     if token == "":
-        return RedactionProfile.DEFAULT_SCRUB
+        return RedactionProfile.DEFAULT_SCRUB, None
     try:
         profile = RedactionProfile(token)
     except ValueError:
-        return RedactionProfile.DEFAULT_SCRUB
+        return RedactionProfile.DEFAULT_SCRUB, f"unknown_profile:{token}"
     if profile is RedactionProfile.RAW_DEV_UNSAFE:
-        return RedactionProfile.DEFAULT_SCRUB
-    return profile
+        return RedactionProfile.DEFAULT_SCRUB, "raw_dev_unsafe_refused"
+    if profile in OWNER_ONLY_REDACTION_PROFILES:
+        if not owner_export:
+            return RedactionProfile.DEFAULT_SCRUB, f"owner_export_required:{profile.value}"
+        if environment is OpikEnvironment.CI:
+            return RedactionProfile.DEFAULT_SCRUB, f"owner_profile_blocked_in_ci:{profile.value}"
+    return profile, None
 
 
 def _parse_flush_timeout(raw: str | None) -> int:
@@ -227,7 +262,16 @@ def resolve_opik_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     if bad_env is not None:
         meta["environment_fallback"] = bad_env
 
-    profile = _parse_redaction_profile(source.get(ENV_REDACTION_PROFILE))
+    owner_export = _truthy(source.get(ENV_OWNER_EXPORT), default=False)
+    profile, profile_fallback = _parse_redaction_profile(
+        source.get(ENV_REDACTION_PROFILE),
+        owner_export=owner_export,
+        environment=environment,
+    )
+    if profile_fallback is not None:
+        meta["redaction_profile_fallback"] = profile_fallback
+    if owner_export:
+        meta["owner_export"] = True
     flush_timeout_ms = _parse_flush_timeout(source.get(ENV_FLUSH_TIMEOUT_MS))
     track_disable = _truthy(source.get(ENV_TRACK_DISABLE), default=False)
     # Default True when unset (safe TLS verify).
