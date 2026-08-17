@@ -451,6 +451,8 @@ S4 projects **precomputed local Layer-A evidence** into Opik for operator compar
 
 Legacy aliases still resolve: `local` → `local_only`, `dogfood` → `strict_mirror`. Invented tokens such as `self_hosted_noauth` are **not** supported modes and never make network auth optional.
 
+Unset/empty mode still defaults to **`off`** (capture-off). An **unknown mode token** also fails closed to `off` for capture safety, but operator surfaces (`git-cg eval config show`, `export status`, `export drain`, and `build_export_plan`) must report **`ExportHealth=config_error`** via `meta.mode_fallback` (**E12**) — never only a quiet ambient disable.
+
 ### Explicit projects — no Default Project
 
 Export requires explicit project/lane/environment binding. Missing project/endpoint when export is requested fails as **export validation**, not product/gate failure. There is no silent Default Project dump path.
@@ -507,15 +509,25 @@ Helpers live in `git_cg.eval.mirror.train` (`build_train_projection`, `filter_po
 ### Operator entrypoints (dev-only)
 
 ```bash
-# secret-safe resolved config
-uv run git-cg eval opik-config-show
+# secret-safe resolved config (+ E12 config_error on invalid mode)
+uv run git-cg eval config show
 
-# queue inspect / drain (never product-blocking)
+# queue inspect / retry / drain (canonical nested form)
+uv run git-cg eval export status
+uv run git-cg eval export retry
+uv run git-cg eval export drain
+
+# temporary dashed aliases (one minor cycle)
 uv run git-cg eval export-status
 uv run git-cg eval export-drain
 ```
 
 These are maintainer/export surfaces. Basic commit UX stays unchanged when capture/mirror are off.
+Invalid mode tokens surface `health=config_error` on config/status/drain (exit 2 for those operator commands only).
+
+### Offline proof matrix + claim evidence (E13 / P2-8)
+
+The pass-2 offline matrix and S4-A…G claim-evidence table live in [`docs/eval/s4-claim-evidence.md`](./s4-claim-evidence.md). Composition-path proof is required for merge/close — leaf projection tests alone are not sufficient.
 
 ### Script absorption boundary
 
