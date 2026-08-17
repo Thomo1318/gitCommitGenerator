@@ -1,16 +1,25 @@
-"""S4b experiment_v1 naming + pin records."""
+"""S4b experiment_v1 naming + pin records (incl. P1-12 network SHA gate)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
+# Back-compat private alias still exported via module attribute.
+from git_cg.eval.mirror import experiments as exp_mod
 from git_cg.eval.mirror.experiments import (
-    _UNRESOLVED_SHA,
+    UNRESOLVED_GIT_SHA,
+    ExportGitShaError,
     build_experiment,
     experiment_name,
+    is_unresolved_git_sha,
+    require_resolved_git_sha,
     resolve_git_sha,
 )
 from git_cg.eval.schema_pack import validate_instance
+
+_UNRESOLVED_SHA = exp_mod._UNRESOLVED_SHA
 
 
 class TestExperimentName:
@@ -41,7 +50,41 @@ class TestResolveGitSha:
         # A non-repo directory → git fails → zeroed sentinel (never raises).
         sha = resolve_git_sha(repo_root=tmp_path)
         assert sha == _UNRESOLVED_SHA
+        assert sha == UNRESOLVED_GIT_SHA
         assert all(c in "0123456789abcdef" for c in sha)
+
+
+class TestUnresolvedGitShaGate:
+    def test_is_unresolved_detects_zeroed_and_empty(self) -> None:
+        assert is_unresolved_git_sha(UNRESOLVED_GIT_SHA)
+        assert is_unresolved_git_sha("0" * 12)
+        assert is_unresolved_git_sha("")
+        assert is_unresolved_git_sha(None)
+        assert not is_unresolved_git_sha("abc1234")
+
+    def test_require_allows_local_diag_zeroed(self, tmp_path) -> None:
+        sha = require_resolved_git_sha(repo_root=tmp_path, network_export=False)
+        assert sha == UNRESOLVED_GIT_SHA
+
+    def test_require_refuses_network_export_zeroed(self, tmp_path) -> None:
+        with pytest.raises(ExportGitShaError, match="export_validation") as ei:
+            require_resolved_git_sha(repo_root=tmp_path, network_export=True)
+        assert ei.value.error_class == "export_validation"
+
+    def test_require_refuses_explicit_zeroed_for_network(self) -> None:
+        with pytest.raises(ExportGitShaError, match="unresolved git SHA"):
+            require_resolved_git_sha(UNRESOLVED_GIT_SHA, network_export=True)
+
+    def test_require_accepts_resolved_for_network(self) -> None:
+        assert require_resolved_git_sha("deadbeefcafebabe", network_export=True) == "deadbeefcafebabe"
+
+    def test_build_experiment_network_export_refuses_unresolved(self, tmp_path) -> None:
+        with pytest.raises(ExportGitShaError, match="export_validation"):
+            build_experiment("mirror", "v0", repo_root=tmp_path, network_export=True)
+
+    def test_build_experiment_local_still_accepts_zeroed(self, tmp_path) -> None:
+        record = build_experiment("mirror", "v0", repo_root=tmp_path, network_export=False)
+        assert record["git_sha"] == UNRESOLVED_GIT_SHA
 
 
 class TestBuildExperiment:
@@ -78,3 +121,4 @@ class TestExperimentsModuleSyntax:
 
         assert callable(exp.resolve_git_sha)
         assert callable(exp.build_experiment)
+        assert callable(exp.require_resolved_git_sha)
