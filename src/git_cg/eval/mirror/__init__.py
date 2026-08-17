@@ -31,7 +31,11 @@ S4b adds the network-facing half (still fail-open, never product-blocking):
   Opik SDK transport, deterministic mock, classified errors.
 * :mod:`git_cg.eval.mirror.experiments` — ``experiment_v1`` naming + pin set.
 * :mod:`git_cg.eval.mirror.projections` — bundle → trace/span, session twin →
-  thread, deterministic score card → feedback (no cloud re-scoring).
+  thread, deterministic score card → feedback (no cloud re-scoring); P1-8/9/10
+  final_accept selection, boolean projection, closed ``local_wrapper`` source,
+  and E9 authority annotations.
+* :mod:`git_cg.eval.mirror.composition` — ``build_export_plan`` sole join path
+  (Layer-A → redact → project → batch → enqueue) for merge evidence (E8 / P0-5).
 * :mod:`git_cg.eval.mirror.exporter` — queue drain orchestration with bounded
   flush and F4 fail-open classification.
 
@@ -57,6 +61,12 @@ from git_cg.eval.mirror.batch import (
     build_export_batches,
     envelope_size_bytes,
     map_queue_status_to_export_status,
+)
+from git_cg.eval.mirror.composition import (
+    ExportPlanError,
+    ExportPlanResult,
+    LayerAObjects,
+    build_export_plan,
 )
 from git_cg.eval.mirror.config import (
     OpikConfigError,
@@ -91,9 +101,13 @@ from git_cg.eval.mirror.payload import (
     persist_payload_artifact,
 )
 from git_cg.eval.mirror.projections import (
+    FEEDBACK_SOURCE,
+    ProjectionError,
+    authority_annotations,
     project_bundle_to_trace,
     project_score_card_to_feedback,
     project_session_thread,
+    select_final_attempt,
 )
 from git_cg.eval.mirror.queue import (
     EXPORT_QUEUE_DIRNAME,
@@ -145,6 +159,7 @@ __all__ = [
     "EXPORT_PAYLOADS_DIRNAME",
     "EXPORT_QUEUE_DIRNAME",
     "EXPORT_STATUSES",
+    "FEEDBACK_SOURCE",
     "LAZY_OPIK_IMPORT_ALLOWLIST",
     "POSITIVE_GOLD",
     "QUARANTINE_MARKER",
@@ -157,10 +172,13 @@ __all__ = [
     "ExportGitShaError",
     "ExportHealth",
     "ExportPayloadError",
+    "ExportPlanError",
+    "ExportPlanResult",
     "ExportQueueError",
     "ExportSizeError",
     "ExportStatus",
     "ExportTransportError",
+    "LayerAObjects",
     "MirrorResult",
     "MirrorSecretError",
     "MockTransport",
@@ -169,12 +187,15 @@ __all__ = [
     "OpikMode",
     "OpikRuntimeSecrets",
     "OpikSdkTransport",
+    "ProjectionError",
     "TrainProjectionError",
     "Transport",
+    "authority_annotations",
     "batch_idempotency_key",
     "build_experiment",
     "build_experiment_pins",
     "build_export_batches",
+    "build_export_plan",
     "build_mirror_result",
     "build_train_projection",
     "claim_queue_item",
@@ -210,4 +231,5 @@ __all__ = [
     "resolve_git_sha",
     "resolve_opik_config",
     "scrub_export_note",
+    "select_final_attempt",
 ]
