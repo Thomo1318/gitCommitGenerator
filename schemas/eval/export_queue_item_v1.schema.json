@@ -194,6 +194,7 @@
       "type": "string"
     },
     "payload_ref": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
       "type": "string"
     },
     "payload_sha256": {
