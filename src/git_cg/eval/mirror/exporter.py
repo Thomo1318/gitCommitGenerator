@@ -24,7 +24,7 @@ from git_cg.eval.mirror import queue as export_queue
 from git_cg.eval.mirror.health import ExportHealth
 from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
 from git_cg.eval.mirror.secrets import MirrorSecretError, OpikRuntimeSecrets, resolve_opik_secrets
-from git_cg.eval.mirror.transport import ExportTransportError, Transport
+from git_cg.eval.mirror.transport import ExportTransportError, Transport, scrub_export_note
 
 __all__ = [
     "DrainSummary",
@@ -152,7 +152,7 @@ def drain_queue(
                 qid,
                 "failed",
                 repo_root=root,
-                notes=f"export_auth: {str(exc)[:160]}",
+                notes=scrub_export_note(f"export_auth: {exc}"),
                 last_error_class="export_auth",
                 clear_lease=True,
             )
@@ -185,7 +185,7 @@ def drain_queue(
                 qid,
                 "failed",
                 repo_root=root,
-                notes=str(exc)[:200],
+                notes=scrub_export_note(str(exc)),
                 last_error_class=err_cls,
                 clear_lease=True,
             )
@@ -206,7 +206,7 @@ def drain_queue(
                 qid,
                 "failed",
                 repo_root=root,
-                notes=str(exc)[:200],
+                notes=scrub_export_note(str(exc)),
                 last_error_class=exc.error_class,
                 clear_lease=True,
             )
@@ -217,7 +217,7 @@ def drain_queue(
                 qid,
                 "failed",
                 repo_root=root,
-                notes=f"export_network: {type(exc).__name__}: {str(exc)[:140]}",
+                notes=scrub_export_note(f"export_network: {type(exc).__name__}: {exc}"),
                 last_error_class="export_network",
                 clear_lease=True,
             )
