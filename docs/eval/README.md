@@ -519,7 +519,7 @@ These are maintainer/export surfaces. Basic commit UX stays unchanged when captu
 
 ### Script absorption boundary
 
-`scripts/compile_opik_dataset.py` is a **legacy scaffold uploader**. S4 library law lives under `src/git_cg/eval/mirror/**` (config, R14, batch/queue/payload, lazy transport, pins, projections, train safeguards). New work must call the library — do not extend the legacy script as product contract. Full retirement/wrap can finish under S6 CLI absorption.
+`scripts/compile_opik_dataset.py` is a **retired pointer/wrapper** (S4 P2-3 / E6). It no longer imports Opik, no longer filters on `user_acceptance`, and no longer uploads. Live dataset push is only via the non-blocking mirror queue (`git-cg eval export status|retry|drain`). S4 library law lives under `src/git_cg/eval/mirror/**` (config, R14, batch/queue/payload, lazy transport, pins, projections, Q18 train safeguards). Layer-A local labels remain the SoT; popularity feedback is never a golden/promotion signal. Do not extend the retired script as product contract.
 
 ### Boundary
 
