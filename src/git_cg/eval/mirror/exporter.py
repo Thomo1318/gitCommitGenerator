@@ -13,15 +13,23 @@ hook process cannot hang (FIND-022).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from git_cg.eval.mirror import queue as export_queue
+from git_cg.eval.mirror.health import ExportHealth
+from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
 from git_cg.eval.mirror.secrets import MirrorSecretError, OpikRuntimeSecrets, resolve_opik_secrets
 from git_cg.eval.mirror.transport import ExportTransportError, Transport
 
-__all__ = ["DrainSummary", "drain_queue", "list_pending_items"]
+__all__ = [
+    "DrainSummary",
+    "drain_queue",
+    "list_pending_items",
+    "mirror_result_from_drain",
+]
 
 
 @dataclass(frozen=True)
@@ -34,6 +42,11 @@ class DrainSummary:
     skipped: int = 0
     error_classes: tuple[str, ...] = field(default_factory=tuple)
     notes: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def succeeded(self) -> int:
+        """Alias used by MirrorResult field naming."""
+        return self.exported
 
 
 def list_pending_items(repo_root: Path | None = None) -> list[dict[str, Any]]:
@@ -53,25 +66,35 @@ def list_pending_items(repo_root: Path | None = None) -> list[dict[str, Any]]:
     return out
 
 
-def _resolve_secrets(config: dict[str, Any]) -> OpikRuntimeSecrets:
+def _resolve_secrets(config: Mapping[str, Any]) -> OpikRuntimeSecrets:
     """Resolve secrets; ``require_key`` only when the mode needs network auth.
 
     Key-optional modes (local durability / off):
       * ``off`` — export skipped
-      * ``local`` — shipped legacy local durability token (pre P0-1)
+      * ``local`` — shipped legacy local durability token (pre P0-1 alias)
       * ``local_only`` — plan vocabulary (post P0-1)
 
-    Every other resolved mode (``mirror``, ``dogfood`` / ``strict_mirror``, …)
-    requires a resolved Opik API key. Invented key-bypass mode tokens are
-    not recognised — unknown or network modes fail closed at secret resolution.
+    Every other resolved mode (``mirror``, ``strict_mirror``, …) requires a
+    resolved Opik API key. Invented key-bypass mode tokens are not recognised
+    — unknown or network modes fail closed at secret resolution.
     """
     mode = str(config.get("mode", "off") or "off")
     require_key = mode not in {"off", "local", "local_only"}
     return resolve_opik_secrets(require_key=require_key)
 
 
+def _project_from_config(config: Mapping[str, Any]) -> str:
+    """Prefer projects.eval; fall back to legacy project_name."""
+    projects = config.get("projects")
+    if isinstance(projects, Mapping):
+        eval_p = str(projects.get("eval") or "").strip()
+        if eval_p:
+            return eval_p
+    return str(config.get("project_name") or "").strip()
+
+
 def drain_queue(
-    config: dict[str, Any],
+    config: Mapping[str, Any],
     *,
     transport: Transport,
     repo_root: Path | None = None,
@@ -92,6 +115,10 @@ def drain_queue(
     export reasons (F4).
     """
     root = repo_root if repo_root is not None else export_queue.resolve_repo_root()
+    mode = str(config.get("mode", "off") or "off")
+    if mode == "off":
+        return DrainSummary(notes=("skipped_off",))
+
     rows = list_pending_items(repo_root=root)
     if max_items is not None:
         rows = rows[: max(0, max_items)]
@@ -99,7 +126,7 @@ def drain_queue(
     if not rows:
         return DrainSummary(notes=("queue_empty",))
 
-    project = config.get("project_name", "")
+    project = _project_from_config(config)
     flush_timeout_ms = int(config.get("flush_timeout_ms", 5000))
 
     try:
@@ -153,4 +180,24 @@ def drain_queue(
         exported=exported,
         failed=failed,
         error_classes=tuple(dict.fromkeys(classes)),
+    )
+
+
+def mirror_result_from_drain(
+    config: Mapping[str, Any],
+    summary: DrainSummary,
+    *,
+    health: ExportHealth | str | None = None,
+) -> MirrorResult:
+    """Build the P0-7 MirrorResult from a drain summary + resolved config."""
+    mode = str(config.get("mode", "off") or "off")
+    return build_mirror_result(
+        mode=mode,
+        health=health,
+        attempted=summary.attempted,
+        succeeded=summary.exported,
+        failed=summary.failed,
+        deferred=summary.skipped,
+        error_classes=summary.error_classes,
+        notes=summary.notes,
     )

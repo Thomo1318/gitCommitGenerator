@@ -126,6 +126,19 @@ def test_s0_a_opik_config_requires_project_when_enabled() -> None:
         "git_cg_opik_config_v1",
         _load("git_cg_opik_config.good.mirror.json"),
     )
+    validate_instance(
+        "git_cg_opik_config_v1",
+        _load("git_cg_opik_config.good.local_only.json"),
+    )
+    validate_instance(
+        "git_cg_opik_config_v1",
+        _load("git_cg_opik_config.good.strict_mirror.json"),
+    )
+    with pytest.raises(SchemaPackError):
+        validate_instance(
+            "git_cg_opik_config_v1",
+            _load("git_cg_opik_config.bad.raw_dev_unsafe.json"),
+        )
 
 
 def test_s0_a_human_review_advisory_authority_and_redaction() -> None:

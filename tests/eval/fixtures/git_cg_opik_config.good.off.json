@@ -1,6 +1,10 @@
 {
+  "schema_version": "git_cg_opik_config_v1",
   "id": "cfg-off",
   "mode": "off",
+  "environment": "development",
   "redaction_profile": "public_ci",
-  "schema_version": "git_cg_opik_config_v1"
+  "flush_timeout_ms": 5000,
+  "track_disable": false,
+  "check_tls_certificate": true
 }

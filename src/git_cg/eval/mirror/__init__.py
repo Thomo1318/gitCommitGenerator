@@ -1,4 +1,4 @@
-"""S4a Opik mirror — offline core (Issue #217, plan §8.4).
+"""S4a Opik mirror — offline core (Issue #232 / #217, plan §8.4).
 
 This package projects **precomputed local** eval results toward Opik for
 operator compare and the owner training/longitudinal corpus lake (R3). It is
@@ -7,8 +7,11 @@ never the scoring engine of record and never the CI sole green.
 S4a ships the offline core:
 
 * :mod:`git_cg.eval.mirror.config` — ``git_cg_opik_config_v1`` resolution
-  (FIND-022): fail-closed env parsing, pinned project per lane, **never**
+  (FIND-022): fail-closed env parsing, pinned project lanes, **never**
   Default Project fallthrough, secrets only via env at runtime.
+* :mod:`git_cg.eval.mirror.health` — closed ``ExportHealth`` §18.7 tokens (E1).
+* :mod:`git_cg.eval.mirror.result` — machine-readable ``MirrorResult`` (P0-7)
+  with dual axis ``export_result`` / ``evaluation_job_result`` (P1-5).
 * :mod:`git_cg.eval.mirror.redaction` — the R14 owner redaction ladder over
   bundle dicts; secrets always scrubbed; scrub failure **quarantines** the
   field (omit + mark) rather than leaking ambient payload.
@@ -50,11 +53,18 @@ from git_cg.eval.mirror.batch import (
 )
 from git_cg.eval.mirror.config import (
     OpikConfigError,
+    OpikEnvironment,
     OpikMode,
     resolve_opik_config,
 )
 from git_cg.eval.mirror.experiments import build_experiment, experiment_name
-from git_cg.eval.mirror.exporter import DrainSummary, drain_queue, list_pending_items
+from git_cg.eval.mirror.exporter import (
+    DrainSummary,
+    drain_queue,
+    list_pending_items,
+    mirror_result_from_drain,
+)
+from git_cg.eval.mirror.health import ExportHealth, derive_export_health_rollup
 from git_cg.eval.mirror.projections import (
     project_bundle_to_trace,
     project_score_card_to_feedback,
@@ -71,6 +81,12 @@ from git_cg.eval.mirror.redaction import (
     QUARANTINE_MARKER,
     redact_bundle_for_export,
 )
+from git_cg.eval.mirror.result import (
+    MirrorResult,
+    build_mirror_result,
+    evaluation_job_result,
+    export_result,
+)
 from git_cg.eval.mirror.secrets import MirrorSecretError, OpikRuntimeSecrets
 from git_cg.eval.mirror.transport import (
     EXPORT_ERROR_CLASSES,
@@ -86,24 +102,32 @@ __all__ = [
     "EXPORT_QUEUE_DIRNAME",
     "QUARANTINE_MARKER",
     "DrainSummary",
+    "ExportHealth",
     "ExportQueueError",
     "ExportSizeError",
     "ExportTransportError",
+    "MirrorResult",
     "MirrorSecretError",
     "MockTransport",
     "OpikConfigError",
+    "OpikEnvironment",
     "OpikMode",
     "OpikRuntimeSecrets",
     "OpikSdkTransport",
     "Transport",
     "build_experiment",
     "build_export_batches",
+    "build_mirror_result",
+    "derive_export_health_rollup",
     "drain_queue",
     "enqueue_export_batch",
+    "evaluation_job_result",
     "experiment_name",
+    "export_result",
     "list_pending_items",
     "load_queue_item",
     "mark_queue_item",
+    "mirror_result_from_drain",
     "project_bundle_to_trace",
     "project_score_card_to_feedback",
     "project_session_thread",

@@ -17,8 +17,17 @@ CONFIG = {
     "schema_version": "git_cg_opik_config_v1",
     "id": "git_cg_opik_config_v1",
     "mode": "mirror",
+    "environment": "eval",
     "redaction_profile": "default_scrub",
     "flush_timeout_ms": 5000,
+    "track_disable": False,
+    "check_tls_certificate": True,
+    "projects": {
+        "live": "eval-project",
+        "eval": "eval-project",
+        "ci": "eval-project",
+        "import": "eval-project",
+    },
     "project_name": "eval-project",
 }
 

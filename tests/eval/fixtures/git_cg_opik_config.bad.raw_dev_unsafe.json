@@ -1,9 +1,9 @@
 {
   "schema_version": "git_cg_opik_config_v1",
-  "id": "cfg-bad",
-  "mode": "mirror",
-  "environment": "eval",
-  "redaction_profile": "public_ci",
+  "id": "cfg-raw",
+  "mode": "off",
+  "environment": "development",
+  "redaction_profile": "raw_dev_unsafe",
   "flush_timeout_ms": 5000,
   "track_disable": false,
   "check_tls_certificate": true

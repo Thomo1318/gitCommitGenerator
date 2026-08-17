@@ -136,6 +136,74 @@ def encode_fixture_cmd(
 
 
 # --------------------------------------------------------------------------
+# S4 config inspection (secret-safe; offline).
+# --------------------------------------------------------------------------
+
+
+@eval_app.command("config")
+def config_cmd(
+    action: str = typer.Argument(..., help="Subcommand: show"),
+) -> None:
+    """Inspect resolved Opik/mirror config (secret-safe).
+
+    Currently supports ``show`` only (E2 / §10.6 law 5). Never prints secret
+    values — only masked ``•••[len=N]`` forms when a key is present in the
+    ambient environment (never loaded into the config record itself).
+    """
+    if action != "show":
+        typer.echo(f"config: unknown action {action!r} (supported: show)", err=True)
+        raise typer.Exit(code=2)
+
+    import json
+    import os
+
+    from git_cg.eval.mirror.config import (
+        OpikConfigError,
+        mask_secret,
+        public_config_view,
+        resolve_opik_config,
+    )
+    from git_cg.eval.mirror.health import ExportHealth
+    from git_cg.eval.mirror.result import build_mirror_result
+
+    try:
+        config = resolve_opik_config()
+    except OpikConfigError as exc:
+        # Surface config_error via MirrorResult; still print diagnostics.
+        result = build_mirror_result(
+            mode="off",
+            health=ExportHealth.CONFIG_ERROR,
+            notes=(f"config_error: {exc}",),
+        )
+        typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        typer.echo(f"config show: invalid (fail-closed): {exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+    view = public_config_view(config)
+    # Ambient secret presence only (never values from config — none stored).
+    ambient_key = os.environ.get("OPIK_API_KEY") or os.environ.get("GIT_CG_OPIK_API_KEY")
+    masked = {
+        "api_key": mask_secret(ambient_key) if ambient_key else None,
+        "api_key_present": bool(ambient_key),
+    }
+    payload = {
+        "config": view,
+        "secrets": masked,
+        "health_hint": (
+            ExportHealth.SKIPPED_OFF.value
+            if view.get("mode") == "off"
+            else (
+                ExportHealth.CONFIG_ERROR.value
+                if "mode_fallback" in (view.get("meta") or {})
+                else ExportHealth.PENDING.value
+            )
+        ),
+    }
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    raise typer.Exit(code=0)
+
+
+# --------------------------------------------------------------------------
 # S4b export commands (F4 fail-open; never block the product accept path).
 # --------------------------------------------------------------------------
 
@@ -227,9 +295,16 @@ def export_drain_cmd(
     if dry_run:
         pending = list_pending_items(repo_root=repo)
         typer.echo(f"mode {config.get('mode')}")
-        typer.echo(f"project {config.get('project_name', '')}")
+        projects = config.get("projects") or {}
+        project = (projects.get("eval") if isinstance(projects, dict) else None) or config.get("project_name", "")
+        typer.echo(f"project {project}")
         typer.echo(f"pending {len(pending)}")
         raise typer.Exit(code=0)
+
+    import json
+
+    from git_cg.eval.mirror.exporter import mirror_result_from_drain
+    from git_cg.eval.mirror.result import evaluation_job_result, export_result
 
     summary = drain_queue(
         config,
@@ -237,8 +312,22 @@ def export_drain_cmd(
         repo_root=repo,
         max_items=max_items,
     )
+    result = mirror_result_from_drain(config, summary)
+    # Human one-liner + machine-readable MirrorResult (P0-7).
     typer.echo(f"attempted {summary.attempted} exported {summary.exported} failed {summary.failed}")
     if summary.error_classes:
         typer.echo(f"error_classes {','.join(summary.error_classes)}")
-    # Fail-open: export failures never produce a blocking non-zero exit.
+    typer.echo(
+        json.dumps(
+            {
+                "mirror_result": result.to_dict(),
+                "export_result": export_result(result),
+                "evaluation_job_result": evaluation_job_result(result),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    # Fail-open for product/hooks: export failures never produce a blocking
+    # non-zero exit here. Eval wrappers may inspect evaluation_job_result.
     raise typer.Exit(code=0)
