@@ -26,7 +26,7 @@
   "provenance_label": "fixture",
   "redaction_profile": "default_scrub",
   "regime": "n/a",
-  "schema_pack": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+  "schema_pack": "schema_pack_v0@50e7fbea5af7de178ea1852bf314fc33c636aa39ef4c0cb7469a9b15a4520917",
   "schema_version": "ape_bundle_v1",
   "unbound_reason": "synthetic_offline_fixture"
 }
