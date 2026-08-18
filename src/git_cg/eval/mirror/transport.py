@@ -66,17 +66,30 @@ _SECRETISH_RE = re.compile(
 
 
 def flush_timeout_seconds(timeout_ms: int) -> int:
-    """Convert configured flush bound (ms) to Opik SDK seconds (P0-4).
-
-    ``opik.Opik.flush`` takes whole seconds. Sub-second budgets still map to
-    at least 1s so the SDK call is not zero/None-open-ended.
+    """
+    Convert a flush timeout from milliseconds to whole seconds.
+    
+    Parameters:
+    	timeout_ms (int): The configured timeout in milliseconds.
+    
+    Returns:
+    	int: The timeout in whole seconds, rounded up to at least one second.
     """
     ms = max(1, int(timeout_ms))
     return max(1, math.ceil(ms / 1000))
 
 
 def scrub_export_note(text: str, *, limit: int = 160) -> str:
-    """Scrub URLs/headers/secret-shaped tokens from queue/transport notes (P1-3)."""
+    """
+    Sanitise an export note by redacting sensitive content and limiting its length.
+    
+    Parameters:
+    	text (str): The note to sanitise.
+    	limit (int): The maximum number of characters in the result.
+    
+    Returns:
+    	str: A redacted, single-line note truncated to the specified limit.
+    """
     cleaned = str(text or "")
     cleaned = _URL_RE.sub("<redacted-url>", cleaned)
     cleaned = _BEARER_RE.sub(r"\1=<redacted>", cleaned)
@@ -93,6 +106,7 @@ class ExportTransportError(RuntimeError):
     """A classified export transport failure (never product-blocking)."""
 
     def __init__(self, error_class: str, message: str) -> None:
+        """Create an export error with a recognised class and scrubbed message."""
         if error_class not in EXPORT_ERROR_CLASSES:
             error_class = "export_network"
         self.error_class = error_class
@@ -112,12 +126,25 @@ class Transport(Protocol):
         secrets: OpikRuntimeSecrets,
         timeout_ms: int,
     ) -> None:
-        """Upload ``payload``; raise :class:`ExportTransportError` on failure."""
+        """
+        Upload an export payload to the specified project and experiment.
+        
+        Parameters:
+            payload (dict[str, Any]): The export data to upload.
+            timeout_ms (int): Maximum time allowed for the upload in milliseconds.
+        
+        Raises:
+            ExportTransportError: If the payload cannot be uploaded.
+        """
         ...
 
 
 def _status_code_of(exc: BaseException) -> int | None:
-    """Best-effort HTTP status extraction without trusting raw bodies."""
+    """Extract an HTTP status code from an exception when one is available.
+    
+    Returns:
+    	int | None: A status code between 100 and 599, or `None` when no valid code is found.
+    """
     for attr in ("status_code", "status", "http_status", "code"):
         raw = getattr(exc, attr, None)
         if isinstance(raw, int) and 100 <= raw <= 599:
@@ -141,15 +168,14 @@ def _status_code_of(exc: BaseException) -> int | None:
 
 
 def classify_export_error(exc: BaseException) -> ExportTransportError:
-    """Map an arbitrary exception to a classified ``ExportTransportError`` (P1-3).
-
-    Order:
-      1. explicit ``ExportTransportError`` passthrough
-      2. HTTP status codes
-      3. exception type-name heuristics
-      4. default ``export_network``
-
-    Messages are scrubbed; raw headers/URLs/bodies never become queue notes.
+    """
+    Classify an exception into a transport error category with a scrubbed diagnostic message.
+    
+    Parameters:
+        exc (BaseException): The exception to classify.
+    
+    Returns:
+        ExportTransportError: The existing classified error, or a new error mapped to an authentication, size, validation, or network category.
     """
     if isinstance(exc, ExportTransportError):
         return exc
@@ -201,6 +227,19 @@ class OpikSdkTransport:
         secrets: OpikRuntimeSecrets,
         timeout_ms: int,
     ) -> None:
+        """
+        Upload projected trace data to the Opik project and experiment.
+        
+        Parameters:
+            project (str): Opik project name.
+            experiment_name (str): Experiment associated with the uploaded traces.
+            payload (dict[str, Any]): Export payload containing trace data.
+            secrets (OpikRuntimeSecrets): Runtime credentials and connection settings.
+            timeout_ms (int): Maximum duration allowed for the upload and flush.
+        
+        Raises:
+            ExportTransportError: If the Opik package is unavailable or the upload fails.
+        """
         deadline = time.monotonic() + max(0.001, float(timeout_ms) / 1000.0)
         try:
             import opik
@@ -236,7 +275,20 @@ class OpikSdkTransport:
         item_count: int,
         item_index: int,
     ) -> dict[str, Any]:
-        """Project a single nested export item onto one SDK trace surface."""
+        """
+        Project one export item into an SDK trace payload, preserving its evaluation and item metadata.
+        
+        Parameters:
+        	primary (dict[str, Any]): Nested export item data.
+        	experiment_name (str): Name assigned to the trace.
+        	batch_payload (dict[str, Any]): Batch-level schema, metric, and redaction data.
+        	item_ref (Any): Optional reference identifying the item.
+        	item_count (int): Total number of items in the batch.
+        	item_index (int): Zero-based position of the item in the batch.
+        
+        Returns:
+        	dict[str, Any]: Trace payload containing the name, input, output, and metadata.
+        """
         trace = primary.get("trace") if isinstance(primary.get("trace"), dict) else {}
         thread = primary.get("thread") if isinstance(primary.get("thread"), dict) else {}
         feedback = primary.get("feedback") if isinstance(primary.get("feedback"), list) else []
@@ -295,24 +347,18 @@ class OpikSdkTransport:
 
     @staticmethod
     def _project_trace_fields(payload: dict[str, Any], *, experiment_name: str) -> list[dict[str, Any]]:
-        """Project a durable export_batch transport body onto one SDK trace per item.
-
-        Durable payloads are ``export_batch_v1`` transport bodies::
-
-            {
-                "items": [{"item_ref": "...", "payload": {...}}],
-                "schema_pack": "...",
-                "metric_catalog": "...",
-                "redaction_profile": "...",
-            }
-
-        Nested item payloads may carry ``trace`` / ``thread`` / ``feedback``
-        projections from :mod:`git_cg.eval.mirror.projections`. Top-level
-        ``input`` / ``output`` / ``metadata`` keys are accepted only as a
-        narrow back-compat shape for unit fixtures.
-
-        Multi-item batches emit one projected trace per valid item so later
-        entries are not discarded.
+        """Project a durable export payload into one SDK trace per valid item.
+        
+        Multi-item batches preserve each valid item as a separate trace. If the payload
+        contains no valid items, returns a trace built from its flat input, output, and
+        metadata fields.
+        
+        Parameters:
+        	payload (dict[str, Any]): Durable export payload to project.
+        	experiment_name (str): Name assigned to each projected trace.
+        
+        Returns:
+        	list[dict[str, Any]]: Projected SDK trace dictionaries.
         """
         items = payload.get("items")
         if isinstance(items, list) and items:
@@ -349,12 +395,15 @@ class OpikSdkTransport:
 
     @staticmethod
     def _send(client: Any, *, experiment_name: str, payload: dict[str, Any]) -> None:
-        """Project the durable payload onto the client trace surface.
-
-        The durable body shape is owned by the queue/batch layer; this adapter
-        only maps it onto the SDK. One trace is emitted per export item so
-        multi-item batches retain every payload. Kept adaptive so fixture
-        double surfaces and real Opik clients can both accept the projected kwargs.
+        """
+        Send each valid payload item as a trace for the specified experiment.
+        
+        Parameters:
+            experiment_name (str): Name of the experiment associated with the traces.
+            payload (dict[str, Any]): Durable export payload containing the trace items.
+        
+        Raises:
+            ExportTransportError: If the client does not provide a usable trace method.
         """
         trace_fn = getattr(client, "trace", None)
         if callable(trace_fn):
@@ -365,11 +414,14 @@ class OpikSdkTransport:
 
     @staticmethod
     def _bounded_flush(client: Any, *, timeout_ms: int, deadline: float) -> None:
-        """Adapter for ``opik.Opik.flush(timeout=seconds) -> bool`` (P0-4).
-
-        * Converts ms → seconds via :func:`flush_timeout_seconds`.
-        * Honours an outer monotonic deadline (remaining seconds, ≥1 when work remains).
-        * ``flush() is False`` or hang past deadline ⇒ ``export_network`` (timeout class).
+        """Attempts to flush buffered data within the supplied outer deadline.
+        
+        Parameters:
+        	timeout_ms (int): Maximum flush duration in milliseconds.
+        	deadline (float): Monotonic time by which flushing must complete.
+        
+        Raises:
+        	ExportTransportError: If flushing fails, returns `False`, or exceeds the outer deadline.
         """
         flush = getattr(client, "flush", None)
         if not callable(flush):
@@ -416,6 +468,17 @@ class MockTransport:
         secrets: OpikRuntimeSecrets,
         timeout_ms: int,
     ) -> None:
+        """Records an upload request and optionally raises the configured transport error.
+        
+        Parameters:
+            project (str): The project associated with the upload.
+            experiment_name (str): The experiment associated with the upload.
+            payload (dict[str, Any]): The data to upload.
+            timeout_ms (int): The upload timeout in milliseconds.
+        
+        Raises:
+            ExportTransportError: If a failure was configured for the mock.
+        """
         self.calls.append(
             {
                 "project": project,

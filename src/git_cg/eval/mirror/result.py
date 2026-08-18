@@ -30,6 +30,15 @@ _MAX_NOTE_LEN: Final = 200
 
 
 def _scrub_notes(notes: Iterable[str] | None) -> tuple[str, ...]:
+    """
+    Clean and limit note text for inclusion in mirror results.
+    
+    Parameters:
+    	notes (Iterable[str] | None): Notes to clean and retain.
+    
+    Returns:
+    	tuple[str, ...]: Non-blank notes with newlines replaced by spaces, each limited to 200 characters, with at most 32 notes retained.
+    """
     if not notes:
         return ()
     out: list[str] = []
@@ -72,6 +81,12 @@ class MirrorResult:
             object.__setattr__(self, "health", ExportHealth(str(self.health)))
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Serialise the mirror result into a dictionary suitable for external consumers.
+        
+        Returns:
+        	dict[str, Any]: A dictionary containing the result status, counts, error classes, strict-mode status, acceptance flag, and notes.
+        """
         return {
             "mode": self.mode,
             "health": self.health.value if isinstance(self.health, ExportHealth) else str(self.health),
@@ -97,7 +112,18 @@ def build_mirror_result(
     error_classes: Iterable[str] | None = None,
     notes: Iterable[str] | None = None,
 ) -> MirrorResult:
-    """Construct a MirrorResult with strict_mirror / health defaults applied."""
+    """
+    Construct a normalised `MirrorResult` for a mirror or export operation.
+    
+    Parameters:
+    	mode (str): Operation mode used to determine strict-mirror failure status.
+    	health (ExportHealth | str | None): Explicit operation health; inferred when omitted.
+    	error_classes (Iterable[str] | None): Error categories associated with the operation.
+    	notes (Iterable[str] | None): Notes associated with the operation.
+    
+    Returns:
+    	MirrorResult: Structured result with normalised health and strict-mirror status.
+    """
     classes = tuple(error_classes or ())
     # Materialize once: generators must survive both health inference and result storage.
     note_items = tuple(notes or ())
@@ -147,6 +173,20 @@ def _infer_health(
     error_classes: tuple[str, ...],
     notes: tuple[str, ...],
 ) -> ExportHealth:
+    """Determine the export health from its mode, counts, notes, and error classes.
+    
+    Parameters:
+    	mode (str): Export mode used to distinguish skipped and pending states.
+    	attempted (int): Number of attempted exports.
+    	succeeded (int): Number of successful exports.
+    	failed (int): Number of failed exports.
+    	deferred (int): Number of deferred exports.
+    	error_classes (tuple[str, ...]): Error classifications associated with failures.
+    	notes (tuple[str, ...]): Notes containing additional health indicators.
+    
+    Returns:
+    	ExportHealth: The inferred export health.
+    """
     if mode == "off" or "mode_off" in notes or "skipped_off" in notes:
         return ExportHealth.SKIPPED_OFF
     if any(n.startswith("secret_resolution_failed") or n == "secret_resolution_failed" for n in notes):
@@ -170,7 +210,15 @@ def _infer_health(
 
 
 def export_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
-    """Ops/drain view of a MirrorResult (P1-5 ``export_result`` axis)."""
+    """
+    Builds the operational export view for a mirror result.
+    
+    Parameters:
+    	result (MirrorResult | Mapping[str, Any]): Mirror result data to serialise.
+    
+    Returns:
+    	dict[str, Any]: Export status, counts, error classes, notes, and acceptance status.
+    """
     data = result.to_dict() if isinstance(result, MirrorResult) else dict(result)
     return {
         "axis": "export_result",
@@ -187,7 +235,16 @@ def export_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
 
 
 def evaluation_job_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
-    """Eval/CI job view — may report failure only under strict_mirror (P1-5)."""
+    """
+    Create the evaluation job view of a mirror result.
+    
+    Parameters:
+    	result (MirrorResult | Mapping[str, Any]): Mirror result data to serialise.
+    
+    Returns:
+    	dict[str, Any]: Evaluation status and mirror metadata, with `ok` set to
+    	`False` only when strict mirror mode has failed.
+    """
     data = result.to_dict() if isinstance(result, MirrorResult) else dict(result)
     mode = str(data.get("mode") or "off")
     strict_failed = bool(data.get("strict_mirror_failed"))

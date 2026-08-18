@@ -36,6 +36,15 @@ class TestResolveOpikSecrets:
 
     def test_base_url_falls_back_to_url_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def fake_resolve(key: str, default: str = "") -> str:
+            """Return the mocked value for a supported Opik secret key.
+            
+            Parameters:
+            	key (str): The secret key to resolve.
+            	default (str): The value to return for unsupported keys.
+            
+            Returns:
+            	str: The configured mock value or the provided default.
+            """
             return {"OPIK_URL_OVERRIDE": "http://localhost:5173"}.get(key, default)
 
         monkeypatch.setattr(mirror_secrets, "resolve_secret", fake_resolve)

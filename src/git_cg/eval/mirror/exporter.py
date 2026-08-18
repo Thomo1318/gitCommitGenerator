@@ -47,7 +47,11 @@ class DrainSummary:
 
     @property
     def succeeded(self) -> int:
-        """Alias used by MirrorResult field naming."""
+        """Provide the number of successfully exported items.
+        
+        Returns:
+        	int: The number of exported items.
+        """
         return self.exported
 
 
@@ -58,16 +62,14 @@ def list_pending_items(repo_root: Path | None = None) -> list[dict[str, Any]]:
 
 
 def _resolve_secrets(config: Mapping[str, Any]) -> OpikRuntimeSecrets:
-    """Resolve secrets; ``require_key`` only when the mode needs network auth.
-
-    Key-optional modes (local durability / off):
-      * ``off`` — export skipped
-      * ``local`` — shipped legacy local durability token (pre P0-1 alias)
-      * ``local_only`` — plan vocabulary (post P0-1)
-
-    Every other resolved mode (``mirror``, ``strict_mirror``, …) requires a
-    resolved Opik API key. Invented key-bypass mode tokens are not recognised
-    — unknown or network modes fail closed at secret resolution.
+    """
+    Resolve runtime secrets according to the configured export mode.
+    
+    Parameters:
+    	config (Mapping[str, Any]): Configuration containing the export mode.
+    
+    Returns:
+    	OpikRuntimeSecrets: Resolved runtime secrets, requiring an API key for network export modes.
     """
     mode = str(config.get("mode", "off") or "off")
     require_key = mode not in {"off", "local", "local_only"}
@@ -85,7 +87,16 @@ def _project_from_config(config: Mapping[str, Any]) -> str:
 
 
 def _row_project(row: Mapping[str, Any], config: Mapping[str, Any]) -> str:
-    """Prefer first-class queue project; fall back to config lanes."""
+    """
+    Selects the project identifier from the queue row or configuration.
+    
+    Parameters:
+        row (Mapping[str, Any]): Queue row containing the project identifier.
+        config (Mapping[str, Any]): Configuration used when the row has no project.
+    
+    Returns:
+        str: The selected project identifier.
+    """
     queued = str(row.get("project") or "").strip()
     if queued:
         return queued
@@ -93,7 +104,16 @@ def _row_project(row: Mapping[str, Any], config: Mapping[str, Any]) -> str:
 
 
 def _row_experiment_name(row: Mapping[str, Any], qid: str) -> str:
-    """Prefer first-class experiment identity on the queue row (P1-1)."""
+    """
+    Selects the experiment name from a queue row, falling back to its metadata batch identifier or queue identifier.
+    
+    Parameters:
+        row (Mapping[str, Any]): Queue row containing experiment identity fields.
+        qid (str): Queue identifier used when no experiment identity is available.
+    
+    Returns:
+        str: The experiment identifier selected from the row, metadata, or queue identifier.
+    """
     exp = str(row.get("experiment_id") or "").strip()
     if exp:
         return exp
@@ -195,7 +215,11 @@ def drain_queue(
             mark_notes: str | None = None,
             _qid: str = qid,
         ) -> bool:
-            """Best-effort terminal transition; never raise (F4)."""
+            """Attempts to transition a queue item to a terminal status.
+            
+            Returns:
+                `True` if the transition succeeds, `False` if a queue error prevents it.
+            """
             try:
                 export_queue.mark_queue_item(
                     _qid,
@@ -267,7 +291,17 @@ def mirror_result_from_drain(
     *,
     health: ExportHealth | str | None = None,
 ) -> MirrorResult:
-    """Build the P0-7 MirrorResult from a drain summary + resolved config."""
+    """
+    Build a mirror result from a queue drain summary and export configuration.
+    
+    Parameters:
+    	config (Mapping[str, Any]): Resolved export configuration containing the export mode.
+    	summary (DrainSummary): Counts, error classes, and notes produced by the queue drain.
+    	health (ExportHealth | str | None): Optional health status for the result.
+    
+    Returns:
+    	MirrorResult: A mirror result populated with the drain outcome and configured mode.
+    """
     mode = str(config.get("mode", "off") or "off")
     return build_mirror_result(
         mode=mode,

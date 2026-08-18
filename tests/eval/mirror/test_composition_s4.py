@@ -87,6 +87,7 @@ def _bundle() -> dict:
 
 
 def _session() -> dict:
+    """Create a representative closed session thread fixture for composition tests."""
     return {
         "schema_version": "commit_session_thread_v1",
         "session_thread_id": "sess_comp_1",
@@ -329,6 +330,7 @@ class TestCompositionAuthorityAndSessionFallback:
         real_redact = composition_mod.redact_bundle_for_export
 
         def drop_session(bundle_in, profile):  # type: ignore[no-untyped-def]
+            """Redacts a bundle and removes session thread identifiers from the result."""
             out = real_redact(bundle_in, profile)
             out = dict(out)
             out.pop("session_thread_id", None)

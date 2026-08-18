@@ -53,6 +53,7 @@ class ExportPlanError(ValueError):
     """Composition failure (``export_*`` class; never product-blocking)."""
 
     def __init__(self, message: str, *, error_class: str = "export_validation") -> None:
+        """Initialise an export plan error with its classification."""
         self.error_class = error_class
         super().__init__(message)
 
@@ -67,6 +68,15 @@ class LayerAObjects:
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any] | None) -> LayerAObjects:
+        """
+        Create a LayerAObjects instance from a mapping of bundles, session threads, and train-projection settings.
+        
+        Parameters:
+        	raw (Mapping[str, Any] | None): Input mapping containing bundle and session-thread data. Singular and plural keys are supported.
+        
+        Returns:
+        	LayerAObjects: Normalised immutable Layer-A objects.
+        """
         if raw is None:
             return cls()
         bundles = raw.get("bundles") or raw.get("bundle") or ()
@@ -113,6 +123,12 @@ class ExportPlanResult:
         object.__setattr__(self, "error_classes", classes)
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Serialise the export result into a dictionary suitable for transport or persistence.
+        
+        Returns:
+        	dict[str, Any]: A dictionary containing the export status, queue and batch references, item counts, errors, notes, train data, and acceptance flag.
+        """
         return {
             "mode": self.mode,
             "health": self.health.value if isinstance(self.health, ExportHealth) else str(self.health),
@@ -130,6 +146,11 @@ class ExportPlanResult:
         }
 
     def as_mirror_result(self) -> MirrorResult:
+        """Convert the export plan outcome into a mirror result.
+        
+        Returns:
+        	MirrorResult: A mirror result containing the plan's mode, health, item counts, error classes, and notes.
+        """
         return build_mirror_result(
             mode=self.mode,
             health=self.health,
@@ -143,12 +164,29 @@ class ExportPlanResult:
 
 
 def _as_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """
+    Normalise an optional export configuration to a dictionary.
+    
+    Parameters:
+    	config: Configuration values to copy, or `None` to use disabled mode with the default redaction profile.
+    
+    Returns:
+    	A dictionary containing the supplied configuration or the default disabled configuration.
+    """
     if config is None:
         return {"mode": "off", "redaction_profile": RedactionProfile.DEFAULT_SCRUB.value}
     return dict(config)
 
 
 def _project_name(config: Mapping[str, Any]) -> str:
+    """Resolve the evaluation project name from configuration.
+    
+    Parameters:
+    	config (Mapping[str, Any]): Configuration containing project settings.
+    
+    Returns:
+    	str: The configured evaluation project name, or ``"git-cg-eval"`` when none is provided.
+    """
     projects = config.get("projects")
     if isinstance(projects, Mapping):
         eval_p = str(projects.get("eval") or "").strip()
@@ -158,14 +196,39 @@ def _project_name(config: Mapping[str, Any]) -> str:
 
 
 def _profile(config: Mapping[str, Any]) -> RedactionProfile | str:
+    """Resolve the configured redaction profile.
+    
+    Parameters:
+    	config (Mapping[str, Any]): Configuration containing the optional redaction profile.
+    
+    Returns:
+    	RedactionProfile | str: The configured redaction profile, or the default scrubbing profile.
+    """
     return config.get("redaction_profile") or RedactionProfile.DEFAULT_SCRUB.value
 
 
 def _environment(config: Mapping[str, Any]) -> str:
+    """Resolve the configured export environment.
+    
+    Parameters:
+    	config (Mapping[str, Any]): Configuration containing the optional environment value.
+    
+    Returns:
+    	str: The configured environment, or ``"eval"`` when no value is provided.
+    """
     return str(config.get("environment") or "eval")
 
 
 def _item_ref(bundle: Mapping[str, Any], index: int) -> str:
+    """Identify a stable reference for a bundle.
+    
+    Parameters:
+    	bundle (Mapping[str, Any]): Bundle data containing a possible identifier.
+    	index (int): Position used to generate a fallback reference.
+    
+    Returns:
+    	str: The first recognised non-empty bundle identifier, or an indexed fallback.
+    """
     for key in ("id", "case_id", "bundle_id", "final_message_sha256"):
         value = bundle.get(key)
         if isinstance(value, str) and value.strip():
@@ -176,6 +239,14 @@ def _item_ref(bundle: Mapping[str, Any], index: int) -> str:
 def _normalize_layer_a(
     layer_a_objects: LayerAObjects | Mapping[str, Any] | Sequence[Mapping[str, Any]] | None,
 ) -> LayerAObjects:
+    """Normalise Layer-A input into a LayerAObjects container.
+    
+    Parameters:
+    	layer_a_objects: Layer-A data supplied as an existing container, mapping, sequence of bundle mappings, or None.
+    
+    Returns:
+    	The normalised LayerAObjects container.
+    """
     if layer_a_objects is None:
         return LayerAObjects()
     if isinstance(layer_a_objects, LayerAObjects):
@@ -205,22 +276,27 @@ def build_export_plan(
     enqueue: bool = True,
     include_train: bool | None = None,
 ) -> ExportPlanResult:
-    """Compose Layer-A evidence into durable export queue rows (E8 / P0-5).
-
+    """
+    Compose Layer-A evidence into redacted, projected export batches and optionally enqueue them.
+    
     Parameters:
-        layer_a_objects: bundles (+ optional session threads) to project.
-        config: resolved ``git_cg_opik_config_v1`` (or compatible mapping).
-        repo_root: queue/payload root (defaults to repo discovery on enqueue).
-        git_sha: optional pin; unresolved + ``network_export`` fails closed.
-        dataset_id / project_lane / lane / catalog_version: experiment identity.
-        when: optional clock for experiment naming.
-        network_export: enforce resolved git SHA before enqueue (P1-12).
-        enqueue: when ``False``, build batches only (no payload/queue writes).
-        include_train: override train projection; default from layer-a envelope.
-
+        layer_a_objects: Layer-A bundles and optional session threads to project.
+        config: Export configuration mapping.
+        repo_root: Repository root used for queue persistence.
+        git_sha: Git revision associated with the export.
+        dataset_id: Dataset identifier for experiment metadata.
+        project_lane: Project lane for experiment metadata.
+        lane: Export lane for experiment metadata.
+        catalog_version: Catalogue version for experiment metadata.
+        when: Timestamp used for experiment naming.
+        network_export: Whether network-export Git revision requirements apply.
+        enqueue: Whether to persist the constructed batches.
+        include_train: Override the input's train-projection setting.
+    
     Returns:
-        :class:`ExportPlanResult` with queue row refs / health. Never blocks
-        product accept.
+        An export plan containing projection counts, batch metadata, queue references,
+        health, errors, notes, and optional train data. Product acceptance is never
+        blocked by export failures.
     """
     cfg = _as_config(config)
     mode = str(cfg.get("mode") or "off")

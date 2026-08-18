@@ -231,6 +231,14 @@ class TestOpikSdkTransport:
                 seen["trace"] = kwargs
 
             def flush(self, timeout: int | None = None) -> bool:
+                """Flushes pending transport data within the specified timeout.
+                
+                Parameters:
+                	timeout (int | None): Maximum wait time in milliseconds, or `None` to use the default.
+                
+                Returns:
+                	`True` when the flush completes successfully.
+                """
                 seen["flush_timeout"] = timeout
                 return True
 
@@ -290,6 +298,14 @@ class TestOpikSdkTransport:
                 return None
 
             def flush(self, timeout: int | None = None) -> bool:
+                """Flush pending exports within the specified timeout.
+                
+                Parameters:
+                	timeout (int | None): Maximum wait time in milliseconds, or ``None`` to use the default.
+                
+                Returns:
+                	``True`` if all pending exports are flushed successfully, ``False`` otherwise.
+                """
                 return False
 
         class FakeModule:
@@ -317,6 +333,14 @@ class TestOpikSdkTransport:
 
             def flush(self, timeout: int | None = None) -> bool:
                 # Simulate wall-clock overrun relative to outer deadline.
+                """Simulate flushing pending transport data.
+                
+                Parameters:
+                	timeout (int | None): Optional timeout in milliseconds.
+                
+                Returns:
+                	bool: `True` when the flush completes.
+                """
                 time.sleep(0.05)
                 return True
 
@@ -329,9 +353,18 @@ class TestOpikSdkTransport:
         offset = {"seconds": 0.0}
 
         def fake_monotonic() -> float:
+            """Return a monotonic timestamp adjusted by the configured offset."""
             return real_monotonic() + offset["seconds"]
 
         def slow_flush(self: object, timeout: int | None = None) -> bool:
+            """Simulate a flush that takes longer than the configured deadline.
+            
+            Parameters:
+            	timeout (int | None): Optional timeout limit for the flush.
+            
+            Returns:
+            	bool: `True` after recording a ten-second flush duration.
+            """
             offset["seconds"] = 10.0
             return True
 
@@ -361,6 +394,14 @@ class TestExportBatchTransportProjection:
                 seen.append(dict(kwargs))
 
             def flush(self, timeout: int | None = None) -> bool:
+                """Flush pending transport data within the optional timeout.
+                
+                Parameters:
+                	timeout (int | None): Maximum time to wait, in milliseconds.
+                
+                Returns:
+                	bool: `True` when the flush completes successfully.
+                """
                 return True
 
         class FakeModule:
@@ -474,6 +515,16 @@ class TestE5ImportIsolation:
             parent_map = parents
 
             def _owner_name(node: ast.AST, *, _parents: dict[ast.AST, ast.AST] = parent_map) -> str:
+                """
+                Build the dotted owner name for an AST node.
+                
+                Parameters:
+                	node (ast.AST): The AST node whose enclosing functions and classes are identified.
+                	_parents (dict[ast.AST, ast.AST]): Mapping of each node to its parent node.
+                
+                Returns:
+                	str: The dotted enclosing owner name, or "<module>" when the node is not inside a function or class.
+                """
                 parts: list[str] = []
                 cur: ast.AST | None = node
                 while cur is not None:

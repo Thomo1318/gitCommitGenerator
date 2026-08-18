@@ -78,7 +78,16 @@ def encode_fixture_cmd(
         help="Suite id to resolve --id against (default: cm-eval-fixtures-core).",
     ),
 ) -> None:
-    """Encode a fixture into an ape_bundle_v1 and print its identity summary."""
+    """Encode a fixture as an ``ape_bundle_v1`` and print its identity summary.
+    
+    Parameters:
+        path (Path | None): Fixture JSON file to encode.
+        fixture_id (str | None): Case identifier used to resolve a known fixture.
+        suite_id (str | None): Suite identifier used when resolving ``fixture_id``.
+    
+    Raises:
+        typer.Exit: If the input options are invalid, the fixture cannot be loaded or encoded, or the case cannot be resolved.
+    """
     from git_cg.eval.corpus.encoder import encode_fixture
     from git_cg.eval.corpus.fixtures import (
         FixtureLoadError,
@@ -146,11 +155,15 @@ def encode_fixture_cmd(
 def config_cmd(
     action: str = typer.Argument(..., help="Subcommand: show"),
 ) -> None:
-    """Inspect resolved Opik/mirror config (secret-safe).
-
-    Currently supports ``show`` only (E2 / §10.6 law 5). Never prints secret
-    values — only masked ``•••[len=N]`` forms when a key is present in the
-    ambient environment (never loaded into the config record itself).
+    """
+    Display the resolved Opik and mirror configuration without exposing secret values.
+    
+    Parameters:
+    	action (str): Configuration action; only ``"show"`` is supported.
+    
+    Raises:
+    	typer.Exit: Exits with code 2 for an unsupported action or invalid
+    		configuration, and code 0 after displaying valid configuration.
     """
     if action != "show":
         typer.echo(f"config: unknown action {action!r} (supported: show)", err=True)
@@ -228,12 +241,21 @@ eval_app.add_typer(export_app, name="export")
 
 
 def _resolve_repo(root: Path | None) -> Path:
+    """Resolve the repository root from an explicit path or repository discovery."""
     from git_cg.eval.binding.paths import resolve_repo_root
 
     return root if root is not None else resolve_repo_root()
 
 
 def _queue_status_counts(repo: Path) -> dict[str, int]:
+    """Count queued export items by status for a repository.
+    
+    Parameters:
+    	repo (Path): Repository root containing the export queue.
+    
+    Returns:
+    	dict[str, int]: Counts grouped by queue status, including unreadable items.
+    """
     from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
 
     qdir = export_queue_dir(repo)
@@ -251,6 +273,7 @@ def _queue_status_counts(repo: Path) -> dict[str, int]:
 
 
 def _emit_status(repo: Path) -> None:
+    """Display export queue status counts for a repository."""
     from git_cg.eval.mirror.queue import export_queue_dir
 
     qdir = export_queue_dir(repo)
@@ -275,7 +298,13 @@ def export_status_cmd(
         resolve_path=True,
     ),
 ) -> None:
-    """Show the Layer-A export queue status (read-only, offline)."""
+    """
+    Display the export queue status for a repository without modifying files or contacting external services.
+    
+    Parameters:
+    	root (Path | None): Repository root to inspect; defaults to repository discovery.
+    
+    """
     from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
 
     # E12: operator status surfaces invalid mode as config_error before queue counts.
@@ -328,12 +357,12 @@ def export_retry_cmd(
         help="Cap on failed rows re-queued this invocation.",
     ),
 ) -> None:
-    """Re-queue failed export rows for another drain attempt (P1-4 / P1-11).
-
-    Default policy: reclaim rows whose last_error_class is retryable
-    (``export_network`` / ``export_timeout`` / empty). Validation/auth/size
-    failures require ``--force``. Transitions ``failed → pending`` so the next
-    ``export drain`` can claim them. Never blocks product accept.
+    """Requeues eligible failed export items for a subsequent drain attempt.
+    
+    Parameters:
+    	queue_id (str | None): A specific failed queue item to retry; when omitted, considers all failed items.
+    	force (bool): Whether to include validation, authentication, and size failures.
+    	max_items (int | None): Maximum number of items to requeue.
     """
     from git_cg.eval.mirror.queue import (
         ExportQueueError,

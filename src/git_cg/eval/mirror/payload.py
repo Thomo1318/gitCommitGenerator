@@ -42,6 +42,7 @@ class ExportPayloadError(ValueError):
     """Payload artifact failure (``export_validation`` class; never product)."""
 
     def __init__(self, message: str, *, error_class: str = "export_validation") -> None:
+        """Create an export payload error with a message and error classification."""
         self.error_class = error_class
         super().__init__(message)
 
@@ -52,17 +53,38 @@ def export_payloads_dir(repo_root: Path) -> Path:
 
 
 def payload_ref_for_sha(sha256: str) -> str:
-    """Stable ``payload_ref`` string for a content hash."""
+    """
+    Formats a SHA-256 digest as an export payload reference.
+    
+    Parameters:
+        sha256 (str): A lowercase 64-character SHA-256 digest.
+    
+    Returns:
+        str: The digest prefixed with ``sha256:``.
+    """
     _assert_sha256(sha256)
     return f"sha256:{sha256}"
 
 
 def _assert_sha256(value: str) -> None:
+    """Validate that a value is a lowercase hexadecimal SHA-256 digest.
+    
+    Raises:
+        ExportPayloadError: If the value is not a 64-character lowercase hexadecimal digest.
+    """
     if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
         raise ExportPayloadError(f"invalid payload sha256: {value!r}")
 
 
 def _sha_from_ref(payload_ref: str) -> str:
+    """Extract and validate the SHA-256 digest from a payload reference.
+    
+    Parameters:
+    	payload_ref (str): Payload reference containing a SHA-256 digest.
+    
+    Returns:
+    	str: The validated SHA-256 digest.
+    """
     ref = str(payload_ref or "").strip()
     sha = ref.removeprefix("sha256:") if ref.startswith("sha256:") else ref
     _assert_sha256(sha)
@@ -70,6 +92,15 @@ def _sha_from_ref(payload_ref: str) -> str:
 
 
 def _artifact_path(repo_root: Path, sha256: str) -> Path:
+    """Return the filesystem path for an export payload artifact identified by its SHA-256 digest.
+    
+    Parameters:
+    	repo_root (Path): Repository root containing the export payload directory.
+    	sha256 (str): Lowercase 64-character SHA-256 digest.
+    
+    Returns:
+    	Path: Path to the corresponding JSON artifact.
+    """
     _assert_sha256(sha256)
     return export_payloads_dir(repo_root) / f"{sha256}.json"
 
@@ -80,7 +111,19 @@ def verify_payload_object(
     expected_sha256: str | None = None,
     expected_size: int | None = None,
 ) -> tuple[str, int]:
-    """Return ``(sha256, size_bytes)`` for the canonical form of ``payload``."""
+    """
+    Compute the SHA-256 digest and canonical byte size of a payload object.
+    
+    Parameters:
+        expected_sha256 (str | None): Optional digest that the payload must match.
+        expected_size (int | None): Optional canonical byte size that the payload must match.
+    
+    Returns:
+        tuple[str, int]: The payload's SHA-256 digest and canonical byte size.
+    
+    Raises:
+        ExportPayloadError: If the payload is not a JSON object or does not match an expected digest or size.
+    """
     if not isinstance(payload, dict):
         raise ExportPayloadError("payload artifact body must be a JSON object")
     raw = canonical_json_bytes(payload)
@@ -98,10 +141,15 @@ def persist_payload_artifact(
     *,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Persist an immutable content-addressed payload artifact.
-
-    Returns ``payload_ref``, ``payload_sha256``, ``payload_size_bytes``, and ``path``.
-    Re-writing identical logical content is idempotent.
+    """
+    Persist a payload as an immutable, content-addressed artifact.
+    
+    Parameters:
+        payload (dict[str, Any]): JSON object to persist.
+        repo_root (Path | None): Repository root containing the artifact directory.
+    
+    Returns:
+        dict[str, Any]: Payload reference, SHA-256 digest, canonical byte size, and artifact path.
     """
     if not isinstance(payload, dict):
         raise ExportPayloadError("payload artifact body must be a JSON object")
@@ -136,7 +184,17 @@ def load_payload_artifact(
     expected_sha256: str | None = None,
     expected_size: int | None = None,
 ) -> dict[str, Any]:
-    """Load and verify a payload artifact. Fail closed on missing/mismatch."""
+    """
+    Load and verify a content-addressed export payload artifact.
+    
+    Parameters:
+    	payload_ref (str): Reference identifying the payload artifact.
+    	expected_sha256 (str | None): Optional digest that must match the reference.
+    	expected_size (int | None): Optional canonical payload size that must match the artifact.
+    
+    Returns:
+    	dict[str, Any]: The verified payload object.
+    """
     root = repo_root if repo_root is not None else resolve_repo_root()
     sha = _sha_from_ref(payload_ref)
     if expected_sha256 is not None and sha != expected_sha256:

@@ -32,19 +32,28 @@ class OpikRuntimeSecrets:
     base_url: str | None
 
     def __repr__(self) -> str:  # never leak the key into repr/logs
+        """
+        Return a redacted representation of the runtime Opik secrets.
+        
+        Returns:
+        	str: A representation that omits the API key value.
+        """
         return "OpikRuntimeSecrets(api_key=<redacted>, workspace=..., base_url=...)"
 
 
 def resolve_opik_secrets(*, require_key: bool = True) -> OpikRuntimeSecrets:
-    """Resolve Opik runtime secrets via the product secret pathway.
-
+    """
+    Resolve the runtime credentials and connection details used to access Opik.
+    
     Parameters:
-        require_key: when True (default), a missing ``OPIK_API_KEY`` raises
-            :class:`MirrorSecretError` (``export_auth``). When False the key
-            may be empty (e.g. local no-auth Opik).
-
-    Returns an :class:`OpikRuntimeSecrets` holder. The caller must treat the
-    values as ephemeral: pass to the transport, never store.
+        require_key (bool): Whether an API key is required. When true, raises
+            MirrorSecretError if OPIK_API_KEY cannot be resolved.
+    
+    Returns:
+        OpikRuntimeSecrets: The resolved API key, workspace, and base URL.
+    
+    Raises:
+        MirrorSecretError: If require_key is true and OPIK_API_KEY is unavailable.
     """
     api_key = resolve_secret("OPIK_API_KEY", "")
     workspace = resolve_secret("OPIK_WORKSPACE", "") or None

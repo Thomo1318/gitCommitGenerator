@@ -329,6 +329,9 @@ def test_export_drain_dashed_alias_mode_off(monkeypatch: pytest.MonkeyPatch, tmp
 
 
 def _clear_project_envs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Remove project-related environment variables from the test environment.
+    """
     for key in (
         "GIT_CG_OPIK_PROJECT_LIVE",
         "GIT_CG_OPIK_PROJECT_EVAL",

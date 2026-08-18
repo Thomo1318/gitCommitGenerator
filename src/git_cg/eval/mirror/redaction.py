@@ -216,11 +216,15 @@ def _scrub_text(value: Any) -> tuple[Any, bool]:
 
 
 def _key_denied(key: str, profile: RedactionProfile) -> bool:
-    """Return True when a retained dict key is forbidden under ``profile``.
-
-    Always-denied tokens (secrets/auth/prompt/env/headers/cookies) are never
-    owner-relaxable. ``diff`` keys are denied on thin/default profiles and only
-    permitted on owner-body profiles (values still secret-scrubbed).
+    """
+    Determines whether a dictionary key must be excluded for an export profile.
+    
+    Parameters:
+        key (str): Dictionary key to evaluate.
+        profile (RedactionProfile): Export profile governing key retention.
+    
+    Returns:
+        bool: `true` if the key is denied, `false` if it may be retained.
     """
     lowered = key.lower().replace("-", "_")
     # Always-denied secret/auth/prompt surfaces — never owner-relaxable.
@@ -328,7 +332,18 @@ def _scrub_meta(
     quarantined: list[str],
     denied: list[str],
 ) -> dict[str, Any]:
-    """Typed meta allowlist + recursive scrub (P1-7)."""
+    """
+    Filter metadata to the profile's allowed fields and recursively redact retained values.
+    
+    Parameters:
+        meta (dict[str, Any]): Metadata to filter and scrub.
+        profile (RedactionProfile): Export profile governing allowed and denied keys.
+        quarantined (list[str]): List to receive paths whose values are omitted after scrubbing.
+        denied (list[str]): List to receive paths excluded by the metadata or key allowlists.
+    
+    Returns:
+        dict[str, Any]: A filtered and scrubbed metadata mapping.
+    """
     out: dict[str, Any] = {}
     for raw_key, child in meta.items():
         key = str(raw_key)
@@ -375,11 +390,12 @@ def _scrub_meta(
 
 
 def _promote_authority(out: dict[str, Any], meta: dict[str, Any]) -> None:
-    """Lift binder-layout authority from ``meta`` when top-level is empty (P0-5).
-
-    Projections read top-level ``gate`` / ``score_card`` / ``product_card``.
-    Accept-path binders currently nest ``score_card`` under ``meta``; promotion
-    keeps the export join honest without inventing values.
+    """
+    Promote non-empty authority fields from metadata to the top level when they are absent or empty.
+    
+    Parameters:
+    	out (dict[str, Any]): Export data to update.
+    	meta (dict[str, Any]): Metadata containing authority fields.
     """
     for key in ("gate", "score_card", "product_card"):
         if key in out and out[key] not in (None, {}, []):
@@ -393,23 +409,23 @@ def redact_bundle_for_export(
     bundle: dict[str, Any],
     profile: RedactionProfile | str,
 ) -> dict[str, Any]:
-    """Return a redacted copy of ``bundle`` under the R14 ``profile``.
-
-    The input is never mutated. The returned copy:
-
-    * retains only the profile's allowlisted top-level fields (incl. P0-5
-      authority surfaces on every export-capable profile);
-    * recursively scrubs every retained free-text string through betterleaks;
-    * applies a typed ``meta`` allowlist and denies ambient secret/prompt/diff
-      keys (P1-7);
-    * **quarantines** any field whose scrub fails safe — the field is removed
-      and its dotted path is appended to ``meta.redaction_quarantine`` so
-      operators can see that something was withheld (no silent ambient leak);
-    * stamps ``redaction_profile`` to the applied profile.
-
+    """Create a redacted export copy of a bundle for the specified profile.
+    
+    The input bundle is not mutated. Only profile-allowlisted fields are retained,
+    retained strings are recursively scrubbed, and fields that cannot be safely
+    scrubbed are omitted and recorded in the output metadata.
+    
+    Parameters:
+        bundle (dict[str, Any]): Bundle to redact.
+        profile (RedactionProfile | str): Export redaction profile to apply.
+    
+    Returns:
+        dict[str, Any]: Redacted bundle containing the applied profile and any
+            redaction bookkeeping.
+    
     Raises:
-        RedactionError: ``raw_dev_unsafe`` requested (never valid on export),
-            or an unknown profile token (fail closed).
+        RedactionError: If the profile is unknown or is
+            ``raw_dev_unsafe``.
     """
     try:
         prof = profile if isinstance(profile, RedactionProfile) else RedactionProfile(str(profile))

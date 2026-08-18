@@ -63,11 +63,17 @@ _PYPROJECT: Final[Path] = _REPO_ROOT / "pyproject.toml"
 
 
 def _slug(token: str) -> str:
+    """Create a filesystem-safe lowercase slug from a text token."""
     return _NAME_SAFE.sub("_", token.strip().lower()).strip("_") or "unknown"
 
 
 def _harness_version() -> str:
-    """Best-effort package version for ExperimentPins (null-safe)."""
+    """
+    Determine the package version used for experiment pins.
+    
+    Returns:
+    	str: The package version, or ``"0.0.0"`` when the version cannot be read or is unavailable.
+    """
     try:
         data = tomllib.loads(_PYPROJECT.read_text(encoding="utf-8"))
     except OSError, tomllib.TOMLDecodeError, AttributeError:
@@ -124,7 +130,18 @@ def build_experiment_pins(
     schema_pack: str | None = None,
     metric_catalog: str | None = None,
 ) -> ExperimentPins:
-    """Build a typed pin set; N/A fields are explicit ``None`` (P2-6)."""
+    """
+    Build the complete set of metadata pins for an experiment record.
+    
+    Parameters:
+    	lane (str): Evaluation lane associated with the experiment.
+    	catalog_version (str): Version of the metric catalogue used by the experiment.
+    	git_sha (str | None): Git commit identifier associated with the experiment.
+    	project_lane (str | None): Project-specific lane; defaults to the evaluation lane when omitted.
+    
+    Returns:
+    	ExperimentPins: Immutable pin set with explicit values for all supported fields.
+    """
     return ExperimentPins(
         harness_version=harness_version if harness_version is not None else _harness_version(),
         schema_pack=schema_pack if schema_pack is not None else schema_pack_pin(),
@@ -149,6 +166,13 @@ class ExportGitShaError(ValueError):
     """Unresolved git SHA refused on a network-export path (``export_validation``)."""
 
     def __init__(self, message: str, *, error_class: str = "export_validation") -> None:
+        """
+        Initialise an error raised when a Git SHA cannot be resolved for export.
+        
+        Parameters:
+        	message (str): Description of the export error.
+        	error_class (str): Classification of the error.
+        """
         self.error_class = error_class
         super().__init__(message)
 
@@ -165,12 +189,21 @@ def require_resolved_git_sha(
     repo_root: Any | None = None,
     network_export: bool = True,
 ) -> str:
-    """Return a resolved git SHA, or fail closed for network export (P1-12).
-
-    Local/offline diagnostics may still call :func:`resolve_git_sha` directly
-    and accept the zeroed sentinel. Any network-export path must call this
-    helper (or pass ``network_export=True`` at enqueue) so unresolved identity
-    never reaches the queue.
+    """
+    Ensure a Git SHA is suitable for the requested export context.
+    
+    Parameters:
+    	git_sha (str | None): Git SHA to validate, or ``None`` to resolve it from
+    		the repository.
+    	repo_root (Any | None): Repository location used when resolving the SHA.
+    	network_export (bool): Whether unresolved Git identity should be rejected.
+    
+    Returns:
+    	str: The supplied or resolved Git SHA.
+    
+    Raises:
+    	ExportGitShaError: If ``network_export`` is ``True`` and the Git SHA is
+    		unresolved.
     """
     sha = str(git_sha).strip() if git_sha is not None else resolve_git_sha(repo_root=repo_root)
     if network_export and is_unresolved_git_sha(sha):
@@ -182,7 +215,15 @@ def require_resolved_git_sha(
 
 
 def resolve_git_sha(repo_root: Any | None = None) -> str:
-    """Best-effort short git SHA; zeroed SHA when unresolvable (never raises)."""
+    """
+    Resolve the current repository's Git commit identifier.
+    
+    Parameters:
+    	repo_root (Any | None): Optional repository directory in which to resolve the commit.
+    
+    Returns:
+    	str: The abbreviated Git SHA, or a 40-zero sentinel when the SHA cannot be resolved.
+    """
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "--short=12", "HEAD"],
@@ -207,11 +248,18 @@ def _collision_suffix(
     stamp: str,
     content_key: str | None,
 ) -> str:
-    """Deterministic short suffix for same-second collisions (P2-5).
-
-    Only a full pure-hex content key may pass through (first 8 hex chars).
-    Stripping non-hex characters from arbitrary keys is forbidden — it can
-    map distinct JSON/pins materials onto the same suffix.
+    """
+    Create a deterministic eight-character suffix for experiment name collisions.
+    
+    Parameters:
+        lane (str): Experiment lane.
+        catalog_version (str): Metric catalog version.
+        git_sha (str): Git commit identifier.
+        stamp (str): Timestamp component of the experiment name.
+        content_key (str | None): Optional content key used to derive the suffix.
+    
+    Returns:
+        str: The first eight hexadecimal characters of the content key or derived hash.
     """
     if content_key:
         token = content_key.strip().lower()
@@ -240,12 +288,19 @@ def experiment_name(
     content_key: str | None = None,
     collide_guard: bool = False,
 ) -> str:
-    """Return ``eval_<lane>_<catalog_version>_<gitsha>_<utc>`` (+ optional suffix).
-
-    ``git_sha`` is used verbatim (it is already hex); only lane/catalog are
-    slugged. When ``collide_guard`` is true, append an 8-char deterministic
-    content suffix so two builds in the same UTC second do not share a name
-    (P2-5). :func:`build_experiment` enables the guard by default.
+    """
+    Constructs a deterministic experiment name from its lane, catalog version, Git SHA, and timestamp.
+    
+    Parameters:
+    	lane (str): Experiment lane included in the name.
+    	catalog_version (str): Catalog version included in the name.
+    	git_sha (str): Git commit identifier included in the name.
+    	when (datetime | None): Timestamp to include; uses the current UTC time when omitted.
+    	content_key (str | None): Content identity used to derive the collision suffix.
+    	collide_guard (bool): Whether to append a deterministic suffix for collision resistance.
+    
+    Returns:
+    	str: An experiment name in the form `eval_<lane>_<catalog_version>_<gitsha>_<utc>`, optionally with a collision suffix.
     """
     stamp = (when or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     base = f"eval_{_slug(lane)}_{_slug(catalog_version)}_{git_sha}_{stamp}"
@@ -276,13 +331,19 @@ def build_experiment(
     content_key: str | None = None,
     collide_guard: bool = True,
 ) -> dict[str, Any]:
-    """Build a schema-valid ``experiment_v1`` pin record.
-
-    ``git_sha`` defaults to the live repo HEAD (best-effort). When
-    ``network_export=True``, an unresolved SHA fails closed as
-    ``export_validation`` (P1-12) instead of baking the zeroed sentinel into
-    a network-bound identity. The record is validated against the frozen
-    schema before return (fail closed).
+    """
+    Build a schema-valid ``experiment_v1`` experiment record with complete pin metadata.
+    
+    Parameters:
+    	lane (str): Evaluation lane used in the experiment identity.
+    	catalog_version (str): Metric catalogue version to pin.
+    	git_sha (str | None): Git commit identifier; resolved from the repository when omitted.
+    	network_export (bool): Whether unresolved Git identities must be rejected.
+    	meta (dict[str, Any] | None): Additional metadata merged into the record.
+    	content_key (str | None): Key used to generate a deterministic collision suffix.
+    
+    Returns:
+    	dict[str, Any]: The validated ``experiment_v1`` record.
     """
     if git_sha is None:
         sha = require_resolved_git_sha(repo_root=repo_root, network_export=network_export)
