@@ -110,7 +110,7 @@ class TestDrainQueue:
         assert "export_network" in summary.error_classes
         assert load_queue_item(qid, repo_root=tmp_path)["status"] == "failed"
 
-    def test_secret_resolution_failure_marks_all_failed(self, tmp_path: Path) -> None:
+    def test_secret_resolution_failure_marks_all_failed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         _enqueue(tmp_path, "item_1", {"x": 1})
         _enqueue(tmp_path, "item_2", {"y": 2})
 
@@ -125,12 +125,8 @@ class TestDrainQueue:
 
             raise MirrorSecretError("no key")
 
-        monkeypatch = pytest.MonkeyPatch()
         monkeypatch.setattr(exporter_mod, "resolve_opik_secrets", boom)
-        try:
-            summary = drain_queue(CONFIG, transport=NoSecrets(), repo_root=tmp_path)  # type: ignore[arg-type]
-        finally:
-            monkeypatch.undo()
+        summary = drain_queue(CONFIG, transport=NoSecrets(), repo_root=tmp_path)  # type: ignore[arg-type]
 
         assert summary.failed == 2
         assert "export_auth" in summary.error_classes

@@ -6,7 +6,7 @@
 > **Proof command (offline):**
 >
 > ```bash
-> uv run pytest tests/eval/mirror tests/eval/test_eval_cli.py -q
+> uv run pytest tests/eval/mirror tests/eval/test_eval_cli.py -q --no-cov
 > ```
 
 This page is the **pass-2 offline matrix (E13)** mapped into the **S4-A…G claim-evidence table (P2-8)**.  
@@ -121,10 +121,11 @@ Implemented by `git_cg.eval.mirror.composition.build_export_plan` and covered in
 |:---|:---|
 | Proof command | `uv run pytest tests/eval/mirror tests/eval/test_eval_cli.py -q --no-cov` |
 | Result | **354 passed** in ~116s |
-| PR | [#236](https://github.com/Thomo1318/gitCommitGenerator/pull/236) @ `5645a0f` |
+| PR | [#236](https://github.com/Thomo1318/gitCommitGenerator/pull/236) @ `2209def` |
 | Issue | [#232](https://github.com/Thomo1318/gitCommitGenerator/issues/232) — implementation complete; merge closes issue only |
 | CodeRabbit | 40/40 threads resolved |
-| CI | all reported checks SUCCESS · mergeable |
+| Branch facts | `53` commits · `74` files · +10614 / −255 |
+| CI | **all reported checks SUCCESS** · mergeable=`MERGEABLE` · mergeStateStatus=`CLEAN` |
 
 ### Explicitly deferred (not blocking S4 close)
 
