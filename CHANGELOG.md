@@ -29,6 +29,158 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.20.0
+
+### Miscellaneous
+
+- 🧪 test(eval-mirror): align proof cmd and monkeypatch fixture (#232)
+- 🔧 chore(coverage): measure retired compile_opik_dataset under scripts/ (#232)
+- 📝 docs(llms): auto-update llms.txt
+- 📝 Add docstrings to `evals/232-non-blocking-opik-mirror-owner-corpus-lake`
+- Merge pull request #236 from Thomo1318/evals/232-non-blocking-opik-mirror-owner-corpus-lake
+
+### Changed
+
+- 🔒️ fix(eval-mirror): R14 redaction ladder with scrub quarantine (#217)
+- ✨ feat(eval-mirror): durable queue rows with claim/lease recovery (#232)
+- ✨ feat(eval-mirror): freeze export_batch_v1 envelope + wire size law (#232)
+- ✨ feat(eval-mirror): export_batch_v1 builder + Layer-A export queue (#217)
+- ✨ feat(eval-mirror): add git_cg_opik_config_v1 resolution (#217)
+- 🦺 fix(eval-mirror): preserve multi-item traces and generator notes (#232)
+- 🧪 test(eval-mirror): align proof cmd and monkeypatch fixture (#232)
+
+### Documentation
+
+- ✨ feat(eval-mirror): export Slice 3 batch/queue/payload surfaces (#232)
+- 🦺 fix(eval-mirror): close CodeRabbit doc/security/count findings (#232)
+- 📝 docs(eval-mirror): freeze S4 final verification matrix (#232)
+- 📝 docs(eval-mirror): restore contract-grade docstrings after CodeRabbit (#232)
+- 📝 docs(eval-mirror): publish S4 claim-evidence matrix (#232)
+- 📝 docs(eval-mirror): mark compile_opik_dataset absorption complete (#232)
+- 📝 docs(eval-mirror): document S4 mirror bounds and Q18 train law (#232)
+
+### Tests
+
+- 🔒️ fix(eval-mirror): R14 redaction ladder with scrub quarantine (#217)
+- ✨ feat(eval-mirror): add nested export queue operations (#232)
+- ✨ feat(eval-mirror): add fail-open build_export_plan join (#232)
+- ✨ feat(eval-mirror): harden authoritative score projections (#232)
+- ✨ feat(eval-mirror): Q18 single-dataset owner train projection (#232)
+- ✨ feat(eval-mirror): typed ExperimentPins + same-second name guard (#232)
+- ✨ feat(eval-mirror): drain claimed rows via verified payload artifacts (#232)
+- ✨ feat(eval-mirror): durable queue rows with claim/lease recovery (#232)
+- ✨ feat(eval-mirror): freeze export_batch_v1 envelope + wire size law (#232)
+- ✨ feat(eval-mirror): add content-addressed export payload store (#232)
+- ✨ feat(eval-mirror): recursive R14 scrub + authority surface retain (#232)
+- ✨ feat(eval-mirror): gate owner R14 profiles behind export pin (#232)
+- ✨ feat(eval-mirror): re-freeze git_cg_opik_config_v1 + lane resolution (#232)
+- ✨ feat(eval): add export queue drain CLI (#217)
+- ✨ feat(eval-mirror): project bundle, session twin, score card to Opik (#217)
+- ✨ feat(eval-mirror): experiment_v1 naming + full pin set (#217)
+- ✨ feat(eval-mirror): transport protocol, lazy Opik SDK, error classes (#217)
+- ✨ feat(eval-mirror): add mirror runtime secret resolution (#217)
+- ✨ feat(eval-mirror): export_batch_v1 builder + Layer-A export queue (#217)
+- ✨ feat(eval-mirror): add git_cg_opik_config_v1 resolution (#217)
+- 🦺 fix(eval-mirror): close CodeRabbit doc/security/count findings (#232)
+- 🦺 fix(ci): install betterleaks for live redaction scrub health (#232)
+- 🦺 fix(eval-mirror): honest drain marks and safe train overlap checks (#232)
+- 🦺 fix(eval-mirror): retain train labels and source-first session join (#232)
+- 🦺 fix(eval-mirror): keep TLS default on unknown boolean env tokens (#232)
+- 🦺 fix(eval-mirror): hash non-hex experiment collision suffixes (#232)
+- 🦺 fix(eval-mirror): never reset live queue rows on re-enqueue (#232)
+- 🦺 fix(eval-mirror): project export_batch envelopes onto Opik traces (#232)
+- 🦺 fix(eval-mirror): surface invalid OPIK mode as config_error (#232)
+- 🦺 fix(eval-mirror): retire compile_opik_dataset live upload path (#232)
+- 🦺 fix(eval-mirror): classify transport and bound secret-safe flush (#232)
+- 🦺 fix(eval-mirror): refuse unresolved git SHA on network export (#232)
+- 🦺 fix(eval-mirror): drop invented self_hosted_noauth key bypass (#232)
+- 🦺 fix(eval-mirror): repair invalid except syntax in resolve_git_sha (#232)
+- ✅ test(eval-mirror): harden path restore and thread asserts (#232)
+- ✅ test(eval-cli): lock config/export status/retry/drain branch contracts (#232)
+- ✅ test(eval-mirror): close PR patch gaps across S4 library modules (#232)
+- ✅ test(eval-mirror): cover retired compile script via importable path (#232)
+- ✅ test(eval): rematerialize schema_pack pin after payload_ref freeze (#232)
+- ✅ test(eval-mirror): prove redact→drain composition and fail-open (#232)
+- ✅ test(eval): rematerialize schema_pack pin after export schema freeze (#232)
+- ✅ test(eval): rematerialize schema_pack pin after opik_config freeze (#232)
+- 📝 docs(eval-mirror): restore contract-grade docstrings after CodeRabbit (#232)
+
+### Fixed
+
+- ✨ feat(eval-mirror): add nested export queue operations (#232)
+- ✨ feat(eval-mirror): add fail-open build_export_plan join (#232)
+- ✨ feat(eval-mirror): harden authoritative score projections (#232)
+- ✨ feat(eval-mirror): Q18 single-dataset owner train projection (#232)
+- ✨ feat(eval-mirror): typed ExperimentPins + same-second name guard (#232)
+- ✨ feat(eval-mirror): drain claimed rows via verified payload artifacts (#232)
+- ✨ feat(eval-mirror): durable queue rows with claim/lease recovery (#232)
+- ✨ feat(eval-mirror): freeze export_batch_v1 envelope + wire size law (#232)
+- ✨ feat(eval-mirror): add content-addressed export payload store (#232)
+- ✨ feat(eval-mirror): recursive R14 scrub + authority surface retain (#232)
+- ✨ feat(eval-mirror): gate owner R14 profiles behind export pin (#232)
+- ✨ feat(eval-mirror): re-freeze git_cg_opik_config_v1 + lane resolution (#232)
+- ✨ feat(eval-mirror): add MirrorResult dual-axis result channel (#232)
+- ✨ feat(eval): add export queue drain CLI (#217)
+- ✨ feat(eval-mirror): project bundle, session twin, score card to Opik (#217)
+- ✨ feat(eval-mirror): experiment_v1 naming + full pin set (#217)
+- ✨ feat(eval-mirror): transport protocol, lazy Opik SDK, error classes (#217)
+- ✨ feat(eval-mirror): add mirror runtime secret resolution (#217)
+- 🦺 fix(eval-mirror): close CodeRabbit doc/security/count findings (#232)
+- 🦺 fix(eval-mirror): preserve multi-item traces and generator notes (#232)
+- 🦺 fix(ci): install betterleaks for live redaction scrub health (#232)
+- 🦺 fix(eval-mirror): honest drain marks and safe train overlap checks (#232)
+- 🦺 fix(eval-mirror): retain train labels and source-first session join (#232)
+- 🦺 fix(eval-mirror): keep TLS default on unknown boolean env tokens (#232)
+- 🦺 fix(eval-mirror): hash non-hex experiment collision suffixes (#232)
+- 🦺 fix(eval-mirror): never reset live queue rows on re-enqueue (#232)
+- 🦺 fix(eval-mirror): project export_batch envelopes onto Opik traces (#232)
+- 🦺 fix(eval-mirror): surface invalid OPIK mode as config_error (#232)
+- 🦺 fix(eval-mirror): retire compile_opik_dataset live upload path (#232)
+- 🦺 fix(eval-mirror): classify transport and bound secret-safe flush (#232)
+- 🦺 fix(eval-mirror): refuse unresolved git SHA on network export (#232)
+- 🦺 fix(eval-mirror): drop invented self_hosted_noauth key bypass (#232)
+- 🦺 fix(eval-mirror): repair invalid except syntax in resolve_git_sha (#232)
+- ✅ test(eval): rematerialize schema_pack pin after payload_ref freeze (#232)
+
+### Security
+
+- 🔒️ fix(eval-mirror): R14 redaction ladder with scrub quarantine (#217)
+- ✨ feat(eval-mirror): recursive R14 scrub + authority surface retain (#232)
+- ✨ feat(eval-mirror): gate owner R14 profiles behind export pin (#232)
+- ✨ feat(eval-mirror): re-freeze git_cg_opik_config_v1 + lane resolution (#232)
+- 🦺 fix(ci): install betterleaks for live redaction scrub health (#232)
+- 🦺 fix(eval-mirror): keep TLS default on unknown boolean env tokens (#232)
+- 🦺 fix(eval-mirror): retire compile_opik_dataset live upload path (#232)
+- 🦺 fix(eval-mirror): classify transport and bound secret-safe flush (#232)
+- 🦺 fix(eval-mirror): drop invented self_hosted_noauth key bypass (#232)
+
+### Added
+
+- ✨ feat(eval-mirror): add nested export queue operations (#232)
+- ✨ feat(eval-mirror): add fail-open build_export_plan join (#232)
+- ✨ feat(eval-mirror): harden authoritative score projections (#232)
+- ✨ feat(eval-mirror): Q18 single-dataset owner train projection (#232)
+- ✨ feat(eval-mirror): typed ExperimentPins + same-second name guard (#232)
+- ✨ feat(eval-mirror): export Slice 3 batch/queue/payload surfaces (#232)
+- ✨ feat(eval-mirror): drain claimed rows via verified payload artifacts (#232)
+- ✨ feat(eval-mirror): durable queue rows with claim/lease recovery (#232)
+- ✨ feat(eval-mirror): freeze export_batch_v1 envelope + wire size law (#232)
+- ✨ feat(eval-mirror): add content-addressed export payload store (#232)
+- ✨ feat(eval-mirror): recursive R14 scrub + authority surface retain (#232)
+- ✨ feat(eval-mirror): gate owner R14 profiles behind export pin (#232)
+- ✨ feat(eval-mirror): re-freeze git_cg_opik_config_v1 + lane resolution (#232)
+- ✨ feat(eval-mirror): add MirrorResult dual-axis result channel (#232)
+- ✨ feat(eval-mirror): add closed ExportHealth §18.7 vocabulary (#232)
+- ✨ feat(eval): add export queue drain CLI (#217)
+- ✨ feat(eval-mirror): project bundle, session twin, score card to Opik (#217)
+- ✨ feat(eval-mirror): experiment_v1 naming + full pin set (#217)
+- ✨ feat(eval-mirror): transport protocol, lazy Opik SDK, error classes (#217)
+- ✨ feat(eval-mirror): add mirror runtime secret resolution (#217)
+- ✨ feat(eval-mirror): export_batch_v1 builder + Layer-A export queue (#217)
+- ✨ feat(eval-mirror): add git_cg_opik_config_v1 resolution (#217)
+- 🦺 fix(eval-mirror): classify transport and bound secret-safe flush (#232)
+- 🦺 fix(eval-mirror): refuse unresolved git SHA on network export (#232)
+
 ## v0.19.0
 
 ### Added
