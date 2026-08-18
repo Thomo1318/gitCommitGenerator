@@ -114,3 +114,24 @@ Implemented by `git_cg.eval.mirror.composition.build_export_plan` and covered in
 * Live network dogfood against Opik Cloud (operator-only)
 * Full `git-cg eval opik doctor` polish (S6)
 * Richer train packaging beyond minimal +/- projection
+
+## Final verification (2026-08-18)
+
+| Gate | Result |
+|:---|:---|
+| Proof command | `uv run pytest tests/eval/mirror tests/eval/test_eval_cli.py -q --no-cov` |
+| Result | **354 passed** in ~116s |
+| PR | [#236](https://github.com/Thomo1318/gitCommitGenerator/pull/236) @ `5645a0f` |
+| Issue | [#232](https://github.com/Thomo1318/gitCommitGenerator/issues/232) — implementation complete; merge closes issue only |
+| CodeRabbit | 40/40 threads resolved |
+| CI | all reported checks SUCCESS · mergeable |
+
+### Explicitly deferred (not blocking S4 close)
+
+* S5 Lane C′ / GEval → [#233](https://github.com/Thomo1318/gitCommitGenerator/issues/233)
+* S6 doctor / amend-brief / review UX
+* S7 ADR rewrite
+* Live Opik dogfood drain demo (operator-only)
+* Richer train packaging / broader legacy script flag absorption → [#235](https://github.com/Thomo1318/gitCommitGenerator/issues/235)
+* Parent board mark-done on [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217) after merge
+
