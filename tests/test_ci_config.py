@@ -242,6 +242,39 @@ class TestCiWorkflowCodecovStep:
         assert "Validate codecov.yml" in names
         assert names.index("Validate codecov.yml") < names.index("Run Tests with Coverage")
 
+    def _test_job_steps(self) -> list:
+        """Return the steps configured for the test-and-coverage job."""
+        return self._workflow()["jobs"]["test-and-coverage"]["steps"]
+
+    def test_test_job_installs_betterleaks_via_mise(self):
+        """test-and-coverage must install betterleaks so live redaction probes work in CI."""
+        step = next(s for s in self._test_job_steps() if s.get("name") == "Install betterleaks via mise")
+        uses = step["uses"]
+        assert uses.startswith("jdx/mise-action@")
+        ref = uses.split("@", 1)[1]
+        assert len(ref) == 40 and all(c in "0123456789abcdef" for c in ref), (
+            f"Install betterleaks via mise must be pinned to a full commit SHA, got {uses!r}"
+        )
+        assert step["with"]["install"] is True
+        assert step["with"]["cache"] is True
+        assert step["with"]["install_args"] == "betterleaks"
+
+    def test_test_job_betterleaks_install_before_pytest(self):
+        """betterleaks must be on PATH before Run Tests with Coverage."""
+        names = [s.get("name") for s in self._test_job_steps()]
+        assert "Install betterleaks via mise" in names
+        assert names.index("Install betterleaks via mise") < names.index("Run Tests with Coverage")
+        # Checkout first; uv/python can follow or precede the tool install, but
+        # the redaction binary must exist before pytest launches.
+        assert names.index("Checkout repository") < names.index("Install betterleaks via mise")
+
+    def test_test_job_and_lint_share_mise_action_pin(self):
+        """Lint and test jobs must use the same SHA-pinned mise-action."""
+        lint_steps = self._workflow()["jobs"]["lint"]["steps"]
+        lint_step = next(s for s in lint_steps if s.get("name") == "Install mise tools")
+        test_step = next(s for s in self._test_job_steps() if s.get("name") == "Install betterleaks via mise")
+        assert lint_step["uses"] == test_step["uses"]
+
 
 # ===========================================================================
 # .github/workflows/docs.yml - Build site step

@@ -140,16 +140,33 @@
   "$id": "https://git-cg.local/schemas/eval/export_batch_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Export batch envelope. Default batch ceiling ≤4MB unless owner raises. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Export batch envelope (plan \u00a77.2.10). Wire contract for a size-bounded, idempotent projection batch. Distinct from the queue ops row and the content-addressed payload artifact. Default ceiling \u22644MB unless owner raises. Failure NEVER flips gate.deterministic_pass.",
   "properties": {
     "batch_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "error_class": {
+      "enum": [
+        "export_network",
+        "export_auth",
+        "export_validation",
+        "export_size"
+      ],
+      "type": "string"
+    },
+    "experiment_id": {
       "$ref": "#/$defs/non_empty_string"
     },
     "id": {
       "$ref": "#/$defs/non_empty_string"
     },
-    "item_ids": {
+    "idempotency_key": {
+      "$ref": "#/$defs/sha256"
+    },
+    "item_refs": {
+      "description": "Stable refs for Layer-A items included in this batch",
       "items": {
+        "minLength": 1,
         "type": "string"
       },
       "type": "array"
@@ -168,6 +185,21 @@
     "notes": {
       "type": "string"
     },
+    "payload_ref": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "payload_size_bytes": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "project": {
+      "$ref": "#/$defs/non_empty_string",
+      "description": "Pinned project/lane \u2014 no Default Project dump"
+    },
     "redaction_profile": {
       "allOf": [
         {
@@ -185,12 +217,33 @@
     },
     "schema_version": {
       "const": "export_batch_v1"
+    },
+    "size_bytes": {
+      "description": "Canonical post-envelope wire size (bytes)",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "status": {
+      "description": "ExportStatus (envelope) \u2014 distinct from QueueStatus",
+      "enum": [
+        "pending",
+        "ok",
+        "failed",
+        "skipped"
+      ],
+      "type": "string"
     }
   },
   "required": [
     "schema_version",
     "id",
     "batch_id",
+    "project",
+    "experiment_id",
+    "item_refs",
+    "idempotency_key",
+    "size_bytes",
+    "status",
     "redaction_profile"
   ],
   "title": "export_batch_v1",

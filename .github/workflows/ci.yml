@@ -116,6 +116,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # betterleaks is mandatory for live redaction probes and mirror scrub health.
+      # Install only that tool (not the full mise toolset) so test runtime can invoke
+      # `redact_payload` without mass-quarantining under the omission fail-safe.
+      - name: Install betterleaks via mise
+        # jdx/mise-action@v4.2.1 — same pin as lint; install_args limits to betterleaks.
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
+        with:
+          install: true
+          cache: true
+          install_args: betterleaks
+
       - name: Install uv
         # astral-sh/setup-uv@v9.0.0
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0

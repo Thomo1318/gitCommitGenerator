@@ -385,6 +385,7 @@ current S0 pin identities for review/CI drift detection.
 | **S0** | Scoring runtime, Opik network client, accept-path binder |
 | **S2a–S2c** | Lane C judges, accept-path binding (S3), Opik upload (S4), S5–S7 |
 | **S3** | Opik mirror/upload + corpus lake (S4), Lane C′ judges (S5), eval CLI/doctor/amend-brief (S6), ADR rewrite (S7) |
+| **S4** | Lane C′ judges (S5), full eval doctor/amend-brief/review queue UX (S6), ADR rewrite (S7) |
 
 Basic `git-cg` users do **not** need Opik installed.
 
@@ -430,3 +431,109 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 ### Boundary
 
 S3 **emits and binds local evidence only.** It does **not** upload to Opik / drain export queues (S4), run Lane C′/GEval judges (S5), provide the full eval CLI/doctor/amend-brief/review queue (S6), or rewrite ADR-0011 (S7).
+
+## S4 — non-blocking Opik mirror + owner corpus lake
+
+> **Implementation issue:** [#232](https://github.com/Thomo1318/gitCommitGenerator/issues/232)
+> **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
+> **Package:** `src/git_cg/eval/mirror/**`
+
+S4 projects **precomputed local Layer-A evidence** into Opik for operator compare and an optional **owner training / longitudinal corpus lake**. Opik is never scoring authority, CI sole green, product acceptance authority, or golden source of truth.
+
+### Modes (`git_cg_opik_config_v1`)
+
+| Mode | Network | Secrets | Behaviour |
+|:---|:---|:---|:---|
+| `off` | no | no | Default. No enqueue/drain/network. |
+| `local_only` | no | no | Local queue/payload durability only. |
+| `mirror` | optional best-effort | runtime-resolved Opik key | Export failures are dual-axis eval health only. |
+| `strict_mirror` | optional best-effort | runtime-resolved Opik key | May fail an **evaluation job**, never product accept. |
+
+Legacy aliases still resolve: `local` → `local_only`, `dogfood` → `strict_mirror`. Invented tokens such as `self_hosted_noauth` are **not** supported modes and never make network auth optional.
+
+Unset/empty mode still defaults to **`off`** (capture-off). An **unknown mode token** also fails closed to `off` for capture safety, but operator surfaces (`git-cg eval config show`, `export status`, `export drain`, and `build_export_plan`) must report **`ExportHealth=config_error`** via `meta.mode_fallback` (**E12**) — never only a quiet ambient disable.
+
+### Explicit projects — no Default Project
+
+Export requires explicit project/lane/environment binding. Missing project/endpoint when export is requested fails as **export validation**, not product/gate failure. There is no silent Default Project dump path.
+
+### Dual-axis fail-open law
+
+| Axis | Export outage effect |
+|:---|:---|
+| **Product accept / Hybrid gate** | **Never blocked** (`product_accept_blocked=false`) |
+| **Evaluation / export health** | May record `export_network` / `export_auth` / `export_validation` / `export_size` |
+
+`gate.deterministic_pass` is local-precompute authority and is never flipped by mirror transport.
+
+### R14 redaction ladder on export
+
+Export always runs the R14 ladder. Default path is `default_scrub`. Owner-rich profiles (`private_message`, `train_rich`, `antipattern_vault`) require explicit owner export enablement and are blocked in CI ambient paths. `raw_dev_unsafe` cannot be selected by the default export path. Scrub failures quarantine/omit fields rather than ambient-leak.
+
+### Queue + transport
+
+```text
+.eval/
+  export_queue/     # durable queue rows (status/lease/retry)
+  export_payloads/  # content-addressed payload artifacts
+```
+
+* Batches are bounded (default **≤4MB** envelope), idempotent, and pin-bound.
+* Transport imports Opik **lazily** inside the upload call only (`src/git_cg/eval/mirror/transport.py`).
+* Installed SDK flush uses whole seconds; config remains `flush_timeout_ms` and is converted with ceiling + outer deadline.
+* Notes/errors are scrubbed (URLs, auth headers, secret-shaped tokens, path/query fragments).
+
+### Experiment naming + pins
+
+```text
+eval_<lane>_<catalog_version>_<gitsha>_<utc>[_suffix]
+```
+
+Records carry full pin metadata (`schema_pack`, `metric_catalog`, harness/catalog versions, environment/project/dataset, redaction profile, etc.). Unresolved git SHA is allowed for local diagnostics only; network export refuses unresolved SHA as `export_validation`.
+
+### Q18 decision (train-positive vs train-negative)
+
+**Decision:** one owner train dataset with explicit **`label` + `split` metadata** (not separate positive/negative datasets).
+
+| Rule | Contract |
+|:---|:---|
+| Dataset | `cm-eval-owner-train` (single lake id) |
+| Labels | closed `positive` \| `negative` |
+| Positive gold | only labeled positives; unlabeled excluded |
+| Negatives | never silent-merge into `positive_gold` |
+| Required metadata | `label`, `split` / `split_group_id`, `redaction_profile`, provenance/source |
+| Authority | `corpus_retention` only — **train lake ≠ CI sole green** |
+
+Helpers live in `git_cg.eval.mirror.train` (`build_train_projection`, `filter_positive_gold`, …).
+
+### Operator entrypoints (dev-only)
+
+```bash
+# secret-safe resolved config (+ E12 config_error on invalid mode)
+uv run git-cg eval config show
+
+# queue inspect / retry / drain (canonical nested form)
+uv run git-cg eval export status
+uv run git-cg eval export retry
+uv run git-cg eval export drain
+
+# temporary dashed aliases (one minor cycle)
+uv run git-cg eval export-status
+uv run git-cg eval export-drain
+```
+
+These are maintainer/export surfaces. Basic commit UX stays unchanged when capture/mirror are off.
+Invalid mode tokens surface `health=config_error` on config/status/drain (exit 2 for those operator commands only).
+
+### Offline proof matrix + claim evidence (E13 / P2-8)
+
+The pass-2 offline matrix and S4-A…G claim-evidence table live in [`docs/eval/s4-claim-evidence.md`](./s4-claim-evidence.md). Composition-path proof is required for merge/close — leaf projection tests alone are not sufficient.
+
+### Script absorption boundary
+
+`scripts/compile_opik_dataset.py` is a **retired pointer/wrapper** (S4 P2-3 / E6). It no longer imports Opik, no longer filters on `user_acceptance`, and no longer uploads. Live dataset push is only via the non-blocking mirror queue (`git-cg eval export status|retry|drain`). S4 library law lives under `src/git_cg/eval/mirror/**` (config, R14, batch/queue/payload, lazy transport, pins, projections, Q18 train safeguards). Layer-A local labels remain the SoT; popularity feedback is never a golden/promotion signal. Do not extend the retired script as product contract.
+
+### Boundary
+
+S4 **mirrors precomputed local evidence only.** It does **not** make Opik CI/golden SoT, run Lane C′/GEval judges (S5), land the full doctor/amend-brief/review-queue UX (S6), or rewrite ADR-0011 (S7).
+

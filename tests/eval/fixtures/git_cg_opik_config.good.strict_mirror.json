@@ -1,0 +1,16 @@
+{
+  "schema_version": "git_cg_opik_config_v1",
+  "id": "cfg-strict",
+  "mode": "strict_mirror",
+  "environment": "ci",
+  "projects": {
+    "live": "git-cg-live",
+    "eval": "git-cg-eval",
+    "ci": "git-cg-ci",
+    "import": "git-cg-import"
+  },
+  "redaction_profile": "public_ci",
+  "flush_timeout_ms": 3000,
+  "track_disable": false,
+  "check_tls_certificate": true
+}

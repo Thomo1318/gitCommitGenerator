@@ -140,10 +140,46 @@
   "$id": "https://git-cg.local/schemas/eval/export_queue_item_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Local Layer-A export queue row. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Local Layer-A export queue ops row under .eval/export_queue/. QueueStatus state machine is distinct from envelope ExportStatus (E7). Carries payload_ref + payload_sha256 + lease/retry metadata; never the transport body alone.",
   "properties": {
+    "attempt_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "batch_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "claimed_by": {
+      "type": "string"
+    },
+    "envelope_status": {
+      "description": "Mirrored ExportStatus from the batch envelope (not QueueStatus)",
+      "enum": [
+        "pending",
+        "ok",
+        "failed",
+        "skipped"
+      ],
+      "type": "string"
+    },
+    "experiment_id": {
+      "type": "string"
+    },
     "id": {
       "$ref": "#/$defs/non_empty_string"
+    },
+    "last_error_class": {
+      "enum": [
+        "export_network",
+        "export_auth",
+        "export_validation",
+        "export_size"
+      ],
+      "type": "string"
+    },
+    "lease_expires_at": {
+      "description": "UTC ISO-8601 lease expiry for sending rows",
+      "type": "string"
     },
     "meta": {
       "type": "object"
@@ -151,10 +187,24 @@
     "metric_catalog": {
       "$ref": "#/$defs/pin_ref"
     },
+    "next_retry_at": {
+      "type": "string"
+    },
     "notes": {
       "type": "string"
     },
     "payload_ref": {
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "payload_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "payload_size_bytes": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "project": {
       "type": "string"
     },
     "queue_id": {
@@ -194,7 +244,9 @@
     "id",
     "queue_id",
     "status",
-    "redaction_profile"
+    "redaction_profile",
+    "payload_ref",
+    "payload_sha256"
   ],
   "title": "export_queue_item_v1",
   "type": "object"

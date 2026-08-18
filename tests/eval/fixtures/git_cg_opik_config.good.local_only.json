@@ -1,0 +1,16 @@
+{
+  "schema_version": "git_cg_opik_config_v1",
+  "id": "cfg-local",
+  "mode": "local_only",
+  "environment": "development",
+  "projects": {
+    "live": "git-cg-live",
+    "eval": "git-cg-eval",
+    "ci": "git-cg-ci",
+    "import": "git-cg-import"
+  },
+  "redaction_profile": "default_scrub",
+  "flush_timeout_ms": 5000,
+  "track_disable": true,
+  "check_tls_certificate": true
+}

@@ -75,6 +75,28 @@
       "minLength": 1,
       "type": "string"
     },
+    "opik_environment": {
+      "description": "Closed git_cg_opik_config_v1 environment vocabulary (plan §7.2.14)",
+      "enum": [
+        "development",
+        "dogfood",
+        "ci",
+        "eval",
+        "staging",
+        "production"
+      ],
+      "type": "string"
+    },
+    "opik_mode": {
+      "description": "Closed git_cg_opik_config_v1 mode vocabulary (plan §7.2.14 / §10.6)",
+      "enum": [
+        "off",
+        "local_only",
+        "mirror",
+        "strict_mirror"
+      ],
+      "type": "string"
+    },
     "pin_ref": {
       "pattern": "^[a-z0-9_]+_v[0-9]+@[a-f0-9]{64}$",
       "type": "string"
@@ -86,6 +108,31 @@
         "pass_fail"
       ],
       "type": "string"
+    },
+    "project_lanes": {
+      "additionalProperties": false,
+      "description": "Pinned Opik project lanes — no silent Default Project (INT-11 / FIND-022)",
+      "properties": {
+        "ci": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "eval": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "import": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "live": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      },
+      "required": [
+        "live",
+        "eval",
+        "ci",
+        "import"
+      ],
+      "type": "object"
     },
     "provenance_label": {
       "enum": [
@@ -140,8 +187,43 @@
   "$id": "https://git-cg.local/schemas/eval/git_cg_opik_config_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Mode/project/env/flush config. Must not require Default Project fallthrough. S0 stub: identifiers + closed enums + representative required fields.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "local_only",
+              "mirror",
+              "strict_mirror"
+            ]
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "projects"
+        ]
+      }
+    }
+  ],
+  "description": "Mode/project/environment/flush config (plan §7.2.14). Must not require Default Project fallthrough. Secrets never stored here.",
   "properties": {
+    "check_tls_certificate": {
+      "type": "boolean"
+    },
+    "config_path": {
+      "type": "string"
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "environment": {
+      "$ref": "#/$defs/opik_environment"
+    },
     "flush_timeout_ms": {
       "minimum": 1,
       "type": "integer"
@@ -156,59 +238,49 @@
       "$ref": "#/$defs/pin_ref"
     },
     "mode": {
-      "enum": [
-        "off",
-        "local",
-        "mirror",
-        "dogfood"
-      ],
-      "type": "string"
+      "$ref": "#/$defs/opik_mode"
     },
     "notes": {
       "type": "string"
     },
-    "project_name": {
-      "$ref": "#/$defs/non_empty_string"
+    "projects": {
+      "$ref": "#/$defs/project_lanes"
     },
     "redaction_profile": {
-      "$ref": "#/$defs/redaction_profile"
+      "allOf": [
+        {
+          "$ref": "#/$defs/redaction_profile"
+        },
+        {
+          "not": {
+            "const": "raw_dev_unsafe"
+          }
+        }
+      ]
     },
     "schema_pack": {
       "$ref": "#/$defs/pin_ref"
     },
     "schema_version": {
       "const": "git_cg_opik_config_v1"
+    },
+    "track_disable": {
+      "type": "boolean"
+    },
+    "workspace": {
+      "type": "string"
     }
   },
   "required": [
     "schema_version",
     "id",
     "mode",
-    "redaction_profile"
+    "environment",
+    "redaction_profile",
+    "flush_timeout_ms",
+    "track_disable",
+    "check_tls_certificate"
   ],
   "title": "git_cg_opik_config_v1",
-  "type": "object",
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "mode": {
-            "enum": [
-              "local",
-              "mirror",
-              "dogfood"
-            ]
-          }
-        },
-        "required": [
-          "mode"
-        ]
-      },
-      "then": {
-        "required": [
-          "project_name"
-        ]
-      }
-    }
-  ]
+  "type": "object"
 }

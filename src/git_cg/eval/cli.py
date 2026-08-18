@@ -1,11 +1,13 @@
 """Thin ``git-cg eval`` corpus-helper CLI (Issue #231, D11 / B1-b).
 
 This is a **delegation-only** Typer sub-app. It exposes corpus helpers
-(``materialize-core-goldens`` and ``encode-fixture``) and nothing else:
+(``materialize-core-goldens`` and ``encode-fixture``) plus the thin S4
+mirror surface (``config show``, nested ``export status|retry|drain``):
 
-* No binder invocation (``git_cg.eval.binding`` is never imported here).
+* No binder invocation at import time (``git_cg.eval.binding`` is never
+  imported by the module body; export commands may resolve repo paths).
 * No accept-path writes under ``.eval/bundles/acceptpath/**``.
-* No network, no capture enablement side effects, no Opik.
+* Opik SDK is imported only lazily inside drain transport construction.
 * Not the S6 doctor / review / amend-brief UX.
 
 ``materialize-core-goldens`` may write corpus golden files under
@@ -76,7 +78,11 @@ def encode_fixture_cmd(
         help="Suite id to resolve --id against (default: cm-eval-fixtures-core).",
     ),
 ) -> None:
-    """Encode a fixture into an ape_bundle_v1 and print its identity summary."""
+    """Encode a fixture into ``ape_bundle_v1`` and print its identity summary.
+
+    Requires exactly one of ``--path`` or ``--id``; exits non-zero
+    on invalid options, missing fixtures, or encode failures.
+    """
     from git_cg.eval.corpus.encoder import encode_fixture
     from git_cg.eval.corpus.fixtures import (
         FixtureLoadError,
@@ -133,3 +139,395 @@ def encode_fixture_cmd(
     typer.echo(f"case_hash {encoded['case_hash']}")
     typer.echo(f"bundle_ref {encoded['bundle_ref']}")
     raise typer.Exit(code=0)
+
+
+# --------------------------------------------------------------------------
+# S4 config inspection (secret-safe; offline).
+# --------------------------------------------------------------------------
+
+
+@eval_app.command("config")
+def config_cmd(
+    action: str = typer.Argument(..., help="Subcommand: show"),
+) -> None:
+    """Inspect resolved Opik/mirror config (secret-safe).
+
+    Currently supports ``show`` only (E2 / §10.6 law 5). Never prints secret
+    values — only masked ``•••[len=N]`` forms when a key is present in the
+    ambient environment (never loaded into the config record itself).
+    """
+    if action != "show":
+        typer.echo(f"config: unknown action {action!r} (supported: show)", err=True)
+        raise typer.Exit(code=2)
+
+    import json
+    import os
+
+    from git_cg.eval.mirror.config import (
+        OpikConfigError,
+        mask_secret,
+        mode_fallback_token,
+        operator_config_health,
+        public_config_view,
+        resolve_opik_config,
+    )
+    from git_cg.eval.mirror.health import ExportHealth
+    from git_cg.eval.mirror.result import build_mirror_result
+
+    try:
+        config = resolve_opik_config()
+    except OpikConfigError as exc:
+        # Surface config_error via MirrorResult; still print diagnostics.
+        result = build_mirror_result(
+            mode="off",
+            health=ExportHealth.CONFIG_ERROR,
+            notes=(f"config_error: {exc}",),
+        )
+        typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+        typer.echo(f"config show: invalid (fail-closed): {exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+    view = public_config_view(config)
+    # Ambient secret presence only (never values from config — none stored).
+    ambient_key = os.environ.get("OPIK_API_KEY") or os.environ.get("GIT_CG_OPIK_API_KEY")
+    masked = {
+        "api_key": mask_secret(ambient_key) if ambient_key else None,
+        "api_key_present": bool(ambient_key),
+    }
+    health_hint = operator_config_health(config)
+    payload = {
+        "config": view,
+        "secrets": masked,
+        "health_hint": health_hint,
+        "mirror_result": build_mirror_result(
+            mode=str(view.get("mode") or "off"),
+            health=ExportHealth(health_hint),
+            notes=(
+                (f"config_error: invalid mode token {mode_fallback_token(config)!r}",)
+                if mode_fallback_token(config)
+                else ()
+            ),
+        ).to_dict(),
+    }
+    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    # E12: invalid mode is operator-visible config_error (exit 2), not silent off.
+    if health_hint == ExportHealth.CONFIG_ERROR.value:
+        raise typer.Exit(code=2)
+    raise typer.Exit(code=0)
+
+
+# --------------------------------------------------------------------------
+# S4 export commands (P1-4 nested surface + temporary dashed aliases).
+# Canonical: git-cg eval export {status,retry,drain}
+# Aliases:   git-cg eval export-status / export-retry / export-drain (R2)
+# --------------------------------------------------------------------------
+
+
+export_app = typer.Typer(
+    add_completion=False,
+    help="Layer-A export queue ops: status / retry / drain (F4 fail-open).",
+    no_args_is_help=True,
+)
+eval_app.add_typer(export_app, name="export")
+
+
+def _resolve_repo(root: Path | None) -> Path:
+    """Resolve repo_root from an explicit path or Layer-A discovery."""
+    from git_cg.eval.binding.paths import resolve_repo_root
+
+    return root if root is not None else resolve_repo_root()
+
+
+def _queue_status_counts(repo: Path) -> dict[str, int]:
+    """Count export-queue rows by status (read-only, offline).
+
+    Unreadable JSON rows are bucketed as ``unreadable`` rather than
+    raising so operator status stays fail-open for product accept.
+    """
+    from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
+
+    qdir = export_queue_dir(repo)
+    counts: dict[str, int] = {}
+    if qdir.is_dir():
+        for path in sorted(qdir.glob("*.json")):
+            try:
+                item = load_queue_item(path.stem, repo_root=repo)
+            except Exception:
+                counts["unreadable"] = counts.get("unreadable", 0) + 1
+                continue
+            status = str(item.get("status", "unknown"))
+            counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _emit_status(repo: Path) -> None:
+    """Print queue directory and per-status counts for ``export status``."""
+    from git_cg.eval.mirror.queue import export_queue_dir
+
+    qdir = export_queue_dir(repo)
+    counts = _queue_status_counts(repo)
+    typer.echo(f"queue_dir {qdir}")
+    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
+        if status in counts:
+            typer.echo(f"{status} {counts[status]}")
+    if not counts:
+        typer.echo("queue empty")
+
+
+@export_app.command("status")
+def export_status_cmd(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+) -> None:
+    """Show the Layer-A export queue status (read-only, offline).
+
+    Never mutates the queue and never contacts Opik or the network.
+    """
+    from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
+
+    # E12: operator status surfaces invalid mode as config_error before queue counts.
+    try:
+        cfg = resolve_opik_config()
+    except Exception:
+        cfg = None
+    health_hint = operator_config_health(cfg) if cfg is not None else None
+    bad_mode = mode_fallback_token(cfg) if cfg is not None else None
+    if health_hint is not None:
+        typer.echo(f"health {health_hint}")
+    if bad_mode is not None:
+        typer.echo(f"config_error invalid mode token {bad_mode!r}", err=True)
+
+    try:
+        repo = _resolve_repo(root)
+    except Exception as exc:
+        typer.echo(f"export status: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    _emit_status(repo)
+    if bad_mode is not None:
+        raise typer.Exit(code=2)
+    raise typer.Exit(code=0)
+
+
+@export_app.command("retry")
+def export_retry_cmd(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    queue_id: str | None = typer.Option(
+        None,
+        "--id",
+        help="Retry a single failed queue id (default: all failed rows).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Also retry export_validation / export_auth / export_size failures.",
+    ),
+    max_items: int | None = typer.Option(
+        None,
+        "--max-items",
+        help="Cap on failed rows re-queued this invocation.",
+    ),
+) -> None:
+    """Re-queue failed export rows for another drain attempt (P1-4 / P1-11).
+
+    Default policy: reclaim rows whose last_error_class is retryable
+    (``export_network`` / ``export_timeout`` / empty). Validation/auth/size
+    failures require ``--force``. Transitions ``failed → pending`` so the next
+    ``export drain`` can claim them. Never blocks product accept.
+    """
+    from git_cg.eval.mirror.queue import (
+        ExportQueueError,
+        export_queue_dir,
+        load_queue_item,
+        mark_queue_item,
+    )
+
+    try:
+        repo = _resolve_repo(root)
+    except Exception as exc:
+        typer.echo(f"export retry: repo root unresolvable: {exc}", err=True)
+        # Fail-open for product/hooks.
+        raise typer.Exit(code=0) from None
+
+    retryable = {"export_network", "export_timeout", ""}
+    qdir = export_queue_dir(repo)
+    targets: list[str] = []
+    if queue_id:
+        targets = [queue_id]
+    elif qdir.is_dir():
+        for path in sorted(qdir.glob("*.json")):
+            targets.append(path.stem)
+
+    retried = 0
+    skipped = 0
+    unreadable = 0
+    for qid in targets:
+        if max_items is not None and retried >= max_items:
+            break
+        try:
+            item = load_queue_item(qid, repo_root=repo)
+        except ExportQueueError:
+            unreadable += 1
+            continue
+        except Exception:
+            unreadable += 1
+            continue
+        if item.get("status") != "failed":
+            skipped += 1
+            continue
+        err = str(item.get("last_error_class") or "")
+        if not force and err not in retryable:
+            skipped += 1
+            continue
+        try:
+            mark_queue_item(
+                qid,
+                "pending",
+                repo_root=repo,
+                clear_lease=True,
+                notes="retry_requested",
+                last_error_class=err or None,
+            )
+            retried += 1
+        except ExportQueueError as exc:
+            typer.echo(f"export retry: {qid}: {exc}", err=True)
+            skipped += 1
+
+    typer.echo(f"retried {retried} skipped {skipped} unreadable {unreadable}")
+    raise typer.Exit(code=0)
+
+
+@export_app.command("drain")
+def export_drain_cmd(
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    max_items: int | None = typer.Option(None, "--max-items", help="Cap on rows processed this drain."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Resolve config + list pending rows; no upload."),
+) -> None:
+    """Drain the export queue through the Opik transport (F4 fail-open).
+
+    Always exits 0 unless the config is invalid (fail-closed). Transport and
+    secret failures are classified and recorded on the queue rows; they never
+    produce a non-zero exit that could block a hook.
+    """
+    import json
+
+    from git_cg.eval.mirror.config import (
+        OpikConfigError,
+        mode_fallback_token,
+        operator_config_health,
+        resolve_opik_config,
+    )
+    from git_cg.eval.mirror.exporter import drain_queue, list_pending_items
+    from git_cg.eval.mirror.health import ExportHealth
+    from git_cg.eval.mirror.result import build_mirror_result, evaluation_job_result, export_result
+    from git_cg.eval.mirror.transport import OpikSdkTransport
+
+    try:
+        config = resolve_opik_config()
+    except OpikConfigError as exc:
+        typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
+        raise typer.Exit(code=2) from None
+
+    # E12: invalid mode token → config_error on drain (not silent mode=off success).
+    bad_mode = mode_fallback_token(config)
+    if bad_mode is not None:
+        result = build_mirror_result(
+            mode=str(config.get("mode") or "off"),
+            health=ExportHealth.CONFIG_ERROR,
+            notes=(f"config_error: invalid mode token {bad_mode!r}",),
+            error_classes=("export_validation",),
+        )
+        typer.echo(
+            f"export drain: config_error invalid mode token {bad_mode!r} (fail-closed to {config.get('mode')!r})",
+            err=True,
+        )
+        typer.echo(
+            json.dumps(
+                {
+                    "mirror_result": result.to_dict(),
+                    "export_result": export_result(result),
+                    "evaluation_job_result": evaluation_job_result(result),
+                    "health_hint": operator_config_health(config),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        # Fail-closed for config misconfiguration visibility; never product-blocking
+        # because basic commit path does not invoke export drain.
+        raise typer.Exit(code=2)
+
+    if config.get("mode", "off") == "off":
+        typer.echo("export drain: mode=off; nothing to do")
+        raise typer.Exit(code=0)
+
+    try:
+        repo = _resolve_repo(root)
+    except Exception as exc:
+        typer.echo(f"export drain: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=0) from None  # fail-open
+
+    if dry_run:
+        pending = list_pending_items(repo_root=repo)
+        typer.echo(f"mode {config.get('mode')}")
+        projects = config.get("projects") or {}
+        project = (projects.get("eval") if isinstance(projects, dict) else None) or config.get("project_name", "")
+        typer.echo(f"project {project}")
+        typer.echo(f"pending {len(pending)}")
+        raise typer.Exit(code=0)
+
+    from git_cg.eval.mirror.exporter import mirror_result_from_drain
+
+    summary = drain_queue(
+        config,
+        transport=OpikSdkTransport(),
+        repo_root=repo,
+        max_items=max_items,
+    )
+    result = mirror_result_from_drain(config, summary)
+    # Human one-liner + machine-readable MirrorResult (P0-7).
+    typer.echo(f"attempted {summary.attempted} exported {summary.exported} failed {summary.failed}")
+    if summary.error_classes:
+        typer.echo(f"error_classes {','.join(summary.error_classes)}")
+    typer.echo(
+        json.dumps(
+            {
+                "mirror_result": result.to_dict(),
+                "export_result": export_result(result),
+                "evaluation_job_result": evaluation_job_result(result),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    # Fail-open for product/hooks: export failures never produce a blocking
+    # non-zero exit here. Eval wrappers may inspect evaluation_job_result.
+    raise typer.Exit(code=0)
+
+
+# Temporary dashed aliases (R2) — one minor cycle; nested form is canonical.
+eval_app.command("export-status")(export_status_cmd)
+eval_app.command("export-retry")(export_retry_cmd)
+eval_app.command("export-drain")(export_drain_cmd)
