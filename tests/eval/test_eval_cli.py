@@ -369,3 +369,227 @@ def test_config_show_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatc
         result = runner.invoke(app, ["eval", "opik-config-show"])
     assert result.exit_code == 2, result.output
     assert "config_error" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Coverage pack: config/export status/retry/drain branches (PR #236 patch ≥80%)
+# ---------------------------------------------------------------------------
+
+
+def test_config_unknown_action_exits_2() -> None:
+    result = runner.invoke(app, ["eval", "config", "wat"])
+    assert result.exit_code == 2
+    assert "unknown action" in result.output
+
+
+def test_config_show_ok_exit_0(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    for key in ("OPIK_API_KEY", "GIT_CG_OPIK_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    result = runner.invoke(app, ["eval", "config", "show"])
+    assert result.exit_code == 0, result.output
+    assert "config" in result.output
+
+
+def test_config_show_opik_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Real fail-closed path: active mode without pinned projects raises OpikConfigError.
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "mirror")
+    for key in (
+        "GIT_CG_OPIK_PROJECT_EVAL",
+        "GIT_CG_OPIK_PROJECT_LIVE",
+        "GIT_CG_OPIK_PROJECT_CI",
+        "GIT_CG_OPIK_PROJECT_IMPORT",
+        "OPIK_PROJECT_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    result = runner.invoke(app, ["eval", "config", "show"])
+    assert result.exit_code == 2, result.output
+    assert "config_error" in result.output or "invalid" in result.output or "pinned projects" in result.output
+
+
+def test_export_status_counts_unreadable_and_statuses(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval.mirror.batch import build_export_batches
+    from git_cg.eval.mirror.queue import enqueue_export_batch, export_queue_dir, mark_queue_item
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    batches = build_export_batches(
+        [("status_item", {"trace": {"ok": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_status",
+    )
+    path = enqueue_export_batch(batches[0], repo_root=tmp_path)
+    qid = path.stem
+    mark_queue_item(qid, "sending", repo_root=tmp_path, claimed_by="t")
+    mark_queue_item(qid, "failed", repo_root=tmp_path, last_error_class="export_network", clear_lease=True)
+
+    # unreadable row
+    bad = export_queue_dir(tmp_path) / "broken.json"
+    bad.write_text("{", encoding="utf-8")
+
+    result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "failed" in result.output
+    assert "unreadable" in result.output
+
+
+def test_export_status_repo_unresolvable(monkeypatch: pytest.MonkeyPatch) -> None:
+    import git_cg.eval.cli as cli_mod
+
+    def boom(_root=None):
+        raise RuntimeError("no repo")
+
+    monkeypatch.setattr(cli_mod, "_resolve_repo", boom)
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    result = runner.invoke(cli_mod.eval_app, ["export", "status"])
+    assert result.exit_code == 1, result.output
+    assert "unresolvable" in result.output
+
+
+def test_export_retry_repo_unresolvable_fail_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    import git_cg.eval.cli as cli_mod
+
+    def boom(_root=None):
+        raise RuntimeError("no repo")
+
+    monkeypatch.setattr(cli_mod, "_resolve_repo", boom)
+    result = runner.invoke(cli_mod.eval_app, ["export", "retry"])
+    assert result.exit_code == 0, result.output
+    assert "unresolvable" in result.output
+
+
+def test_export_retry_by_id_max_items_and_unreadable(tmp_path: Path) -> None:
+    from git_cg.eval.mirror.batch import build_export_batches
+    from git_cg.eval.mirror.queue import enqueue_export_batch, export_queue_dir, load_queue_item, mark_queue_item
+
+    batches = build_export_batches(
+        [("retry_id", {"trace": {"ok": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_retry_id",
+    )
+    path = enqueue_export_batch(batches[0], repo_root=tmp_path)
+    qid = path.stem
+    mark_queue_item(qid, "sending", repo_root=tmp_path, claimed_by="t")
+    mark_queue_item(qid, "failed", repo_root=tmp_path, last_error_class="export_network", clear_lease=True)
+
+    # unreadable + pending (skipped)
+    (export_queue_dir(tmp_path) / "junk.json").write_text("{", encoding="utf-8")
+    batches2 = build_export_batches(
+        [("pending_skip", {"trace": {"ok": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_pending",
+    )
+    enqueue_export_batch(batches2[0], repo_root=tmp_path)
+
+    result = runner.invoke(
+        app,
+        ["eval", "export", "retry", "--root", str(tmp_path), "--id", qid, "--max-items", "1"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "retried 1" in result.output
+    assert load_queue_item(qid, repo_root=tmp_path)["status"] == "pending"
+
+
+def test_export_retry_mark_failure_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval.mirror.batch import build_export_batches
+    from git_cg.eval.mirror.queue import ExportQueueError, enqueue_export_batch, mark_queue_item
+
+    batches = build_export_batches(
+        [("retry_mark_fail", {"trace": {"ok": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_retry_mark",
+    )
+    path = enqueue_export_batch(batches[0], repo_root=tmp_path)
+    qid = path.stem
+    mark_queue_item(qid, "sending", repo_root=tmp_path, claimed_by="t")
+    mark_queue_item(qid, "failed", repo_root=tmp_path, last_error_class="export_network", clear_lease=True)
+
+    def boom(*_a, **_k):
+        raise ExportQueueError("cannot mark")
+
+    monkeypatch.setattr("git_cg.eval.mirror.queue.mark_queue_item", boom)
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--id", qid])
+    assert result.exit_code == 0
+    assert "skipped" in result.output
+
+
+def test_export_drain_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Real fail-closed path: active mode without pinned projects.
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "mirror")
+    for key in (
+        "GIT_CG_OPIK_PROJECT_EVAL",
+        "GIT_CG_OPIK_PROJECT_LIVE",
+        "GIT_CG_OPIK_PROJECT_CI",
+        "GIT_CG_OPIK_PROJECT_IMPORT",
+        "OPIK_PROJECT_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    result = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path)])
+    assert result.exit_code == 2, result.output
+    assert "config invalid" in result.output or "invalid" in result.output or "pinned projects" in result.output
+
+
+def test_export_drain_dry_run_and_full_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval.mirror.batch import build_export_batches
+    from git_cg.eval.mirror.queue import enqueue_export_batch
+    from git_cg.eval.mirror.transport import MockTransport
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "mirror")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_CI", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_IMPORT", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_API_KEY", "test-key")
+
+    batches = build_export_batches(
+        [("drain_item", {"trace": {"ok": True}})],
+        "default_scrub",
+        project="eval-project",
+        experiment_id="exp_drain",
+    )
+    enqueue_export_batch(batches[0], repo_root=tmp_path)
+
+    dry = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path), "--dry-run"])
+    assert dry.exit_code == 0, dry.output
+    assert "pending" in dry.output
+    assert "mode" in dry.output
+
+    # Patch real transport to mock so drain path executes without Opik.
+    monkeypatch.setattr("git_cg.eval.mirror.transport.OpikSdkTransport", MockTransport)
+
+    monkeypatch.setattr(
+        "git_cg.eval.mirror.exporter.drain_queue",
+        lambda *a, **k: __import__("git_cg.eval.mirror.exporter", fromlist=["DrainSummary"]).DrainSummary(
+            attempted=1, exported=1
+        ),
+    )
+    full = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path)])
+    assert full.exit_code == 0, full.output
+    assert "attempted" in full.output
+    assert "mirror_result" in full.output
+
+
+def test_export_drain_repo_unresolvable_fail_open(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import git_cg.eval.cli as cli_mod
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "mirror")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_CI", "eval-project")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_IMPORT", "eval-project")
+
+    def boom(_root=None):
+        raise RuntimeError("no repo")
+
+    monkeypatch.setattr(cli_mod, "_resolve_repo", boom)
+    # Pass --root so config path succeeds; boom still intercepts _resolve_repo.
+    result = runner.invoke(cli_mod.eval_app, ["export", "drain", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "unresolvable" in result.output
