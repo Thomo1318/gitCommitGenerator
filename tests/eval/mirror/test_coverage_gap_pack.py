@@ -831,6 +831,11 @@ class TestTransportCoverage:
             ]
         }
         OpikSdkTransport._send(Client(), experiment_name="exp", payload=payload)
-        assert recorded
-        # When only thread is present, input/output may be synthesized from messages.
-        assert any("input" in r or "output" in r or "metadata" in r or "name" in r for r in recorded)
+        assert len(recorded) == 1
+        call = recorded[0]
+        # Thread-only rows synthesize input/output from the thread surface.
+        assert call["input"]["thread_id"] == "t1"
+        assert call["output"]["messages"] == [{"role": "user", "content": "hi"}]
+        assert call["metadata"]["thread"]["thread_id"] == "t1"
+        assert call["metadata"]["thread"]["messages"] == [{"role": "user", "content": "hi"}]
+        assert call["name"] == "exp"

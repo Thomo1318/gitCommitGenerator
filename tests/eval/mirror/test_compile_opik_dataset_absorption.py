@@ -39,7 +39,10 @@ def _load_script_module(*, mask_opik: bool = False, monkeypatch: pytest.MonkeyPa
         monkeypatch.setitem(sys.modules, "opik", None)  # type: ignore[arg-type]
 
     scripts_dir = str(SCRIPT_PATH.parent)
-    if scripts_dir not in sys.path:
+    if monkeypatch is not None:
+        monkeypatch.syspath_prepend(scripts_dir)
+    elif scripts_dir not in sys.path:
+        # Fallback for rare direct calls without a pytest monkeypatch fixture.
         sys.path.insert(0, scripts_dir)
 
     # Drop any stale module so re-import re-executes under active coverage.
@@ -62,8 +65,8 @@ def _load_script_module(*, mask_opik: bool = False, monkeypatch: pytest.MonkeyPa
 
 
 @pytest.fixture
-def script_mod():
-    return _load_script_module()
+def script_mod(monkeypatch: pytest.MonkeyPatch):
+    return _load_script_module(monkeypatch=monkeypatch)
 
 
 class TestP23NoHardOpikImport:
