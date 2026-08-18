@@ -73,7 +73,7 @@ def _sha_from_ref(payload_ref: str) -> str:
 
 
 def _artifact_path(repo_root: Path, sha256: str) -> Path:
-    """Content-addressed path under ``.eval/export/payloads/<sha>.json``."""
+    """Content-addressed path under ``.eval/export_payloads/<sha>.json``."""
     _assert_sha256(sha256)
     return export_payloads_dir(repo_root) / f"{sha256}.json"
 

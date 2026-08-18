@@ -447,6 +447,46 @@ class TestExportBatchTransportProjection:
         assert second["metadata"]["item_index"] == 1
         assert second["metadata"]["schema_pack"].startswith("schema_pack_v0@")
 
+    def test_project_trace_fields_item_count_matches_projected_entries(self) -> None:
+        """item_count/item_index describe the emitted-trace set, not raw batch rows."""
+        payload = {
+            "items": [
+                {"item_ref": "skip-me", "payload": "not-a-dict"},
+                {
+                    "item_ref": "keep-a",
+                    "payload": {
+                        "trace": {
+                            "input": {"bundle_id": "a"},
+                            "output": {"final_message": "one"},
+                            "metadata": {},
+                        }
+                    },
+                },
+                {"item_ref": "skip-none", "payload": None},
+                {
+                    "item_ref": "keep-b",
+                    "payload": {
+                        "trace": {
+                            "input": {"bundle_id": "b"},
+                            "output": {"final_message": "two"},
+                            "metadata": {},
+                        }
+                    },
+                },
+            ],
+            "schema_pack": "schema_pack_v0@" + ("a" * 64),
+            "metric_catalog": "metric_catalog_v0@" + ("b" * 64),
+            "redaction_profile": "default_scrub",
+        }
+        projected = OpikSdkTransport._project_trace_fields(payload, experiment_name="exp")
+        assert len(projected) == 2
+        assert projected[0]["metadata"]["item_count"] == 2
+        assert projected[0]["metadata"]["item_index"] == 0
+        assert projected[0]["metadata"]["item_ref"] == "keep-a"
+        assert projected[1]["metadata"]["item_count"] == 2
+        assert projected[1]["metadata"]["item_index"] == 1
+        assert projected[1]["metadata"]["item_ref"] == "keep-b"
+
 
 class TestE5ImportIsolation:
     def test_static_no_module_level_opik_import(self) -> None:

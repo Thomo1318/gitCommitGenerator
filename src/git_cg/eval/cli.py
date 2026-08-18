@@ -80,7 +80,7 @@ def encode_fixture_cmd(
 ) -> None:
     """Encode a fixture into ``ape_bundle_v1`` and print its identity summary.
 
-    Requires exactly one of ``--path`` or ``--fixture-id``; exits non-zero
+    Requires exactly one of ``--path`` or ``--id``; exits non-zero
     on invalid options, missing fixtures, or encode failures.
     """
     from git_cg.eval.corpus.encoder import encode_fixture

@@ -432,12 +432,15 @@ def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _looks_like_secret_key(key: str) -> bool:
-    """True when a meta/config key name looks secret-bearing (never print values)."""
-    lowered = key.lower()
+    """True when a meta/config key name looks secret-bearing (never print values).
+
+    Normalizes non-alphanumeric separators so hyphen/space variants such as
+    ``x-api-key`` and ``api key`` match the same tokens as ``api_key``.
+    """
+    normalized = "".join(char for char in key.lower() if char.isalnum())
     return any(
-        token in lowered
+        token in normalized
         for token in (
-            "api_key",
             "apikey",
             "authorization",
             "password",

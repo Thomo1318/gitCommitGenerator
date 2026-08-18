@@ -253,6 +253,36 @@ def test_off_and_local_only_never_require_network_fields() -> None:
     assert "endpoint" not in local
 
 
+def test_public_config_view_strips_separator_secret_key_variants() -> None:
+    """Hyphen/space secret meta keys must not appear in public config show."""
+    from git_cg.eval.mirror.config import _looks_like_secret_key
+
+    for key in ("x-api-key", "api-key", "api_key", "API Key", "x_api_key"):
+        assert _looks_like_secret_key(key), key
+    assert not _looks_like_secret_key("schema_pack")
+    assert not _looks_like_secret_key("project_lane")
+
+    view = public_config_view(
+        {
+            "schema_version": "git_cg_opik_config_v1",
+            "id": "cfg_test",
+            "mode": "off",
+            "meta": {
+                "x-api-key": "should-never-show",
+                "api-key": "also-hidden",
+                "note": "safe",
+            },
+        }
+    )
+    meta = view["meta"]
+    assert "x-api-key" not in meta
+    assert "api-key" not in meta
+    assert meta["note"] == "safe"
+    blob = json.dumps(view)
+    assert "should-never-show" not in blob
+    assert "also-hidden" not in blob
+
+
 def test_public_config_view_strips_internal_project_name() -> None:
     """Public view must omit internal project/API key material."""
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "mirror", "GIT_CG_OPIK_PROJECT_EVAL": "p"})

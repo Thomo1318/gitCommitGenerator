@@ -334,7 +334,8 @@ class OpikSdkTransport:
                     valid_entries.append((entry.get("item_ref"), entry["payload"]))
 
             if valid_entries:
-                item_count = len(items)
+                # Align item_count with emitted traces / item_index domain.
+                item_count = len(valid_entries)
                 projected: list[dict[str, Any]] = []
                 for index, (item_ref, primary) in enumerate(valid_entries):
                     projected.append(

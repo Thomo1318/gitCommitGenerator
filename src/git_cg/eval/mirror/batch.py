@@ -130,7 +130,7 @@ def _build_batch(
 
     Computes content-addressed ``payload_sha256`` over the transport body,
     derives the deterministic idempotency key (P1-2), measures final
-    ``size_bytes``, and fails closed via ``BatchTooLargeError`` when the
+    ``size_bytes``, and fails closed via ``ExportSizeError`` when the
     envelope exceeds ``max_bytes``.
     """
     # Transport body for this batch slice (redacted items keyed by ref).
@@ -230,7 +230,7 @@ def build_export_batches(
     def try_batch(item_refs: list[str], item_payloads: list[dict[str, Any]]) -> dict[str, Any]:
         """Attempt one fixed packing of item_refs/payloads into an envelope.
 
-        Raises ``BatchTooLargeError`` when the measured envelope exceeds
+        Raises ``ExportSizeError`` when the measured envelope exceeds
         ``max_bytes`` (size authority is the envelope, not a pre-count).
         """
         return _build_batch(
