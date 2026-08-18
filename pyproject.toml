@@ -44,9 +44,21 @@ build-backend = "hatchling.build"
 
 [tool.coverage.run]
 branch = true
-source = ["src/git_cg"]
+source = ["src/git_cg", "scripts"]
 omit = [
   "src/git_cg/evals/*",
+  "scripts/eval_commit_message.py",
+  "scripts/opik_metrics.py",
+  "scripts/opik_trace_triage.py",
+  "scripts/setup_opik_eval_rule.py",
+  "scripts/setup_opik_test_suites.py",
+  "scripts/sync_promptfoo_to_opik.py",
+  "scripts/sync_prompts_to_opik.py",
+  "scripts/test_generation.py",
+  "scripts/setup_test_scenario.zsh",
+  "scripts/with_1p_env.sh",
+  "scripts/*.mjs",
+  "scripts/*.kdl",
 ]
 
 [tool.coverage.report]
@@ -72,7 +84,7 @@ packages = ["src/git_cg"]
 extraPaths = ["src", "scripts"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=src/git_cg --cov-branch --cov-report=term-missing:skip-covered"
+addopts = "--cov=src/git_cg --cov=scripts --cov-branch --cov-report=term-missing:skip-covered"
 python_files = "test_*.py"
 pythonpath = ["src"]
 testpaths = ["tests"]
