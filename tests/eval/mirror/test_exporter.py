@@ -34,17 +34,7 @@ CONFIG = {
 
 
 def _enqueue(repo: Path, item_id: str, payload: dict) -> str:
-    """
-    Enqueue a single export payload for an item.
-    
-    Parameters:
-    	repo (Path): Repository root used to store the export batch.
-    	item_id (str): Identifier of the item being exported.
-    	payload (dict): Export payload associated with the item.
-    
-    Returns:
-    	str: Queue identifier assigned to the enqueued batch.
-    """
+    """Enqueue one minimal export payload for drain tests."""
     batches = build_export_batches([(item_id, payload)], "default_scrub", project="eval-project")
     path = enqueue_export_batch(batches[0], repo_root=repo)
     return path.stem
@@ -112,7 +102,6 @@ class TestDrainQueue:
     def test_unexpected_exception_never_propagates(self, tmp_path: Path) -> None:
         class BadTransport:
             def upload(self, **kwargs):  # type: ignore[no-untyped-def]
-                """Raise an unexpected runtime error when an upload is attempted."""
                 raise RuntimeError("totally unexpected")
 
         qid = _enqueue(tmp_path, "item_1", {"x": 1})
@@ -205,15 +194,6 @@ class TestResolveSecretsModeGate:
         seen: list[bool] = []
 
         def capture(*, require_key: bool = True):  # type: ignore[no-untyped-def]
-            """
-            Record the requested API-key requirement and return the configured secrets.
-            
-            Parameters:
-            	require_key (bool): Whether API-key resolution is requested.
-            
-            Returns:
-            	The configured secrets.
-            """
             seen.append(require_key)
             return SECRETS
 
@@ -229,15 +209,6 @@ class TestResolveSecretsModeGate:
         seen: list[bool] = []
 
         def capture(*, require_key: bool = True):  # type: ignore[no-untyped-def]
-            """
-            Record the requested API-key requirement and return the configured secrets.
-            
-            Parameters:
-            	require_key (bool): Whether API-key resolution is requested.
-            
-            Returns:
-            	The configured secrets.
-            """
             seen.append(require_key)
             return SECRETS
 

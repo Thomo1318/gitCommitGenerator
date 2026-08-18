@@ -40,14 +40,9 @@ assert len(EXPORT_HEALTH) == len(set(EXPORT_HEALTH)), "ExportHealth values must 
 
 
 def map_error_class_to_health(error_class: str | None) -> ExportHealth:
-    """
-    Map an export error class to its operational health status.
-    
-    Parameters:
-    	error_class (str | None): Error classification to map.
-    
-    Returns:
-    	ExportHealth: The corresponding health status, defaulting to `network_error` for missing or unrecognised classifications.
+    """Map a closed export ``error_class`` onto a section-18.7 ``ExportHealth`` token.
+
+    Unknown/empty classes become ``network_error`` (safe default for operator UX).
     """
     if not error_class:
         return ExportHealth.NETWORK_ERROR
@@ -62,15 +57,7 @@ def map_error_class_to_health(error_class: str | None) -> ExportHealth:
 
 
 def derive_export_health_rollup(health: ExportHealth | str) -> str:
-    """
-    Derive a UI-facing rollup label from an export health status.
-    
-    Parameters:
-    	health (ExportHealth | str): Export health status token.
-    
-    Returns:
-    	str: ``"healthy"``, ``"idle"``, ``"degraded"``, ``"replay"``, or ``"unhealthy"`` according to the status.
-    """
+    """Human/UI rollup label derived from a section-18.7 token (not a second enum)."""
     token = ExportHealth(health) if not isinstance(health, ExportHealth) else health
     if token is ExportHealth.SUCCESS:
         return "healthy"

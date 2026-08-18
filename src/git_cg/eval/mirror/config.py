@@ -143,15 +143,11 @@ class OpikConfigError(ValueError):
 
 
 def _truthy(raw: str | None, default: bool) -> bool:
-    """
-    Parse an environment value as a boolean with a caller-provided fallback.
-    
-    Parameters:
-        raw (str | None): The value to parse.
-        default (bool): The value used when `raw` is missing, empty, or unrecognised.
-    
-    Returns:
-        `True` for recognised true tokens, `False` for recognised false tokens, or `default` otherwise.
+    """Parse common boolean env tokens; unknown non-empty values keep ``default``.
+
+    Explicit true tokens ⇒ True. Explicit false tokens ⇒ False. Missing/empty
+    and unrecognized non-empty tokens fall back to the supplied default so
+    TLS/track flags cannot flip open/closed on garbage operator input.
     """
     if raw is None or raw == "":
         return default
@@ -164,16 +160,10 @@ def _truthy(raw: str | None, default: bool) -> bool:
 
 
 def _parse_mode(raw: str | None) -> tuple[OpikMode, str | None, str | None]:
-    """
-    Parse a mode token into its canonical mode and diagnostic details.
-    
-    Parameters:
-        raw (str | None): The raw mode value to parse.
-    
-    Returns:
-        tuple[OpikMode, str | None, str | None]: The resolved mode, an unknown
-        token when parsing fails, and the original token when a legacy alias was
-        converted.
+    """Return ``(mode, bad_token, aliased_from)``.
+
+    Unknown tokens fail closed to ``off`` and surface the raw token as
+    ``bad_token`` for E12 ``config_error`` / mode_fallback telemetry.
     """
     if raw is None:
         return OpikMode.OFF, None, None
@@ -188,15 +178,7 @@ def _parse_mode(raw: str | None) -> tuple[OpikMode, str | None, str | None]:
 
 
 def _parse_environment(raw: str | None) -> tuple[OpikEnvironment, str | None]:
-    """
-    Parse an environment value and provide the configured default for blank or unknown input.
-    
-    Parameters:
-    	raw (str | None): The environment value to parse.
-    
-    Returns:
-    	tuple[OpikEnvironment, str | None]: The resolved environment and the unrecognised input token, or `None` when the input is valid or blank.
-    """
+    """Return ``(environment, bad_token)``; unknown tokens fall back to default."""
     if raw is None or not str(raw).strip():
         return OpikEnvironment(DEFAULT_ENVIRONMENT), None
     token = str(raw).strip().lower()
@@ -212,16 +194,18 @@ def _parse_redaction_profile(
     owner_export: bool,
     environment: OpikEnvironment,
 ) -> tuple[RedactionProfile, str | None]:
-    """
-    Resolve a redaction profile while applying ownership and environment restrictions.
-    
-    Parameters:
-    	raw (str | None): Requested redaction profile token.
-    	owner_export (bool): Whether owner-only profiles are permitted.
-    	environment (OpikEnvironment): Environment in which the profile will be used.
-    
-    Returns:
-    	tuple[RedactionProfile, str | None]: The selected profile and a non-secret fallback reason, or ``None`` when no fallback was applied.
+    """Parse the R14 profile fail-closed to ``default_scrub``.
+
+    ``raw_dev_unsafe`` and unknown tokens both fail closed — the export path
+    ceiling for non-owner sinks is ``default_scrub`` (§7.6).
+
+    Richer owner profiles (P1-6 / D14) additionally require:
+
+    * explicit owner selection via ``GIT_CG_OPIK_OWNER_EXPORT`` truthy, and
+    * a non-CI environment (CI sinks stay ≤ ``default_scrub`` / ``public_ci``).
+
+    Returns ``(profile, fallback_reason)`` where ``fallback_reason`` is a
+    non-secret diagnostic token when the requested profile was downgraded.
     """
     if raw is None:
         return RedactionProfile.DEFAULT_SCRUB, None
@@ -243,15 +227,7 @@ def _parse_redaction_profile(
 
 
 def _parse_flush_timeout(raw: str | None) -> int:
-    """
-    Parse a flush timeout value with a safe default.
-    
-    Parameters:
-    	raw (str | None): The configured timeout in milliseconds.
-    
-    Returns:
-    	int: The positive timeout in milliseconds, or the default timeout when the value is missing, invalid, or less than one.
-    """
+    """Parse positive flush timeout ms; invalid/empty uses ``DEFAULT_FLUSH_TIMEOUT_MS``."""
     if raw is None or str(raw).strip() == "":
         return DEFAULT_FLUSH_TIMEOUT_MS
     try:
@@ -264,16 +240,11 @@ def _parse_flush_timeout(raw: str | None) -> int:
 
 
 def _resolve_projects(source: Mapping[str, str]) -> dict[str, str] | None:
-    """
-    Builds project assignments for the live, evaluation, CI, and import lanes.
-    
-    Parameters:
-    	source (Mapping[str, str]): Environment-derived project settings.
-    
-    Returns:
-    	dict[str, str] | None: A complete project-lane mapping, or `None` when no
-    	projects are configured or the assignments are incomplete. A sole
-    	evaluation project is assigned to all lanes.
+    """Build the four project lanes from env.
+
+    Bootstrap convenience: if only EVAL (or legacy OPIK_PROJECT_NAME) is set,
+    pin all four lanes to that value so single-project operators still get a
+    complete ``projects`` map (still never silent Default Project).
     """
     live = (source.get(ENV_PROJECT_LIVE) or "").strip()
     eval_p = (source.get(ENV_PROJECT_EVAL) or source.get(OPIK_ENV_PROJECT_NAME) or "").strip()
@@ -293,16 +264,14 @@ def _resolve_projects(source: Mapping[str, str]) -> dict[str, str] | None:
 
 
 def resolve_opik_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """
-    Resolve the ``git_cg_opik_config_v1`` record from environment settings using fail-closed defaults.
-    
-    The returned record is suitable for schema validation, CLI rendering, and exporter consumption, and does not contain secrets.
-    
+    """Resolve ``git_cg_opik_config_v1`` from the environment (fail-closed).
+
+    Returns a plain dict suitable for schema validation, CLI rendering, and
+    exporter consumption. Never carries secrets.
+
     Raises:
-        OpikConfigError: If an active mode lacks pinned project lanes.
-    
-    Returns:
-        dict[str, Any]: The resolved configuration record.
+        OpikConfigError: active mode requested without pinned project lanes
+            (no Default Project fallthrough — INT-11 / FIND-022).
     """
     source: Mapping[str, str] = env if env is not None else os.environ
     meta: dict[str, Any] = {}
@@ -382,14 +351,12 @@ def resolve_opik_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
 
 
 def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
-    """
-    Extracts the invalid mode token recorded during configuration resolution.
-    
-    Parameters:
-    	record (Mapping[str, Any] | None): Configuration record to inspect.
-    
-    Returns:
-    	str | None: The recorded mode token, or `None` when no fallback token is present.
+    """Return the invalid mode token recorded by resolution (E12), if any.
+
+    Unset/empty modes resolve to ``off`` without a fallback token. Unknown
+    tokens still fail closed to ``off`` for capture safety, but leave the bad
+    token in ``meta.mode_fallback`` so operator surfaces can surface
+    ``config_error`` instead of a silent disable.
     """
     if not isinstance(record, Mapping):
         return None
@@ -404,16 +371,13 @@ def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
 
 
 def operator_config_health(record: Mapping[str, Any] | None) -> str:
-    """
-    Determine the operator-visible export health for a resolved configuration.
-    
-    Parameters:
-        record (Mapping[str, Any] | None): Resolved configuration record, or ``None``.
-    
-    Returns:
-        str: ``"config_error"`` for a mode fallback, ``"skipped_off"`` for disabled
-            mode, ``"deferred"`` for local-only mode, or ``"pending"`` for other
-            active modes.
+    """Return the operator-visible export health token for a resolved config (E12).
+
+    Priority:
+    1. ``meta.mode_fallback`` → ``config_error`` (invalid token while export tooling runs)
+    2. mode ``off`` → ``skipped_off``
+    3. mode ``local_only`` → ``deferred``
+    4. otherwise → ``pending`` (active export modes awaiting drain/transport)
     """
     # Local import keeps config free of hard health-module cycles at import time
     # for lightweight fixture helpers, while still returning stable §18.7 tokens.
@@ -432,14 +396,10 @@ def operator_config_health(record: Mapping[str, Any] | None) -> str:
 
 
 def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Create a schema-shaped view containing only public configuration fields and metadata that does not appear secret-like.
-    
-    Parameters:
-    	record (Mapping[str, Any]): Configuration record to filter.
-    
-    Returns:
-    	dict[str, Any]: Public configuration fields with secret-like metadata keys excluded.
+    """Schema-shaped public view: no secrets, no internal-only keys.
+
+    Strips secret-looking ``meta`` keys so ``git-cg eval config show``
+    stays secret-safe.
     """
     allowed = {
         "schema_version",
@@ -472,7 +432,7 @@ def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _looks_like_secret_key(key: str) -> bool:
-    """Identify metadata keys that suggest secret or credential values."""
+    """True when a meta/config key name looks secret-bearing (never print values)."""
     lowered = key.lower()
     return any(
         token in lowered
@@ -489,15 +449,7 @@ def _looks_like_secret_key(key: str) -> bool:
 
 
 def mask_secret(value: str | None) -> str | None:
-    """
-    Mask a secret while preserving its length for diagnostics.
-    
-    Parameters:
-        value (str | None): Secret value to mask.
-    
-    Returns:
-        str | None: A length-only mask, or `None` when `value` is `None`.
-    """
+    """Mask a secret to ``•••[len=N]`` (never value, never prefix) — E2."""
     if value is None:
         return None
     return f"•••[len={len(value)}]"

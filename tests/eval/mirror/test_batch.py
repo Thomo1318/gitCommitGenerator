@@ -20,29 +20,12 @@ from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 
 
 def _items(n: int, size_each: int = 10) -> list[tuple[str, dict]]:
-    """
-    Generate item references paired with payloads of a configurable padding size.
-    
-    Parameters:
-    	n (int): Number of item-reference/payload pairs to generate.
-    	size_each (int): Number of padding characters in each payload.
-    
-    Returns:
-    	list[tuple[str, dict]]: Item references and their corresponding payloads.
-    """
+    """Build ``n`` (item_ref, payload) pairs with padded bodies for size tests."""
     return [(f"item-{i}", {"pad": "x" * size_each}) for i in range(n)]
 
 
 def _id_kwargs(**overrides: object) -> dict:
-    """
-    Build standard keyword arguments for idempotency-key tests, with optional overrides.
-    
-    Parameters:
-    	overrides (object): Values that replace the standard idempotency-key arguments.
-    
-    Returns:
-    	dict: The combined standard and overridden arguments.
-    """
+    """Default kwargs for batch idempotency-key tests (overridable)."""
     base = {
         "bundle_hashes": ["a", "b"],
         "project_lane": "eval",

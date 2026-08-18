@@ -32,14 +32,7 @@ FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def _load(name: str) -> dict:
-    """Load a JSON fixture by name and return its contents as a dictionary.
-    
-    Parameters:
-    	name (str): The fixture file name.
-    
-    Returns:
-    	dict: The parsed JSON contents.
-    """
+    """Load a named JSON config fixture as a dict."""
     return json.loads((FIXTURE_DIR / name).read_text(encoding="utf-8"))
 
 
@@ -261,7 +254,7 @@ def test_off_and_local_only_never_require_network_fields() -> None:
 
 
 def test_public_config_view_strips_internal_project_name() -> None:
-    """Verify that the public configuration view omits internal project and API key data while retaining project information."""
+    """Public view must omit internal project/API key material."""
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "mirror", "GIT_CG_OPIK_PROJECT_EVAL": "p"})
     view = public_config_view(cfg)
     assert "project_name" not in view
@@ -400,7 +393,7 @@ def test_build_mirror_result_preserves_generator_notes() -> None:
     """Generator notes must survive health inference and result storage."""
 
     def note_gen():
-        """Yield diagnostic notes for generator-result tests."""
+        """Yield diagnostic notes (generator materialization tests)."""
         yield "diag_one"
         yield "diag_two"
 

@@ -30,15 +30,7 @@ _MAX_NOTE_LEN: Final = 200
 
 
 def _scrub_notes(notes: Iterable[str] | None) -> tuple[str, ...]:
-    """
-    Clean and limit note text for inclusion in mirror results.
-    
-    Parameters:
-    	notes (Iterable[str] | None): Notes to clean and retain.
-    
-    Returns:
-    	tuple[str, ...]: Non-blank notes with newlines replaced by spaces, each limited to 200 characters, with at most 32 notes retained.
-    """
+    """Bound and sanitize operator notes (max count/length; no multi-line dumps)."""
     if not notes:
         return ()
     out: list[str] = []
@@ -81,12 +73,7 @@ class MirrorResult:
             object.__setattr__(self, "health", ExportHealth(str(self.health)))
 
     def to_dict(self) -> dict[str, Any]:
-        """
-        Serialise the mirror result into a dictionary suitable for external consumers.
-        
-        Returns:
-        	dict[str, Any]: A dictionary containing the result status, counts, error classes, strict-mode status, acceptance flag, and notes.
-        """
+        """Public MirrorResult view. Always sets ``product_accept_blocked=False``."""
         return {
             "mode": self.mode,
             "health": self.health.value if isinstance(self.health, ExportHealth) else str(self.health),
@@ -112,17 +99,10 @@ def build_mirror_result(
     error_classes: Iterable[str] | None = None,
     notes: Iterable[str] | None = None,
 ) -> MirrorResult:
-    """
-    Construct a normalised `MirrorResult` for a mirror or export operation.
-    
-    Parameters:
-    	mode (str): Operation mode used to determine strict-mirror failure status.
-    	health (ExportHealth | str | None): Explicit operation health; inferred when omitted.
-    	error_classes (Iterable[str] | None): Error categories associated with the operation.
-    	notes (Iterable[str] | None): Notes associated with the operation.
-    
-    Returns:
-    	MirrorResult: Structured result with normalised health and strict-mirror status.
+    """Construct a ``MirrorResult`` with strict_mirror / health defaults.
+
+    Infers section-18.7 health when omitted. ``strict_mirror_failed`` may be
+    true only under ``strict_mirror``; product accept is never blocked here.
     """
     classes = tuple(error_classes or ())
     # Materialize once: generators must survive both health inference and result storage.
@@ -173,19 +153,10 @@ def _infer_health(
     error_classes: tuple[str, ...],
     notes: tuple[str, ...],
 ) -> ExportHealth:
-    """Determine the export health from its mode, counts, notes, and error classes.
-    
-    Parameters:
-    	mode (str): Export mode used to distinguish skipped and pending states.
-    	attempted (int): Number of attempted exports.
-    	succeeded (int): Number of successful exports.
-    	failed (int): Number of failed exports.
-    	deferred (int): Number of deferred exports.
-    	error_classes (tuple[str, ...]): Error classifications associated with failures.
-    	notes (tuple[str, ...]): Notes containing additional health indicators.
-    
-    Returns:
-    	ExportHealth: The inferred export health.
+    """Derive section-18.7 ``ExportHealth`` from mode, counters, notes, and classes.
+
+    Covers skipped_off, auth/config errors, deferred empty drains, partial
+    success, and mapped transport failures.
     """
     if mode == "off" or "mode_off" in notes or "skipped_off" in notes:
         return ExportHealth.SKIPPED_OFF
@@ -210,15 +181,7 @@ def _infer_health(
 
 
 def export_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Builds the operational export view for a mirror result.
-    
-    Parameters:
-    	result (MirrorResult | Mapping[str, Any]): Mirror result data to serialise.
-    
-    Returns:
-    	dict[str, Any]: Export status, counts, error classes, notes, and acceptance status.
-    """
+    """Operator export-result axis (P0-7). Never a product-accept blocker."""
     data = result.to_dict() if isinstance(result, MirrorResult) else dict(result)
     return {
         "axis": "export_result",
@@ -235,15 +198,9 @@ def export_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
 
 
 def evaluation_job_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
-    """
-    Create the evaluation job view of a mirror result.
-    
-    Parameters:
-    	result (MirrorResult | Mapping[str, Any]): Mirror result data to serialise.
-    
-    Returns:
-    	dict[str, Any]: Evaluation status and mirror metadata, with `ok` set to
-    	`False` only when strict mirror mode has failed.
+    """Eval/CI job view - may report failure only under ``strict_mirror`` (P1-5).
+
+    Always keeps ``product_accept_blocked=False`` on this axis.
     """
     data = result.to_dict() if isinstance(result, MirrorResult) else dict(result)
     mode = str(data.get("mode") or "off")

@@ -24,26 +24,12 @@ from git_cg.eval.mirror.queue import (
 
 
 def _batch(items: list[tuple[str, dict]] | None = None) -> dict:
-    """Build a default-scrubbed export batch for the supplied items or a default item.
-    
-    Parameters:
-    	items (list[tuple[str, dict]] | None): Items to include in the batch.
-    	
-    Returns:
-    	dict: The resulting export batch.
-    """
+    """Build a default-scrubbed export batch for queue tests."""
     return build_export_batches(items or [("i-1", {"pad": "x" * 20})], RedactionProfile.DEFAULT_SCRUB)[0]
 
 
 def _qid(batch: dict) -> str:
-    """Extract the idempotency key from an export batch.
-    
-    Parameters:
-    	batch (dict): Export batch containing an `idempotency_key` field.
-    
-    Returns:
-    	str: The batch's idempotency key as a string.
-    """
+    """Read the batch idempotency key used as queue id."""
     return str(batch["idempotency_key"])
 
 

@@ -19,12 +19,7 @@ from git_cg.eval.mirror.redaction import (
 
 
 def _bundle() -> dict:
-    """Create a representative evaluation bundle for redaction tests.
-    
-    Returns:
-    	dict: An evaluation bundle containing messages, task input, gate results,
-    	score-card data, attempts, metadata, and session identifiers.
-    """
+    """Representative ape_bundle_v1 fixture for redaction tests."""
     return {
         "schema_version": "ape_bundle_v1",
         "id": "bundle_1",
@@ -145,15 +140,6 @@ def test_secret_scrubbed_from_retained_message(monkeypatch: pytest.MonkeyPatch) 
 
 def test_task_input_secret_scrubbed_and_quarantined(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake(value: str) -> str:
-        """
-        Return a failure sentinel for values containing the test secret marker.
-        
-        Parameters:
-        	value (str): The value to inspect.
-        
-        Returns:
-        	str: The redaction failure sentinel when the value contains "SECRET"; otherwise, the original value.
-        """
         if "SECRET" in value:
             return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
         return value
@@ -228,14 +214,6 @@ def test_p1_7_nested_string_scrub_recursive(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_p1_7_nested_quarantine_exact_path(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake(value: str) -> str:
-        """Return a redaction failure marker when the value contains ``"BOOM"``; otherwise, return the original value.
-        
-        Parameters:
-        	value (str): The value to inspect.
-        
-        Returns:
-        	str: The redaction failure marker or the original value.
-        """
         if "BOOM" in value:
             return "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
         return value
@@ -280,7 +258,7 @@ def test_p0_5_authority_surfaces_retained_on_every_export_profile() -> None:
 
 
 def test_p0_5_promote_score_card_from_meta_when_top_level_absent() -> None:
-    """Verify that a nested score card is promoted when the top-level score card is absent."""
+    """P0-5: promote nested score_card from meta when top-level card is absent."""
     bundle = _bundle()
     del bundle["score_card"]
     # nested remains under meta

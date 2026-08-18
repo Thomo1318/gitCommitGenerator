@@ -62,15 +62,7 @@ class ExportSizeError(ValueError):
 
 
 def map_queue_status_to_export_status(queue_status: str) -> ExportStatus:
-    """
-    Map a queue state to the corresponding export status.
-    
-    Parameters:
-    	queue_status (str): Queue state to translate.
-    
-    Returns:
-    	ExportStatus: The mapped export status, or `ExportStatus.FAILED` for an unknown state.
-    """
+    """Exporter-boundary mapping only (E7) — never serialize QueueStatus on envelope."""
     mapping = {
         "pending": ExportStatus.PENDING,
         "sending": ExportStatus.PENDING,
@@ -93,16 +85,11 @@ def batch_idempotency_key(
     experiment_id: str = "",
     payload_sha256: str | None = None,
 ) -> str:
-    """
-    Constructs a deterministic idempotency key from batch identity fields and optional payload content.
-    
-    Parameters:
-        bundle_hashes: Hashes identifying the bundles included in the batch.
-        redaction_profile: Redaction profile applied to the payload.
-        payload_sha256: Optional hash of the payload content.
-    
-    Returns:
-        The canonical SHA-256 idempotency key.
+    """Deterministic D10/P1-2 idempotency key over canonical JSON identity.
+
+    Inputs intentionally include lane/env/dataset/profile/pins (and optional
+    payload content hash + experiment id) so the same item refs under two
+    projects or two payload bodies never collide.
     """
     profile = redaction_profile.value if isinstance(redaction_profile, RedactionProfile) else str(redaction_profile)
     identity: dict[str, Any] = {
@@ -120,14 +107,7 @@ def batch_idempotency_key(
 
 
 def envelope_size_bytes(batch: dict[str, Any]) -> int:
-    """Calculate the canonical uncompressed size of an export envelope in bytes.
-    
-    Parameters:
-    	batch (dict[str, Any]): The export envelope to measure.
-    
-    Returns:
-    	int: The envelope size in bytes.
-    """
+    """Canonical uncompressed size of the envelope body (E10 / P1-13)."""
     return len(canonical_json_bytes(batch))
 
 
@@ -146,19 +126,12 @@ def _build_batch(
     project_lane: str,
     status: ExportStatus,
 ) -> dict[str, Any]:
-    """
-    Build and validate a single `export_batch_v1` envelope.
-    
-    Parameters:
-    	item_refs (list[str]): References identifying the items in the batch.
-    	item_payloads (list[dict[str, Any]]): Payloads corresponding to `item_refs`.
-    	max_bytes (int): Maximum permitted envelope size in bytes.
-    
-    Returns:
-    	dict[str, Any]: A schema-valid export envelope.
-    
-    Raises:
-    	ExportSizeError: If the envelope exceeds `max_bytes`.
+    """Build and validate one ``export_batch_v1`` envelope.
+
+    Computes content-addressed ``payload_sha256`` over the transport body,
+    derives the deterministic idempotency key (P1-2), measures final
+    ``size_bytes``, and fails closed via ``BatchTooLargeError`` when the
+    envelope exceeds ``max_bytes``.
     """
     # Transport body for this batch slice (redacted items keyed by ref).
     transport_body = {
@@ -255,15 +228,10 @@ def build_export_batches(
     catalog_pin = metric_catalog_pin()
 
     def try_batch(item_refs: list[str], item_payloads: list[dict[str, Any]]) -> dict[str, Any]:
-        """
-        Build an export envelope for the supplied item references and payloads.
-        
-        Parameters:
-            item_refs: References identifying the items in the batch.
-            item_payloads: Redacted payloads associated with the item references.
-        
-        Returns:
-            The validated export envelope.
+        """Attempt one fixed packing of item_refs/payloads into an envelope.
+
+        Raises ``BatchTooLargeError`` when the measured envelope exceeds
+        ``max_bytes`` (size authority is the envelope, not a pre-count).
         """
         return _build_batch(
             item_refs=item_refs,

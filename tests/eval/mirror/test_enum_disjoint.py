@@ -17,14 +17,7 @@ from git_cg.eval.mirror.transport import EXPORT_ERROR_CLASSES
 
 
 def _values(enum_cls: type) -> set[str]:
-    """Return the string values defined by an enum class.
-    
-    Parameters:
-    	enum_cls (type): The enum class to inspect.
-    
-    Returns:
-    	set[str]: The enum members' string values.
-    """
+    """String values of a closed StrEnum surface."""
     return {m.value for m in enum_cls}
 
 
@@ -60,12 +53,7 @@ def test_e4_mirror_enums_are_value_disjoint(
 
 
 def test_e7_export_health_and_queue_status_are_distinct_surfaces() -> None:
-    """
-    Verifies that export health and queue status values remain distinct surfaces.
-    
-    Shared status tokens such as ``pending`` may exist in both collections, while
-    transport error classes must not be used as queue statuses.
-    """
+    """E7: ExportHealth tokens and queue statuses must remain disjoint surfaces."""
     assert ExportHealth is not QUEUE_STATUSES
     assert ExportHealth.PENDING.value in _values(ExportHealth)
     assert "pending" in QUEUE_STATUSES

@@ -23,7 +23,7 @@ _OMISSION = "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
 
 def _require_betterleaks() -> None:
-    """Require the `betterleaks` executable to be available on `PATH`."""
+    """Skip unless the ``betterleaks`` executable is on PATH."""
     if shutil.which("betterleaks") is None:
         pytest.fail(
             "betterleaks is not on PATH. CI test-and-coverage must install it via mise "

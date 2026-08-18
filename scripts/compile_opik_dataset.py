@@ -73,15 +73,17 @@ Train labels: git_cg.eval.mirror.train (Q18 single dataset + label/split metadat
 
 
 def selection_predicate(row: Mapping[str, Any]) -> bool:
-    """
-    Determine whether a row qualifies for a train or gold projection based on its label.
-    
-    Parameters:
-        row (Mapping[str, Any]): Row to evaluate.
-    
-    Returns:
-        bool: `true` if the row has a recognised positive label and contains no
-            forbidden user-acceptance signal, `false` otherwise.
+    """Return whether a **local Layer-A** row may enter a train/gold projection.
+
+    Pure offline helper retained so callers/tests can assert E6 law without
+    invoking network or Opik. Selection is label-driven only:
+
+    * closed ``label`` / ``train_label`` of ``positive`` (aliases normalized by
+      library consumers), and
+    * never ``user_acceptance`` or other popularity feedback scores.
+
+    This predicate does **not** upload, does **not** call Opik, and does **not**
+    invent labels from telemetry popularity fields.
     """
     if not isinstance(row, Mapping):
         return False
@@ -122,13 +124,11 @@ def compile_dataset(
     dataset_name: str = "git-cg-golden-dataset",
     threshold: float = 0.8,
 ) -> None:
-    """
-    Refuse the retired dataset compilation and upload workflow.
-    
-    Parameters:
-    	project_name (str): Retained for compatibility with historical CLI invocations.
-    	dataset_name (str): Retained for compatibility with historical CLI invocations.
-    	threshold (float): Retained for compatibility with historical CLI invocations.
+    """Former upload entrypoint — always refuses (P2-3).
+
+    Parameters are accepted only so historical CLI invocations fail closed with
+    a pointer instead of raising ``TypeError``. They are intentionally unused:
+    project/dataset/threshold no longer select cloud traces by popularity.
     """
     del project_name, dataset_name, threshold  # retained for CLI back-compat only
     code = refuse_legacy_upload()

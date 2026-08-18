@@ -24,19 +24,7 @@ def _bundle(
     regime: str | None = None,
     profile: str = "train_rich",
 ) -> dict:
-    """
-    Construct a training bundle fixture with optional label and regime metadata.
-    
-    Parameters:
-        bid (str): Bundle identifier.
-        label (str | None): Optional training label.
-        split (str): Dataset split.
-        regime (str | None): Optional regime metadata value.
-        profile (str): Redaction profile.
-    
-    Returns:
-        dict: A training bundle containing artifact, gate, score, metadata, and split fields.
-    """
+    """Build a train-projection bundle fixture with optional label/regime."""
     meta: dict = {"redaction_profile": profile, "split_group_id": f"sg-{bid}"}
     if label is not None:
         meta["train_label"] = label

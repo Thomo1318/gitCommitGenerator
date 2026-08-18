@@ -22,16 +22,7 @@ SCRIPT_PATH = REPO_ROOT / "scripts" / "compile_opik_dataset.py"
 
 
 def _load_script_module(*, mask_opik: bool = False, monkeypatch: pytest.MonkeyPatch | None = None):
-    """
-    Load the retired script as a standalone module.
-    
-    Parameters:
-        mask_opik (bool): Whether to mask the ``opik`` module during loading.
-        monkeypatch (pytest.MonkeyPatch | None): Pytest monkeypatch fixture required when masking ``opik``.
-    
-    Returns:
-        The loaded script module.
-    """
+    """Load the retired compile script as a standalone module (not on package path)."""
     if mask_opik:
         assert monkeypatch is not None
         # Ensure script body never requires a real opik install.

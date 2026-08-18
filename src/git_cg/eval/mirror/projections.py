@@ -73,14 +73,7 @@ class ProjectionError(ValueError):
 
 
 def _attempts(bundle: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract dictionary-valued attempts from a bundle.
-    
-    Parameters:
-    	bundle (dict[str, Any]): Bundle containing the attempts collection.
-    
-    Returns:
-    	list[dict[str, Any]]: Dictionary-valued attempts from the bundle.
-    """
+    """Return dict-typed attempt rows from a bundle (empty if absent/invalid)."""
     raw = bundle.get("attempts") or []
     if not isinstance(raw, list):
         return []
@@ -88,7 +81,7 @@ def _attempts(bundle: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _attempt_artifact_class(attempt: dict[str, Any]) -> str | None:
-    """Return the attempt's artifact class when one is provided directly or in its metadata."""
+    """Read ``artifact_class`` from an attempt or its nested ``meta``."""
     direct = attempt.get("artifact_class")
     if isinstance(direct, str) and direct.strip():
         return direct.strip()
@@ -100,27 +93,19 @@ def _attempt_artifact_class(attempt: dict[str, Any]) -> str | None:
 
 
 def select_final_attempt(bundle: dict[str, Any]) -> dict[str, Any] | None:
-    """
-    Select the attempt bound to the bundle's final output.
-    
-    Attempts are matched by explicit ``final_accept`` classification, final-message
-    hash, or final-message content. A sole attempt is selected when no stronger
-    binding exists. A bundle-level final message is synthesised as a final-accept
-    carrier when no attempts are present and the bundle is classified as
-    ``final_accept``.
-    
-    Parameters:
-        bundle (dict[str, Any]): Bundle containing attempts and final-output
-            binding information.
-    
-    Returns:
-        dict[str, Any] | None: The selected attempt, or a synthesised final-accept
-        carrier. Returns ``None`` for an empty bundle without a final message.
-    
-    Raises:
-        ProjectionError: If multiple attempts claim final acceptance or share the
-        same final-output binding, or if multiple attempts have no identifiable
-        final binding.
+    """Select the final-bytes-bound attempt by explicit final_accept law (P1-8).
+
+    Precedence:
+
+    1. Unique attempt with ``artifact_class=final_accept``.
+    2. Unique attempt matching ``final_message_sha256`` / ``final_message``.
+    3. Sole attempt when the bundle itself is ``final_accept`` (or sole attempt).
+    4. Bundle-level ``final_message`` synthesized as a final_accept carrier when
+       no attempts are present but the bundle claims final_accept.
+    5. Fail closed when multiple attempts exist without an identifiable binding.
+
+    Returns ``None`` only when the bundle has no attempts **and** no
+    bundle-level final message to project (empty / hollow inputs).
     """
     attempts = _attempts(bundle)
     final_token = ArtifactClass.FINAL_ACCEPT.value
@@ -195,14 +180,7 @@ def _metric_index() -> dict[str, dict[str, Any]]:
 
 
 def _resolve_metric_row(key: str) -> dict[str, Any] | None:
-    """Resolve a metric key to its catalogue entry.
-    
-    Parameters:
-    	key (str): Metric key or name to look up.
-    
-    Returns:
-    	dict[str, Any] | None: The matching metric catalogue entry, or `None` when no entry matches.
-    """
+    """Resolve a metric catalog row by id (case-insensitive); ``None`` if unknown."""
     index = _metric_index()
     if key in index:
         return index[key]
@@ -223,20 +201,10 @@ def authority_annotations(
     scored_target: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Builds authority metadata for projected trace and feedback payloads.
-    
-    Parameters:
-    	bundle (dict[str, Any]): Bundle containing provenance and redaction metadata.
-    	experiment_name (str): Name of the experiment associated with the projection.
-    	metric_id (str | None): Identifier of the associated metric.
-    	polarity (str | None): Metric scoring polarity.
-    	value_kind (str | None): Kind of value represented by the metric.
-    	scored_target (str | None): Target used for scoring.
-    	extra (dict[str, Any] | None): Additional non-null metadata fields to include.
-    
-    Returns:
-    	dict[str, Any]: E9 authority annotations with schema, metric-catalog, provenance, and projection controls.
+    """Build E9 authority annotations for feedback/trace metadata.
+
+    Marks ``product_score_authority=True`` and ``cloud_rescore_forbidden=True``
+    so Opik-side rescoring cannot silently become score authority.
     """
     meta = _bundle_meta(bundle)
     profile = meta.get("redaction_profile") or bundle.get("redaction_profile") or meta.get("applied_redaction_profile")
@@ -282,15 +250,11 @@ def project_bundle_to_trace(
     *,
     experiment_name: str,
 ) -> dict[str, Any]:
-    """
-    Project a redacted evaluation bundle into a trace payload.
-    
-    Parameters:
-    	bundle (dict[str, Any]): Redacted evaluation bundle data.
-    	experiment_name (str): Name associated with the projected evaluation.
-    
-    Returns:
-    	dict[str, Any]: Trace payload containing redacted final-attempt data, gate results, score-card metadata, and authority annotations.
+    """Project a redacted ``ape_bundle_v1`` to a trace/span upload payload.
+
+    Carries the final-bytes-bound attempt and gate verdict. The score card
+    is attached as authoritative metadata (not recomputed). Input/output
+    are redacted bundle fields only - never raw diff text.
     """
     final = select_final_attempt(bundle) or {}
     gate = bundle.get("gate") or {}
@@ -364,14 +328,11 @@ def project_session_thread(
 
 
 def _coerce_feedback_value(value: Any) -> tuple[float, str, str] | None:
-    """
-    Convert a boolean or numeric score-card value into a feedback value, polarity, and value kind.
-    
-    Parameters:
-        value (Any): The score-card value to convert.
-    
-    Returns:
-        tuple[float, str, str] | None: The converted value, polarity, and value kind, or `None` for nonnumeric values.
+    """Return ``(float_value, polarity, value_kind)`` or ``None`` if not projectable.
+
+    Booleans → 1.0/0.0 with ``pass_fail`` (P1-9 / R5).
+    Integers/floats (non-bool) → float with default ``higher_is_better`` polarity
+    until catalog resolution overrides it.
     """
     if isinstance(value, bool):
         return (1.0 if value else 0.0, Polarity.PASS_FAIL.value, "boolean")
@@ -385,17 +346,13 @@ def project_score_card_to_feedback(
     *,
     experiment_name: str,
 ) -> list[dict[str, Any]]:
-    """
-    Project numeric and boolean score-card values into local feedback records.
-    
-    Parameters:
-        bundle (dict[str, Any]): Bundle containing the score card and final scored target.
-        experiment_name (str): Name associated with each feedback record.
-    
-    Returns:
-        list[dict[str, Any]]: Feedback records for projectable score-card values. Boolean
-            values are represented as ``1.0`` or ``0.0`` with ``pass_fail`` polarity;
-            nonnumeric values are skipped.
+    """Project the deterministic ``score_card`` to Opik feedback scores.
+
+    Each numeric **or boolean** entry becomes one feedback score. Booleans map
+    to ``1.0``/``0.0`` with ``polarity=pass_fail`` (P1-9). Source is always the
+    closed enum ``local_wrapper`` (P1-10). Catalog polarity/metric ids are
+    attached when resolvable; unresolved keys still project with the raw key as
+    ``metric_id`` so values are never silently dropped for enum mismatch.
     """
     score_card = bundle.get("score_card") or bundle.get("product_card") or {}
     if not isinstance(score_card, dict):

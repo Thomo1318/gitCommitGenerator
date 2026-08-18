@@ -88,12 +88,7 @@ class ExportQueueError(ValueError):
     """Export queue failure (fail-closed; ``export_*`` class, never product)."""
 
     def __init__(self, message: str, *, error_class: str = "export_validation") -> None:
-        """Initialise an export queue error with a message and classification.
-        
-        Parameters:
-        	message (str): Description of the export queue error.
-        	error_class (str): Classification of the error.
-        """
+        """Queue error with closed ``error_class`` (default ``export_validation``)."""
         self.error_class = error_class
         super().__init__(message)
 
@@ -104,18 +99,9 @@ def export_queue_dir(repo_root: Path) -> Path:
 
 
 def _queue_item_path(repo_root: Path, queue_id: str) -> Path:
-    """
-    Build the filesystem path for a queue item.
-    
-    Parameters:
-    	repo_root (Path): Repository root containing the evaluation queue.
-    	queue_id (str): Queue item identifier.
-    
-    Returns:
-    	Path: Path to the queue item's JSON record.
-    
-    Raises:
-    	ExportQueueError: If the queue identifier is empty or contains path traversal or hidden-name patterns.
+    """Path for ``queue_id.json`` under the export queue dir.
+
+    Rejects empty ids and path-traversal tokens (``/``, ``..``, leading ``.``).
     """
     if not queue_id or "/" in queue_id or ".." in queue_id or queue_id.startswith("."):
         raise ExportQueueError(f"invalid queue_id: {queue_id!r}")
@@ -123,32 +109,16 @@ def _queue_item_path(repo_root: Path, queue_id: str) -> Path:
 
 
 def _utc_now() -> datetime:
-    """Return the current date and time in UTC."""
     return datetime.now(UTC)
 
 
 def _iso(dt: datetime) -> str:
-    """Formats a datetime as a UTC ISO 8601 timestamp.
-    
-    Parameters:
-    	dt (datetime): The datetime to format.
-    
-    Returns:
-    	str: The UTC timestamp in ``YYYY-MM-DDTHH:MM:SSZ`` format.
-    """
+    """Format a datetime as UTC ``Z`` timestamp."""
     return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _parse_iso(value: str | None) -> datetime | None:
-    """
-    Parse an ISO 8601 timestamp and normalise it to UTC.
-    
-    Parameters:
-    	value (str | None): The timestamp text to parse.
-    
-    Returns:
-    	datetime | None: The UTC timestamp, or `None` when the value is empty or invalid.
-    """
+    """Parse an ISO/``Z`` timestamp to UTC; invalid input yields ``None``."""
     if not value:
         return None
     text = str(value).strip()
@@ -164,17 +134,10 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 
 def _transport_body_from_batch(batch: dict[str, Any]) -> dict[str, Any]:
-    """
-    Extract the transport body required for durable export queuing.
-    
-    Parameters:
-    	batch (dict[str, Any]): Export batch containing the transport body under `meta.transport_body`.
-    
-    Returns:
-    	dict[str, Any]: The batch's transport body.
-    
-    Raises:
-    	ExportQueueError: If `meta.transport_body` is missing or is not a mapping.
+    """Extract durable ``meta.transport_body`` from a batch envelope.
+
+    Fails closed when missing - refuses item-id-only enqueue that cannot
+    be drained offline (P1-1 content-addressed payload contract).
     """
     meta = batch.get("meta") if isinstance(batch.get("meta"), dict) else {}
     body = meta.get("transport_body")
@@ -195,22 +158,17 @@ def enqueue_export_batch(
     network_export: bool = False,
     git_sha: str | None = None,
 ) -> Path:
-    """
-    Persist a redacted export payload and a pending queue record for a batch.
-    
-    Re-enqueuing an existing valid record preserves it unless ``force`` is
-    ``True``. Network exports require a resolved Git SHA before any files are
-    written.
-    
-    Parameters:
-        batch (dict[str, Any]): Export batch containing the payload and metadata.
-        repo_root (Path | None): Repository root; resolved automatically when omitted.
-        force (bool): Whether to replace an existing valid queue record.
-        network_export (bool): Whether to require a resolved Git SHA.
-        git_sha (str | None): Explicit Git SHA to validate for network exports.
-    
-    Returns:
-        Path: Path to the persisted queue record.
+    """Persist payload artifact + pending ``export_queue_item_v1`` for ``batch``.
+
+    The queue row id is the batch ``idempotency_key`` (fallback ``batch_id``).
+    Re-enqueue is idempotent: any existing valid queue row is left untouched
+    unless ``force=True``. This preserves in-flight ``sending`` lease ownership
+    and attempt counters as well as terminal ``sent`` rows.
+
+    When ``network_export=True`` (P1-12), an unresolved/zeroed git SHA fails
+    closed as ``export_validation`` **before** any payload/queue write so
+    network-bound rows never share a fake identity. Local/offline enqueue
+    keeps the historical default (``network_export=False``).
     """
     root = repo_root if repo_root is not None else resolve_repo_root()
 
@@ -286,19 +244,7 @@ def enqueue_export_batch(
 
 
 def load_queue_item(queue_id: str, repo_root: Path | None = None) -> dict[str, Any]:
-    """
-    Load a queue item by its identifier.
-    
-    Parameters:
-        queue_id (str): Identifier of the queue item to load.
-        repo_root (Path | None): Repository root containing the export queue.
-    
-    Returns:
-        dict[str, Any]: The queue item.
-    
-    Raises:
-        ExportQueueError: If the item is missing, unreadable, malformed, or not a JSON object.
-    """
+    """Load a queue row by id. Raises ``ExportQueueError`` if absent/invalid."""
     root = repo_root if repo_root is not None else resolve_repo_root()
     path = _queue_item_path(root, queue_id)
     if not path.is_file():
@@ -318,17 +264,7 @@ def load_queue_payload(
     repo_root: Path | None = None,
     row: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Load and verify the payload referenced by a queue item.
-    
-    Parameters:
-    	queue_id (str): Identifier of the queue item whose payload should be loaded.
-    	repo_root (Path | None): Repository root containing the export queue.
-    	row (dict[str, Any] | None): Preloaded queue item to use instead of loading it.
-    
-    Returns:
-    	dict[str, Any]: The verified durable payload.
-    """
+    """Load + verify the durable payload for a queue row (P0-3 / E11)."""
     root = repo_root if repo_root is not None else resolve_repo_root()
     item = row if row is not None else load_queue_item(queue_id, repo_root=root)
     ref = str(item.get("payload_ref") or "")
@@ -357,24 +293,10 @@ def mark_queue_item(
     clear_lease: bool = False,
     increment_attempt: bool = False,
 ) -> Path:
-    """
-    Update a queue item and persist its new status.
-    
-    Parameters:
-    	queue_id (str): Identifier of the queue item.
-    	status (str): Target queue status.
-    	notes (str | None): Optional bounded note to store with the item.
-    	last_error_class (str | None): Optional classification of the latest error.
-    	claimed_by (str | None): Optional owner for a sending item.
-    	lease_seconds (int | None): Lease duration for a sending item.
-    	clear_lease (bool): Whether to remove the current lease.
-    	increment_attempt (bool): Whether to increase the attempt count.
-    
-    Returns:
-    	Path: Path to the updated queue row.
-    
-    Raises:
-    	ExportQueueError: If the status is unknown, the transition is invalid, or the updated item fails schema validation.
+    """Transition a queue row to ``status`` under the closed state machine.
+
+    Enforces legal transitions, mirrors ``envelope_status``, bounds notes,
+    and manages claim lease fields for ``sending`` and terminal states.
     """
     if status not in QUEUE_STATUSES:
         raise ExportQueueError(f"unknown queue status: {status!r}")
@@ -418,14 +340,9 @@ def mark_queue_item(
 
 
 def _lease_expired(item: dict[str, Any], *, now: datetime | None = None) -> bool:
-    """Determine whether a queue item's lease has expired or is unavailable.
-    
-    Parameters:
-    	item (dict[str, Any]): Queue item containing the lease expiry timestamp.
-    	now (datetime | None): Time to compare against; uses the current UTC time when omitted.
-    
-    Returns:
-    	bool: `true` if the lease has expired or has no valid expiry timestamp, `false` otherwise.
+    """True when a ``sending`` row's lease is missing or past ``now``.
+
+    Missing lease is immediately reclaimable (crash recovery).
     """
     exp = _parse_iso(item.get("lease_expires_at") if isinstance(item.get("lease_expires_at"), str) else None)
     if exp is None:
@@ -440,15 +357,9 @@ def release_stale_leases(
     *,
     now: datetime | None = None,
 ) -> list[str]:
-    """
-    Reclaim queue items whose sending leases have expired.
-    
-    Parameters:
-    	repo_root (Path | None): Repository root containing the export queue.
-    	now (datetime | None): Reference time used to determine lease expiry.
-    
-    Returns:
-    	list[str]: Queue IDs reclaimed from `sending` to `pending`.
+    """Reclaim stale ``sending`` rows back to ``pending`` (P1-11).
+
+    Never blocks product accept; returns reclaimed queue ids.
     """
     root = repo_root if repo_root is not None else resolve_repo_root()
     qdir = export_queue_dir(root)
@@ -470,15 +381,7 @@ def release_stale_leases(
 
 
 def list_claimable_items(repo_root: Path | None = None) -> list[dict[str, Any]]:
-    """
-    Identify queue items that are currently eligible for claiming, reclaiming expired leases first.
-    
-    Parameters:
-    	repo_root (Path | None): Repository root containing the export queue. Defaults to the resolved repository root.
-    
-    Returns:
-    	list[dict[str, Any]]: Valid queue rows with ``pending`` status, sorted by filename.
-    """
+    """Return rows eligible for claim: reclaim stale leases, then list ``pending``."""
     root = repo_root if repo_root is not None else resolve_repo_root()
     release_stale_leases(repo_root=root)
     qdir = export_queue_dir(root)
@@ -502,16 +405,11 @@ def claim_queue_item(
     claimed_by: str | None = None,
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
 ) -> dict[str, Any] | None:
-    """
-    Claim a queue item for processing and assign it a lease.
-    
-    Parameters:
-    	queue_id (str): Identifier of the queue item to claim.
-    	claimed_by (str | None): Optional owner identifier for the claim.
-    	lease_seconds (int): Duration of the processing lease in seconds.
-    
-    Returns:
-    	dict[str, Any] | None: The claimed queue item, or `None` if it cannot be claimed.
+    """Atomically claim a pending (or reclaimed) row for drain.
+
+    Uses exclusive create of a ``.claim`` lock file beside the row to reduce
+    double-claim races between concurrent drainers, then transitions the row
+    to ``sending``. Returns the claimed row, or ``None`` if not claimable.
     """
     root = repo_root if repo_root is not None else resolve_repo_root()
     # Reclaim first so stale sending becomes pending.

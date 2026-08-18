@@ -47,14 +47,9 @@ class TrainProjectionError(ValueError):
 
 
 def normalize_train_label(raw: object) -> str | None:
-    """
-    Map a raw label value to a supported training label.
-    
-    Parameters:
-    	raw (object): Label value or alias to normalise.
-    
-    Returns:
-    	str | None: ``"positive"`` or ``"negative"`` for recognised labels; ``None`` for missing or unknown values.
+    """Map common aliases to closed ``positive`` / ``negative`` labels.
+
+    Returns ``None`` for missing/unknown labels (fail-closed for positive_gold).
     """
     if raw is None:
         return None
@@ -84,16 +79,10 @@ def project_train_row(
     dataset_id: str = TRAIN_DATASET_ID,
     default_split: str = "train",
 ) -> dict[str, Any] | None:
-    """
-    Project a labelled redacted bundle into a train-lake row.
-    
-    Parameters:
-    	bundle (Mapping[str, Any]): Redacted bundle containing the label and metadata.
-    	dataset_id (str): Dataset identifier for the projected row.
-    	default_split (str): Split used when the bundle does not specify one.
-    
-    Returns:
-    	dict[str, Any] | None: The projected row, or `None` when the bundle has no recognised label.
+    """Project one redacted bundle into a train-lake row, or ``None`` if unlabeled.
+
+    Expects R14 redaction to have already run. Does **not** invent labels
+    from telemetry or user-acceptance popularity signals.
     """
     meta = dict(bundle.get("meta") or {})
     label = normalize_train_label(
@@ -139,14 +128,9 @@ def project_train_row(
 
 
 def filter_positive_gold(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Filter rows to produce the positive-gold projection.
-    
-    Parameters:
-    	rows (Iterable[Mapping[str, Any]]): Candidate training rows.
-    
-    Returns:
-    	list[dict[str, Any]]: Rows with a positive label, excluding rows marked as antipatterns, with the projection set to `positive_gold`.
+    """Return only labeled positive rows; reject negatives and unlabeled.
+
+    Safeguard: antipattern / negative never silent-merge into ``positive_gold``.
     """
     out: list[dict[str, Any]] = []
     for raw in rows:
@@ -170,22 +154,10 @@ def build_train_projection(
     dataset_id: str = TRAIN_DATASET_ID,
     default_split: str = "train",
 ) -> dict[str, Any]:
-    """
-    Build the Q18 single-dataset training projection and its label-specific views.
-    
-    Parameters:
-        bundles (Iterable[Mapping[str, Any]]): Bundle records to project.
-        dataset_id (str): Dataset identifier for the projected rows.
-        default_split (str): Split assigned when a bundle does not provide one.
-    
-    Returns:
-        dict[str, Any]: Projection metadata containing all labelled rows, positive-gold
-            rows, negative rows, the count of excluded unlabeled bundles, and authority
-            safeguards.
-    
-    Raises:
-        TrainProjectionError: If a non-empty bundle identifier occurs in both the
-            positive-gold and negative projections.
+    """Build Q18 single-dataset train projection with dual-axis safeguards.
+
+    Returns labeled ``rows``, ``positive_gold``, ``negatives``, and
+    ``excluded_unlabeled``. Fails closed on positive/negative bundle_id overlap.
     """
     rows: list[dict[str, Any]] = []
     excluded = 0
