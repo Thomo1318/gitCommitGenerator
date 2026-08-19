@@ -270,6 +270,13 @@ def project_score_context(
     )
 
 
-def live_pin_refs() -> list[str]:
-    """Return live S0 pin strings for ScoreResult.pin_refs."""
-    return [schema_pack_pin(), metric_catalog_pin()]
+def live_pin_refs(*, prompt_pack: str | None = None) -> list[str]:
+    """Return live S0 pin strings for ScoreResult.pin_refs.
+
+    Prompt-pack pins are included only when a Lane C' pack actually resolved
+    (Slice 2). Default remains schema + catalog so non-C' rows stay honest.
+    """
+    refs = [schema_pack_pin(), metric_catalog_pin()]
+    if prompt_pack:
+        refs.append(prompt_pack)
+    return refs

@@ -119,8 +119,8 @@ def judge_identity_pins_resolvable(
     A judge identity is resolvable when:
 
     * model id is present and not ``latest`` / undated alias
-    * pack identity is non-empty (default deferred pack id is allowed in S5a;
-      byte resolution is Slice 2 fail-closed)
+    * pack identity is non-empty and not ``latest`` (default deferred pack id
+      is allowed at authorization; byte resolution is Slice 2 fail-closed)
     * sampling + output-contract identity fields are non-empty (defaults ok)
     """
     env = environ if environ is not None else os.environ
@@ -130,6 +130,8 @@ def judge_identity_pins_resolvable(
 
     pack = (pack_identity if pack_identity is not None else DEFAULT_PACK_IDENTITY).strip()
     if not pack:
+        return False
+    if _LATEST_RE.search(pack):
         return False
 
     sampling = (sampling_identity if sampling_identity is not None else DEFAULT_SAMPLING_IDENTITY).strip()

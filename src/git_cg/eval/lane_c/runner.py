@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from git_cg.eval.lane_c.availability import (
@@ -18,24 +19,37 @@ from git_cg.eval.lane_c.availability import (
     evaluate_judge_availability,
 )
 from git_cg.eval.lane_c.eligibility import (
+    DEFAULT_PACK_IDENTITY,
     LaneCEligibility,
     evaluate_semantic_cohort_eligibility,
+)
+from git_cg.eval.lane_c.prompt_pack import (
+    PromptPackError,
+    prompt_pack_pin,
+    record_universe_fingerprint,
+    resolve_judge_pack,
 )
 from git_cg.eval.lane_c.taxonomy import (
     EXEC_COHORT_INELIGIBLE,
     EXEC_JUDGE_NOT_INVOKED,
     EXEC_LAB_OVERRIDE_DIAGNOSTIC,
+    EXEC_PACK_DECODE_ERROR,
+    EXEC_PACK_UNRESOLVABLE,
     EXEC_UNAVAILABLE_CREDS,
     FAILURE_COHORT_INELIGIBLE,
     FAILURE_JUDGE_NOT_INVOKED,
     FAILURE_LAB_OVERRIDE_DIAGNOSTIC,
+    FAILURE_PACK_DECODE_ERROR,
+    FAILURE_PACK_UNRESOLVABLE,
     GATE_JUDGE_UNAVAILABLE,
     GATE_LAB_OVERRIDE_DIAGNOSTIC,
+    GATE_PROMPT_PACK_MISSING,
     assert_execution_code,
     failure_id_for,
     map_gate_to_execution,
 )
 from git_cg.eval.score_result import ScoreResultV1
+from git_cg.eval.scoring.context import live_pin_refs
 from git_cg.eval.scoring.result_builder import make_score
 
 # Default C' metrics when a caller opts into defaults (Slice 4 wires scoring).
@@ -66,6 +80,7 @@ def _skip_row(
     availability: LaneCAvailability | None,
     extra_evidence: Mapping[str, Any] | None = None,
     gate_disposition: str | None = None,
+    pin_refs: list[str] | None = None,
 ) -> ScoreResultV1:
     """Emit one advisory skip row with closed-set reason + failure_id."""
     code = assert_execution_code(execution_code)
@@ -110,6 +125,7 @@ def _skip_row(
         reason=code,
         evidence=evidence,
         failure_ids=[fid] if fid else None,
+        pin_refs=pin_refs,
     )
     # Advisory continuous metrics must not auto-derive passed=True (D30 footgun).
     return row.model_copy(update={"passed": None})
@@ -131,6 +147,8 @@ def run_lane_c(
     secret_resolver: SecretResolver | None = None,
     client_factory_ok: bool | None = None,
     use_default_metrics: bool = False,
+    prompt_root: Path | None = None,
+    universe_root: Path | None = None,
 ) -> LaneCRunResult:
     """Run the gated Lane C' cohort skeleton.
 
@@ -141,8 +159,10 @@ def run_lane_c(
     3. ``lab_override`` diagnostic (det fail) → ``lab_override_diagnostic`` skips;
        **zero** judge side effects even when credentials exist.
     4. Eligible but unavailable → ``unavailable_creds`` / constructibility skips.
-    5. Eligible + available → **no judge invocation yet** (Slice 4); honest
-       ``judge_not_invoked`` skips with ``invoked=False`` / ``cprime_ran=False``.
+    5. Eligible + available → resolve local ``prompt_pack_v1`` (Slice 2).
+       Missing/malformed/non-UTF-8 packs skip as ``pack_unresolvable`` /
+       ``pack_decode_error``. Resolved packs still do **not** invoke judges
+       (Slice 4); honest ``judge_not_invoked`` skips.
     6. Explicit empty ``metric_ids`` → no rows (``[]``).
     7. Unknown metric ids fail closed via catalog (``KeyError``).
 
@@ -278,9 +298,76 @@ def run_lane_c(
             evidence=run_evidence,
         )
 
-    # 4) Eligible + available: Slice 1 does not invoke judge/pack transport.
-    # Honest skip — never cprime_ran := eligible (D32).
+    # 4) Eligible + available: resolve local prompt packs (Slice 2) then
+    # honest non-invocation (Slice 4 owns judge transport).
+    fingerprint = record_universe_fingerprint(universe_root)
+    run_evidence["universe_fingerprint"] = fingerprint.as_dict()
+
+    if fingerprint.root_present and not fingerprint.pinned:
+        map_gate_to_execution(GATE_PROMPT_PACK_MISSING, EXEC_PACK_UNRESOLVABLE)
+        extra = {
+            "failure_class": FAILURE_PACK_UNRESOLVABLE,
+            "universe_fingerprint": fingerprint.as_dict(),
+            "sampling_identity": eligibility.evidence.get("sampling_identity"),
+            "output_contract_identity": eligibility.evidence.get("output_contract_identity"),
+        }
+        for mid in ids:
+            rows.append(
+                _skip_row(
+                    mid,
+                    execution_code=EXEC_PACK_UNRESOLVABLE,
+                    eligibility=eligibility,
+                    availability=availability,
+                    gate_disposition=GATE_PROMPT_PACK_MISSING,
+                    extra_evidence=extra,
+                )
+            )
+        return LaneCRunResult(
+            rows=rows,
+            eligibility=eligibility,
+            availability=availability,
+            invoked=False,
+            scored_count=0,
+            cprime_ran=False,
+            evidence=run_evidence,
+        )
+
+    # Authorization may still carry the Slice-1 deferred placeholder.
+    # Byte identity is computed from local files; only a real sha256 pin is
+    # treated as an expected-identity constraint.
+    expected_pack = pack_identity
+    if expected_pack in {None, "", DEFAULT_PACK_IDENTITY}:
+        expected_pack = None
     for mid in ids:
+        try:
+            pack = resolve_judge_pack(
+                mid,
+                prompt_root=prompt_root,
+                expected_identity=expected_pack,
+            )
+        except PromptPackError as exc:
+            code = exc.code if exc.code in {EXEC_PACK_UNRESOLVABLE, EXEC_PACK_DECODE_ERROR} else EXEC_PACK_UNRESOLVABLE
+            fid = FAILURE_PACK_DECODE_ERROR if code == EXEC_PACK_DECODE_ERROR else FAILURE_PACK_UNRESOLVABLE
+            map_gate_to_execution(GATE_PROMPT_PACK_MISSING, code)
+            rows.append(
+                _skip_row(
+                    mid,
+                    execution_code=code,
+                    eligibility=eligibility,
+                    availability=availability,
+                    gate_disposition=GATE_PROMPT_PACK_MISSING,
+                    extra_evidence={
+                        "failure_class": fid,
+                        "pack_error": str(exc),
+                        "universe_fingerprint": fingerprint.as_dict(),
+                        "sampling_identity": eligibility.evidence.get("sampling_identity"),
+                        "output_contract_identity": eligibility.evidence.get("output_contract_identity"),
+                    },
+                )
+            )
+            continue
+
+        pin = prompt_pack_pin(pack)
         rows.append(
             _skip_row(
                 mid,
@@ -288,10 +375,17 @@ def run_lane_c(
                 eligibility=eligibility,
                 availability=availability,
                 gate_disposition=None,
+                pin_refs=live_pin_refs(prompt_pack=pin),
                 extra_evidence={
                     "failure_class": FAILURE_JUDGE_NOT_INVOKED,
-                    "spine_stage": "s5a_skeleton",
-                    "next_stage": "prompt_pack_and_judge",
+                    "spine_stage": "s5b_prompt_pack",
+                    "next_stage": "judge_transport",
+                    "pack_id": pack["pack_id"],
+                    "pack_identity": pin,
+                    "content_sha256": pack["content_sha256"],
+                    "sampling_identity": eligibility.evidence.get("sampling_identity"),
+                    "output_contract_identity": eligibility.evidence.get("output_contract_identity"),
+                    "universe_fingerprint": fingerprint.as_dict(),
                 },
             )
         )
