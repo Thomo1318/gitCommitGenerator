@@ -1,66 +1,89 @@
 #!/usr/bin/env python
+"""Legacy Opik test-suite bootstrap — retired as alternate authority (S5 D24 / S5-G05).
+
+Issue #233 / plan §8.9 / D24:
+
+* This script must **never** be accept-path, CI, package, or golden authority.
+* Cloud ``evaluate()`` harnesses are **not** the offline ``tests/eval`` SoT.
+* Canonical evaluation paths::
+
+      uv run pytest tests/eval/test_lane_c*.py
+      src/git_cg/eval/lane_c/run_lane_c
+      src/git_cg/eval/scoring/score_bundle
+
+* Do not revive ``scripts/eval_commit_message.py`` / ``scripts/opik_metrics.py``
+  as Hybrid/gold/path-class law (S2 demotion + S5 residual board).
+
+This file remains only as a fail-closed pointer so old invocation sites do not
+silently regain hard ``import opik`` evaluation authority.
+"""
+
+from __future__ import annotations
+
 import argparse
-import os
 import sys
-from typing import Any
+from typing import Final
 
-import opik
-from opik.evaluation import evaluate
+# No module-level ``import opik`` and no import of sibling legacy scripts
+# (I4 / D20 / D24). Offline tests and gated Lane C are the supported surfaces.
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+__all__ = [
+    "CANONICAL_EVAL_COMMANDS",
+    "LEGACY_TEST_SUITE_SETUP_RETIRED",
+    "main",
+    "refuse_legacy_test_suite_setup",
+    "run_test_suite",
+]
 
-# Import existing metrics and the task runner
-from eval_commit_message import commit_quality_metric, evaluation_task
-from opik_metrics import FormatMetric
+LEGACY_TEST_SUITE_SETUP_RETIRED: Final[bool] = True
+
+CANONICAL_EVAL_COMMANDS: Final[tuple[str, ...]] = (
+    "uv run pytest tests/eval/test_lane_c*.py",
+    "uv run pytest tests/eval/test_score_runner.py tests/eval/test_family_h.py",
+    "# library: git_cg.eval.lane_c.run_lane_c / git_cg.eval.scoring.score_bundle",
+)
+
+_REFUSE_MESSAGE: Final[str] = f"""\
+ERROR: scripts/setup_opik_test_suites.py is frozen (S5 D24 / S5-G05 / #233).
+
+Reasons:
+  * Cloud Opik evaluate() suites are not offline CI / golden / accept-path SoT.
+  * Hard top-level Opik import violated product isolation (I4 / D20).
+  * Legacy FormatMetric / GEval script metrics are not Hybrid law (S2 demotion).
+
+Canonical path:
+  {CANONICAL_EVAL_COMMANDS[0]}
+  {CANONICAL_EVAL_COMMANDS[1]}
+  {CANONICAL_EVAL_COMMANDS[2]}
+
+Library SoT: src/git_cg/eval/lane_c/** and src/git_cg/eval/scoring/**
+Do not import this script from package code, hooks, or CI.
+"""
 
 
-def run_test_suite(dataset_name: str, metric_name: str):
-    client = opik.Opik()
+def refuse_legacy_test_suite_setup(*, stream=None) -> int:
+    """Print the freeze notice and return a non-zero exit code."""
+    out = sys.stderr if stream is None else stream
+    print(_REFUSE_MESSAGE, file=out)
+    return 2
 
-    print("=== Setting up Test Suite ===")
-    print(f"Dataset: {dataset_name}")
-    print(f"Metric:  {metric_name}")
 
-    try:
-        dataset = client.get_dataset(name=dataset_name)
-    except Exception as e:
-        print(f"Error: Dataset '{dataset_name}' could not be fetched. Ensure it exists in Opik Cloud. Details: {e}")
-        sys.exit(1)
+def run_test_suite(*_args, **_kwargs) -> None:
+    """Former suite runner — always refuses (D24)."""
+    code = refuse_legacy_test_suite_setup()
+    raise SystemExit(code)
 
-    # Choose metrics based on the argument
-    metrics: list[Any] = []
-    if metric_name == "git-cg-commit-quality":
-        metrics = [FormatMetric(), commit_quality_metric]
-    elif metric_name == "format-only":
-        metrics = [FormatMetric()]
-    elif metric_name == "semantic-only":
-        metrics = [commit_quality_metric]
-    else:
-        print(f"Unknown metric suite: {metric_name}")
-        sys.exit(1)
 
-    print("Executing evaluation...")
-    try:
-        evaluate(
-            dataset=dataset,
-            task=evaluation_task,
-            scoring_metrics=metrics,
-            experiment_config={"metric_suite": metric_name},
-        )
-        print("Evaluation completed successfully.")
-    except Exception as e:
-        print(f"Evaluation failed: {e}")
-        sys.exit(1)
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry: parse legacy flags, then refuse with pointer (no network)."""
+    parser = argparse.ArgumentParser(
+        description=("FROZEN: former Opik test-suite runner. Use offline tests/eval and gated Lane C (see #233 D24).")
+    )
+    parser.add_argument("--dataset", default="git-cg-golden-dataset", help=argparse.SUPPRESS)
+    parser.add_argument("--metric", default="git-cg-commit-quality", help=argparse.SUPPRESS)
+    parser.parse_args(argv)
+    return refuse_legacy_test_suite_setup()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Opik test suites by binding datasets to GEval metrics.")
-    parser.add_argument("--dataset", default="git-cg-golden-dataset", help="Target Opik dataset name")
-    parser.add_argument(
-        "--metric",
-        default="git-cg-commit-quality",
-        help="Metric suite to apply (git-cg-commit-quality, format-only, semantic-only)",
-    )
-    args = parser.parse_args()
-
-    run_test_suite(args.dataset, args.metric)
+    raise SystemExit(main())
