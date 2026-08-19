@@ -1,0 +1,203 @@
+{
+  "schema_version": "slice0_baseline_v1",
+  "issue": 233,
+  "slice": 0,
+  "branch": "evals/233-s5-gated-lane-c-cohort-optional-judge-lab",
+  "branch_sha": "cda756dc85e69adc593785538b2bc8cf9821c7b7",
+  "base_ref": "main",
+  "base_sha": "db8e93b3f4f27fb6bd7825f6f6f776784985d94e",
+  "merge_base_sha": "db8e93b3f4f27fb6bd7825f6f6f776784985d94e",
+  "plan_version": "0.9.4-s5-eligibility-split",
+  "plan_path": "docs/plans/opik-evaluation-harness.md",
+  "eval_schema_hash": {
+    "command": "just eval-schema-hash",
+    "schema_pack_pin": "schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6",
+    "metric_catalog_pin": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75"
+  },
+  "base1": {
+    "commands": [
+      {
+        "cmd": "uv run pytest tests/eval -q",
+        "exit_code": 0,
+        "summary": "806 passed in 93.05s",
+        "recorded_at": "2026-08-19T10:00:00+10:00"
+      },
+      {
+        "cmd": "uv run ruff check src/git_cg/eval tests/eval",
+        "exit_code": 0,
+        "summary": "All checks passed!",
+        "recorded_at": "2026-08-19T10:00:00+10:00"
+      }
+    ],
+    "overall_pass": true
+  },
+  "base2": {
+    "compose_gates": {
+      "path": "src/git_cg/eval/scoring/gates.py",
+      "semantic_cohort_eligible": false,
+      "reason": "semantic_cohort_deferred_offline_later_lane",
+      "failure_ids": [
+        "GATE_SEMANTIC_COHORT_DEFERRED"
+      ],
+      "evidence_keys_include": [
+        "offline_s2b",
+        "cprime_ran"
+      ],
+      "match": true
+    },
+    "make_score": {
+      "path": "src/git_cg/eval/scoring/result_builder.py",
+      "footgun": "when passed is None and polarity is higher_is_better, derives passed = float(value) >= 1.0",
+      "match": true,
+      "s5_action": "C′ must use make_advisory_score (or equivalent non-deriving path); never raw make_score(passed=None) for 1–5 scores"
+    },
+    "binder": {
+      "path": "src/git_cg/eval/binding/binder.py",
+      "symbols": [
+        "_project_final_text",
+        "bind_final_accept"
+      ],
+      "owns_final_bytes_projection": true,
+      "utf8_policy": "strict utf-8 or utf-8-replace with encoding meta; sha over original bytes",
+      "match": true
+    }
+  },
+  "base3": {
+    "offline_gate_requires_live_provider": false,
+    "offline_gate_requires_opik": false,
+    "product_accept_path_changes_when_lane_c_off": false,
+    "evidence": [
+      "src/git_cg/eval/scoring/runner.py score_bundle(offline=True) documents no Opik/network/product mutation",
+      "no src/git_cg/eval/lane_c package on post-S4 main / this branch tip yet",
+      "tests/eval suite green without live credentials (BASE-1)"
+    ],
+    "match": true
+  },
+  "policy_lock": {
+    "post_s4_main_base": "v0.20.0",
+    "main_sha": "db8e93b3f4f27fb6bd7825f6f6f776784985d94e",
+    "branch": "evals/233-s5-gated-lane-c-cohort-optional-judge-lab",
+    "d1_d44_match_post_s3_s4_shape": true,
+    "i1_i12_unreopened": true,
+    "notes": [
+      "Lane C does not yet exist on main — expected",
+      "compose_gates still carries deferred semantic cohort stub — expected until S5 touches gates",
+      "S3 binder owns final_accept projection; S4 mirror remains optional offline"
+    ]
+  },
+  "recovery_peel_d43": {
+    "decision": "peel",
+    "tip_ref": "backup/s5c-tip-c59b790",
+    "tip_sha": "c59b790376e9064b6de264a6a2752bad72dc39df",
+    "range_note": "ef73456…c59b790 Lane C commits on historical tip; tip is evidence only — peel onto post-S4 main, never wholesale reset",
+    "take": [
+      {
+        "path": "src/git_cg/eval/lane_c/**",
+        "note": "eligibility/prompt_pack/judge/runner skeleton — rework to post-S4 law before merge"
+      },
+      {
+        "path": "prompts/eval/lane_c/geval_craft/rubric.md",
+        "note": "pinned craft rubric candidate"
+      },
+      {
+        "path": "prompts/eval/lane_c/geval_relevance/rubric.md",
+        "note": "pinned relevance rubric candidate"
+      },
+      {
+        "path": "tests/eval/test_lane_c.py",
+        "note": "eligibility/runner tests — rewrite against current contracts"
+      },
+      {
+        "path": "tests/eval/test_lane_c_prompt_pack.py",
+        "note": "pack identity tests"
+      },
+      {
+        "path": "tests/eval/test_lane_c_judge.py",
+        "note": "judge seam tests"
+      },
+      {
+        "path": "schemas/eval/prompt_pack_v1.schema.json",
+        "note": "take only if still absent/compatible with live schema pack generator"
+      },
+      {
+        "path": "schemas/eval/judge_meta_eval_v1.schema.json",
+        "note": "R2 residual schema candidate; may defer under D28"
+      }
+    ],
+    "refuse": [
+      {
+        "path": "tip CLI export commands / pre-S4 mirror code",
+        "note": "must not regress shipped S4 v0.20.0 mirror/queue/CLI"
+      },
+      {
+        "path": "anything that reintroduces dual package homes or cloud-latest pins",
+        "note": "D23/D5/F5"
+      },
+      {
+        "path": "wholesale cherry-pick/reset of tip history",
+        "note": "D43 — peel files/ideas only under PR review"
+      },
+      {
+        "path": "pre-S4 accept-path or ranking changes on tip",
+        "note": "out of S5 scope"
+      }
+    ],
+    "package_home": "src/git_cg/eval/lane_c/",
+    "package_home_confirmed": true
+  },
+  "legacy_scripts": {
+    "approach": "freeze_headers_or_thin_lab_adapters",
+    "feeds_slices": [
+      6,
+      7
+    ],
+    "inventory": [
+      {
+        "path": "scripts/setup_opik_eval_rule.py",
+        "current": "live cloud GEval rule creator (gpt-4o automations API)",
+        "s5_disposition": "docs-only freeze header minimum with spine docs (D24); never accept-path install; never package/CI authority"
+      },
+      {
+        "path": "scripts/setup_opik_test_suites.py",
+        "current": "live Opik test-suite runner importing legacy eval_commit_message/opik_metrics",
+        "s5_disposition": "docs-only freeze header minimum with spine docs (D24); never accept-path install"
+      },
+      {
+        "path": "scripts/compile_opik_dataset.py",
+        "current": "already retired pointer (S4 P2-3 / E6)",
+        "s5_disposition": "leave retired; do not revive as Lane C authority"
+      },
+      {
+        "path": "scripts/opik_metrics.py",
+        "current": "S2b absorption target / legacy shallow metrics",
+        "s5_disposition": "not Lane C spine; do not re-home as C′ law"
+      },
+      {
+        "path": "scripts/eval_commit_message.py",
+        "current": "live LLM regen + format/GEval scaffold",
+        "s5_disposition": "not default S5 path; freeze/absorb later — never silent primary artifact scorer"
+      }
+    ]
+  },
+  "d44_pin_honesty": {
+    "live_schema_pack_pin": "schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6",
+    "live_metric_catalog_pin": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+    "docs_eval_readme_was_stale_schema_pin": "schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6",
+    "action": "reconcile docs/eval/README.md to live just eval-schema-hash output"
+  },
+  "product_code_changed": false,
+  "recorded_at": "2026-08-19T10:17:25+10:00",
+  "eval_validate_checksum": {
+    "algorithm": "sha256",
+    "input": "canonical JSON of slice0_baseline fields excluding this checksum object and recorded_at",
+    "hex": "86963185379cad62f942d09da8f8a9c349c59b9302f64d6f5376d6e1cd93ed07",
+    "note": "Issue text says `just eval-validate` checksum; repo currently exposes `just eval-schema-hash` for pin identity. This artifact records both live pins and a content checksum over the baseline payload so the claim is machine-checkable."
+  },
+  "exit": {
+    "architecture_unreopened": true,
+    "baseline_recorded": true,
+    "plan_body_alignment_target_version": "0.9.4-s5-eligibility-split",
+    "slice_1_may_start": true,
+    "no_lane_c_product_code_in_slice_0": true
+  }
+}

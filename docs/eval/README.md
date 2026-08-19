@@ -32,7 +32,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6`
+  * `schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -536,4 +536,15 @@ The pass-2 offline matrix and S4-A…G claim-evidence table live in [`docs/eval/
 ### Boundary
 
 S4 **mirrors precomputed local evidence only.** It does **not** make Opik CI/golden SoT, run Lane C′/GEval judges (S5), land the full doctor/amend-brief/review-queue UX (S6), or rewrite ADR-0011 (S7).
+
+
+## S5 baseline (Slice 0 / #233)
+
+Policy lock + remediation baseline for gated Lane C′ work:
+
+* Plan SSOT version: `0.9.4-s5-eligibility-split` (`docs/plans/opik-evaluation-harness.md`)
+* Machine-checkable baseline: [`slice0_baseline.json`](./slice0_baseline.json)
+* Recovery peel inventory (D43): [`s5-recovery-peel-inventory.md`](./s5-recovery-peel-inventory.md)
+* Package home (not landed on `main` yet): `src/git_cg/eval/lane_c/`
+* Authority: C′ remains advisory; offline Lane A/B must stay green without live judges/Opik
 

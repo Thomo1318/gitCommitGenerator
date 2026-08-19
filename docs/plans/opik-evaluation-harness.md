@@ -1,6 +1,6 @@
 # Opik Evaluation Harness — Design & Implementation Plan
 
-> **Status:** v0.9.3 S2b clarifications (#227 T1–T12 implementation locks) · v0.9.2 body-residual ingest · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed)  
+> **Status:** v0.9.4 S5 eligibility/availability split (#233 Slice 0) · v0.9.3 S2b clarifications (#227 T1–T12) · v0.9.2 body-residual ingest · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed)  
 > **Document class:** formal design + implementation SSOT (promoted from scratch)  
 > **Parent epic:** #216 — E2E Observability Stack  
 > **Governing issue:** #217 — formalise Opik commit-message evaluation harness  
@@ -18,13 +18,19 @@
 
 | Field | Value |
 |:---|:---|
-| Version | `0.9.3-s2b-clarifications` |
-| Stage | Formal design SSOT · S2b T1–T12 locks compiled into §6.4–§6.11 / §8.2 / §8.9 · body residual + briefing locks remain |
+| Version | `0.9.4-s5-eligibility-split` |
+| Stage | Formal design SSOT · S5 eligibility/availability split + §8.5 spine/residual locks (#233) · S2b T1–T12 locks remain · body residual + briefing locks remain |
 | Location | `docs/plans/opik-evaluation-harness.md` (versioned; was `scratch/0.OpikIntegration/opik.md`) |
 | Filled from | #217 body residual (2026-08-13) + #217 (all 26 comments) + full plan compile + owner training-corpus / thread / redaction-ladder approval + comment-depth + live Daily Briefing locks |
 | Filled through §14 gate | SSOT pointer in #217 body + Q1=A + S0 filed as #220; implement S0 next |
 | Companion artefacts (planned) | optional YAML machine map under `docs/plans/`; optional per-slice briefs |
 | Out of scope for this file | Runtime product behaviour changes; Promptfoo deep design (#219); Sentry deep design (#218) |
+
+
+
+### 0.5 Live pin honesty (D44 / #233 Slice 0)
+
+Planning text may use `schema_pack_v0@…` / `metric_catalog_v0@…` as **shape** examples. **Live frozen identities** are whatever `just eval-schema-hash` / `tests/eval/test_catalog_pins.py` assert on the current tree (also printed in [`docs/eval/README.md`](../eval/README.md)). After any S5 docs touch that mentions pins, reconcile README ↔ generator output; never leave contradictory concrete hashes unexplained.
 
 ### 0.1 How to use this file
 
@@ -1248,7 +1254,7 @@ Gates **must not** rely on display normalization alone — use `passed` / raw po
 | metric_id | Polarity | Pass when |
 |:---|:---|:---|
 | `gate.deterministic_pass` | pass_fail | all required A–H block-severity metrics passed |
-| `gate.semantic_cohort_eligible` | pass_fail | deterministic classification says cohort may run Lane C (e.g. hard gates green **or** explicit lab override profile) |
+| `gate.semantic_cohort_eligible` | pass_fail | **authorization only** — `suite.allows_lane_c` ∧ (`gate.deterministic_pass` ∨ `suite.lab_override`) ∧ **judge identity pins resolvable** (model/pack/params — **NOT secrets**). Credentials/network affect availability/skip only (D4/D4′). |
 | `gate.golden_promotion_eligible` | pass_fail | §2.4 minimum — no LLM-only path |
 
 #### 6.10.2 C′ semantic cohort (R1) — after eligibility
@@ -1313,11 +1319,27 @@ gate.deterministic_pass =
     AND d.gold_report_ok under suite gold_mode
     # AGG-GATE: never substitute suite/mean pass-rate for the above (M12)
 
-gate.semantic_cohort_eligible =
+gate.semantic_cohort_eligible =   # authorization ONLY (D4) — entry enablement, not product pass
     suite.allows_lane_c
     AND (gate.deterministic_pass OR suite.lab_override)
-    AND pins_resolvable(judge)
+    AND judge_identity_pins_resolvable   # model/pack/params — NOT secrets (D4′)
     # NOTE: corpus.capture_on / train eligibility is SEPARATE and may include fails
+
+judge_execution_available =        # availability / skip / lab class ONLY (D4′)
+    gate.semantic_cohort_eligible
+    AND credentials_present
+    AND provider_client_constructible
+    # Missing key/network MUST NOT render cohort "unauthorized"
+    # Default offline scoring path NEVER invokes network judges
+
+# lab_override (F-B / C-TAX / C-ELIG):
+#   marks the run eligible-diagnostic and emits skip rows only —
+#   zero judge side effects on det-fail cohorts (spine never runs judges there)
+
+# Advisory emission (D30/D31) — when C′ rows are produced later:
+#   use make_advisory_score (or equivalent); never make_score(passed=None) for 1–5
+#   success reason MUST be the stable machine class "scored" (not None)
+#   free-form judge prose lives only in evidence["rationale"] (≤800, scrubbed)
 
 corpus.train_row_eligible =   # not a product gate
     owner.profile.allows_train_capture
@@ -2039,6 +2061,13 @@ prompt_pack_v1:
 
 **Law:** runtime uses **git-pinned local packs**. Cloud Prompt Library is optional immutable mirror only. Variant changes require local PR — not UI save/latest.
 
+**S5 / #233 amendment (`0.9.4-s5-eligibility-split`):**
+* Frozen `prompt_pack_v1` identity fields above remain the schema floor.
+* Runtime pack decode is **strict UTF-8 fail-closed**; content hash is over stored bytes (D41).
+* Suite/meta may carry pack pin refs and amendment notes; they do **not** authorize floating cloud “latest”.
+* Ordinary C′ judges consume **S3 final-accept evidence projection** (D29): `artifact_class=final_accept` (or explicit lab class under `lab_override`), `final_message_sha256` over original bytes, encoding metadata (`utf-8` | `utf-8-replace`), session/bundle identity when available. Invalid UTF-8: judge the S3 text projection; stamp encoding + original byte hash; **do not invent a second decode path**.
+* Default offline scoring never loads network judges; unit tests stay green via injectable offline seams.
+
 
 ### 7.3 Dataset strategy (local names)
 
@@ -2481,13 +2510,14 @@ schemas/eval/
 | **Depends on** | eligibility gate from S2–S3; pins from S0 |
 | **Network** | judge optional; Lane A/B still offline without it |
 | **Forbids** | merge-gate authority; moderation-as-default; unpinned latest judges |
-| **Delivers** | (1) `gate.semantic_cohort_eligible` enforcement. (2) C′ metric runners (GEval craft/relevance subset) pinned. (3) R1 richer rubric pack behind flags. (4) R8 flakiness study hooks. (5) R10 NLP diagnostics off-by-default. (6) R2 `judge_meta_eval_v1` path (FIND-001) non-gating. (7) R6 moderation ops flag off-by-default; coord note w/ #219. (8) Scripts `setup_opik_eval_rule.py` / `setup_opik_test_suites.py` either thin adapters or docs-only freeze. |
-| **Non-goals** | Making C′ required for CI green; accept-path block on judge timeout. |
-| **Primary paths** | `src/git_cg/eval/lane_c/**`, `tests/eval/test_lane_c*.py` |
-| **R-items** | R1, R2, R6, R8, R10 (as optional) |
-| **Findings** | FIND-001, FIND-005 |
-| **AC** | ☐ Lane C does not run when eligibility false (unless explicit lab_override suite). ☐ Judge results stamp `authority=advisory`. ☐ Missing credentials → skip/lab fail class, Lane A still pass. ☐ Meta-eval Equals does not leak labels into judge_input by default. ☐ No job named like “required GEval gate” in default CI. |
-| **Exit risk** | Dashboard beauty → authority creep; keep gates tests. |
+| **Delivers (spine)** | (1) `gate.semantic_cohort_eligible` authorization-only enforcement (D4/D4′ — identity pins, not secrets). (2) Availability/skip path separate from eligibility. (3) Pinned C′ GEval craft/relevance subset on eligible path. (4) Final-accept–linked judge input (D29) + gold-blind projection. (5) Advisory emission without `make_score(passed=None)` footgun (D30) and `reason="scored"` (D31). (6) Scripts `setup_opik_eval_rule.py` / `setup_opik_test_suites.py` freeze headers or thin lab adapters (never accept-path authority). |
+| **Residuals (D28 — ship, split, or explicit defer; never silent-drop)** | R1 richer rubrics · R2 `judge_meta_eval_v1` (FIND-001; DEFER OK with checkbox) · R5 dirty overlays · R6 moderation ops · R8 flakiness hooks · R10 NLP diagnostics · Family H C′ honesty metrics (D39) · full script absorption polish. Plan “delivers” must not overclaim residuals as spine-required. |
+| **Non-goals** | Making C′ required for CI green; accept-path block on judge timeout; S6 doctor/amend-brief UX; S7 ADR rewrite. |
+| **Primary paths** | `src/git_cg/eval/lane_c/**`, `prompts/eval/lane_c/**`, `tests/eval/test_lane_c*.py` |
+| **R-items** | R1, R2, R6, R8, R10 (optional / residual per D28) |
+| **Findings** | FIND-001, FIND-005, FIND-007, FIND-026/027/028 (as consumed) |
+| **AC** | ☐ Lane C does **not** run judges when eligibility is false. ☐ `lab_override` marks the run **eligible-diagnostic** and emits **skip rows only — zero judge side effects** (spine never runs judges on det-fail cohorts). ☐ Judge results stamp `authority=advisory` / `source=lane_c_judge`. ☐ Missing credentials → availability skip/lab class only; Lane A still pass; cohort is **not** “unauthorized.” ☐ Meta-eval Equals does not leak labels into judge_input by default. ☐ No job named like “required GEval gate” in default CI. ☐ Default offline scoring never invokes network judges. |
+| **Exit risk** | Dashboard beauty → authority creep; keep gates tests; D28 residual honesty. |
 
 ---
 
@@ -3306,7 +3336,7 @@ looks valuable inside the floor.
 - [x] R13/R14 + FIND-009…018 owner-approved and logged  
 - [x] **v0.9.2 body-residual ingest** (scaffold gap, Regime pedagogy, Session-12 seed, provenance enum, aliases, 4MB/naming)  
 - [x] **v0.9.3 S2b clarifications** (#227 T1–T12: gate-label, C/D dual-emit, empty/oversize, GoldReport API, C/E helper split, S2b block tuple, secret/policy-fork, joint script/test absorption, Family I out of S2b)  
-- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.3-s2b-clarifications` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217); S2b locks also on [#227](https://github.com/Thomo1318/gitCommitGenerator/issues/227))  
+- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.4-s5-eligibility-split` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217); S5 handoff on [#233](https://github.com/Thomo1318/gitCommitGenerator/issues/233); prior S2b locks on [#227](https://github.com/Thomo1318/gitCommitGenerator/issues/227))  
 - [x] **S0 filed:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) `eval(S0): freeze schema pack + metric catalog pins`
 - [x] **Q1=A** resolved (body pointer + S0 only; S1–S7 not filed)
 - [x] Owner decisions recorded on §17 FIND-* rows (approved 2026-08-12 + 2026-08-13)  
@@ -3448,6 +3478,7 @@ looks valuable inside the floor.
 | 2026-08-13 | **Live Opik Daily Briefing locks** (v0.9.1) | FIND-026…028; INT-46…52; treat briefing as live-plane misconfig evidence; **no SOP/Hybrid threshold relax** from unbound online scores; fixes via eval-suite S2–S6 |
 | 2026-08-13 | **#217 body-residual ingest** (v0.9.2) | Scaffold gap matrix; Regime A/B teaching; Session-12 seed AC; provenance enum; F/P ID namespaces; what-good-looks-like; dataset aliases; experiment naming; default 4MB batch; gold skeleton non-weaken; plan ▸ body on conflict; SSOT pointer prefers issue body |
 | 2026-08-14 | **S2b T1–T12 clarifications** (v0.9.3) | #227 implementation locks: advisory-label (not veto-path) gate fix; C/D dual emission; empty/oversize overrides D always-emit; shared GoldReport API; C/E helper split; deterministic 68-id S2b block tuple; local secret-shape; non-vacuous policy-fork; joint `scripts/opik_metrics.py` + `tests/test_opik_metrics.py` absorption; Family I / `require_topology` deferred to S2c |
+| 2026-08-19 | **S5 eligibility/availability split** (v0.9.4) | #233 Slice 0: §6.11 D4/D4′ identity-pins vs credentials; `judge_execution_available`; §8.5 spine vs D28 residuals + `lab_override` eligible-diagnostic/skip-only AC; §7.2.18 final_accept/UTF-8/pack notes; D30/D31 advisory `passed`/`reason="scored"`; offline no-network-judge default; D44 live pin honesty note |
 
 **Approved finding dispositions (implementation binding):**
 
@@ -3780,5 +3811,5 @@ has_body = message_has_body_or_trailers(final)
 
 ---
 
-*End of v0.9.3-s2b-clarifications — #227 T1–T12 S2b locks compiled into §6.4–§6.11 / §8.2 / §8.9. Prior v0.9.2 body residual + v0.9.1 briefing locks + v0.9.0 comment-depth remain locked. S2a is on `main`; implement S2b from #227. Family I stays S2c.*
+*End of v0.9.4-s5-eligibility-split — #233 Slice 0 plan amendments for S5 eligibility/availability split, §8.5 spine/residual honesty, and final_accept/advisory emission locks. Prior v0.9.3 S2b locks + v0.9.2 body residual + v0.9.1 briefing locks + v0.9.0 comment-depth remain locked. Post-S4 `main` (`v0.20.0`) is the contract base; implement S5 from #233.*
 
