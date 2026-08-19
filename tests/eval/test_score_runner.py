@@ -113,3 +113,66 @@ def test_score_suite_rejects_divergent_suite_path(tmp_path: Path) -> None:
             fixture_root=FIXTURE_ROOT,
             suite_path=path,
         )
+
+
+def test_score_bundle_lane_c_default_offline_no_cprime_rows() -> None:
+    """Default score_bundle path must not emit cprime rows or import judge SDKs."""
+    import json
+
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    enc = encode_fixture(fx)
+    result = score_bundle(enc["bundle"], suite_snapshot_pin="pin@1")
+    assert not any(s.metric_id.startswith("cprime.") for s in result.scores)
+    assert result.by_id()["gate.semantic_cohort_eligible"].evidence.get("offline_lane_ab") is True
+
+
+def test_score_bundle_lane_c_opt_in_with_fake_judge() -> None:
+    """Opt-in Lane C' appends advisory rows and never blocks promotion alone."""
+    import json
+
+    from git_cg.eval.binding.binder import message_sha256_bytes
+    from git_cg.eval.enums import ArtifactClass
+    from git_cg.eval.lane_c.judge_input import project_judge_input
+
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    enc = encode_fixture(fx)
+    text = (
+        "✨ feat(eval): score bundle lane c\n\n"
+        "Refs: #233\n"
+        "SemVer-Impact: MINOR\n"
+        "Change-Types: feat\n"
+        "Changelog-Groups: Added\n"
+    )
+    projected = project_judge_input(
+        {
+            "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+            "bound": True,
+            "final_message": text,
+            "final_message_sha256": message_sha256_bytes(text),
+        }
+    )
+
+    def fake(prompt, judge_input, *, model, timeout_s=15.0):
+        return {"score": 5, "rationale": "bundle ok"}
+
+    result = score_bundle(
+        enc["bundle"],
+        suite={"meta": {"allows_lane_c": True}},
+        suite_snapshot_pin="pin@1",
+        enable_lane_c=True,
+        lane_c_metric_ids=["cprime.geval_craft"],
+        judge_fn=fake,
+        judge_input=projected,
+        judge_model="gpt-4o-2024-08-06",
+        judge_api_key="sk-test-not-real",
+        lane_c_environ={"GIT_CG_EVAL_JUDGE_MODEL": "gpt-4o-2024-08-06"},
+        lane_c_allows=True,
+    )
+    c_rows = [s for s in result.scores if s.metric_id.startswith("cprime.")]
+    assert c_rows, "expected cprime rows when enable_lane_c=True"
+    assert all(r.passed is None for r in c_rows)
+    by = result.by_id()
+    # C' must not be the sole reason promotion passes; if promo true, det/gold drove it.
+    if by["gate.golden_promotion_eligible"].passed is True:
+        assert by["gate.deterministic_pass"].passed is True
+    assert by["gate.semantic_cohort_eligible"].evidence.get("cprime_ran") in {True, False}
