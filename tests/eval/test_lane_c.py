@@ -569,3 +569,156 @@ def test_semantic_cohort_deferred_s2a_compat() -> None:
     assert sc.passed is False
     assert sc.reason == "semantic_cohort_deferred_offline_later_lane"
     assert "deferred" in (sc.reason or "")
+
+
+# ---------------------------------------------------------------------------
+# Slice 4 — injectable judge wiring (C-RUN / C-ADV / C-JUDGE)
+# ---------------------------------------------------------------------------
+
+
+class TestSlice4JudgeWiring:
+    def _projected(self):
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.judge_input import project_judge_input
+
+        text = (
+            "✨ feat(eval): lane c judge wiring\n\n"
+            "Refs: #233\n"
+            "SemVer-Impact: MINOR\n"
+            "Change-Types: feat\n"
+            "Changelog-Groups: Added\n"
+        )
+        return project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+            }
+        )
+
+    def test_eligible_with_judge_scores_advisory(self) -> None:
+        from git_cg.eval.lane_c.taxonomy import EXEC_SCORED
+
+        def fake(prompt, judge_input, *, model, timeout_s=15.0):
+            assert prompt
+            return {"score": 4, "rationale": "clear subject"}
+
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=fake,
+            judge_input=self._projected(),
+        )
+        assert result.invoked is True
+        assert result.scored_count == 1
+        assert result.cprime_ran is True
+        row = result.rows[0]
+        assert row.reason == EXEC_SCORED
+        assert row.passed is None
+        assert row.value == 4
+        assert row.evidence["scale"] == "geval_1_5"
+        assert row.evidence.get("rationale") == "clear subject"
+        assert "api_key" not in row.evidence
+
+    def test_judge_exception_isolated_per_metric(self) -> None:
+        from git_cg.eval.lane_c.taxonomy import EXEC_TRANSPORT_ERROR
+
+        def boom(*_a, **_k):
+            raise RuntimeError("provider down")
+
+        result = run_lane_c(
+            ["cprime.geval_craft", "cprime.geval_relevance"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=boom,
+            judge_input=self._projected(),
+        )
+        assert result.invoked is True
+        assert result.scored_count == 0
+        assert result.cprime_ran is False
+        assert len(result.rows) == 2
+        assert all(r.passed is None for r in result.rows)
+        assert all(r.reason == EXEC_TRANSPORT_ERROR for r in result.rows)
+
+    def test_empty_input_skips_without_invoke(self) -> None:
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.taxonomy import EXEC_EMPTY_INPUT
+
+        calls = {"n": 0}
+
+        def fake(*_a, **_k):
+            calls["n"] += 1
+            return {"score": 5}
+
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=fake,
+            judge_input={
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": "   ",
+                "final_message_sha256": message_sha256_bytes("   "),
+            },
+        )
+        assert calls["n"] == 0
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_EMPTY_INPUT
+        assert result.rows[0].passed is None
+
+    def test_without_judge_fn_remains_not_invoked(self) -> None:
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_input=self._projected(),
+        )
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_JUDGE_NOT_INVOKED
+
+
+class TestSlice4PromotionImmunity:
+    def test_poisoned_cprime_passed_true_cannot_veto_or_promote(self) -> None:
+        from git_cg.eval.enums import Authority, Family, Polarity, Severity, Source
+        from git_cg.eval.score_result import ScoreResultV1
+
+        poisoned = ScoreResultV1(
+            metric_id="cprime.geval_craft",
+            polarity=Polarity.HIGHER_IS_BETTER,
+            authority=Authority.ADVISORY,
+            source=Source.LANE_C_JUDGE,
+            value=1,
+            name="GEval craft",
+            family=Family.CPRIME,
+            threshold=None,
+            passed=True,
+            severity=Severity.WARN,
+            reason="scored",
+            evidence={"scale": "geval_1_5", "poison": True},
+            failure_ids=None,
+            product_authority=None,
+            pin_refs=[],
+            duration_ms=None,
+        )
+        gates = compose_gates([poisoned], require_block=S2A_REQUIRE_BLOCK, bound=True)
+        by = {g.metric_id: g for g in gates}
+        assert by["gate.deterministic_pass"].passed is False
+        assert by["gate.golden_promotion_eligible"].passed is False
+
+    def test_scored_cprime_does_not_flip_deferred_semantic_gate_alone(self) -> None:
+        from git_cg.eval.lane_c.advisory import make_advisory_score
+
+        row = make_advisory_score("cprime.geval_craft", 5)
+        gates = compose_gates([row], require_block=(), bound=True)
+        by = {g.metric_id: g for g in gates}
+        assert by["gate.semantic_cohort_eligible"].passed is False
+        assert by["gate.semantic_cohort_eligible"].evidence["cprime_ran"] is False
