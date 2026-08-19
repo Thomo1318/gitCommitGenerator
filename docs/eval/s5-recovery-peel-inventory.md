@@ -33,11 +33,13 @@ Confirmed: `src/git_cg/eval/lane_c/` (D23). No permanent dual home.
 
 ## Legacy scripts (freeze approach — feeds Slice 6/7)
 
-| Script | Slice 0 disposition |
-|:---|:---|
-| `scripts/setup_opik_eval_rule.py` | Freeze header / docs-only minimum with spine docs (D24); never accept-path authority |
-| `scripts/setup_opik_test_suites.py` | Freeze header / docs-only minimum with spine docs (D24) |
-| `scripts/compile_opik_dataset.py` | Already retired (S4); leave retired |
-| `scripts/opik_metrics.py` / `scripts/eval_commit_message.py` | Not C′ law; do not revive as spine authority |
+| Script | Slice 0 disposition | Slice 6 status |
+|:---|:---|:---|
+| `scripts/setup_opik_eval_rule.py` | Freeze header / docs-only minimum with spine docs (D24); never accept-path authority | **Frozen** fail-closed pointer (D24 / S5-G05) |
+| `scripts/setup_opik_test_suites.py` | Freeze header / docs-only minimum with spine docs (D24) | **Frozen** fail-closed pointer (D24 / S5-G05) |
+| `scripts/compile_opik_dataset.py` | Already retired (S4); leave retired | Unchanged retired |
+| `scripts/opik_metrics.py` / `scripts/eval_commit_message.py` | Not C′ law; do not revive as spine authority | **Frozen** fail-closed pointers (non-authority) |
+
+Machine-checkable freeze tests: `tests/eval/mirror/test_setup_opik_scripts_absorption.py`.
 
 Machine-checkable baseline: [`slice0_baseline.json`](./slice0_baseline.json).
