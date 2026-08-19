@@ -119,11 +119,23 @@ def test_score_bundle_lane_c_default_offline_no_cprime_rows() -> None:
     """Default score_bundle path must not emit cprime rows or import judge SDKs."""
     import json
 
+    from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
+
     fx = json.loads(VALID.read_text(encoding="utf-8"))
     enc = encode_fixture(fx)
     result = score_bundle(enc["bundle"], suite_snapshot_pin="pin@1")
     assert not any(s.metric_id.startswith("cprime.") for s in result.scores)
     assert result.by_id()["gate.semantic_cohort_eligible"].evidence.get("offline_lane_ab") is True
+    # S5 / D39: honesty metrics still emit and fail closed when Lane C did not run.
+    by = result.by_id()
+    for mid in FAMILY_H_CPRIME:
+        assert mid in by, f"missing honesty metric {mid}"
+        assert by[mid].passed is False
+        assert by[mid].reason == "lane_c_not_run"
+        assert by[mid].evidence.get("honest_not_run") is True
+    # Exactly one row per honesty metric (no duplicate emission).
+    for mid in FAMILY_H_CPRIME:
+        assert sum(1 for s in result.scores if s.metric_id == mid) == 1
 
 
 def test_score_bundle_lane_c_opt_in_with_fake_judge() -> None:
@@ -176,3 +188,48 @@ def test_score_bundle_lane_c_opt_in_with_fake_judge() -> None:
     if by["gate.golden_promotion_eligible"].passed is True:
         assert by["gate.deterministic_pass"].passed is True
     assert by["gate.semantic_cohort_eligible"].evidence.get("cprime_ran") in {True, False}
+    # S5 honesty metrics must be present exactly once after Lane C.
+    from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
+
+    for mid in FAMILY_H_CPRIME:
+        assert mid in by
+        assert sum(1 for s in result.scores if s.metric_id == mid) == 1
+        # Not the not-run path once Lane C was enabled.
+        assert by[mid].reason != "lane_c_not_run"
+
+
+def test_score_bundle_family_h_cprime_single_emission_when_lane_c_errors(
+    monkeypatch,
+) -> None:
+    """Lane C exception path still emits honest H C' metrics once (not not-run)."""
+    import json
+    import sys
+    import types
+
+    from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
+
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    enc = encode_fixture(fx)
+
+    boom_mod = types.ModuleType("git_cg.eval.lane_c")
+
+    def _boom_run_lane_c(*_a, **_k):
+        raise RuntimeError("lane c exploded")
+
+    boom_mod.run_lane_c = _boom_run_lane_c  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "git_cg.eval.lane_c", boom_mod)
+
+    result = score_bundle(
+        enc["bundle"],
+        suite_snapshot_pin="pin@1",
+        enable_lane_c=True,
+        lane_c_allows=True,
+    )
+    by = result.by_id()
+    assert any(e.startswith("lane_c:") for e in result.evaluator_errors)
+    for mid in FAMILY_H_CPRIME:
+        assert mid in by
+        assert sum(1 for s in result.scores if s.metric_id == mid) == 1
+        # Enabled+attempted path — never the disabled not-run green-by-absence path.
+        assert by[mid].reason != "lane_c_not_run"
+        assert by[mid].evidence.get("lane_c_enabled") is True
