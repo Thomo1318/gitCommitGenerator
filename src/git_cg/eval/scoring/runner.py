@@ -21,7 +21,7 @@ from git_cg.eval.scoring.family_d import GoldBridge, score_family_d
 from git_cg.eval.scoring.family_e import score_family_e
 from git_cg.eval.scoring.family_f import score_family_f
 from git_cg.eval.scoring.family_g import score_family_g
-from git_cg.eval.scoring.family_h import score_family_h
+from git_cg.eval.scoring.family_h import score_family_h, score_family_h_cprime
 from git_cg.eval.scoring.family_i import (
     FAMILY_I_METRIC_IDS,
     build_session_thread_index,
@@ -441,7 +441,8 @@ def score_bundle(
 
     # Optional gated Lane C' (advisory only). Default offline path never invokes.
     lane_c_eligibility = None
-    lane_c_run_evidence: dict[str, Any] | None = None
+    lane_c_rows: list[ScoreResultV1] = []
+    lane_c_run_evidence: dict[str, Any] = {"lane_c_enabled": bool(enable_lane_c)}
     if enable_lane_c:
         try:
             from git_cg.eval.lane_c import run_lane_c
@@ -487,13 +488,42 @@ def score_bundle(
                 final_accept_evidence=fa_evidence,
                 max_input_chars=max_input_chars,
             )
-            scores.extend(c_result.rows)
+            lane_c_rows = list(c_result.rows)
+            scores.extend(lane_c_rows)
             lane_c_eligibility = c_result.eligibility
             lane_c_run_evidence = dict(c_result.evidence)
+            lane_c_run_evidence["lane_c_enabled"] = True
+            lane_c_run_evidence["cprime_attempted"] = True
+            # Surface pack identities from scored/skip rows for Family H honesty.
+            pack_ids: list[str] = []
+            hashes: list[str] = []
+            pin_refs_acc: list[str] = []
+            for row in lane_c_rows:
+                for pref in row.pin_refs or []:
+                    if isinstance(pref, str) and pref not in pin_refs_acc:
+                        pin_refs_acc.append(pref)
+                payload = row.evidence or {}
+                pid = payload.get("pack_identity")
+                if isinstance(pid, str) and pid not in pack_ids:
+                    pack_ids.append(pid)
+                digest = payload.get("content_sha256")
+                if isinstance(digest, str) and digest not in hashes:
+                    hashes.append(digest)
+            if pack_ids:
+                lane_c_run_evidence.setdefault("pack_identities", pack_ids)
+                lane_c_run_evidence.setdefault("pack_identity", pack_ids[0])
+            if hashes:
+                lane_c_run_evidence.setdefault("content_hashes", hashes)
+                lane_c_run_evidence.setdefault("content_sha256", hashes[0])
+            if pin_refs_acc:
+                lane_c_run_evidence.setdefault("pin_refs", pin_refs_acc)
         except Exception as exc:
             errors.append(f"lane_c:{type(exc).__name__}: {exc}")
             lane_c_eligibility = None
+            lane_c_rows = []
             lane_c_run_evidence = {
+                "lane_c_enabled": True,
+                "cprime_attempted": True,
                 "invoked": False,
                 "scored_count": 0,
                 "cprime_ran": False,
@@ -501,23 +531,44 @@ def score_bundle(
                 "error": type(exc).__name__,
             }
 
-    # Re-validate envelopes after optional C' append (C' rows already constructed).
-    if enable_lane_c:
-        valid_scores = []
-        env_bad = 0
-        i_ids = set(FAMILY_I_METRIC_IDS)
-        for s in scores:
-            if s.metric_id in i_ids or str(s.metric_id).startswith("cprime."):
-                valid_scores.append(s)
-                continue
+    # S5 / D39 — Family H C' honesty metrics after Lane C (never green-by-absence).
+    try:
+        scores.extend(
+            score_family_h_cprime(
+                suite_snapshot_pin=suite_snapshot_pin,
+                lane_c_run_evidence=lane_c_run_evidence,
+                lane_c_rows=lane_c_rows,
+            )
+        )
+    except Exception as exc:
+        errors.append(f"family_h_cprime:{type(exc).__name__}: {exc}")
+
+    # Re-validate envelopes after C' rows + H honesty metrics (C' already constructed).
+    valid_scores = []
+    env_bad = 0
+    i_ids = set(FAMILY_I_METRIC_IDS)
+    cprime_h_ids = {
+        "h.judge_input_isolated",
+        "h.prompt_pack_pinned",
+        "h.prompt_pack_hash_known",
+        "h.prompt_pack_suite_fresh",
+    }
+    for s in scores:
+        if s.metric_id in i_ids or str(s.metric_id).startswith("cprime.") or s.metric_id in cprime_h_ids:
+            # Already constructed via catalog helpers / recovered paths.
             try:
-                payload = s.model_dump(mode="json")
-                valid_scores.append(ScoreResultV1.model_validate(payload))
+                valid_scores.append(ScoreResultV1.model_validate(s.model_dump(mode="json")))
             except Exception:
                 env_bad += 1
-        scores = valid_scores
-        if env_bad:
-            errors.append(f"envelope_post_c:{env_bad}_invalid")
+            continue
+        try:
+            payload = s.model_dump(mode="json")
+            valid_scores.append(ScoreResultV1.model_validate(payload))
+        except Exception:
+            env_bad += 1
+    scores = valid_scores
+    if env_bad:
+        errors.append(f"envelope_post_c:{env_bad}_invalid")
 
     try:
         gates = compose_gates(

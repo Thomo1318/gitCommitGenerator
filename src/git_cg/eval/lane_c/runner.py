@@ -425,6 +425,26 @@ def run_lane_c(
         max_input_chars=max_input_chars,
     )
 
+    # Family H honesty (D39): surface isolation/projection outcome on run evidence.
+    # Host size guards (empty/oversize) are not isolation leaks. parse_error and
+    # other projection failures are treated as isolation/contract failures.
+    if input_skip is None and projected is not None:
+        run_evidence["judge_input_projected"] = True
+        run_evidence["judge_input_isolated"] = True
+        run_evidence["judge_input_present"] = True
+    elif input_skip is not None:
+        run_evidence["judge_input_projected"] = False
+        run_evidence["judge_input_skip_code"] = input_skip
+        run_evidence["judge_input_error"] = input_note
+        run_evidence["input_error"] = input_note
+        run_evidence["judge_input_isolated"] = input_skip in {
+            EXEC_EMPTY_INPUT,
+            EXEC_OVERSIZE_INPUT,
+        }
+    elif judge_input is None and final_accept_evidence is None:
+        run_evidence["judge_input_projected"] = False
+        run_evidence["judge_input_present"] = False
+
     # Host-guard / projection failure before any judge call.
     if input_skip is not None:
         for mid in ids:
@@ -438,6 +458,7 @@ def run_lane_c(
                     extra_evidence={
                         "failure_class": failure_id_for(input_skip),
                         "input_error": input_note,
+                        "judge_input_isolated": run_evidence.get("judge_input_isolated"),
                         "universe_fingerprint": fingerprint.as_dict(),
                     },
                 )
@@ -655,13 +676,31 @@ def run_lane_c(
         )
 
     cprime_ran = bool(invoked and scored_count > 0)
+    # Aggregate pack identities from emitted rows for Family H honesty metrics.
+    pack_ids: list[str] = []
+    hashes: list[str] = []
+    for row in rows:
+        payload = row.evidence or {}
+        pid = payload.get("pack_identity")
+        if isinstance(pid, str) and pid not in pack_ids:
+            pack_ids.append(pid)
+        digest = payload.get("content_sha256")
+        if isinstance(digest, str) and digest not in hashes:
+            hashes.append(digest)
     run_evidence.update(
         {
             "invoked": invoked,
             "scored_count": scored_count,
             "cprime_ran": cprime_ran,
+            "judge_input_present": projected is not None,
         }
     )
+    if pack_ids:
+        run_evidence.setdefault("pack_identities", pack_ids)
+        run_evidence.setdefault("pack_identity", pack_ids[0])
+    if hashes:
+        run_evidence.setdefault("content_hashes", hashes)
+        run_evidence.setdefault("content_sha256", hashes[0])
     return LaneCRunResult(
         rows=rows,
         eligibility=eligibility,
