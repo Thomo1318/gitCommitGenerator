@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -71,7 +71,7 @@ def resolve_require_trajectory(
     """Resolve trajectory-require policy (R7/N19.6).
 
     Order: explicit API argument → ``suite.meta.require_trajectory`` (bool only)
-    → ``False``. Never inferred from ``bound`` or from topology policy — Family
+    → ``False``. Never inferred from ``bound`` or from topology policy - Family
     H owns trajectory; Family I owns topology. The two planes stay separate.
     """
     if require_trajectory is not None:
@@ -210,7 +210,7 @@ class ScoreCaseResult:
     def by_id(self) -> dict[str, ScoreResultV1]:
         """Index ``all_results`` by ``metric_id``.
 
-        Duplicate metric IDs are rejected (fail closed) — last-write-wins is banned.
+        Duplicate metric IDs are rejected (fail closed) - last-write-wins is banned.
         """
         out: dict[str, ScoreResultV1] = {}
         dups: list[str] = []
@@ -257,14 +257,27 @@ def score_bundle(
     offline: bool = True,
     max_eval_bytes: int | None = None,
     case_id: str | None = None,
+    enable_lane_c: bool = False,
+    lane_c_metric_ids: Sequence[str] | None = None,
+    judge_fn: Any | None = None,
+    judge_input: Any | None = None,
+    final_accept_evidence: Any | None = None,
+    judge_model: str | None = None,
+    judge_api_key: str | None = None,
+    lane_c_environ: Mapping[str, str] | None = None,
+    lane_c_lab_override: bool | None = None,
+    lane_c_allows: bool | None = None,
+    max_input_chars: int | None = None,
 ) -> ScoreCaseResult:
     """Score one already-encoded ``ape_bundle_v1`` mapping offline (Plane A).
 
     Order: context → FIND-026 preconditions → A → (B/C/D/E/F/G if runnable with
-    one shared gold slot) → **I** → H → envelope validate → gates. Short-circuit
-    is A + I + H + envelope validate + gates (topology is not message-dependent).
-    No Opik client, network I/O, or product commit-path mutation. Family/gate
-    exceptions become evaluator errors + fail-closed gate composition.
+    one shared gold slot) → **I** → H → optional gated Lane C' → envelope
+    validate → gates. Short-circuit is A + I + H + optional C' + envelope
+    validate + gates (topology is not message-dependent). Default path stays
+    offline/no-network: Lane C' runs only when ``enable_lane_c=True``. Family /
+    gate / Lane C' exceptions become evaluator errors + fail-closed gate
+    composition and never abort the case.
     """
     errors: list[str] = []
     scores: list[ScoreResultV1] = []
@@ -426,6 +439,86 @@ def score_bundle(
                 rewritten.append(s)
         scores = rewritten
 
+    # Optional gated Lane C' (advisory only). Default offline path never invokes.
+    lane_c_eligibility = None
+    lane_c_run_evidence: dict[str, Any] | None = None
+    if enable_lane_c:
+        try:
+            from git_cg.eval.lane_c import run_lane_c
+
+            # Prefer explicit final-accept evidence; else project from context.
+            fa_evidence = final_accept_evidence
+            if fa_evidence is None and judge_input is None:
+                fa_evidence = {
+                    "final_message_text": getattr(ctx, "final_message", None) or "",
+                    "case_id": ctx.case_id,
+                    "artifact_class": getattr(ctx, "artifact_class", None),
+                    "bound": getattr(ctx, "bound", None),
+                    "files": list(getattr(ctx, "files", ()) or ()),
+                }
+
+            # Provisional deterministic eligibility from family scores only.
+            # True-advisory prefixes never veto; missing/failed required metrics do.
+            by_tmp = {s.metric_id: s for s in scores}
+            det_pass = True
+            for mid in req:
+                if str(mid).startswith(("cprime.", "gate.")):
+                    continue
+                row = by_tmp.get(mid)
+                if row is None or row.passed is False:
+                    det_pass = False
+                    break
+                if row.passed is None and getattr(row.polarity, "value", str(row.polarity)) == "pass_fail":
+                    det_pass = False
+                    break
+
+            c_result = run_lane_c(
+                lane_c_metric_ids,
+                deterministic_pass=det_pass,
+                allows_lane_c=lane_c_allows,
+                lab_override=lane_c_lab_override,
+                suite=suite,
+                judge_model=judge_model,
+                judge_api_key=judge_api_key,
+                environ=lane_c_environ,
+                use_default_metrics=lane_c_metric_ids is None,
+                judge_fn=judge_fn,
+                judge_input=judge_input,
+                final_accept_evidence=fa_evidence,
+                max_input_chars=max_input_chars,
+            )
+            scores.extend(c_result.rows)
+            lane_c_eligibility = c_result.eligibility
+            lane_c_run_evidence = dict(c_result.evidence)
+        except Exception as exc:
+            errors.append(f"lane_c:{type(exc).__name__}: {exc}")
+            lane_c_eligibility = None
+            lane_c_run_evidence = {
+                "invoked": False,
+                "scored_count": 0,
+                "cprime_ran": False,
+                "available": False,
+                "error": type(exc).__name__,
+            }
+
+    # Re-validate envelopes after optional C' append (C' rows already constructed).
+    if enable_lane_c:
+        valid_scores = []
+        env_bad = 0
+        i_ids = set(FAMILY_I_METRIC_IDS)
+        for s in scores:
+            if s.metric_id in i_ids or str(s.metric_id).startswith("cprime."):
+                valid_scores.append(s)
+                continue
+            try:
+                payload = s.model_dump(mode="json")
+                valid_scores.append(ScoreResultV1.model_validate(payload))
+            except Exception:
+                env_bad += 1
+        scores = valid_scores
+        if env_bad:
+            errors.append(f"envelope_post_c:{env_bad}_invalid")
+
     try:
         gates = compose_gates(
             scores,
@@ -433,6 +526,8 @@ def score_bundle(
             bound=ctx.bound,
             require_topology=topo_required,
             gold_mode=gold_mode,
+            lane_c_eligibility=lane_c_eligibility,
+            lane_c_run_evidence=lane_c_run_evidence,
         )
     except Exception as exc:
         errors.append(f"gates:{type(exc).__name__}: {exc}")
@@ -535,7 +630,7 @@ def score_suite(
     topo_required = resolve_require_topology(require_topology, suite_doc)
 
     # Snapshot pin (content-addressed) always binds the *canonical* committed suite.
-    # suite_path is a test override only — reject it when case membership diverges
+    # suite_path is a test override only - reject it when case membership diverges
     # so the pin cannot claim one corpus while we score another.
     snapshot = build_snapshot(sid, fixture_root=root, validate=True)
     suite_pin = str(snapshot.get("snapshot_hash") or snapshot.get("id") or "")
