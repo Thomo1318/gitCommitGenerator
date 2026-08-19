@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.result_builder import make_score
@@ -147,6 +147,8 @@ def compose_gates(
     bound: bool | None = None,
     require_topology: bool = False,
     gold_mode: str = "strict",
+    lane_c_eligibility: object | None = None,
+    lane_c_run_evidence: Mapping[str, object] | None = None,
 ) -> list[ScoreResultV1]:
     """Compose ``gate.*`` metrics from score rows.
 
@@ -160,8 +162,18 @@ def compose_gates(
 
     Golden promotion uses the S2b baseline (det + gold + skeleton + bound).
     When ``require_topology=true``, it additionally requires passing
-    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7). Semantic
-    cohort stays false offline (later lane).
+    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7).
+
+    Semantic cohort (S5 / C-GATE):
+    * Prefer an already-emitted ``gate.semantic_cohort_eligible`` row in
+      ``results`` (same ``by_id.get`` pattern as golden promotion inputs).
+    * Else accept optional precomputed ``lane_c_eligibility`` (duck-typed:
+      ``eligible``, ``reason``, ``lab_override``, ``evidence``) and optional
+      ``lane_c_run_evidence`` counters (``invoked`` / ``scored_count`` /
+      ``available`` / ``cprime_ran``).
+    * Else emit honest offline deferred row (Lane A/B path unchanged).
+    * Never resolves env secrets or imports ``git_cg.eval.lane_c`` (D34).
+    * Never sets ``cprime_ran := eligible`` (D32).
     """
     base_req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
     # Stable unique union; S2C_TOPOLOGY_BLOCK order preserved for new tails.
@@ -261,19 +273,117 @@ def compose_gates(
         )
     )
 
-    # Offline S2b/S2c: C-prime / semantic cohort remains later-lane (not C).
-    gates.append(
-        make_score(
+    # Semantic cohort eligibility (S5 / C-GATE). Prefer precomputed rows/verdicts;
+    # never resolve credentials here and never equate cprime_ran with eligible.
+    existing_sem = by_id.get("gate.semantic_cohort_eligible")
+    if existing_sem is not None:
+        gates.append(existing_sem)
+    else:
+        gates.append(
+            _compose_semantic_cohort_gate(
+                lane_c_eligibility=lane_c_eligibility,
+                lane_c_run_evidence=lane_c_run_evidence,
+            )
+        )
+
+    return gates
+
+
+def _compose_semantic_cohort_gate(
+    *,
+    lane_c_eligibility: object | None,
+    lane_c_run_evidence: Mapping[str, object] | None,
+) -> ScoreResultV1:
+    """Build ``gate.semantic_cohort_eligible`` from optional precomputed verdict.
+
+    Duck-types eligibility objects so ``gates.py`` stays free of ``lane_c``
+    imports (D34 / C-GATE). Offline default remains deferred when no verdict.
+    """
+    run_ev = dict(lane_c_run_evidence or {})
+
+    def _counter(name: str, default: object) -> object:
+        if name in run_ev:
+            return run_ev[name]
+        return default
+
+    if lane_c_eligibility is None:
+        # Offline Lane A/B path — honest deferred vocabulary (D32).
+        return make_score(
             "gate.semantic_cohort_eligible",
             False,
             passed=False,
             reason="semantic_cohort_deferred_offline_later_lane",
-            evidence={"cprime_ran": False, "offline_s2b": True},
+            evidence={
+                "eligible": False,
+                "available": False,
+                "invoked": False,
+                "scored_count": 0,
+                "cprime_ran": False,
+                "lab_override": False,
+                "offline_lane_ab": True,
+                "semantic_cohort_not_evaluated": True,
+            },
             failure_ids=["GATE_SEMANTIC_COHORT_DEFERRED"],
         )
+
+    eligible = bool(getattr(lane_c_eligibility, "eligible", False))
+    reason = getattr(lane_c_eligibility, "reason", None)
+    lab_override = bool(getattr(lane_c_eligibility, "lab_override", False))
+    diagnostic_only = bool(getattr(lane_c_eligibility, "diagnostic_only", False))
+    base_evidence = getattr(lane_c_eligibility, "evidence", None)
+    evidence: dict = {}
+    if isinstance(base_evidence, dict):
+        # Copy and strip any accidental secret-looking keys.
+        for k, v in base_evidence.items():
+            lk = str(k).lower()
+            if any(s in lk for s in ("api_key", "secret", "password", "token", "authorization")):
+                continue
+            evidence[k] = v
+
+    invoked = bool(_counter("invoked", False))
+    scored_count_raw = _counter("scored_count", 0)
+    try:
+        scored_count = int(scored_count_raw)  # type: ignore[arg-type]
+    except TypeError, ValueError:
+        scored_count = 0
+    available = bool(_counter("available", False))
+    # cprime_ran is true only when a judge actually ran — never := eligible.
+    cprime_ran = bool(run_ev["cprime_ran"]) if "cprime_ran" in run_ev else bool(invoked and scored_count > 0)
+
+    evidence.update(
+        {
+            "eligible": eligible,
+            "available": available,
+            "invoked": invoked,
+            "scored_count": scored_count,
+            "cprime_ran": cprime_ran,
+            "lab_override": lab_override,
+            "diagnostic_only": diagnostic_only,
+            "offline_lane_ab": False,
+            "semantic_cohort_not_evaluated": False,
+        }
     )
 
-    return gates
+    if eligible:
+        # Entry authorization true — still not product/golden pass (D5).
+        return make_score(
+            "gate.semantic_cohort_eligible",
+            True,
+            passed=True,
+            reason=None if not diagnostic_only else str(reason or "lab_override_diagnostic"),
+            evidence=evidence,
+            failure_ids=None,
+        )
+
+    fail_reason = str(reason or "cohort_ineligible")
+    return make_score(
+        "gate.semantic_cohort_eligible",
+        False,
+        passed=False,
+        reason=fail_reason,
+        evidence=evidence,
+        failure_ids=["GATE_SEMANTIC_COHORT_INELIGIBLE"],
+    )
 
 
 def assert_s2b_block_len() -> None:

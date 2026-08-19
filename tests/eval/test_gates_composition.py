@@ -107,9 +107,15 @@ def test_semantic_cohort_deferred_s2a() -> None:
     gates = compose_gates(rows, bound=True)
     sc = next(x for x in gates if x.metric_id == "gate.semantic_cohort_eligible")
     assert sc.passed is False
-    # S2b: offline/later-lane wording only (stale S2a/C-prime string must not pass)
+    # Offline Lane A/B: deferred wording retained; D32 evidence vocabulary updated.
     assert sc.reason == "semantic_cohort_deferred_offline_later_lane"
     assert "deferred" in (sc.reason or "")
+    assert sc.failure_ids == ["GATE_SEMANTIC_COHORT_DEFERRED"]
+    assert sc.evidence is not None
+    assert sc.evidence.get("cprime_ran") is False
+    assert sc.evidence.get("invoked") is False
+    assert sc.evidence.get("offline_lane_ab") is True
+    assert "offline_s2b" not in sc.evidence
 
 
 def test_promotion_requires_bound_and_gold() -> None:
