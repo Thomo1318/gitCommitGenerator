@@ -24,6 +24,13 @@ secret export. Provider SDKs are lazy-imported only inside transport paths
 
 from __future__ import annotations
 
+from git_cg.eval.lane_c.advisory import (
+    GEVAL_SCALE,
+    MAX_RATIONALE_CHARS,
+    make_advisory_score,
+    make_advisory_skip,
+    scrub_rationale,
+)
 from git_cg.eval.lane_c.availability import (
     ENV_JUDGE_API_KEY,
     ENV_JUDGE_BASE_URL,
@@ -44,6 +51,18 @@ from git_cg.eval.lane_c.eligibility import (
     judge_pins_resolvable,
     resolve_allows_lane_c,
     resolve_lab_override,
+)
+from git_cg.eval.lane_c.judge import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT_S,
+    JudgeCredentialView,
+    JudgeFn,
+    JudgeOutcome,
+    JudgeTransportResult,
+    openai_compatible_judge_fn,
+    parse_judge_score,
+    resolve_judge_credentials,
+    run_pinned_judge,
 )
 from git_cg.eval.lane_c.judge_input import (
     DEFAULT_MAX_DIFF_SUMMARY_CHARS,
@@ -90,10 +109,12 @@ __all__ = [
     "DEFAULT_LANE_C_METRICS",
     "DEFAULT_MAX_DIFF_SUMMARY_CHARS",
     "DEFAULT_MAX_INPUT_CHARS",
+    "DEFAULT_MAX_RETRIES",
     "DEFAULT_OUTPUT_CONTRACT_IDENTITY",
     "DEFAULT_PACK_IDENTITY",
     "DEFAULT_PROMPT_ROOT",
     "DEFAULT_SAMPLING_IDENTITY",
+    "DEFAULT_TIMEOUT_S",
     "DEFAULT_UNIVERSE_ROOT",
     "ENV_JUDGE_API_KEY",
     "ENV_JUDGE_BASE_URL",
@@ -101,8 +122,14 @@ __all__ = [
     "EXECUTION_CODES",
     "GATE_DISPOSITION_CODES",
     "GATE_TO_EXECUTION",
+    "GEVAL_SCALE",
+    "MAX_RATIONALE_CHARS",
+    "JudgeCredentialView",
+    "JudgeFn",
     "JudgeInput",
     "JudgeInputError",
+    "JudgeOutcome",
+    "JudgeTransportResult",
     "LaneCAvailability",
     "LaneCEligibility",
     "LaneCRunResult",
@@ -122,8 +149,12 @@ __all__ = [
     "judge_pins_resolvable",
     "lint_prompt_pack_hygiene",
     "load_pack_prompt_text",
+    "make_advisory_score",
+    "make_advisory_skip",
     "map_gate_to_execution",
     "mapping_table",
+    "openai_compatible_judge_fn",
+    "parse_judge_score",
     "project_diff_summary",
     "project_judge_input",
     "prompt_pack_content_hash",
@@ -131,9 +162,12 @@ __all__ = [
     "provider_client_constructible",
     "record_universe_fingerprint",
     "resolve_allows_lane_c",
+    "resolve_judge_credentials",
     "resolve_judge_pack",
     "resolve_lab_override",
     "run_lane_c",
+    "run_pinned_judge",
+    "scrub_rationale",
     "validate_closed_reason",
     "validate_prompt_pack",
 ]
