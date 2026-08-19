@@ -45,6 +45,15 @@ from git_cg.eval.lane_c.eligibility import (
     resolve_allows_lane_c,
     resolve_lab_override,
 )
+from git_cg.eval.lane_c.judge_input import (
+    DEFAULT_MAX_DIFF_SUMMARY_CHARS,
+    DEFAULT_MAX_INPUT_CHARS,
+    JudgeInput,
+    JudgeInputError,
+    classify_judge_input_size,
+    project_diff_summary,
+    project_judge_input,
+)
 from git_cg.eval.lane_c.prompt_pack import (
     DEFAULT_PROMPT_ROOT,
     DEFAULT_UNIVERSE_ROOT,
@@ -79,6 +88,8 @@ from git_cg.eval.lane_c.taxonomy import (
 
 __all__ = [
     "DEFAULT_LANE_C_METRICS",
+    "DEFAULT_MAX_DIFF_SUMMARY_CHARS",
+    "DEFAULT_MAX_INPUT_CHARS",
     "DEFAULT_OUTPUT_CONTRACT_IDENTITY",
     "DEFAULT_PACK_IDENTITY",
     "DEFAULT_PROMPT_ROOT",
@@ -90,6 +101,8 @@ __all__ = [
     "EXECUTION_CODES",
     "GATE_DISPOSITION_CODES",
     "GATE_TO_EXECUTION",
+    "JudgeInput",
+    "JudgeInputError",
     "LaneCAvailability",
     "LaneCEligibility",
     "LaneCRunResult",
@@ -99,6 +112,7 @@ __all__ = [
     "assert_execution_code",
     "assert_gate_disposition",
     "build_prompt_pack",
+    "classify_judge_input_size",
     "credentials_present",
     "evaluate_judge_availability",
     "evaluate_semantic_cohort_eligibility",
@@ -110,6 +124,8 @@ __all__ = [
     "load_pack_prompt_text",
     "map_gate_to_execution",
     "mapping_table",
+    "project_diff_summary",
+    "project_judge_input",
     "prompt_pack_content_hash",
     "prompt_pack_pin",
     "provider_client_constructible",
