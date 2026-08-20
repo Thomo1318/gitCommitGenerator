@@ -2,7 +2,7 @@
 
 Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), **Plane A score runner** (S2a/S2b/S2c), and **accept-path final-bytes binding + trajectory evidence** (S3) for the Opik evaluation harness.
 
-> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.5-s5-s6-s7-api-surface` (retains `0.9.3-s2b-clarifications` / `0.9.4-s5-eligibility-split` locks)
+> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.6-s6-slice0-reconciliation` (retains `0.9.5-s5-s6-s7-api-surface` / `0.9.4-s5-eligibility-split` / `0.9.3-s2b-clarifications` locks)
 > **Implementation issues:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) (S0) · [#231](https://github.com/Thomo1318/gitCommitGenerator/issues/231) (S3)
 > **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
 
@@ -55,6 +55,25 @@ Pins are content hashes (`name@sha256`):
 
 Legacy `src/git_cg/evals/` (soak/report helpers) is **not** the contract home. S0 uses singular `eval/`.
 
+
+
+## S6 — operator UX Slice 0 lock (#246)
+
+> **Implementation issue:** [#246](https://github.com/Thomo1318/gitCommitGenerator/issues/246)
+> **Plan SSOT version:** `0.9.6-s6-slice0-reconciliation`
+> **Census:** [`s6-slice0-landed-state-census.md`](./s6-slice0-landed-state-census.md)
+> **Baseline:** [`s6-slice0-baseline.json`](./s6-slice0-baseline.json)
+
+Slice 0 is **policy lock + landed-state census + canonical CLI naming** only. It does not ship runtime S6 writers. Schema re-freeze starts in Slice 1; CLI skeleton in Slice 2.
+
+Canonical command names (locked):
+
+* `git-cg eval run` (not `eval suite run`)
+* `git-cg eval session show` (not `session-show`)
+* `git-cg eval opik config show` (flat `eval config show` = temporary deprecated alias)
+* nested `git-cg eval export status|retry|drain` (dashed `export-*` = temporary bridges)
+
+Path-helper split: `src/git_cg/eval/paths.py` = static schema/catalog discovery; all Layer-A runtime stores extend `src/git_cg/eval/binding/paths.py` only.
 
 ## S2a — offline Plane A score runner
 
