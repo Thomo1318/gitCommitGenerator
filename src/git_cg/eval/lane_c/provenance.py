@@ -59,8 +59,8 @@ class DirtyOverlayProvenance:
     non_gating: bool = True
 
     def as_dict(self) -> dict[str, Any]:
-        """JSON-friendly provenance stamp."""
-        return {
+        """JSON-friendly provenance stamp (scrubbed; no raw overlay body)."""
+        payload = {
             "active": self.active,
             "lab_only": self.lab_only,
             "overlay_path": self.overlay_path,
@@ -75,6 +75,8 @@ class DirtyOverlayProvenance:
             "residual": "R5",
             "raw_overlay_exported": False,
         }
+        scrubbed = scrub_evidence_mapping(payload)
+        return scrubbed if isinstance(scrubbed, dict) else payload
 
 
 def overlays_exist_in_tree(*, root: Path | None = None) -> bool:
@@ -105,7 +107,7 @@ def stamp_dirty_provenance(
             overlay_name=None,
             provenance="clean",
         )
-    if not lab_only:
+    if lab_only is not True:
         raise DirtyOverlayError("dirty overlay stamp requires lab_only=True when overlay_path is set")
     path = Path(overlay_path)
     name = path.name or "overlay"
@@ -113,11 +115,23 @@ def stamp_dirty_provenance(
     safe_path = name
     return DirtyOverlayProvenance(
         active=True,
-        lab_only=bool(lab_only),
+        lab_only=True,
         overlay_path=safe_path,
         overlay_name=name,
         provenance=DIRTY_PROVENANCE_LABEL,
     )
+
+
+def _context_flag_enabled(val: Any) -> bool:
+    """Fail closed: any non-explicitly-false context flag is treated as enabled."""
+    if val is None or val is False:
+        return False
+    if isinstance(val, str) and val.strip().lower() in {"", "0", "false", "no", "off", "n"}:
+        return False
+    if val is True:
+        return True
+    # Non-bool truthy/ambiguous values (1, "true", "yes", objects) enable the guard.
+    return True
 
 
 def assert_overlay_not_on_green_path(
@@ -129,11 +143,10 @@ def assert_overlay_not_on_green_path(
 ) -> None:
     """Fail closed when dirty overlays would touch green/accept/hook contexts."""
     ctx = context or {}
-    flagged = accept_path or ci_green or hooks
-    # Also honor explicit context keys.
+    flagged = bool(accept_path) or bool(ci_green) or bool(hooks)
+    # Also honor explicit context keys (fail closed on ambiguous non-bool values).
     for key in ("accept_path", "ci_green", "hooks", "golden_promotion", "first_ci"):
-        val = ctx.get(key)
-        if val is True:
+        if _context_flag_enabled(ctx.get(key)):
             flagged = True
     if flagged:
         raise DirtyOverlayError("dirty overlays are lab-only and forbidden on accept-path/hooks/CI green paths")
@@ -153,7 +166,7 @@ def activate_dirty_overlay(
 
     Does **not** load or return overlay file bytes — only provenance metadata.
     """
-    if not lab_only:
+    if lab_only is not True:
         raise DirtyOverlayError("dirty overlay activation requires lab_only=True")
     assert_overlay_not_on_green_path(
         accept_path=accept_path,
@@ -164,7 +177,4 @@ def activate_dirty_overlay(
     path = Path(overlay_path)
     if require_exists and not path.exists():
         raise DirtyOverlayError(f"overlay path does not exist: {path.name}")
-    stamp = stamp_dirty_provenance(overlay_path=path, lab_only=True)
-    # Scrub any accidental rich context keys if callers attach later.
-    _ = scrub_evidence_mapping(stamp.as_dict())
-    return stamp
+    return stamp_dirty_provenance(overlay_path=path, lab_only=True)

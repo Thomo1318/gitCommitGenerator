@@ -44,13 +44,12 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _final_accept_payload(text: str = "feat(eval): residual lab signal") -> dict:
-    import hashlib
+    from git_cg.eval.binding.binder import message_sha256_bytes
 
-    raw = text.encode("utf-8")
     return {
         "artifact_class": "final_accept",
         "final_message": text,
-        "final_message_sha256": hashlib.sha256(raw).hexdigest(),
+        "final_message_sha256": message_sha256_bytes(text),
         "encoding": "utf-8",
         "bound": True,
     }
@@ -365,8 +364,14 @@ class TestR6Moderation:
 
 
 class TestR5DirtyOverlay:
-    def test_overlays_absent_in_tree(self) -> None:
-        assert overlays_exist_in_tree() is False
+    def test_overlays_absent_in_tree(self, tmp_path: Path) -> None:
+        # Controlled root — never inspect the real working tree.
+        assert overlays_exist_in_tree(root=tmp_path) is False
+        overlay_dir = tmp_path / ".eval" / "overlays"
+        overlay_dir.mkdir(parents=True)
+        assert overlays_exist_in_tree(root=tmp_path) is False
+        (overlay_dir / "dirty.json").write_text("{}", encoding="utf-8")
+        assert overlays_exist_in_tree(root=tmp_path) is True
 
     def test_stamp_inactive_without_path(self) -> None:
         stamp = stamp_dirty_provenance(overlay_path=None)
