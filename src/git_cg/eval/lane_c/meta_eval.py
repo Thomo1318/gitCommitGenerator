@@ -93,8 +93,10 @@ def classify_equals_error(
 ) -> tuple[bool | None, Literal["FP", "FN", "OK", "judge_error"]]:
     """Classify one Equals outcome.
 
-    Positive label convention: truthy expected labels are ``{"1", "true", "yes",
-    "pos", "positive", "pass", "toxic", "harmful", "fail"}`` (case-insensitive).
+    Positive label convention: truthy expected labels are the members of
+    ``_POSITIVE`` (case-insensitive), currently ``{"1", "true", "yes", "y",
+    "pos", "positive", "pass", "toxic", "harmful", "fail", "violation",
+    "flagged"}``.
     All other non-empty labels are treated as negative. This is lab-only
     calibration vocabulary — not product Hybrid law.
     """
@@ -147,7 +149,11 @@ def _is_positive_label(normalized: str) -> bool:
 def _pin_or_default(pin_ref: str | None) -> str:
     if pin_ref is None or not str(pin_ref).strip():
         # Stable lab pin identity over schema pack (content-addressed).
-        return schema_pack_pin().replace("schema_pack_v0@", "judge_meta_v1@", 1)
+        base = schema_pack_pin()
+        _name, sep, digest = base.partition("@")
+        if not sep or len(digest) != 64:
+            raise MetaEvalError(f"cannot derive judge_meta pin from schema pack pin {base!r}")
+        return f"judge_meta_v1@{digest}"
     pin = str(pin_ref).strip()
     # Accept full pin_ref form; otherwise fail closed.
     if "@" not in pin or len(pin.split("@", 1)[1]) != 64:
@@ -229,12 +235,18 @@ def build_judge_meta_eval(
 
 
 def summarize_meta_eval(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Compute ``{fp_rate, fn_rate, n, equals_count, judge_error_count}``."""
+    """Compute ``{fp_rate, fn_rate, n, equals_count, judge_error_count}``.
+
+    Items with ``equals is False`` but no ``error_type`` are counted as
+    ``unclassified`` rather than biased into FN, so externally built envelopes
+    cannot silently skew fp/fn rates.
+    """
     n = 0
     fp = 0
     fn = 0
     ok = 0
     errors = 0
+    unclassified = 0
     for item in items:
         et = str(item.get("error_type") or "")
         if et == "judge_error":
@@ -248,10 +260,15 @@ def summarize_meta_eval(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         elif et == "OK" or item.get("equals") is True:
             ok += 1
         elif item.get("equals") is False:
-            # Fallback if error_type omitted.
-            fn += 1
-    fp_rate = (fp / n) if n else 0.0
-    fn_rate = (fn / n) if n else 0.0
+            # Ambiguous without error_type — do not bias FN vs FP.
+            unclassified += 1
+        else:
+            unclassified += 1
+    classified = fp + fn + ok
+    # Rates use classified denominator so unclassified rows stay honest.
+    denom = classified if classified else 0
+    fp_rate = (fp / denom) if denom else 0.0
+    fn_rate = (fn / denom) if denom else 0.0
     return {
         "fp_rate": fp_rate,
         "fn_rate": fn_rate,
@@ -260,6 +277,7 @@ def summarize_meta_eval(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "judge_error_count": errors,
         "fp_count": fp,
         "fn_count": fn,
+        "unclassified_count": unclassified,
     }
 
 
@@ -431,6 +449,8 @@ def run_judge_meta_eval(
 
 def assert_labels_absent_from_ordinary_payload(payload: Mapping[str, Any]) -> None:
     """Fail closed if a mapping looks like an ordinary judge payload carrying labels."""
+    from git_cg.eval.lane_c.judge_input import _normalize_key_name
+
     forbidden = {
         "expected_label",
         "expected_labels",
@@ -439,7 +459,11 @@ def assert_labels_absent_from_ordinary_payload(payload: Mapping[str, Any]) -> No
         "judge_labels",
         "expected_gold",
     }
-    found = sorted(k for k in payload if str(k).lower() in forbidden or str(k).lower().startswith("expected"))
+    found = sorted(
+        k
+        for k in payload
+        if _normalize_key_name(str(k)) in forbidden or _normalize_key_name(str(k)).startswith("expected")
+    )
     # Allow only inside explicit meta-eval builders — callers use this on JudgeInput.as_dict().
     if found:
         raise MetaEvalError("ordinary judge payload must not carry meta-eval labels: " + ", ".join(found))

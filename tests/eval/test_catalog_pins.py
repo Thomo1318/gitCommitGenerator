@@ -86,7 +86,7 @@ def test_s0_b05_pins_stable_across_two_invocations() -> None:
     assert len(s1.split("@", 1)[1]) == 64
     assert len(m1.split("@", 1)[1]) == 64
     # Frozen S0 identities (content hashes). Drift fails closed here.
-    assert s1 == ("schema_pack_v0@eea1e9d9e60549626b365d98403ca08e2c7751a81ef2068d8749994f55f47651")
+    assert s1 == ("schema_pack_v0@7b4eaf312d2255b1dbfeca095a6fb716e5d30f3a3b3ad8648f6a8c705a070539")
     assert m1 == ("metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75")
 
 

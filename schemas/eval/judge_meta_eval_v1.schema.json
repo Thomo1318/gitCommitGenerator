@@ -227,6 +227,10 @@
         "fn_count": {
           "type": "integer",
           "minimum": 0
+        },
+        "unclassified_count": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     }
