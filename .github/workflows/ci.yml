@@ -362,6 +362,8 @@ jobs:
           MAX_FILES = 40
           MAX_SUMMARY_ROWS = 12
           MAX_COMMENT_BYTES = 55_000
+          # Keep the sticky comment summary-first; verbose -vv lives under <details>.
+          MAX_VERBOSE_CHARS = 24_000
 
 
           def scrub(text: str) -> str:
@@ -404,6 +406,160 @@ jobs:
               body = [r for r in rows if r[0].upper() != "TOTAL"]
               body = body[:MAX_SUMMARY_ROWS]
               return body + total[-1:]
+
+
+          def extract_detailed_coverage(report: str) -> str:
+              """Return the interrogate -vv detailed block when present."""
+              if not report.strip():
+                  return ""
+              lines = report.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+              start = None
+              end = None
+              for idx, line in enumerate(lines):
+                  stripped = line.strip()
+                  if start is None and "Detailed Coverage" in stripped:
+                      start = idx
+                      continue
+                  if start is not None and stripped.startswith("-----") and "Summary" in stripped:
+                      end = idx
+                      break
+              if start is None:
+                  # Fallback: whole report (still size-capped by caller).
+                  body = "\n".join(lines).strip()
+              else:
+                  body = "\n".join(lines[start:end]).strip() if end is not None else "\n".join(lines[start:]).strip()
+              return body
+
+
+          # interrogate -vv rows look like:
+          # | ParseResult.to_dict (L86)   |        MISSED |
+          DETAIL_ROW_RE = re.compile(
+              r"^\|\s*(?P<name>.+?)\s*\|\s*(?P<status>COVERED|MISSED)\s*\|\s*$",
+              re.IGNORECASE,
+          )
+          MAX_MISSED_ROWS = 80
+
+
+          def parse_missed_rows(report: str) -> list[tuple[str, str]]:
+              """Extract (symbol, location) pairs for MISSED rows from -vv output."""
+              detail = extract_detailed_coverage(report)
+              if not detail:
+                  return []
+              missed: list[tuple[str, str]] = []
+              for line in detail.splitlines():
+                  m = DETAIL_ROW_RE.match(line.strip())
+                  if not m:
+                      continue
+                  if m.group("status").upper() != "MISSED":
+                      continue
+                  raw_name = scrub(m.group("name").strip())
+                  # Split trailing "(L123)" location when present.
+                  loc_match = re.search(r"\s*\((L\d+)\)\s*$", raw_name)
+                  if loc_match:
+                      location = loc_match.group(1)
+                      symbol = raw_name[: loc_match.start()].strip()
+                  else:
+                      symbol = raw_name
+                      location = "—"
+                  if not symbol or symbol.lower() == "name":
+                      continue
+                  missed.append((symbol, location))
+              return missed[:MAX_MISSED_ROWS]
+
+
+          def md_missed_table(rows: list[tuple[str, str]]) -> str:
+              if not rows:
+                  return "_No MISSED symbols in the patch gate report._"
+              lines = [
+                  "| Symbol | Location |",
+                  "| --- | --- |",
+              ]
+              for symbol, location in rows:
+                  lines.append(f"| `{symbol}` | `{location}` |")
+              return "\n".join(lines)
+
+
+          def format_missed_section(report: str, *, skipped: bool) -> list[str]:
+              """Always-visible MISSED-symbol summary for the sticky PR comment."""
+              if skipped:
+                  return [
+                      "### MISSED symbols (patch gate)",
+                      "",
+                      "_Patch gate skipped — no changed `src/git_cg` Python files._",
+                  ]
+              if not report.strip():
+                  return [
+                      "### MISSED symbols (patch gate)",
+                      "",
+                      "_Verbose patch report unavailable._",
+                  ]
+              missed_rows = parse_missed_rows(report)
+              note = ""
+              # parse_missed_rows already caps; surface that when we hit the ceiling.
+              missed_total = 0
+              detail = extract_detailed_coverage(report)
+              if detail:
+                  for line in detail.splitlines():
+                      m = DETAIL_ROW_RE.match(line.strip())
+                      if m and m.group("status").upper() == "MISSED":
+                          missed_total += 1
+              if missed_total > MAX_MISSED_ROWS:
+                  note = (
+                      f"\n\n_Showing first {MAX_MISSED_ROWS} of {missed_total} MISSED symbols. "
+                      "See the verbose detail or `interrogate-docstring-report` artifact for the full list._"
+                  )
+              return [
+                  "### MISSED symbols (patch gate)",
+                  "",
+                  md_missed_table(missed_rows) + note,
+              ]
+
+
+          def format_verbose_details(report: str, *, skipped: bool) -> list[str]:
+              """Collapsible -vv ASCII dump for the sticky PR comment."""
+              if skipped:
+                  return [
+                      "<details>",
+                      "<summary>Patch verbose detail (-vv)</summary>",
+                      "",
+                      "_Patch gate skipped — no changed `src/git_cg` Python files._",
+                      "",
+                      "</details>",
+                  ]
+              detail = extract_detailed_coverage(report)
+              if not detail:
+                  return [
+                      "<details>",
+                      "<summary>Patch verbose detail (-vv)</summary>",
+                      "",
+                      "_Verbose patch report unavailable._",
+                      "",
+                      "</details>",
+                  ]
+              truncated = False
+              if len(detail) > MAX_VERBOSE_CHARS:
+                  detail = detail[:MAX_VERBOSE_CHARS].rstrip()
+                  truncated = True
+              detail = scrub(detail)
+              # Fence as plain text so table pipes render literally.
+              block = [
+                  "<details>",
+                  "<summary>Patch verbose detail (-vv)</summary>",
+                  "",
+                  "```text",
+                  detail,
+                  "```",
+              ]
+              if truncated:
+                  block.extend(
+                      [
+                          "",
+                          "_…verbose detail truncated for comment size limits. "
+                          "Full `-vv` output is in the `interrogate-docstring-report` artifact._",
+                      ]
+                  )
+              block.extend(["", "</details>"])
+              return block
 
 
           def status_emoji(status: str | None, *, skipped: bool = False) -> str:
@@ -516,10 +672,15 @@ jobs:
               "",
               md_table(full_rows),
               "",
+              *format_missed_section(patch_report, skipped=skip_patch),
+              "",
+              *format_verbose_details(patch_report, skipped=skip_patch),
+              "",
               "---",
               "",
               "*Docstring coverage via [interrogate](https://github.com/econchick/interrogate). "
-              "Patch gate fails under 80% on changed `src/git_cg` files; full-package scan is informational.*",
+              "Patch gate fails under 80% on changed `src/git_cg` files; full-package scan is informational. "
+              "MISSED symbols are listed above; expand **Patch verbose detail (-vv)** for the full ASCII report.*",
               "",
           ]
           body = "\n".join(lines)

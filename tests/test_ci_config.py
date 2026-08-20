@@ -604,6 +604,35 @@ class TestCiWorkflowHardening:
         full = steps["Full-package badge scan (informational; does not gate)"]
         assert "interrogate==1.7.0" in full["run"]
         assert "--fail-under 0" in full["run"]
+        # Patch gate stays -vv so the sticky comment can embed symbol-level detail.
+        assert (
+            "interrogate -vv" in patch["run"]
+            or 'interrogate==1.7.0" interrogate -vv' in patch["run"]
+            or "-vv --fail-under 80" in patch["run"]
+        )
+        assert "-v --fail-under 0" in full["run"] or "interrogate src/git_cg -v" in full["run"]
+
+        stage = steps["Stage sticky PR docstring comment artifact"]
+        stage_run = stage["run"]
+        assert "format_missed_section" in stage_run
+        assert "format_verbose_details" in stage_run
+        assert "extract_detailed_coverage" in stage_run
+        assert "parse_missed_rows" in stage_run
+        assert "md_missed_table" in stage_run
+        assert "MISSED symbols (patch gate)" in stage_run
+        assert "Patch verbose detail (-vv)" in stage_run
+        assert "<details>" in stage_run
+        assert "MAX_VERBOSE_CHARS" in stage_run
+        assert "MAX_MISSED_ROWS" in stage_run
+        assert "```text" in stage_run
+        # MISSED summary must be composed outside the collapsible -vv dump.
+        assert stage_run.index("format_missed_section") < stage_run.index(
+            "*format_verbose_details(patch_report, skipped=skip_patch)"
+        ) or (
+            "format_missed_section(patch_report" in stage_run
+            and stage_run.index("format_missed_section(patch_report")
+            < stage_run.index("format_verbose_details(patch_report")
+        )
 
     def test_top_level_permissions_only_contents(self):
         """Top-level permissions must be scoped to `contents: read` only (no extra keys)."""
