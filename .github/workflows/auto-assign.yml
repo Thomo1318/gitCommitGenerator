@@ -1,0 +1,52 @@
+# Assign the repo owner on newly opened issues and pull requests.
+# No third-party Action, no checkout, no untrusted code execution.
+name: Auto Assign
+
+on:
+  issues:
+    types: [opened]
+  # Base-repo context so fork/Dependabot PRs can still be assigned.
+  # Safe here: this workflow never checks out PR code.
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  assign:
+    name: Assign owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assign Thomo1318
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSIGNEE: Thomo1318
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "issues" ]; then
+            number="${ISSUE_NUMBER}"
+          else
+            number="${PR_NUMBER}"
+          fi
+
+          if [ -z "${number}" ]; then
+            echo "No issue/PR number in event payload" >&2
+            exit 1
+          fi
+
+          # Idempotent: GitHub ignores assignees already present.
+          gh api \
+            --method POST \
+            "repos/${REPOSITORY}/issues/${number}/assignees" \
+            -f "assignees[]=${ASSIGNEE}"
+
+          echo "Assigned @${ASSIGNEE} to #${number}"
