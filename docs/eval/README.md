@@ -640,12 +640,12 @@ Composition/runner claim mapping lives in [`s5-claim-evidence.md`](./s5-claim-ev
 
 | Residual | Disposition |
 |:---|:---|
-| **R2** meta-eval / Equals | Deferred — future lab home; labels must not enter ordinary `judge_input` |
-| **R1** richer rubric packs | Deferred — flags-only later |
-| **R6** moderation ops | Deferred — off-by-default; #219 plane coord |
-| **R8** flakiness studies | Deferred — lab only |
-| **R10** NLP diagnostics | Deferred — lab/diagnostic only |
-| **R5** dirty overlays | **N/A** — no `.eval/overlays/` in tree |
+| **R2** meta-eval / Equals | **Shipped (lab)** — `lane_c/meta_eval.py` + `judge_meta_eval_v1`; labels never enter ordinary `judge_input` |
+| **R1** richer rubric packs | **Shipped (opt-in)** — `resolve_richer_rubric_metrics` / `run_lane_c(richer_rubrics=…)`; default spine craft/relevance only |
+| **R6** moderation ops | **Shipped (off-by-default)** — scrubbed `ops.*` signal; #219 Promptfoo plane; no Promptfoo impl here |
+| **R8** flakiness studies | **Shipped (lab)** — injectable `measure_flakiness` → `cprime.flakiness_std` (`passed=None`) |
+| **R10** NLP diagnostics | **Shipped (lab)** — `nlp.*` diagnostics; BERTScore honest skip when unavailable |
+| **R5** dirty overlays | **Guard shipped / content N/A** — `activate_dirty_overlay` lab-only; no committed `.eval/overlays/` |
 | Family H C′ honesty metrics | **Shipped** (`h.judge_input_isolated`, `h.prompt_pack_*`) |
 | Legacy `setup_opik_eval_rule.py` / `setup_opik_test_suites.py` | **Frozen** — refuse live accept-path authority |
 

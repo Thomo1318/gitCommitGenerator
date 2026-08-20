@@ -94,7 +94,7 @@ Primary composition tests:
 | **S5-C04** | Empty/oversize never fan-out | judge empty/oversize never-retry + runner empty skip |
 | **S5-C05** | Final-accept linkage (class/sha/encoding) | judge_input final_accept projection tests |
 | **S5-C06** | `diff_summary` allowlisted/bounded/gold-blind | `project_diff_summary` tests |
-| **S5-C07** | R2 labeled path | **Deferred** (S5-F) — no ordinary label leak |
+| **S5-C07** | R2 labeled path | **Complete on #233** (S5-F) — no ordinary label leak |
 | **S5-C08** | Success `reason="scored"`; rationale evidence-only | `test_lane_c_advisory_score.py` |
 | **S5-C09** | Docs/module framing is opt-in/lab, not accept-blocking | package docstring + README S5 section |
 
@@ -138,19 +138,19 @@ Primary composition tests:
 
 | ID | Summary | Disposition / evidence |
 |:---|:---|:---|
-| **S5-F01** | `judge_meta_eval_v1` path | **Deferred** on #233 (named future lab home) |
-| **S5-F02** | Equals label non-leak | N/A until R2 ships; ordinary path already gold-blind (S5-C01/C02) |
-| **S5-F03** | FP/FN lab-only | Deferred with R2 |
-| **S5-F04** | Deferral visible | #233 D28 residual table + README S5 residuals |
+| **S5-F01** | `judge_meta_eval_v1` path | **Shipped** — `src/git_cg/eval/lane_c/meta_eval.py` + schema + residual tests (lab-only; not S8) |
+| **S5-F02** | Equals label non-leak | **Shipped** — `assert_labels_absent_from_ordinary_payload` + `tests/eval/test_lane_c_residuals.py`; ordinary `JudgeInput` remains gold-blind (S5-C01/C02) |
+| **S5-F03** | FP/FN lab-only | **Shipped** — `lab.judge_fp_rate` / `lab.judge_fn_rate` via `emit_meta_eval_scores` (`passed=None`, non-gating) |
+| **S5-F04** | Tracking visible until ship | #233 D28 + disposition doc; S8 is not R2 owner |
 
 ### S5-G — other residuals + board hygiene
 
 | ID | Summary | Disposition / evidence |
 |:---|:---|:---|
-| **S5-G01** | R1/R6/R8/R10/R5/scripts/H | R1/R6/R8/R10 deferred w/ home; R5 N/A; scripts frozen; H shipped |
+| **S5-G01** | R1/R6/R8/R10/R5/scripts/H | **Shipped** — residual modules + `tests/eval/test_lane_c_residuals.py`; R5 activation guard + existence N/A; scripts frozen; H shipped |
 | **S5-G02** | PR links #233 + #217 + claim evidence | this file + PR body (Slice 7) |
 | **S5-G03** | Closes #233 only | PR trailer policy |
-| **S5-G04** | Deferrals name future home | #233 D28 + README residuals |
+| **S5-G04** | Non-R* hygiene → #235/S8; R* stay on #233 | #233 D28 + #235 migration table |
 | **S5-G05** | Legacy scripts frozen | `tests/eval/mirror/test_setup_opik_scripts_absorption.py` |
 
 ### S5-H — coverage & public API quality
@@ -208,7 +208,7 @@ Notes:
 * Never first CI gate · advisory authority · gold-blind default · authz≠creds · final_accept linkage · no auto-`passed` C′ · `reason="scored"`
 * Claims S5-A…H evidence summarized (this file)
 * I1–I12 non-violation restated
-* Deferred: R2/R1/R6/R8/R10 lab residuals; S6 doctor/amend-brief/review-queue; S7 ADR/Zensical API docs
+* Complete on #233: R2/R1/R6/R8/R10 lab residuals. Still separate: S6 doctor/amend-brief/review-queue; S7 ADR/Zensical API docs; S8/#235 unallocated hygiene
 * Coverage ≥80% on `git_cg.eval.lane_c` recorded
 * Plan SSOT `0.9.5` (with retained `0.9.4` S5 locks) included in the S5 PR
 
@@ -217,4 +217,4 @@ Notes:
 * Live network dogfood against a provider (operator-only)
 * Full `git-cg eval` doctor / amend-brief / review-queue (S6)
 * ADR-0011 rewrite / full Zensical API site (S7)
-* R2 Equals meta-eval implementation (deferred residual)
+* R2 Equals meta-eval implementation (complete on #233 Slice 6)

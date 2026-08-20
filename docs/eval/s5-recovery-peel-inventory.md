@@ -20,7 +20,7 @@ Confirmed: `src/git_cg/eval/lane_c/` (D23). No permanent dual home.
 | `tests/eval/test_lane_c_prompt_pack.py` | pack identity tests |
 | `tests/eval/test_lane_c_judge.py` | judge seam tests |
 | `schemas/eval/prompt_pack_v1.schema.json` | take only if compatible with live schema-pack generator |
-| `schemas/eval/judge_meta_eval_v1.schema.json` | R2 residual; may D28-defer |
+| `schemas/eval/judge_meta_eval_v1.schema.json` | **Shipped** R2 lab envelope (Slice 6; not product gate) |
 
 ## REFUSE
 
