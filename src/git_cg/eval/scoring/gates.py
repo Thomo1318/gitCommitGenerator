@@ -137,9 +137,7 @@ _ADVISORY_PREFIXES = (
 
 def _is_true_advisory(metric_id: str) -> bool:
     """True for C-prime / lab / human / NLP / ops / export / dogfood (never gate veto)."""
-    if metric_id.startswith("cprime"):
-        return True
-    return any(metric_id.startswith(p) for p in _ADVISORY_PREFIXES if p != "cprime")
+    return metric_id.startswith(_ADVISORY_PREFIXES)
 
 
 def compose_gates(

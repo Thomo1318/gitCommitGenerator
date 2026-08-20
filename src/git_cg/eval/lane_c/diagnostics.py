@@ -13,6 +13,7 @@ or first-CI gates. Default :data:`DEFAULT_LANE_C_METRICS` remains craft/relevanc
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 import statistics
@@ -96,10 +97,10 @@ def resolve_richer_rubric_metrics(
     selected: list[str] = []
     if enabled is True:
         selected.extend(RICHER_RUBRIC_METRICS)
-    elif isinstance(enabled, (list, tuple)):
+    elif isinstance(enabled, Sequence) and not isinstance(enabled, (str, bytes)):
         selected.extend(str(x) for x in enabled)
-    elif enabled not in {None, False}:
-        raise DiagnosticError("enabled must be bool, sequence, or None")
+    elif enabled is not None and enabled is not False:
+        raise DiagnosticError("enabled must be bool, sequence of metric ids, or None")
 
     if include:
         selected.extend(str(x) for x in include)
@@ -163,7 +164,6 @@ def measure_flakiness(
         raise DiagnosticError("model pin is required for flakiness studies")
 
     base_ev = {
-        **_NON_GATING,
         "lab_only": True,
         "runs_per_item": runs_per_item,
         "model": str(model).strip(),
@@ -171,6 +171,8 @@ def measure_flakiness(
     }
     if evidence:
         base_ev.update(dict(evidence))
+    # Honesty keys are invariant — caller evidence must not override them.
+    base_ev.update(_NON_GATING)
 
     if judge_fn is None:
         row = make_advisory_skip(
@@ -251,7 +253,7 @@ def _continuous_advisory_row(
     polarity = Polarity(crow["polarity"])
     if polarity is Polarity.PASS_FAIL:
         raise DiagnosticError(f"{metric_id} is pass_fail; use boolean helper")
-    payload = scrub_evidence_mapping({**_NON_GATING, **dict(evidence)})
+    payload = scrub_evidence_mapping({**dict(evidence), **_NON_GATING})
     if not isinstance(payload, dict):
         payload = dict(_NON_GATING)
     sev = crow.get("severity")
@@ -285,7 +287,7 @@ def _pass_fail_ops_row(
     crow = metric_row(metric_id)
     if crow is None:
         raise KeyError(f"unknown metric_id not in catalog: {metric_id}")
-    payload = scrub_evidence_mapping({**_NON_GATING, **dict(evidence)})
+    payload = scrub_evidence_mapping({**dict(evidence), **_NON_GATING})
     if not isinstance(payload, dict):
         payload = dict(_NON_GATING)
     sev = crow.get("severity")
@@ -481,31 +483,19 @@ def compute_nlp_diagnostics(
         elif mid == "nlp.bertscore":
             if bertscore_fn is None:
                 values[mid] = None
-                crow = metric_row(mid)
-                assert crow is not None
                 rows.append(
-                    ScoreResultV1(
-                        metric_id=mid,
-                        polarity=Polarity(crow["polarity"]),
-                        authority=Authority(crow["authority"]),
-                        source=Source(crow.get("source_default") or "lab_meta"),
-                        value=0.0,
-                        name=crow.get("name"),
-                        family=Family(crow["family"]) if crow.get("family") else None,
-                        passed=None,
-                        severity=Severity(crow["severity"]) if crow.get("severity") else None,
+                    _continuous_advisory_row(
+                        mid,
+                        0.0,
                         reason="nlp_bertscore_unavailable",
-                        evidence=scrub_evidence_mapping(
-                            {
-                                **base,
-                                "skipped": True,
-                                "available": False,
-                                "metric": "bertscore",
-                                "note": "optional dependency/fn not provided; honest skip",
-                            }
-                        ),
-                        product_authority=None,
-                        pin_refs=list(pin_refs) if pin_refs is not None else live_pin_refs(),
+                        evidence={
+                            **base,
+                            "skipped": True,
+                            "available": False,
+                            "metric": "bertscore",
+                            "note": "optional dependency/fn not provided; honest skip",
+                        },
+                        pin_refs=pin_refs,
                     )
                 )
             else:
@@ -601,7 +591,7 @@ def evaluate_moderation_ops(
             "category": category,
             "risk": risk,
             "sample_chars": len(sample),
-            "sample_sha16": __import__("hashlib").sha256(sample.encode("utf-8", errors="replace")).hexdigest()[:16],
+            "sample_sha16": hashlib.sha256(sample.encode("utf-8", errors="replace")).hexdigest()[:16],
             "raw_sample_retained": False,
             "promptfoo": False,
             "plane": "#219-coord",
