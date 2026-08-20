@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from typing import Any, Final
 
 from git_cg.eval.enums import Authority, Family, Polarity, Severity, Source
+from git_cg.eval.evidence_scrub import scrub_evidence_mapping
 from git_cg.eval.lane_c.taxonomy import EXEC_SCORED, assert_execution_code, failure_id_for, validate_closed_reason
 from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.context import live_pin_refs
@@ -25,6 +26,7 @@ __all__ = [
     "MAX_RATIONALE_CHARS",
     "make_advisory_score",
     "make_advisory_skip",
+    "scrub_evidence_mapping",
     "scrub_rationale",
 ]
 
@@ -131,12 +133,9 @@ def make_advisory_score(
         raise ValueError(f"make_advisory_score requires reason={EXEC_SCORED!r}, got {reason!r}")
     score = _coerce_geval_value(value)
 
-    payload: dict[str, Any] = dict(evidence) if evidence else {}
-    # Hard ban: never persist secret-looking keys.
-    for key in list(payload):
-        lk = str(key).lower()
-        if any(token in lk for token in ("api_key", "secret", "password", "token", "authorization")):
-            payload.pop(key, None)
+    payload: dict[str, Any] = scrub_evidence_mapping(dict(evidence) if evidence else {})
+    if not isinstance(payload, dict):
+        payload = {}
     payload["scale"] = GEVAL_SCALE
     payload["skipped"] = False
     payload["execution_code"] = EXEC_SCORED
@@ -180,11 +179,9 @@ def make_advisory_skip(
     code = assert_execution_code(reason)
     if code == EXEC_SCORED:
         raise ValueError("make_advisory_skip cannot emit reason='scored'")
-    payload: dict[str, Any] = dict(evidence) if evidence else {}
-    for key in list(payload):
-        lk = str(key).lower()
-        if any(token in lk for token in ("api_key", "secret", "password", "token", "authorization")):
-            payload.pop(key, None)
+    payload: dict[str, Any] = scrub_evidence_mapping(dict(evidence) if evidence else {})
+    if not isinstance(payload, dict):
+        payload = {}
     payload.setdefault("skipped", True)
     payload["execution_code"] = code
     # Never stamp a quality scale on a skip - 0.0 is not a GEval mark.

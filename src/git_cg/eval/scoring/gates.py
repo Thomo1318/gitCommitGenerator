@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 
+from git_cg.eval.evidence_scrub import scrub_evidence_mapping
 from git_cg.eval.score_result import ScoreResultV1
 from git_cg.eval.scoring.result_builder import make_score
 
@@ -332,13 +333,10 @@ def _compose_semantic_cohort_gate(
     diagnostic_only = bool(getattr(lane_c_eligibility, "diagnostic_only", False))
     base_evidence = getattr(lane_c_eligibility, "evidence", None)
     evidence: dict = {}
-    if isinstance(base_evidence, dict):
-        # Copy and strip any accidental secret-looking keys.
-        for k, v in base_evidence.items():
-            lk = str(k).lower()
-            if any(s in lk for s in ("api_key", "secret", "password", "token", "authorization")):
-                continue
-            evidence[k] = v
+    if isinstance(base_evidence, Mapping):
+        scrubbed = scrub_evidence_mapping(base_evidence)
+        if isinstance(scrubbed, dict):
+            evidence = scrubbed
 
     invoked = bool(_counter("invoked", False))
     scored_count_raw = _counter("scored_count", 0)
