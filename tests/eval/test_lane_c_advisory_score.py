@@ -87,3 +87,18 @@ class TestMakeAdvisorySkip:
     def test_unknown_metric_fails_closed(self) -> None:
         with pytest.raises(KeyError):
             make_advisory_skip("cprime.does_not_exist", reason=EXEC_JUDGE_NOT_INVOKED)
+
+
+class TestAdvisoryCoverageEdges:
+    def test_float_score_preserved(self) -> None:
+        row = make_advisory_score("cprime.geval_craft", 3.5, rationale=123)  # type: ignore[arg-type]
+        assert row.value == 3.5
+        assert row.evidence["rationale"] == "123"
+
+    def test_skip_maps_failure_id(self) -> None:
+        from git_cg.eval.lane_c.taxonomy import EXEC_TIMEOUT, failure_id_for
+
+        row = make_advisory_skip("cprime.geval_craft", reason=EXEC_TIMEOUT)
+        mapped = failure_id_for(EXEC_TIMEOUT)
+        assert mapped is not None
+        assert row.failure_ids == [mapped]

@@ -735,3 +735,470 @@ class TestSlice4PromotionImmunity:
         by = {g.metric_id: g for g in gates}
         assert by["gate.semantic_cohort_eligible"].passed is False
         assert by["gate.semantic_cohort_eligible"].evidence["cprime_ran"] is False
+
+
+class TestRunnerCoverageEdges:
+    def _projected(self):
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.judge_input import project_judge_input
+
+        text = (
+            "✨ feat(eval): runner coverage\n\n"
+            "Refs: #233\n"
+            "SemVer-Impact: MINOR\n"
+            "Change-Types: feat\n"
+            "Changelog-Groups: Added\n"
+        )
+        return project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+            }
+        )
+
+    def test_base_evidence_strips_secret_keys(self) -> None:
+        from git_cg.eval.lane_c.availability import evaluate_judge_availability
+        from git_cg.eval.lane_c.eligibility import evaluate_semantic_cohort_eligibility
+        from git_cg.eval.lane_c.runner import _base_evidence
+
+        elig = evaluate_semantic_cohort_eligibility(
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+        )
+        avail = evaluate_judge_availability(eligible=elig.eligible, environ=PIN_ENV_WITH_KEY)
+        ev = _base_evidence(
+            eligibility=elig,
+            availability=avail,
+            extra={"api_key": "sk-x", "ok": 1, "authorization": "Bearer z", "token_hint": "nope"},
+        )
+        assert "api_key" not in ev
+        assert "authorization" not in ev
+        assert "token_hint" not in ev
+        assert ev["ok"] == 1
+        assert ev["available"] is True
+
+    def test_aggregate_pack_evidence(self) -> None:
+        from git_cg.eval.lane_c.advisory import make_advisory_score, make_advisory_skip
+        from git_cg.eval.lane_c.runner import aggregate_pack_evidence
+        from git_cg.eval.lane_c.taxonomy import EXEC_JUDGE_NOT_INVOKED
+
+        rows = [
+            make_advisory_score(
+                "cprime.geval_craft",
+                4,
+                evidence={"pack_identity": "lane_c_craft@1", "content_sha256": "a" * 64},
+            ),
+            make_advisory_skip(
+                "cprime.geval_relevance",
+                reason=EXEC_JUDGE_NOT_INVOKED,
+                evidence={"pack_identity": "lane_c_craft@1", "content_sha256": "b" * 64},
+            ),
+            make_advisory_score("cprime.geval_craft", 3, evidence={"not_pack": True}),
+            object(),
+        ]
+        out = aggregate_pack_evidence(rows)
+        assert out["pack_identity"] == "lane_c_craft@1"
+        assert out["pack_identities"] == ["lane_c_craft@1"]
+        assert out["content_sha256"] == "a" * 64
+        assert out["content_hashes"] == ["a" * 64, "b" * 64]
+
+    def test_resolve_projected_input_paths(self) -> None:
+        from git_cg.eval.lane_c.runner import _resolve_projected_input
+        from git_cg.eval.lane_c.taxonomy import EXEC_EMPTY_INPUT, EXEC_PARSE_ERROR
+
+        none_proj, none_skip, none_note = _resolve_projected_input(
+            judge_input=None,
+            final_accept_evidence=None,
+            lab_override=False,
+            max_input_chars=None,
+        )
+        assert none_proj is None and none_skip is None and none_note is None
+
+        projected = self._projected()
+        same, skip, _note = _resolve_projected_input(
+            judge_input=projected,
+            final_accept_evidence=None,
+            lab_override=False,
+            max_input_chars=None,
+        )
+        assert same is projected and skip is None
+
+        from git_cg.eval.binding.binder import message_sha256_bytes
+
+        empty_text = "   "
+        empty, code, err = _resolve_projected_input(
+            judge_input={
+                "artifact_class": "final_accept",
+                "bound": True,
+                "final_message": empty_text,
+                "final_message_sha256": message_sha256_bytes(empty_text),
+            },
+            final_accept_evidence=None,
+            lab_override=False,
+            max_input_chars=None,
+        )
+        assert empty is None
+        assert code == EXEC_EMPTY_INPUT
+        assert err
+
+        bad, code2, err2 = _resolve_projected_input(
+            judge_input={"not": "valid"},
+            final_accept_evidence=None,
+            lab_override=False,
+            max_input_chars=None,
+        )
+        assert bad is None
+        assert code2 == EXEC_PARSE_ERROR
+        assert err2
+
+    def test_pack_dir_for_recorded_and_derived(self, tmp_path: Path) -> None:
+        from git_cg.eval.lane_c.runner import _pack_dir_for
+
+        recorded = tmp_path / "craft"
+        recorded.mkdir()
+        assert _pack_dir_for({"pack_dir": recorded}, None) == recorded
+        assert _pack_dir_for({"pack_dir": str(recorded)}, None) == recorded
+        derived = _pack_dir_for({"pack_id": "lane_c_craft"}, tmp_path)
+        assert derived == tmp_path / "craft"
+
+    def test_oversize_input_via_runner(self) -> None:
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.taxonomy import EXEC_OVERSIZE_INPUT
+
+        huge = "x" * 40000
+        calls = {"n": 0}
+
+        def fake(*_a, **_k):
+            calls["n"] += 1
+            return {"score": 5}
+
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=fake,
+            judge_input={
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": huge,
+                "final_message_sha256": message_sha256_bytes(huge),
+            },
+        )
+        assert calls["n"] == 0
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_OVERSIZE_INPUT
+        assert result.evidence.get("judge_input_isolated") is True
+
+    def test_isolation_failure_via_runner(self) -> None:
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.taxonomy import EXEC_PARSE_ERROR
+
+        text = (
+            "✨ feat(eval): isolation\n\n"
+            "Refs: #233\n"
+            "SemVer-Impact: PATCH\n"
+            "Change-Types: feat\n"
+            "Changelog-Groups: Added\n"
+        )
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=lambda *a, **k: {"score": 5},
+            judge_input={
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+                "expected_output": "leak",
+            },
+        )
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_PARSE_ERROR
+        assert result.evidence.get("judge_input_isolated") is False
+
+    def test_timeout_maps_gate_disposition(self) -> None:
+        from git_cg.eval.lane_c.taxonomy import EXEC_TIMEOUT, GATE_JUDGE_UNAVAILABLE
+
+        def boom(*_a, **_k):
+            raise TimeoutError("slow")
+
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=boom,
+            judge_input=self._projected(),
+        )
+        assert result.invoked is True
+        row = result.rows[0]
+        assert row.reason == EXEC_TIMEOUT
+        assert row.evidence.get("gate_disposition") == GATE_JUDGE_UNAVAILABLE
+
+
+class TestTaxonomyCoverageEdges:
+    def test_assert_gate_and_pair_and_iters(self) -> None:
+        from git_cg.eval.lane_c.taxonomy import (
+            TaxonomyPair,
+            assert_gate_disposition,
+            iter_execution_codes,
+            iter_gate_disposition_codes,
+            mapping_table,
+            validate_closed_reason,
+        )
+
+        assert assert_gate_disposition(GATE_SCOPE_GATE_REJECT) == GATE_SCOPE_GATE_REJECT
+        with pytest.raises(TaxonomyError):
+            assert_gate_disposition("not-a-gate")
+
+        pair = TaxonomyPair(
+            gate_disposition=GATE_SCOPE_GATE_REJECT,
+            execution_code=EXEC_COHORT_INELIGIBLE,
+        ).validate()
+        assert pair.execution_code == EXEC_COHORT_INELIGIBLE
+
+        with pytest.raises(TaxonomyError):
+            TaxonomyPair(
+                gate_disposition=GATE_BUDGET_CAP_REACHED,
+                execution_code=EXEC_COHORT_INELIGIBLE,
+            ).validate()
+
+        assert "scored" in set(iter_execution_codes())
+        assert GATE_SCOPE_GATE_REJECT in set(iter_gate_disposition_codes())
+        table = mapping_table()
+        assert GATE_SCOPE_GATE_REJECT in table
+        assert validate_closed_reason("scored") == "scored"
+        with pytest.raises(TaxonomyError):
+            validate_closed_reason("scored", allow_scored=False)
+
+
+class TestRunnerPackErrorPaths:
+    def _projected(self):
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.judge_input import project_judge_input
+
+        text = (
+            "✨ feat(eval): pack errors\n\n"
+            "Refs: #233\n"
+            "SemVer-Impact: PATCH\n"
+            "Change-Types: feat\n"
+            "Changelog-Groups: Added\n"
+        )
+        return project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+            }
+        )
+
+    def test_resolve_pack_error_skips(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.lane_c import runner as runner_mod
+        from git_cg.eval.lane_c.prompt_pack import PromptPackError
+        from git_cg.eval.lane_c.taxonomy import EXEC_PACK_UNRESOLVABLE
+
+        def boom(*_a, **_k):
+            raise PromptPackError("missing pack", code=EXEC_PACK_UNRESOLVABLE)
+
+        monkeypatch.setattr(runner_mod, "resolve_judge_pack", boom)
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=lambda *a, **k: {"score": 5},
+            judge_input=self._projected(),
+        )
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_PACK_UNRESOLVABLE
+        assert result.rows[0].evidence.get("gate_disposition") == GATE_PROMPT_PACK_MISSING
+
+    def test_load_pack_prompt_error_skips(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.lane_c import runner as runner_mod
+        from git_cg.eval.lane_c.prompt_pack import PromptPackError
+        from git_cg.eval.lane_c.taxonomy import EXEC_PACK_DECODE_ERROR
+
+        def bad_load(_pack_dir):
+            raise PromptPackError("bad utf8", code=EXEC_PACK_DECODE_ERROR)
+
+        monkeypatch.setattr(runner_mod, "load_pack_prompt_text", bad_load)
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=lambda *a, **k: {"score": 5},
+            judge_input=self._projected(),
+        )
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_PACK_DECODE_ERROR
+
+    def test_load_pack_unexpected_exception_skips(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.lane_c import runner as runner_mod
+        from git_cg.eval.lane_c.taxonomy import EXEC_PACK_DECODE_ERROR
+
+        def bad_load(_pack_dir):
+            raise RuntimeError("disk exploded")
+
+        monkeypatch.setattr(runner_mod, "load_pack_prompt_text", bad_load)
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=lambda *a, **k: {"score": 5},
+            judge_input=self._projected(),
+        )
+        assert result.invoked is False
+        assert result.rows[0].reason == EXEC_PACK_DECODE_ERROR
+        assert "RuntimeError" in str(result.rows[0].evidence.get("pack_error", ""))
+
+    def test_run_pinned_judge_exception_marks_invoked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.lane_c import runner as runner_mod
+        from git_cg.eval.lane_c.taxonomy import EXEC_TRANSPORT_ERROR
+
+        def boom(*_a, **_k):
+            raise RuntimeError("escaped")
+
+        monkeypatch.setattr(runner_mod, "run_pinned_judge", boom)
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=lambda *a, **k: {"score": 5},
+            judge_input=self._projected(),
+        )
+        assert result.invoked is True
+        assert result.rows[0].reason == EXEC_TRANSPORT_ERROR
+        assert result.rows[0].evidence.get("invoked") is True
+
+
+class TestRunnerProjectionAndFailCodes:
+    def test_resolve_projected_from_final_accept_and_max_chars(self) -> None:
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c.runner import _resolve_projected_input
+        from git_cg.eval.lane_c.taxonomy import EXEC_OVERSIZE_INPUT
+
+        text = (
+            "✨ feat(eval): final accept path\n\n"
+            "Refs: #233\n"
+            "SemVer-Impact: PATCH\n"
+            "Change-Types: feat\n"
+            "Changelog-Groups: Added\n"
+        )
+        projected, code, err = _resolve_projected_input(
+            judge_input=None,
+            final_accept_evidence={
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+            },
+            lab_override=False,
+            max_input_chars=None,
+        )
+        assert projected is not None
+        assert code is None
+        assert err is None
+
+        _, code2, err2 = _resolve_projected_input(
+            judge_input=None,
+            final_accept_evidence={
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+            },
+            lab_override=False,
+            max_input_chars=1,
+        )
+        assert code2 == EXEC_OVERSIZE_INPUT
+        assert err2
+
+    def test_resolve_projected_unexpected_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.lane_c import runner as runner_mod
+        from git_cg.eval.lane_c.taxonomy import EXEC_PARSE_ERROR
+
+        def boom(*_a, **_k):
+            raise RuntimeError("projection exploded")
+
+        monkeypatch.setattr(runner_mod, "project_judge_input", boom)
+        projected, code, err = runner_mod._resolve_projected_input(
+            judge_input={
+                "artifact_class": "final_accept",
+                "bound": True,
+                "final_message": "x",
+                "final_message_sha256": "a" * 64,
+            },
+            final_accept_evidence=None,
+            lab_override=False,
+            max_input_chars=None,
+        )
+        assert projected is None
+        assert code == EXEC_PARSE_ERROR
+        assert "RuntimeError" in (err or "")
+
+    def test_unknown_execution_code_maps_to_parse_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.binding.binder import message_sha256_bytes
+        from git_cg.eval.enums import ArtifactClass
+        from git_cg.eval.lane_c import runner as runner_mod
+        from git_cg.eval.lane_c.judge import JudgeOutcome
+        from git_cg.eval.lane_c.judge_input import project_judge_input
+        from git_cg.eval.lane_c.taxonomy import EXEC_PARSE_ERROR
+
+        text = (
+            "✨ feat(eval): unknown code\n\n"
+            "Refs: #233\n"
+            "SemVer-Impact: PATCH\n"
+            "Change-Types: feat\n"
+            "Changelog-Groups: Added\n"
+        )
+        projected = project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+            }
+        )
+
+        def weird(*_a, **_k):
+            return JudgeOutcome(
+                ok=False,
+                execution_code="not_a_real_code",
+                score=None,
+                rationale=None,
+                text=None,
+                usage=None,
+                latency_ms=1.0,
+                finish_reason=None,
+                retry_count=0,
+                error_type="weird",
+                raw_discarded=True,
+                duration_ms=1.0,
+            )
+
+        monkeypatch.setattr(runner_mod, "run_pinned_judge", weird)
+        result = run_lane_c(
+            ["cprime.geval_craft"],
+            deterministic_pass=True,
+            allows_lane_c=True,
+            environ=PIN_ENV_WITH_KEY,
+            judge_fn=lambda *a, **k: {"score": 5},
+            judge_input=projected,
+        )
+        assert result.invoked is True
+        assert result.rows[0].reason == EXEC_PARSE_ERROR

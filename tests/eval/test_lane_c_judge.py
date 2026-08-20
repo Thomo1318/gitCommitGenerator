@@ -226,3 +226,328 @@ class TestFactoryAndCredentials:
             text=True,
         )
         assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+class TestParseJudgeScoreEdgeCases:
+    def test_string_numeric_score(self) -> None:
+        assert parse_judge_score('{"score": "4", "rationale": "ok"}') == (4, "ok")
+
+    def test_string_non_numeric_score(self) -> None:
+        with pytest.raises(ValueError, match="not numeric"):
+            parse_judge_score('{"score": "nope"}')
+
+    def test_bool_score_rejected(self) -> None:
+        with pytest.raises(ValueError, match="missing or not numeric"):
+            parse_judge_score('{"score": true}')
+
+    def test_non_object_payload(self) -> None:
+        with pytest.raises(ValueError, match="not a JSON object"):
+            parse_judge_score("[1, 2, 3]")
+
+    def test_non_string_rationale_dropped(self) -> None:
+        score, rationale = parse_judge_score('{"score": 2, "rationale": 99}')
+        assert score == 2
+        assert rationale is None
+
+
+class TestNormalizeAndUsage:
+    def test_usage_dict_filters_invalid(self) -> None:
+        from git_cg.eval.lane_c.judge import _usage_dict
+
+        assert _usage_dict(None) is None
+        assert _usage_dict("x") is None
+        assert _usage_dict({"prompt_tokens": True, "completion_tokens": "n"}) is None
+        assert _usage_dict({"prompt_tokens": 1.5, "total_tokens": 3}) == {
+            "prompt_tokens": 1,
+            "total_tokens": 3,
+        }
+
+    def test_normalize_raw_variants(self) -> None:
+        from git_cg.eval.lane_c.judge import JudgeOutcome, _normalize_raw
+
+        already = JudgeTransportResult(text='{"score":1}', usage={"total_tokens": 1})
+        assert _normalize_raw(already) is already
+
+        outcome = JudgeOutcome(ok=True, execution_code=EXEC_SCORED, text='{"score":2}', retry_count=1)
+        norm = _normalize_raw(outcome)
+        assert norm.text == '{"score":2}'
+        assert norm.retry_count == 1
+
+        mapped = _normalize_raw(
+            {
+                "text": '{"score":3}',
+                "usage": {"prompt_tokens": 2, "bogus": 1},
+                "latency_ms": 11,
+                "finish_reason": "stop",
+                "retry_count": 1,
+                "error_type": None,
+            }
+        )
+        assert mapped.text.startswith("{")
+        assert mapped.usage == {"prompt_tokens": 2}
+        assert mapped.latency_ms == 11.0
+
+        convenience = _normalize_raw({"score": 5, "rationale": "great"})
+        assert '"score": 5' in convenience.text or '"score":5' in convenience.text.replace(" ", "")
+
+        with pytest.raises(TypeError, match="unsupported judge return type"):
+            _normalize_raw(123)
+
+
+class TestInvokeOnceBranches:
+    def test_transport_error_type_without_text(self) -> None:
+        def timed_out(*_a: Any, **_k: Any) -> JudgeTransportResult:
+            return JudgeTransportResult(text="  ", error_type="TimeoutError")
+
+        out = run_pinned_judge("p", _judge_input(), judge_fn=timed_out, model=PINNED_MODEL)
+        assert out.execution_code == EXEC_TIMEOUT
+        assert out.error_type == "TimeoutError"
+
+    def test_transport_error_type_generic(self) -> None:
+        def broken(*_a: Any, **_k: Any) -> JudgeTransportResult:
+            return JudgeTransportResult(text="", error_type="ConnectionReset")
+
+        out = run_pinned_judge("p", _judge_input(), judge_fn=broken, model=PINNED_MODEL)
+        assert out.execution_code == EXEC_TRANSPORT_ERROR
+
+    def test_normalize_error_from_bad_return_type(self) -> None:
+        def bad_type(*_a: Any, **_k: Any) -> Any:
+            return 42
+
+        out = run_pinned_judge("p", _judge_input(), judge_fn=bad_type, model=PINNED_MODEL)
+        assert out.execution_code == EXEC_PARSE_ERROR
+        assert out.error_type == "normalize_error"
+
+    def test_mapping_payload_accepted(self) -> None:
+        payload = _judge_input().as_dict()
+
+        def fake(prompt: str, judge_input: Any, *, model: str, timeout_s: float = 15.0) -> str:
+            assert isinstance(judge_input, dict)
+            assert judge_input["final_message_text"]
+            return json.dumps({"score": 4})
+
+        out = run_pinned_judge("p", payload, judge_fn=fake, model=PINNED_MODEL)
+        assert out.ok is True
+        assert out.score == 4
+
+    def test_non_retryable_unknown_code_breaks(self) -> None:
+        # Force a non-retryable failure path via host guard already covered;
+        # here ensure max_retries=0 still fails after one attempt.
+        calls = {"n": 0}
+
+        def boom(*_a: Any, **_k: Any) -> str:
+            calls["n"] += 1
+            raise RuntimeError("once")
+
+        out = run_pinned_judge(
+            "p",
+            _judge_input(),
+            judge_fn=boom,
+            model=PINNED_MODEL,
+            max_retries=0,
+        )
+        assert out.execution_code == EXEC_TRANSPORT_ERROR
+        assert calls["n"] == 1
+        assert out.retry_count == 0
+
+
+class TestCredentialResolverBranches:
+    def test_explicit_key_and_base_url(self) -> None:
+        view = resolve_judge_credentials(
+            judge_model=PINNED_MODEL,
+            judge_api_key=" sk-x ",
+            base_url=" https://example.test/v1 ",
+            environ={},
+        )
+        assert view.credentials_present is True
+        assert view.base_url == "https://example.test/v1"
+
+    def test_secret_resolver_success_and_failure(self) -> None:
+        ok = resolve_judge_credentials(
+            judge_model=PINNED_MODEL,
+            secret_resolver=lambda _name, _default="": "sk-from-resolver",
+            environ=None,
+        )
+        assert ok.credentials_present is True
+
+        def boom(_name: str, _default: str = "") -> str:
+            raise RuntimeError("vault down")
+
+        bad = resolve_judge_credentials(
+            judge_model=PINNED_MODEL,
+            secret_resolver=boom,
+            environ=None,
+        )
+        assert bad.credentials_present is False
+
+    def test_resolve_closed_key_paths(self) -> None:
+        from git_cg.eval.lane_c.judge import _resolve_closed_key
+
+        assert _resolve_closed_key(judge_api_key="sk-a", environ=None, secret_resolver=None) == "sk-a"
+        assert (
+            _resolve_closed_key(
+                judge_api_key=None,
+                environ={"GIT_CG_EVAL_JUDGE_API_KEY": "sk-env"},
+                secret_resolver=None,
+            )
+            == "sk-env"
+        )
+        assert (
+            _resolve_closed_key(
+                judge_api_key=None,
+                environ=None,
+                secret_resolver=lambda _n, _d="": "sk-res",
+            )
+            == "sk-res"
+        )
+
+        def boom(_n: str, _d: str = "") -> str:
+            raise RuntimeError("nope")
+
+        assert _resolve_closed_key(judge_api_key=None, environ=None, secret_resolver=boom) == ""
+
+
+class TestLiveTransportMocked:
+    def test_live_openai_transport_standard_and_reasoning(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.lane_c import judge as judge_mod
+
+        class _Usage:
+            prompt_tokens = 3
+            completion_tokens = 4
+            total_tokens = 7
+
+        class _Msg:
+            content = '{"score": 5, "rationale": "ok"}'
+
+        class _Choice:
+            message = _Msg()
+            finish_reason = "stop"
+
+        class _Resp:
+            def __init__(self) -> None:
+                self.choices = [_Choice()]
+                self.usage = _Usage()
+
+        client_kwargs: dict[str, Any] = {}
+        create_kwargs: dict[str, Any] = {}
+
+        class _Completions:
+            def create(self, **kwargs: Any) -> _Resp:
+                create_kwargs.clear()
+                create_kwargs.update(kwargs)
+                return _Resp()
+
+        class _Chat:
+            completions = _Completions()
+
+        class _Client:
+            def __init__(self, **kwargs: Any) -> None:
+                client_kwargs.clear()
+                client_kwargs.update(kwargs)
+                self.chat = _Chat()
+
+        import sys
+        import types
+
+        fake_openai = types.ModuleType("openai")
+        fake_openai.OpenAI = _Client  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+        standard = judge_mod._live_openai_transport(
+            prompt="rubric",
+            judge_input=_judge_input().as_dict(),
+            model=PINNED_MODEL,
+            timeout_s=5.0,
+            api_key="sk-test",
+            base_url="https://example.test/v1",
+        )
+        assert standard.text.startswith("{")
+        assert standard.usage == {
+            "prompt_tokens": 3,
+            "completion_tokens": 4,
+            "total_tokens": 7,
+        }
+        assert create_kwargs["temperature"] == 0
+        assert create_kwargs["max_tokens"] == 256
+        assert "max_completion_tokens" not in create_kwargs
+        assert client_kwargs["base_url"] == "https://example.test/v1"
+
+        reasoning = judge_mod._live_openai_transport(
+            prompt="rubric",
+            judge_input=_judge_input().as_dict(),
+            model="o3-2025-01-01",
+            timeout_s=5.0,
+            api_key="sk-test",
+            base_url=None,
+        )
+        assert reasoning.finish_reason == "stop"
+        assert create_kwargs["max_completion_tokens"] == 256
+        assert "temperature" not in create_kwargs
+        assert "base_url" not in client_kwargs
+
+    def test_factory_uses_injected_transport_not_live(self) -> None:
+        def transport(**kwargs: Any) -> JudgeTransportResult:
+            return JudgeTransportResult(text='{"score": 1}', latency_ms=1.0)
+
+        fn = openai_compatible_judge_fn(
+            model=PINNED_MODEL,
+            judge_api_key="sk-closed",
+            transport=transport,
+        )
+        raw = fn("p", _judge_input().as_dict(), model="")
+        assert isinstance(raw, JudgeTransportResult)
+        assert raw.text == '{"score": 1}'
+
+
+def test_credentials_present_via_secret_resolver_only() -> None:
+    from git_cg.eval.lane_c.availability import credentials_present
+
+    assert credentials_present(environ=None, secret_resolver=lambda *_a, **_k: "sk-from-resolver") is True
+    assert credentials_present(environ=None, secret_resolver=lambda *_a, **_k: "") is False
+
+    def boom(*_a, **_k):
+        raise RuntimeError("no secret store")
+
+    assert credentials_present(environ=None, secret_resolver=boom) is False
+
+
+def test_resolve_closed_key_via_secret_resolver_only() -> None:
+    from git_cg.eval.lane_c.judge import _resolve_closed_key
+
+    assert (
+        _resolve_closed_key(
+            judge_api_key=None,
+            environ=None,
+            secret_resolver=lambda *_a, **_k: "sk-closed",
+        )
+        == "sk-closed"
+    )
+
+    def boom(*_a, **_k):
+        raise RuntimeError("nope")
+
+    assert _resolve_closed_key(judge_api_key=None, environ=None, secret_resolver=boom) == ""
+
+
+def test_resolve_judge_credentials_via_secret_resolver_only() -> None:
+    from git_cg.eval.lane_c.judge import resolve_judge_credentials
+
+    view = resolve_judge_credentials(
+        judge_model="gpt-test",
+        base_url="https://example.test/v1",
+        environ=None,
+        secret_resolver=lambda *_a, **_k: "sk-view",
+    )
+    assert view.model == "gpt-test"
+    assert view.base_url == "https://example.test/v1"
+    assert view.credentials_present is True
+
+    def boom(*_a, **_k):
+        raise RuntimeError("nope")
+
+    view2 = resolve_judge_credentials(
+        judge_model="gpt-test",
+        environ=None,
+        secret_resolver=boom,
+    )
+    assert view2.credentials_present is False

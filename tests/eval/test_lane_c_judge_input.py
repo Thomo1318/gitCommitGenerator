@@ -421,3 +421,145 @@ class TestImportIsolation:
             text=True,
         )
         assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+class TestJudgeInputCoverageEdges:
+    def test_as_dict_optional_fields(self) -> None:
+        ji = project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": "✨ feat(x): y\n\nRefs: #1\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n",
+                "final_message_sha256": message_sha256_bytes(
+                    "✨ feat(x): y\n\nRefs: #1\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+                ),
+                "session_thread_id": "thr-1",
+            },
+            context={"diff_summary": "touched src/a.py"},
+        )
+        payload = ji.as_dict()
+        assert payload["session_thread_id"] == "thr-1"
+        assert payload["diff_summary"] == "touched src/a.py"
+
+    def test_strip_forbidden_nested_sequences(self) -> None:
+        from git_cg.eval.lane_c.judge_input import _strip_forbidden
+
+        cleaned = _strip_forbidden(
+            {
+                "ok": 1,
+                "expected": "drop",
+                "nested": [{"gold_codes": [1], "keep": 2}, ("x",)],
+                "tuple_wrap": ({"assert_pass": True, "v": 3},),
+            }
+        )
+        assert cleaned == {
+            "ok": 1,
+            "nested": [{"keep": 2}, ("x",)],
+            "tuple_wrap": ({"v": 3},),
+        }
+
+    def test_isolation_targets_bind_result_parts(self) -> None:
+        from git_cg.eval.binding.binder import BindResult
+        from git_cg.eval.lane_c.judge_input import _isolation_targets
+
+        br = BindResult(
+            bound=True,
+            bundle={"artifact_class": ArtifactClass.FINAL_ACCEPT.value},
+            session_thread={"id": "s"},
+            trajectory={"steps": []},
+        )
+        targets = _isolation_targets(br, {"diff_summary": "x"})
+        assert len(targets) == 4
+
+    def test_bytes_final_message_and_encoding_validation(self) -> None:
+        text = "✨ feat(eval): bytes path\n\nRefs: #233\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+        raw = text.encode("utf-8")
+        ji = project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": raw,
+                "final_message_sha256": message_sha256_bytes(raw),
+                "meta": {"final_message_encoding": "utf-8"},
+            }
+        )
+        assert ji.final_message_text == text
+        assert ji.encoding == "utf-8"
+
+    def test_invalid_encoding_rejected(self) -> None:
+        text = "✨ feat(eval): enc\n\nRefs: #233\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+        with pytest.raises(JudgeInputError, match="encoding"):
+            project_judge_input(
+                {
+                    "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                    "bound": True,
+                    "final_message": text,
+                    "final_message_sha256": message_sha256_bytes(text),
+                    "encoding": "latin-1",
+                }
+            )
+
+    def test_hash_mismatch_on_utf8_rejected(self) -> None:
+        text = "✨ feat(eval): hash\n\nRefs: #233\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+        with pytest.raises(JudgeInputError, match="does not match"):
+            project_judge_input(
+                {
+                    "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                    "bound": True,
+                    "final_message": text,
+                    "final_message_sha256": "0" * 64,
+                    "encoding": "utf-8",
+                }
+            )
+
+    def test_unsupported_artifact_class(self) -> None:
+        text = "✨ feat(eval): cls\n\nRefs: #233\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+        with pytest.raises(JudgeInputError, match="unsupported artifact_class"):
+            project_judge_input(
+                {
+                    "artifact_class": "not-a-real-class",
+                    "bound": True,
+                    "final_message": text,
+                    "final_message_sha256": message_sha256_bytes(text),
+                }
+            )
+
+    def test_unbound_final_accept_rejected(self) -> None:
+        text = (
+            "✨ feat(eval): unbound\n\nRefs: #233\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+        )
+        with pytest.raises(JudgeInputError, match="unbound"):
+            project_judge_input(
+                {
+                    "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                    "bound": False,
+                    "final_message": text,
+                    "final_message_sha256": message_sha256_bytes(text),
+                }
+            )
+
+    def test_non_string_final_message_rejected(self) -> None:
+        with pytest.raises(JudgeInputError, match="final_message must be text"):
+            project_judge_input(
+                {
+                    "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                    "bound": True,
+                    "final_message": 123,
+                    "final_message_sha256": "a" * 64,
+                }
+            )
+
+    def test_strict_false_context_unknown_keys_stripped(self) -> None:
+        text = "✨ feat(eval): ctx\n\nRefs: #233\nSemVer-Impact: PATCH\nChange-Types: feat\nChangelog-Groups: Added\n"
+        ji = project_judge_input(
+            {
+                "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+                "bound": True,
+                "final_message": text,
+                "final_message_sha256": message_sha256_bytes(text),
+                "expected": "strip-me",
+            },
+            context={"diff_summary": "ok summary", "unexpected": 1, "gold_codes": []},
+            strict=False,
+        )
+        assert ji.diff_summary == "ok summary"

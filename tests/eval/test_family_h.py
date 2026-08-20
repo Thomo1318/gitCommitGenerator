@@ -287,3 +287,234 @@ def test_family_h_cprime_via_score_family_h_optional_args() -> None:
         assert mid in by
         assert by[mid].passed is False
         assert by[mid].reason == "lane_c_not_run"
+
+
+def test_family_h_cprime_isolation_from_row_evidence() -> None:
+    """Sparse top-level evidence derives isolation from cprime row payloads."""
+    from git_cg.eval.scoring.result_builder import make_score
+
+    digest = "f" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    bad_row = make_score(
+        "cprime.geval_craft",
+        0.0,
+        passed=False,
+        reason="parse_error",
+        evidence={
+            "judge_input_isolated": False,
+            "input_error": "expected gold field leaked",
+            "execution_code": "parse_error",
+            "pack_identity": pin,
+            "content_sha256": digest,
+        },
+        pin_refs=[pin],
+        failure_ids=["EVAL_JUDGE_INPUT_ISOLATION"],
+        product_authority="test",
+    )
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+        },
+        lane_c_rows=[bad_row],
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is False
+    assert by["h.judge_input_isolated"].reason == "judge_input_isolation_failed"
+    assert by["h.prompt_pack_pinned"].passed is True
+    assert by["h.prompt_pack_hash_known"].passed is True
+
+
+def test_family_h_cprime_isolation_held_when_rows_clean() -> None:
+    from git_cg.eval.scoring.result_builder import make_score
+
+    digest = "1" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    good_row = make_score(
+        "cprime.geval_craft",
+        5.0,
+        passed=True,
+        evidence={
+            "judge_input_isolated": True,
+            "pack_identity": pin,
+            "content_sha256": digest,
+        },
+        pin_refs=[pin, "suite@1"],
+        product_authority="test",
+    )
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+        },
+        lane_c_rows=[good_row],
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is True
+    assert by["h.prompt_pack_pinned"].passed is True
+    assert by["h.prompt_pack_hash_known"].passed is True
+    assert by["h.prompt_pack_suite_fresh"].passed is True
+
+
+def test_family_h_cprime_pack_identity_list_and_explicit_fresh() -> None:
+    digest = "2" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "judge_input_present": True,
+            "pack_identities": [pin, pin],
+            "content_hashes": [digest, "not-a-hash", digest],
+            "pin_refs": [pin, "other@ref"],
+            "prompt_pack_suite_fresh": False,
+        },
+    )
+    by = _by_id(scores)
+    assert by["h.prompt_pack_pinned"].passed is True
+    assert by["h.prompt_pack_hash_known"].passed is True
+    assert by["h.prompt_pack_suite_fresh"].passed is False
+    assert by["h.prompt_pack_suite_fresh"].reason == "prompt_pack_suite_stale"
+
+
+def test_family_h_cprime_oversize_input_keeps_isolation() -> None:
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "judge_input_skip_code": "oversize_input",
+            "pack_identity": f"prompt_pack_v1@{'3' * 64}",
+            "content_sha256": "3" * 64,
+        },
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is True
+
+
+def test_family_h_cprime_parse_error_without_isolation_error_fails() -> None:
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "judge_input_skip_code": "parse_error",
+            "judge_input_error": "malformed payload",
+            "pack_identity": f"prompt_pack_v1@{'4' * 64}",
+            "content_sha256": "4" * 64,
+        },
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is False
+
+
+def test_family_h_cprime_isolation_unknown_without_rows() -> None:
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "pack_identity": f"prompt_pack_v1@{'5' * 64}",
+            "content_sha256": "5" * 64,
+        },
+        lane_c_rows=[],
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is False
+    assert by["h.judge_input_isolated"].reason == "judge_input_isolation_unknown"
+
+
+def test_family_h_cprime_pin_from_pin_refs_only() -> None:
+    digest = "6" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "judge_input_isolated": True,
+            "pin_refs": [pin],
+        },
+    )
+    by = _by_id(scores)
+    assert by["h.prompt_pack_pinned"].passed is True
+    assert by["h.prompt_pack_hash_known"].passed is True
+
+
+def test_family_h_cprime_row_keyword_isolation_without_flag() -> None:
+    from git_cg.eval.scoring.result_builder import make_score
+
+    digest = "7" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    row = make_score(
+        "cprime.geval_craft",
+        0.0,
+        passed=False,
+        evidence={
+            "input_error": "isolation contract broken",
+            "pack_identity": pin,
+            "content_sha256": digest,
+        },
+        pin_refs=[pin],
+        product_authority="test",
+    )
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+        },
+        lane_c_rows=[row],
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is False
+
+
+def test_family_h_cprime_ignores_non_cprime_rows() -> None:
+    from git_cg.eval.scoring.result_builder import make_score
+
+    digest = "8" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    other = make_score(
+        "h.catalog_pinned",
+        True,
+        evidence={"pack_identity": "should-ignore", "judge_input_isolated": False},
+        product_authority="test",
+    )
+    good = make_score(
+        "cprime.geval_craft",
+        5.0,
+        passed=True,
+        evidence={"judge_input_isolated": True, "pack_identity": pin, "content_sha256": digest},
+        pin_refs=[pin],
+        product_authority="test",
+    )
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={"lane_c_enabled": True, "cprime_attempted": True},
+        lane_c_rows=[other, good],
+    )
+    by = _by_id(scores)
+    assert by["h.judge_input_isolated"].passed is True
+    assert by["h.prompt_pack_pinned"].passed is True
+
+
+def test_family_h_cprime_prompt_pack_pin_key_alias() -> None:
+    digest = "9" * 64
+    pin = f"prompt_pack_v1@{digest}"
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "judge_input_isolated": True,
+            "prompt_pack_pin": pin,
+            "prompt_pack_hash": digest,
+        },
+    )
+    by = _by_id(scores)
+    assert by["h.prompt_pack_pinned"].passed is True
+    assert by["h.prompt_pack_hash_known"].passed is True

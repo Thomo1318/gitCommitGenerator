@@ -574,3 +574,90 @@ class TestRunnerPackResolution:
         assert result.invoked is False
         ev = result.rows[0].evidence or {}
         assert ev.get("universe_fingerprint", {}).get("latest_found")
+
+
+def test_prompt_pack_pin_requires_digest() -> None:
+    with pytest.raises(PromptPackError, match="sha256 content digest"):
+        prompt_pack_pin({"content_sha256": "short"})
+
+
+def test_reject_floating_identity_variants() -> None:
+    from git_cg.eval.lane_c.prompt_pack import _reject_floating_identity
+
+    with pytest.raises(PromptPackError, match="unknown prompt pack identity"):
+        _reject_floating_identity("")
+    with pytest.raises(PromptPackError, match="latest/floating"):
+        _reject_floating_identity("prompt_pack_v1@latest")
+    with pytest.raises(PromptPackError, match="unknown prompt pack identity"):
+        _reject_floating_identity("other@abc")
+    with pytest.raises(PromptPackError, match="unknown prompt pack identity"):
+        _reject_floating_identity("prompt_pack_v1@abc")
+    _reject_floating_identity(f"prompt_pack_v1@{'a' * 64}")
+
+
+def test_build_prompt_pack_notes_meta_cloud_and_identity_mismatch(tmp_path: Path) -> None:
+    pack_dir = tmp_path / "geval_craft"
+    _write_rubric(pack_dir, SAFE_RUBRIC)
+    pack = build_prompt_pack(
+        "geval_craft",
+        pack_dir=pack_dir,
+        notes="lab notes",
+        meta={"owner": "s5"},
+        cloud_mirror={"provider": "opik", "name": "mirror"},
+    )
+    assert pack["notes"] == "lab notes"
+    assert pack["meta"]["owner"] == "s5"
+    assert pack["meta"]["cloud_mirror"]["name"] == "mirror"
+    with pytest.raises(PromptPackError, match="identity mismatch"):
+        build_prompt_pack(
+            "geval_craft",
+            pack_dir=pack_dir,
+            expected_identity=f"prompt_pack_v1@{'0' * 64}",
+        )
+
+
+def test_universe_fingerprint_assert_pinned_paths(tmp_path: Path) -> None:
+    # empty root → not pinned, no latest
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    fp = record_universe_fingerprint(empty)
+    assert fp.pinned is False
+    with pytest.raises(PromptPackError, match="not pinned"):
+        fp.assert_pinned()
+
+    # latest family fails with latest message
+    root = tmp_path / "uni"
+    fam = root / "family_a"
+    fam.mkdir(parents=True)
+    (fam / "model.txt").write_text("identity: prompt_pack_v1@latest\n", encoding="utf-8")
+    fp2 = record_universe_fingerprint(root)
+    assert fp2.latest_found
+    assert fp2.pinned is False
+    with pytest.raises(PromptPackError, match="latest/unpinnable"):
+        fp2.assert_pinned()
+
+
+def test_body_has_floating_latest_variants() -> None:
+    from git_cg.eval.lane_c.prompt_pack import _body_has_floating_latest
+
+    assert _body_has_floating_latest("identity: prompt_pack_v1@latest") is True
+    assert _body_has_floating_latest("pin@latest") is True
+    assert _body_has_floating_latest("version: latest") is True
+    assert _body_has_floating_latest("stable rubric text only") is False
+
+
+def test_universe_secretish_and_bad_utf8_unpinnable(tmp_path: Path) -> None:
+    root = tmp_path / "uni"
+    sec = root / "sec_family"
+    sec.mkdir(parents=True)
+    (sec / "api_key.txt").write_text("x", encoding="utf-8")
+    bad = root / "bad_family"
+    bad.mkdir()
+    (bad / "rubric.md").write_bytes(b"\xff\xfe")
+    empty_fam = root / "empty_family"
+    empty_fam.mkdir()
+    fp = record_universe_fingerprint(root)
+    assert fp.pinned is False
+    assert "sec_family" in fp.unpinnable or any("sec" in u for u in fp.unpinnable)
+    assert "bad_family" in fp.unpinnable or any("bad" in u for u in fp.unpinnable)
+    assert "empty_family" in fp.unpinnable or any("empty" in u for u in fp.unpinnable)
