@@ -85,13 +85,10 @@ def provider_client_constructible(
         return False
     if client_factory_ok is False:
         return False
-    # base_url is optional; validate only when explicitly provided non-empty
-    # and clearly invalid (whitespace-only already treated as absent).
-    env = environ if environ is not None else os.environ
-    url = base_url if base_url is not None else env.get(ENV_JUDGE_BASE_URL, "")
-    if url is not None and str(url).strip() == "" and base_url is not None:
-        # Explicit empty override is still allowed (default endpoint).
-        return True
+    # base_url / environ are accepted for API symmetry with availability callers
+    # but do not affect constructibility: empty/missing URL uses the provider
+    # default endpoint. Keep parameters so call sites stay stable.
+    _ = (base_url, environ)
     return True
 
 

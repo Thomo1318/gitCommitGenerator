@@ -35,8 +35,16 @@ DEFAULT_MAX_INPUT_CHARS: Final = 32000
 DEFAULT_MAX_DIFF_SUMMARY_CHARS: Final = 2000
 
 # Mirror corpus/task_input.py — do not weaken or reimplement differently (C-INPUT).
-_FORBIDDEN_NAME = re.compile(r"^(expected|gold)(_|$)", re.IGNORECASE)
-_ASSERT_NAME = re.compile(r"^assert(_|$)", re.IGNORECASE)
+_FORBIDDEN_NAME = re.compile(r"^(expected|gold)([_-]|$)", re.IGNORECASE)
+_ASSERT_NAME = re.compile(r"^assert([_-]|$)", re.IGNORECASE)
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _normalize_key_name(key: str) -> str:
+    """Normalize key separators so goldCodes / gold-codes match gold_codes."""
+    spaced = _CAMEL_BOUNDARY.sub("_", key)
+    return spaced.replace("-", "_")
+
 
 _FORBIDDEN_EXACT: Final[frozenset[str]] = frozenset(
     {
@@ -124,11 +132,12 @@ def classify_judge_input_size(
 
 
 def _is_forbidden_key(key: str) -> bool:
-    if key in _FORBIDDEN_EXACT:
+    norm = _normalize_key_name(key)
+    if key in _FORBIDDEN_EXACT or norm in _FORBIDDEN_EXACT:
         return True
-    if _FORBIDDEN_NAME.match(key) is not None:
+    if _FORBIDDEN_NAME.match(key) is not None or _FORBIDDEN_NAME.match(norm) is not None:
         return True
-    return _ASSERT_NAME.match(key) is not None
+    return _ASSERT_NAME.match(key) is not None or _ASSERT_NAME.match(norm) is not None
 
 
 def _walk_forbidden_keys(obj: Any, found: list[str]) -> None:

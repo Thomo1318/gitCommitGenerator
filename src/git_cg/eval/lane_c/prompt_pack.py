@@ -57,6 +57,14 @@ _DEFAULT_SAMPLING: Final[dict[str, int]] = {"temperature": 0, "max_tokens": 256}
 _DEFAULT_OUTPUT_CONTRACT: Final = "json_object"
 
 _LATEST_RE = re.compile(r"(?:^|[^a-z0-9])latest(?:[^a-z0-9]|$)", re.IGNORECASE)
+# Body scan: only identity-bearing / pin-shaped "latest" markers fail closed.
+# Ordinary prose ("summarize the latest commit") must not mark a family unpinnable.
+_IDENTITY_LATEST_LINE_RE = re.compile(
+    r"(?im)^(?:\s*(?:provider|model|version|pin|identity|image|tag)\s*[:=]\s*.*\blatest\b"
+    r"|\s*@latest\b"
+    r"|\s*[^\n]*\b(?:prompt_pack_v\d+|schema_pack_v\d+|metric_catalog_v\d+)@latest\b)"
+)
+
 _LEAK_RE = re.compile(
     r"expected[_-]?gold|expected[_-]?label|expected[_-]?final|gold[_-]?codes|gold[_-]?label",
     re.IGNORECASE,
@@ -310,6 +318,20 @@ def _unique(items: Iterable[str]) -> tuple[str, ...]:
     return tuple(seen)
 
 
+def _body_has_floating_latest(text: str) -> bool:
+    """True when prompt body carries a pin-shaped floating latest identity."""
+    if _IDENTITY_LATEST_LINE_RE.search(text):
+        return True
+    # Pin-shaped tokens anywhere (not ordinary prose).
+    lowered = text.lower()
+    if "@latest" in lowered:
+        return True
+    return bool(_LATEST_RE.search(text) and _re_version_latest.search(text))
+
+
+_re_version_latest = re.compile(r"(?i)\bversion\s*[:=]\s*latest\b")
+
+
 def record_universe_fingerprint(root: Path | None = None) -> UniverseFingerprint:
     """Record active universes under ``config/promptfoo/prompts`` (or *root*)."""
     if root is None:
@@ -353,7 +375,7 @@ def record_universe_fingerprint(root: Path | None = None) -> UniverseFingerprint
             except UnicodeDecodeError:
                 unpinnable.append(family.name)
                 continue
-            if _LATEST_RE.search(text):
+            if _body_has_floating_latest(text):
                 latest.append(f"{family.name}/{name}")
                 unpinnable.append(family.name)
 

@@ -14,6 +14,7 @@ one retry and never retries empty/oversize host guards.
 from __future__ import annotations
 
 import json
+import os
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -141,7 +142,7 @@ def resolve_judge_credentials(
     ``resolve_secret``. ``GIT_CG_EVAL_JUDGE_API_KEY`` is resolved lazily only
     to test presence.
     """
-    env = environ if environ is not None else {}
+    env = environ if environ is not None else os.environ
     model = (judge_model if judge_model is not None else env.get(ENV_JUDGE_MODEL, "")).strip()
     url_raw = base_url if base_url is not None else env.get(ENV_JUDGE_BASE_URL, "")
     url = str(url_raw).strip() or None
@@ -514,17 +515,26 @@ def _live_openai_transport(
     if base_url:
         kwargs["base_url"] = base_url
     client = OpenAI(**kwargs)
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
+    # Sampling identity is sampling:temperature=0|max_tokens=256 (eligibility).
+    # Reasoning-family model ids (o1/o3/o4/gpt-5*) reject temperature / max_tokens;
+    # use max_completion_tokens and omit temperature for those pins only.
+    create_kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps(dict(judge_input), ensure_ascii=False)},
         ],
-        temperature=0,
-        max_tokens=256,
-        response_format={"type": "json_object"},
-        timeout=timeout_s,
-    )
+        "response_format": {"type": "json_object"},
+        "timeout": timeout_s,
+    }
+    model_l = model.lower()
+    reasoning_family = model_l.startswith(("o1", "o3", "o4", "gpt-5"))
+    if reasoning_family:
+        create_kwargs["max_completion_tokens"] = 256
+    else:
+        create_kwargs["temperature"] = 0
+        create_kwargs["max_tokens"] = 256
+    response = client.chat.completions.create(**create_kwargs)
     latency_ms = (time.perf_counter() - started) * 1000.0
     choice = response.choices[0] if getattr(response, "choices", None) else None
     message = getattr(choice, "message", None) if choice is not None else None
