@@ -1,0 +1,21 @@
+{
+  "schema_version": "replay_compare_v1",
+  "id": "replay-cmp-1",
+  "source_id": "src-1",
+  "replay_id": "rep-1",
+  "lineage_ok": true,
+  "session_thread_id": "sess_abc",
+  "source_bundle_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "replay_bundle_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "pinned": {
+    "harness_version": "0.21.0",
+    "metric_catalog": "metric_catalog_v0@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "schema_pack": "schema_pack_v0@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "deltas": {
+    "input_equal": true,
+    "metric_deltas": []
+  },
+  "regression_status": "unchanged",
+  "created_at": "2026-08-20T12:00:00Z"
+}

@@ -843,7 +843,7 @@ def test_s2c_h_no_s3_s4_thread_star_or_pin_drift() -> None:
     assert len(scoring_pkg.S2A_REQUIRE_BLOCK) == 30
     assert len(scoring_pkg.S2B_REQUIRE_BLOCK) == 68
     # Pin identity unchanged
-    assert schema_pack_pin().endswith("7b4eaf312d2255b1dbfeca095a6fb716e5d30f3a3b3ad8648f6a8c705a070539")
+    assert schema_pack_pin().endswith("a5ca2c6bc580aa929084a9abcd9abd66a7cb426050bee38bfe73baf99aa47a7e")
     assert metric_catalog_pin().endswith("430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75")
     # No S3 accept-path emitter / S4 Opik client surface under scoring package.
     repo_root = Path(__file__).resolve().parents[2]

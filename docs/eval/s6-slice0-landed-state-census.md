@@ -61,10 +61,12 @@ Recorded for Slice 2 API map/docs so agents cannot extend the wrong module.
 
 ## 4. Schema census (Slice 1 input)
 
-Live pack: **25** non-underscore schemas under `schemas/eval/` (plus `_enums.schema.json` helper).
+Live pack: **26** non-underscore schemas under `schemas/eval/` (plus `_enums.schema.json` helper).
 Live pins at census time:
 
 * `schema_pack_v0@7b4eaf312d2255b1dbfeca095a6fb716e5d30f3a3b3ad8648f6a8c705a070539`
+> **Slice 1 note (post-re-freeze):** live schema pack pin is now `schema_pack_v0@a5ca2c6bc580aa929084a9abcd9abd66a7cb426050bee38bfe73baf99aa47a7e` after greenfield re-freeze of six S6 schemas, additive live-writer extensions, and new `cli_output_envelope_v1`. The Slice 0 pin above remains the historical landed-state census value and must not be rewritten.
+
 * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 
 | Schema | Live shape (tip) | S6 classification | Slice 1 action |
@@ -75,7 +77,7 @@ Live pins at census time:
 | `replay_compare_v1` | `source_id`/`replay_id`; untyped `meta` | **Greenfield re-freeze** | lineage + regression_status enum |
 | `human_review_v1` | top-level `rating` + `reviewer`; untyped `meta` | **Greenfield re-freeze** | migrate to typed `scores` map (no dual-shape window) |
 | `dogfood_attachment_v1` | `mode`/`score` stub; untyped `meta` | **Greenfield re-freeze** | R12 attachment contract; `authority=advisory` |
-| `cli_output_envelope_v1` | **absent** | **New (S6)** | Freeze common `--json` envelope in Slice 1; producers in Slice 2+ |
+| `cli_output_envelope_v1` | frozen `{schema_version, command, ok, data, errors[], warnings[], meta?}` with closed message items + enumerated meta | **New (S6)** | Schema frozen in Slice 1; producers in Slice 2+ |
 | `commit_session_thread_v1` | live S3 writer validates on write | **Live-writer additive only** | Optional R13 links only; no new required fields without writer+tests |
 | `train_row_v1` / `train_export_v1` | live S4 projection | **Live-writer additive / consume** | Optional metadata only; preserve R14 |
 | `experiment_v1` | live S4 writer | **Live-writer additive only** | Optional checkpoint/resume refs only |

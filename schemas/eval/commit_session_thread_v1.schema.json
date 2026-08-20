@@ -135,12 +135,23 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/commit_session_thread_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Full commit-unit thread (R13). Additive; does not delete traces. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Full commit-unit thread (R13). Additive; does not delete traces. S3 writer owns required fields; S6 may attach optional R13 links (repo_fingerprints, stages, preference_pairs, train_label, opik_thread_ref). Lifecycle/timestamps remain under established meta layout.",
   "properties": {
     "attempt_ids": {
       "items": {
@@ -177,6 +188,82 @@
     },
     "redaction_profile": {
       "$ref": "#/$defs/redaction_profile"
+    },
+    "repo_fingerprints": {
+      "type": "object",
+      "description": "Optional non-secret repo fingerprints (S6 additive).",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      }
+    },
+    "stages": {
+      "type": "array",
+      "description": "Optional ordered stage timeline (S6 additive).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "$ref": "#/$defs/non_empty_string"
+          },
+          "t": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "refs": {
+            "$ref": "#/$defs/string_list"
+          }
+        }
+      }
+    },
+    "preference_pairs": {
+      "type": "array",
+      "description": "Optional preference pairs (S6 additive).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "chosen_version_id": {
+            "type": "string"
+          },
+          "rejected_version_ids": {
+            "$ref": "#/$defs/string_list"
+          },
+          "owner_approved": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "train_label": {
+      "enum": [
+        "positive_gold",
+        "hard_negative",
+        "preference_chosen",
+        "preference_rejected",
+        "unlabeled",
+        "holdout",
+        "positive"
+      ],
+      "type": "string",
+      "description": "Optional train-axis label (observational; not gate)."
+    },
+    "opik_thread_ref": {
+      "type": "string",
+      "description": "Optional Opik thread reference (mirror only; never sole SoT)."
     }
   },
   "required": [

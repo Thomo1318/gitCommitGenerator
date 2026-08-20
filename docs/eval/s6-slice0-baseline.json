@@ -12,7 +12,7 @@
   "census_path": "docs/eval/s6-slice0-landed-state-census.md",
   "eval_schema_hash": {
     "command": "just eval-schema-hash",
-    "schema_pack_pin": "schema_pack_v0@7b4eaf312d2255b1dbfeca095a6fb716e5d30f3a3b3ad8648f6a8c705a070539",
+    "schema_pack_pin": "schema_pack_v0@a5ca2c6bc580aa929084a9abcd9abd66a7cb426050bee38bfe73baf99aa47a7e",
     "metric_catalog_pin": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
     "schema_count_non_underscore": 25
   },
@@ -101,7 +101,7 @@
       {
         "cmd": "just eval-schema-hash",
         "exit_code": 0,
-        "summary": "schema_pack_v0@7b4eaf312d2255b1dbfeca095a6fb716e5d30f3a3b3ad8648f6a8c705a070539 / metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+        "summary": "schema_pack_v0@a5ca2c6bc580aa929084a9abcd9abd66a7cb426050bee38bfe73baf99aa47a7e / metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
         "recorded_at": "2026-08-20T23:35:24+10:00"
       }
     ],

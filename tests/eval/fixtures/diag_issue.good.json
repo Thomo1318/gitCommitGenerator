@@ -1,0 +1,37 @@
+{
+  "schema_version": "diag_issue_v1",
+  "id": "issue-1",
+  "issue_id": "issue-1",
+  "fingerprint": "fp-dddddddddddddddddddddddddddddddd",
+  "code": "EVAL_TOPOLOGY_MISSING_SPAN",
+  "status": "open",
+  "severity": "warn",
+  "title": "Missing required span",
+  "first_seen_at": "2026-08-20T12:00:00Z",
+  "last_seen_at": "2026-08-20T12:05:00Z",
+  "occurrence_count": 2,
+  "failure_ids": [
+    "I_REQUIRED_SPANS"
+  ],
+  "prevention_ids": [],
+  "metric_ids": [
+    "i.required_spans_present"
+  ],
+  "regime": "A",
+  "blame_span": "accept_finalize",
+  "artifact_class": "final_accept",
+  "path_class": "src",
+  "topology_missing_spans": [
+    "accept_finalize"
+  ],
+  "sample_bundle_ids": [
+    "bundle-1"
+  ],
+  "sample_trace_ids": [
+    "trace-not-in-fingerprint"
+  ],
+  "product_impact": "export",
+  "suggested_surfaces": [
+    "src/git_cg/eval/scoring/family_i.py"
+  ]
+}

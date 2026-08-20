@@ -135,24 +135,70 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_empty_string_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/evaluation_checkpoint_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Resume/checkpoint record. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Resume/checkpoint record (S6). Stores suite progress under an explicit compat_hash; resume must fail closed on EVAL_COMPAT_HASH_MISMATCH when the D9 preimage diverges. Canonical stored name is compat_hash only (no compatibility_hash alias). mode is a closed five-value resume set.",
   "properties": {
-    "compat_hash": {
-      "$ref": "#/$defs/sha256"
-    },
-    "cursor": {
-      "type": "string"
+    "schema_version": {
+      "const": "evaluation_checkpoint_v1"
     },
     "id": {
       "$ref": "#/$defs/non_empty_string"
     },
-    "meta": {
-      "type": "object"
+    "checkpoint_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "experiment_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "compat_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "completed_case_ids": {
+      "$ref": "#/$defs/string_list"
+    },
+    "pending_case_ids": {
+      "$ref": "#/$defs/string_list"
+    },
+    "last_progress_at": {
+      "$ref": "#/$defs/iso8601"
+    },
+    "mode": {
+      "description": "Closed resume/recovery mode set (five modes).",
+      "enum": [
+        "fresh_suite_run",
+        "resume_missing",
+        "recompute_scores",
+        "replay_generation",
+        "export_only"
+      ],
+      "type": "string"
+    },
+    "cursor": {
+      "type": "string"
+    },
+    "schema_pack": {
+      "$ref": "#/$defs/pin_ref"
     },
     "metric_catalog": {
       "$ref": "#/$defs/pin_ref"
@@ -160,17 +206,23 @@
     "notes": {
       "type": "string"
     },
-    "schema_pack": {
-      "$ref": "#/$defs/pin_ref"
+    "suite_id": {
+      "type": "string"
     },
-    "schema_version": {
-      "const": "evaluation_checkpoint_v1"
+    "snapshot_id": {
+      "type": "string"
     }
   },
   "required": [
     "schema_version",
     "id",
-    "compat_hash"
+    "checkpoint_id",
+    "experiment_id",
+    "compat_hash",
+    "completed_case_ids",
+    "pending_case_ids",
+    "last_progress_at",
+    "mode"
   ],
   "title": "evaluation_checkpoint_v1",
   "type": "object"

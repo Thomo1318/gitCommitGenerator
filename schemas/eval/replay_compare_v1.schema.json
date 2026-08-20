@@ -135,21 +135,170 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_empty_string_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/replay_compare_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Replay lineage compare record. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Replay lineage compare record (S6). Replay always writes a new bundle and never mutates the source. regression_status is a closed four-value set.",
   "properties": {
+    "schema_version": {
+      "const": "replay_compare_v1"
+    },
     "id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "source_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "replay_id": {
       "$ref": "#/$defs/non_empty_string"
     },
     "lineage_ok": {
       "type": "boolean"
     },
-    "meta": {
-      "type": "object"
+    "session_thread_id": {
+      "type": "string"
+    },
+    "source_bundle_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "replay_bundle_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "source_trace_id": {
+      "type": "string"
+    },
+    "replay_trace_id": {
+      "type": "string"
+    },
+    "pinned": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "harness_version",
+        "metric_catalog",
+        "schema_pack"
+      ],
+      "properties": {
+        "harness_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "metric_catalog": {
+          "$ref": "#/$defs/pin_ref"
+        },
+        "schema_pack": {
+          "$ref": "#/$defs/pin_ref"
+        },
+        "prompt_pack": {
+          "$ref": "#/$defs/pin_ref"
+        },
+        "model": {
+          "type": "string"
+        },
+        "dataset_snapshot": {
+          "type": "string"
+        }
+      }
+    },
+    "deltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_equal": {
+          "type": "boolean"
+        },
+        "first_divergent_span": {
+          "type": "string"
+        },
+        "metric_deltas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "number",
+                "boolean",
+                "string",
+                "null",
+                "array",
+                "object"
+              ]
+            }
+          }
+        },
+        "artifact_delta": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string",
+              "null",
+              "array",
+              "object"
+            ]
+          }
+        },
+        "product_result_delta": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string",
+              "null",
+              "array",
+              "object"
+            ]
+          }
+        },
+        "eval_result_delta": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string",
+              "null",
+              "array",
+              "object"
+            ]
+          }
+        }
+      }
+    },
+    "first_divergence": {
+      "type": "string"
+    },
+    "regression_status": {
+      "enum": [
+        "improved",
+        "regressed",
+        "unchanged",
+        "incomparable"
+      ],
+      "type": "string"
+    },
+    "schema_pack": {
+      "$ref": "#/$defs/pin_ref"
     },
     "metric_catalog": {
       "$ref": "#/$defs/pin_ref"
@@ -157,24 +306,17 @@
     "notes": {
       "type": "string"
     },
-    "replay_id": {
-      "$ref": "#/$defs/non_empty_string"
-    },
-    "schema_pack": {
-      "$ref": "#/$defs/pin_ref"
-    },
-    "schema_version": {
-      "const": "replay_compare_v1"
-    },
-    "source_id": {
-      "$ref": "#/$defs/non_empty_string"
+    "created_at": {
+      "$ref": "#/$defs/iso8601"
     }
   },
   "required": [
     "schema_version",
     "id",
     "source_id",
-    "replay_id"
+    "replay_id",
+    "lineage_ok",
+    "regression_status"
   ],
   "title": "replay_compare_v1",
   "type": "object"

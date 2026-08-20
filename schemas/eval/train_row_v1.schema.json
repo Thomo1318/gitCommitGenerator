@@ -135,12 +135,18 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/train_row_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Training corpus row. train axis ≠ gate axis (M11). Richness via R14 only. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Training corpus row. train axis ≠ gate axis (M11). Richness via R14 only. S6 may attach optional split_group_id, preference-pair refs, scrub report, and vault destination without changing required S4 writer fields.",
   "properties": {
     "artifact_class": {
       "$ref": "#/$defs/artifact_class"
@@ -191,6 +197,48 @@
         "unlabeled"
       ],
       "type": "string"
+    },
+    "split_group_id": {
+      "type": "string",
+      "description": "Optional split/group identity for contamination checks."
+    },
+    "preference_pair_ref": {
+      "type": "string",
+      "description": "Optional reference to a preference pair record."
+    },
+    "preference_chosen_version_id": {
+      "type": "string"
+    },
+    "preference_rejected_version_ids": {
+      "$ref": "#/$defs/string_list"
+    },
+    "scrub_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "ok",
+            "quarantined",
+            "omitted",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "fields_quarantined": {
+          "$ref": "#/$defs/string_list"
+        },
+        "fields_omitted": {
+          "$ref": "#/$defs/string_list"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "vault_destination": {
+      "type": "string",
+      "description": "Optional antipattern vault destination marker."
     }
   },
   "required": [

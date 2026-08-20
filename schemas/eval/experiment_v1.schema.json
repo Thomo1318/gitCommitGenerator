@@ -135,12 +135,17 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
     }
   },
   "$id": "https://git-cg.local/schemas/eval/experiment_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Experiment naming/pin record. Prefer eval_<lane>_<catalog_version>_<gitsha>_<utc>. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Experiment naming/pin record. Prefer eval_<lane>_<catalog_version>_<gitsha>_<utc>. S6 may attach optional checkpoint/resume references and compat_hash without changing required S4 writer fields.",
   "properties": {
     "catalog_pin": {
       "$ref": "#/$defs/pin_ref"
@@ -172,6 +177,36 @@
     },
     "schema_version": {
       "const": "experiment_v1"
+    },
+    "compat_hash": {
+      "$ref": "#/$defs/sha256",
+      "description": "Optional compatibility identity for S6 resume provenance."
+    },
+    "checkpoint_id": {
+      "type": "string",
+      "description": "Optional checkpoint reference for run/resume provenance."
+    },
+    "resume_mode": {
+      "enum": [
+        "fresh_suite_run",
+        "resume_missing",
+        "recompute_scores",
+        "replay_generation",
+        "export_only"
+      ],
+      "type": "string"
+    },
+    "suite_id": {
+      "type": "string"
+    },
+    "snapshot_id": {
+      "type": "string"
+    },
+    "started_at": {
+      "$ref": "#/$defs/iso8601"
+    },
+    "finished_at": {
+      "$ref": "#/$defs/iso8601"
     }
   },
   "required": [

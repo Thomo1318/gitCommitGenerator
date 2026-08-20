@@ -135,46 +135,160 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_empty_string_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/diag_issue_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Deterministic diagnostic issue + fingerprint. S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Deterministic diagnostic issue + fingerprint (S6 issue store). Fingerprint preimage (normative, inclusion list): sorted failure_ids + metric_ids + blame_span + regime + artifact_class + topology missing-span set + path-class key. Fingerprint MUST exclude trace IDs, timestamps, raw text, URLs, usernames, and absolute paths. status is a closed five-value lifecycle; severity remains block|warn|info.",
   "properties": {
-    "code": {
-      "$ref": "#/$defs/non_empty_string"
-    },
-    "fingerprint": {
-      "$ref": "#/$defs/non_empty_string"
+    "schema_version": {
+      "const": "diag_issue_v1"
     },
     "id": {
       "$ref": "#/$defs/non_empty_string"
     },
-    "meta": {
-      "type": "object"
+    "issue_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "fingerprint": {
+      "$ref": "#/$defs/non_empty_string",
+      "description": "Stable fingerprint over sorted failure_ids + metric_ids + blame_span + regime + artifact_class + topology missing-span set + path-class key. Excludes trace IDs, timestamps, raw text, URLs, usernames, absolute paths."
+    },
+    "code": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "status": {
+      "enum": [
+        "open",
+        "acknowledged",
+        "resolved",
+        "suppressed",
+        "reopened"
+      ],
+      "type": "string"
+    },
+    "severity": {
+      "$ref": "#/$defs/severity"
+    },
+    "title": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "first_seen_at": {
+      "$ref": "#/$defs/iso8601"
+    },
+    "last_seen_at": {
+      "$ref": "#/$defs/iso8601"
+    },
+    "occurrence_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "failure_ids": {
+      "$ref": "#/$defs/string_list"
+    },
+    "prevention_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "May be empty when no producer exists; do not invent scoring law."
+    },
+    "metric_ids": {
+      "$ref": "#/$defs/string_list"
+    },
+    "regime": {
+      "type": "string"
+    },
+    "blame_span": {
+      "type": "string"
+    },
+    "artifact_class": {
+      "$ref": "#/$defs/artifact_class"
+    },
+    "path_class": {
+      "type": "string"
+    },
+    "topology_missing_spans": {
+      "$ref": "#/$defs/string_list"
+    },
+    "sample_bundle_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32
+    },
+    "sample_trace_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "description": "Capped samples; never included in fingerprint preimage."
+    },
+    "product_impact": {
+      "enum": [
+        "accept_path",
+        "golden",
+        "train",
+        "export",
+        "docs",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "suggested_surfaces": {
+      "$ref": "#/$defs/string_list"
+    },
+    "resolution_evidence": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "schema_pack": {
+      "$ref": "#/$defs/pin_ref"
     },
     "metric_catalog": {
       "$ref": "#/$defs/pin_ref"
     },
     "notes": {
       "type": "string"
-    },
-    "schema_pack": {
-      "$ref": "#/$defs/pin_ref"
-    },
-    "schema_version": {
-      "const": "diag_issue_v1"
-    },
-    "severity": {
-      "$ref": "#/$defs/severity"
     }
   },
   "required": [
     "schema_version",
     "id",
+    "issue_id",
     "fingerprint",
-    "code"
+    "code",
+    "status",
+    "severity",
+    "title",
+    "first_seen_at",
+    "last_seen_at",
+    "occurrence_count",
+    "failure_ids",
+    "metric_ids",
+    "product_impact"
   ],
   "title": "diag_issue_v1",
   "type": "object"

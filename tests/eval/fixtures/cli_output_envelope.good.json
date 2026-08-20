@@ -1,0 +1,18 @@
+{
+  "schema_version": "cli_output_envelope_v1",
+  "command": "eval doctor",
+  "ok": true,
+  "data": {
+    "status": "green",
+    "checks_passed": 3
+  },
+  "errors": [],
+  "warnings": [],
+  "meta": {
+    "request_id": "req-1",
+    "harness_version": "0.0.0-test",
+    "timing": {
+      "duration_ms": 12
+    }
+  }
+}
