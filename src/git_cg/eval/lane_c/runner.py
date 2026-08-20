@@ -18,6 +18,7 @@ from git_cg.eval.lane_c.availability import (
     SecretResolver,
     evaluate_judge_availability,
 )
+from git_cg.eval.lane_c.diagnostics import resolve_richer_rubric_metrics
 from git_cg.eval.lane_c.eligibility import (
     DEFAULT_PACK_IDENTITY,
     LaneCEligibility,
@@ -262,6 +263,7 @@ def run_lane_c(
     secret_resolver: SecretResolver | None = None,
     client_factory_ok: bool | None = None,
     use_default_metrics: bool = False,
+    richer_rubrics: bool | Sequence[str] | None = None,
     prompt_root: Path | None = None,
     universe_root: Path | None = None,
     judge_fn: JudgeFn | None = None,
@@ -271,24 +273,26 @@ def run_lane_c(
 ) -> LaneCRunResult:
     """Run the gated Lane C' cohort.
 
-    Behaviour:
+     Behaviour:
 
-    1. Evaluate authorization-only eligibility (no secrets).
-    2. Ineligible → one ``cohort_ineligible`` skip per metric; no side effects.
-    3. ``lab_override`` diagnostic (det fail) → ``lab_override_diagnostic`` skips;
-       **zero** judge side effects even when credentials exist.
-    4. Eligible but unavailable → ``unavailable_creds`` / constructibility skips.
-    5. Eligible + available → resolve local ``prompt_pack_v1``.
-       Missing/malformed/non-UTF-8 packs skip as ``pack_unresolvable`` /
-       ``pack_decode_error``.
-    6. Without injectable ``judge_fn`` **or** projected judge input → honest
-       ``judge_not_invoked`` (backward compatible with Slice 1-3).
-    7. With both → invoke pinned judge per metric; emit advisory scored/skip rows.
-    8. Explicit empty ``metric_ids`` → no rows (``[]``).
-    9. Unknown metric ids fail closed via catalog (``KeyError``).
+     1. Evaluate authorization-only eligibility (no secrets).
+     2. Ineligible → one ``cohort_ineligible`` skip per metric; no side effects.
+     3. ``lab_override`` diagnostic (det fail) → ``lab_override_diagnostic`` skips;
+        **zero** judge side effects even when credentials exist.
+     4. Eligible but unavailable → ``unavailable_creds`` / constructibility skips.
+     5. Eligible + available → resolve local ``prompt_pack_v1``.
+        Missing/malformed/non-UTF-8 packs skip as ``pack_unresolvable`` /
+        ``pack_decode_error``.
+     6. Without injectable ``judge_fn`` **or** projected judge input → honest
+        ``judge_not_invoked`` (backward compatible with Slice 1-3).
+     7. With both → invoke pinned judge per metric; emit advisory scored/skip rows.
+     8. Explicit empty ``metric_ids`` → no rows (``[]``) — never expands to all R1 (D13).
+     9. Unknown metric ids fail closed via catalog (``KeyError``).
+    10. ``richer_rubrics`` is off-by-default; extends None/default or non-empty
+        metric lists only (advisory; packs may be unresolvable).
 
-    Never raises on missing credentials. Never imports provider SDKs at module
-    import time. Judge exceptions never abort the case.
+     Never raises on missing credentials. Never imports provider SDKs at module
+     import time. Judge exceptions never abort the case.
 
     """
     eligibility = evaluate_semantic_cohort_eligibility(
@@ -305,8 +309,19 @@ def run_lane_c(
 
     if metric_ids is None:
         ids: list[str] = list(DEFAULT_LANE_C_METRICS) if use_default_metrics else []
+        # R1 opt-in may extend the default/empty-None path only.
+        richer = resolve_richer_rubric_metrics(enabled=richer_rubrics)
+        for mid in richer:
+            if mid not in ids:
+                ids.append(mid)
     else:
+        # D13: explicit empty metric list emits zero C' rows (not "all R1").
         ids = list(metric_ids)
+        if ids:
+            richer = resolve_richer_rubric_metrics(enabled=richer_rubrics)
+            for mid in richer:
+                if mid not in ids:
+                    ids.append(mid)
 
     availability = evaluate_judge_availability(
         eligible=eligibility.eligible,

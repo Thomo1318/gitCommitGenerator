@@ -129,13 +129,14 @@ _ADVISORY_PREFIXES = (
     "lab.",
     "human.",
     "nlp.",
+    "ops.",
     "export.",
     "dogfood.",
 )
 
 
 def _is_true_advisory(metric_id: str) -> bool:
-    """True for C-prime / lab / human / NLP / export / dogfood (never gate veto)."""
+    """True for C-prime / lab / human / NLP / ops / export / dogfood (never gate veto)."""
     if metric_id.startswith("cprime"):
         return True
     return any(metric_id.startswith(p) for p in _ADVISORY_PREFIXES if p != "cprime")
