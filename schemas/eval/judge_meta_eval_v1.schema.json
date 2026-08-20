@@ -135,18 +135,128 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "meta_eval_error_type": {
+      "enum": [
+        "FP",
+        "FN",
+        "OK",
+        "judge_error"
+      ],
+      "type": "string"
+    },
+    "meta_eval_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "expected_label",
+        "error_type"
+      ],
+      "properties": {
+        "item_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "judge_input_ref": {
+          "description": "Scrubbed reference only — never raw secrets or full unredacted bodies as ambient default",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "expected_label": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "judge_output_label": {
+          "type": "string"
+        },
+        "judge_output_score": {
+          "type": "number"
+        },
+        "equals": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "error_type": {
+          "$ref": "#/$defs/meta_eval_error_type"
+        }
+      }
+    },
+    "meta_eval_aggregates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fp_rate",
+        "fn_rate",
+        "n"
+      ],
+      "properties": {
+        "fp_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fn_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "equals_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "judge_error_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fp_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fn_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unclassified_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/judge_meta_eval_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Judge meta-eval / lab row (non-authoritative). S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Judge meta-eval / lab row (non-authoritative). Offline Equals / FP / FN calibration envelope (R2). Labels never enter ordinary judge_input. Never product/golden/first-CI gate.",
   "properties": {
+    "aggregates": {
+      "$ref": "#/$defs/meta_eval_aggregates"
+    },
     "authority": {
       "const": "lab"
     },
+    "cohort_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
     "id": {
       "$ref": "#/$defs/non_empty_string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/meta_eval_item"
+      }
     },
     "judge_id": {
       "$ref": "#/$defs/non_empty_string"
@@ -156,6 +266,9 @@
     },
     "metric_catalog": {
       "$ref": "#/$defs/pin_ref"
+    },
+    "network_policy": {
+      "const": "offline_preferred"
     },
     "notes": {
       "type": "string"
@@ -178,7 +291,8 @@
     "id",
     "judge_id",
     "pin_ref",
-    "polarity"
+    "polarity",
+    "authority"
   ],
   "title": "judge_meta_eval_v1",
   "type": "object"

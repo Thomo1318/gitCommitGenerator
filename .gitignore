@@ -45,6 +45,8 @@ venv/
 .coverage
 htmlcov/
 coverage.xml
+# Local interrogate report dumps (CI uploads as artifact)
+outputs/interrogate/
 .ruff_cache/
 .mypy_cache/
 .tox/

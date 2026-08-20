@@ -89,6 +89,36 @@ When developing or testing with local Apple Silicon inference engines, you must 
 
 We use `pytest` for the Python test suite and `just` as our command runner.
 
+### Docstring coverage (`interrogate`)
+
+Docstring coverage is measured with [`interrogate`](https://github.com/econchick/interrogate).
+
+**CI gate is patch-scoped:** only `src/git_cg/**/*.py` files changed in the PR/push are checked (`fail-under` **80**). Untouched files are not part of the gate. Legacy `src/git_cg/evals/**` is excluded.
+
+**Runtime pin (mandatory):** run under **Python 3.14**. This codebase uses PEP 758 bare multi-except (`except A, B:`), which is a `SyntaxError` on 3.13 — including bare `uvx interrogate` defaults that resolve to 3.13.
+
+```bash
+# Patch gate (changed files vs origin/main) — same shape as CI
+just docstrings-patch
+mise run docstrings:patch
+
+# Full-package health + regenerate README badge SVG
+just docstrings
+mise run docstrings
+
+# Optional global tool install (only if installed against 3.14)
+uv tool install --python 3.14 'interrogate>=1.7.0'
+```
+
+CI uploads a verbose report artifact (`interrogate-docstring-report`) with:
+- **patch report** — docstring coverage for **changed `src/git_cg` files only** (this is the fail gate at 80%)
+- **full-package report + badge SVG** — whole `src/git_cg` health for the README badge (informational; does not fail CI)
+
+**Sticky PR comment (trust-split):** on `pull_request` events the unprivileged `docstring-coverage` job also stages a bounded `interrogate-pr-comment` artifact (`interrogate-comment.md` + `pr-number.txt`). A separate privileged workflow (`.github/workflows/pr-docstring-comment.yml`) runs from the default branch via `workflow_run`, validates every artifact byte as untrusted input, and upserts a sticky PR comment marked `<!-- interrogate-docstring-report -->`. Comments post on CI **success or failure** so a failed patch gate still surfaces the report; cancelled / non-PR runs are skipped. This mirrors the code-review-graph report poster pattern.
+
+The committed flat shields.io badge lives at `docs/assets/badges/interrogate_badge.svg` (README slot between Codecov and GitMCP). Refresh the committed badge locally with `just docstrings` when you want main’s badge SVG updated in-tree.
+
+
 - **Run integration smoke tests** (`just test` runs a temporary-repo commit dry run):
 
   ```bash
@@ -153,6 +183,8 @@ Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 | `mise run lint`     | Read-only fast lint (CI-shaped): `hk validate` + `hk check --check --no-stage --all` with `HK_SKIP_STEPS=pytest-cov,betterleaks,gen-docs,gen-toc` |
 | `mise run test`     | Full project `pytest` suite                                                                                                                       |
 | `mise run cov`      | Slow coverage verification (`--cov=src/git_cg --cov-branch`)                                                                                      |
+| `mise run docstrings:patch` / `just docstrings-patch` | **CI-shaped** patch docstring gate on changed `src/git_cg` files only (`fail-under` 80, Python 3.14) |
+| `mise run docstrings` / `just docstrings` | Full-package interrogate + regenerate `docs/assets/badges/interrogate_badge.svg` |
 | `mise run security` | Optional local SBOM + Grant + Grype                                                                                                               |
 
 ### `hk` profiles
@@ -411,7 +443,7 @@ telemetry field (no separate payload key).
 
 Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), offline Plane A score runner (S2a/S2b/S2c), and accept-path final-bytes binding + trajectory evidence (S3) live under:
 
-* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S4 boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), S3 capture defaults / `.eval` paths, S4 non-blocking Opik mirror modes/queue/R14/Q18 train lake, and remaining S5+
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S4 boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), S3 capture defaults / `.eval` paths, S4 non-blocking Opik mirror modes/queue/R14/Q18 train lake, S5 Lane C′ boundary, and remaining S6+
 * Package: `src/git_cg/eval/` · corpus: `src/git_cg/eval/corpus/` · scoring: `src/git_cg/eval/scoring/` · binding: `src/git_cg/eval/binding/` · schemas: `schemas/eval/`
 * Fixtures (Lane A SoT): `tests/fixtures/eval/` · recipes: `just eval-schema-hash`, `just eval-materialize`, `just eval-fixture-index`
 
@@ -429,7 +461,7 @@ print("snapshot", res.suite_snapshot_pin)
 PY
 ```
 
-S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding emitters (binder, trajectory, session twin, message_versions) live under `src/git_cg/eval/binding/`; the thin `git-cg eval` corpus CLI is `src/git_cg/eval/cli.py` under `src/git_cg/eval/`. Capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. S4 non-blocking Opik mirror + owner corpus lake lives under `src/git_cg/eval/mirror/**` (modes `off|local_only|mirror|strict_mirror`, R14 ladder, durable export queue, lazy transport, pinned experiments, Q18 single-dataset train labels); see `docs/eval/README.md` §S4 and the E13/P2-8 claim-evidence matrix in `docs/eval/s4-claim-evidence.md`. Lane C′/GEval (S5), operator UX expansion (S6), and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225.
+S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding emitters (binder, trajectory, session twin, message_versions) live under `src/git_cg/eval/binding/`; the thin `git-cg eval` corpus CLI is `src/git_cg/eval/cli.py` under `src/git_cg/eval/`. Capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. S4 non-blocking Opik mirror + owner corpus lake lives under `src/git_cg/eval/mirror/**` (modes `off|local_only|mirror|strict_mirror`, R14 ladder, durable export queue, lazy transport, pinned experiments, Q18 single-dataset train labels); see `docs/eval/README.md` §S4 and the E13/P2-8 claim-evidence matrix in `docs/eval/s4-claim-evidence.md`. Lane C′/GEval (S5) is implemented on #233 / PR #238 (`src/git_cg/eval/lane_c/**`, advisory/opt-in only; never first CI gate). Operator UX expansion (S6) and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225; unallocated NTH DX polish on #235 / S8.
 
 ## Promptfoo evaluation (offline)
 

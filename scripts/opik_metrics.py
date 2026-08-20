@@ -1,67 +1,70 @@
-"""LEGACY ADVISORY ONLY — not S2 scoring law.
+#!/usr/bin/env python
+"""LEGACY ADVISORY ONLY — not S2/S5 scoring law (frozen pointer).
 
-Demoted in S2b (#227). Do not import from git_cg.eval.scoring, CI gates,
-or product commit paths. Format heuristics here are not gold/Hybrid authority.
+Demoted in S2b (#227). Strengthened freeze under S5 D24 board (#233).
+
+* Do **not** import from ``git_cg.eval.scoring``, CI gates, hooks, or product
+  commit paths.
+* Format heuristics here are **not** gold / Hybrid / path-class authority.
+* Canonical format/structure law lives in offline Family metrics + hooks.
+
+This module no longer imports the Opik SDK. Invocation refuses closed.
 """
 
-import re
+from __future__ import annotations
 
-from opik.evaluation.metrics import BaseMetric
-from opik.evaluation.metrics.score_result import ScoreResult
+import argparse
+import sys
+from typing import Final
+
+__all__ = [
+    "CANONICAL_SCORING_HOME",
+    "LEGACY_OPIK_METRICS_RETIRED",
+    "FormatMetric",
+    "main",
+    "refuse_legacy_opik_metrics",
+]
+
+LEGACY_OPIK_METRICS_RETIRED: Final[bool] = True
+CANONICAL_SCORING_HOME: Final[str] = "src/git_cg/eval/scoring/"
+
+_REFUSE_MESSAGE: Final[str] = f"""\
+ERROR: scripts/opik_metrics.py is frozen legacy advisory (S2b demotion / #233).
+
+Reasons:
+  * FormatMetric heuristics are not Hybrid/gold/path-class law.
+  * Opik SDK metric classes are not the offline score_bundle SoT.
+  * Canonical scoring: {CANONICAL_SCORING_HOME}
+"""
 
 
-class FormatMetric(BaseMetric):
-    def __init__(self, name: str = "CommitFormatQuality"):
-        """
-        Initialise a FormatMetric instance for evaluating commit message formatting.
-        """
-        super().__init__(name=name)
-        # Matches: "<emoji> <type>[(<scope>)]: <subject>"
-        self.header_regex = re.compile(
-            r"^\S+\s(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|init)(\([\w\-]+\))?:\s.+$"
-        )
+def refuse_legacy_opik_metrics(*, stream=None) -> int:
+    """Print the freeze notice and return a non-zero exit code."""
+    out = sys.stderr if stream is None else stream
+    print(_REFUSE_MESSAGE, file=out)
+    return 2
 
-    def score(self, output: str, **kwargs) -> ScoreResult:
-        """
-        Score a commit message's formatting compliance.
 
-        Parameters:
-            output (str): The commit message to evaluate.
+class FormatMetric:
+    """Retired placeholder — instantiation/score always fails closed."""
 
-        Returns:
-            ScoreResult: Score between 0.0 and 1.0 with reasons for formatting deductions.
-        """
-        if not output or not isinstance(output, str) or not output.strip():
-            return ScoreResult(name=self.name, value=0.0, reason="Commit message is empty or not a string.")
+    def __init__(self, name: str = "CommitFormatQuality") -> None:
+        """Retired placeholder — name only; scoring always refuses."""
+        self.name = name
 
-        lines = output.strip().split("\n")
-        subject = lines[0].strip()
+    def score(self, output: str = "", **_kwargs):
+        """Always refuse (exit 2); legacy metrics are not scoring law."""
+        del output
+        code = refuse_legacy_opik_metrics()
+        raise SystemExit(code)
 
-        reasons = []
-        score = 1.0
 
-        # Check 1: Subject length
-        if len(subject) > 72:
-            score -= 0.3
-            reasons.append("Subject line exceeds 72 characters.")
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry: refuse with pointer."""
+    parser = argparse.ArgumentParser(description="FROZEN: legacy Opik FormatMetric helper. Use git_cg.eval.scoring.")
+    parser.parse_args(argv)
+    return refuse_legacy_opik_metrics()
 
-        # Check 2: Header format (Gitmoji + type + scope + subject)
-        if not self.header_regex.match(subject):
-            score -= 0.5
-            reasons.append("Subject line does not match convention: '<emoji> <type>[(<scope>)]: <subject>'.")
 
-        # Check 3: Substantive commits should have specific headers
-        # We look for SemVer-Impact or Change-Types if it has any body content.
-        # This is a soft check.
-        if len(lines) > 1:
-            has_semver = any(line.startswith("SemVer-Impact:") for line in lines)
-            has_changes = any(line.startswith("Change-Types:") for line in lines)
-            if not has_semver or not has_changes:
-                score -= 0.2
-                reasons.append("Missing required trailers (SemVer-Impact and Change-Types must both be present).")
-
-        # Clamp score between 0.0 and 1.0
-        final_score = max(0.0, min(1.0, score))
-
-        reason_str = " | ".join(reasons) if reasons else "Perfect formatting."
-        return ScoreResult(name=self.name, value=final_score, reason=reason_str)
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,29 @@
+{
+  "schema_version": "judge_meta_eval_v1",
+  "id": "jme-1",
+  "judge_id": "lab-equals-offline",
+  "pin_ref": "judge_meta_v1@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "polarity": "pass_fail",
+  "authority": "lab",
+  "cohort_id": "cohort-lab-1",
+  "network_policy": "offline_preferred",
+  "items": [
+    {
+      "item_id": "i1",
+      "expected_label": "positive",
+      "judge_output_label": "positive",
+      "equals": true,
+      "error_type": "OK",
+      "judge_input_ref": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "aggregates": {
+    "fp_rate": 0.0,
+    "fn_rate": 0.0,
+    "n": 1,
+    "equals_count": 1,
+    "judge_error_count": 0,
+    "fp_count": 0,
+    "fn_count": 0
+  }
+}

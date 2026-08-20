@@ -113,3 +113,130 @@ def test_score_suite_rejects_divergent_suite_path(tmp_path: Path) -> None:
             fixture_root=FIXTURE_ROOT,
             suite_path=path,
         )
+
+
+def test_score_bundle_lane_c_default_offline_no_cprime_rows() -> None:
+    """Default score_bundle path must not emit cprime rows or import judge SDKs."""
+    import json
+
+    from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
+
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    enc = encode_fixture(fx)
+    result = score_bundle(enc["bundle"], suite_snapshot_pin="pin@1")
+    assert not any(s.metric_id.startswith("cprime.") for s in result.scores)
+    assert result.by_id()["gate.semantic_cohort_eligible"].evidence.get("offline_lane_ab") is True
+    # S5 / D39: honesty metrics still emit and fail closed when Lane C did not run.
+    by = result.by_id()
+    for mid in FAMILY_H_CPRIME:
+        assert mid in by, f"missing honesty metric {mid}"
+        assert by[mid].passed is False
+        assert by[mid].reason == "lane_c_not_run"
+        assert by[mid].evidence.get("honest_not_run") is True
+    # Exactly one row per honesty metric (no duplicate emission).
+    for mid in FAMILY_H_CPRIME:
+        assert sum(1 for s in result.scores if s.metric_id == mid) == 1
+
+
+def test_score_bundle_lane_c_opt_in_with_fake_judge() -> None:
+    """Opt-in Lane C' appends advisory rows and never blocks promotion alone."""
+    import json
+
+    from git_cg.eval.binding.binder import message_sha256_bytes
+    from git_cg.eval.enums import ArtifactClass
+    from git_cg.eval.lane_c.judge_input import project_judge_input
+
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    enc = encode_fixture(fx)
+    text = (
+        "✨ feat(eval): score bundle lane c\n\n"
+        "Refs: #233\n"
+        "SemVer-Impact: MINOR\n"
+        "Change-Types: feat\n"
+        "Changelog-Groups: Added\n"
+    )
+    projected = project_judge_input(
+        {
+            "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+            "bound": True,
+            "final_message": text,
+            "final_message_sha256": message_sha256_bytes(text),
+        }
+    )
+
+    def fake(prompt, judge_input, *, model, timeout_s=15.0):
+        return {"score": 5, "rationale": "bundle ok"}
+
+    result = score_bundle(
+        enc["bundle"],
+        suite={"meta": {"allows_lane_c": True}},
+        suite_snapshot_pin="pin@1",
+        enable_lane_c=True,
+        lane_c_metric_ids=["cprime.geval_craft"],
+        judge_fn=fake,
+        judge_input=projected,
+        judge_model="gpt-4o-2024-08-06",
+        judge_api_key="sk-test-not-real",
+        lane_c_environ={"GIT_CG_EVAL_JUDGE_MODEL": "gpt-4o-2024-08-06"},
+        lane_c_allows=True,
+    )
+    c_rows = [s for s in result.scores if s.metric_id.startswith("cprime.")]
+    assert c_rows, "expected cprime rows when enable_lane_c=True"
+    assert all(r.passed is None for r in c_rows)
+    by = result.by_id()
+    # C' must not be the sole reason promotion passes; if promo true, det/gold drove it.
+    if by["gate.golden_promotion_eligible"].passed is True:
+        assert by["gate.deterministic_pass"].passed is True
+    # Fake judge is injectable and credentials are present → C' runs and scores.
+    assert by["gate.semantic_cohort_eligible"].evidence.get("cprime_ran") is True
+    # Advisory polarity: scored rows keep passed=None (never sole gate).
+    assert all(r.passed is None for r in c_rows)
+    assert any((r.evidence or {}).get("execution_code") == "scored" or r.reason == "scored" for r in c_rows) or all(
+        r.score is not None or (r.evidence or {}).get("score") is not None for r in c_rows
+    )
+    # S5 honesty metrics must be present exactly once after Lane C.
+    from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
+
+    for mid in FAMILY_H_CPRIME:
+        assert mid in by
+        assert sum(1 for s in result.scores if s.metric_id == mid) == 1
+        # Not the not-run path once Lane C was enabled.
+        assert by[mid].reason != "lane_c_not_run"
+
+
+def test_score_bundle_family_h_cprime_single_emission_when_lane_c_errors(
+    monkeypatch,
+) -> None:
+    """Lane C exception path still emits honest H C' metrics once (not not-run)."""
+    import json
+    import sys
+    import types
+
+    from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
+
+    fx = json.loads(VALID.read_text(encoding="utf-8"))
+    enc = encode_fixture(fx)
+
+    boom_mod = types.ModuleType("git_cg.eval.lane_c")
+
+    def _boom_run_lane_c(*_a, **_k):
+        raise RuntimeError("lane c exploded")
+
+    boom_mod.run_lane_c = _boom_run_lane_c  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "git_cg.eval.lane_c", boom_mod)
+
+    result = score_bundle(
+        enc["bundle"],
+        suite_snapshot_pin="pin@1",
+        enable_lane_c=True,
+        lane_c_allows=True,
+    )
+    by = result.by_id()
+    assert any(e.startswith("lane_c:") for e in result.evaluator_errors)
+    assert by["h.evaluator_error_free"].passed is False
+    for mid in FAMILY_H_CPRIME:
+        assert mid in by
+        assert sum(1 for s in result.scores if s.metric_id == mid) == 1
+        # Enabled+attempted path — never the disabled not-run green-by-absence path.
+        assert by[mid].reason != "lane_c_not_run"
+        assert by[mid].evidence.get("lane_c_enabled") is True

@@ -2,7 +2,7 @@
 
 Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), **Plane A score runner** (S2a/S2b/S2c), and **accept-path final-bytes binding + trajectory evidence** (S3) for the Opik evaluation harness.
 
-> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.3-s2b-clarifications`
+> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.5-s5-s6-s7-api-surface` (retains `0.9.3-s2b-clarifications` / `0.9.4-s5-eligibility-split` locks)
 > **Implementation issues:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) (S0) · [#231](https://github.com/Thomo1318/gitCommitGenerator/issues/231) (S3)
 > **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
 
@@ -32,7 +32,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@91484d242ceedceb9160abd65a6a3f91fca1599251cab4285261c8de161d5cc6`
+  * `schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -46,6 +46,9 @@ Pins are content hashes (`name@sha256`):
 | `src/git_cg/eval/corpus/` | S1 fixture encoder + snapshot builder |
 | `src/git_cg/eval/scoring/` | S2a–S2c offline Plane A runner (A–I + gates) |
 | `src/git_cg/eval/binding/` | S3 accept-path binder + trajectory/session/message-version emitters |
+| `src/git_cg/eval/mirror/` | S4 non-blocking Opik mirror + train projection |
+| `src/git_cg/eval/lane_c/` | S5 gated Lane C′ cohort (advisory judges) |
+| `prompts/eval/lane_c/` | Local prompt-pack SoT (craft/relevance rubrics) |
 | `tests/fixtures/eval/` | Lane A committed fixtures / suites |
 | `src/git_cg/eval/data/metric_catalog_v0.json` | Machine catalog (Families A–I + secondary) |
 | `tests/eval/` | Offline fail-closed tests |
@@ -92,7 +95,7 @@ gate.deterministic_pass = all(require_block metrics passed)
 * Default require block: `git_cg.eval.scoring.S2A_REQUIRE_BLOCK` (A + B + D core + H core).
 * Suite documents may override via `metrics.require_block`.
 * Mean pass-rate, C′, lab, human, NLP, export scores do **not** veto the deterministic gate.
-* `gate.semantic_cohort_eligible` is deferred offline-honest (`cprime_deferred_s2a`).
+* `gate.semantic_cohort_eligible` is **authorization only** (suite allows Lane C ∧ (deterministic pass ∨ `lab_override`) ∧ judge identity pins resolvable — **not secrets**). When the semantic cohort is not evaluated on the offline Lane A/B path, the gate stays honest-deferred (`reason=semantic_cohort_deferred_offline_later_lane`, `failure_ids=["GATE_SEMANTIC_COHORT_DEFERRED"]`, evidence `offline_lane_ab` / `semantic_cohort_not_evaluated`). Credentials affect **availability/skip only** — never eligibility. See [S5](#s5--gated-lane-c-cohort--optional-judge-lab-233).
 
 ### Offline score API
 
@@ -130,10 +133,13 @@ uv run pytest tests/eval/test_score_runner.py \
   tests/eval/test_no_eval_policy_fork.py -q
 ```
 
-### Deferred (not S2a baseline)
+### Later slices (not S2a baseline)
 
-Lane C judges, Opik upload (S4), and S5–S7 remain out of scope here. Accept-path binding (S3) is documented in its own section below.
-S2b (C/E/F/G product-authority metrics) shipped in v0.17.0 / PR #227; S2c (Family I topology) is documented below.
+S2a remains the offline deterministic baseline. Later slices are documented in their own sections:
+
+* **S2b** (C/E/F/G product-authority metrics) shipped in v0.17.0 / PR #227; **S2c** (Family I topology) below.
+* **S3** accept-path binding, **S4** Opik mirror, and **S5** gated Lane C′ judges each have dedicated sections.
+* S2a itself does **not** invoke network judges or Opik.
 
 ## S2c — Family I topology / lifecycle validators
 
@@ -378,14 +384,17 @@ current S0 pin identities for review/CI drift detection.
 * Do **not** mutate product validators, hooks, accept-path, or telemetry for S1.
 * Do **not** require network / Opik credentials for fixture encode or snapshot hash.
 
-## Non-goals
+## Non-goals (historical slice boundaries)
 
-| Slice | Still out of scope here |
+Each slice section documents **what that slice itself does not own**. Later slices may land the deferred work — see the dedicated S3/S4/S5 sections below.
+
+| Slice section | Out of that slice's scope (owned later) |
 |:---|:---|
 | **S0** | Scoring runtime, Opik network client, accept-path binder |
-| **S2a–S2c** | Lane C judges, accept-path binding (S3), Opik upload (S4), S5–S7 |
+| **S2a–S2c** | Accept-path binding (S3), Opik upload (S4), Lane C′ judges (S5), operator UX (S6), ADR rewrite (S7) |
 | **S3** | Opik mirror/upload + corpus lake (S4), Lane C′ judges (S5), eval CLI/doctor/amend-brief (S6), ADR rewrite (S7) |
 | **S4** | Lane C′ judges (S5), full eval doctor/amend-brief/review queue UX (S6), ADR rewrite (S7) |
+| **S5** | Full doctor/amend-brief/review-queue UX (S6), ADR-0011 rewrite + durable Zensical API pages (S7), required GEval CI gate (never) |
 
 Basic `git-cg` users do **not** need Opik installed.
 
@@ -430,7 +439,7 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 
 ### Boundary
 
-S3 **emits and binds local evidence only.** It does **not** upload to Opik / drain export queues (S4), run Lane C′/GEval judges (S5), provide the full eval CLI/doctor/amend-brief/review queue (S6), or rewrite ADR-0011 (S7).
+S3 **emits and binds local evidence only.** Upload/drain is **S4**; gated advisory Lane C′ judges are **S5** (see [S5](#s5--gated-lane-c-cohort--optional-judge-lab-233)); full eval CLI/doctor/amend-brief/review queue is **S6**; ADR-0011 rewrite is **S7**.
 
 ## S4 — non-blocking Opik mirror + owner corpus lake
 
@@ -535,5 +544,112 @@ The pass-2 offline matrix and S4-A…G claim-evidence table live in [`docs/eval/
 
 ### Boundary
 
-S4 **mirrors precomputed local evidence only.** It does **not** make Opik CI/golden SoT, run Lane C′/GEval judges (S5), land the full doctor/amend-brief/review-queue UX (S6), or rewrite ADR-0011 (S7).
+S4 **mirrors precomputed local evidence only.** It does **not** make Opik CI/golden SoT. Gated advisory Lane C′ judges are **S5** (see [S5](#s5--gated-lane-c-cohort--optional-judge-lab-233)); full doctor/amend-brief/review-queue UX is **S6**; ADR-0011 rewrite is **S7**.
+
+
+## S5 — gated Lane C′ cohort + optional judge lab (#233)
+
+> **Implementation issue:** [#233](https://github.com/Thomo1318/gitCommitGenerator/issues/233)
+> **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
+> **Package:** `src/git_cg/eval/lane_c/**`
+> **Prompt-pack SoT:** `prompts/eval/lane_c/**`
+> **Plan SSOT:** `docs/plans/opik-evaluation-harness.md` (`0.9.5-s5-s6-s7-api-surface`, retaining the `0.9.4-s5-eligibility-split` locks)
+> **Baseline / peel:** [`slice0_baseline.json`](./slice0_baseline.json) · [`s5-recovery-peel-inventory.md`](./s5-recovery-peel-inventory.md)
+> **Claim evidence:** [`s5-claim-evidence.md`](./s5-claim-evidence.md)
+
+S5 enables **residual advisory** craft/relevance judges **after** eligibility. It is **never** the first CI gate, never sole golden green, and never product accept authority.
+
+### Authority + FIND-007 (narrow ban)
+
+| Law | Contract |
+|:---|:---|
+| **Authority** | Every C′ row stamps `authority=advisory` and `source=lane_c_judge` (or weaker lab/ops labels). |
+| **Deterministic gate** | `gate.deterministic_pass` stays local A/B/D/H (…I) authority. C′ scores cannot veto it. |
+| **FIND-007 narrow ban** | Ban only **product-plane, universal, unattended, sole-authoritative GEval-on-every-commit**. Maintainer advisory / async dogfood / lab cohorts remain allowed. |
+| **Never first CI gate** | Default CI stays offline Lane A. There is **no** required “GEval gate” job. Lane C′ must not become the first or sole merge gate. |
+| **Gold-blind default** | Ordinary `judge_input` omits expected/gold/assert/gate carriers (recursive isolation). |
+| **Authz ≠ credentials** | Eligibility is authorization (suite + det-pass/`lab_override` + **identity pins**). Missing API keys are **availability** skips only. |
+| **Final-accept linkage** | Ordinary judges consume S3 final-accept projection (`artifact_class`, `final_message_sha256`, encoding, optional `session_thread_id`). No invented `bundle_id`. |
+| **No auto-`passed`** | Continuous 1–5 scores use `make_advisory_score` → `passed is None`, `reason="scored"`. Do **not** call raw `make_score(..., passed=None)` for C′ (F01 footgun). |
+
+### Eligibility vs availability
+
+```text
+gate.semantic_cohort_eligible =   # authorization ONLY
+    suite.allows_lane_c
+    AND (gate.deterministic_pass OR suite.lab_override)
+    AND judge_identity_pins_resolvable   # model/pack/params — NOT secrets
+
+judge_execution_available =       # skip / lab class ONLY
+    credentials_present AND provider_client_constructible
+```
+
+* Offline Lane A/B with **no** Lane C verdict keeps the honest deferred gate:
+  `reason=semantic_cohort_deferred_offline_later_lane`,
+  `failure_ids=["GATE_SEMANTIC_COHORT_DEFERRED"]`,
+  evidence `offline_lane_ab=true`, `semantic_cohort_not_evaluated=true`, `cprime_ran=false`.
+* Active paths never set `cprime_ran := eligible`. `cprime_ran` is true only when a judge actually invoked and scored.
+* `compose_gates` never resolves credentials; it only consumes optional precomputed eligibility/run evidence.
+
+### Operator matrix
+
+| Mode | Preconditions | What happens | Product / det gate |
+|:---|:---|:---|:---|
+| **Lane C off** (default) | `allows_lane_c=false` or no Lane C wiring | No judges; offline deferred or ineligible skip rows | Unchanged; offline A/B green without keys/network |
+| **Eligible + no key** | suite allows + det pass + pins OK; `GIT_CG_EVAL_JUDGE_API_KEY` absent | **Eligible** but **unavailable** → availability skip (`unavailable_creds`); zero judge side effects | Det gate unchanged; not “unauthorized” |
+| **Eligible + key** | eligible + key present + client constructible + pack/input OK | `run_lane_c` may invoke pinned craft/relevance judges; advisory rows only | Det/golden **not** flipped by C′ scores |
+| **`lab_override`** | det fail + explicit lab override | **Eligible-diagnostic** path: skip rows only (`lab_override_diagnostic`); **zero judge side effects** | Diagnostic provenance; excluded from default quality rollups |
+
+### Env / pins (identity vs secrets)
+
+| Variable / pin | Role |
+|:---|:---|
+| `GIT_CG_EVAL_JUDGE_MODEL` | **Identity pin** (dated/immutable model id). Undated aliases / `latest` fail closed on CI-shaped suites. |
+| `GIT_CG_EVAL_JUDGE_API_KEY` | **Secret** — availability only; never part of eligibility. |
+| `GIT_CG_EVAL_JUDGE_BASE_URL` | Optional OpenAI-compatible base URL (NTH-01). |
+| Local `prompt_pack_v1` under `prompts/eval/lane_c/` | Runtime SoT for craft/relevance rubrics; content-hash pinned. Cloud Prompt Library is **not** runtime SoT. |
+
+### Supported Python surface (narrow)
+
+| Surface | Status |
+|:---|:---|
+| `git_cg.eval.lane_c.run_lane_c` | **Supported** gated execution API |
+| `git_cg.eval.scoring.score_bundle` (Lane C′ opt-in args) | **Supported** composition entry |
+| `make_advisory_score` / eligibility / availability helpers | Supported harness helpers |
+| Raw `run_pinned_judge` | Lab/internal seam — **not** the default public execution API |
+| General-purpose Python SDK / REST | **Out of scope** (CLI-first; operator map → S6; durable API docs → S7) |
+
+Importing `git_cg.eval.lane_c` stays free of `openai` / provider SDKs until a live transport is actually invoked.
+
+### Offline proof + coverage
+
+```bash
+# Full Lane C offline suite
+uv run pytest tests/eval/test_lane_c*.py -q --no-cov
+
+# Scoped coverage floor (D40 / S5-H)
+uv run pytest tests/eval/test_lane_c*.py \
+  --cov=git_cg.eval.lane_c \
+  --cov-report=term-missing \
+  --cov-fail-under=80
+```
+
+Composition/runner claim mapping lives in [`s5-claim-evidence.md`](./s5-claim-evidence.md).
+
+### Residuals (explicit)
+
+| Residual | Disposition |
+|:---|:---|
+| **R2** meta-eval / Equals | **Shipped (lab)** — `lane_c/meta_eval.py` + `judge_meta_eval_v1`; labels never enter ordinary `judge_input` |
+| **R1** richer rubric packs | **Shipped (opt-in)** — `resolve_richer_rubric_metrics` / `run_lane_c(richer_rubrics=…)`; default spine craft/relevance only |
+| **R6** moderation ops | **Shipped (off-by-default)** — scrubbed `ops.*` signal; #219 Promptfoo plane; no Promptfoo impl here |
+| **R8** flakiness studies | **Shipped (lab)** — injectable `measure_flakiness` → `cprime.flakiness_std` (`passed=None`) |
+| **R10** NLP diagnostics | **Shipped (lab)** — `nlp.*` diagnostics; BERTScore honest skip when unavailable |
+| **R5** dirty overlays | **Guard shipped / content N/A** — `activate_dirty_overlay` lab-only; no committed `.eval/overlays/` |
+| Family H C′ honesty metrics | **Shipped** (`h.judge_input_isolated`, `h.prompt_pack_*`) |
+| Legacy `setup_opik_eval_rule.py` / `setup_opik_test_suites.py` | **Frozen** — refuse live accept-path authority |
+
+### Boundary
+
+S5 ships the **gated advisory cohort only.** It does **not** land full doctor/amend-brief/review-queue UX (**S6**), rewrite ADR-0011 / durable Zensical API pages (**S7**), or install a required GEval CI gate (**never**).
 

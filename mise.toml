@@ -88,6 +88,41 @@ set -euo pipefail
 uv run pytest --cov=src/git_cg --cov-branch --cov-report=xml --cov-report=term-missing:skip-covered
 """
 
+
+[tasks.docstrings]
+description = "Full-package docstring coverage + badge (interrogate==1.7.0 @ Python 3.14)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+uvx --python 3.14 --from "interrogate==1.7.0" interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
+"""
+
+[tasks."docstrings:patch"]
+description = "Patch-scoped docstring gate on changed src/git_cg files (fail-under 80, Python 3.14)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+BASE="${DOCSTRINGS_BASE:-origin/main}"
+# Prefer merge-base style range when BASE...HEAD is valid; fall back to HEAD~1 on main.
+if git rev-parse --verify "${BASE}" >/dev/null 2>&1; then
+  RANGE="${BASE}...HEAD"
+else
+  RANGE="HEAD~1...HEAD"
+fi
+# Explicit :(glob) includes top-level src/git_cg/*.py modules.
+mapfile -t files < <(
+  git diff --name-only --diff-filter=ACMR "${RANGE}" -- ':(glob)src/git_cg/**/*.py' \
+    | rg -v '^src/git_cg/evals/' || true
+)
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "No changed src/git_cg Python files in ${RANGE} — docstring patch gate skipped."
+  exit 0
+fi
+printf 'Docstring patch gate (%d file(s) in %s):\n' "${#files[@]}" "${RANGE}"
+printf '  %s\n' "${files[@]}"
+uvx --python 3.14 --from "interrogate==1.7.0" interrogate -v --fail-under 80 "${files[@]}"
+"""
+
 [tasks.security]
 description = "Optional local SBOM + license + vulnerability verification"
 run = """
