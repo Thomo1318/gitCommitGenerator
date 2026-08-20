@@ -171,6 +171,144 @@ jobs:
           path: ./coverage.xml
           if-no-files-found: error
 
+
+  docstring-coverage:
+    name: Docstring Coverage (patch + badge)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        # actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # Need merge-base history for accurate changed-file lists on PRs/pushes.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install uv
+        # astral-sh/setup-uv@v9.0.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python 3.14
+        # interrogate MUST parse under 3.14 (PEP 758 bare multi-except).
+        run: uv python install 3.14
+
+      - name: Resolve changed src/git_cg Python files
+        id: changed
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p outputs/interrogate docs/assets/badges
+
+          # Patch gate only — never hard-wire the whole package into the fail path.
+          # Exclude legacy soak/dashboard tree (same as [tool.interrogate] exclude).
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
+            RANGE="origin/${BASE_REF}...HEAD"
+          elif [ "${EVENT_NAME}" = "push" ] && [ -n "${BEFORE_SHA}" ] \
+            && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${BEFORE_SHA}...${HEAD_SHA}"
+          else
+            # workflow_dispatch / first push: compare against default branch tip when available.
+            if git rev-parse --verify origin/main >/dev/null 2>&1; then
+              RANGE="origin/main...HEAD"
+            else
+              RANGE="HEAD~1...HEAD"
+            fi
+          fi
+
+          echo "Diff range: ${RANGE}"
+          # Newline-separated path list (no embedded NULs in the workflow file).
+          git diff --name-only --diff-filter=ACMR ${RANGE} -- 'src/git_cg/**/*.py' \
+            | grep -v '^src/git_cg/evals/' \
+            | grep -v '^$' \
+            > outputs/interrogate/changed-files.txt || true
+
+          count="$(wc -l < outputs/interrogate/changed-files.txt | tr -d ' ')"
+          {
+            echo "range=${RANGE}"
+            echo "count=${count}"
+          } | tee outputs/interrogate/changed-summary.txt
+
+          if [ "${count}" -eq 0 ]; then
+            echo "No changed src/git_cg Python files — patch docstring gate skipped."
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            echo "count=0" >> "${GITHUB_OUTPUT}"
+            echo "range=${RANGE}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "Changed files (${count}):"
+          sed 's/^/  /' outputs/interrogate/changed-files.txt
+          {
+            echo "skip=false"
+            echo "count=${count}"
+            echo "range=${RANGE}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Patch gate — interrogate changed files only (fail-under 80)
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mapfile -t files < outputs/interrogate/changed-files.txt
+          # Human report for the PR/push surface only (Codecov-style "what changed").
+          set +e
+          uvx --python 3.14 interrogate -vv --fail-under 80 "${files[@]}" \
+            | tee outputs/interrogate/patch-report.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "mode=patch"
+            echo "range=${{ steps.changed.outputs.range }}"
+            echo "file_count=${{ steps.changed.outputs.count }}"
+            echo "fail_under=80"
+            echo "exit=${status}"
+          } | tee outputs/interrogate/patch-summary.txt
+          exit "${status}"
+
+      - name: Full-package badge scan (informational; does not gate)
+        if: always()
+        run: |
+          set -euo pipefail
+          # README badge reflects whole-package health, not the patch subset.
+          # fail-under 0 so a low global % never fails CI; the patch step is the gate.
+          set +e
+          uvx --python 3.14 interrogate src/git_cg -v --fail-under 0 \
+            --generate-badge docs/assets/badges \
+            --badge-format svg \
+            --badge-style flat \
+            | tee outputs/interrogate/full-report.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "mode=full-package-badge"
+            echo "fail_under=0"
+            echo "badge=docs/assets/badges/interrogate_badge.svg"
+            echo "exit=${status}"
+          } | tee outputs/interrogate/full-summary.txt
+          # Badge generation failure should not hide a patch-gate result, but still surface.
+          exit "${status}"
+
+      - name: Upload interrogate report artifact
+        if: always()
+        # actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: interrogate-docstring-report
+          path: |
+            outputs/interrogate/
+            docs/assets/badges/interrogate_badge.svg
+          if-no-files-found: warn
+
+
   upload-coverage:
     name: Upload Coverage to Codecov
     needs: test-and-coverage
