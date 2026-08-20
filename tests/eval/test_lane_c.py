@@ -685,6 +685,7 @@ class TestSlice4JudgeWiring:
         assert result.invoked is False
         assert result.rows[0].reason == EXEC_EMPTY_INPUT
         assert result.rows[0].passed is None
+        assert result.rows[0].evidence["invoked"] is False
 
     def test_without_judge_fn_remains_not_invoked(self) -> None:
         result = run_lane_c(

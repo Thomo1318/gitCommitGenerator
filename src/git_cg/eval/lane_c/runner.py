@@ -154,12 +154,15 @@ def _skip_row(
         availability=availability,
         extra=extra_evidence,
     )
+    # Preserve an explicit invoked flag from callers (e.g. transport attempted),
+    # otherwise default to False for pre-invoke skips.
+    invoked = bool(evidence["invoked"]) if "invoked" in evidence else False
     evidence.update(
         {
             "skipped": True,
             "execution_code": code,
             "gate_disposition": gate_disposition,
-            "invoked": False,
+            "invoked": invoked,
             "scored_count": 0,
             "cprime_ran": False,
         }
@@ -644,7 +647,8 @@ def run_lane_c(
             continue
 
         # Host guards (empty/oversize) return without calling judge_fn.
-        if outcome.execution_code not in {EXEC_EMPTY_INPUT, EXEC_OVERSIZE_INPUT}:
+        row_invoked = outcome.execution_code not in {EXEC_EMPTY_INPUT, EXEC_OVERSIZE_INPUT}
+        if row_invoked:
             invoked = True
 
         duration = outcome.duration_ms
@@ -693,7 +697,7 @@ def run_lane_c(
             availability=availability,
             extra={
                 "skipped": True,
-                "invoked": True,
+                "invoked": row_invoked,
                 "cprime_ran": False,
                 "pack_id": pack["pack_id"],
                 "pack_identity": pin,
