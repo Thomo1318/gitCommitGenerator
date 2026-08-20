@@ -223,6 +223,25 @@ class TestRecursiveIsolation:
         with pytest.raises(JudgeInputError, match="judge_"):
             project_judge_input(poisoned)
 
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "goldCodes",
+            "gold-codes",
+            "GOLD_CODES",
+            "gold codes",
+            "expectedOutput",
+            "Expected_Output",
+            "gateDeterministicPass",
+            "judgeLabels",
+        ],
+    )
+    def test_forbidden_key_normalization_variants(self, key: str) -> None:
+        poisoned = _bundle()
+        poisoned["meta"] = {"producer": "x", key: "LEAK"}
+        with pytest.raises(JudgeInputError):
+            project_judge_input(poisoned)
+
     def test_poisoned_context_rejected(self) -> None:
         with pytest.raises(JudgeInputError, match="expected"):
             project_judge_input(_bundle(), context={"diff_summary": "ok", "expected_output": "LEAK"})

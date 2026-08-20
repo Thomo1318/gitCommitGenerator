@@ -41,9 +41,10 @@ _CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 
 
 def _normalize_key_name(key: str) -> str:
-    """Normalize key separators so goldCodes / gold-codes match gold_codes."""
-    spaced = _CAMEL_BOUNDARY.sub("_", key)
-    return spaced.replace("-", "_")
+    """Normalize key shape so goldCodes / gold-codes / "gold codes" match gold_codes."""
+    spaced = _CAMEL_BOUNDARY.sub("_", str(key).strip())
+    collapsed = re.sub(r"[\s\-]+", "_", spaced)
+    return collapsed.lower()
 
 
 _FORBIDDEN_EXACT: Final[frozenset[str]] = frozenset(
