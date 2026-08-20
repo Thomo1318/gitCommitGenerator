@@ -25,6 +25,7 @@ Dependencies: 21 runtime, 1 dev
 | docs-hook | `just docs-hook` |
 | all | `just all` |
 | test | `just test` |
+| docstrings | `just docstrings` |
 | uninstall | `just uninstall` |
 | eval-schema-hash | `just eval-schema-hash` |
 | eval-materialize | `just eval-materialize` |
@@ -34,9 +35,9 @@ Dependencies: 21 runtime, 1 dev
 
 | Name | Command |
 |------|---------|
+| test | `echo "Error: no test specified" && exit 1` |
 | validate | `node scripts/validate_commit.mjs` |
 | release | `uv run python -m git_cg.main release` |
-| test | `echo "Error: no test specified" && exit 1` |
 
 
 ## Tools
@@ -152,6 +153,41 @@ set -euo pipefail
 uv run pytest --cov=src/git_cg --cov-branch --cov-report=xml --cov-report=term-missing:skip-covered
 """
 
+
+[tasks.docstrings]
+description = "Full-package docstring coverage + badge (interrogate==1.7.0 @ Python 3.14)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+uvx --python 3.14 --from "interrogate==1.7.0" interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
+"""
+
+[tasks."docstrings:patch"]
+description = "Patch-scoped docstring gate on changed src/git_cg files (fail-under 80, Python 3.14)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+BASE="${DOCSTRINGS_BASE:-origin/main}"
+# Prefer merge-base style range when BASE...HEAD is valid; fall back to HEAD~1 on main.
+if git rev-parse --verify "${BASE}" >/dev/null 2>&1; then
+  RANGE="${BASE}...HEAD"
+else
+  RANGE="HEAD~1...HEAD"
+fi
+# Explicit :(glob) includes top-level src/git_cg/*.py modules.
+mapfile -t files < <(
+  git diff --name-only --diff-filter=ACMR "${RANGE}" -- ':(glob)src/git_cg/**/*.py' \
+    | rg -v '^src/git_cg/evals/' || true
+)
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "No changed src/git_cg Python files in ${RANGE} — docstring patch gate skipped."
+  exit 0
+fi
+printf 'Docstring patch gate (%d file(s) in %s):\n' "${#files[@]}" "${RANGE}"
+printf '  %s\n' "${files[@]}"
+uvx --python 3.14 --from "interrogate==1.7.0" interrogate -v --fail-under 80 "${files[@]}"
+"""
+
 [tasks.security]
 description = "Optional local SBOM + license + vulnerability verification"
 run = """
@@ -211,4 +247,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-67.5ms | 738 files checked | 21/539 tools matched
+69.6ms | 738 files checked | 21/539 tools matched
