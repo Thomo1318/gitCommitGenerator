@@ -125,7 +125,7 @@ Primary composition tests:
 | ID | Summary | Primary evidence |
 |:---|:---|:---|
 | **S5-E01** | Judge only on eligible+available path | runner invoke vs skip matrix in `test_lane_c.py` |
-| **S5-E02** | Craft/relevance packs present | `prompts/eval/lane_c/geval_craft|relevance/rubric.md` + pack tests |
+| **S5-E02** | Craft/relevance packs present | `prompts/eval/lane_c/geval_craft/rubric.md` and `prompts/eval/lane_c/geval_relevance/rubric.md` + pack tests |
 | **S5-E03** | README advisory + FIND-007 + operator matrix | `docs/eval/README.md` § S5 |
 | **S5-E04** | Offline `test_lane_c*.py` green | proof command above |
 | **S5-E05** | pin_refs / duration / INT-28 nullable fields | judge outcome + advisory rows |
