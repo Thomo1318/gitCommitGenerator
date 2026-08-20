@@ -56,27 +56,12 @@ def _bundle(**overrides: Any) -> dict[str, Any]:
 
 
 def _bound_result(**overrides: Any) -> BindResult:
-    """Create a bound result containing a bundle with the supplied field overrides.
-    
-    Parameters:
-    	overrides (Any): Field values to override in the generated bundle.
-    
-    Returns:
-    	BindResult: A bound result containing the configured bundle.
-    """
+    """Bound ``BindResult`` fixture with optional bundle field overrides."""
     return BindResult(bound=True, bundle=_bundle(**overrides))
 
 
 def _assert_allowlisted(projected: JudgeInput) -> dict[str, Any]:
-    """
-    Validate that a projected judge input contains only permitted fields and return its serialised payload.
-    
-    Parameters:
-    	projected (JudgeInput): The projected judge input to validate.
-    
-    Returns:
-    	dict[str, Any]: The validated serialised payload.
-    """
+    """Assert projected input is allowlisted-only; return serialized payload."""
     payload = projected.as_dict()
     allowed = {
         "artifact_class",

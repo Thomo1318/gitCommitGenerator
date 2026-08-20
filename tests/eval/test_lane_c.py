@@ -246,11 +246,7 @@ class TestAvailability:
         calls: list[str] = []
 
         def resolver(k: str, d: str = "") -> str:
-            """Record the requested key and provide a fixed secret value.
-            
-            Returns:
-            	str: The fixed secret value ``"sk-from-resolver"``.
-            """
+            """Test double: record key and return a fixed non-secret placeholder."""
             calls.append(k)
             return "sk-from-resolver"
 
@@ -356,15 +352,7 @@ class TestRunLaneC:
         side_effects = {"judge_calls": 0}
 
         def resolver(k: str, d: str = "") -> str:
-            """Track a judge resolver call and return a placeholder secret.
-            
-            Parameters:
-                k (str): Secret key to resolve.
-                d (str): Default value.
-            
-            Returns:
-                str: A placeholder secret value.
-            """
+            """Test double: count resolver calls; never return a live secret."""
             side_effects["judge_calls"] += 1
             return "sk-should-not-matter"
 
@@ -578,7 +566,7 @@ def test_semantic_cohort_deferred_s2a_compat() -> None:
     pol = {m["metric_id"]: m["polarity"] for m in load_metric_catalog()["metrics"]}
 
     def _pass(metric_id: str):
-        """Create a passing score for the specified metric."""
+        """Minimal passing score row for gate composition fixtures."""
         p = pol[metric_id]
         if p == "lower_is_better":
             return make_score(metric_id, 0, passed=True)
@@ -601,11 +589,7 @@ def test_semantic_cohort_deferred_s2a_compat() -> None:
 
 class TestSlice4JudgeWiring:
     def _projected(self):
-        """Construct the projected Lane C′ judge input for a representative accepted artifact.
-        
-        Returns:
-        	dict: The projected judge input containing the final message, its SHA-256 digest, and acceptance metadata.
-        """
+        """Projected ordinary-path judge input for a representative accept artifact."""
         from git_cg.eval.binding.binder import message_sha256_bytes
         from git_cg.eval.enums import ArtifactClass
         from git_cg.eval.lane_c.judge_input import project_judge_input

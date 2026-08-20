@@ -86,12 +86,7 @@ class JudgeOutcome:
     duration_ms: float | None = None
 
     def as_evidence(self) -> dict[str, Any]:
-        """
-        Return secret-free execution metadata for evidence records.
-        
-        Returns:
-        	dict[str, Any]: Structured metadata including usage, latency, completion status, retry count, error type, raw-response disposal status, and execution code.
-        """
+        """Secret-free structured metadata for ScoreResult evidence."""
         return {
             "usage": self.usage,
             "latency_ms": self.latency_ms,
@@ -130,19 +125,7 @@ class JudgeFn(Protocol):
         *,
         model: str,
         timeout_s: float = DEFAULT_TIMEOUT_S,
-    ) -> JudgeTransportResult | Mapping[str, Any] | str | JudgeOutcome: """
-        Invoke the judge for the supplied prompt and input.
-        
-        Parameters:
-            prompt: The instruction presented to the judge.
-            judge_input: The input content to evaluate.
-            model: The model to use for the invocation.
-            timeout_s: Maximum duration allowed for the invocation.
-        
-        Returns:
-            The judge response as transport data, a mapping, text, or a normalised outcome.
-        """
-        ...
+    ) -> JudgeTransportResult | Mapping[str, Any] | str | JudgeOutcome: ...
 
 
 def resolve_judge_credentials(
@@ -153,18 +136,11 @@ def resolve_judge_credentials(
     environ: Mapping[str, str] | None = None,
     secret_resolver: SecretResolver | None = None,
 ) -> JudgeCredentialView:
-    """
-    Resolve the configured judge identity and indicate whether credentials are available without exposing the credential value.
-    
-    Parameters:
-    	judge_model (str | None): Optional model override; otherwise, use the configured environment value.
-    	judge_api_key (str | None): Optional credential override used only to determine presence.
-    	base_url (str | None): Optional service URL override.
-    	environ (Mapping[str, str] | None): Optional environment mapping used for configuration.
-    	secret_resolver (SecretResolver | None): Optional resolver used to check credential presence.
-    
-    Returns:
-    	JudgeCredentialView: The resolved model, base URL, and credential-presence status.
+    """Resolve identity + credential *presence* without returning the raw key.
+
+    ``GIT_CG_EVAL_JUDGE_MODEL`` is an identity pin and is never passed through
+    ``resolve_secret``. ``GIT_CG_EVAL_JUDGE_API_KEY`` is resolved lazily only
+    to test presence.
     """
     env = environ if environ is not None else os.environ
     model = (judge_model if judge_model is not None else env.get(ENV_JUDGE_MODEL, "")).strip()
@@ -191,14 +167,6 @@ def resolve_judge_credentials(
 
 
 def _usage_dict(raw: object) -> dict[str, int] | None:
-    """Extract numeric token counts from a usage mapping.
-    
-    Parameters:
-        raw (object): Candidate usage data.
-    
-    Returns:
-        dict[str, int] | None: Normalised token counts, or `None` when the input contains no numeric token counts.
-    """
     if not isinstance(raw, Mapping):
         return None
     out: dict[str, int] = {}
@@ -211,19 +179,10 @@ def _usage_dict(raw: object) -> dict[str, int] | None:
 
 
 def parse_judge_score(text: str) -> tuple[int | float, str | None]:
-    """
-    Parse a judge response and extract its score and optional rationale.
-    
-    The response may contain a JSON object within surrounding text. The score
-    must be numeric and between 1 and 5 inclusive.
-    
-    Returns:
-        tuple[int | float, str | None]: The score and rationale, or ``None`` if no
-        string rationale is provided.
-    
-    Raises:
-        ValueError: If the response is empty, is not a JSON object, or contains a
-        missing, non-numeric, or out-of-range score.
+    """Parse a JSON object with a 1-5 score and optional rationale.
+
+    Raises ``ValueError`` on missing/invalid/out-of-range scores (mapped to
+    ``parse_error`` by the runner).
     """
     blob = str(text).strip()
     if not blob:
@@ -255,17 +214,6 @@ def parse_judge_score(text: str) -> tuple[int | float, str | None]:
 
 
 def _normalize_raw(raw: object) -> JudgeTransportResult:
-    """Normalise supported judge responses into a transport result.
-    
-    Parameters:
-    	raw (object): A transport result, judge outcome, response string, or mapping containing judge response data.
-    
-    Returns:
-    	JudgeTransportResult: The normalised transport response.
-    
-    Raises:
-    	TypeError: If `raw` has an unsupported type.
-    """
     if isinstance(raw, JudgeTransportResult):
         return raw
     if isinstance(raw, JudgeOutcome):
@@ -298,14 +246,6 @@ def _normalize_raw(raw: object) -> JudgeTransportResult:
 
 
 def _classify_exception(exc: BaseException) -> tuple[str, str]:
-    """Classify an exception as a timeout or transport failure.
-    
-    Parameters:
-    	exc (BaseException): Exception to classify.
-    
-    Returns:
-    	tuple[str, str]: The execution code and exception type name.
-    """
     name = type(exc).__name__
     lowered = name.lower()
     if isinstance(exc, TimeoutError) or "timeout" in lowered:
@@ -314,29 +254,12 @@ def _classify_exception(exc: BaseException) -> tuple[str, str]:
 
 
 def _payload_dict(judge_input: JudgeInput | Mapping[str, str]) -> dict[str, str]:
-    """Convert judge input into a string-keyed, string-valued dictionary.
-    
-    Parameters:
-    	judge_input (JudgeInput | Mapping[str, str]): Input data to convert.
-    
-    Returns:
-    	dict[str, str]: The normalised input mapping.
-    """
     if isinstance(judge_input, JudgeInput):
         return judge_input.as_dict()
     return {str(k): str(v) for k, v in judge_input.items()}
 
 
 def _host_guard(payload: Mapping[str, str]) -> str | None:
-    """
-    Classify the combined judge input for empty or oversized content.
-    
-    Parameters:
-    	payload (Mapping[str, str]): Judge input containing the final message and optional diff summary.
-    
-    Returns:
-    	str | None: The applicable input-size execution code, or `None` when the input is within the permitted limits.
-    """
     text = str(payload.get("final_message_text") or "")
     extra = payload.get("diff_summary")
     size_text = text if not extra else f"{text}\n{extra}"
@@ -354,22 +277,6 @@ def _fail(
     text: str | None = None,
     duration_ms: float | None = None,
 ) -> JudgeOutcome:
-    """
-    Construct a failed judge outcome with the supplied execution metadata.
-    
-    Parameters:
-    	code (str): Execution code describing the failure.
-    	error_type (str | None): Optional category of the failure.
-    	retry_count (int): Number of retries already performed.
-    	usage (dict[str, int] | None): Optional token usage metadata.
-    	latency_ms (float | None): Optional provider latency in milliseconds.
-    	finish_reason (str | None): Optional provider completion reason.
-    	text (str | None): Optional response text associated with the failure.
-    	duration_ms (float | None): Optional total execution duration in milliseconds.
-    
-    Returns:
-    	JudgeOutcome: A failed outcome with raw response data marked as discarded.
-    """
     return JudgeOutcome(
         ok=False,
         execution_code=assert_execution_code(code),
@@ -392,13 +299,6 @@ def _invoke_once(
     model: str,
     timeout_s: float,
 ) -> JudgeOutcome:
-    """
-    Invoke the judge once and convert its response into a structured outcome.
-    
-    Returns:
-        JudgeOutcome: A scored outcome or a classified failure with secret-free
-        metadata.
-    """
     started = time.perf_counter()
     try:
         raw = judge_fn(prompt, payload, model=model, timeout_s=timeout_s)
@@ -458,23 +358,11 @@ def run_pinned_judge(
     timeout_s: float = DEFAULT_TIMEOUT_S,
     max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> JudgeOutcome:
-    """
-    Run the pinned judge and normalise its result into a product-facing outcome.
-    
-    Empty or oversized inputs are rejected before invocation. Retryable timeout,
-    transport, and parsing failures are retried up to ``max_retries``; other
-    failures stop immediately.
-    
-    Parameters:
-        prompt (str): The judging prompt.
-        judge_input (JudgeInput | Mapping[str, str]): The input payload to evaluate.
-        judge_fn (JudgeFn): The judge callable.
-        model (str): The model identifier to use.
-        timeout_s (float): Maximum duration permitted for each invocation.
-        max_retries (int): Maximum number of retries for retryable failures.
-    
-    Returns:
-        JudgeOutcome: A scored outcome or a secret-free structured failure.
+    """Invoke ``judge_fn`` with at most one retry. Never raises to the product.
+
+    Empty / oversize inputs are classified before any call and are never retried.
+    Transport / timeout / parse failures retry at most once. The callable must
+    not accept ``api_key``.
     """
     payload = _payload_dict(judge_input)
     guard = _host_guard(payload)
@@ -557,24 +445,11 @@ def openai_compatible_judge_fn(
     judge_api_key: str | None = None,
     transport: Callable[..., JudgeTransportResult | Mapping[str, Any] | str] | None = None,
 ) -> JudgeFn:
-    """
-    Build a judge callable with credentials captured privately in its closure.
-    
-    The optional transport provides an offline or test execution path. Without an
-    injected transport, the live OpenAI-compatible client is created when the
+    """Build a ``JudgeFn`` that closes over credentials (never in the signature).
+
+    ``transport`` is the offline/test injection point. The live OpenAI-compatible
+    client is constructed only when ``transport`` is omitted **and** the
     returned callable is invoked.
-    
-    Parameters:
-    	model (str | None): Model identifier used by default.
-    	base_url (str | None): OpenAI-compatible API base URL.
-    	environ (Mapping[str, str] | None): Environment values used for credential resolution.
-    	secret_resolver (SecretResolver | None): Resolver used to obtain credentials lazily.
-    	judge_api_key (str | None): Explicit API key used for the closure.
-    	transport (Callable | None): Optional transport used instead of the live provider.
-    
-    Returns:
-    	JudgeFn: A callable that executes judge requests without exposing the API key
-    	in its signature.
     """
     creds = resolve_judge_credentials(
         judge_model=model,
@@ -599,18 +474,6 @@ def openai_compatible_judge_fn(
         model: str,
         timeout_s: float = DEFAULT_TIMEOUT_S,
     ) -> JudgeTransportResult:
-        """
-        Send judge input to the configured transport and return its structured response.
-        
-        Parameters:
-            prompt (str): Prompt supplied to the judge.
-            judge_input (Mapping[str, str]): Input fields included in the judge request.
-            model (str): Model to use, falling back to the configured model when empty.
-            timeout_s (float): Request timeout in seconds.
-        
-        Returns:
-            JudgeTransportResult: Structured transport response.
-        """
         chosen_model = model or closed_model
         if injected is not None:
             return _normalize_raw(
@@ -643,20 +506,7 @@ def _live_openai_transport(
     api_key: str,
     base_url: str | None,
 ) -> JudgeTransportResult:
-    """
-    Send the judge prompt and input to an OpenAI-compatible chat-completion service.
-    
-    Parameters:
-        prompt (str): System prompt supplied to the judge.
-        judge_input (Mapping[str, str]): Input payload serialised for the user message.
-        model (str): Model identifier used for the completion.
-        timeout_s (float): Request timeout in seconds.
-        api_key (str): API credential for the provider.
-        base_url (str | None): Optional provider-compatible base URL.
-    
-    Returns:
-        JudgeTransportResult: Structured completion text, usage data, latency, and finish reason.
-    """
+    """Lazy OpenAI-compatible chat completion. Imported only on invocation."""
     started = time.perf_counter()
     # Local import - this is the only provider-SDK load site (S5-E08).
     from openai import OpenAI

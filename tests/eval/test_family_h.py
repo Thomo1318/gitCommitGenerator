@@ -78,14 +78,7 @@ def test_family_h_online_flag_fails_offline_complete() -> None:
 
 
 def _by_id(scores):
-    """Map score objects by their metric identifiers.
-    
-    Parameters:
-    	scores: Score objects to index.
-    
-    Returns:
-    	A dictionary mapping each metric identifier to its score object.
-    """
+    """Index score rows by ``metric_id``."""
     return {s.metric_id: s for s in scores}
 
 

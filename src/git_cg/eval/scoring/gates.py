@@ -151,29 +151,31 @@ def compose_gates(
     lane_c_eligibility: object | None = None,
     lane_c_run_evidence: Mapping[str, object] | None = None,
 ) -> list[ScoreResultV1]:
-    """
-    Compose deterministic, golden-promotion, and semantic-cohort gate metrics from score rows.
-    
-    Parameters:
-    	results (Sequence[ScoreResultV1]): Score rows used to evaluate the gates.
-    	require_block (Iterable[str] | None): Metric IDs required for deterministic
-    		passage; defaults to the S2A block.
-    	bound (bool | None): Binding status used to determine golden-promotion
-    		eligibility.
-    	require_topology (bool): Whether to include topology metrics and require
-    		their lifecycle checks for promotion.
-    	gold_mode (str): Golden evaluation mode recorded in gate evidence.
-    	lane_c_eligibility (object | None): Optional precomputed semantic-cohort
-    		eligibility data.
-    	lane_c_run_evidence (Mapping[str, object] | None): Optional semantic-cohort
-    		execution counters and evidence.
-    
-    Returns:
-    	list[ScoreResultV1]: Deterministic, golden-promotion, and semantic-cohort
-    		gate rows.
-    
-    Raises:
-    	ValueError: If duplicate non-gate metric IDs occur in the score rows.
+    """Compose ``gate.*`` metrics from score rows.
+
+    ``gate.deterministic_pass`` uses only metrics in the effective require block
+    (default ``S2A_REQUIRE_BLOCK``). When ``require_topology=true``, the block is
+    the stable unique union with ``S2C_TOPOLOGY_BLOCK`` (N7). True advisory
+    prefixes never veto — even when explicitly listed. Plane A ``c.``/``e.``/
+    ``f.``/``g.`` are gate-capable when requested. Unrequested C/E/F/G failures
+    are not labeled ``ignored_advisory_failures``. Duplicate metric IDs in
+    ``results`` fail closed. Missing required metrics fail closed.
+
+    Golden promotion uses the S2b baseline (det + gold + skeleton + bound).
+    When ``require_topology=true``, it additionally requires passing
+    ``i.lifecycle_complete`` and ``i.required_spans_present`` (N7).
+
+    Semantic cohort (S5 / C-GATE):
+    * Prefer an already-emitted ``gate.semantic_cohort_eligible`` row in
+      ``results`` (same ``by_id.get`` pattern as golden promotion inputs).
+    * Else accept optional precomputed ``lane_c_eligibility`` (duck-typed:
+      ``eligible``, ``reason``, ``lab_override``, ``evidence``) and optional
+      ``lane_c_run_evidence`` counters (``invoked`` / ``scored_count`` /
+      ``available`` / ``cprime_ran``).
+    * Else emit honest offline deferred row (Lane A/B path unchanged).
+    * Never resolves env secrets or imports ``git_cg.eval.lane_c`` (D34).
+    * Never sets ``cprime_ran := eligible`` (D32).
+
     """
     base_req = tuple(require_block) if require_block is not None else S2A_REQUIRE_BLOCK
     # Stable unique union; S2C_TOPOLOGY_BLOCK order preserved for new tails.
@@ -294,28 +296,16 @@ def _compose_semantic_cohort_gate(
     lane_c_eligibility: object | None,
     lane_c_run_evidence: Mapping[str, object] | None,
 ) -> ScoreResultV1:
-    """
-    Build the semantic-cohort eligibility gate from optional eligibility and run evidence.
-    
-    Parameters:
-    	lane_c_eligibility (object | None): Precomputed eligibility data, when available.
-    	lane_c_run_evidence (Mapping[str, object] | None): Evidence describing semantic-cohort execution and scored items.
-    
-    Returns:
-    	ScoreResultV1: The semantic-cohort eligibility result, including eligibility, execution evidence, or offline deferral details.
+    """Build ``gate.semantic_cohort_eligible`` from optional precomputed verdict.
+
+    Duck-types eligibility objects so ``gates.py`` stays free of ``lane_c``
+    imports (D34 / C-GATE). Offline default remains deferred when no verdict.
+
     """
     run_ev = dict(lane_c_run_evidence or {})
 
     def _counter(name: str, default: object) -> object:
-        """Retrieve a named run-evidence counter, returning a default when it is unavailable.
-        
-        Parameters:
-        	name (str): Name of the run-evidence counter.
-        	default (object): Value to use when the counter is unavailable.
-        
-        Returns:
-        	object: The recorded counter value or the supplied default.
-        """
+        """Read a named run-evidence counter with default when absent."""
         if name in run_ev:
             return run_ev[name]
         return default

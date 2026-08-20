@@ -85,12 +85,7 @@ class JudgeInputError(ValueError):
     """Judge-input isolation, linkage, or host-guard failure."""
 
     def __init__(self, message: str, *, code: str = "invalid_input") -> None:
-        """Create an input validation error with a message and classification code.
-        
-        Parameters:
-        	message (str): Description of the validation failure.
-        	code (str): Code identifying the failure category.
-        """
+        """Bind ``message`` + machine ``code`` (isolation / linkage / host-guard)."""
         super().__init__(message)
         self.code = code
 
@@ -111,11 +106,7 @@ class JudgeInput:
     diff_summary: str | None = None
 
     def as_dict(self) -> dict[str, str]:
-        """Return the allowlisted judge input fields as a dictionary.
-        
-        Returns:
-        	dict[str, str]: The artifact class, final message, message hash, encoding, and any available session or diff metadata.
-        """
+        """Allowlisted ordinary-path fields only (no gold/expected carriers)."""
         payload: dict[str, str] = {
             "artifact_class": self.artifact_class,
             "final_message_text": self.final_message_text,
@@ -143,14 +134,7 @@ def classify_judge_input_size(
 
 
 def _is_forbidden_key(key: str) -> bool:
-    """Determine whether a key identifies forbidden expected, gold, assertion, or gate data.
-    
-    Parameters:
-    	key (str): Key name to inspect.
-    
-    Returns:
-    	(bool): `True` if the key matches a forbidden pattern, `False` otherwise.
-    """
+    """True when ``key`` normalizes to an expected/gold/assert/gate carrier."""
     norm = _normalize_key_name(key)
     if key in _FORBIDDEN_EXACT or norm in _FORBIDDEN_EXACT:
         return True
@@ -160,12 +144,7 @@ def _is_forbidden_key(key: str) -> bool:
 
 
 def _walk_forbidden_keys(obj: Any, found: list[str]) -> None:
-    """Collect forbidden keys found recursively in mappings and nested sequences.
-    
-    Parameters:
-    	obj (Any): Object to inspect.
-    	found (list[str]): List to which detected forbidden keys are appended.
-    """
+    """Recursively collect forbidden key names from mappings/sequences."""
     if isinstance(obj, Mapping):
         for key, value in obj.items():
             if isinstance(key, str) and _is_forbidden_key(key):
@@ -178,7 +157,7 @@ def _walk_forbidden_keys(obj: Any, found: list[str]) -> None:
 
 
 def _strip_forbidden(obj: Any) -> Any:
-    """Remove forbidden fields from mappings while preserving nested sequences and other values."""
+    """Drop forbidden keys from mappings; preserve nested sequences/scalars."""
     if isinstance(obj, Mapping):
         return {
             key: _strip_forbidden(value)
@@ -209,13 +188,7 @@ def _isolation_targets(evidence: BindResult | Mapping[str, Any], context: Mappin
 
 
 def _enforce_isolation(targets: Iterable[Any], *, strict: bool) -> None:
-    """
-    Validate targets for forbidden expected, gold, assert, or gate fields.
-    
-    Parameters:
-    	targets (Iterable[Any]): Values to inspect for forbidden fields.
-    	strict (bool): Whether to raise an error when forbidden fields are found.
-    """
+    """Fail closed (or record) when targets carry expected/gold/assert/gate fields."""
     found: list[str] = []
     for target in targets:
         _walk_forbidden_keys(target, found)
@@ -230,21 +203,14 @@ def _enforce_isolation(targets: Iterable[Any], *, strict: bool) -> None:
 
 
 def _basename_path(path: str) -> str:
-    """Return the final component of a path, using ``"file"`` when it has no name."""
+    """Final path component only; ``file`` when the path has no name."""
     cleaned = path.replace("\\", "/").rstrip("/")
     name = cleaned.rsplit("/", 1)[-1]
     return name or "file"
 
 
 def _scrub_paths(text: str) -> str:
-    """Replace absolute file paths and file URLs with their basenames.
-    
-    Parameters:
-    	text (str): Text containing paths to scrub.
-    
-    Returns:
-    	str: Text with absolute paths replaced by their basenames.
-    """
+    """Replace absolute paths / file URLs with basenames (C-DIFF)."""
     scrubbed = _FILE_URL_RE.sub(lambda match: _basename_path(match.group(0).removeprefix("file://")), text)
     scrubbed = _UNIX_ABS_RE.sub(lambda match: _basename_path(match.group(0)), scrubbed)
     return _WIN_ABS_RE.sub(lambda match: _basename_path(match.group(0)), scrubbed)
@@ -255,19 +221,11 @@ def project_diff_summary(
     *,
     max_chars: int = DEFAULT_MAX_DIFF_SUMMARY_CHARS,
 ) -> str | None:
-    """Sanitise and bound a diff summary for inclusion in judge input.
-    
-    Parameters:
-        raw (Any): Candidate diff summary text.
-        max_chars (int): Maximum number of characters to retain.
-    
-    Returns:
-        str | None: The path-scrubbed, truncated summary, or `None` when no summary
-            is provided.
-    
-    Raises:
-        JudgeInputError: If the value is not a string, contains a raw patch, or
-            contains expected or gold labels.
+    """Project an allowlisted, path-scrubbed, bounded, gold-blind diff summary.
+
+    Rejects raw patches and expected/gold carriers. Never returns file contents
+    or absolute paths. Shared helper for judge input (D37 / C-DIFF).
+
     """
     if raw is None:
         return None
@@ -287,31 +245,13 @@ def project_diff_summary(
 
 
 def _reject_free_message(payload: Mapping[str, Any]) -> None:
-    """
-    Rejects payloads that contain an unbound free-form message.
-    
-    Parameters:
-    	payload (Mapping[str, Any]): Payload to inspect.
-    
-    Raises:
-    	JudgeInputError: If the payload contains a ``message`` field.
-    """
+    """Reject unbound free-form ``message`` on ordinary judge path."""
     if "message" in payload:
         raise JudgeInputError("ordinary judge input rejects free unbound message= without final_accept linkage")
 
 
 def _as_payload(evidence: BindResult | Mapping[str, Any]) -> tuple[dict[str, Any], bool | None]:
-    """Normalise judge evidence into a payload and its binding status.
-    
-    Parameters:
-        evidence: A BindResult or mapping containing the final-accept evidence.
-    
-    Returns:
-        A tuple containing the evidence payload and its binding status, or None when the mapping does not provide a Boolean status.
-    
-    Raises:
-        JudgeInputError: If the evidence is unbound, lacks a final-accept bundle, contains a free message, or has an unsupported type.
-    """
+    """Normalize BindResult/mapping → (payload, bound); None when unbound-shaped."""
     if isinstance(evidence, BindResult):
         if evidence.bundle is None:
             if not evidence.bound:
@@ -330,19 +270,7 @@ def _as_payload(evidence: BindResult | Mapping[str, Any]) -> tuple[dict[str, Any
 
 
 def _project_context(context: Mapping[str, Any] | None, *, strict: bool) -> str | None:
-    """
-    Projects the supported context fields into a validated diff summary.
-    
-    Parameters:
-    	context (Mapping[str, Any] | None): Context containing an optional diff summary.
-    	strict (bool): Whether unsupported context keys should raise an error.
-    
-    Returns:
-    	str | None: The validated diff summary, or `None` when no summary is provided.
-    
-    Raises:
-    	JudgeInputError: If the context is not an object or contains unsupported keys in strict mode.
-    """
+    """Project allowlisted context → path-scrubbed ``diff_summary`` (or None)."""
     if context is None:
         return None
     if not isinstance(context, Mapping):
@@ -363,18 +291,7 @@ def _project_context(context: Mapping[str, Any] | None, *, strict: bool) -> str 
 
 
 def _resolve_text_and_encoding(payload: Mapping[str, Any]) -> tuple[str, str, str]:
-    """
-    Resolve the final message text, encoding, and SHA-256 digest from a payload.
-    
-    Parameters:
-    	payload (Mapping[str, Any]): Payload containing the final message and optional encoding metadata.
-    
-    Returns:
-    	tuple[str, str, str]: The final message text, its encoding, and its SHA-256 digest.
-    
-    Raises:
-    	JudgeInputError: If the final message is missing or is neither text nor bytes.
-    """
+    """Resolve final-message text, encoding, and SHA-256 from accept payload."""
     raw = payload.get("final_message")
     if raw is None:
         raw = payload.get("final_message_text")
@@ -400,37 +317,14 @@ def _resolve_text_and_encoding(payload: Mapping[str, Any]) -> tuple[str, str, st
 
 
 def _validate_encoding(encoding: str) -> str:
-    """Validate and return a supported message encoding.
-    
-    Parameters:
-    	encoding (str): The encoding identifier to validate.
-    
-    Returns:
-    	str: The validated encoding identifier.
-    
-    Raises:
-    	JudgeInputError: If the encoding is not ``utf-8`` or ``utf-8-replace``.
-    """
+    """Accept only ``utf-8`` / ``utf-8-replace``; else ``JudgeInputError``."""
     if encoding not in {"utf-8", "utf-8-replace"}:
         raise JudgeInputError("encoding must be utf-8 or utf-8-replace")
     return encoding
 
 
 def _validate_hash(provided: Any, computed_from_text: str, *, encoding: str) -> str:
-    """
-    Validate and return a supplied SHA-256 digest for the projected final message.
-    
-    Parameters:
-        provided (Any): The supplied SHA-256 digest.
-        computed_from_text (str): The digest computed from the projected text.
-        encoding (str): The message encoding used for validation.
-    
-    Returns:
-        str: The validated SHA-256 digest.
-    
-    Raises:
-        JudgeInputError: If the digest is invalid or does not match the projected UTF-8 text.
-    """
+    """Validate supplied SHA-256 against projected text (fail closed on mismatch)."""
     if not isinstance(provided, str) or not _SHA256_RE.fullmatch(provided):
         raise JudgeInputError("final_accept linkage requires final_message_sha256 over original bytes")
     if encoding == "utf-8" and provided != computed_from_text:
@@ -439,17 +333,7 @@ def _validate_hash(provided: Any, computed_from_text: str, *, encoding: str) -> 
 
 
 def _validate_artifact_class(artifact_class: Any, *, bound: bool | None, lab_override: bool) -> str:
-    """
-    Validate and return the artifact class permitted for judge input.
-    
-    Parameters:
-    	artifact_class (Any): Artifact class to validate.
-    	bound (bool | None): Whether the evidence is linked to a bound final acceptance.
-    	lab_override (bool): Whether lab artifact classes are explicitly permitted.
-    
-    Returns:
-    	str: The validated artifact class.
-    """
+    """Allowlisted artifact class; lab classes require explicit lab_override."""
     if not isinstance(artifact_class, str) or not artifact_class:
         raise JudgeInputError("final_accept linkage requires artifact_class")
     if artifact_class == ArtifactClass.FINAL_ACCEPT.value:
@@ -478,20 +362,17 @@ def project_judge_input(
 ) -> JudgeInput:
     """Project gold-blind, final-accept-linked judge input (C-INPUT / C-DIFF).
 
-    Args:
-        evidence: S3 ``BindResult`` or its bundle mapping. Ordinary path rejects
-            free ``message=`` and unbound / non-``final_accept`` artifacts.
-        context: optional allowlisted projection inputs (``diff_summary`` only).
-        lab_override: when True, permit explicit lab artifact classes
-            (``fixture`` / ``live_regen`` / ``Opik-unbound``). Still gold-blind
-            and still requires hash/text/encoding linkage.
-        strict: reject (True) or strip (False) forbidden keys. Strip never
-            returns expected/gold/assert/gate carriers.
-        max_input_chars: host size guard (default 32000). Empty/oversize raise
-            with taxonomy codes; they do not score.
+    Ordinary path consumes S3 ``BindResult`` / final-accept evidence only —
+    free ``message=`` and unbound / non-``final_accept`` artifacts fail closed.
+    Optional ``context`` may carry allowlisted ``diff_summary`` (path-scrubbed).
 
-    Raises:
-        JudgeInputError: isolation leak, missing linkage, or host-guard trip.
+    ``lab_override`` permits explicit lab artifact classes (``fixture`` /
+    ``live_regen`` / ``Opik-unbound``) but stays gold-blind and still requires
+    hash/text/encoding linkage. ``strict=True`` rejects forbidden keys;
+    ``strict=False`` strips them and never returns expected/gold/assert/gate
+    carriers. Empty/oversize inputs raise host-guard taxonomy codes (no score).
+
+    Raises ``JudgeInputError`` on isolation leak, missing linkage, or host guard.
     """
     targets = _isolation_targets(evidence, context)
     _enforce_isolation(targets, strict=strict)

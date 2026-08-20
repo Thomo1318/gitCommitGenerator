@@ -55,22 +55,21 @@ def score_family_h(
     lane_c_run_evidence: Mapping[str, Any] | None = None,
     lane_c_rows: list[ScoreResultV1] | None = None,
 ) -> list[ScoreResultV1]:
-    """
-    Emit Family H metrics for pin integrity, offline execution, score validity, input health, and trajectory completeness.
-    
-    Lane C′ honesty metrics are included when Lane C evidence or score rows are supplied. Missing Lane C execution is reported as an explicit failed result.
-    
-    Parameters:
-        pre (PreconditionResult): Preconditions describing evaluation input availability and size.
-        family_scores (list[ScoreResultV1]): Scores from previously evaluated families.
-        suite_snapshot_pin (str | None): Pin identifying the suite snapshot used for evaluation.
-        evaluator_errors (list[str] | None): Evaluator errors to reflect in the resulting metrics.
-        require_trajectory (bool): Whether missing or incomplete trajectory evidence should fail evaluation.
-        lane_c_run_evidence (Mapping[str, Any] | None): Evidence describing the Lane C execution.
-        lane_c_rows (list[ScoreResultV1] | None): Lane C scores used to assess C′ honesty.
-    
-    Returns:
-        list[ScoreResultV1]: Family H metric results.
+    """Emit Family H pin/offline/envelope/anti-fan-out + trajectory metrics.
+
+    Runs after A/B/D so ``h.score_envelope_valid`` can validate prior rows.
+    Live S0 pin identity + suite snapshot pin are fail-closed.
+
+    S3 (R7/N19.6): trajectory evidence is read from ``ctx.meta["trajectory"]``
+    (inline at ``bundle.meta.trajectory``). Missing/incomplete trajectory is an
+    eval-class fail only when ``require_trajectory`` is set (suite policy);
+    otherwise it is advisory. Family H never treats trajectory as topology —
+    that plane stays with Family I.
+
+    S5 / D39: optional ``lane_c_run_evidence`` / ``lane_c_rows`` drive the four
+    C' honesty metrics. When Lane C did not run, those metrics fail closed with
+    an honest not-run reason — never green-by-absence.
+
     """
     errors = list(evaluator_errors or [])
     scores: list[ScoreResultV1] = []
@@ -299,15 +298,14 @@ def score_family_h(
 
 
 def _score_trajectory(ctx: ScoreContext, *, require_trajectory: bool) -> list[ScoreResultV1]:
-    """
-    Assess whether declared and observed trajectory stages are present and complete.
-    
-    Parameters:
-        ctx (ScoreContext): Scoring context containing trajectory evidence.
-        require_trajectory (bool): Whether missing or incomplete trajectory evidence should fail the metrics.
-    
-    Returns:
-        list[ScoreResultV1]: Scores for declared-stage presence and observed-stage completeness.
+    """Emit the two S3 trajectory metrics (existing catalog ids only).
+
+    ``h.trajectory_stages_declared`` — declared stage list is present and
+    non-empty. ``h.trajectory_stages_observed`` — observed stages are present
+    and behaviourally complete (``meta.complete``). Both are eval-class signals:
+    they fail only when ``require_trajectory`` is set (suite policy) and the
+    evidence is missing/incomplete; otherwise they are advisory passes.
+
     """
     trajectory = (ctx.meta or {}).get("trajectory")
     declared: list[Any] = []
@@ -373,16 +371,15 @@ def score_family_h_cprime(
     lane_c_run_evidence: Mapping[str, Any] | None = None,
     lane_c_rows: list[ScoreResultV1] | None = None,
 ) -> list[ScoreResultV1]:
-    """
-    Evaluate Lane C′ honesty metrics from run evidence and score rows.
-    
-    Parameters:
-    	suite_snapshot_pin (str | None): Suite snapshot pin used to assess prompt-pack freshness.
-    	lane_c_run_evidence (Mapping[str, Any] | None): Evidence describing whether Lane C ran and its results.
-    	lane_c_rows (list[ScoreResultV1] | None): Lane C′ metric results used as additional evidence.
-    
-    Returns:
-    	list[ScoreResultV1]: Four Lane C′ scores. When Lane C was not run, all scores fail with reason ``"lane_c_not_run"``.
+    """Emit the four S5 / D39 Lane C' honesty metrics.
+
+    Semantics (no false green-by-absence):
+
+    * Lane C not enabled / no evidence → each metric ``passed=False`` with
+      ``reason="lane_c_not_run"``.
+    * Lane C ran → evaluate isolation / pack pin / hash / suite freshness from
+      run evidence + C' rows. Failures are honest eval-class fails.
+
     """
     ev = dict(lane_c_run_evidence or {})
     rows = list(lane_c_rows or [])
@@ -402,15 +399,7 @@ def score_family_h_cprime(
 
 
 def _cprime_not_run_scores(*, reason: str) -> list[ScoreResultV1]:
-    """
-    Create failed scoring rows for each Lane C′ metric when Lane C did not run.
-    
-    Parameters:
-    	reason (str): Explanation for why Lane C did not run.
-    
-    Returns:
-    	list[ScoreResultV1]: Failed rows marked as honestly absent from the evaluation.
-    """
+    """Honest fail-closed rows when Lane C' did not run (D39 / F28)."""
     out: list[ScoreResultV1] = []
     for mid in FAMILY_H_CPRIME:
         out.append(
@@ -431,14 +420,7 @@ def _cprime_not_run_scores(*, reason: str) -> list[ScoreResultV1]:
 
 
 def _cprime_row_evidence(rows: list[ScoreResultV1]) -> list[dict[str, Any]]:
-    """Collect evidence payloads from Lane C′ metric rows, including metric IDs and pin references.
-    
-    Parameters:
-    	rows (list[ScoreResultV1]): Lane C′ score rows to inspect.
-    
-    Returns:
-    	list[dict[str, Any]]: Evidence payloads for rows whose metric IDs begin with `cprime.`.
-    """
+    """Collect evidence payloads from ``cprime.*`` rows (ids + pin_refs)."""
     collected: list[dict[str, Any]] = []
     for row in rows:
         if not str(row.metric_id).startswith("cprime."):
@@ -454,16 +436,7 @@ def _score_judge_input_isolated(
     ev: Mapping[str, Any],
     rows: list[ScoreResultV1],
 ) -> ScoreResultV1:
-    """
-    Determine whether Lane C judge input remained isolated from gold or reference data.
-    
-    Parameters:
-    	ev (Mapping[str, Any]): Run evidence containing judge-input isolation status and related errors.
-    	rows (list[ScoreResultV1]): Lane C′ score rows used to derive isolation status when run evidence is incomplete.
-    
-    Returns:
-    	ScoreResultV1: The judge-input isolation score.
-    """
+    """``h.judge_input_isolated`` — gold-blind projection held for the run."""
     row_ev = _cprime_row_evidence(rows)
     isolation_ok = ev.get("judge_input_isolated")
     isolation_error = ev.get("judge_input_error") or ev.get("input_error")
@@ -533,21 +506,13 @@ def _collect_pack_identities(
     ev: Mapping[str, Any],
     rows: list[ScoreResultV1],
 ) -> tuple[list[str], list[str], list[str]]:
-    """Collect prompt-pack identities, content hashes, and pin references from run evidence and Lane C′ rows.
-    
-    Parameters:
-    	ev (Mapping[str, Any]): Run evidence containing prompt-pack identities, hashes, and pin references.
-    	rows (list[ScoreResultV1]): Lane C′ score rows containing prompt-pack evidence.
-    
-    Returns:
-    	tuple[list[str], list[str], list[str]]: Deduplicated prompt-pack identities, content hashes, and pin references.
-    """
+    """Return (pack_identities, content_hashes, pin_refs) from run evidence + rows."""
     identities: list[str] = []
     hashes: list[str] = []
     pin_refs: list[str] = []
 
     def _add_identity(raw: Any) -> None:
-        """Add a valid prompt-pack identity and its 64-character digest to the collected values."""
+        """Record a ``prompt_pack_v1@<64-hex>`` identity and its digest when well-formed."""
         if isinstance(raw, str) and raw.startswith("prompt_pack_v1@") and raw not in identities:
             identities.append(raw)
             digest = raw.split("@", 1)[1]
@@ -595,16 +560,7 @@ def _score_prompt_pack_pinned(
     ev: Mapping[str, Any],
     rows: list[ScoreResultV1],
 ) -> ScoreResultV1:
-    """
-    Assess whether the Lane C prompt pack and any present universe fingerprint are pinned.
-    
-    Parameters:
-        ev (Mapping[str, Any]): Lane C run evidence containing prompt-pack and universe-fingerprint details.
-        rows (list[ScoreResultV1]): Lane C′ score rows that may provide prompt-pack identities or pin references.
-    
-    Returns:
-        ScoreResultV1: A passing result when a prompt-pack pin is present and any present universe fingerprint is pinned; otherwise, a failed result identifying the missing pin or unpinned fingerprint.
-    """
+    """``h.prompt_pack_pinned`` — pack pin present; universe fingerprint pinned."""
     identities, hashes, pin_refs = _collect_pack_identities(ev, rows)
     fp = ev.get("universe_fingerprint")
     fp_pinned = True
@@ -646,11 +602,7 @@ def _score_prompt_pack_hash_known(
     ev: Mapping[str, Any],
     rows: list[ScoreResultV1],
 ) -> ScoreResultV1:
-    """Determine whether the run has a known prompt-pack content hash.
-    
-    Returns:
-    	ScoreResultV1: The prompt-pack hash validation result, including collected identities, hashes, and pin references.
-    """
+    """``h.prompt_pack_hash_known`` — content hash recorded for the run."""
     identities, hashes, pin_refs = _collect_pack_identities(ev, rows)
     ok = bool(hashes) or any(
         isinstance(i, str) and i.startswith("prompt_pack_v1@") and len(i.split("@", 1)[1]) == 64 for i in identities
@@ -676,16 +628,12 @@ def _score_prompt_pack_suite_fresh(
     *,
     suite_snapshot_pin: str | None,
 ) -> ScoreResultV1:
-    """
-    Determines whether a known prompt pack has an associated suite snapshot pin.
-    
-    Parameters:
-    	suite_snapshot_pin (str | None): Suite snapshot pin used to establish local
-    		freshness.
-    
-    Returns:
-    	ScoreResultV1: Score indicating whether prompt-pack suite freshness is
-    		satisfied.
+    """``h.prompt_pack_suite_fresh`` — pack change has local suite pin (FIND-028).
+
+    Local law: a known prompt-pack pin plus a non-empty suite snapshot pin is
+    fresh enough for offline S5. Cloud prompt churn without a local suite pin
+    fails (doctor-red class). Severity remains catalog ``warn``.
+
     """
     identities, hashes, _pin_refs = _collect_pack_identities(ev, rows)
     pack_known = bool(identities) or bool(hashes)

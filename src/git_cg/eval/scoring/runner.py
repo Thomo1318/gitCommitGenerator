@@ -73,15 +73,12 @@ def resolve_require_trajectory(
     require_trajectory: bool | None,
     suite: Mapping[str, Any] | None,
 ) -> bool:
-    """
-    Resolve the trajectory requirement policy for a suite.
-    
-    Parameters:
-    	require_trajectory (bool | None): Explicit policy override.
-    	suite (Mapping[str, Any] | None): Suite metadata that may define the policy.
-    
-    Returns:
-    	bool: The explicit policy, the boolean ``suite.meta.require_trajectory`` value, or ``False`` when neither is provided.
+    """Resolve trajectory-require policy (R7/N19.6).
+
+    Order: explicit API argument → ``suite.meta.require_trajectory`` (bool only)
+    → ``False``. Never inferred from ``bound`` or from topology policy - Family
+    H owns trajectory; Family I owns topology. The two planes stay separate.
+
     """
     if require_trajectory is not None:
         return bool(require_trajectory)
@@ -253,16 +250,7 @@ class ScoreSuiteResult:
 
 
 def _rewrite_evaluator_error_free(scores: list[ScoreResultV1], errors: list[str]) -> list[ScoreResultV1]:
-    """
-    Ensure the evaluator-error status reflects recorded evaluator failures.
-    
-    Parameters:
-    	scores (list[ScoreResultV1]): Score results to update.
-    	errors (list[str]): Recorded evaluator error messages.
-    
-    Returns:
-    	list[ScoreResultV1]: The scores with `h.evaluator_error_free` set to failed when errors are present.
-    """
+    """Force h.evaluator_error_free false when evaluator_errors is non-empty."""
     if not errors:
         return scores
     rewritten: list[ScoreResultV1] = []
@@ -674,30 +662,15 @@ def score_suite(
     offline: bool = True,
     suite_path: str | Path | None = None,
 ) -> ScoreSuiteResult:
-    """
-    Score every case in a suite against its canonical content-addressed snapshot.
-    
-    The suite is encoded in full before scoring so session-thread context is shared
-    through a read-only index across all cases. An alternate suite document must
-    have the same case membership as the canonical suite.
-    
-    Parameters:
-        suite_id (str): Identifier of the suite to score.
-        fixture_root (str | Path | None): Root directory containing the fixtures.
-        require_block (tuple[str, ...] | None): Required metric identifiers.
-        require_topology (bool | None): Whether topology evidence is required.
-        gold_mode (str): Gold-evaluation mode.
-        gold_bridge (GoldBridge | None): Optional bridge used for gold evaluation.
-        offline (bool): Whether to restrict scoring to offline evaluation.
-        suite_path (str | Path | None): Optional path to an alternate suite document.
-    
-    Returns:
-        ScoreSuiteResult: The per-case scores, snapshot metadata, requirements, and
-        session-thread index.
-    
-    Raises:
-        ValueError: If an alternate suite document has different case membership
-        from the canonical suite.
+    """Score every case in a committed suite under the canonical S1 snapshot pin.
+
+    Always content-addresses the suite via ``build_snapshot(suite_id)``. When
+    ``suite_path`` loads an alternate document with the same ``suite_id``, case
+    membership must match the pinned suite or scoring fails closed.
+
+    Two-pass flow (N14): encode all cases, build a read-only session-thread
+    index, then score each case with that index.
+
     """
     root = Path(fixture_root) if fixture_root else default_fixture_root()
 

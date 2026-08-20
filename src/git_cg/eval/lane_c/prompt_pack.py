@@ -81,25 +81,19 @@ class PromptPackError(ValueError):
     """Prompt pack construction, decode, or resolution failure (fail closed)."""
 
     def __init__(self, message: str, *, code: str = EXEC_PACK_UNRESOLVABLE) -> None:
-        """Create a prompt pack error with an execution error code.
-        
-        Parameters:
-        	message (str): Description of the failure.
-        	code (str): Execution error code associated with the failure.
-        """
+        """Bind message + closed execution ``code`` (fail closed)."""
         super().__init__(message)
         self.code = code
 
 
 def prompt_pack_content_hash(files: Sequence[tuple[str, bytes]]) -> str:
-    """
-    Compute a deterministic SHA-256 digest for prompt file names and contents.
-    
-    Parameters:
-    	files (Sequence[tuple[str, bytes]]): Relative file names paired with their stored content bytes.
-    
-    Returns:
-    	str: The hexadecimal SHA-256 digest of the sorted file names and content bytes.
+    """Deterministic SHA-256 over canonical prompt file content.
+
+    ``files`` is a list of ``(relative_name, content_bytes)`` pairs. The hash
+    covers file names and **stored bytes** in sorted order, with NUL
+    separators, so any rename, reorder, or content change produces a
+    different digest. Hash set ≡ load set.
+
     """
     h = hashlib.sha256()
     nul = bytes([0])
@@ -120,16 +114,7 @@ def prompt_pack_pin(pack: Mapping[str, Any]) -> str:
 
 
 def _load_named_files(directory: Path, suffixes: set[str]) -> list[tuple[str, bytes]]:
-    """
-    Load eligible files from a directory in name order.
-    
-    Parameters:
-    	directory (Path): Directory containing the files to load.
-    	suffixes (set[str]): File suffixes to include.
-    
-    Returns:
-    	list[tuple[str, bytes]]: Sorted file names paired with their raw contents.
-    """
+    """Load matching files from ``directory`` sorted by name → ``(name, bytes)``."""
     files: list[tuple[str, bytes]] = []
     for path in sorted(directory.iterdir(), key=lambda p: p.name):
         if not path.is_file() or path.name.startswith("."):
@@ -141,17 +126,7 @@ def _load_named_files(directory: Path, suffixes: set[str]) -> list[tuple[str, by
 
 
 def _load_prompt_files(pack_dir: Path) -> list[tuple[str, bytes]]:
-    """Load supported prompt files from a pack directory.
-    
-    Parameters:
-    	pack_dir (Path): Directory containing the prompt files.
-    
-    Returns:
-    	list[tuple[str, bytes]]: Sorted relative filenames and their raw contents.
-    
-    Raises:
-    	PromptPackError: If the directory is missing or contains no supported prompt files.
-    """
+    """Load ``.md``/``.txt`` prompt files from pack dir (sorted, fail closed)."""
     if not pack_dir.is_dir():
         raise PromptPackError("missing prompt pack directory")
     files = _load_named_files(pack_dir, _PROMPT_SUFFIXES)
@@ -161,19 +136,7 @@ def _load_prompt_files(pack_dir: Path) -> list[tuple[str, bytes]]:
 
 
 def _decode_prompt_bytes(name: str, data: bytes) -> str:
-    """
-    Decode prompt file content as strict UTF-8.
-    
-    Parameters:
-    	name (str): Prompt file name used in decode error reporting.
-    	data (bytes): Raw prompt file content.
-    
-    Returns:
-    	str: The decoded prompt text.
-    
-    Raises:
-    	PromptPackError: If the content is not valid UTF-8.
-    """
+    """Strict UTF-8 decode of prompt bytes (D41 fail closed)."""
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -184,11 +147,12 @@ def _decode_prompt_bytes(name: str, data: bytes) -> str:
 
 
 def load_pack_prompt_text(pack_dir: Path) -> str:
-    """
-    Combine the prompt files in a pack directory into a single text value.
-    
-    Returns:
-    	str: The decoded prompt contents joined by blank lines.
+    """Return concatenated prompt text for a pack directory.
+
+    Reads the same sorted ``.md``/``.txt`` files that
+    :func:`prompt_pack_content_hash` hashes, joined with blank lines.
+    Runtime decode is **strict UTF-8 fail-closed** (D41).
+
     """
     files = _load_prompt_files(pack_dir)
     texts = [_decode_prompt_bytes(name, data) for name, data in files]
@@ -196,12 +160,7 @@ def load_pack_prompt_text(pack_dir: Path) -> str:
 
 
 def lint_prompt_pack_hygiene(text: str) -> None:
-    """
-    Validate prompt text for expected-answer leakage and forced perfect scores on empty inputs.
-    
-    Parameters:
-    	text (str): Prompt text to check.
-    """
+    """Reject gold/expected leakage and empty-input forced scores (F04/F25)."""
     if _LEAK_RE.search(text):
         raise PromptPackError("prompt pack hygiene violation: expected/gold/label leakage")
     if _EMPTY_SCORE_RE.search(text):
@@ -209,12 +168,7 @@ def lint_prompt_pack_hygiene(text: str) -> None:
 
 
 def _reject_floating_identity(identity: str) -> None:
-    """Reject empty, floating, or malformed prompt pack identities.
-    
-    Raises:
-        PromptPackError: If the identity is empty, contains a floating marker,
-            or does not contain a valid `prompt_pack_v1` digest.
-    """
+    """Reject empty / ``latest`` / malformed ``prompt_pack_v1@…`` identities."""
     ident = identity.strip()
     if not ident:
         raise PromptPackError("unknown prompt pack identity")
@@ -237,24 +191,7 @@ def build_prompt_pack(
     expected_identity: str | None = None,
     lane: str = _DEFAULT_LANE,
 ) -> dict[str, Any]:
-    """
-    Build and validate a Lane C prompt pack from repository-local prompt files.
-    
-    Parameters:
-    	pack_id (str): Identifier for the prompt pack.
-    	pack_dir (Path | None): Directory containing the prompt files. The default resolves the directory from the pack identifier.
-    	notes (str | None): Optional notes to include in the pack.
-    	meta (dict[str, Any] | None): Optional metadata overrides.
-    	cloud_mirror (Mapping[str, Any] | None): Optional cloud mirror metadata.
-    	expected_identity (str | None): Optional content pin that the built pack must match.
-    	lane (str): Lane name stored in the pack metadata.
-    
-    Returns:
-    	dict[str, Any]: A schema-valid ``prompt_pack_v1`` object.
-    
-    Raises:
-    	PromptPackError: If the pack identifier, prompt files, prompt content, identity, or resulting pack is invalid.
-    """
+    """Build a schema-valid ``prompt_pack_v1`` object from repo-local files."""
     if expected_identity is not None:
         _reject_floating_identity(expected_identity)
 
@@ -322,19 +259,11 @@ def resolve_judge_pack(
     expected_identity: str | None = None,
     cloud_mirror: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Resolve the prompt pack associated with a Lane C metric.
-    
-    Parameters:
-        metric_id (str): Metric identifier with the ``cprime.`` prefix.
-        prompt_root (Path | None): Root directory containing metric-specific prompt pack directories.
-        expected_identity (str | None): Expected content pin for the resolved pack.
-        cloud_mirror (Mapping[str, Any] | None): Optional cloud mirror metadata.
-    
-    Returns:
-        dict[str, Any]: The validated prompt pack.
-    
-    Raises:
-        PromptPackError: If the metric identifier is not a ``cprime.*`` identifier or the prompt pack cannot be built or validated.
+    """Resolve the pinned prompt pack for a ``cprime.*`` metric.
+
+    ``cprime.geval_craft`` → ``<prompt_root>/geval_craft/`` /
+    ``prompts/eval/lane_c/geval_craft/``.
+
     """
     if not isinstance(metric_id, str) or not metric_id.startswith("cprime."):
         raise PromptPackError(f"resolve_judge_pack requires a cprime.* metric id, got: {metric_id!r}")
@@ -368,11 +297,7 @@ class UniverseFingerprint:
     content_sha256: str
 
     def as_dict(self) -> dict[str, Any]:
-        """Serialise the universe fingerprint as a dictionary.
-        
-        Returns:
-        	dict[str, Any]: A dictionary containing the fingerprint state and content hash.
-        """
+        """JSON-safe fingerprint snapshot (state + content hash)."""
         return {
             "root_present": self.root_present,
             "universes": list(self.universes),
@@ -384,11 +309,7 @@ class UniverseFingerprint:
         }
 
     def assert_pinned(self) -> None:
-        """Ensure the universe fingerprint represents a pinned prompt universe.
-        
-        Raises:
-        	PromptPackError: If the fingerprint contains a floating identity or is otherwise not pinned.
-        """
+        """Fail closed when fingerprint is floating / unpinned (S5-D12)."""
         if self.pinned:
             return
         if self.latest_found:
@@ -400,15 +321,7 @@ class UniverseFingerprint:
 
 
 def _unique(items: Iterable[str]) -> tuple[str, ...]:
-    """
-    Return the items in their first-occurrence order with duplicates removed.
-    
-    Parameters:
-    	items (Iterable[str]): The values to deduplicate.
-    
-    Returns:
-    	tuple[str, ...]: The unique values in first-occurrence order.
-    """
+    """Stable unique tuple preserving first-seen order."""
     seen: list[str] = []
     for item in items:
         if item not in seen:
@@ -417,11 +330,7 @@ def _unique(items: Iterable[str]) -> tuple[str, ...]:
 
 
 def _body_has_floating_latest(text: str) -> bool:
-    """Detect whether prompt text contains a floating `latest` identity marker.
-    
-    Returns:
-    	bool: `True` if the text contains a pin-shaped `latest` marker, `False` otherwise.
-    """
+    """True when prompt body carries a pin-shaped floating latest identity."""
     if _IDENTITY_LATEST_LINE_RE.search(text):
         return True
     # Pin-shaped tokens anywhere (not ordinary prose).
@@ -435,18 +344,7 @@ _re_version_latest = re.compile(r"(?i)\bversion\s*[:=]\s*latest\b")
 
 
 def record_universe_fingerprint(root: Path | None = None) -> UniverseFingerprint:
-    """
-    Record a content fingerprint for the prompt universes under the configured root.
-    
-    Parameters:
-    	root (Path | None): Directory containing universe family subdirectories. When
-    		omitted, uses the repository's default Promptfoo universe directory.
-    
-    Returns:
-    	UniverseFingerprint: Snapshot containing discovered universes, pinning status,
-    		floating identities, unpinnable families, and the content SHA-256 digest.
-    		An absent root is recorded with ``status="absent"``.
-    """
+    """Record active universes under ``config/promptfoo/prompts`` (or *root*)."""
     if root is None:
         from git_cg.eval.paths import REPO_ROOT
 

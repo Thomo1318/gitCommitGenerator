@@ -41,12 +41,7 @@ _WS_RE = re.compile(r" {2,}")
 
 
 def scrub_rationale(text: str | None) -> str | None:
-    """
-    Sanitise rationale text for storage.
-    
-    Returns:
-    	str | None: The cleaned rationale, capped at the maximum length, or `None` when the text is empty.
-    """
+    """Return a control-stripped, length-capped rationale, or ``None`` if empty."""
     if text is None:
         return None
     cleaned = _CONTROL_RE.sub(" ", str(text))
@@ -59,17 +54,7 @@ def scrub_rationale(text: str | None) -> str | None:
 
 
 def _catalog_row(metric_id: str) -> dict[str, Any]:
-    """Retrieve a metric catalog entry by identifier.
-    
-    Parameters:
-    	metric_id (str): Identifier of the metric to retrieve.
-    
-    Returns:
-    	dict[str, Any]: The matching metric catalog entry.
-    
-    Raises:
-    	KeyError: If the metric identifier is not present in the catalog.
-    """
+    """Return the metric-catalog row for ``metric_id`` (KeyError if unknown)."""
     row = metric_row(metric_id)
     if row is None:
         raise KeyError(f"unknown metric_id not in catalog: {metric_id}")
@@ -88,23 +73,7 @@ def _build_row(
     product_authority: str | None,
     name: str | None,
 ) -> ScoreResultV1:
-    """
-    Construct a catalog-aligned score result with the supplied value, execution metadata, evidence, and references.
-    
-    Parameters:
-        metric_id (str): Identifier of the metric in the catalogue.
-        value (int | float): Score value to include in the result.
-        reason (str): Execution reason associated with the result.
-        evidence (dict[str, Any]): Evidence associated with the score.
-        failure_ids (list[str] | None): Failure identifiers associated with the result.
-        pin_refs (list[str] | None): Pin references to attach to the result.
-        duration_ms (int | float | None): Execution duration in milliseconds.
-        product_authority (str | None): Product authority associated with the result.
-        name (str | None): Optional display name overriding the catalogue name.
-    
-    Returns:
-        ScoreResultV1: A score result populated with catalogue metadata and nullable pass status.
-    """
+    """Build one catalog-aligned ``ScoreResultV1`` with closed ``reason`` + evidence."""
     row = _catalog_row(metric_id)
     polarity = Polarity(row["polarity"])
     authority = Authority(row["authority"])
@@ -133,18 +102,7 @@ def _build_row(
 
 
 def _coerce_geval_value(value: object) -> int | float:
-    """
-    Validate and normalise a GEval score within the range 1 to 5.
-    
-    Parameters:
-    	value (object): The score to validate.
-    
-    Returns:
-    	int | float: The score, with whole-number values represented as integers.
-    
-    Raises:
-    	ValueError: If the value is boolean, not numeric, or outside the range 1 to 5.
-    """
+    """Coerce a GEval value to 1-5 (int when whole); reject bool/non-numeric/OOR."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"GEval score must be a number in 1..5, got {type(value).__name__}")
     numeric = float(value)
@@ -168,21 +126,11 @@ def make_advisory_score(
     product_authority: str | None = None,
     name: str | None = None,
 ) -> ScoreResultV1:
-    """
-    Create a catalog-aligned advisory GEval score row.
-    
-    Parameters:
-        metric_id (str): Catalog identifier for the metric.
-        value (int | float): GEval score from 1 to 5.
-        reason (str): Execution code, which must be ``scored``.
-        rationale (str | None): Optional rationale stored in sanitised evidence.
-    
-    Returns:
-        ScoreResultV1: Advisory score row with ``passed`` set to ``None``.
-    
-    Raises:
-        ValueError: If the execution code or score is invalid.
-        KeyError: If ``metric_id`` is not in the metric catalogue.
+    """Emit a catalog-aligned C' GEval row with ``passed is None``.
+
+    ``reason`` stays a closed execution code (default ``scored``). Optional
+    rationale is scrubbed into ``evidence["rationale"]`` only - never ``reason``.
+
     """
     code = validate_closed_reason(reason, allow_scored=True)
     if code != EXEC_SCORED:
@@ -227,24 +175,11 @@ def make_advisory_skip(
     product_authority: str | None = None,
     name: str | None = None,
 ) -> ScoreResultV1:
-    """
-    Emit a skipped advisory score without a fabricated quality score.
-    
-    Parameters:
-    	metric_id (str): Identifier of the catalog metric.
-    	reason (str): Closed execution code describing why scoring was skipped.
-    	evidence (Mapping[str, Any] | None): Additional evidence to include.
-    	failure_ids (list[str] | None): Failure identifiers associated with the skip.
-    	pin_refs (list[str] | None): Pin references associated with the result.
-    	duration_ms (int | float | None): Execution duration in milliseconds.
-    	product_authority (str | None): Product authority metadata.
-    	name (str | None): Optional display name for the metric.
-    
-    Returns:
-    	ScoreResultV1: A skipped result with value 0.0 and nullable `passed`.
-    
-    Raises:
-    	ValueError: If `reason` is `scored`.
+    """Emit a C' skip row with nullable ``passed`` and no fabricated quality score.
+
+    Value is the neutral ``0.0`` (not a 1-5 GEval quality mark). ``reason`` must
+    be a closed execution code other than ``scored``.
+
     """
     code = assert_execution_code(reason)
     if code == EXEC_SCORED:

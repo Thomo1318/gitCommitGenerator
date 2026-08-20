@@ -52,14 +52,7 @@ PIN_ENV_WITH_KEY = {
 
 
 def _write_rubric(directory: Path, text: str, name: str = "rubric.md") -> Path:
-    """
-    Write rubric text to a UTF-8 encoded file and return its path.
-    
-    Parameters:
-    	directory (Path): Directory in which to create the rubric file.
-    	text (str): Content to write to the file.
-    	name (str): File name for the rubric.
-    """
+    """Write UTF-8 rubric text under ``directory`` and return its path."""
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / name
     path.write_text(text, encoding="utf-8")

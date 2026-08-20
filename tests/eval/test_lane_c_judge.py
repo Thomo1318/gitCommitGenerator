@@ -35,7 +35,7 @@ FINAL_TEXT = (
 
 
 def _judge_input(**overrides: Any) -> JudgeInput:
-    """Build a validated judge input bundle for tests, applying any supplied field overrides."""
+    """Build a validated ``JudgeInput`` for tests (optional field overrides)."""
     bundle = {
         "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
         "bound": True,
@@ -157,9 +157,7 @@ class TestRunPinnedJudge:
 
     def test_outcome_evidence_has_no_secrets(self) -> None:
         def ok(*_a: Any, **_k: Any) -> JudgeTransportResult:
-            """
-            Return a successful judge transport result with a score of 3 and sample usage metadata.
-            """
+            """Transport stub: score=3 success payload without credential material."""
             return JudgeTransportResult(
                 text='{"score": 3}',
                 usage={"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
