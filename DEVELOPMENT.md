@@ -443,7 +443,7 @@ telemetry field (no separate payload key).
 
 Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), offline Plane A score runner (S2a/S2b/S2c), and accept-path final-bytes binding + trajectory evidence (S3) live under:
 
-* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S4 boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), S3 capture defaults / `.eval` paths, S4 non-blocking Opik mirror modes/queue/R14/Q18 train lake, and remaining S5+
+* **`docs/eval/README.md`** — dual-axis pins, hash recipe (`just eval-schema-hash`), S0–S4 boundaries, encoder/snapshot flow, FIND-026/027 law, require_block gates, Family I topology (`require_topology` / `S2C_TOPOLOGY_BLOCK`), S3 capture defaults / `.eval` paths, S4 non-blocking Opik mirror modes/queue/R14/Q18 train lake, S5 Lane C′ boundary, and remaining S6+
 * Package: `src/git_cg/eval/` · corpus: `src/git_cg/eval/corpus/` · scoring: `src/git_cg/eval/scoring/` · binding: `src/git_cg/eval/binding/` · schemas: `schemas/eval/`
 * Fixtures (Lane A SoT): `tests/fixtures/eval/` · recipes: `just eval-schema-hash`, `just eval-materialize`, `just eval-fixture-index`
 
@@ -461,7 +461,7 @@ print("snapshot", res.suite_snapshot_pin)
 PY
 ```
 
-S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding emitters (binder, trajectory, session twin, message_versions) live under `src/git_cg/eval/binding/`; the thin `git-cg eval` corpus CLI is `src/git_cg/eval/cli.py` under `src/git_cg/eval/`. Capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. S4 non-blocking Opik mirror + owner corpus lake lives under `src/git_cg/eval/mirror/**` (modes `off|local_only|mirror|strict_mirror`, R14 ladder, durable export queue, lazy transport, pinned experiments, Q18 single-dataset train labels); see `docs/eval/README.md` §S4 and the E13/P2-8 claim-evidence matrix in `docs/eval/s4-claim-evidence.md`. Lane C′/GEval (S5), operator UX expansion (S6), and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225.
+S2a/S2b/S2c offline Plane A (Families A–I + gates) is implemented. S3 accept-path binding emitters (binder, trajectory, session twin, message_versions) live under `src/git_cg/eval/binding/`; the thin `git-cg eval` corpus CLI is `src/git_cg/eval/cli.py` under `src/git_cg/eval/`. Capture is **off by default** (`GIT_CG_EVAL_CAPTURE`); see `docs/eval/README.md` §S3. S4 non-blocking Opik mirror + owner corpus lake lives under `src/git_cg/eval/mirror/**` (modes `off|local_only|mirror|strict_mirror`, R14 ladder, durable export queue, lazy transport, pinned experiments, Q18 single-dataset train labels); see `docs/eval/README.md` §S4 and the E13/P2-8 claim-evidence matrix in `docs/eval/s4-claim-evidence.md`. Lane C′/GEval (S5) is implemented on #233 / PR #238 (`src/git_cg/eval/lane_c/**`, advisory/opt-in only; never first CI gate). Operator UX expansion (S6) and ADR rewrite (S7) remain deferred on #217. Track residual S2 polish / typecheck debt on #225; unallocated NTH DX polish on #235 / S8.
 
 ## Promptfoo evaluation (offline)
 

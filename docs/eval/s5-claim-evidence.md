@@ -182,7 +182,7 @@ uv run pytest tests/eval/test_lane_c*.py \
   --cov-report=term-missing \
   --cov-fail-under=80
 
-RESULT: 171 passed · Required 80% reached · Total coverage: 86.06%
+RESULT: 283 passed · Required 80% reached · Total coverage: 91.31%
 
 Name                                     Stmts   Miss Branch BrPart  Cover
 src/git_cg/eval/lane_c/advisory.py          86      2     30      2    97%
