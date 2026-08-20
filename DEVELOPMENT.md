@@ -114,6 +114,8 @@ CI uploads a verbose report artifact (`interrogate-docstring-report`) with:
 - **patch report** — docstring coverage for **changed `src/git_cg` files only** (this is the fail gate at 80%)
 - **full-package report + badge SVG** — whole `src/git_cg` health for the README badge (informational; does not fail CI)
 
+**Sticky PR comment (trust-split):** on `pull_request` events the unprivileged `docstring-coverage` job also stages a bounded `interrogate-pr-comment` artifact (`interrogate-comment.md` + `pr-number.txt`). A separate privileged workflow (`.github/workflows/pr-docstring-comment.yml`) runs from the default branch via `workflow_run`, validates every artifact byte as untrusted input, and upserts a sticky PR comment marked `<!-- interrogate-docstring-report -->`. Comments post on CI **success or failure** so a failed patch gate still surfaces the report; cancelled / non-PR runs are skipped. This mirrors the code-review-graph report poster pattern.
+
 The committed flat shields.io badge lives at `docs/assets/badges/interrogate_badge.svg` (README slot between Codecov and GitMCP). Refresh the committed badge locally with `just docstrings` when you want main’s badge SVG updated in-tree.
 
 

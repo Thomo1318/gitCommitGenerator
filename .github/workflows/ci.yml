@@ -308,6 +308,244 @@ jobs:
             docs/assets/badges/interrogate_badge.svg
           if-no-files-found: warn
 
+      # Unprivileged PR-only staging. The privileged poster lives in
+      # pr-docstring-comment.yml and treats every artifact byte as untrusted.
+      - name: Stage sticky PR docstring comment artifact
+        if: always() && github.event_name == 'pull_request'
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/interrogate-pr-comment
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SKIP_PATCH: ${{ steps.changed.outputs.skip }}
+          PATCH_COUNT: ${{ steps.changed.outputs.count }}
+          PATCH_RANGE: ${{ steps.changed.outputs.range }}
+        run: |
+          set -euo pipefail
+          rm -rf -- "${ARTIFACT_DIR}"
+          mkdir -p -- "${ARTIFACT_DIR}"
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          import os
+          import re
+          from pathlib import Path
+
+          RESULT_RE = re.compile(
+              r"RESULT:\s*(PASSED|FAILED)\s*\(minimum:\s*([0-9.]+)%,\s*actual:\s*([0-9.]+)%\)",
+              re.IGNORECASE,
+          )
+          SUMMARY_ROW_RE = re.compile(
+              r"^\|\s*([^|]+?)\s*\|\s*([0-9]+)\s*\|\s*([0-9]+)\s*\|\s*([0-9]+)\s*\|\s*([0-9.]+)%\s*\|$"
+          )
+          MAX_FILES = 40
+          MAX_SUMMARY_ROWS = 12
+          MAX_COMMENT_BYTES = 55_000
+
+
+          def scrub(text: str) -> str:
+              text = text.replace("\r\n", "\n").replace("\r", "\n")
+              text = "".join(
+                  ch for ch in text if (ord(ch) >= 32 or ch in "\n\t") and ch != "\x7f"
+              )
+              # Neutralize mentions and accidental HTML comment breakouts.
+              return text.replace("@", "&#64;").replace("<!--", "&lt;!--").replace("-->", "--&gt;")
+
+
+          def parse_result(report: str) -> tuple[str, str, str] | None:
+              matches = list(RESULT_RE.finditer(report))
+              if not matches:
+                  return None
+              m = matches[-1]
+              return m.group(1).upper(), m.group(2), m.group(3)
+
+
+          def parse_summary_rows(report: str) -> list[tuple[str, str, str, str, str]]:
+              rows: list[tuple[str, str, str, str, str]] = []
+              for line in report.splitlines():
+                  m = SUMMARY_ROW_RE.match(line.strip())
+                  if not m:
+                      continue
+                  name = m.group(1).strip()
+                  if name.lower() in {"name", "-----"}:
+                      continue
+                  rows.append(
+                      (
+                          scrub(name),
+                          m.group(2),
+                          m.group(3),
+                          m.group(4),
+                          m.group(5),
+                      )
+                  )
+              # Keep TOTAL last if present; otherwise keep first N.
+              total = [r for r in rows if r[0].upper() == "TOTAL"]
+              body = [r for r in rows if r[0].upper() != "TOTAL"]
+              body = body[:MAX_SUMMARY_ROWS]
+              return body + total[-1:]
+
+
+          def status_emoji(status: str | None, *, skipped: bool = False) -> str:
+              if skipped:
+                  return "⏭️"
+              if status == "PASSED":
+                  return "✅"
+              if status == "FAILED":
+                  return "❌"
+              return "⚠️"
+
+
+          def md_table(rows: list[tuple[str, str, str, str, str]]) -> str:
+              if not rows:
+                  return "_No summary rows parsed._"
+              lines = [
+                  "| Name | Total | Miss | Cover | Cover% |",
+                  "| --- | ---: | ---: | ---: | ---: |",
+              ]
+              for name, total, miss, cover, pct in rows:
+                  lines.append(f"| `{name}` | {total} | {miss} | {cover} | {pct}% |")
+              return "\n".join(lines)
+
+
+          out_dir = Path("outputs/interrogate")
+          patch_report_path = out_dir / "patch-report.txt"
+          full_report_path = out_dir / "full-report.txt"
+          changed_path = out_dir / "changed-files.txt"
+
+          skip_patch = os.environ.get("SKIP_PATCH", "false").lower() == "true"
+          patch_count = os.environ.get("PATCH_COUNT", "0")
+          patch_range = scrub(os.environ.get("PATCH_RANGE", "unknown"))
+          head_sha = scrub(os.environ.get("HEAD_SHA", ""))
+          run_url = scrub(os.environ.get("RUN_URL", ""))
+          pr_number = os.environ["PR_NUMBER"]
+
+          patch_report = (
+              patch_report_path.read_text(encoding="utf-8", errors="replace")
+              if patch_report_path.is_file()
+              else ""
+          )
+          full_report = (
+              full_report_path.read_text(encoding="utf-8", errors="replace")
+              if full_report_path.is_file()
+              else ""
+          )
+          changed_files = []
+          if changed_path.is_file():
+              changed_files = [
+                  scrub(line.strip())
+                  for line in changed_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                  if line.strip()
+              ]
+
+          patch_parsed = None if skip_patch else parse_result(patch_report)
+          full_parsed = parse_result(full_report)
+          patch_rows = [] if skip_patch else parse_summary_rows(patch_report)
+          full_rows = parse_summary_rows(full_report)
+
+          if skip_patch:
+              patch_line = f"{status_emoji(None, skipped=True)} **Patch gate:** skipped (no changed `src/git_cg` Python files)"
+          elif patch_parsed:
+              st, minimum, actual = patch_parsed
+              patch_line = (
+                  f"{status_emoji(st)} **Patch gate:** `{st}` "
+                  f"(minimum: {minimum}%, actual: **{actual}%**, files: {patch_count})"
+              )
+          else:
+              patch_line = f"{status_emoji(None)} **Patch gate:** report unavailable (files: {patch_count})"
+
+          if full_parsed:
+              st, minimum, actual = full_parsed
+              full_line = (
+                  f"{status_emoji(st)} **Full package:** `{st}` "
+                  f"(informational minimum: {minimum}%, actual: **{actual}%**)"
+              )
+          else:
+              full_line = f"{status_emoji(None)} **Full package:** report unavailable"
+
+          files_block: list[str]
+          if not changed_files:
+              files_block = ["_None_"]
+          else:
+              shown = changed_files[:MAX_FILES]
+              files_block = [f"- `{path}`" for path in shown]
+              remaining = len(changed_files) - len(shown)
+              if remaining > 0:
+                  files_block.append(f"- _…and {remaining} more_")
+
+          short_sha = head_sha[:12] if head_sha else "unknown"
+          lines = [
+              "## interrogate docstring coverage",
+              "",
+              patch_line,
+              full_line,
+              "",
+              f"- **Diff range:** `{patch_range}`",
+              f"- **Analyzed SHA:** `{short_sha}`",
+              f"- **CI run:** [workflow run]({run_url})" if run_url else "- **CI run:** unavailable",
+              "",
+              "### Changed files (patch gate)",
+              "",
+              *files_block,
+              "",
+              "### Patch summary",
+              "",
+              md_table(patch_rows) if not skip_patch else "_Patch gate skipped._",
+              "",
+              "### Full-package summary",
+              "",
+              md_table(full_rows),
+              "",
+              "---",
+              "",
+              "*Docstring coverage via [interrogate](https://github.com/econchick/interrogate). "
+              "Patch gate fails under 80% on changed `src/git_cg` files; full-package scan is informational.*",
+              "",
+          ]
+          body = "\n".join(lines)
+          body = scrub(body)
+          # Ensure required heading survives scrub.
+          if not body.startswith("## interrogate docstring coverage\n"):
+              raise SystemExit("generated comment missing required heading")
+          if "*Docstring coverage via [interrogate]" not in body:
+              raise SystemExit("generated comment missing required footer")
+
+          data = body.encode("utf-8")
+          if len(data) > MAX_COMMENT_BYTES:
+              # Last-resort truncation while preserving heading + footer.
+              footer = (
+                  "\n\n---\n\n*Docstring coverage via [interrogate]"
+                  "(https://github.com/econchick/interrogate). "
+                  "Patch gate fails under 80% on changed `src/git_cg` files; "
+                  "full-package scan is informational.*\n"
+              )
+              keep = MAX_COMMENT_BYTES - len(footer.encode("utf-8")) - 80
+              truncated = data[:keep].decode("utf-8", errors="ignore").rstrip()
+              body = (
+                  truncated
+                  + "\n\n_…report truncated for comment size limits._"
+                  + footer
+              )
+              if not body.startswith("## interrogate docstring coverage\n"):
+                  raise SystemExit("truncated comment lost required heading")
+              data = body.encode("utf-8")
+
+          artifact = Path(os.environ["ARTIFACT_DIR"])
+          (artifact / "interrogate-comment.md").write_bytes(data)
+          (artifact / "pr-number.txt").write_text(f"{int(pr_number)}\n", encoding="ascii")
+          print(f"staged sticky interrogate comment ({len(data)} bytes) for PR #{int(pr_number)}")
+          PY
+
+      - name: Upload sticky PR docstring comment artifact
+        if: always() && github.event_name == 'pull_request'
+        # actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: interrogate-pr-comment
+          path: ${{ runner.temp }}/interrogate-pr-comment/
+          if-no-files-found: warn
+          retention-days: 1
+
 
   upload-coverage:
     name: Upload Coverage to Codecov
