@@ -52,7 +52,7 @@ def score_family_h(
     offline: bool = True,
     evaluator_errors: list[str] | None = None,
     require_trajectory: bool = False,
-    lane_c_run_evidence: dict[str, Any] | Mapping[str, Any] | None = None,
+    lane_c_run_evidence: Mapping[str, Any] | None = None,
     lane_c_rows: list[ScoreResultV1] | None = None,
 ) -> list[ScoreResultV1]:
     """Emit Family H pin/offline/envelope/anti-fan-out + trajectory metrics.
@@ -428,13 +428,6 @@ def _cprime_row_evidence(rows: list[ScoreResultV1]) -> list[dict[str, Any]]:
     return collected
 
 
-def _first_present(mapping: Mapping[str, Any], *keys: str) -> Any:
-    for key in keys:
-        if key in mapping and mapping[key] is not None:
-            return mapping[key]
-    return None
-
-
 def _score_judge_input_isolated(
     ev: Mapping[str, Any],
     rows: list[ScoreResultV1],
@@ -446,18 +439,25 @@ def _score_judge_input_isolated(
     projected = ev.get("judge_input_projected")
     skip_code = ev.get("judge_input_skip_code") or ev.get("input_skip_code")
 
-    # Derive from rows when top-level evidence is sparse.
+    # Derive from rows when top-level evidence is sparse (fail-closed over ALL rows).
     if isolation_ok is None:
+        saw_verdict = False
+        aggregate_ok = True
         for payload in row_ev:
             if "judge_input_isolated" in payload:
-                isolation_ok = payload.get("judge_input_isolated")
-                isolation_error = isolation_error or payload.get("judge_input_error") or payload.get("input_error")
-                break
+                saw_verdict = True
+                if payload.get("judge_input_isolated") is False:
+                    aggregate_ok = False
+                    isolation_error = isolation_error or payload.get("judge_input_error") or payload.get("input_error")
             # Isolation/linkage contract failures surface as parse_error skips.
-            if payload.get("execution_code") == "parse_error" and payload.get("input_error"):
-                isolation_ok = False
+            if (payload.get("execution_code") == "parse_error" and payload.get("input_error")) or (
+                payload.get("input_error") and payload.get("judge_input_isolated") is False
+            ):
+                saw_verdict = True
+                aggregate_ok = False
                 isolation_error = isolation_error or payload.get("input_error")
-                break
+        if saw_verdict:
+            isolation_ok = aggregate_ok
 
     # If a projection was attempted and no isolation error was recorded, pass.
     if isolation_ok is None:
@@ -511,7 +511,8 @@ def _collect_pack_identities(
         if isinstance(raw, str) and raw.startswith("prompt_pack_v1@") and raw not in identities:
             identities.append(raw)
             digest = raw.split("@", 1)[1]
-            if digest and digest not in hashes:
+            # Same 64-hex honesty gate as content_sha256 (fail closed on short digests).
+            if isinstance(digest, str) and len(digest) == 64 and digest not in hashes:
                 hashes.append(digest)
 
     def _add_hash(raw: Any) -> None:

@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from git_cg.eval.corpus.encoder import encode_fixture
 from git_cg.eval.corpus.fixtures import default_fixture_root, load_suite_fixtures
@@ -42,6 +42,11 @@ __all__ = [
     "score_case",
     "score_suite",
 ]
+
+
+if TYPE_CHECKING:
+    from git_cg.eval.lane_c.judge import JudgeFn
+    from git_cg.eval.lane_c.judge_input import JudgeInput
 
 
 def resolve_require_topology(
@@ -243,6 +248,27 @@ class ScoreSuiteResult:
         return all(c.deterministic_pass is True for c in self.cases)
 
 
+def _rewrite_evaluator_error_free(scores: list[ScoreResultV1], errors: list[str]) -> list[ScoreResultV1]:
+    """Force h.evaluator_error_free false when evaluator_errors is non-empty."""
+    if not errors:
+        return scores
+    rewritten: list[ScoreResultV1] = []
+    for s in scores:
+        if s.metric_id == "h.evaluator_error_free" and s.passed is not False:
+            rewritten.append(
+                make_score(
+                    "h.evaluator_error_free",
+                    False,
+                    reason="evaluator_exceptions",
+                    evidence={"errors": errors[:10], "count": len(errors)},
+                    failure_ids=["EVAL_EVALUATOR_ERROR"],
+                )
+            )
+        else:
+            rewritten.append(s)
+    return rewritten
+
+
 def score_bundle(
     bundle: dict[str, Any],
     *,
@@ -259,9 +285,9 @@ def score_bundle(
     case_id: str | None = None,
     enable_lane_c: bool = False,
     lane_c_metric_ids: Sequence[str] | None = None,
-    judge_fn: Any | None = None,
-    judge_input: Any | None = None,
-    final_accept_evidence: Any | None = None,
+    judge_fn: JudgeFn | None = None,
+    judge_input: JudgeInput | Mapping[str, Any] | None = None,
+    final_accept_evidence: Mapping[str, Any] | None = None,
     judge_model: str | None = None,
     judge_api_key: str | None = None,
     lane_c_environ: Mapping[str, str] | None = None,
@@ -422,22 +448,7 @@ def score_bundle(
     if env_bad:
         errors.append(f"envelope:{env_bad}_invalid")
 
-    if errors:
-        rewritten: list[ScoreResultV1] = []
-        for s in scores:
-            if s.metric_id == "h.evaluator_error_free" and s.passed is not False:
-                rewritten.append(
-                    make_score(
-                        "h.evaluator_error_free",
-                        False,
-                        reason="evaluator_exceptions",
-                        evidence={"errors": errors[:10], "count": len(errors)},
-                        failure_ids=["EVAL_EVALUATOR_ERROR"],
-                    )
-                )
-            else:
-                rewritten.append(s)
-        scores = rewritten
+    scores = _rewrite_evaluator_error_free(scores, errors)
 
     # Optional gated Lane C' (advisory only). Default offline path never invokes.
     lane_c_eligibility = None
@@ -447,23 +458,45 @@ def score_bundle(
         try:
             from git_cg.eval.lane_c import run_lane_c
 
-            # Prefer explicit final-accept evidence; else project from context.
+            # Prefer explicit final-accept evidence; else project from context only
+            # when final-accept linkage is complete (hash + non-empty message + class).
             fa_evidence = final_accept_evidence
             if fa_evidence is None and judge_input is None:
-                fa_evidence = {
-                    "final_message_text": getattr(ctx, "final_message", None) or "",
-                    "case_id": ctx.case_id,
-                    "artifact_class": getattr(ctx, "artifact_class", None),
-                    "bound": getattr(ctx, "bound", None),
-                    "files": list(getattr(ctx, "files", ()) or ()),
-                }
+                msg = getattr(ctx, "final_message", None) or ""
+                digest = getattr(ctx, "final_message_sha256", None)
+                artifact = getattr(ctx, "artifact_class", None)
+                if (
+                    isinstance(msg, str)
+                    and msg.strip()
+                    and isinstance(digest, str)
+                    and len(digest) == 64
+                    and isinstance(artifact, str)
+                    and artifact
+                ):
+                    fa_evidence = {
+                        "final_message": msg,
+                        "final_message_text": msg,
+                        "final_message_sha256": digest,
+                        "case_id": ctx.case_id,
+                        "artifact_class": artifact,
+                        "bound": getattr(ctx, "bound", None),
+                        "files": list(getattr(ctx, "files", ()) or ()),
+                        "encoding": "utf-8",
+                    }
+                else:
+                    # Incomplete linkage — leave unset so Lane C emits honest skip
+                    # (judge_not_invoked / parse path) instead of fabricated projection.
+                    fa_evidence = None
 
             # Provisional deterministic eligibility from family scores only.
             # True-advisory prefixes never veto; missing/failed required metrics do.
+            from git_cg.eval.scoring.gates import _is_true_advisory
+
             by_tmp = {s.metric_id: s for s in scores}
             det_pass = True
             for mid in req:
-                if str(mid).startswith(("cprime.", "gate.")):
+                mid_s = str(mid)
+                if mid_s.startswith("gate.") or _is_true_advisory(mid_s):
                     continue
                 row = by_tmp.get(mid)
                 if row is None or row.passed is False:
@@ -494,27 +527,12 @@ def score_bundle(
             lane_c_run_evidence = dict(c_result.evidence)
             lane_c_run_evidence["lane_c_enabled"] = True
             lane_c_run_evidence["cprime_attempted"] = True
-            # Surface pack identities from scored/skip rows for Family H honesty.
-            pack_ids: list[str] = []
-            hashes: list[str] = []
+            # pin_refs only here — pack identity/hash aggregation lives in run_lane_c.
             pin_refs_acc: list[str] = []
             for row in lane_c_rows:
                 for pref in row.pin_refs or []:
                     if isinstance(pref, str) and pref not in pin_refs_acc:
                         pin_refs_acc.append(pref)
-                payload = row.evidence or {}
-                pid = payload.get("pack_identity")
-                if isinstance(pid, str) and pid not in pack_ids:
-                    pack_ids.append(pid)
-                digest = payload.get("content_sha256")
-                if isinstance(digest, str) and digest not in hashes:
-                    hashes.append(digest)
-            if pack_ids:
-                lane_c_run_evidence.setdefault("pack_identities", pack_ids)
-                lane_c_run_evidence.setdefault("pack_identity", pack_ids[0])
-            if hashes:
-                lane_c_run_evidence.setdefault("content_hashes", hashes)
-                lane_c_run_evidence.setdefault("content_sha256", hashes[0])
             if pin_refs_acc:
                 lane_c_run_evidence.setdefault("pin_refs", pin_refs_acc)
         except Exception as exc:
@@ -553,22 +571,19 @@ def score_bundle(
         "h.prompt_pack_hash_known",
         "h.prompt_pack_suite_fresh",
     }
+    # Uniform envelope re-validation (C'/H-C' rows use the same ScoreResultV1 path).
+    _ = (i_ids, cprime_h_ids)  # retained for readability / future selective skips
     for s in scores:
-        if s.metric_id in i_ids or str(s.metric_id).startswith("cprime.") or s.metric_id in cprime_h_ids:
-            # Already constructed via catalog helpers / recovered paths.
-            try:
-                valid_scores.append(ScoreResultV1.model_validate(s.model_dump(mode="json")))
-            except Exception:
-                env_bad += 1
-            continue
         try:
-            payload = s.model_dump(mode="json")
-            valid_scores.append(ScoreResultV1.model_validate(payload))
+            valid_scores.append(ScoreResultV1.model_validate(s.model_dump(mode="json")))
         except Exception:
             env_bad += 1
     scores = valid_scores
     if env_bad:
         errors.append(f"envelope_post_c:{env_bad}_invalid")
+
+    # Re-apply after Lane C' / H C' / post-C envelope errors so honesty stays consistent.
+    scores = _rewrite_evaluator_error_free(scores, errors)
 
     try:
         gates = compose_gates(
