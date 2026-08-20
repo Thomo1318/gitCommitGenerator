@@ -6,6 +6,16 @@ Locked on-disk tree (repo-local, gitignored in normal use)::
       bundles/acceptpath/<session_thread_id>.json   # final_accept ape_bundle_v1
       sessions/<session_thread_id>.json             # commit_session_thread_v1 twin
       trajectories/<trajectory_id>.json             # optional split twin (inline preferred)
+      checkpoints/                                 # evaluation_checkpoint_v1 (S6)
+      review_queue/                                # human_review_v1 rows (S6)
+      dogfood/                                     # dogfood_attachment_v1 (S6)
+      amend_briefs/                                # amend_brief_v1 (S6)
+      diagnostics/                                 # diagnostic artifacts (S6)
+      issues/                                      # diag_issue_v1 store (S6)
+      replays/                                     # replay_compare_v1 (S6)
+      index/                                       # rebuildable cache only (S6)
+      train_export/                                # train export envelopes (S6)
+      antipattern_vault/                           # labeled negatives vault (S6)
 
 Write law:
 
@@ -34,26 +44,56 @@ from typing import Any
 
 __all__ = [
     "ACCEPTPATH_BUNDLES_DIRNAME",
+    "AMEND_BRIEFS_DIRNAME",
+    "ANTIPATTERN_VAULT_DIRNAME",
+    "CHECKPOINTS_DIRNAME",
+    "DIAGNOSTICS_DIRNAME",
+    "DOGFOOD_DIRNAME",
     "EVAL_DIRNAME",
+    "INDEX_DIRNAME",
+    "ISSUES_DIRNAME",
+    "REPLAYS_DIRNAME",
+    "REVIEW_QUEUE_DIRNAME",
     "SESSIONS_DIRNAME",
+    "TRAIN_EXPORT_DIRNAME",
     "TRAJECTORIES_DIRNAME",
     "LayerAPathError",
     "RepoRootUnresolvedError",
     "acceptpath_bundles_dir",
+    "amend_briefs_dir",
+    "antipattern_vault_dir",
     "atomic_write_json",
+    "checkpoints_dir",
+    "diagnostics_dir",
+    "dogfood_dir",
     "eval_tree_root",
+    "index_dir",
+    "issues_dir",
+    "replays_dir",
     "resolve_repo_root",
+    "review_queue_dir",
     "sessions_dir",
+    "train_export_dir",
     "trajectories_dir",
 ]
 
 #: Runtime tree root name (repo-local; gitignored via ``/.eval/``).
 EVAL_DIRNAME = ".eval"
 
-#: Locked sub-paths under ``.eval/`` (D2).
+#: Locked sub-paths under ``.eval/`` (D2 + S6 stores).
 ACCEPTPATH_BUNDLES_DIRNAME = ("bundles", "acceptpath")
 SESSIONS_DIRNAME = ("sessions",)
 TRAJECTORIES_DIRNAME = ("trajectories",)
+CHECKPOINTS_DIRNAME = ("checkpoints",)
+REVIEW_QUEUE_DIRNAME = ("review_queue",)
+DOGFOOD_DIRNAME = ("dogfood",)
+AMEND_BRIEFS_DIRNAME = ("amend_briefs",)
+DIAGNOSTICS_DIRNAME = ("diagnostics",)
+ISSUES_DIRNAME = ("issues",)
+REPLAYS_DIRNAME = ("replays",)
+INDEX_DIRNAME = ("index",)
+TRAIN_EXPORT_DIRNAME = ("train_export",)
+ANTIPATTERN_VAULT_DIRNAME = ("antipattern_vault",)
 
 #: Restrictive modes for runtime trees (N19.3).
 _FILE_MODE = 0o600
@@ -190,6 +230,56 @@ def sessions_dir(repo_root: Path) -> Path:
 def trajectories_dir(repo_root: Path) -> Path:
     """Return ``.eval/trajectories/`` (contained; not created here)."""
     return _contained(repo_root, Path(*TRAJECTORIES_DIRNAME))
+
+
+def checkpoints_dir(repo_root: Path) -> Path:
+    """Return ``.eval/checkpoints/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*CHECKPOINTS_DIRNAME))
+
+
+def review_queue_dir(repo_root: Path) -> Path:
+    """Return ``.eval/review_queue/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*REVIEW_QUEUE_DIRNAME))
+
+
+def dogfood_dir(repo_root: Path) -> Path:
+    """Return ``.eval/dogfood/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*DOGFOOD_DIRNAME))
+
+
+def amend_briefs_dir(repo_root: Path) -> Path:
+    """Return ``.eval/amend_briefs/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*AMEND_BRIEFS_DIRNAME))
+
+
+def diagnostics_dir(repo_root: Path) -> Path:
+    """Return ``.eval/diagnostics/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*DIAGNOSTICS_DIRNAME))
+
+
+def issues_dir(repo_root: Path) -> Path:
+    """Return ``.eval/issues/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*ISSUES_DIRNAME))
+
+
+def replays_dir(repo_root: Path) -> Path:
+    """Return ``.eval/replays/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*REPLAYS_DIRNAME))
+
+
+def index_dir(repo_root: Path) -> Path:
+    """Return ``.eval/index/`` (contained; rebuildable cache only; not created here)."""
+    return _contained(repo_root, Path(*INDEX_DIRNAME))
+
+
+def train_export_dir(repo_root: Path) -> Path:
+    """Return ``.eval/train_export/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*TRAIN_EXPORT_DIRNAME))
+
+
+def antipattern_vault_dir(repo_root: Path) -> Path:
+    """Return ``.eval/antipattern_vault/`` (contained; not created here)."""
+    return _contained(repo_root, Path(*ANTIPATTERN_VAULT_DIRNAME))
 
 
 def _ensure_dir(path: Path) -> None:

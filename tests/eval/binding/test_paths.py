@@ -247,6 +247,27 @@ class TestTreeHelpersAndContainment:
         sessions = binding_paths.sessions_dir(tmp_path)
         assert sessions == tmp_path.resolve() / ".eval" / "sessions"
 
+    def test_s6_store_dir_helpers_are_contained(self, tmp_path: Path) -> None:
+        """S6 Layer-A stores resolve under .eval/ with containment (no creation)."""
+        root = tmp_path.resolve()
+        expected = {
+            "checkpoints": binding_paths.checkpoints_dir(root),
+            "review_queue": binding_paths.review_queue_dir(root),
+            "dogfood": binding_paths.dogfood_dir(root),
+            "amend_briefs": binding_paths.amend_briefs_dir(root),
+            "diagnostics": binding_paths.diagnostics_dir(root),
+            "issues": binding_paths.issues_dir(root),
+            "replays": binding_paths.replays_dir(root),
+            "index": binding_paths.index_dir(root),
+            "train_export": binding_paths.train_export_dir(root),
+            "antipattern_vault": binding_paths.antipattern_vault_dir(root),
+        }
+        for name, path in expected.items():
+            assert path == root / ".eval" / name
+            assert not path.exists()  # helpers do not create
+        # No quarantine store primitive (field-level only).
+        assert not hasattr(binding_paths, "quarantine_dir")
+
     def test_contained_target_resolve_oserror(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         root = tmp_path.resolve()
         real_resolve = Path.resolve
