@@ -658,6 +658,4 @@ def test_universe_secretish_and_bad_utf8_unpinnable(tmp_path: Path) -> None:
     empty_fam.mkdir()
     fp = record_universe_fingerprint(root)
     assert fp.pinned is False
-    assert "sec_family" in fp.unpinnable or any("sec" in u for u in fp.unpinnable)
-    assert "bad_family" in fp.unpinnable or any("bad" in u for u in fp.unpinnable)
-    assert "empty_family" in fp.unpinnable or any("empty" in u for u in fp.unpinnable)
+    assert set(fp.unpinnable) == {"sec_family", "bad_family", "empty_family"}

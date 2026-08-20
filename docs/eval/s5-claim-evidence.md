@@ -150,7 +150,7 @@ Primary composition tests:
 | **S5-G01** | R1/R6/R8/R10/R5/scripts/H | **Shipped** — residual modules + `tests/eval/test_lane_c_residuals.py`; R5 activation guard + existence N/A; scripts frozen; H shipped |
 | **S5-G02** | PR links #233 + #217 + claim evidence | this file + PR body (Slice 7) |
 | **S5-G03** | Closes #233 only | PR trailer policy |
-| **S5-G04** | Non-R* hygiene → #235/S8; R* stay on #233 | #233 D28 + #235 migration table |
+| **S5-G04** | Non-R\* hygiene → #235/S8; R\* stay on #233 | #233 D28 + #235 migration table |
 | **S5-G05** | Legacy scripts frozen | `tests/eval/mirror/test_setup_opik_scripts_absorption.py` |
 
 ### S5-H — coverage & public API quality

@@ -330,9 +330,8 @@ class TestInvokeOnceBranches:
         assert out.ok is True
         assert out.score == 4
 
-    def test_non_retryable_unknown_code_breaks(self) -> None:
-        # Force a non-retryable failure path via host guard already covered;
-        # here ensure max_retries=0 still fails after one attempt.
+    def test_zero_max_retries_single_attempt(self) -> None:
+        # max_retries=0 must fail after a single transport attempt.
         calls = {"n": 0}
 
         def boom(*_a: Any, **_k: Any) -> str:
