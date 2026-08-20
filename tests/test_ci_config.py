@@ -464,7 +464,7 @@ class TestCiWorkflowHardening:
     def test_checkout_and_setup_uv_pinned_to_sha(self):
         """Retain explicit checkout/setup-uv pin checks (subset of all-uses SHA lock)."""
         wf = self._workflow()
-        for job_name in ("lint", "test-and-coverage", "upload-coverage"):
+        for job_name in ("lint", "test-and-coverage", "upload-coverage", "docstring-coverage"):
             for step in wf["jobs"][job_name]["steps"]:
                 uses = step.get("uses", "")
                 if uses.startswith("actions/checkout@") or uses.startswith("astral-sh/setup-uv@"):
@@ -570,9 +570,38 @@ class TestCiWorkflowHardening:
         )
 
     def test_only_lint_and_coverage_jobs_present(self):
-        """CI must only define lint, tests, and the dedicated Codecov upload job."""
+        """CI must only define lint, tests, Codecov upload, and docstring coverage."""
         wf = self._workflow()
-        assert set(wf["jobs"].keys()) == {"lint", "test-and-coverage", "upload-coverage"}
+        assert set(wf["jobs"].keys()) == {
+            "lint",
+            "test-and-coverage",
+            "upload-coverage",
+            "docstring-coverage",
+        }
+
+    def test_docstring_coverage_job_contract(self):
+        """Docstring job must pin interrogate, use glob pathspec, and fail closed."""
+        wf = self._workflow()
+        job = wf["jobs"]["docstring-coverage"]
+        assert job["permissions"] == {"contents": "read"}
+        steps = {s.get("name"): s for s in job["steps"]}
+        resolve = steps["Resolve changed src/git_cg Python files"]
+        resolve_run = resolve["run"]
+        assert ":(glob)src/git_cg/**/*.py" in resolve_run
+        assert 'git diff --name-only --diff-filter=ACMR "${RANGE}"' in resolve_run
+        assert "changed-files.raw" in resolve_run
+        assert "diff_status" in resolve_run
+        # Fail-closed: fetch and git diff must not swallow errors with `|| true`.
+        assert 'refs/remotes/origin/${BASE_REF}" || true' not in resolve_run
+        assert "changed-files.raw || true" not in resolve_run
+        patch = steps["Patch gate — interrogate changed files only (fail-under 80)"]
+        assert patch["env"]["CHANGED_RANGE"] == "${{ steps.changed.outputs.range }}"
+        assert patch["env"]["CHANGED_COUNT"] == "${{ steps.changed.outputs.count }}"
+        assert "interrogate==1.7.0" in patch["run"]
+        assert "${CHANGED_RANGE}" in patch["run"]
+        assert "${{ steps.changed.outputs.range }}" not in patch["run"]
+        full = steps["Full-package badge scan (informational; does not gate)"]
+        assert "interrogate==1.7.0" in full["run"]
 
     def test_top_level_permissions_only_contents(self):
         """Top-level permissions must be scoped to `contents: read` only (no extra keys)."""

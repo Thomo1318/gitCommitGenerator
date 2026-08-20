@@ -210,8 +210,10 @@ jobs:
 
           # Patch gate only — never hard-wire the whole package into the fail path.
           # Exclude legacy soak/dashboard tree (same as [tool.interrogate] exclude).
+          # Use an explicit git pathspec glob so top-level modules (src/git_cg/*.py)
+          # are included; plain '**' pathspecs omit them without :(glob).
           if [ "${EVENT_NAME}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}" || true
+            git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
             RANGE="origin/${BASE_REF}...HEAD"
           elif [ "${EVENT_NAME}" = "push" ] && [ -n "${BEFORE_SHA}" ] \
             && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
@@ -226,11 +228,25 @@ jobs:
           fi
 
           echo "Diff range: ${RANGE}"
+          # Fail closed on invalid endpoints / ranges. Empty diffs still yield count=0.
+          git rev-parse --verify "${RANGE%%...*}" >/dev/null
+          git rev-parse --verify "${RANGE##*...}" >/dev/null
+          # Capture git diff status separately from grep's "no matches" exit code.
+          set +e
+          git diff --name-only --diff-filter=ACMR "${RANGE}" -- \
+            ':(glob)src/git_cg/**/*.py' \
+            > outputs/interrogate/changed-files.raw
+          diff_status=$?
+          set -e
+          if [ "${diff_status}" -ne 0 ]; then
+            echo "git diff failed for range ${RANGE} (exit ${diff_status})" >&2
+            exit "${diff_status}"
+          fi
           # Newline-separated path list (no embedded NULs in the workflow file).
-          git diff --name-only --diff-filter=ACMR ${RANGE} -- 'src/git_cg/**/*.py' \
-            | grep -v '^src/git_cg/evals/' \
+          grep -v '^src/git_cg/evals/' outputs/interrogate/changed-files.raw \
             | grep -v '^$' \
             > outputs/interrogate/changed-files.txt || true
+          rm -f outputs/interrogate/changed-files.raw
 
           count="$(wc -l < outputs/interrogate/changed-files.txt | tr -d ' ')"
           {
@@ -256,19 +272,23 @@ jobs:
 
       - name: Patch gate — interrogate changed files only (fail-under 80)
         if: steps.changed.outputs.skip != 'true'
+        env:
+          CHANGED_RANGE: ${{ steps.changed.outputs.range }}
+          CHANGED_COUNT: ${{ steps.changed.outputs.count }}
         run: |
           set -euo pipefail
           mapfile -t files < outputs/interrogate/changed-files.txt
           # Human report for the PR/push surface only (Codecov-style "what changed").
+          # Pin interrogate for reproducible 3.14 parsing / badge output.
           set +e
-          uvx --python 3.14 interrogate -vv --fail-under 80 "${files[@]}" \
+          uvx --python 3.14 --from "interrogate==1.7.0" interrogate -vv --fail-under 80 "${files[@]}" \
             | tee outputs/interrogate/patch-report.txt
           status=${PIPESTATUS[0]}
           set -e
           {
             echo "mode=patch"
-            echo "range=${{ steps.changed.outputs.range }}"
-            echo "file_count=${{ steps.changed.outputs.count }}"
+            echo "range=${CHANGED_RANGE}"
+            echo "file_count=${CHANGED_COUNT}"
             echo "fail_under=80"
             echo "exit=${status}"
           } | tee outputs/interrogate/patch-summary.txt
@@ -281,7 +301,7 @@ jobs:
           # README badge reflects whole-package health, not the patch subset.
           # fail-under 0 so a low global % never fails CI; the patch step is the gate.
           set +e
-          uvx --python 3.14 interrogate src/git_cg -v --fail-under 0 \
+          uvx --python 3.14 --from "interrogate==1.7.0" interrogate src/git_cg -v --fail-under 0 \
             --generate-badge docs/assets/badges \
             --badge-format svg \
             --badge-style flat \
