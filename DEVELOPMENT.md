@@ -89,6 +89,34 @@ When developing or testing with local Apple Silicon inference engines, you must 
 
 We use `pytest` for the Python test suite and `just` as our command runner.
 
+### Docstring coverage (`interrogate`)
+
+Docstring coverage is measured with [`interrogate`](https://github.com/econchick/interrogate).
+
+**CI gate is patch-scoped:** only `src/git_cg/**/*.py` files changed in the PR/push are checked (`fail-under` **80**). Untouched files are not part of the gate. Legacy `src/git_cg/evals/**` is excluded.
+
+**Runtime pin (mandatory):** run under **Python 3.14**. This codebase uses PEP 758 bare multi-except (`except A, B:`), which is a `SyntaxError` on 3.13 — including bare `uvx interrogate` defaults that resolve to 3.13.
+
+```bash
+# Patch gate (changed files vs origin/main) — same shape as CI
+just docstrings-patch
+mise run docstrings:patch
+
+# Full-package health + regenerate README badge SVG
+just docstrings
+mise run docstrings
+
+# Optional global tool install (only if installed against 3.14)
+uv tool install --python 3.14 'interrogate>=1.7.0'
+```
+
+CI uploads a verbose report artifact (`interrogate-docstring-report`) with:
+- **patch report** — docstring coverage for **changed `src/git_cg` files only** (this is the fail gate at 80%)
+- **full-package report + badge SVG** — whole `src/git_cg` health for the README badge (informational; does not fail CI)
+
+The committed flat shields.io badge lives at `docs/assets/badges/interrogate_badge.svg` (README slot between Codecov and GitMCP). Refresh the committed badge locally with `just docstrings` when you want main’s badge SVG updated in-tree.
+
+
 - **Run integration smoke tests** (`just test` runs a temporary-repo commit dry run):
 
   ```bash
@@ -153,6 +181,8 @@ Our Git hooks are critical to enforcing the **Hybrid Commit Standard**.
 | `mise run lint`     | Read-only fast lint (CI-shaped): `hk validate` + `hk check --check --no-stage --all` with `HK_SKIP_STEPS=pytest-cov,betterleaks,gen-docs,gen-toc` |
 | `mise run test`     | Full project `pytest` suite                                                                                                                       |
 | `mise run cov`      | Slow coverage verification (`--cov=src/git_cg --cov-branch`)                                                                                      |
+| `mise run docstrings:patch` / `just docstrings-patch` | **CI-shaped** patch docstring gate on changed `src/git_cg` files only (`fail-under` 80, Python 3.14) |
+| `mise run docstrings` / `just docstrings` | Full-package interrogate + regenerate `docs/assets/badges/interrogate_badge.svg` |
 | `mise run security` | Optional local SBOM + Grant + Grype                                                                                                               |
 
 ### `hk` profiles
