@@ -203,13 +203,43 @@ def _resolve_projected_input(
 
 
 def _pack_dir_for(pack: Mapping[str, Any], prompt_root: Path | None) -> Path:
+    """Return the pack directory, preferring the path recorded at resolve time."""
     from git_cg.eval.paths import REPO_ROOT
 
+    recorded = pack.get("pack_dir") or pack.get("_pack_dir")
+    if isinstance(recorded, Path):
+        return recorded
+    if isinstance(recorded, str) and recorded.strip():
+        return Path(recorded)
     pack_id = str(pack.get("pack_id") or "")
     suffix = pack_id.removeprefix("lane_c_")
     if prompt_root is not None:
         return Path(prompt_root) / suffix
     return REPO_ROOT / "prompts" / "eval" / "lane_c" / suffix
+
+
+def aggregate_pack_evidence(rows: Sequence[Any]) -> dict[str, Any]:
+    """Aggregate pack_identity / content_sha256 evidence from C' rows (exported)."""
+    pack_ids: list[str] = []
+    hashes: list[str] = []
+    for row in rows:
+        payload = getattr(row, "evidence", None) or {}
+        if not isinstance(payload, Mapping):
+            continue
+        pid = payload.get("pack_identity")
+        if isinstance(pid, str) and pid not in pack_ids:
+            pack_ids.append(pid)
+        digest = payload.get("content_sha256")
+        if isinstance(digest, str) and digest not in hashes:
+            hashes.append(digest)
+    out: dict[str, Any] = {}
+    if pack_ids:
+        out["pack_identities"] = pack_ids
+        out["pack_identity"] = pack_ids[0]
+    if hashes:
+        out["content_hashes"] = hashes
+        out["content_sha256"] = hashes[0]
+    return out
 
 
 def run_lane_c(
@@ -488,6 +518,10 @@ def run_lane_c(
                 prompt_root=prompt_root,
                 expected_identity=expected_pack,
             )
+            # Record resolved directory so loaders do not re-derive pack_id→path.
+            if "pack_dir" not in pack and "_pack_dir" not in pack:
+                pack = dict(pack)
+                pack["pack_dir"] = str(_pack_dir_for(pack, prompt_root))
         except PromptPackError as exc:
             code = exc.code if exc.code in {EXEC_PACK_UNRESOLVABLE, EXEC_PACK_DECODE_ERROR} else EXEC_PACK_UNRESOLVABLE
             fid = FAILURE_PACK_DECODE_ERROR if code == EXEC_PACK_DECODE_ERROR else FAILURE_PACK_UNRESOLVABLE
@@ -581,7 +615,6 @@ def run_lane_c(
             )
             continue
 
-        invoked = True
         try:
             outcome = run_pinned_judge(
                 prompt_text,
@@ -590,6 +623,7 @@ def run_lane_c(
                 model=model_pin,
             )
         except Exception as exc:
+            invoked = True  # exception path: transport was attempted
             rows.append(
                 _skip_row(
                     mid,
@@ -606,6 +640,10 @@ def run_lane_c(
                 )
             )
             continue
+
+        # Host guards (empty/oversize) return without calling judge_fn.
+        if outcome.execution_code not in {EXEC_EMPTY_INPUT, EXEC_OVERSIZE_INPUT}:
+            invoked = True
 
         duration = outcome.duration_ms
         if outcome.ok and outcome.score is not None:
@@ -676,17 +714,6 @@ def run_lane_c(
         )
 
     cprime_ran = bool(invoked and scored_count > 0)
-    # Aggregate pack identities from emitted rows for Family H honesty metrics.
-    pack_ids: list[str] = []
-    hashes: list[str] = []
-    for row in rows:
-        payload = row.evidence or {}
-        pid = payload.get("pack_identity")
-        if isinstance(pid, str) and pid not in pack_ids:
-            pack_ids.append(pid)
-        digest = payload.get("content_sha256")
-        if isinstance(digest, str) and digest not in hashes:
-            hashes.append(digest)
     run_evidence.update(
         {
             "invoked": invoked,
@@ -695,12 +722,7 @@ def run_lane_c(
             "judge_input_present": projected is not None,
         }
     )
-    if pack_ids:
-        run_evidence.setdefault("pack_identities", pack_ids)
-        run_evidence.setdefault("pack_identity", pack_ids[0])
-    if hashes:
-        run_evidence.setdefault("content_hashes", hashes)
-        run_evidence.setdefault("content_sha256", hashes[0])
+    run_evidence.update(aggregate_pack_evidence(rows))
     return LaneCRunResult(
         rows=rows,
         eligibility=eligibility,
