@@ -29,6 +29,125 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.21.0
+
+### Miscellaneous
+
+- 👷 ci(interrogate): pin local just recipes and lock fail-under gates (#233)
+- 👷 ci(interrogate): gate PRs on changed-file docstring coverage
+- 👷 ci(interrogate): add 3.14-pinned docstring coverage contract
+- ✅ test(eval-lane-c): raise Codecov patch coverage for Lane C modules (#233)
+- 📝 docs(llms): auto-update llms.txt
+- 📝 Add docstrings to `evals/233-s5-gated-lane-c-cohort-optional-judge-lab`
+- Merge pull request #238 from Thomo1318/evals/233-s5-gated-lane-c-cohort-optional-judge-lab
+
+### Documentation
+
+- ✨ feat(eval-lane-c): add repo-first prompt_pack_v1 identity (#233)
+- 🦺 fix(eval-lane-c): harden meta-eval pins and honest FP/FN rates (#233)
+- 👷 ci(interrogate): publish validated sticky PR coverage report (#233)
+- ✅ test(eval-lane-c): tighten residual contract assertions (#233)
+- ✅ test(eval-scripts): lock D24 absorption freezes (#233)
+- 📝 docs(eval): reconcile S5 closeout status and coverage evidence (#233)
+- 📝 docs(eval): mark Slice 6 residuals as shipped lab surfaces (#233)
+- 📝 docs(interrogate): publish flat badge and operator invoke guide
+- 📝 docs(eval): restore gold-standard S5 contract docstrings (#233)
+- 📝 docs(eval-lane-c): constrain GEval rubrics to gold-blind projection (#233)
+- 📝 docs(eval): align S5 SSOT pointer and claim-evidence paths (#233)
+- 📝 docs(eval): publish S5 operator boundary and claim-evidence matrix (#233)
+- 📝 docs(plans): lock v0.9.5 S5/S6/S7 API-surface policy (#233)
+- 📝 docs(eval-lane-c): record Slice 4 S5c pinned GEval seam checklist (#233)
+- 📝 docs(eval): lock S5 Slice 0 baseline and eligibility-split SSOT (#233)
+
+### Tests
+
+- ✨ feat(eval-lane-c): ship judge_meta_eval_v1 lab Equals path (#233)
+- ✨ feat(eval-lane-c): Slice 1 gated cohort spine (authz, availability) (#233)
+- ✨ feat(eval-scoring): optional Lane C precomputed semantic-cohort gate (#233)
+- 🦺 fix(eval-lane-c): fail closed on dirty-overlay activation guards (#233)
+- 🦺 fix(eval-lane-c): harden meta-eval pins and honest FP/FN rates (#233)
+- 🦺 fix(eval-lane-c): keep host-guard rows uninvoked in evidence (#233)
+- 🦺 fix(eval-lane-c): normalize forbidden judge-input key variants (#233)
+- 👷 ci(interrogate): pin local just recipes and lock fail-under gates (#233)
+- 👷 ci(interrogate): fail-closed pathspec and pin interrogate 1.7.0 (#233)
+- ✅ test(eval-lane-c): tighten residual contract assertions (#233)
+- ✅ test(eval-lane-c): lock Slice 6 residual contracts (#233)
+- ✅ test(eval-lane-c): run import isolation in subprocess (#233)
+- ✅ test(eval-scripts): align legacy Opik tests with D24 freeze (#233)
+- ✅ test(eval): lock CodeRabbit S5 Lane C′ honesty contracts (#233)
+- ✅ test(eval-scoring): lock Family H C' honesty and score_bundle emission (#233)
+- ✅ test(eval-scoring): lock score_bundle Lane C' opt-in path (#233)
+- ✅ test(eval-lane-c): lock Slice 4 judge wiring and promo immunity (#233)
+- ✅ test(eval-lane-c): lock pinned judge parse and transport contracts (#233)
+- ✅ test(eval-lane-c): lock advisory score and skip contracts (#233)
+- ✅ test(eval-lane-c): lock gold-blind judge input contracts (#233)
+- ✅ test(eval-lane-c): lock C-PACK identity and runner contracts (#233)
+
+### Fixed
+
+- ✨ feat(eval-lane-c): wire Slice 6 residuals into runner exports (#233)
+- ✨ feat(eval-lane-c): add dirty-overlay provenance guard (#233)
+- ✨ feat(eval-lane-c): add Slice 6 residual diagnostics module (#233)
+- ✨ feat(eval-lane-c): ship judge_meta_eval_v1 lab Equals path (#233)
+- ✨ feat(eval-scoring): emit Family H C' honesty metrics after Lane C (#233)
+- ✨ feat(eval-scoring): opt-in gated Lane C' in score_bundle (#233)
+- ✨ feat(eval-lane-c): wire pinned judge into gated runner (#233)
+- ✨ feat(eval-lane-c): add injectable pinned judge transport (#233)
+- ✨ feat(eval-lane-c): add advisory GEval score builders (#233)
+- ✨ feat(eval-lane-c): add gold-blind judge input projection (#233)
+- ✨ feat(eval-lane-c): wire pinned prompt packs into gated runner (#233)
+- ✨ feat(eval-lane-c): add repo-first prompt_pack_v1 identity (#233)
+- ✨ feat(eval-scoring): optional Lane C precomputed semantic-cohort gate (#233)
+- 🦺 fix(eval-lane-c): fail closed on dirty-overlay activation guards (#233)
+- 🦺 fix(eval-lane-c): keep residual diagnostics non-gating and typed (#233)
+- 🦺 fix(eval-lane-c): harden meta-eval pins and honest FP/FN rates (#233)
+- 🦺 fix(eval-lane-c): keep host-guard rows uninvoked in evidence (#233)
+- 🦺 fix(eval-lane-c): normalize forbidden judge-input key variants (#233)
+- 🦺 fix(eval-scoring): preserve C′ linkage and post-C honesty metrics (#233)
+- 🦺 fix(eval-lane-c): record pack dir and honest judge invocation (#233)
+- 🦺 fix(eval-lane-c): harden judge boundary pins and input hygiene (#233)
+- 👷 ci(interrogate): gate PRs on changed-file docstring coverage
+- 👷 ci(interrogate): add 3.14-pinned docstring coverage contract
+- 📝 docs(eval-lane-c): constrain GEval rubrics to gold-blind projection (#233)
+- 🔒 fix(eval): share recursive secret-key evidence scrubber (#233)
+
+### Changed
+
+- 🦺 fix(eval-lane-c): fail closed on dirty-overlay activation guards (#233)
+- 🦺 fix(eval-lane-c): keep residual diagnostics non-gating and typed (#233)
+- 🦺 fix(eval-scoring): preserve C′ linkage and post-C honesty metrics (#233)
+- 🦺 fix(eval-lane-c): harden judge boundary pins and input hygiene (#233)
+- ♻️ refactor(eval-scripts): freeze legacy Opik setup scripts (#233)
+- 👷 ci(interrogate): fail-closed pathspec and pin interrogate 1.7.0 (#233)
+- ✅ test(eval-scripts): lock D24 absorption freezes (#233)
+
+### Added
+
+- ✨ feat(eval-lane-c): wire Slice 6 residuals into runner exports (#233)
+- ✨ feat(eval-lane-c): add dirty-overlay provenance guard (#233)
+- ✨ feat(eval-lane-c): add Slice 6 residual diagnostics module (#233)
+- ✨ feat(eval-lane-c): ship judge_meta_eval_v1 lab Equals path (#233)
+- ✨ feat(eval-scoring): emit Family H C' honesty metrics after Lane C (#233)
+- ✨ feat(eval-scoring): opt-in gated Lane C' in score_bundle (#233)
+- ✨ feat(eval-lane-c): wire pinned judge into gated runner (#233)
+- ✨ feat(eval-lane-c): add injectable pinned judge transport (#233)
+- ✨ feat(eval-lane-c): add advisory GEval score builders (#233)
+- ✨ feat(eval-lane-c): add gold-blind judge input projection (#233)
+- ✨ feat(eval-lane-c): wire pinned prompt packs into gated runner (#233)
+- ✨ feat(eval-lane-c): add repo-first prompt_pack_v1 identity (#233)
+- ✨ feat(eval-lane-c): Slice 1 gated cohort spine (authz, availability) (#233)
+- ✨ feat(eval-scoring): optional Lane C precomputed semantic-cohort gate (#233)
+- 🦺 fix(eval-lane-c): harden meta-eval pins and honest FP/FN rates (#233)
+- 🦺 fix(eval-lane-c): record pack dir and honest judge invocation (#233)
+- 👷 ci(interrogate): publish validated sticky PR coverage report (#233)
+- 👷 ci(interrogate): gate PRs on changed-file docstring coverage
+- 👷 ci(interrogate): add 3.14-pinned docstring coverage contract
+- 🔒 fix(eval): share recursive secret-key evidence scrubber (#233)
+
+### Security
+
+- 🔒 fix(eval): share recursive secret-key evidence scrubber (#233)
+
 ## v0.20.0
 
 ### Miscellaneous
