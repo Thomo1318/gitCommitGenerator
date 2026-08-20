@@ -598,10 +598,12 @@ class TestCiWorkflowHardening:
         assert patch["env"]["CHANGED_RANGE"] == "${{ steps.changed.outputs.range }}"
         assert patch["env"]["CHANGED_COUNT"] == "${{ steps.changed.outputs.count }}"
         assert "interrogate==1.7.0" in patch["run"]
+        assert "--fail-under 80" in patch["run"]
         assert "${CHANGED_RANGE}" in patch["run"]
         assert "${{ steps.changed.outputs.range }}" not in patch["run"]
         full = steps["Full-package badge scan (informational; does not gate)"]
         assert "interrogate==1.7.0" in full["run"]
+        assert "--fail-under 0" in full["run"]
 
     def test_top_level_permissions_only_contents(self):
         """Top-level permissions must be scoped to `contents: read` only (no extra keys)."""

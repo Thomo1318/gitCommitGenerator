@@ -78,11 +78,11 @@ docstrings-patch base="origin/main":
     fi
     printf 'Docstring patch gate (%d file(s)):\n' "${#files[@]}"
     printf '  %s\n' "${files[@]}"
-    uvx --python 3.14 interrogate -v --fail-under 80 "${files[@]}"
+    uvx --python 3.14 --from "interrogate==1.7.0" interrogate -v --fail-under 80 "${files[@]}"
 
 # Full-package docstring health + flat badge (not the CI push gate)
 docstrings:
-    uvx --python 3.14 interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
+    uvx --python 3.14 --from "interrogate==1.7.0" interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
 
 # Uninstall the tool and completions
 uninstall:
