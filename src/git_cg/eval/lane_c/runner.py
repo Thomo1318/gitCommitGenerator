@@ -102,6 +102,16 @@ def _base_evidence(
     availability: LaneCAvailability | None,
     extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Builds evidence metadata describing Lane C eligibility and availability.
+    
+    Parameters:
+    	eligibility (LaneCEligibility): Eligibility assessment to record.
+    	availability (LaneCAvailability | None): Optional judge availability assessment.
+    	extra (Mapping[str, Any] | None): Additional evidence fields, excluding secret-like keys.
+    
+    Returns:
+    	A dictionary containing sanitised eligibility, availability, and permitted additional evidence.
+    """
     evidence: dict[str, Any] = {
         "eligible": eligibility.eligible,
         "diagnostic_only": eligibility.diagnostic_only,
@@ -143,7 +153,21 @@ def _skip_row(
     pin_refs: list[str] | None = None,
     duration_ms: int | float | None = None,
 ) -> ScoreResultV1:
-    """Emit one advisory skip row with closed-set reason + failure_id."""
+    """Create an advisory skip result with a validated execution code and failure identifier.
+    
+    Parameters:
+    	metric_id (str): Identifier of the metric associated with the skipped result
+    	execution_code (str): Closed-set code describing why execution was skipped
+    	eligibility (LaneCEligibility): Lane C′ eligibility metadata
+    	availability (LaneCAvailability | None): Judge availability metadata, if available
+    	extra_evidence (Mapping[str, Any] | None): Additional evidence to include
+    	gate_disposition (str | None): Gate disposition associated with the execution code
+    	pin_refs (list[str] | None): References to the pins governing the result
+    	duration_ms (int | float | None): Duration of the skipped execution in milliseconds
+    
+    Returns:
+    	ScoreResultV1: An advisory result recording the skip reason, evidence, and failure identifier
+    """
     code = assert_execution_code(execution_code)
     if gate_disposition is not None:
         map_gate_to_execution(gate_disposition, code)
@@ -180,7 +204,18 @@ def _resolve_projected_input(
     lab_override: bool,
     max_input_chars: int | None,
 ) -> tuple[JudgeInput | None, str | None, str | None]:
-    """Return (projected, skip_code, error_note). Never raises."""
+    """
+    Project a judge input or final acceptance evidence into the format required for evaluation.
+    
+    Parameters:
+        judge_input: Explicit input to project, when provided.
+        final_accept_evidence: Acceptance evidence used when explicit judge input is absent.
+        lab_override: Whether lab-override projection rules apply.
+        max_input_chars: Maximum permitted projected input length, when configured.
+    
+    Returns:
+        A tuple containing the projected input, an input skip code if projection fails, and a descriptive error note. All three values are `None` when no input is supplied.
+    """
     if judge_input is None and final_accept_evidence is None:
         return None, None, None
     try:
@@ -219,7 +254,15 @@ def _pack_dir_for(pack: Mapping[str, Any], prompt_root: Path | None) -> Path:
 
 
 def aggregate_pack_evidence(rows: Sequence[Any]) -> dict[str, Any]:
-    """Aggregate pack_identity / content_sha256 evidence from C' rows (exported)."""
+    """
+    Collect unique prompt-pack identities and content hashes from Lane C′ result rows.
+    
+    Parameters:
+    	rows (Sequence[Any]): Result rows whose evidence may contain prompt-pack metadata.
+    
+    Returns:
+    	dict[str, Any]: Prompt-pack identities and content hashes, including the first value under singular keys when present.
+    """
     pack_ids: list[str] = []
     hashes: list[str] = []
     for row in rows:
@@ -265,26 +308,33 @@ def run_lane_c(
     final_accept_evidence: Any | None = None,
     max_input_chars: int | None = None,
 ) -> LaneCRunResult:
-    """Run the gated Lane C' cohort.
-
-    Behaviour:
-
-    1. Evaluate authorization-only eligibility (no secrets).
-    2. Ineligible → one ``cohort_ineligible`` skip per metric; no side effects.
-    3. ``lab_override`` diagnostic (det fail) → ``lab_override_diagnostic`` skips;
-       **zero** judge side effects even when credentials exist.
-    4. Eligible but unavailable → ``unavailable_creds`` / constructibility skips.
-    5. Eligible + available → resolve local ``prompt_pack_v1``.
-       Missing/malformed/non-UTF-8 packs skip as ``pack_unresolvable`` /
-       ``pack_decode_error``.
-    6. Without injectable ``judge_fn`` **or** projected judge input → honest
-       ``judge_not_invoked`` (backward compatible with Slice 1-3).
-    7. With both → invoke pinned judge per metric; emit advisory scored/skip rows.
-    8. Explicit empty ``metric_ids`` → no rows (``[]``).
-    9. Unknown metric ids fail closed via catalog (``KeyError``).
-
-    Never raises on missing credentials. Never imports provider SDKs at module
-    import time. Judge exceptions never abort the case.
+    """
+    Run the gated Lane C′ evaluation cohort.
+    
+    Parameters:
+        metric_ids: Metrics to evaluate; an omitted value uses defaults only when
+            ``use_default_metrics`` is true.
+        deterministic_pass: Whether the deterministic evaluation passed.
+        allows_lane_c: Whether the evaluation is authorised to run Lane C′.
+        lab_override: Whether to run in diagnostic-only mode.
+        suite: Suite metadata used for eligibility decisions.
+        judge_model: Model identity used for eligibility and judge invocation.
+        pack_identity: Expected prompt-pack identity.
+        sampling_identity: Sampling configuration identity.
+        output_contract_identity: Output-contract identity.
+        use_default_metrics: Whether to use the default metric set when
+            ``metric_ids`` is omitted.
+        prompt_root: Root directory containing local prompt packs.
+        universe_root: Root directory used to verify the prompt universe.
+        judge_fn: Injectable judge callable.
+        judge_input: Projected input for the judge.
+        final_accept_evidence: Acceptance evidence from which judge input may be
+            projected.
+        max_input_chars: Maximum permitted judge-input length.
+    
+    Returns:
+        A ``LaneCRunResult`` containing advisory score or skip rows and execution
+        evidence. An explicitly empty metric set produces no rows.
     """
     eligibility = evaluate_semantic_cohort_eligibility(
         deterministic_pass=deterministic_pass,

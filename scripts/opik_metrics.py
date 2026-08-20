@@ -39,7 +39,15 @@ Reasons:
 
 
 def refuse_legacy_opik_metrics(*, stream=None) -> int:
-    """Print the freeze notice and return a non-zero exit code."""
+    """
+    Print the legacy metrics freeze notice to the specified stream.
+    
+    Parameters:
+    	stream: Output stream for the notice; defaults to standard error.
+    
+    Returns:
+    	int: Exit code 2.
+    """
     out = sys.stderr if stream is None else stream
     print(_REFUSE_MESSAGE, file=out)
     return 2
@@ -49,16 +57,31 @@ class FormatMetric:
     """Retired placeholder — instantiation/score always fails closed."""
 
     def __init__(self, name: str = "CommitFormatQuality") -> None:
+        """Initialise a retired metric placeholder with the given name."""
         self.name = name
 
     def score(self, output: str = "", **_kwargs):
+        """
+        Refuse scoring through the retired legacy metrics interface.
+        
+        Raises:
+        	SystemExit: Always, with exit code 2.
+        """
         del output
         code = refuse_legacy_opik_metrics()
         raise SystemExit(code)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: refuse with pointer."""
+    """
+    Parse command-line arguments and refuse execution of the retired legacy metrics helper.
+    
+    Parameters:
+    	argv (list[str] | None): Command-line arguments to parse, or None to use the process arguments.
+    
+    Returns:
+    	int: Exit code 2 indicating that the legacy helper is retired.
+    """
     parser = argparse.ArgumentParser(description="FROZEN: legacy Opik FormatMetric helper. Use git_cg.eval.scoring.")
     parser.parse_args(argv)
     return refuse_legacy_opik_metrics()

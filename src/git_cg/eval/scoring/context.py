@@ -137,17 +137,25 @@ def project_score_context(
     max_eval_bytes: int = DEFAULT_MAX_EVAL_BYTES,
     allow_wrong_artifact: bool = False,
 ) -> ScoreContext:
-    """Project a bundle (+ optional suite) into a FIND-027 score context.
-
-    Prefer ``bundle.final_message``. Never default format scoring onto raw model
-    dumps / generation JSON keys unless ``allow_wrong_artifact`` (tests only).
-    Pins come from live S0 loaders; missing identity fields fail closed.
-
-    Card / path injection (D10/D44):
-    * Explicit ``product_card`` / ``score_card`` / ``files`` kwargs win.
-    * Post-encode test dict keys are accepted as injection channels (frozen
-      ``ape_bundle_v1`` does not declare them; they are not schema fields).
-    * Explicit empty ``files=()`` stays empty — never fabricate paths.
+    """
+    Project a bundle and optional suite into a validated FIND-027 score context.
+    
+    Parameters:
+        bundle (Mapping[str, Any]): Bundle containing the evaluation inputs and metadata.
+        suite (Mapping[str, Any] | None): Optional suite metadata.
+        case_id (str | None): Case identifier, overriding the value in the bundle.
+        product_card (Mapping[str, Any] | None): Optional product card to score.
+        score_card (Mapping[str, Any] | None): Optional score card to score.
+        files (Sequence[str] | None): Explicit file paths to include as evidence.
+        max_eval_bytes (int): Maximum permitted UTF-8 size of the scoring target.
+        allow_wrong_artifact (bool): Whether raw model-output fields may be used when
+            no final message is available.
+    
+    Returns:
+        ScoreContext: The projected scoring context.
+    
+    Raises:
+        ScoreContextError: If the bundle, case identifier, or typed bundle fields are invalid.
     """
     if not isinstance(bundle, Mapping):
         raise ScoreContextError("bundle must be an object")
@@ -271,10 +279,14 @@ def project_score_context(
 
 
 def live_pin_refs(*, prompt_pack: str | None = None) -> list[str]:
-    """Return live S0 pin strings for ScoreResult.pin_refs.
-
-    Prompt-pack pins are included only when a Lane C' pack actually resolved
-    (Slice 2). Default remains schema + catalog so non-C' rows stay honest.
+    """
+    Provide the active schema and metric-catalog pin references, optionally including a resolved prompt-pack pin.
+    
+    Parameters:
+    	prompt_pack (str | None): A resolved prompt-pack pin to append when provided.
+    
+    Returns:
+    	list[str]: The schema-pack and metric-catalog pins, followed by the prompt-pack pin when provided.
     """
     refs = [schema_pack_pin(), metric_catalog_pin()]
     if prompt_pack:

@@ -62,20 +62,41 @@ Do not import this script from package code, hooks, or CI.
 
 
 def refuse_legacy_test_suite_setup(*, stream=None) -> int:
-    """Print the freeze notice and return a non-zero exit code."""
+    """
+    Rejects legacy test-suite setup and emits the retirement notice.
+    
+    Parameters:
+    	stream: Optional output stream for the notice; defaults to standard error.
+    
+    Returns:
+    	int: Exit code 2 indicating that legacy setup is refused.
+    """
     out = sys.stderr if stream is None else stream
     print(_REFUSE_MESSAGE, file=out)
     return 2
 
 
 def run_test_suite(*_args, **_kwargs) -> None:
-    """Former suite runner — always refuses (D24)."""
+    """
+    Refuse to run the retired legacy test suite.
+    
+    Raises:
+    	SystemExit: Always, with the refusal exit code.
+    """
     code = refuse_legacy_test_suite_setup()
     raise SystemExit(code)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: parse legacy flags, then refuse with pointer (no network)."""
+    """
+    Parse retained legacy command-line options and refuse execution with guidance to the supported evaluation paths.
+    
+    Parameters:
+        argv (list[str] | None): Command-line arguments to parse, or the process arguments when omitted.
+    
+    Returns:
+        int: Exit code indicating that the retired test-suite setup was refused.
+    """
     parser = argparse.ArgumentParser(
         description=("FROZEN: former Opik test-suite runner. Use offline tests/eval and gated Lane C (see #233 D24).")
     )

@@ -9,6 +9,14 @@ _SECRET_TOKENS = frozenset({"api_key", "secret", "password", "token", "authoriza
 
 
 def _looks_like_secret_key(key: object) -> bool:
+    """Determine whether a key contains a case-insensitive secret-related term.
+    
+    Parameters:
+    	key (object): The key to inspect.
+    
+    Returns:
+    	`true` if the key is a string containing a configured secret-related term, `false` otherwise.
+    """
     if not isinstance(key, str):
         return False
     lowered = key.lower()
@@ -16,7 +24,15 @@ def _looks_like_secret_key(key: object) -> bool:
 
 
 def scrub_evidence_mapping(value: Any) -> Any:
-    """Recursively drop secret-looking keys from mappings/lists before persist."""
+    """
+    Recursively sanitise evidence by removing secret-looking mapping keys.
+    
+    Parameters:
+        value (Any): Evidence value to sanitise.
+    
+    Returns:
+        Any: Sanitised mappings and sequences, with tuples converted to lists; other values are unchanged.
+    """
     if isinstance(value, Mapping):
         out: dict[str, Any] = {}
         for key, item in value.items():

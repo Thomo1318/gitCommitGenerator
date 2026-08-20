@@ -52,21 +52,41 @@ Canonical homes:
 
 
 def refuse_legacy_eval_commit_message(*, stream=None) -> int:
-    """Print the freeze notice and return a non-zero exit code."""
+    """Print the legacy evaluator freeze notice and provide its failure exit code.
+    
+    Parameters:
+    	stream: Optional output stream for the notice. Defaults to standard error.
+    
+    Returns:
+    	int: Exit code 2.
+    """
     out = sys.stderr if stream is None else stream
     print(_REFUSE_MESSAGE, file=out)
     return 2
 
 
 def evaluation_task(item=None, **_kwargs):
-    """Former evaluation task — always refuses (no network, no generation)."""
+    """
+    Refuse execution of the retired legacy evaluation task.
+    
+    Raises:
+        SystemExit: Always, with exit code 2.
+    """
     del item
     code = refuse_legacy_eval_commit_message()
     raise SystemExit(code)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: refuse with pointer (no network)."""
+    """
+    Refuse execution of the retired legacy evaluator and direct users to the canonical evaluation locations.
+    
+    Parameters:
+        argv (list[str] | None): Optional command-line arguments to parse.
+    
+    Returns:
+        int: Exit code `2`.
+    """
     parser = argparse.ArgumentParser(
         description="FROZEN: former Opik commit-message evaluator. Use tests/eval + lane_c."
     )

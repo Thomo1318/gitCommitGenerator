@@ -26,7 +26,16 @@ OPIK_METRICS = SCRIPTS / "opik_metrics.py"
 
 
 def _install_banned_module_sentinels(monkeypatch, banned_roots=None):
-    """Remove loaded banned modules and block fresh imports (process-global isolation)."""
+    """
+    Remove banned modules and block their subsequent access through import sentinels.
+    
+    Parameters:
+        monkeypatch: Fixture used to isolate the process module state.
+        banned_roots (optional): Module roots to remove and block.
+    
+    Returns:
+        tuple: The module roots that were blocked.
+    """
     import types
 
     roots = tuple(banned_roots or ("opik", "requests", "httpx", "openai", "anthropic"))
@@ -37,6 +46,7 @@ def _install_banned_module_sentinels(monkeypatch, banned_roots=None):
 
     class _BannedModule(types.ModuleType):
         def __getattr__(self, item):  # pragma: no cover - defensive
+            """Reject access to attributes on a banned module."""
             raise ImportError(f"banned module access: {self.__name__}.{item}")
 
     for root in roots:
@@ -46,6 +56,17 @@ def _install_banned_module_sentinels(monkeypatch, banned_roots=None):
 
 
 def _load(path: Path, *, monkeypatch: pytest.MonkeyPatch, module_name: str):
+    """
+    Load a legacy script with banned dependency modules masked.
+    
+    Parameters:
+    	path (Path): Path to the script to load
+    	monkeypatch (pytest.MonkeyPatch): Fixture used to adjust import state
+    	module_name (str): Module name to import
+    
+    Returns:
+    	module: The loaded script module
+    """
     scripts_dir = str(path.parent)
     monkeypatch.syspath_prepend(scripts_dir)
     # Mask network/SDK modules so freezes cannot accidentally depend on them.
@@ -68,6 +89,13 @@ def _load(path: Path, *, monkeypatch: pytest.MonkeyPatch, module_name: str):
 
 
 def _assert_no_banned_imports(path: Path, banned_roots: set[str]) -> None:
+    """
+    Verify that a script contains no top-level imports from banned module roots.
+    
+    Parameters:
+    	path (Path): Path to the script to inspect.
+    	banned_roots (set[str]): Module roots that must not be imported.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for node in tree.body:
         if isinstance(node, ast.Import):

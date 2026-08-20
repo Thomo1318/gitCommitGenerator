@@ -132,24 +132,47 @@ class TaxonomyError(ValueError):
 
 
 def assert_execution_code(code: str) -> str:
-    """Fail closed when ``code`` is outside the execution closed set."""
+    """Validate an execution code against the closed execution taxonomy.
+    
+    Parameters:
+    	code (str): Execution code to validate.
+    
+    Returns:
+    	str: The validated execution code.
+    
+    Raises:
+    	TaxonomyError: If the code is not a recognised execution code.
+    """
     if code not in EXECUTION_CODES:
         raise TaxonomyError(f"unknown C' execution code: {code!r}")
     return code
 
 
 def assert_gate_disposition(code: str) -> str:
-    """Fail closed when ``code`` is outside the gate-disposition closed set."""
+    """Validate a gate-disposition code.
+    
+    Parameters:
+    	code (str): Gate-disposition code to validate.
+    
+    Returns:
+    	str: The validated gate-disposition code.
+    """
     if code not in GATE_DISPOSITION_CODES:
         raise TaxonomyError(f"unknown C' gate-disposition code: {code!r}")
     return code
 
 
 def map_gate_to_execution(gate_code: str, execution_code: str) -> None:
-    """Validate gate-disposition ↔ execution mapping (S5-D16).
-
-    ``budget_cap_reached`` is gate-only (empty execution set). Passing any
-    execution code with it is a cross-layer collision.
+    """
+    Validate that an execution code is permitted for a gate disposition.
+    
+    Parameters:
+        gate_code (str): Gate-disposition code to validate.
+        execution_code (str): Execution code to validate against the gate disposition.
+    
+    Raises:
+        TaxonomyError: If either code is unknown or the execution code is not
+            permitted for the gate disposition.
     """
     g = assert_gate_disposition(gate_code)
     e = assert_execution_code(execution_code)
@@ -163,7 +186,15 @@ def map_gate_to_execution(gate_code: str, execution_code: str) -> None:
 
 
 def failure_id_for(execution_code: str) -> str | None:
-    """Return the stable failure_id for a skip execution code (None for scored)."""
+    """
+    Map an execution outcome to its stable failure identifier.
+    
+    Parameters:
+        execution_code (str): A recognised execution outcome code.
+    
+    Returns:
+        str | None: The associated failure identifier, or `None` for scored outcomes.
+    """
     code = assert_execution_code(execution_code)
     if code == EXEC_SCORED:
         return None
@@ -178,6 +209,12 @@ class TaxonomyPair:
     execution_code: str
 
     def validate(self) -> TaxonomyPair:
+        """
+        Validate the execution code and its optional gate disposition pairing.
+        
+        Returns:
+            TaxonomyPair: This taxonomy pair.
+        """
         assert_execution_code(self.execution_code)
         if self.gate_disposition is not None:
             map_gate_to_execution(self.gate_disposition, self.execution_code)
@@ -185,20 +222,45 @@ class TaxonomyPair:
 
 
 def validate_closed_reason(reason: str, *, allow_scored: bool = True) -> str:
-    """Ensure a ScoreResult.reason is a closed execution code (D42)."""
+    """Validate a score result reason against the closed set of execution codes.
+    
+    Parameters:
+        reason (str): Execution code to validate.
+        allow_scored (bool): Whether the scored execution code is permitted.
+    
+    Returns:
+        str: The validated execution code.
+    
+    Raises:
+        TaxonomyError: If the reason is unknown or scored execution is disallowed.
+    """
     if reason == EXEC_SCORED and not allow_scored:
         raise TaxonomyError("reason=scored is not valid on this path")
     return assert_execution_code(reason)
 
 
 def iter_gate_disposition_codes() -> Iterable[str]:
+    """Return the gate disposition codes in sorted order.
+    
+    Returns:
+    	Iterable[str]: The sorted gate disposition codes.
+    """
     return sorted(GATE_DISPOSITION_CODES)
 
 
 def iter_execution_codes() -> Iterable[str]:
+    """Return execution codes in stable sorted order.
+    
+    Returns:
+        Iterable[str]: The sorted execution codes.
+    """
     return sorted(EXECUTION_CODES)
 
 
 def mapping_table() -> Mapping[str, tuple[str, ...]]:
-    """Stable mapping snapshot for tests/docs."""
+    """Return a stable snapshot of the allowed gate-disposition to execution-code mappings.
+    
+    Returns:
+        Mapping[str, tuple[str, ...]]: Gate dispositions mapped to sorted execution-code tuples, with gate dispositions sorted by key.
+    """
     return {g: tuple(sorted(v)) for g, v in sorted(GATE_TO_EXECUTION.items())}

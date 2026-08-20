@@ -61,20 +61,41 @@ Do not import this script from package code, hooks, or CI.
 
 
 def refuse_legacy_rule_setup(*, stream=None) -> int:
-    """Print the freeze notice and return a non-zero exit code."""
+    """
+    Print the legacy rule setup refusal message and provide the failure exit code.
+    
+    Parameters:
+    	stream: Optional output stream for the refusal message. Defaults to standard error.
+    
+    Returns:
+    	int: Exit code 2 indicating that legacy rule setup is refused.
+    """
     out = sys.stderr if stream is None else stream
     print(_REFUSE_MESSAGE, file=out)
     return 2
 
 
 def create_geval_rule(*_args, **_kwargs) -> None:
-    """Former rule-creation helper — always refuses (D24)."""
+    """
+    Reject attempts to create a legacy cloud GEval rule.
+    
+    Raises:
+        SystemExit: Always, with exit code 2.
+    """
     code = refuse_legacy_rule_setup()
     raise SystemExit(code)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry: accept legacy invocation, then refuse with pointer (no network)."""
+    """
+    Accept a historical command-line invocation and refuse legacy rule setup.
+    
+    Parameters:
+        argv (list[str] | None): Command-line arguments to parse, or the process arguments when omitted.
+    
+    Returns:
+        int: Exit code indicating that legacy rule setup was refused.
+    """
     parser = argparse.ArgumentParser(
         description=(
             "FROZEN: former Opik GEval rule installer. Use gated Lane C in src/git_cg/eval/lane_c/ (see #233 D24)."

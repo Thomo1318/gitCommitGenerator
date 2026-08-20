@@ -67,12 +67,16 @@ def resolve_lab_override(
     lab_override: bool | None,
     suite: Mapping[str, Any] | None,
 ) -> bool:
-    """Resolve the explicit lab-override escape hatch (N19).
-
-    Order: explicit API argument → ``suite.meta.lab_override`` (bool only) →
-    ``False``. When True with deterministic fail, the cohort is marked
-    **eligible-diagnostic** only — runner emits skip rows and never invokes
-    judges (F-B / C-TAX).
+    """Resolve whether lab override is enabled for a suite.
+    
+    Parameters:
+        lab_override (bool | None): Explicit override setting, taking precedence
+            when provided.
+        suite (Mapping[str, Any] | None): Suite metadata containing an optional
+            boolean ``meta.lab_override`` setting.
+    
+    Returns:
+        bool: The resolved lab override setting, defaulting to ``False``.
     """
     if lab_override is not None:
         return bool(lab_override)
@@ -86,15 +90,23 @@ def resolve_lab_override(
 
 
 def _normalize_model_id(model: str) -> str:
+    """Normalise a model identifier by removing leading and trailing whitespace.
+    
+    Parameters:
+    	model (str): The model identifier to normalise.
+    
+    Returns:
+    	str: The model identifier without leading or trailing whitespace.
+    """
     return model.strip()
 
 
 def is_undated_model_alias(model: str) -> bool:
-    """Return True when ``model`` is empty, ``latest``, or an undated alias (D8).
-
-    Dated immutable ids must embed an ISO ``YYYY-MM-DD`` fragment (e.g.
-    ``gpt-4o-2024-08-06``). Bare aliases such as ``gpt-4o`` fail closed for
-    CI/accept-path-shaped suites.
+    """
+    Determine whether a model identifier is empty, refers to a latest alias, or lacks an ISO date fragment.
+    
+    Returns:
+        bool: `true` if the model identifier is undated or otherwise represents a mutable alias, `false` for a dated identifier.
     """
     m = _normalize_model_id(model)
     if not m:
@@ -114,14 +126,21 @@ def judge_identity_pins_resolvable(
     output_contract_identity: str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> bool:
-    """Fail-closed identity pin probe — **secrets are never consulted** (D4/D4').
-
-    A judge identity is resolvable when:
-
-    * model id is present and not ``latest`` / undated alias
-    * pack identity is non-empty and not ``latest`` (default deferred pack id
-      is allowed at authorization; byte resolution is Slice 2 fail-closed)
-    * sampling + output-contract identity fields are non-empty (defaults ok)
+    """
+    Validate whether the configured judge identity pins are resolvable.
+    
+    Parameters:
+        judge_model (str | None): Judge model identifier; the environment value is
+            used when omitted.
+        pack_identity (str | None): Pack identity to validate.
+        sampling_identity (str | None): Sampling identity to validate.
+        output_contract_identity (str | None): Output-contract identity to validate.
+        environ (Mapping[str, str] | None): Environment mapping used for model
+            lookup.
+    
+    Returns:
+        bool: `True` when all identity pins are present and valid, `False`
+            otherwise.
     """
     env = environ if environ is not None else os.environ
     model = judge_model if judge_model is not None else env.get(ENV_JUDGE_MODEL, "")
@@ -182,6 +201,19 @@ def _pin_evidence(
     output_contract_identity: str | None,
     environ: Mapping[str, str] | None,
 ) -> dict[str, Any]:
+    """
+    Build secret-free evidence describing the configured judge identity pins.
+    
+    Parameters:
+    	judge_model (str | None): Judge model identifier, or the configured environment value when omitted.
+    	pack_identity (str | None): Pack identity reference.
+    	sampling_identity (str | None): Sampling identity reference.
+    	output_contract_identity (str | None): Output-contract identity reference.
+    	environ (Mapping[str, str] | None): Environment values used to resolve the judge model.
+    
+    Returns:
+    	dict[str, Any]: Evidence containing pin presence and dating status, identity references, and an indication that secrets were not consulted.
+    """
     env = environ if environ is not None else os.environ
     model = judge_model if judge_model is not None else env.get(ENV_JUDGE_MODEL, "")
     model_norm = _normalize_model_id(model)
@@ -216,10 +248,22 @@ def evaluate_semantic_cohort_eligibility(
     output_contract_identity: str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> LaneCEligibility:
-    """Evaluate authorization-only ``gate.semantic_cohort_eligible`` (D4).
-
-    Never consults credentials. Never raises on missing keys. Returns a frozen
-    result carrying machine-class reasons and secret-free evidence.
+    """
+    Evaluate semantic cohort authorisation using suite scope, deterministic status, lab override, and judge identity pins.
+    
+    Parameters:
+    	deterministic_pass (bool): Whether the cohort passed deterministic evaluation.
+    	allows_lane_c (bool | None): Explicit suite opt-in, or ``None`` to resolve it from ``suite``.
+    	lab_override (bool | None): Explicit lab override, or ``None`` to resolve it from ``suite``.
+    	suite (Mapping[str, Any] | None): Suite metadata used to resolve omitted settings.
+    	judge_model (str | None): Dated judge model identity.
+    	pack_identity (str | None): Judge pack identity.
+    	sampling_identity (str | None): Sampling configuration identity.
+    	output_contract_identity (str | None): Output contract identity.
+    	environ (Mapping[str, str] | None): Environment values used to resolve the judge model.
+    
+    Returns:
+    	LaneCEligibility: An immutable verdict containing eligibility, diagnostic status, reason codes, gate disposition, and secret-free evidence.
     """
     allows = resolve_allows_lane_c(allows_lane_c, suite)
     override = resolve_lab_override(lab_override, suite)

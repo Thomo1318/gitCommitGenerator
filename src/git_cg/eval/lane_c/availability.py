@@ -45,12 +45,16 @@ def credentials_present(
     environ: Mapping[str, str] | None = None,
     secret_resolver: SecretResolver | None = None,
 ) -> bool:
-    """Return True when a non-empty judge API key is available.
-
-    Resolution order:
-    1. explicit ``judge_api_key`` argument (tests/lab injection)
-    2. ``environ[GIT_CG_EVAL_JUDGE_API_KEY]`` when ``environ`` is provided
-    3. ``secret_resolver`` / ``resolve_secret`` against process env + 1P cache
+    """
+    Determine whether a judge API key is available.
+    
+    Parameters:
+        judge_api_key (str | None): Explicit API key to check before other sources.
+        environ (Mapping[str, str] | None): Environment mapping containing the configured judge API key.
+        secret_resolver (SecretResolver | None): Resolver used when no explicit key or environment mapping is supplied.
+    
+    Returns:
+        bool: `True` if a non-empty key is available, `False` otherwise. Resolver errors are treated as unavailable credentials.
     """
     if judge_api_key is not None:
         return bool(judge_api_key.strip())
@@ -74,12 +78,17 @@ def provider_client_constructible(
     environ: Mapping[str, str] | None = None,
     client_factory_ok: bool | None = None,
 ) -> bool:
-    """Return True when a provider client could be constructed offline-safe.
-
-    Spine rule: credentials must be present. Optional ``base_url`` is an
-    enhancement only — empty/missing URL does not fail constructibility.
-    ``client_factory_ok`` lets tests force a constructibility failure without
-    importing a provider SDK.
+    """
+    Determine whether a provider client is constructible.
+    
+    Parameters:
+        credentials_ok (bool): Whether the required provider credentials are present.
+        base_url (str | None): Optional provider endpoint; it does not affect constructibility.
+        environ (Mapping[str, str] | None): Optional environment settings; they do not affect constructibility.
+        client_factory_ok (bool | None): Explicitly forces failure when set to ``False``.
+    
+    Returns:
+        bool: ``True`` if credentials are present and client construction is permitted, ``False`` otherwise.
     """
     if not credentials_ok:
         return False
@@ -115,7 +124,20 @@ def evaluate_judge_availability(
     secret_resolver: SecretResolver | None = None,
     client_factory_ok: bool | None = None,
 ) -> LaneCAvailability:
-    """Evaluate execution availability without mutating eligibility (D4')."""
+    """
+    Evaluate judge execution availability without changing eligibility.
+    
+    Parameters:
+    	eligible (bool): Whether the input is eligible for judge execution.
+    	judge_api_key (str | None): Optional API key to use for credential detection.
+    	base_url (str | None): Optional judge service base URL.
+    	environ (Mapping[str, str] | None): Optional environment mapping used for configuration.
+    	secret_resolver (SecretResolver | None): Optional resolver for retrieving the API key.
+    	client_factory_ok (bool | None): Optional result controlling client constructibility.
+    
+    Returns:
+    	(LaneCAvailability): Execution availability, gate disposition, reason codes, and non-secret evidence.
+    """
     creds_ok = credentials_present(
         judge_api_key=judge_api_key,
         environ=environ,
