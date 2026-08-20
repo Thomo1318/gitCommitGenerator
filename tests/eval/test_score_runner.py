@@ -187,7 +187,13 @@ def test_score_bundle_lane_c_opt_in_with_fake_judge() -> None:
     # C' must not be the sole reason promotion passes; if promo true, det/gold drove it.
     if by["gate.golden_promotion_eligible"].passed is True:
         assert by["gate.deterministic_pass"].passed is True
-    assert by["gate.semantic_cohort_eligible"].evidence.get("cprime_ran") in {True, False}
+    # Fake judge is injectable and credentials are present → C' runs and scores.
+    assert by["gate.semantic_cohort_eligible"].evidence.get("cprime_ran") is True
+    # Advisory polarity: scored rows keep passed=None (never sole gate).
+    assert all(r.passed is None for r in c_rows)
+    assert any((r.evidence or {}).get("execution_code") == "scored" or r.reason == "scored" for r in c_rows) or all(
+        r.score is not None or (r.evidence or {}).get("score") is not None for r in c_rows
+    )
     # S5 honesty metrics must be present exactly once after Lane C.
     from git_cg.eval.scoring.family_h import FAMILY_H_CPRIME
 
@@ -227,6 +233,7 @@ def test_score_bundle_family_h_cprime_single_emission_when_lane_c_errors(
     )
     by = result.by_id()
     assert any(e.startswith("lane_c:") for e in result.evaluator_errors)
+    assert by["h.evaluator_error_free"].passed is False
     for mid in FAMILY_H_CPRIME:
         assert mid in by
         assert sum(1 for s in result.scores if s.metric_id == mid) == 1

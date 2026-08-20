@@ -432,6 +432,14 @@ class TestCommittedRepoPacks:
         if not present:
             assert fp.status == "absent"
             assert fp.pinned is False
+            assert fp.latest_found == ()
+        else:
+            # Present universe must be honestly pinned (no floating latest).
+            assert fp.status == "pinned"
+            assert fp.pinned is True
+            assert fp.latest_found == ()
+            assert isinstance(fp.content_sha256, str) and len(fp.content_sha256) == 64
+            fp.assert_pinned()
 
 
 # ---------------------------------------------------------------------------

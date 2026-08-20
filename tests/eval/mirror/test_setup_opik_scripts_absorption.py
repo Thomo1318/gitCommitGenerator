@@ -25,15 +25,34 @@ EVAL_COMMIT = SCRIPTS / "eval_commit_message.py"
 OPIK_METRICS = SCRIPTS / "opik_metrics.py"
 
 
+def _install_banned_module_sentinels(monkeypatch, banned_roots=None):
+    """Remove loaded banned modules and block fresh imports (process-global isolation)."""
+    import types
+
+    roots = tuple(banned_roots or ("opik", "requests", "httpx", "openai", "anthropic"))
+    # Drop already-loaded roots and submodules.
+    for name in list(sys.modules):
+        if name in roots or any(name.startswith(r + ".") for r in roots):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+    class _BannedModule(types.ModuleType):
+        def __getattr__(self, item):  # pragma: no cover - defensive
+            raise ImportError(f"banned module access: {self.__name__}.{item}")
+
+    for root in roots:
+        sentinel = _BannedModule(root)
+        monkeypatch.setitem(sys.modules, root, sentinel)
+    return roots
+
+
 def _load(path: Path, *, monkeypatch: pytest.MonkeyPatch, module_name: str):
     scripts_dir = str(path.parent)
     monkeypatch.syspath_prepend(scripts_dir)
     # Mask network/SDK modules so freezes cannot accidentally depend on them.
-    for key in list(sys.modules):
-        if key == "opik" or key.startswith("opik.") or key == "requests":
-            monkeypatch.delitem(sys.modules, key, raising=False)
-    monkeypatch.setitem(sys.modules, "opik", None)  # type: ignore[arg-type]
-    monkeypatch.setitem(sys.modules, "requests", None)  # type: ignore[arg-type]
+    _install_banned_module_sentinels(
+        monkeypatch,
+        banned_roots=("opik", "requests", "httpx", "openai", "anthropic"),
+    )
 
     sys.modules.pop(module_name, None)
     sys.modules.pop(f"{module_name}_frozen", None)
@@ -93,7 +112,7 @@ class TestLegacyScriptFreeze:
         self, path: Path, module_name: str, flag_name: str, refuse_name: str, needle: str
     ) -> None:
         del module_name, flag_name, refuse_name, needle
-        _assert_no_banned_imports(path, {"opik", "requests", "httpx", "openai"})
+        _assert_no_banned_imports(path, {"opik", "requests", "httpx", "openai", "anthropic"})
 
     def test_flag_and_refuse(
         self,

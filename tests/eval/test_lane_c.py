@@ -6,7 +6,6 @@ C-ELIG / C-AVAIL / C-TAX / C-GATE / S5-A*.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -374,6 +373,7 @@ class TestRunLaneC:
             assert r.passed is None
         # Availability may still be probed for evidence; that is not judge invocation.
         assert result.evidence["invoked"] is False
+        assert side_effects["judge_calls"] == 0
 
     def test_eligible_available_does_not_set_cprime_ran(self) -> None:
         # S5a: eligible+available still does not invoke judge (Slice 4).
@@ -529,19 +529,27 @@ class TestGateComposition:
 
 class TestImportIsolation:
     def test_import_lane_c_does_not_import_openai(self) -> None:
-        # Drop cached modules then reimport; openai must not appear.
-        banned = {"openai", "anthropic", "httpx", "opik"}
-        before = {m for m in sys.modules if m.split(".")[0] in banned}
-        # Re-import package surface.
-        import importlib
+        # Fresh subprocess: import surface must not pull provider/network SDKs.
+        import subprocess
+        import sys as _sys
 
-        import git_cg.eval.lane_c as lane_c
-
-        importlib.reload(lane_c)
-        after = {m for m in sys.modules if m.split(".")[0] in banned}
-        leaked = after - before
-        assert not leaked, f"provider modules imported: {leaked}"
-        assert hasattr(lane_c, "run_lane_c")
+        code = (
+            "import sys\n"
+            "banned = {'openai', 'anthropic', 'httpx', 'opik', 'requests'}\n"
+            "before = {m for m in sys.modules if m.split('.', 1)[0] in banned}\n"
+            "import git_cg.eval.lane_c as lane_c\n"
+            "after = {m for m in sys.modules if m.split('.', 1)[0] in banned}\n"
+            "leaked = sorted(after - before)\n"
+            "assert not leaked, leaked\n"
+            "assert hasattr(lane_c, 'run_lane_c')\n"
+        )
+        proc = subprocess.run(
+            [_sys.executable, "-c", code],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 # ---------------------------------------------------------------------------

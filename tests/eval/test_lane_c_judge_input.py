@@ -8,7 +8,6 @@ No provider SDK, network, or runner wiring.
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 
 import pytest
@@ -381,13 +380,23 @@ class TestLabOverride:
 
 class TestImportIsolation:
     def test_judge_input_does_not_import_providers(self) -> None:
-        banned = {"openai", "anthropic", "httpx", "opik"}
-        before = {m for m in sys.modules if m.split(".", 1)[0] in banned}
-        import importlib
+        import subprocess
+        import sys as _sys
 
-        import git_cg.eval.lane_c.judge_input as judge_input
-
-        importlib.reload(judge_input)
-        after = {m for m in sys.modules if m.split(".", 1)[0] in banned}
-        assert not (after - before)
-        assert hasattr(judge_input, "project_judge_input")
+        code = (
+            "import sys\n"
+            "banned = {'openai', 'anthropic', 'httpx', 'opik', 'requests'}\n"
+            "before = {m for m in sys.modules if m.split('.', 1)[0] in banned}\n"
+            "import git_cg.eval.lane_c.judge_input as judge_input\n"
+            "after = {m for m in sys.modules if m.split('.', 1)[0] in banned}\n"
+            "leaked = sorted(after - before)\n"
+            "assert not leaked, leaked\n"
+            "assert hasattr(judge_input, 'project_judge_input')\n"
+        )
+        proc = subprocess.run(
+            [_sys.executable, "-c", code],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr

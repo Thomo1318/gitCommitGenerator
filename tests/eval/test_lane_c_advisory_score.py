@@ -43,9 +43,9 @@ class TestMakeAdvisoryScore:
         assert row.authority.value == "advisory"
 
     def test_rejects_out_of_range(self) -> None:
-        with pytest.raises(ValueError, match=r"1..5"):
+        with pytest.raises(ValueError, match=r"1\.\.5"):
             make_advisory_score("cprime.geval_craft", 0)
-        with pytest.raises(ValueError, match=r"1..5"):
+        with pytest.raises(ValueError, match=r"1\.\.5"):
             make_advisory_score("cprime.geval_craft", 6)
         with pytest.raises(ValueError, match="number"):
             make_advisory_score("cprime.geval_craft", True)  # type: ignore[arg-type]

@@ -170,6 +170,23 @@ def test_family_h_cprime_missing_pack_pin_fails() -> None:
     assert by["h.prompt_pack_suite_fresh"].reason == "prompt_pack_pin_missing"
 
 
+def test_family_h_cprime_malformed_pack_identity_digest_fails() -> None:
+    """Short digest after prompt_pack_v1@ must fail hash-known (not green)."""
+    scores = score_family_h_cprime(
+        suite_snapshot_pin="suite@1",
+        lane_c_run_evidence={
+            "lane_c_enabled": True,
+            "cprime_attempted": True,
+            "judge_input_isolated": True,
+            "pack_identity": "prompt_pack_v1@abc",
+        },
+    )
+    by = _by_id(scores)
+    assert by["h.prompt_pack_pinned"].passed is True
+    assert by["h.prompt_pack_hash_known"].passed is False
+    assert by["h.prompt_pack_hash_known"].reason == "prompt_pack_hash_missing"
+
+
 def test_family_h_cprime_missing_suite_snapshot_fails_freshness() -> None:
     digest = "b" * 64
     pin = f"prompt_pack_v1@{digest}"
