@@ -122,6 +122,35 @@ max-complexity = 15
 # Security / SBOM floor pins for transitive deps (Grype --fail-on high).
 # pillow via reportlab; aiohttp via instructor/litellm; cryptography transitive;
 # pymdown-extensions via docs extra; pydantic-settings via opik/mcp.
+[tool.interrogate]
+# Docstring coverage (interrogate) for first-party package surface.
+#
+# Runtime pin (mandatory): Python 3.14+.
+# This codebase uses PEP 758 bare multi-except (`except A, B:`). interrogate on
+# 3.13- parses that as SyntaxError. Always invoke via:
+#   uvx --python 3.14 interrogate …
+#
+# CI gate is PATCH-SCOPED (changed files under src/git_cg only), fail-under 80.
+# Full-tree `src/git_cg` scans generate the README badge only (informational in CI).
+# Legacy soak/dashboard scripts are excluded from package-wide scans.
+ignore-init-method = true
+ignore-magic = true
+ignore-nested-functions = true
+ignore-nested-classes = true
+ignore-semiprivate = false
+ignore-private = false
+ignore-module = false
+fail-under = 80
+exclude = ["src/git_cg/evals"]
+verbose = 1
+quiet = false
+color = true
+omit-covered-files = false
+generate-badge = "docs/assets/badges"
+badge-format = "svg"
+badge-style = "flat"
+
+
 [tool.uv]
 constraint-dependencies = [
   "pillow>=12.3.0",

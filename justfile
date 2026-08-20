@@ -63,6 +63,27 @@ test:
     @rm -rf .test_repo
     @echo "✅ Robust integration test complete."
 
+
+# Docstring coverage on CHANGED files only (CI-shaped patch gate, fail-under 80).
+# BASE defaults to origin/main...HEAD for branches; override: just docstrings-patch main
+docstrings-patch base="origin/main":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mapfile -t files < <(
+      git diff --name-only --diff-filter=ACMR "{{base}}"...HEAD -- 'src/git_cg/**/*.py'         | rg -v '^src/git_cg/evals/' || true
+    )
+    if [ "${#files[@]}" -eq 0 ]; then
+      echo "No changed src/git_cg Python files vs {{base}} — docstring patch gate skipped."
+      exit 0
+    fi
+    printf 'Docstring patch gate (%d file(s)):\n' "${#files[@]}"
+    printf '  %s\n' "${files[@]}"
+    uvx --python 3.14 interrogate -v --fail-under 80 "${files[@]}"
+
+# Full-package docstring health + flat badge (not the CI push gate)
+docstrings:
+    uvx --python 3.14 interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
+
 # Uninstall the tool and completions
 uninstall:
     @echo "🗑 Uninstalling git-cg..."
