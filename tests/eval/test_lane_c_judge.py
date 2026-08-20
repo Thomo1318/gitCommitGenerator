@@ -205,5 +205,24 @@ class TestFactoryAndCredentials:
         assert seen["model"] == PINNED_MODEL
 
     def test_import_lane_c_does_not_load_openai(self) -> None:
-        # Ensure openai not pulled by package import path used here.
-        assert not any(m == "openai" or m.startswith("openai.") for m in sys.modules)
+        # Clean interpreter: suite-level openai imports must not poison this check.
+        import subprocess
+
+        code = (
+            "import sys\n"
+            "banned = {'openai'}\n"
+            "before = {m for m in sys.modules if m == 'openai' or m.startswith('openai.')}\n"
+            "import git_cg.eval.lane_c.judge as judge\n"
+            "after = {m for m in sys.modules if m == 'openai' or m.startswith('openai.')}\n"
+            "leaked = sorted(after - before)\n"
+            "assert not leaked, leaked\n"
+            "assert hasattr(judge, 'openai_compatible_judge_fn')\n"
+            "assert hasattr(judge, 'run_pinned_judge')\n"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
