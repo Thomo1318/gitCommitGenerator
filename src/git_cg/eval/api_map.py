@@ -211,7 +211,8 @@ def render_operator_api_map(nodes: Iterable[CommandNode] | None = None) -> str:
         f"| Deprecated alias removal target | `{REMOVAL_TARGET}` |",
         f"| Default `--keep-last` (checkpoint retention bound) | `{DEFAULT_KEEP_LAST}` |",
         "",
-        "Pruning semantics for `--keep-last` land in Slice 3; the default is",
+        "Pruning semantics for `--keep-last` are live (per-suite family; "
+        "failed-run retention until a completed supersedes). The default is "
         "recorded here so help/API map stay aligned.",
         "",
         "## CLI command tree",

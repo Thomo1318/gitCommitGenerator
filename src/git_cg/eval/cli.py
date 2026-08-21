@@ -173,48 +173,309 @@ def encode_fixture_cmd(
 
 
 # --------------------------------------------------------------------------
-# S6 suite run / resume / recompute (stubs → Slice 3)
+# S6 suite run / resume / recompute (Slice 3)
 # --------------------------------------------------------------------------
+
+
+def _emit_run_result(
+    command: str,
+    *,
+    as_json: bool,
+    result: Any | None = None,
+    error: BaseException | None = None,
+) -> None:
+    """Shared stdout/stderr + exit mapping for run/resume/recompute."""
+    from git_cg.eval.cli_output import emit_human_line, envelope_message
+    from git_cg.eval.run_orchestrator import RunOrchestratorError, RunResult
+
+    if error is not None:
+        if isinstance(error, RunOrchestratorError):
+            code = error.code
+            message = str(error)
+            hint = error.hint
+            exit_code = int(error.exit_code)
+            data = dict(error.data)
+            data.setdefault("status", "failed" if exit_code == 1 else "blocked")
+        else:
+            code = "EVAL_SUITE_FAIL"
+            message = str(error)
+            hint = None
+            exit_code = 1
+            data = {"status": "failed"}
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    command,
+                    ok=False,
+                    data=data,
+                    errors=[envelope_message(code, message, hint=hint)],
+                )
+            )
+        else:
+            line = f"{command}: {message}"
+            if hint:
+                line = f"{line} ({hint})"
+            emit_human_line(line, err=True)
+        raise typer.Exit(code=exit_code)
+
+    assert isinstance(result, RunResult)
+    data = result.to_data()
+    ok = result.exit_code == 0
+    if as_json:
+        emit_json_envelope(build_envelope(command, ok=ok, data=data))
+    else:
+        emit_human_line(
+            (
+                f"{command}: status={result.status} mode={result.mode} "
+                f"suite={result.suite_id} experiment={result.experiment_id} "
+                f"all_pass={result.all_pass} completed={len(result.completed_case_ids)} "
+                f"pending={len(result.pending_case_ids)}"
+            ),
+            err=False,
+        )
+        for case in result.case_results:
+            failed = ",".join(case.failed_metric_ids) if case.failed_metric_ids else "-"
+            emit_human_line(
+                f"  case {case.case_id}: deterministic_pass={case.deterministic_pass} failed={failed}",
+                err=True,
+            )
+        if result.checkpoint_id:
+            emit_human_line(f"  checkpoint={result.checkpoint_id}", err=True)
+        if result.compat_hash:
+            emit_human_line(f"  compat_hash={result.compat_hash[:12]}…", err=True)
+        if result.pruned_checkpoint_ids:
+            emit_human_line(
+                f"  pruned_checkpoints={len(result.pruned_checkpoint_ids)}",
+                err=True,
+            )
+    raise typer.Exit(code=result.exit_code)
+
+
+def _parse_case_ids(raw: str | None) -> tuple[str, ...] | None:
+    if raw is None:
+        return None
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    return tuple(parts) if parts else None
 
 
 @eval_app.command("run")
 def run_cmd(
-    suite: str | None = typer.Option(None, "--suite", help="Suite id to run."),
+    suite: str | None = typer.Option(
+        "cm-eval-fixtures-core",
+        "--suite",
+        help="Suite id to run (default: cm-eval-fixtures-core).",
+    ),
+    fixture_root: Path | None = typer.Option(
+        None,
+        "--fixture-root",
+        help="Optional fixture root override (tests/lab).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    mode: str = typer.Option(
+        "fresh_suite_run",
+        "--mode",
+        help=("Run mode: fresh_suite_run | resume_missing | recompute_scores | replay_generation | export_only."),
+    ),
     keep_last: int = typer.Option(
         DEFAULT_KEEP_LAST,
         "--keep-last",
-        help="Checkpoint retention bound (default 10; pruning semantics in Slice 3).",
+        help="Checkpoint retention bound per suite family (default 10).",
     ),
     keep_checkpoint: bool = typer.Option(
         False,
         "--keep-checkpoint",
         help="Retain this run's checkpoint even after success.",
     ),
+    gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
+    case: str | None = typer.Option(
+        None,
+        "--case",
+        help="Optional comma-separated case id filter (triage/lab only; not CI golden).",
+    ),
+    experiment: str | None = typer.Option(
+        None,
+        "--experiment",
+        help="Required for export_only / optional parent for recompute via run --mode.",
+    ),
+    checkpoint: str | None = typer.Option(
+        None,
+        "--checkpoint",
+        help="Checkpoint id when --mode resume_missing.",
+    ),
+    allow_replay_generation: bool = typer.Option(
+        False,
+        "--allow-replay-generation",
+        help="Explicit gate for replay_generation (refused by default).",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Run an offline evaluation suite (canonical; not ``eval suite run``)."""
-    _ = (suite, keep_last, keep_checkpoint)
-    _stub("eval run", slice_hint="Slice 3", as_json=as_json)
+    # Lazy import preserves Slice 2 import-isolation law (no scoring at import).
+    from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
+
+    try:
+        result = run_evaluation(
+            RunRequest(
+                mode=mode,  # type: ignore[arg-type]
+                suite_id=suite or "cm-eval-fixtures-core",
+                fixture_root=fixture_root,
+                gold_mode=gold_mode,
+                keep_last=keep_last,
+                keep_checkpoint=keep_checkpoint,
+                checkpoint_id=checkpoint,
+                experiment_id=experiment,
+                case_ids=_parse_case_ids(case),
+                allow_replay_generation=allow_replay_generation,
+                offline=True,
+                enable_lane_c=False,
+                enable_dogfood=False,
+            )
+        )
+    except RunOrchestratorError as exc:
+        _emit_run_result("eval run", as_json=as_json, error=exc)
+    except Exception as exc:
+        _emit_run_result("eval run", as_json=as_json, error=exc)
+    else:
+        _emit_run_result("eval run", as_json=as_json, result=result)
 
 
 @eval_app.command("resume")
 def resume_cmd(
-    checkpoint: str | None = typer.Option(None, "--checkpoint", help="Checkpoint id to resume."),
+    checkpoint: str | None = typer.Option(
+        None,
+        "--checkpoint",
+        help="Checkpoint id to resume (required).",
+    ),
+    fixture_root: Path | None = typer.Option(
+        None,
+        "--fixture-root",
+        help="Optional fixture root override (tests/lab).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    keep_last: int = typer.Option(
+        DEFAULT_KEEP_LAST,
+        "--keep-last",
+        help="Checkpoint retention bound per suite family (default 10).",
+    ),
+    keep_checkpoint: bool = typer.Option(
+        False,
+        "--keep-checkpoint",
+        help="Retain this run's checkpoint even after success.",
+    ),
+    gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Resume a suite run from a governed checkpoint + compat hash."""
-    _ = checkpoint
-    _stub("eval resume", slice_hint="Slice 3", as_json=as_json)
+    from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
+
+    if not checkpoint:
+        _emit_run_result(
+            "eval resume",
+            as_json=as_json,
+            error=RunOrchestratorError(
+                "resume requires --checkpoint",
+                code="EVAL_USAGE",
+                exit_code=2,
+                hint="Pass --checkpoint <id> from a prior suite run.",
+            ),
+        )
+        return
+
+    try:
+        result = run_evaluation(
+            RunRequest(
+                mode="resume_missing",
+                fixture_root=fixture_root,
+                gold_mode=gold_mode,
+                keep_last=keep_last,
+                keep_checkpoint=keep_checkpoint,
+                checkpoint_id=checkpoint,
+                offline=True,
+            )
+        )
+    except RunOrchestratorError as exc:
+        _emit_run_result("eval resume", as_json=as_json, error=exc)
+    except Exception as exc:
+        _emit_run_result("eval resume", as_json=as_json, error=exc)
+    else:
+        _emit_run_result("eval resume", as_json=as_json, result=result)
 
 
 @eval_app.command("recompute-scores")
 def recompute_scores_cmd(
-    experiment: str | None = typer.Option(None, "--experiment", help="Experiment id."),
+    experiment: str | None = typer.Option(
+        None,
+        "--experiment",
+        help="Parent experiment id whose evidence is re-scored (required).",
+    ),
+    suite: str | None = typer.Option(
+        "cm-eval-fixtures-core",
+        "--suite",
+        help="Suite id / metric pack context (default: cm-eval-fixtures-core).",
+    ),
+    fixture_root: Path | None = typer.Option(
+        None,
+        "--fixture-root",
+        help="Optional fixture root override (tests/lab).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    keep_last: int = typer.Option(
+        DEFAULT_KEEP_LAST,
+        "--keep-last",
+        help="Checkpoint retention bound per suite family (default 10).",
+    ),
+    keep_checkpoint: bool = typer.Option(
+        False,
+        "--keep-checkpoint",
+        help="Retain this recompute checkpoint even after success.",
+    ),
+    gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Re-run the metric pack over already-landed evidence bundles."""
-    _ = experiment
-    _stub("eval recompute-scores", slice_hint="Slice 3", as_json=as_json)
+    from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
+
+    if not experiment:
+        _emit_run_result(
+            "eval recompute-scores",
+            as_json=as_json,
+            error=RunOrchestratorError(
+                "recompute-scores requires --experiment",
+                code="EVAL_USAGE",
+                exit_code=2,
+                hint="Pass the parent experiment id that retains evidence bundles.",
+            ),
+        )
+        return
+
+    try:
+        result = run_evaluation(
+            RunRequest(
+                mode="recompute_scores",
+                suite_id=suite or "cm-eval-fixtures-core",
+                fixture_root=fixture_root,
+                gold_mode=gold_mode,
+                keep_last=keep_last,
+                keep_checkpoint=keep_checkpoint,
+                experiment_id=experiment,
+                offline=True,
+            )
+        )
+    except RunOrchestratorError as exc:
+        _emit_run_result("eval recompute-scores", as_json=as_json, error=exc)
+    except Exception as exc:
+        _emit_run_result("eval recompute-scores", as_json=as_json, error=exc)
+    else:
+        _emit_run_result("eval recompute-scores", as_json=as_json, result=result)
 
 
 # --------------------------------------------------------------------------

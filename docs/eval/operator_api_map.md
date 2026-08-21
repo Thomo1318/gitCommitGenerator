@@ -28,8 +28,7 @@ Undocumented internals are **not** promised compatible (S6-A05).
 | Deprecated alias removal target | `first minor release after S6 GA` |
 | Default `--keep-last` (checkpoint retention bound) | `10` |
 
-Pruning semantics for `--keep-last` land in Slice 3; the default is
-recorded here so help/API map stay aligned.
+Pruning semantics for `--keep-last` are live (per-suite family; failed-run retention until a completed supersedes). The default is recorded here so help/API map stay aligned.
 
 ## CLI command tree
 
