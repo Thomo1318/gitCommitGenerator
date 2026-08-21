@@ -102,3 +102,7 @@ eval-materialize:
 # Regenerate tests/fixtures/eval/FIXTURE_INDEX.md
 eval-fixture-index:
     uv run python -m git_cg.eval.corpus.index --write
+
+# Check docs/eval/operator_api_map.md matches live Typer tree (S6 Slice 2)
+eval-api-map-check:
+    uv run python -m git_cg.eval.api_map --check
