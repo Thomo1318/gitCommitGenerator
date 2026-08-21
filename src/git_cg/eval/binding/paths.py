@@ -16,6 +16,7 @@ Locked on-disk tree (repo-local, gitignored in normal use)::
       index/                                       # rebuildable cache only (S6)
       train_export/                                # train export envelopes (S6)
       antipattern_vault/                           # labeled negatives vault (S6)
+      experiments/                                # local experiment + score artifacts (S6)
 
 Write law:
 
@@ -50,6 +51,7 @@ __all__ = [
     "DIAGNOSTICS_DIRNAME",
     "DOGFOOD_DIRNAME",
     "EVAL_DIRNAME",
+    "EXPERIMENTS_DIRNAME",
     "INDEX_DIRNAME",
     "ISSUES_DIRNAME",
     "REPLAYS_DIRNAME",
@@ -67,6 +69,7 @@ __all__ = [
     "diagnostics_dir",
     "dogfood_dir",
     "eval_tree_root",
+    "experiments_dir",
     "index_dir",
     "issues_dir",
     "replays_dir",
@@ -94,6 +97,7 @@ REPLAYS_DIRNAME = ("replays",)
 INDEX_DIRNAME = ("index",)
 TRAIN_EXPORT_DIRNAME = ("train_export",)
 ANTIPATTERN_VAULT_DIRNAME = ("antipattern_vault",)
+EXPERIMENTS_DIRNAME = ("experiments",)
 
 #: Restrictive modes for runtime trees (N19.3).
 _FILE_MODE = 0o600
@@ -270,6 +274,11 @@ def replays_dir(repo_root: Path) -> Path:
 def index_dir(repo_root: Path) -> Path:
     """Return ``.eval/index/`` (contained; rebuildable cache only; not created here)."""
     return _contained(repo_root, Path(*INDEX_DIRNAME))
+
+
+def experiments_dir(repo_root: Path) -> Path:
+    """Return ``.eval/experiments/`` (contained; authoritative local run artifacts)."""
+    return _contained(repo_root, Path(*EXPERIMENTS_DIRNAME))
 
 
 def train_export_dir(repo_root: Path) -> Path:
