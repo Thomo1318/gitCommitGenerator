@@ -39,7 +39,7 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | `eval compare` | command | public | canonical | Structural + metric delta; prefer replay_compare lineage when linked. — Public CLI operator surface. |
 | `eval config` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval opik config show`` (temporary bridge). Removal target: first minor release after S6 GA. — Canonical: `eval opik config show`. Removal: first minor release after S6 GA. |
 | `eval diagnose` | command | public | canonical | Upsert diag_issue_v1 with stable fingerprint law. — Public CLI operator surface. |
-| `eval doctor` | command | public | canonical | Local suite/pin/metric doctor (distinct from ``eval opik doctor``). — Public CLI operator surface. |
+| `eval doctor` | command | public | canonical | Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, network-free. Fail-closed on floating ``latest`` pins and missing catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks only; warn-severity failures never flip green to red. Emits phantom-metric producers ``h.compat_hash_resume`` / ``h.doctor_green`` / ``h.export_config_resolved`` as ScoreResultV1 rows. — Public CLI operator surface. |
 | `eval dogfood` | command | public | canonical | Maintainer dogfood profile controls (default off for non-maintainers). — Public CLI operator surface. |
 | `eval encode-fixture` | command | public | canonical | Encode a fixture into ``ape_bundle_v1`` and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exits non-zero on invalid options, missing fixtures, or encode failures. — Public CLI operator surface. |
 | `eval explain` | command | public | canonical | Deterministic explain contract (§18.3); no opaque LLM RCA. — Public CLI operator surface. |
@@ -61,7 +61,7 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | `eval opik` | group | public (group) | group | Opik/export health and secret-safe config (canonical). — Nested Typer group (not invoked alone). |
 | `eval opik config` | group | public (group) | group | Secret-safe Opik/mirror config inspection. — Nested Typer group (not invoked alone). |
 | `eval opik config show` | command | public | canonical | Inspect resolved Opik/mirror config (secret-safe; canonical). — Public CLI operator surface. |
-| `eval opik doctor` | command | public | canonical | Secret-safe Opik/export health doctor. — Public CLI operator surface. |
+| `eval opik doctor` | command | public | canonical | Secret-safe Opik/export health doctor. Inspects resolved config / export health / queue without transport or network. All secret-bearing output passes through ``mask_secret()`` (``•••[len=N]``); raw token values and prefixes are never printed. — Public CLI operator surface. |
 | `eval promote` | command | public | canonical | Promotion state machine + split_group_id contamination check. — Public CLI operator surface. |
 | `eval recompute-scores` | command | public | canonical | Re-run the metric pack over already-landed evidence bundles. — Public CLI operator surface. |
 | `eval replay` | command | public | canonical | Replay generation into a new bundle + replay_compare_v1 (never mutates source). — Public CLI operator surface. |
@@ -155,6 +155,39 @@ JSON-capable operator commands emit exactly one
 * schema: `schemas/eval/cli_output_envelope_v1.schema.json`
 * progress / diagnostics / human deprecations → **stderr**
 * deprecations also appear in envelope `warnings[]` in JSON mode
+
+## Doctor report contract (Slice 4)
+
+`git-cg eval doctor` (local suite/pin/metric) and `git-cg eval opik
+doctor` (secret-safe Opik/export/queue) are **observability-only** and
+network-free. Neither mutates product accept, ranking, golden
+promotion, or Families A-I authority.
+
+Each emits a machine-readable check list in envelope `data.checks[]`:
+
+```text
+{check_id, metric_id?, status: pass|warn|fail, severity, message, hint?}
+```
+
+Doctor metric producers (close the S6 phantom-metric gap), projected as
+catalog-aligned `ScoreResultV1` rows in `data.scores[]`:
+
+| Metric | Producer | Severity |
+|:---|:---|:---|
+| `h.compat_hash_resume` | Slice 3 checkpoint compat vs live preimage | block |
+| `h.doctor_green` | Rollup over the doctor check set | warn |
+| `h.export_config_resolved` | S4 `resolve_opik_config` / `operator_config_health` | warn |
+
+**Aggregation rule (locked):** `h.doctor_green` aggregates
+**block-severity** checks only. Warn-severity check failures never flip
+green → red. This rule is part of the frozen doctor contract.
+
+Secret safety (S6-C08): every secret-bearing value passes through
+`mask_secret()` (`•••[len=N]`). Raw token values and prefixes are
+never printed in human or JSON output.
+
+Exit classes: `0` green · `1` doctor red (block fail) · `2` usage/config
+· `3` compatibility mismatch · `4` missing evidence.
 
 ## Regeneration
 

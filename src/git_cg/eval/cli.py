@@ -485,10 +485,51 @@ def recompute_scores_cmd(
 
 @eval_app.command("doctor")
 def doctor_cmd(
+    suite: str = typer.Option(
+        "cm-eval-fixtures-core",
+        "--suite",
+        help="Suite id to doctor (default: cm-eval-fixtures-core).",
+    ),
+    fixture_root: Path | None = typer.Option(
+        None,
+        "--fixture-root",
+        help="Optional fixture root override (tests/lab).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Local suite/pin/metric doctor (distinct from ``eval opik doctor``)."""
-    _stub("eval doctor", slice_hint="Slice 4", as_json=as_json)
+    """Local suite/pin/metric doctor (distinct from ``eval opik doctor``).
+
+    Offline, network-free. Fail-closed on floating ``latest`` pins and missing
+    catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks
+    only; warn-severity failures never flip green to red. Emits phantom-metric
+    producers ``h.compat_hash_resume`` / ``h.doctor_green`` /
+    ``h.export_config_resolved`` as ScoreResultV1 rows.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.doctor import run_local_doctor
+
+    repo = _resolve_repo(None)
+    report = run_local_doctor(repo_root=repo, suite_id=suite, fixture_root=fixture_root)
+    if as_json:
+        emit_json_envelope(build_envelope("eval doctor", ok=report.green, data=report.to_data()))
+    else:
+        emit_human_line(
+            f"eval doctor: green={report.green} suite={report.suite_id} "
+            f"checks={len(report.checks)} block_failures={len(report.to_data()['block_failures'])}",
+            err=False,
+        )
+        for check in report.checks:
+            if check.status == "pass":
+                continue
+            line = f"  [{check.severity}/{check.status}] {check.check_id}: {check.message}"
+            if check.hint:
+                line = f"{line} (hint: {check.hint})"
+            emit_human_line(line, err=True)
+    raise typer.Exit(code=report.exit_code)
 
 
 @eval_app.command("amend-brief")
@@ -809,8 +850,30 @@ def opik_config_show_cmd(
 def opik_doctor_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Secret-safe Opik/export health doctor."""
-    _stub("eval opik doctor", slice_hint="Slice 4", as_json=as_json)
+    """Secret-safe Opik/export health doctor.
+
+    Inspects resolved config / export health / queue without transport or
+    network. All secret-bearing output passes through ``mask_secret()``
+    (``•••[len=N]``); raw token values and prefixes are never printed.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.doctor import run_opik_doctor
+
+    repo = _resolve_repo(None)
+    report = run_opik_doctor(repo_root=repo)
+    if as_json:
+        emit_json_envelope(build_envelope("eval opik doctor", ok=report.green, data=report.to_data()))
+    else:
+        emit_human_line(
+            f"eval opik doctor: green={report.green} checks={len(report.checks)}",
+            err=False,
+        )
+        for check in report.checks:
+            line = f"  [{check.severity}/{check.status}] {check.check_id}: {check.message}"
+            if check.hint:
+                line = f"{line} (hint: {check.hint})"
+            emit_human_line(line, err=True)
+    raise typer.Exit(code=report.exit_code)
 
 
 # --------------------------------------------------------------------------
