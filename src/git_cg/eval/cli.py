@@ -558,26 +558,113 @@ def train_export_cmd(
 
 @eval_app.command("failures")
 def failures_cmd(
+    experiment_id: str | None = typer.Option(
+        None, "--experiment-id", help="Experiment id (defaults to latest local run)."
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """List failing bundles/cases with metric_ids + failure_ids."""
-    _stub("eval failures", slice_hint="Slice 5", as_json=as_json)
+    """List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.explain import ExplainError, list_failures
+
+    repo = _resolve_repo(None)
+    try:
+        data = list_failures(repo, experiment_id=experiment_id)
+    except ExplainError as exc:
+        _emit_slice5_error("eval failures", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval failures", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval failures: experiment={data['experiment_id']} failing_cases={data['case_count']}",
+            err=False,
+        )
+        for case in data["failing_cases"]:
+            emit_human_line(
+                f"  {case['case_id']}: metrics={','.join(case['metric_ids']) or '-'} "
+                f"failures={','.join(case['failure_ids']) or '-'}",
+                err=False,
+            )
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("explain")
 def explain_cmd(
+    experiment_id: str | None = typer.Option(
+        None, "--experiment-id", help="Experiment id (defaults to latest local run)."
+    ),
+    case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Deterministic explain contract (§18.3); no opaque LLM RCA."""
-    _stub("eval explain", slice_hint="Slice 5", as_json=as_json)
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.explain import ExplainError, explain
+
+    repo = _resolve_repo(None)
+    try:
+        data = explain(repo, experiment_id=experiment_id, case_id=case_id)
+    except ExplainError as exc:
+        _emit_slice5_error("eval explain", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval explain", ok=True, data=data))
+    else:
+        for case in data["cases"]:
+            emit_human_line(
+                f"eval explain: {case['case_id']} blame={case['blame_span'] or '-'} "
+                f"first_divergent={case['first_divergent_span'] or '-'} "
+                f"artifact_class={case['artifact_class'] or '-'}",
+                err=False,
+            )
+            emit_human_line(
+                f"  failures={','.join(case['failure_ids']) or '-'} "
+                f"prevention={','.join(case['prevention_ids']) or '-'}",
+                err=False,
+            )
+            emit_human_line(f"  replay: {case['replay_command']}", err=False)
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("compare")
 def compare_cmd(
+    a_experiment_id: str = typer.Option(..., "--a-experiment-id", help="Left experiment id."),
+    a_case_id: str = typer.Option(..., "--a-case", help="Left case id."),
+    b_experiment_id: str = typer.Option(..., "--b-experiment-id", help="Right experiment id."),
+    b_case_id: str = typer.Option(..., "--b-case", help="Right case id."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Structural + metric delta; prefer replay_compare lineage when linked."""
-    _stub("eval compare", slice_hint="Slice 5", as_json=as_json)
+    """Structural + metric delta; uses replay_compare lineage when linked (§18.3)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.explain import ExplainError, compare
+
+    repo = _resolve_repo(None)
+    try:
+        data = compare(
+            repo,
+            a_experiment_id=a_experiment_id,
+            a_case_id=a_case_id,
+            b_experiment_id=b_experiment_id,
+            b_case_id=b_case_id,
+        )
+    except ExplainError as exc:
+        _emit_slice5_error("eval compare", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval compare", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval compare: source={data['compare_source']} "
+            f"lineage_linked={data['lineage_linked']} "
+            f"metric_changes={len(data['metric_delta'])}",
+            err=False,
+        )
+        for row in data["metric_delta"]:
+            emit_human_line(
+                f"  {row['metric_id']}: a={row['a']['passed']} b={row['b']['passed']}",
+                err=False,
+            )
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("replay")
@@ -598,10 +685,50 @@ def promote_cmd(
 
 @eval_app.command("diagnose")
 def diagnose_cmd(
+    experiment_id: str | None = typer.Option(
+        None, "--experiment-id", help="Experiment id (defaults to latest local run)."
+    ),
+    case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
+    code: str | None = typer.Option(None, "--code", help="Diagnostic code (defaults to first failure_id)."),
+    title: str | None = typer.Option(None, "--title", help="Issue title."),
+    product_impact: str = typer.Option(
+        "unknown", "--product-impact", help="accept_path|golden|train|export|docs|unknown."
+    ),
+    owner: str | None = typer.Option(None, "--owner", help="Issue owner."),
+    notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Upsert diag_issue_v1 with stable fingerprint law."""
-    _stub("eval diagnose", slice_hint="Slice 5", as_json=as_json)
+    """Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.diagnose import DiagnoseError, diagnose
+
+    repo = _resolve_repo(None)
+    try:
+        result = diagnose(
+            repo,
+            experiment_id=experiment_id,
+            case_id=case_id,
+            code=code,
+            title=title,
+            product_impact=product_impact,
+            owner=owner,
+            notes=notes,
+        )
+    except DiagnoseError as exc:
+        _emit_slice5_error("eval diagnose", exc, as_json=as_json)
+        return
+    issue = result["issue"]
+    data = {"issue": issue, "upserted": result["upserted"]}
+    if as_json:
+        emit_json_envelope(build_envelope("eval diagnose", ok=True, data=data))
+    else:
+        verb = "upserted" if result["upserted"] else "created"
+        emit_human_line(
+            f"eval diagnose: {verb} {issue['issue_id']} status={issue['status']} "
+            f"occurrences={issue['occurrence_count']} fingerprint={issue['fingerprint'][:12]}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 # --------------------------------------------------------------------------
@@ -660,50 +787,118 @@ eval_app.add_typer(issue_app, name="issue")
 
 @issue_app.command("list")
 def issue_list_cmd(
+    status: str | None = typer.Option(
+        None, "--status", help="Filter by status (open|acknowledged|resolved|suppressed|reopened)."
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """List local diagnostic issues."""
-    _stub("eval issue list", slice_hint="Slice 5", as_json=as_json)
+    """List local diagnostic issues (newest last_seen first)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.diagnose import DiagnoseError, list_issues
+
+    repo = _resolve_repo(None)
+    try:
+        data = list_issues(repo, status=status)
+    except DiagnoseError as exc:
+        _emit_slice5_error("eval issue list", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval issue list", ok=True, data=data))
+    else:
+        emit_human_line(f"eval issue list: {data['issue_count']} issue(s)", err=False)
+        for issue in data["issues"]:
+            emit_human_line(
+                f"  {issue['issue_id']}: [{issue['status']}/{issue['severity']}] "
+                f"{issue['code']} occurrences={issue['occurrence_count']}",
+                err=False,
+            )
+    raise typer.Exit(code=0)
 
 
 @issue_app.command("show")
 def issue_show_cmd(
-    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    issue_id: str = typer.Argument(..., help="Issue id."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Show one local diagnostic issue."""
-    _ = issue_id
-    _stub("eval issue show", slice_hint="Slice 5", as_json=as_json)
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.diagnose import DiagnoseError, show_issue
+
+    repo = _resolve_repo(None)
+    try:
+        data = show_issue(repo, issue_id=issue_id)
+    except DiagnoseError as exc:
+        _emit_slice5_error("eval issue show", exc, as_json=as_json)
+        return
+    issue = data["issue"]
+    if as_json:
+        emit_json_envelope(build_envelope("eval issue show", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval issue show: {issue['issue_id']} [{issue['status']}/{issue['severity']}] {issue['title']}",
+            err=False,
+        )
+        emit_human_line(
+            f"  fingerprint={issue['fingerprint']} occurrences={issue['occurrence_count']}",
+            err=False,
+        )
+        emit_human_line(
+            f"  failure_ids={','.join(issue['failure_ids']) or '-'} metric_ids={','.join(issue['metric_ids']) or '-'}",
+            err=False,
+        )
+        if issue.get("suggested_surfaces"):
+            emit_human_line(f"  surfaces={','.join(issue['suggested_surfaces'])}", err=False)
+    raise typer.Exit(code=0)
 
 
 @issue_app.command("resolve")
 def issue_resolve_cmd(
-    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    issue_id: str = typer.Argument(..., help="Issue id."),
+    resolution_evidence: str = typer.Option(..., "--resolution-evidence", help="Required fix-verification evidence."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Mark a local diagnostic issue resolved."""
-    _ = issue_id
-    _stub("eval issue resolve", slice_hint="Slice 5", as_json=as_json)
+    """Mark a local diagnostic issue resolved (requires --resolution-evidence)."""
+    _run_issue_transition(
+        "eval issue resolve",
+        issue_id=issue_id,
+        target="resolved",
+        resolution_evidence=resolution_evidence,
+        reason=None,
+        as_json=as_json,
+    )
 
 
 @issue_app.command("reopen")
 def issue_reopen_cmd(
-    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    issue_id: str = typer.Argument(..., help="Issue id."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Reopen a previously resolved local diagnostic issue."""
-    _ = issue_id
-    _stub("eval issue reopen", slice_hint="Slice 5", as_json=as_json)
+    """Reopen a previously resolved/suppressed local diagnostic issue."""
+    _run_issue_transition(
+        "eval issue reopen",
+        issue_id=issue_id,
+        target="reopened",
+        resolution_evidence=None,
+        reason=None,
+        as_json=as_json,
+    )
 
 
 @issue_app.command("suppress")
 def issue_suppress_cmd(
-    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    issue_id: str = typer.Argument(..., help="Issue id."),
+    reason: str = typer.Option(..., "--reason", help="Required suppression reason."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Suppress a local diagnostic issue."""
-    _ = issue_id
-    _stub("eval issue suppress", slice_hint="Slice 5", as_json=as_json)
+    """Suppress a local diagnostic issue (requires --reason)."""
+    _run_issue_transition(
+        "eval issue suppress",
+        issue_id=issue_id,
+        target="suppressed",
+        resolution_evidence=None,
+        reason=reason,
+        as_json=as_json,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -914,6 +1109,66 @@ def _resolve_repo(root: Path | None) -> Path:
     from git_cg.eval.binding.paths import resolve_repo_root
 
     return root if root is not None else resolve_repo_root()
+
+
+def _emit_slice5_error(command: str, exc: Exception, *, as_json: bool) -> None:
+    """Emit a Slice-5 deterministic error and exit with the locked code.
+
+    ``exc`` is an ExplainError/DiagnoseError carrying ``code``/``exit_code``/
+    optional ``hint``. Human mode → one stderr line; JSON mode → one
+    ``cli_output_envelope_v1`` with ``ok=false``. Never raises past the exit.
+    """
+    from git_cg.eval.cli_output import emit_human_line, envelope_message
+
+    code = getattr(exc, "code", "EVAL_STORE_INTEGRITY")
+    exit_code = int(getattr(exc, "exit_code", 4))
+    hint = getattr(exc, "hint", None)
+    err = envelope_message(code, str(exc), hint=hint)
+    if as_json:
+        emit_json_envelope(build_envelope(command, ok=False, errors=[err]))
+    else:
+        line = f"{command}: {err['message']}"
+        if hint := err.get("hint"):
+            line = f"{line} (hint: {hint})"
+        emit_human_line(line, err=True)
+    raise typer.Exit(code=exit_code)
+
+
+def _run_issue_transition(
+    command: str,
+    *,
+    issue_id: str,
+    target: str,
+    resolution_evidence: str | None,
+    reason: str | None,
+    as_json: bool,
+) -> None:
+    """Shared runner for the closed issue transition matrix verbs."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.diagnose import DiagnoseError, transition_issue
+
+    repo = _resolve_repo(None)
+    try:
+        result = transition_issue(
+            repo,
+            issue_id=issue_id,
+            target=target,
+            resolution_evidence=resolution_evidence,
+            reason=reason,
+        )
+    except DiagnoseError as exc:
+        _emit_slice5_error(command, exc, as_json=as_json)
+        return
+    issue = result["issue"]
+    if as_json:
+        emit_json_envelope(build_envelope(command, ok=True, data=result))
+    else:
+        verb = "transitioned" if result["transitioned"] else "already"
+        emit_human_line(
+            f"{command}: {verb} {issue['issue_id']} {result['from']} -> {result['to']}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 def _queue_status_counts(repo: Path) -> dict[str, int]:

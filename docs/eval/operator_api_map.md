@@ -36,9 +36,9 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 |:---|:---|:---|:---|:---|
 | `eval` | group | public (group) | group | Evaluation harness operator surface: corpus helpers, offline suite ops, doctor/triage, export queue, and Opik config (no product ranking). — Root eval Typer group. |
 | `eval amend-brief` | command | public | canonical | Emit an offline R11 amend brief. — Public CLI operator surface. |
-| `eval compare` | command | public | canonical | Structural + metric delta; prefer replay_compare lineage when linked. — Public CLI operator surface. |
+| `eval compare` | command | public | canonical | Structural + metric delta; uses replay_compare lineage when linked (§18.3). — Public CLI operator surface. |
 | `eval config` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval opik config show`` (temporary bridge). Removal target: first minor release after S6 GA. — Canonical: `eval opik config show`. Removal: first minor release after S6 GA. |
-| `eval diagnose` | command | public | canonical | Upsert diag_issue_v1 with stable fingerprint law. — Public CLI operator surface. |
+| `eval diagnose` | command | public | canonical | Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent). — Public CLI operator surface. |
 | `eval doctor` | command | public | canonical | Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, network-free. Fail-closed on floating ``latest`` pins and missing catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks only; warn-severity failures never flip green to red. Emits phantom-metric producers ``h.compat_hash_resume`` / ``h.doctor_green`` / ``h.export_config_resolved`` as ScoreResultV1 rows. — Public CLI operator surface. |
 | `eval dogfood` | command | public | canonical | Maintainer dogfood profile controls (default off for non-maintainers). — Public CLI operator surface. |
 | `eval encode-fixture` | command | public | canonical | Encode a fixture into ``ape_bundle_v1`` and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exits non-zero on invalid options, missing fixtures, or encode failures. — Public CLI operator surface. |
@@ -50,13 +50,13 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | `eval export-drain` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval export drain``. — Canonical: `eval export drain`. Removal: first minor release after S6 GA. |
 | `eval export-retry` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval export retry``. — Canonical: `eval export retry`. Removal: first minor release after S6 GA. |
 | `eval export-status` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval export status``. — Canonical: `eval export status`. Removal: first minor release after S6 GA. |
-| `eval failures` | command | public | canonical | List failing bundles/cases with metric_ids + failure_ids. — Public CLI operator surface. |
+| `eval failures` | command | public | canonical | List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only). — Public CLI operator surface. |
 | `eval issue` | group | public (group) | group | Local diagnostic issue store ops. — Nested Typer group (not invoked alone). |
-| `eval issue list` | command | public | canonical | List local diagnostic issues. — Public CLI operator surface. |
-| `eval issue reopen` | command | public | canonical | Reopen a previously resolved local diagnostic issue. — Public CLI operator surface. |
-| `eval issue resolve` | command | public | canonical | Mark a local diagnostic issue resolved. — Public CLI operator surface. |
+| `eval issue list` | command | public | canonical | List local diagnostic issues (newest last_seen first). — Public CLI operator surface. |
+| `eval issue reopen` | command | public | canonical | Reopen a previously resolved/suppressed local diagnostic issue. — Public CLI operator surface. |
+| `eval issue resolve` | command | public | canonical | Mark a local diagnostic issue resolved (requires --resolution-evidence). — Public CLI operator surface. |
 | `eval issue show` | command | public | canonical | Show one local diagnostic issue. — Public CLI operator surface. |
-| `eval issue suppress` | command | public | canonical | Suppress a local diagnostic issue. — Public CLI operator surface. |
+| `eval issue suppress` | command | public | canonical | Suppress a local diagnostic issue (requires --reason). — Public CLI operator surface. |
 | `eval materialize-core-goldens` | command | public | canonical | Materialize checked-in core golden bundles + snapshot (corpus write only). — Public CLI operator surface. |
 | `eval opik` | group | public (group) | group | Opik/export health and secret-safe config (canonical). — Nested Typer group (not invoked alone). |
 | `eval opik config` | group | public (group) | group | Secret-safe Opik/mirror config inspection. — Nested Typer group (not invoked alone). |
