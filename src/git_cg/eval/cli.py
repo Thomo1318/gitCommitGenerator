@@ -1,30 +1,62 @@
-"""Thin ``git-cg eval`` corpus-helper CLI (Issue #231, D11 / B1-b).
+"""``git-cg eval`` operator CLI (S3-S6).
 
-This is a **delegation-only** Typer sub-app. It exposes corpus helpers
-(``materialize-core-goldens`` and ``encode-fixture``) plus the thin S4
-mirror surface (``config show``, nested ``export status|retry|drain``):
+Extends the landed corpus helpers and S4 mirror surface with the S6 operator
+command skeleton (Issue #246 Slice 2). Behaviour for most S6 commands lands in
+later slices; help names and nested groups are real now so the operator API
+map cannot drift from the Typer tree.
 
-* No binder invocation at import time (``git_cg.eval.binding`` is never
-  imported by the module body; export commands may resolve repo paths).
-* No accept-path writes under ``.eval/bundles/acceptpath/**``.
-* Opik SDK is imported only lazily inside drain transport construction.
-* Not the S6 doctor / review / amend-brief UX.
-
-``materialize-core-goldens`` may write corpus golden files under
-``tests/fixtures/eval/**`` — that is a corpus write, not an accept-path write.
+Import law (locked):
+* No binder invocation at import time.
+* No hard Opik SDK import at module import time.
+* Opik is resolved lazily inside drain transport construction only.
+* Not a general-purpose Python SDK — CLI is the primary public API.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 
+from git_cg.eval.cli_output import (
+    DEFAULT_KEEP_LAST,
+    REMOVAL_TARGET,
+    build_envelope,
+    deprecation_warning,
+    emit_deprecation_human,
+    emit_json_envelope,
+    emit_not_implemented,
+)
+
 eval_app = typer.Typer(
     add_completion=False,
-    help="Corpus helpers: materialize core goldens and encode fixtures (no binder, no .eval writes).",
+    help=(
+        "Evaluation harness operator surface: corpus helpers, offline suite "
+        "ops, doctor/triage, export queue, and Opik config (no product ranking)."
+    ),
     no_args_is_help=True,
 )
+
+
+# --------------------------------------------------------------------------
+# Shared helpers
+# --------------------------------------------------------------------------
+
+
+def _stub(
+    command: str,
+    *,
+    slice_hint: str,
+    as_json: bool = False,
+) -> None:
+    """Thin Slice-2 stub: real help name, behaviour later."""
+    emit_not_implemented(command, slice_hint=slice_hint, as_json=as_json)
+
+
+# --------------------------------------------------------------------------
+# Corpus helpers (landed S3)
+# --------------------------------------------------------------------------
 
 
 @eval_app.command("materialize-core-goldens")
@@ -99,7 +131,7 @@ def encode_fixture_cmd(
         typer.echo("encode-fixture accepts only one of --path or --id", err=True)
         raise typer.Exit(code=2)
 
-    fixture: dict
+    fixture: dict[str, Any]
     case_id: str | None = None
     resolved_suite_id: str | None = None
 
@@ -110,7 +142,6 @@ def encode_fixture_cmd(
             typer.echo(f"encode-fixture failed: {exc}", err=True)
             raise typer.Exit(code=1) from None
     else:
-        # --id resolution: resolve case_id against the suite's known fixtures.
         root = default_fixture_root()
         sid = suite_id or "cm-eval-fixtures-core"
         try:
@@ -142,24 +173,259 @@ def encode_fixture_cmd(
 
 
 # --------------------------------------------------------------------------
-# S4 config inspection (secret-safe; offline).
+# S6 suite run / resume / recompute (stubs → Slice 3)
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("config")
-def config_cmd(
-    action: str = typer.Argument(..., help="Subcommand: show"),
+@eval_app.command("run")
+def run_cmd(
+    suite: str | None = typer.Option(None, "--suite", help="Suite id to run."),
+    keep_last: int = typer.Option(
+        DEFAULT_KEEP_LAST,
+        "--keep-last",
+        help="Checkpoint retention bound (default 10; pruning semantics in Slice 3).",
+    ),
+    keep_checkpoint: bool = typer.Option(
+        False,
+        "--keep-checkpoint",
+        help="Retain this run's checkpoint even after success.",
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Inspect resolved Opik/mirror config (secret-safe).
+    """Run an offline evaluation suite (canonical; not ``eval suite run``)."""
+    _ = (suite, keep_last, keep_checkpoint)
+    _stub("eval run", slice_hint="Slice 3", as_json=as_json)
 
-    Currently supports ``show`` only (E2 / §10.6 law 5). Never prints secret
-    values — only masked ``•••[len=N]`` forms when a key is present in the
-    ambient environment (never loaded into the config record itself).
-    """
-    if action != "show":
-        typer.echo(f"config: unknown action {action!r} (supported: show)", err=True)
-        raise typer.Exit(code=2)
 
+@eval_app.command("resume")
+def resume_cmd(
+    checkpoint: str | None = typer.Option(None, "--checkpoint", help="Checkpoint id to resume."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Resume a suite run from a governed checkpoint + compat hash."""
+    _ = checkpoint
+    _stub("eval resume", slice_hint="Slice 3", as_json=as_json)
+
+
+@eval_app.command("recompute-scores")
+def recompute_scores_cmd(
+    experiment: str | None = typer.Option(None, "--experiment", help="Experiment id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Re-run the metric pack over already-landed evidence bundles."""
+    _ = experiment
+    _stub("eval recompute-scores", slice_hint="Slice 3", as_json=as_json)
+
+
+# --------------------------------------------------------------------------
+# S6 doctor / triage / review (stubs → later slices)
+# --------------------------------------------------------------------------
+
+
+@eval_app.command("doctor")
+def doctor_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Local suite/pin/metric doctor (distinct from ``eval opik doctor``)."""
+    _stub("eval doctor", slice_hint="Slice 4", as_json=as_json)
+
+
+@eval_app.command("amend-brief")
+def amend_brief_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Emit an offline R11 amend brief."""
+    _stub("eval amend-brief", slice_hint="Slice 7", as_json=as_json)
+
+
+@eval_app.command("dogfood")
+def dogfood_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Maintainer dogfood profile controls (default off for non-maintainers)."""
+    _stub("eval dogfood", slice_hint="Slice 7", as_json=as_json)
+
+
+@eval_app.command("train-export")
+def train_export_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """R14 train_export_v1 + vault helpers."""
+    _stub("eval train-export", slice_hint="Slice 7", as_json=as_json)
+
+
+@eval_app.command("failures")
+def failures_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """List failing bundles/cases with metric_ids + failure_ids."""
+    _stub("eval failures", slice_hint="Slice 5", as_json=as_json)
+
+
+@eval_app.command("explain")
+def explain_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Deterministic explain contract (§18.3); no opaque LLM RCA."""
+    _stub("eval explain", slice_hint="Slice 5", as_json=as_json)
+
+
+@eval_app.command("compare")
+def compare_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Structural + metric delta; prefer replay_compare lineage when linked."""
+    _stub("eval compare", slice_hint="Slice 5", as_json=as_json)
+
+
+@eval_app.command("replay")
+def replay_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Replay generation into a new bundle + replay_compare_v1 (never mutates source)."""
+    _stub("eval replay", slice_hint="Slice 6", as_json=as_json)
+
+
+@eval_app.command("promote")
+def promote_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Promotion state machine + split_group_id contamination check."""
+    _stub("eval promote", slice_hint="Slice 6", as_json=as_json)
+
+
+@eval_app.command("diagnose")
+def diagnose_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Upsert diag_issue_v1 with stable fingerprint law."""
+    _stub("eval diagnose", slice_hint="Slice 5", as_json=as_json)
+
+
+# --------------------------------------------------------------------------
+# Nested: session / thread
+# --------------------------------------------------------------------------
+
+
+session_app = typer.Typer(
+    add_completion=False,
+    help="Local commit-session inspection.",
+    no_args_is_help=True,
+)
+eval_app.add_typer(session_app, name="session")
+
+
+@session_app.command("show")
+def session_show_cmd(
+    session_id: str | None = typer.Option(None, "--id", help="Session id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Show a local commit session (canonical nested form)."""
+    _ = session_id
+    _stub("eval session show", slice_hint="Slice 7", as_json=as_json)
+
+
+thread_app = typer.Typer(
+    add_completion=False,
+    help="Local session-thread inspection.",
+    no_args_is_help=True,
+)
+eval_app.add_typer(thread_app, name="thread")
+
+
+@thread_app.command("show")
+def thread_show_cmd(
+    thread_id: str | None = typer.Option(None, "--id", help="Thread id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Show a local session thread (canonical nested form)."""
+    _ = thread_id
+    _stub("eval thread show", slice_hint="Slice 7", as_json=as_json)
+
+
+# --------------------------------------------------------------------------
+# Nested: issue
+# --------------------------------------------------------------------------
+
+
+issue_app = typer.Typer(
+    add_completion=False,
+    help="Local diagnostic issue store ops.",
+    no_args_is_help=True,
+)
+eval_app.add_typer(issue_app, name="issue")
+
+
+@issue_app.command("list")
+def issue_list_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """List local diagnostic issues."""
+    _stub("eval issue list", slice_hint="Slice 5", as_json=as_json)
+
+
+@issue_app.command("show")
+def issue_show_cmd(
+    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Show one local diagnostic issue."""
+    _ = issue_id
+    _stub("eval issue show", slice_hint="Slice 5", as_json=as_json)
+
+
+@issue_app.command("resolve")
+def issue_resolve_cmd(
+    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Mark a local diagnostic issue resolved."""
+    _ = issue_id
+    _stub("eval issue resolve", slice_hint="Slice 5", as_json=as_json)
+
+
+@issue_app.command("reopen")
+def issue_reopen_cmd(
+    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Reopen a previously resolved local diagnostic issue."""
+    _ = issue_id
+    _stub("eval issue reopen", slice_hint="Slice 5", as_json=as_json)
+
+
+@issue_app.command("suppress")
+def issue_suppress_cmd(
+    issue_id: str | None = typer.Argument(None, help="Issue id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Suppress a local diagnostic issue."""
+    _ = issue_id
+    _stub("eval issue suppress", slice_hint="Slice 5", as_json=as_json)
+
+
+# --------------------------------------------------------------------------
+# Nested: opik (canonical config + doctor)
+# --------------------------------------------------------------------------
+
+
+opik_app = typer.Typer(
+    add_completion=False,
+    help="Opik/export health and secret-safe config (canonical).",
+    no_args_is_help=True,
+)
+eval_app.add_typer(opik_app, name="opik")
+
+opik_config_app = typer.Typer(
+    add_completion=False,
+    help="Secret-safe Opik/mirror config inspection.",
+    no_args_is_help=True,
+)
+opik_app.add_typer(opik_config_app, name="config")
+
+
+def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = None) -> None:
+    """Shared secret-safe config show implementation (canonical + alias)."""
     import json
     import os
 
@@ -174,21 +440,56 @@ def config_cmd(
     from git_cg.eval.mirror.health import ExportHealth
     from git_cg.eval.mirror.result import build_mirror_result
 
+    warnings: list[dict[str, str]] = []
+    if deprecated_from is not None:
+        warning = deprecation_warning(
+            deprecated=deprecated_from,
+            canonical="git-cg eval opik config show",
+            removal_target=REMOVAL_TARGET,
+        )
+        warnings.append(warning)
+        if not as_json:
+            emit_deprecation_human(
+                deprecated=deprecated_from,
+                canonical="git-cg eval opik config show",
+                removal_target=REMOVAL_TARGET,
+            )
+
     try:
         config = resolve_opik_config()
     except OpikConfigError as exc:
-        # Surface config_error via MirrorResult; still print diagnostics.
         result = build_mirror_result(
             mode="off",
             health=ExportHealth.CONFIG_ERROR,
             notes=(f"config_error: {exc}",),
         )
-        typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-        typer.echo(f"config show: invalid (fail-closed): {exc}", err=True)
+        payload = {
+            "config": None,
+            "secrets": {"api_key": None, "api_key_present": False},
+            "health_hint": ExportHealth.CONFIG_ERROR.value,
+            "mirror_result": result.to_dict(),
+        }
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval opik config show",
+                    ok=False,
+                    data=payload,
+                    errors=[
+                        {
+                            "code": "EVAL_CONFIG_ERROR",
+                            "message": f"invalid (fail-closed): {exc}",
+                        }
+                    ],
+                    warnings=warnings,
+                )
+            )
+        else:
+            typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+            typer.echo(f"config show: invalid (fail-closed): {exc}", err=True)
         raise typer.Exit(code=2) from None
 
     view = public_config_view(config)
-    # Ambient secret presence only (never values from config — none stored).
     ambient_key = os.environ.get("OPIK_API_KEY") or os.environ.get("GIT_CG_OPIK_API_KEY")
     masked = {
         "api_key": mask_secret(ambient_key) if ambient_key else None,
@@ -209,17 +510,70 @@ def config_cmd(
             ),
         ).to_dict(),
     }
-    typer.echo(json.dumps(payload, indent=2, sort_keys=True))
-    # E12: invalid mode is operator-visible config_error (exit 2), not silent off.
-    if health_hint == ExportHealth.CONFIG_ERROR.value:
-        raise typer.Exit(code=2)
-    raise typer.Exit(code=0)
+
+    exit_code = 2 if health_hint == ExportHealth.CONFIG_ERROR.value else 0
+    if as_json:
+        emit_json_envelope(
+            build_envelope(
+                "eval opik config show",
+                ok=exit_code == 0,
+                data=payload,
+                warnings=warnings,
+                errors=(
+                    [
+                        {
+                            "code": "EVAL_CONFIG_ERROR",
+                            "message": f"invalid mode token {mode_fallback_token(config)!r}",
+                        }
+                    ]
+                    if exit_code == 2
+                    else []
+                ),
+            )
+        )
+    else:
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+    raise typer.Exit(code=exit_code)
+
+
+@opik_config_app.command("show")
+def opik_config_show_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Inspect resolved Opik/mirror config (secret-safe; canonical)."""
+    _config_show_impl(as_json=as_json, deprecated_from=None)
+
+
+@opik_app.command("doctor")
+def opik_doctor_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Secret-safe Opik/export health doctor."""
+    _stub("eval opik doctor", slice_hint="Slice 4", as_json=as_json)
 
 
 # --------------------------------------------------------------------------
-# S4 export commands (P1-4 nested surface + temporary dashed aliases).
-# Canonical: git-cg eval export {status,retry,drain}
-# Aliases:   git-cg eval export-status / export-retry / export-drain (R2)
+# Temporary flat config alias (deprecated → eval opik config show)
+# --------------------------------------------------------------------------
+
+
+@eval_app.command("config")
+def config_cmd(
+    action: str = typer.Argument(..., help="Subcommand: show"),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Deprecated alias for ``eval opik config show`` (temporary bridge).
+
+    Removal target: first minor release after S6 GA.
+    """
+    if action != "show":
+        typer.echo(f"config: unknown action {action!r} (supported: show)", err=True)
+        raise typer.Exit(code=2)
+    _config_show_impl(as_json=as_json, deprecated_from="git-cg eval config show")
+
+
+# --------------------------------------------------------------------------
+# Nested export (landed S4) + temporary dashed aliases
 # --------------------------------------------------------------------------
 
 
@@ -274,6 +628,25 @@ def _emit_status(repo: Path) -> None:
         typer.echo("queue empty")
 
 
+def _maybe_export_alias_deprecation(deprecated: str, *, as_json: bool) -> list[dict[str, str]]:
+    """Emit dashed-export deprecation (stderr human / warnings[] JSON)."""
+    leaf = deprecated.rsplit(" ", 1)[-1]  # export-status
+    nested = leaf.replace("export-", "export ")
+    canonical = f"git-cg eval {nested}"
+    warning = deprecation_warning(
+        deprecated=deprecated,
+        canonical=canonical,
+        removal_target=REMOVAL_TARGET,
+    )
+    if not as_json:
+        emit_deprecation_human(
+            deprecated=deprecated,
+            canonical=canonical,
+            removal_target=REMOVAL_TARGET,
+        )
+    return [warning]
+
+
 @export_app.command("status")
 def export_status_cmd(
     root: Path | None = typer.Option(
@@ -285,6 +658,8 @@ def export_status_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
     """Show the Layer-A export queue status (read-only, offline).
 
@@ -292,24 +667,68 @@ def export_status_cmd(
     """
     from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
 
-    # E12: operator status surfaces invalid mode as config_error before queue counts.
+    warnings: list[dict[str, str]] = []
+    if _deprecated_from:
+        warnings = _maybe_export_alias_deprecation(_deprecated_from, as_json=as_json)
+
     try:
         cfg = resolve_opik_config()
     except Exception:
         cfg = None
     health_hint = operator_config_health(cfg) if cfg is not None else None
     bad_mode = mode_fallback_token(cfg) if cfg is not None else None
-    if health_hint is not None:
-        typer.echo(f"health {health_hint}")
-    if bad_mode is not None:
-        typer.echo(f"config_error invalid mode token {bad_mode!r}", err=True)
 
     try:
         repo = _resolve_repo(root)
     except Exception as exc:
-        typer.echo(f"export status: repo root unresolvable: {exc}", err=True)
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval export status",
+                    ok=False,
+                    data={},
+                    errors=[{"code": "EVAL_REPO_UNRESOLVABLE", "message": str(exc)}],
+                    warnings=warnings,
+                )
+            )
+        else:
+            typer.echo(f"export status: repo root unresolvable: {exc}", err=True)
         raise typer.Exit(code=1) from None
-    _emit_status(repo)
+
+    counts = _queue_status_counts(repo)
+    from git_cg.eval.mirror.queue import export_queue_dir
+
+    qdir = export_queue_dir(repo)
+    if as_json:
+        emit_json_envelope(
+            build_envelope(
+                "eval export status",
+                ok=bad_mode is None,
+                data={
+                    "queue_dir": str(qdir),
+                    "counts": counts,
+                    "health": health_hint,
+                    "bad_mode": bad_mode,
+                },
+                errors=(
+                    [
+                        {
+                            "code": "EVAL_CONFIG_ERROR",
+                            "message": f"invalid mode token {bad_mode!r}",
+                        }
+                    ]
+                    if bad_mode is not None
+                    else []
+                ),
+                warnings=warnings,
+            )
+        )
+    else:
+        if health_hint is not None:
+            typer.echo(f"health {health_hint}")
+        if bad_mode is not None:
+            typer.echo(f"config_error invalid mode token {bad_mode!r}", err=True)
+        _emit_status(repo)
     if bad_mode is not None:
         raise typer.Exit(code=2)
     raise typer.Exit(code=0)
@@ -341,6 +760,8 @@ def export_retry_cmd(
         "--max-items",
         help="Cap on failed rows re-queued this invocation.",
     ),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
     """Re-queue failed export rows for another drain attempt (P1-4 / P1-11).
 
@@ -356,11 +777,25 @@ def export_retry_cmd(
         mark_queue_item,
     )
 
+    warnings: list[dict[str, str]] = []
+    if _deprecated_from:
+        warnings = _maybe_export_alias_deprecation(_deprecated_from, as_json=as_json)
+
     try:
         repo = _resolve_repo(root)
     except Exception as exc:
-        typer.echo(f"export retry: repo root unresolvable: {exc}", err=True)
-        # Fail-open for product/hooks.
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval export retry",
+                    ok=True,
+                    data={"retried": 0, "skipped": 0, "unreadable": 0, "note": "fail_open"},
+                    warnings=warnings,
+                    errors=[{"code": "EVAL_REPO_UNRESOLVABLE", "message": str(exc)}],
+                )
+            )
+        else:
+            typer.echo(f"export retry: repo root unresolvable: {exc}", err=True)
         raise typer.Exit(code=0) from None
 
     retryable = {"export_network", "export_timeout", ""}
@@ -407,7 +842,17 @@ def export_retry_cmd(
             typer.echo(f"export retry: {qid}: {exc}", err=True)
             skipped += 1
 
-    typer.echo(f"retried {retried} skipped {skipped} unreadable {unreadable}")
+    if as_json:
+        emit_json_envelope(
+            build_envelope(
+                "eval export retry",
+                ok=True,
+                data={"retried": retried, "skipped": skipped, "unreadable": unreadable},
+                warnings=warnings,
+            )
+        )
+    else:
+        typer.echo(f"retried {retried} skipped {skipped} unreadable {unreadable}")
     raise typer.Exit(code=0)
 
 
@@ -424,6 +869,8 @@ def export_drain_cmd(
     ),
     max_items: int | None = typer.Option(None, "--max-items", help="Cap on rows processed this drain."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Resolve config + list pending rows; no upload."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
     """Drain the export queue through the Opik transport (F4 fail-open).
 
@@ -444,13 +891,27 @@ def export_drain_cmd(
     from git_cg.eval.mirror.result import build_mirror_result, evaluation_job_result, export_result
     from git_cg.eval.mirror.transport import OpikSdkTransport
 
+    warnings: list[dict[str, str]] = []
+    if _deprecated_from:
+        warnings = _maybe_export_alias_deprecation(_deprecated_from, as_json=as_json)
+
     try:
         config = resolve_opik_config()
     except OpikConfigError as exc:
-        typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval export drain",
+                    ok=False,
+                    data={},
+                    errors=[{"code": "EVAL_CONFIG_ERROR", "message": str(exc)}],
+                    warnings=warnings,
+                )
+            )
+        else:
+            typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
         raise typer.Exit(code=2) from None
 
-    # E12: invalid mode token → config_error on drain (not silent mode=off success).
     bad_mode = mode_fallback_token(config)
     if bad_mode is not None:
         result = build_mirror_result(
@@ -459,43 +920,80 @@ def export_drain_cmd(
             notes=(f"config_error: invalid mode token {bad_mode!r}",),
             error_classes=("export_validation",),
         )
-        typer.echo(
-            f"export drain: config_error invalid mode token {bad_mode!r} (fail-closed to {config.get('mode')!r})",
-            err=True,
-        )
-        typer.echo(
-            json.dumps(
-                {
-                    "mirror_result": result.to_dict(),
-                    "export_result": export_result(result),
-                    "evaluation_job_result": evaluation_job_result(result),
-                    "health_hint": operator_config_health(config),
-                },
-                indent=2,
-                sort_keys=True,
+        payload = {
+            "mirror_result": result.to_dict(),
+            "export_result": export_result(result),
+            "evaluation_job_result": evaluation_job_result(result),
+            "health_hint": operator_config_health(config),
+        }
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval export drain",
+                    ok=False,
+                    data=payload,
+                    errors=[
+                        {
+                            "code": "EVAL_CONFIG_ERROR",
+                            "message": f"invalid mode token {bad_mode!r}",
+                        }
+                    ],
+                    warnings=warnings,
+                )
             )
-        )
-        # Fail-closed for config misconfiguration visibility; never product-blocking
-        # because basic commit path does not invoke export drain.
+        else:
+            typer.echo(
+                f"export drain: config_error invalid mode token {bad_mode!r} (fail-closed to {config.get('mode')!r})",
+                err=True,
+            )
+            typer.echo(json.dumps(payload, indent=2, sort_keys=True))
         raise typer.Exit(code=2)
 
     if config.get("mode", "off") == "off":
-        typer.echo("export drain: mode=off; nothing to do")
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval export drain",
+                    ok=True,
+                    data={"mode": "off", "note": "nothing_to_do"},
+                    warnings=warnings,
+                )
+            )
+        else:
+            typer.echo("export drain: mode=off; nothing to do")
         raise typer.Exit(code=0)
 
     try:
         repo = _resolve_repo(root)
     except Exception as exc:
-        typer.echo(f"export drain: repo root unresolvable: {exc}", err=True)
-        raise typer.Exit(code=0) from None  # fail-open
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval export drain",
+                    ok=True,
+                    data={"note": "fail_open", "error": str(exc)},
+                    warnings=warnings,
+                )
+            )
+        else:
+            typer.echo(f"export drain: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=0) from None
 
     if dry_run:
         pending = list_pending_items(repo_root=repo)
-        typer.echo(f"mode {config.get('mode')}")
         projects = config.get("projects") or {}
         project = (projects.get("eval") if isinstance(projects, dict) else None) or config.get("project_name", "")
-        typer.echo(f"project {project}")
-        typer.echo(f"pending {len(pending)}")
+        data = {
+            "mode": config.get("mode"),
+            "project": project,
+            "pending": len(pending),
+        }
+        if as_json:
+            emit_json_envelope(build_envelope("eval export drain", ok=True, data=data, warnings=warnings))
+        else:
+            typer.echo(f"mode {config.get('mode')}")
+            typer.echo(f"project {project}")
+            typer.echo(f"pending {len(pending)}")
         raise typer.Exit(code=0)
 
     from git_cg.eval.mirror.exporter import mirror_result_from_drain
@@ -507,27 +1005,78 @@ def export_drain_cmd(
         max_items=max_items,
     )
     result = mirror_result_from_drain(config, summary)
-    # Human one-liner + machine-readable MirrorResult (P0-7).
-    typer.echo(f"attempted {summary.attempted} exported {summary.exported} failed {summary.failed}")
-    if summary.error_classes:
-        typer.echo(f"error_classes {','.join(summary.error_classes)}")
-    typer.echo(
-        json.dumps(
-            {
-                "mirror_result": result.to_dict(),
-                "export_result": export_result(result),
-                "evaluation_job_result": evaluation_job_result(result),
-            },
-            indent=2,
-            sort_keys=True,
+    payload = {
+        "mirror_result": result.to_dict(),
+        "export_result": export_result(result),
+        "evaluation_job_result": evaluation_job_result(result),
+        "attempted": summary.attempted,
+        "exported": summary.exported,
+        "failed": summary.failed,
+        "error_classes": list(summary.error_classes) if summary.error_classes else [],
+    }
+    if as_json:
+        emit_json_envelope(build_envelope("eval export drain", ok=True, data=payload, warnings=warnings))
+    else:
+        typer.echo(f"attempted {summary.attempted} exported {summary.exported} failed {summary.failed}")
+        if summary.error_classes:
+            typer.echo(f"error_classes {','.join(summary.error_classes)}")
+        typer.echo(
+            json.dumps(
+                {
+                    "mirror_result": payload["mirror_result"],
+                    "export_result": payload["export_result"],
+                    "evaluation_job_result": payload["evaluation_job_result"],
+                },
+                indent=2,
+                sort_keys=True,
+            )
         )
-    )
-    # Fail-open for product/hooks: export failures never produce a blocking
-    # non-zero exit here. Eval wrappers may inspect evaluation_job_result.
     raise typer.Exit(code=0)
 
 
-# Temporary dashed aliases (R2) — one minor cycle; nested form is canonical.
-eval_app.command("export-status")(export_status_cmd)
-eval_app.command("export-retry")(export_retry_cmd)
-eval_app.command("export-drain")(export_drain_cmd)
+# Temporary dashed aliases (R2) — removal: first minor after S6 GA.
+def _export_status_alias(
+    root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Deprecated alias for ``eval export status``."""
+    export_status_cmd(root=root, as_json=as_json, _deprecated_from="git-cg eval export-status")
+
+
+def _export_retry_alias(
+    root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
+    queue_id: str | None = typer.Option(None, "--id"),
+    force: bool = typer.Option(False, "--force"),
+    max_items: int | None = typer.Option(None, "--max-items"),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Deprecated alias for ``eval export retry``."""
+    export_retry_cmd(
+        root=root,
+        queue_id=queue_id,
+        force=force,
+        max_items=max_items,
+        as_json=as_json,
+        _deprecated_from="git-cg eval export-retry",
+    )
+
+
+def _export_drain_alias(
+    root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
+    max_items: int | None = typer.Option(None, "--max-items"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Deprecated alias for ``eval export drain``."""
+    export_drain_cmd(
+        root=root,
+        max_items=max_items,
+        dry_run=dry_run,
+        as_json=as_json,
+        _deprecated_from="git-cg eval export-drain",
+    )
+
+
+eval_app.command("export-status")(_export_status_alias)
+eval_app.command("export-retry")(_export_retry_alias)
+eval_app.command("export-drain")(_export_drain_alias)
