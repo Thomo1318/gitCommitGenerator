@@ -12,12 +12,15 @@ Locks:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import sys
 from pathlib import Path
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from git_cg.eval.api_map import (
@@ -143,12 +146,17 @@ def test_eval_cli_module_import_stays_light() -> None:
 
 
 def test_stub_json_emits_envelope() -> None:
-    result = runner.invoke(app, ["eval", "doctor", "--json"])
-    assert result.exit_code == 2, result.output
-    # stdout must be exactly one JSON document
-    payload = json.loads(result.stdout)
+    # All S6 commands are landed as of Slice 7; the not-implemented JSON
+    # contract is exercised directly against the emitter instead of a live stub.
+    from git_cg.eval.cli_output import emit_not_implemented
+
+    buf = io.StringIO()
+    with pytest.raises(typer.Exit) as ei, contextlib.redirect_stdout(buf):
+        emit_not_implemented("eval hypothetical", slice_hint="Slice 9", as_json=True)
+    assert ei.value.exit_code == 2
+    payload = json.loads(buf.getvalue())
     assert payload["schema_version"] == SCHEMA_VERSION
-    assert payload["command"] == "eval doctor"
+    assert payload["command"] == "eval hypothetical"
     assert payload["ok"] is False
     assert payload["errors"]
     assert payload["errors"][0]["code"] == "EVAL_CLI_NOT_IMPLEMENTED"
