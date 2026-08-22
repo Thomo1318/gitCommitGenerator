@@ -479,7 +479,7 @@ def recompute_scores_cmd(
 
 
 # --------------------------------------------------------------------------
-# S6 doctor / triage / review (stubs → later slices)
+# S6 doctor / triage / review
 # --------------------------------------------------------------------------
 
 
@@ -690,6 +690,123 @@ def train_export_cmd(
             err=False,
         )
     raise typer.Exit(code=0)
+
+
+@eval_app.command("triage")
+def triage_cmd(
+    suite: str = typer.Option(
+        "cm-eval-fixtures-core",
+        "--suite",
+        help="Suite id for the doctor section (default: cm-eval-fixtures-core).",
+    ),
+    fixture_root: Path | None = typer.Option(
+        None,
+        "--fixture-root",
+        help="Optional fixture root override for the doctor section.",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    experiment_id: str | None = typer.Option(
+        None,
+        "--experiment-id",
+        help="Experiment id for failures/explain (defaults to latest local run).",
+    ),
+    case_id: str | None = typer.Option(
+        None,
+        "--case",
+        help="Case id for explain (auto-selects when exactly one failing case).",
+    ),
+    skip_doctor: bool = typer.Option(False, "--skip-doctor", help="Skip the doctor section."),
+    skip_failures: bool = typer.Option(False, "--skip-failures", help="Skip the failures section."),
+    skip_explain: bool = typer.Option(False, "--skip-explain", help="Skip the explain section."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Offline advisory router over doctor + failures + explain (Slice 8 / D27).
+
+    Composes library engines only — never nests Typer presentation commands.
+    Not score law: does not promote gold, rank intents, or revive Opik
+    ``user_acceptance`` threshold triage. Emits one human report or one
+    ``cli_output_envelope_v1`` with an ``eval_triage_v0`` data payload.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.explain import ExplainError
+    from git_cg.eval.triage import TriageError, run_triage
+
+    repo = _resolve_repo(None)
+    try:
+        report = run_triage(
+            repo,
+            suite_id=suite,
+            fixture_root=fixture_root,
+            experiment_id=experiment_id,
+            case_id=case_id,
+            skip_doctor=skip_doctor,
+            skip_failures=skip_failures,
+            skip_explain=skip_explain,
+        )
+    except (TriageError, ExplainError) as exc:
+        _emit_slice5_error("eval triage", exc, as_json=as_json)
+        return
+
+    data = report.to_data()
+    if as_json:
+        emit_json_envelope(build_envelope("eval triage", ok=report.ok, data=data))
+    else:
+        doctor = data.get("doctor") or {}
+        failures = data.get("failures") or {}
+        explain = data.get("explain")
+        emit_human_line(
+            "eval triage: "
+            f"authority={data.get('authority')} "
+            f"sections_run={','.join(data.get('sections_run') or []) or '-'} "
+            f"doctor_green={doctor.get('green') if doctor else 'skipped'} "
+            f"failing_cases={failures.get('case_count') if failures else 'skipped'} "
+            f"explain={'yes' if explain else 'no'}",
+            err=False,
+        )
+        for note in data.get("notes") or []:
+            emit_human_line(f"  note: {note}", err=False)
+        if doctor:
+            block = doctor.get("block_failures") or []
+            if block:
+                emit_human_line(
+                    f"  doctor block_failures={','.join(block)}",
+                    err=True,
+                )
+            for check in doctor.get("checks") or []:
+                if check.get("status") == "pass":
+                    continue
+                line = (
+                    f"  [doctor {check.get('severity')}/{check.get('status')}] "
+                    f"{check.get('check_id')}: {check.get('message')}"
+                )
+                if check.get("hint"):
+                    line = f"{line} (hint: {check['hint']})"
+                emit_human_line(line, err=True)
+        if failures:
+            for case in failures.get("failing_cases") or []:
+                emit_human_line(
+                    f"  fail {case.get('case_id')}: "
+                    f"metrics={','.join(case.get('metric_ids') or []) or '-'} "
+                    f"failures={','.join(case.get('failure_ids') or []) or '-'}",
+                    err=False,
+                )
+        if explain:
+            for case in explain.get("cases") or []:
+                emit_human_line(
+                    f"  explain {case.get('case_id')}: blame={case.get('blame_span') or '-'} "
+                    f"first_divergent={case.get('first_divergent_span') or '-'} "
+                    f"artifact_class={case.get('artifact_class') or '-'}",
+                    err=False,
+                )
+                emit_human_line(f"    replay: {case.get('replay_command')}", err=False)
+        emit_human_line(
+            "  replacements: " + ", ".join(data.get("replacements_for_legacy_script") or []),
+            err=False,
+        )
+    raise typer.Exit(code=report.exit_code)
 
 
 @eval_app.command("failures")

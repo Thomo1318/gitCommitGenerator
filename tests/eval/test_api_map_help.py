@@ -48,6 +48,7 @@ CANONICAL_HELP_NAMES = sorted(
         "resume",
         "recompute-scores",
         "doctor",
+        "triage",
         "amend-brief",
         "dogfood",
         "train-export",

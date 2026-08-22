@@ -79,6 +79,7 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | `eval thread` | group | public (group) | group | Local session-thread inspection. — Nested Typer group (not invoked alone). |
 | `eval thread show` | command | public | canonical | Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation. — Public CLI operator surface. |
 | `eval train-export` | command | public | canonical | Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). — Public CLI operator surface. |
+| `eval triage` | command | public | canonical | Offline advisory router over doctor + failures + explain (Slice 8 / D27). Composes library engines only — never nests Typer presentation commands. Not score law: does not promote gold, rank intents, or revive Opik ``user_acceptance`` threshold triage. Emits one human report or one ``cli_output_envelope_v1`` with an ``eval_triage_v0`` data payload. — Public CLI operator surface. |
 
 ## Canonical S6 operator surface (Slice 0 lock)
 
@@ -108,6 +109,7 @@ git-cg eval run …
 git-cg eval session show …
 git-cg eval thread show …
 git-cg eval train-export …
+git-cg eval triage …
 ```
 
 Corpus helpers also public:
@@ -195,6 +197,22 @@ never printed in human or JSON output.
 
 Exit classes: `0` green · `1` doctor red (block fail) · `2` usage/config
 · `3` compatibility mismatch · `4` missing evidence.
+
+## Triage router contract (Slice 8 / D27)
+
+`git-cg eval triage` is the offline advisory router that absorbs
+`scripts/opik_trace_triage.py`. It composes library engines
+(`run_local_doctor`, `list_failures`, `explain`) and emits one
+`eval_triage_v0` projection inside `cli_output_envelope_v1`.
+
+* **Authority:** `advisory_offline_router` (`not_score_law: true`).
+* **Not** gold promotion, accept-path, ranking, or Opik
+  `user_acceptance` threshold triage.
+* Exit precedence: `2` usage → `4` store → `3` doctor compat →
+  `1` doctor block-red → `0` advisory success (listed failures alone
+  stay `0`).
+* Explain auto-selects only when exactly one failing case is present
+  (or `--case` is explicit).
 
 ## Regeneration
 
