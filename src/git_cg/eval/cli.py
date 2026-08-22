@@ -534,26 +534,162 @@ def doctor_cmd(
 
 @eval_app.command("amend-brief")
 def amend_brief_cmd(
+    score_run_id: str = typer.Argument(..., help="Case score run id (rs_) to brief against."),
+    session_thread_id: str | None = typer.Option(
+        None, "--session-thread-id", help="Optional session twin (sess_) this brief belongs to."
+    ),
+    last_dogfood: int = typer.Option(3, "--last", min=0, help="Last-N dogfood/Lane C attachments."),
+    doctor: bool = typer.Option(False, "--doctor", help="Include the doctor projection."),
+    write: bool = typer.Option(True, "--write/--no-write", help="Persist under .eval/amend_briefs/."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Emit an offline R11 amend brief."""
-    _stub("eval amend-brief", slice_hint="Slice 7", as_json=as_json)
+    """Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2).
+
+    Advisory authority: summarizes score/failure/regime/family context and
+    preference pairs; never auto-applies reruns, never accepts, never re-ranks.
+    """
+    from git_cg.eval.brief import AmendBriefError, amend_brief
+    from git_cg.eval.cli_output import emit_human_line
+
+    repo = _resolve_repo(None)
+    try:
+        data = amend_brief(
+            repo,
+            experiment_id=score_run_id,
+            session_thread_id=session_thread_id,
+            include_doctor=doctor,
+            lane_c_last_n=last_dogfood,
+            write=write,
+        )
+    except AmendBriefError as exc:
+        _emit_slice5_error("eval amend-brief", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval amend-brief", ok=True, data=data))
+    else:
+        brief = data["brief"]
+        emit_human_line(
+            f"eval amend-brief: id={brief.get('id')} run={data.get('experiment_id') or score_run_id} "
+            f"written={data.get('written')}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("dogfood")
 def dogfood_cmd(
+    commit_message: str = typer.Option(..., "--commit-message", help="Candidate commit message."),
+    mode: str = typer.Option("async", "--mode", help="off|sample|always|async."),
+    profile: str = typer.Option("default_scrub", "--profile", help="Redaction profile."),
+    population: list[str] | None = typer.Option(
+        None, "--population", help="Deterministic sample population (repeatable)."
+    ),
+    seed: str | None = typer.Option(None, "--seed", help="Explicit sample seed."),
+    sample_rate: float = typer.Option(0.10, "--sample-rate", min=0.0, max=1.0),
+    capture_on: str = typer.Option("all", "--capture-on", help="pass|fail|all."),
+    payload_path: Path | None = typer.Option(
+        None, "--payload", help="Optional JSON payload for the Lane C judge (exists-check)."
+    ),
+    session_thread_id: str | None = typer.Option(None, "--session-thread-id"),
+    trigger: str = typer.Option("cli", "--trigger", help="cli|pre_commit|post_commit|hook."),
+    write: bool = typer.Option(True, "--write/--no-write"),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Maintainer dogfood profile controls (default off for non-maintainers)."""
-    _stub("eval dogfood", slice_hint="Slice 7", as_json=as_json)
+    """Fire the Lane C dogfood shadow sidecar (§7.3).
+
+    Lane C is advisory only: it never blocks the product commit path, never
+    mutates intent/ranking, and async mode never awaits the judge outcome.
+    """
+    import hashlib
+
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.dogfood.capture import DOGFoodError, capture_dogfood
+
+    if payload_path is not None and not payload_path.is_file():
+        exc = DOGFoodError(
+            f"payload file not found: {payload_path}",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint="--payload must point at an existing JSON file for the Lane C judge.",
+        )
+        _emit_slice5_error("eval dogfood", exc, as_json=as_json)
+        return
+    repo = _resolve_repo(None)
+    sha = hashlib.sha256(commit_message.encode("utf-8")).hexdigest()
+    try:
+        data = capture_dogfood(
+            repo,
+            message_sha256=sha,
+            mode=mode,
+            capture_on=capture_on,
+            seed=seed,
+            rate=sample_rate,
+            population=population,
+            session_thread_id=session_thread_id,
+            notes=f"trigger={trigger} profile={profile}",
+            write=write,
+        )
+    except DOGFoodError as exc:
+        _emit_slice5_error("eval dogfood", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval dogfood", ok=True, data=data))
+    else:
+        att = data.get("attachment") or {}
+        emit_human_line(
+            f"eval dogfood: captured={data.get('captured')} mode={att.get('mode', mode)} "
+            f"authority={att.get('authority', 'advisory')} written={bool(write)}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("train-export")
 def train_export_cmd(
+    bundle_id: list[str] | None = typer.Option(
+        None, "--bundle-id", help="Bundle id(s) to export; default exports all landed bundles."
+    ),
+    profile: str = typer.Option("train_rich", "--profile", help="Redaction profile (never raw_dev_unsafe)."),
+    capture_on: str = typer.Option("all", "--capture-on", help="pass|fail|all corpus eligibility."),
+    split_group_id: str | None = typer.Option(None, "--split-group-id"),
+    notes: str | None = typer.Option(None, "--notes"),
+    write: bool = typer.Option(True, "--write/--no-write"),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """R14 train_export_v1 + vault helpers."""
-    _stub("eval train-export", slice_hint="Slice 7", as_json=as_json)
+    """Export governed train rows from landed bundles (R14 / §7.5).
+
+    Row scrub-failure policy: drop + report (scrub_report) + continue; never
+    emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never
+    enter positive_gold (S6-G06).
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.train_export import TrainExportError, train_export
+
+    repo = _resolve_repo(None)
+    try:
+        data = train_export(
+            repo,
+            bundle_ids=bundle_id,
+            redaction_profile=profile,
+            capture_on=capture_on,
+            split_group_id=split_group_id,
+            notes=notes,
+            write=write,
+        )
+    except TrainExportError as exc:
+        _emit_slice5_error("eval train-export", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval train-export", ok=True, data=data))
+    else:
+        scrub = data["scrub_report"]
+        emit_human_line(
+            f"eval train-export: id={data['export_id']} rows={data['row_count']} "
+            f"dropped={len(data['dropped_row_ids'])} scrub={scrub['status']} "
+            f"written={data['written']}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("failures")
@@ -1130,12 +1266,34 @@ eval_app.add_typer(session_app, name="session")
 
 @session_app.command("show")
 def session_show_cmd(
-    session_id: str | None = typer.Option(None, "--id", help="Session id."),
+    session_id: str = typer.Option(..., "--id", help="Session id (sess_ or sessmeta_)."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Show a local commit session (canonical nested form)."""
-    _ = session_id
-    _stub("eval session show", slice_hint="Slice 7", as_json=as_json)
+    """Read a local session twin under .eval/sessions/ (§7.6).
+
+    Read-only: no Opik reach, no chat timeline, no graph browser, no accept
+    authority, no rerun, no ranking mutation.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    repo = _resolve_repo(None)
+    try:
+        data = show_session(repo, session_id)
+    except SessionsError as exc:
+        _emit_slice5_error("eval session show", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval session show", ok=True, data=data))
+    else:
+        sess = data["session"]
+        meta = sess.get("meta") or {}
+        emit_human_line(
+            f"eval session show: id={sess.get('id')} lifecycle={meta.get('lifecycle', '-')} "
+            f"schema={sess.get('schema_version', '-')}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 thread_app = typer.Typer(
@@ -1148,12 +1306,33 @@ eval_app.add_typer(thread_app, name="thread")
 
 @thread_app.command("show")
 def thread_show_cmd(
-    thread_id: str | None = typer.Option(None, "--id", help="Thread id."),
+    thread_id: str = typer.Option(..., "--id", help="Thread/session id (sess_ or sessmeta_)."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Show a local session thread (canonical nested form)."""
-    _ = thread_id
-    _stub("eval thread show", slice_hint="Slice 7", as_json=as_json)
+    """Read a local message-thread twin under .eval/sessions/ (§7.6).
+
+    Read-only: no Opik reach, no chat timeline, no graph browser, no accept
+    authority, no rerun, no ranking mutation.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.sessions import SessionsError, show_thread
+
+    repo = _resolve_repo(None)
+    try:
+        data = show_thread(repo, thread_id)
+    except SessionsError as exc:
+        _emit_slice5_error("eval thread show", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval thread show", ok=True, data=data))
+    else:
+        thread = data["thread"]
+        msgs = thread.get("messages") or []
+        emit_human_line(
+            f"eval thread show: id={thread.get('id')} messages={len(msgs)}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
 
 
 # --------------------------------------------------------------------------

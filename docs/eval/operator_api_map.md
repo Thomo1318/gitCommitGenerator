@@ -35,12 +35,12 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | Path | Kind | Tier | Status | Help / notes |
 |:---|:---|:---|:---|:---|
 | `eval` | group | public (group) | group | Evaluation harness operator surface: corpus helpers, offline suite ops, doctor/triage, export queue, and Opik config (no product ranking). — Root eval Typer group. |
-| `eval amend-brief` | command | public | canonical | Emit an offline R11 amend brief. — Public CLI operator surface. |
+| `eval amend-brief` | command | public | canonical | Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2). Advisory authority: summarizes score/failure/regime/family context and preference pairs; never auto-applies reruns, never accepts, never re-ranks. — Public CLI operator surface. |
 | `eval compare` | command | public | canonical | Structural + metric delta; uses replay_compare lineage when linked (§18.3). — Public CLI operator surface. |
 | `eval config` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval opik config show`` (temporary bridge). Removal target: first minor release after S6 GA. — Canonical: `eval opik config show`. Removal: first minor release after S6 GA. |
 | `eval diagnose` | command | public | canonical | Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent). — Public CLI operator surface. |
 | `eval doctor` | command | public | canonical | Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, network-free. Fail-closed on floating ``latest`` pins and missing catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks only; warn-severity failures never flip green to red. Emits phantom-metric producers ``h.compat_hash_resume`` / ``h.doctor_green`` / ``h.export_config_resolved`` as ScoreResultV1 rows. — Public CLI operator surface. |
-| `eval dogfood` | command | public | canonical | Maintainer dogfood profile controls (default off for non-maintainers). — Public CLI operator surface. |
+| `eval dogfood` | command | public | canonical | Fire the Lane C dogfood shadow sidecar (§7.3). Lane C is advisory only: it never blocks the product commit path, never mutates intent/ranking, and async mode never awaits the judge outcome. — Public CLI operator surface. |
 | `eval encode-fixture` | command | public | canonical | Encode a fixture into ``ape_bundle_v1`` and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exits non-zero on invalid options, missing fixtures, or encode failures. — Public CLI operator surface. |
 | `eval explain` | command | public | canonical | Deterministic explain contract (§18.3); no opaque LLM RCA. — Public CLI operator surface. |
 | `eval export` | group | public (group) | group | Layer-A export queue ops: status / retry / drain (F4 fail-open). — Nested Typer group (not invoked alone). |
@@ -75,10 +75,10 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | `eval review show` | command | public | registered | Show one local review-queue item. — Present on Typer tree; see help. |
 | `eval run` | command | public | canonical | Run an offline evaluation suite (canonical; not ``eval suite run``). — Public CLI operator surface. |
 | `eval session` | group | public (group) | group | Local commit-session inspection. — Nested Typer group (not invoked alone). |
-| `eval session show` | command | public | canonical | Show a local commit session (canonical nested form). — Public CLI operator surface. |
+| `eval session show` | command | public | canonical | Read a local session twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation. — Public CLI operator surface. |
 | `eval thread` | group | public (group) | group | Local session-thread inspection. — Nested Typer group (not invoked alone). |
-| `eval thread show` | command | public | canonical | Show a local session thread (canonical nested form). — Public CLI operator surface. |
-| `eval train-export` | command | public | canonical | R14 train_export_v1 + vault helpers. — Public CLI operator surface. |
+| `eval thread show` | command | public | canonical | Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation. — Public CLI operator surface. |
+| `eval train-export` | command | public | canonical | Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). — Public CLI operator surface. |
 
 ## Canonical S6 operator surface (Slice 0 lock)
 

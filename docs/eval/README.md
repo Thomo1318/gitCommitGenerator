@@ -32,7 +32,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@a5ca2c6bc580aa929084a9abcd9abd66a7cb426050bee38bfe73baf99aa47a7e`
+  * `schema_pack_v0@d00988d1e926969741f6db7a47b65e87b4a7adcc060489975b5054e15fc7df2e`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -672,3 +672,39 @@ Composition/runner claim mapping lives in [`s5-claim-evidence.md`](./s5-claim-ev
 
 S5 ships the **gated advisory cohort only.** It does **not** land full doctor/amend-brief/review-queue UX (**S6**), rewrite ADR-0011 / durable Zensical API pages (**S7**), or install a required GEval CI gate (**never**).
 
+
+## S6 Slice 7 — amend-brief · dogfood (Lane C) · train-export · sessions (#246)
+
+Slice 7 wires the five remaining offline operator surfaces to landed engines.
+All five emit `cli_output_envelope_v1`, are import-light (no Opik at import
+time), and are **advisory/corpus** surfaces — none is a gate or product-accept
+authority.
+
+| Command | Engine | Data `data` shape | Exit classes |
+|:---|:---|:---|:---|
+| `eval amend-brief <run_id>` | `eval/brief.py` | `brief`, `written`, `family_rollup`, `blocking`, `preference_pairs` | 2 usage · 4 store |
+| `eval dogfood --commit-message …` | `eval/dogfood/capture.py` | `attachment`, `captured`, `skipped`, `product_block:false`, `async_never_awaits_judge` | 2 usage · 4 store |
+| `eval train-export [--bundle-id …]` | `eval/train_export.py` | `export`, `row_ids`, `dropped_row_ids`, `scrub_report`, `positive_gold_count` | 2 usage · 4 store |
+| `eval session show --id sess_…` | `eval/sessions.py` | session projection (`lifecycle`, `message_versions`, …) | 2 usage · 4 store |
+| `eval thread show --id sess_…` | `eval/sessions.py` | thread projection (`messages`) | 2 usage · 4 store |
+
+### Lane C dogfood (advisory, never-blocking)
+
+* Modes `off|sample|always|async`; maintainer profile defaults to `async`, non-maintainer to `off`.
+* `async` mode records `async_never_awaits_judge=true` and **never** awaits the judge on the product path (`product_block` is always `false`).
+* `sample` mode is deterministic: explicit `--seed` or a stable hash of the population; `mode=sample` requires `sample_seed`, `sample_rate`, `population_id` (schema-conditional requirement).
+* `capture_on=fail` marks `hard_negative_candidate=true` for R14 vault routing.
+* Bench: `just dogfood-bench` runs `hyperfine` async-on vs async-off on the real commit path and reports mean delta + CI-overlap. Maintainer evidence only — never a CI or product gate.
+
+### Train export row scrub-failure policy (locked)
+
+Field-level quarantine stays S4 (`meta.redaction_quarantine`, never emitted
+clear). A **row** that cannot be emitted secret-safe is **dropped** from the
+batch, recorded in the export `scrub_report` (`status=quarantined|omitted`
+with the affected ids/fields), and the export **continues**. No cleartext is
+ever emitted and there is **no `.eval/quarantine/` store**.
+
+**S6-G06 preserved:** `filter_positive_gold` / `build_train_projection`
+dual-axis law holds — antipattern / hard-negative rows never silent-merge into
+`positive_gold`; `hard_negative` rows are routed to the antipattern vault copy
+when `vault_destination=antipattern_vault`.

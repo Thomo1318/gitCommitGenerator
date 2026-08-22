@@ -106,3 +106,20 @@ eval-fixture-index:
 # Check docs/eval/operator_api_map.md matches live Typer tree (S6 Slice 2)
 eval-api-map-check:
     uv run python -m git_cg.eval.api_map --check
+
+# S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
+# Maintainer evidence only — never a CI gate, never a product-accept gate.
+dogfood-bench runs="20":
+    @echo "🔬 dogfood-bench: hyperfine {{runs}} runs ×2 (async on/off) on real commit path"
+    @command -v hyperfine >/dev/null || { echo "hyperfine not installed" >&2; exit 1; }
+    @mkdir -p .eval/dogfood
+    @GIT_CG_EVAL_DOGFOOD_MODE=async hyperfine --warmup 2 --runs {{runs}} \
+        --export-json .eval/dogfood/bench_async_on.json \
+        --command-name dogfood_async_on \
+        "GIT_CG_EVAL_DOGFOOD_MODE=async ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
+    @GIT_CG_EVAL_DOGFOOD_MODE=off hyperfine --warmup 2 --runs {{runs}} \
+        --export-json .eval/dogfood/bench_async_off.json \
+        --command-name dogfood_async_off \
+        "GIT_CG_EVAL_DOGFOOD_MODE=off ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
+    @uv run python -m git_cg.eval.dogfood.bench \
+        .eval/dogfood/bench_async_on.json .eval/dogfood/bench_async_off.json
