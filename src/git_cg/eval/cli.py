@@ -669,18 +669,152 @@ def compare_cmd(
 
 @eval_app.command("replay")
 def replay_cmd(
+    bundle: str | None = typer.Option(
+        None,
+        "--bundle",
+        help="Source ape_bundle_v1 path or accept-path session_thread_id/stem.",
+    ),
+    experiment_id: str | None = typer.Option(
+        None, "--experiment-id", help="Experiment id (with --case) for explain-linked replay."
+    ),
+    case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
+    notes: str | None = typer.Option(None, "--notes", help="Optional notes on the compare record."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate and project without writing."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Replay generation into a new bundle + replay_compare_v1 (never mutates source)."""
-    _stub("eval replay", slice_hint="Slice 6", as_json=as_json)
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.replay import ReplayError, replay
+
+    repo = _resolve_repo(None)
+    try:
+        result = replay(
+            repo,
+            bundle=bundle,
+            experiment_id=experiment_id,
+            case_id=case_id,
+            notes=notes,
+            dry_run=dry_run,
+        )
+    except ReplayError as exc:
+        _emit_slice5_error("eval replay", exc, as_json=as_json)
+        return
+    compare = result["compare"]
+    data = {
+        "compare": compare,
+        "source_path": result["source_path"],
+        "compare_path": result["compare_path"],
+        "replay_bundle_path": result["replay_bundle_path"],
+        "source_bundle_hash": result["source_bundle_hash"],
+        "replay_bundle_hash": result["replay_bundle_hash"],
+        "source_mutated": result["source_mutated"],
+        "dry_run": result["dry_run"],
+    }
+    if as_json:
+        emit_json_envelope(build_envelope("eval replay", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval replay: replay_id={compare['replay_id']} "
+            f"status={compare['regression_status']} lineage_ok={compare['lineage_ok']} "
+            f"source_mutated={result['source_mutated']} dry_run={dry_run}",
+            err=False,
+        )
+        emit_human_line(f"  compare: {result['compare_path']}", err=False)
+        emit_human_line(f"  bundle:  {result['replay_bundle_path']}", err=False)
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("promote")
 def promote_cmd(
+    bundle: str = typer.Option(..., "--bundle", help="Source ape_bundle_v1 path/id (acceptpath or replay)."),
+    destination: str = typer.Option(
+        ...,
+        "--destination",
+        help=(
+            "Terminal destination: fixture_lane_a|hard_negative|preference_pair|observability_fixture|quarantine|reject"
+        ),
+    ),
+    owner: str = typer.Option(..., "--owner", help="Promotion owner (opaque local handle)."),
+    label: str = typer.Option(..., "--label", help="Promotion label (not silent gold)."),
+    provenance: str = typer.Option(..., "--provenance", help="Provenance token (not popularity/accept alone)."),
+    redaction_profile: str = typer.Option(
+        ...,
+        "--redaction-profile",
+        help="R14 redaction profile for the promoted artifact.",
+    ),
+    stage: str = typer.Option(
+        "scrubbed_candidate",
+        "--stage",
+        help="Source stage: failure_or_capture|scrubbed_candidate (default scrubbed_candidate).",
+    ),
+    split_group_id: str | None = typer.Option(
+        None, "--split-group-id", help="Contamination unit (defaults from bundle/session)."
+    ),
+    review_id: str | None = typer.Option(
+        None, "--review-id", help="Optional adjudicated review_queue id (advisory only)."
+    ),
+    notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
+    popularity_signal: bool = typer.Option(
+        False,
+        "--popularity-signal",
+        help="Mark popularity/user_acceptance signal (cannot promote golden).",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate decision without writing."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Promotion state machine + split_group_id contamination check."""
-    _stub("eval promote", slice_hint="Slice 6", as_json=as_json)
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.promote import PromoteError, promote
+
+    repo = _resolve_repo(None)
+    try:
+        result = promote(
+            repo,
+            bundle=bundle,
+            destination=destination,
+            owner=owner,
+            label=label,
+            provenance=provenance,
+            redaction_profile=redaction_profile,
+            stage=stage,
+            split_group_id=split_group_id,
+            review_id=review_id,
+            notes=notes,
+            popularity_signal=popularity_signal,
+            dry_run=dry_run,
+        )
+    except PromoteError as exc:
+        # Surface denial_reason in envelope data when present.
+        if as_json:
+            from git_cg.eval.cli_output import envelope_message
+
+            err = envelope_message(getattr(exc, "code", "EVAL_USAGE"), str(exc), hint=getattr(exc, "hint", None))
+            data = {"accepted": False, "denial_reason": getattr(exc, "denial_reason", None)}
+            emit_json_envelope(build_envelope("eval promote", ok=False, data=data, errors=[err]))
+            raise typer.Exit(code=int(getattr(exc, "exit_code", 2))) from None
+        _emit_slice5_error("eval promote", exc, as_json=False)
+        return
+    data = {
+        "decision": result["decision"],
+        "decision_path": result["decision_path"],
+        "artifact_path": result["artifact_path"],
+        "accepted": result["accepted"],
+        "denial_reason": result["denial_reason"],
+        "dry_run": result["dry_run"],
+    }
+    if as_json:
+        emit_json_envelope(build_envelope("eval promote", ok=True, data=data))
+    else:
+        decision = result["decision"]
+        emit_human_line(
+            f"eval promote: accepted={result['accepted']} id={decision.get('promotion_id')} "
+            f"destination={decision.get('destination')} dry_run={dry_run}",
+            err=False,
+        )
+        emit_human_line(f"  decision: {result['decision_path']}", err=False)
+        if result.get("artifact_path"):
+            emit_human_line(f"  artifact: {result['artifact_path']}", err=False)
+    raise typer.Exit(code=0)
 
 
 @eval_app.command("diagnose")
@@ -726,6 +860,256 @@ def diagnose_cmd(
         emit_human_line(
             f"eval diagnose: {verb} {issue['issue_id']} status={issue['status']} "
             f"occurrences={issue['occurrence_count']} fingerprint={issue['fingerprint'][:12]}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
+
+
+# --------------------------------------------------------------------------
+# Nested: review queue (HITL / human_review_v1)
+# --------------------------------------------------------------------------
+
+
+review_app = typer.Typer(
+    add_completion=False,
+    help="Local HITL review queue (.eval/review_queue; advisory only).",
+    no_args_is_help=True,
+)
+eval_app.add_typer(review_app, name="review")
+
+
+@review_app.command("enqueue")
+def review_enqueue_cmd(
+    case_id: str | None = typer.Option(None, "--case", help="Case id under review."),
+    bundle_id: str | None = typer.Option(None, "--bundle-id", help="Bundle id under review."),
+    reviewer: str = typer.Option(..., "--reviewer", help="Opaque local reviewer handle (not email)."),
+    redaction_profile: str = typer.Option(
+        "meta_eval_scrub",
+        "--redaction-profile",
+        help="R14 redaction profile (default meta_eval_scrub).",
+    ),
+    craft_rating: float | None = typer.Option(None, "--craft-rating", help="human.craft_rating score."),
+    gold_dispute: str | None = typer.Option(None, "--gold-dispute", help="human.gold_dispute: true|false."),
+    regime_label: str | None = typer.Option(None, "--regime-label", help="human.regime_label: A|B|unknown."),
+    notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Enqueue an advisory human_review_v1 row (pending)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, enqueue
+
+    repo = _resolve_repo(None)
+    gd: bool | None = None
+    if gold_dispute is not None:
+        token = gold_dispute.strip().lower()
+        if token in {"1", "true", "yes", "y"}:
+            gd = True
+        elif token in {"0", "false", "no", "n"}:
+            gd = False
+        else:
+            from git_cg.eval.cli_output import emit_human_line, envelope_message
+
+            err = envelope_message("EVAL_USAGE", f"invalid --gold-dispute: {gold_dispute!r}", hint="Use true|false")
+            if as_json:
+                emit_json_envelope(build_envelope("eval review enqueue", ok=False, errors=[err]))
+            else:
+                emit_human_line(f"eval review enqueue: {err['message']}", err=True)
+            raise typer.Exit(code=2)
+    try:
+        result = enqueue(
+            repo,
+            case_id=case_id,
+            bundle_id=bundle_id,
+            reviewer=reviewer,
+            redaction_profile=redaction_profile,
+            craft_rating=craft_rating,
+            gold_dispute=gd,
+            regime_label=regime_label,
+            notes=notes,
+            dry_run=dry_run,
+        )
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review enqueue", exc, as_json=as_json)
+        return
+    item = result["item"]
+    if as_json:
+        emit_json_envelope(build_envelope("eval review enqueue", ok=True, data=result))
+    else:
+        emit_human_line(
+            f"eval review enqueue: {item['review_id']} status={item['status']} dry_run={dry_run}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
+
+
+@review_app.command("list")
+def review_list_cmd(
+    status: str | None = typer.Option(None, "--status", help="Filter: pending|in_review|adjudicated|dismissed."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """List local review-queue items."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, list_reviews
+
+    repo = _resolve_repo(None)
+    try:
+        data = list_reviews(repo, status=status)
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review list", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval review list", ok=True, data=data))
+    else:
+        emit_human_line(f"eval review list: {data['review_count']} item(s)", err=False)
+        for row in data["reviews"]:
+            emit_human_line(
+                f"  {row['review_id']}: [{row['status']}] case={row.get('case_id') or '-'} "
+                f"reviewer={row.get('reviewer') or '-'}",
+                err=False,
+            )
+    raise typer.Exit(code=0)
+
+
+@review_app.command("show")
+def review_show_cmd(
+    review_id: str = typer.Argument(..., help="Review id."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Show one local review-queue item."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, show_review
+
+    repo = _resolve_repo(None)
+    try:
+        data = show_review(repo, review_id=review_id)
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review show", exc, as_json=as_json)
+        return
+    item = data["item"]
+    if as_json:
+        emit_json_envelope(build_envelope("eval review show", ok=True, data=data))
+    else:
+        review = item.get("review") or {}
+        emit_human_line(
+            f"eval review show: {item['review_id']} status={item['status']} "
+            f"authority={review.get('authority', 'advisory')}",
+            err=False,
+        )
+        if item.get("adjudication"):
+            adj = item["adjudication"]
+            emit_human_line(
+                f"  outcome={adj.get('outcome')} ref={adj.get('outcome_ref')}",
+                err=False,
+            )
+    raise typer.Exit(code=0)
+
+
+@review_app.command("claim")
+def review_claim_cmd(
+    review_id: str = typer.Argument(..., help="Review id."),
+    reviewer: str = typer.Option(..., "--reviewer", help="Opaque local reviewer handle."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Claim a pending review item (pending → in_review)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, claim
+
+    repo = _resolve_repo(None)
+    try:
+        result = claim(repo, review_id=review_id, reviewer=reviewer, dry_run=dry_run)
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review claim", exc, as_json=as_json)
+        return
+    item = result["item"]
+    if as_json:
+        emit_json_envelope(build_envelope("eval review claim", ok=True, data=result))
+    else:
+        emit_human_line(
+            f"eval review claim: {item['review_id']} status={item['status']} "
+            f"claimed_by={item.get('claimed_by')} dry_run={dry_run}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
+
+
+@review_app.command("adjudicate")
+def review_adjudicate_cmd(
+    review_id: str = typer.Argument(..., help="Review id."),
+    outcome: str = typer.Option(
+        ...,
+        "--outcome",
+        help="Typed outcome: approve_promote|reject|needs_work|dismiss.",
+    ),
+    adjudicator: str | None = typer.Option(None, "--adjudicator", help="Opaque adjudicator handle."),
+    destination_hint: str | None = typer.Option(
+        None, "--destination-hint", help="Optional promote destination hint (advisory)."
+    ),
+    notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Adjudicate an in_review item (emits typed outcome_ref; never writes gold)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, adjudicate
+
+    repo = _resolve_repo(None)
+    try:
+        result = adjudicate(
+            repo,
+            review_id=review_id,
+            outcome=outcome,
+            adjudicator=adjudicator,
+            destination_hint=destination_hint,
+            notes=notes,
+            dry_run=dry_run,
+        )
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review adjudicate", exc, as_json=as_json)
+        return
+    item = result["item"]
+    if as_json:
+        emit_json_envelope(build_envelope("eval review adjudicate", ok=True, data=result))
+    else:
+        emit_human_line(
+            f"eval review adjudicate: {item['review_id']} status={item['status']} "
+            f"outcome_ref={result.get('outcome_ref')} dry_run={dry_run}",
+            err=False,
+        )
+    raise typer.Exit(code=0)
+
+
+@review_app.command("dismiss")
+def review_dismiss_cmd(
+    review_id: str = typer.Argument(..., help="Review id."),
+    reason: str = typer.Option(..., "--reason", help="Required dismissal reason."),
+    adjudicator: str | None = typer.Option(None, "--adjudicator", help="Opaque adjudicator handle."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Dismiss a pending/in_review item (terminal)."""
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, dismiss
+
+    repo = _resolve_repo(None)
+    try:
+        result = dismiss(
+            repo,
+            review_id=review_id,
+            reason=reason,
+            adjudicator=adjudicator,
+            dry_run=dry_run,
+        )
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review dismiss", exc, as_json=as_json)
+        return
+    item = result["item"]
+    if as_json:
+        emit_json_envelope(build_envelope("eval review dismiss", ok=True, data=result))
+    else:
+        emit_human_line(
+            f"eval review dismiss: {item['review_id']} status={item['status']} dry_run={dry_run}",
             err=False,
         )
     raise typer.Exit(code=0)

@@ -162,7 +162,15 @@ def _status_for(path: str) -> tuple[str, str]:
                 "temporary alias",
                 f"Canonical nested form preferred. Removal: {REMOVAL_TARGET}.",
             )
-    if path in {"eval export", "eval issue", "eval opik", "eval opik config", "eval session", "eval thread"}:
+    if path in {
+        "eval export",
+        "eval issue",
+        "eval opik",
+        "eval opik config",
+        "eval review",
+        "eval session",
+        "eval thread",
+    }:
         return ("group", "Nested Typer group (not invoked alone).")
     if path == "eval":
         return ("group", "Root eval Typer group.")

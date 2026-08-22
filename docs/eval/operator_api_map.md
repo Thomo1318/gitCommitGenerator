@@ -66,6 +66,13 @@ Pruning semantics for `--keep-last` are live (per-suite family; failed-run reten
 | `eval recompute-scores` | command | public | canonical | Re-run the metric pack over already-landed evidence bundles. — Public CLI operator surface. |
 | `eval replay` | command | public | canonical | Replay generation into a new bundle + replay_compare_v1 (never mutates source). — Public CLI operator surface. |
 | `eval resume` | command | public | canonical | Resume a suite run from a governed checkpoint + compat hash. — Public CLI operator surface. |
+| `eval review` | group | public (group) | group | Local HITL review queue (.eval/review_queue; advisory only). — Nested Typer group (not invoked alone). |
+| `eval review adjudicate` | command | public | registered | Adjudicate an in_review item (emits typed outcome_ref; never writes gold). — Present on Typer tree; see help. |
+| `eval review claim` | command | public | registered | Claim a pending review item (pending → in_review). — Present on Typer tree; see help. |
+| `eval review dismiss` | command | public | registered | Dismiss a pending/in_review item (terminal). — Present on Typer tree; see help. |
+| `eval review enqueue` | command | public | registered | Enqueue an advisory human_review_v1 row (pending). — Present on Typer tree; see help. |
+| `eval review list` | command | public | registered | List local review-queue items. — Present on Typer tree; see help. |
+| `eval review show` | command | public | registered | Show one local review-queue item. — Present on Typer tree; see help. |
 | `eval run` | command | public | canonical | Run an offline evaluation suite (canonical; not ``eval suite run``). — Public CLI operator surface. |
 | `eval session` | group | public (group) | group | Local commit-session inspection. — Nested Typer group (not invoked alone). |
 | `eval session show` | command | public | canonical | Show a local commit session (canonical nested form). — Public CLI operator surface. |
