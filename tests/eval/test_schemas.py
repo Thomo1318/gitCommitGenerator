@@ -158,6 +158,7 @@ def test_s6_s1_greenfield_schemas_validate_good_fixtures() -> None:
     validate_instance("replay_compare_v1", _load("replay_compare.good.json"))
     validate_instance("human_review_v1", _load("human_review.good.json"))
     validate_instance("dogfood_attachment_v1", _load("dogfood_attachment.good.json"))
+    validate_instance("dogfood_attachment_v1", _load("dogfood_attachment.sample.good.json"))
     validate_instance("cli_output_envelope_v1", _load("cli_output_envelope.good.json"))
 
 
@@ -240,3 +241,11 @@ def test_s6_s1_cli_output_envelope_message_items_require_code_and_message() -> N
     payload["errors"] = [{"message": "missing code"}]
     with pytest.raises(SchemaPackError):
         validate_instance("cli_output_envelope_v1", payload)
+
+
+def test_s6_s7_dogfood_sample_requires_repro_fields() -> None:
+    """Slice 7: mode=sample requires seed/rate/population + selected identity."""
+    bad = _load("dogfood_attachment.good.json")
+    bad["mode"] = "sample"
+    with pytest.raises(SchemaPackError):
+        validate_instance("dogfood_attachment_v1", bad)

@@ -157,7 +157,7 @@
   "$id": "https://git-cg.local/schemas/eval/dogfood_attachment_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "R12 dogfood attachment (advisory). mode is closed off|sample|always|async. authority is always advisory; never sole gate or gold promoter. message_sha256 links without storing full text twice. rationale is bounded.",
+  "description": "R12 dogfood attachment (advisory). mode is closed off|sample|always|async. authority is always advisory; never sole gate or gold promoter. message_sha256 links without storing full text twice. rationale is bounded. When mode=sample, sample_seed/sample_rate/population_id plus selected_ids and/or selected_set_hash are required so membership is offline-reproducible (no wall-clock membership changes).",
   "properties": {
     "schema_version": {
       "const": "dogfood_attachment_v1"
@@ -227,6 +227,43 @@
     },
     "bundle_id": {
       "type": "string"
+    },
+    "sample_seed": {
+      "type": "string",
+      "description": "Deterministic sample seed (explicit --seed or stable hash of population identity).",
+      "minLength": 1
+    },
+    "sample_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Sample rate in [0,1] used for membership selection."
+    },
+    "population_id": {
+      "type": "string",
+      "description": "Stable population identity (e.g. suite_id or experiment_id|suite_id).",
+      "minLength": 1
+    },
+    "selected_ids": {
+      "$ref": "#/$defs/string_list",
+      "description": "Selected member ids for this sample draw (optional when selected_set_hash is present)."
+    },
+    "selected_set_hash": {
+      "$ref": "#/$defs/sha256",
+      "description": "SHA-256 over canonical sorted selected_ids; alone permits offline membership reproduction with seed/rate/population."
+    },
+    "capture_on": {
+      "enum": [
+        "pass",
+        "fail",
+        "all"
+      ],
+      "type": "string",
+      "description": "Corpus capture eligibility for this attachment (owner-set; separate from product accept)."
+    },
+    "hard_negative_candidate": {
+      "type": "boolean",
+      "description": "True when capture_on includes fail and the row is retained as a hard-negative candidate (never a product fail)."
     }
   },
   "required": [
@@ -240,5 +277,38 @@
     "message_sha256"
   ],
   "title": "dogfood_attachment_v1",
-  "type": "object"
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "sample"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "sample_seed",
+          "sample_rate",
+          "population_id"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "selected_ids"
+            ]
+          },
+          {
+            "required": [
+              "selected_set_hash"
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
