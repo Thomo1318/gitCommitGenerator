@@ -136,13 +136,23 @@ git-cg eval export status|retry|drain
 | Script | Live state (tip) | Slice 0 disposition | Slice 8 action |
 |:---|:---|:---|:---|
 | `scripts/compile_opik_dataset.py` | Retired fail-closed pointer (S4) | **Already absorbed/retired** | Verify pointer remains; do not revive |
-| `scripts/eval_commit_message.py` | Frozen fail-closed pointer (S5) | **Thin-shim / frozen** | Keep refuse+pointer; no dual score law |
+| `scripts/eval_commit_message.py` | Frozen fail-closed pointer (S5; S8 pointer tighten) | **Thin-shim / frozen** | Keep refuse+pointer; CLI homes include `eval run` / `eval triage` / `eval doctor`; no dual score law |
 | `scripts/opik_metrics.py` | Frozen fail-closed pointer (S5) | **Thin-shim / frozen** | Keep refuse+pointer |
 | `scripts/setup_opik_eval_rule.py` | Frozen fail-closed pointer (S5 D24) | **Thin-shim / frozen** | Keep refuse+pointer |
 | `scripts/setup_opik_test_suites.py` | Frozen fail-closed pointer (S5 D24) | **Thin-shim / frozen** | Keep refuse+pointer |
-| `scripts/opik_trace_triage.py` | **Still live** (`import opik`, acceptance-threshold triage) | **Absorb into `git_cg.eval*`** | Replace with fail-closed pointer → `eval doctor` / `eval failures` / `eval explain` surfaces; never popularity/`user_acceptance` as gold law |
+| `scripts/opik_trace_triage.py` | **Absorbed** (fail-closed pointer; offline `eval triage` router) | **`absorbed_pointer_cli_s8`** | Frozen refusal shim → `git-cg eval triage` composing `eval doctor` / `eval failures` / `eval explain`; never popularity/`user_acceptance` as gold law |
 | `scripts/sync_promptfoo_to_opik.py` | Live Promptfoo→Opik sync | **Explicitly out of S6 scope** | Leave for #219 / prompt-ops plane; do not make S6 operator law |
 | `scripts/sync_prompts_to_opik.py` | Live system-prompt cloud sync | **Explicitly out of S6 scope** | Leave as optional maintainer cloud utility; not doctor/run/resume authority |
+
+### 6.1 S6-H / D27 absorption proof (Slice 8)
+
+| Legacy surface | Disposition | Replacement | Proof |
+|:---|:---|:---|:---|
+| `scripts/opik_trace_triage.py` | `absorbed_pointer_cli_s8` | `git-cg eval triage` → doctor / failures / explain | triage CLI + script-freeze / absorption tests |
+| `scripts/eval_commit_message.py` | frozen thin shim (pointer tightened) | `git-cg eval run` / `eval triage` / `eval doctor` + scoring/Lane C | existing freeze tests + pointer tests |
+
+`absorbed_pointer_cli_s8` means: the legacy script is a frozen refusal shim whose supported replacement is the offline `git-cg eval triage` router. It does **not** preserve Opik acceptance-threshold triage, and `user_acceptance` is not gold or accept-path law.
+
 
 ## 7. Plan-drift reconciliation (executed in this slice)
 

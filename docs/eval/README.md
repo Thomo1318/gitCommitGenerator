@@ -708,3 +708,17 @@ ever emitted and there is **no `.eval/quarantine/` store**.
 dual-axis law holds — antipattern / hard-negative rows never silent-merge into
 `positive_gold`; `hard_negative` rows are routed to the antipattern vault copy
 when `vault_destination=antipattern_vault`.
+
+## Slice 8 / D27 triage absorption
+
+Legacy `scripts/opik_trace_triage.py` is a frozen refusal shim. Use the offline advisory router:
+
+```bash
+git-cg eval triage
+git-cg eval doctor
+git-cg eval failures
+git-cg eval explain
+```
+
+`eval triage` composes doctor + failures + explain library engines. It is **not** score law and does not revive Opik `user_acceptance` threshold triage.
+

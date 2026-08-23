@@ -67,7 +67,7 @@
     "scripts/opik_metrics.py": "frozen_thin_shim_s5",
     "scripts/setup_opik_eval_rule.py": "frozen_thin_shim_s5",
     "scripts/setup_opik_test_suites.py": "frozen_thin_shim_s5",
-    "scripts/opik_trace_triage.py": "absorb_into_git_cg_eval_s8",
+    "scripts/opik_trace_triage.py": "absorbed_pointer_cli_s8",
     "scripts/sync_promptfoo_to_opik.py": "out_of_s6_scope",
     "scripts/sync_prompts_to_opik.py": "out_of_s6_scope"
   },
@@ -140,5 +140,17 @@
     "input": "canonical JSON of s6 slice0 baseline fields excluding this checksum object and recorded_at",
     "hex": "c2a7efa404f687dd328e486e7c1baaf16cf162562e56f49c921f8a7a69aeae08",
     "note": "Machine-checkable census checksum; pins also recorded via just eval-schema-hash."
+  },
+  "script_disposition_notes": {
+    "scripts/opik_trace_triage.py": "Frozen refusal shim; replacement is offline git-cg eval triage composing doctor/failures/explain; no Opik user_acceptance threshold law.",
+    "scripts/eval_commit_message.py": "Frozen thin shim retained; S8 tightened pointers to eval run/triage/doctor."
+  },
+  "slice8_d27": {
+    "status": "landed",
+    "router": "git-cg eval triage",
+    "service": "src/git_cg/eval/triage.py",
+    "schema": "eval_triage_v0",
+    "authority": "advisory_offline_router",
+    "not_score_law": true
   }
 }
