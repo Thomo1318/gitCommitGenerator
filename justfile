@@ -122,4 +122,4 @@ dogfood-bench runs="20":
         --command-name dogfood_async_off \
         "GIT_CG_EVAL_DOGFOOD_MODE=off ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
     @uv run python -m git_cg.eval.dogfood.bench \
-        .eval/dogfood/bench_async_on.json .eval/dogfood/bench_async_off.json
+        .eval/dogfood/bench_async_off.json .eval/dogfood/bench_async_on.json

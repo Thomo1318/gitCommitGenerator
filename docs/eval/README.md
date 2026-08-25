@@ -697,7 +697,7 @@ authority.
 * `async` mode records `async_never_awaits_judge=true` and **never** awaits the judge on the product path (`product_block` is always `false`).
 * `sample` mode is deterministic: explicit `--seed` or a stable hash of the population; `mode=sample` requires `sample_seed`, `sample_rate`, `population_id` (schema-conditional requirement).
 * `capture_on=fail` marks `hard_negative_candidate=true` for R14 vault routing.
-* Bench: `just dogfood-bench` runs `hyperfine` async-on vs async-off on the real commit path and reports mean delta + CI-overlap. Maintainer evidence only — never a CI or product gate.
+* Bench: `just dogfood-bench` runs `hyperfine` async-on vs async-off on the real commit path and reports mean delta + CI-overlap. Maintainer evidence only — never a CI or product gate. Durable S6-G02(b) pack: `docs/eval/evidence/s6-g02b-*`.
 
 ### Train export row scrub-failure policy (locked)
 

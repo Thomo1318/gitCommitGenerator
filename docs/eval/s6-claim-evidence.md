@@ -48,7 +48,7 @@ cross-checks, not alternate law surfaces.
 |:---|:---|:---|
 | Every S6-A…H row names ≥1 intended test module/node | Slice 2 → expand Slice 9 | **Yes** |
 | Full narrative evidence + coverage report + PR claim paste | Slice 9 / S6-H* | **No** |
-| Maintainer hyperfine artifact for S6-G02(b) | Maintainer evidence (NTH-06) | Linked residual only |
+| Maintainer hyperfine artifact for S6-G02(b) | `docs/eval/evidence/s6-g02b-*` + NTH-06 | **landed (maintainer evidence)** |
 | PR links #246+#217; closes only #246 | Slice 9 / S6-H05–H06 | Open |
 
 ## Composition / CLI spine
@@ -153,7 +153,7 @@ api_map + envelope sketches
 | ID | Summary | Primary evidence (seed) | Status |
 |:---|:---|:---|:---|
 | **S6-G01** | Non-maintainer default dogfood mode `off` | `tests/eval/test_s6_slice7.py::test_dogfood_g01_non_maintainer_default_off`; `test_dogfood_g01_capture_off_skips_without_product_block` | landed |
-| **S6-G02** | Async dogfood never blocks commit path (two-part) | **(a)** `tests/eval/test_s6_slice7.py::test_dogfood_g02a_async_never_invokes_or_awaits_judge`; `test_dogfood_g02a_source_has_no_blocking_wait_primitives`<br>**(b)** `just dogfood-bench` + `test_dogfood_g02b_bench_summarise_delta_ci_overlap` / `test_dogfood_g02b_parse_hyperfine_json` (recipe+parser landed; **maintainer hyperfine artifact still open**) | **(a) landed · (b) residual evidence** |
+| **S6-G02** | Async dogfood never blocks commit path (two-part) | **(a)** `tests/eval/test_s6_slice7.py::test_dogfood_g02a_async_never_invokes_or_awaits_judge`; `test_dogfood_g02a_source_has_no_blocking_wait_primitives`<br>**(b)** `just dogfood-bench` + `test_dogfood_g02b_*` + maintainer artifact `docs/eval/evidence/s6-g02b-dogfood-bench-meta.json` (ci_overlap=True; not a CI gate) | **landed (a+b)** |
 | **S6-G03** | Dogfood attachments `authority=advisory` | `tests/eval/test_s6_slice7.py::test_dogfood_g03_authority_always_advisory_and_non_overridable` | landed |
 | **S6-G04** | `capture_on=fail` hard_negative without product fail | `tests/eval/test_s6_slice7.py::test_dogfood_g04_capture_on_fail_hard_negative_no_product_block` | landed |
 | **S6-G05** | Train-export scrub; row fail → drop + `scrub_report` + continue | `tests/eval/test_s6_slice7.py::test_train_export_row_scrub_failure_drops_and_continues`; `test_train_export_no_quarantine_store` | landed |
@@ -176,9 +176,9 @@ api_map + envelope sketches
 
 | Residual | Notes |
 |:---|:---|
-| **S6-G02(b) / A5 empirical** | Recipe + parser proved; attach maintainer `just dogfood-bench` hyperfine artifact before close if claim kept at full two-part strength |
+| **S6-G02(b) / A5 empirical** | **Closed with maintainer evidence** at `docs/eval/evidence/s6-g02b-*` (hyperfine off/on JSON + summary + meta; ci_overlap=True). Recipe default remains 20 runs; capture used 3-run durable pack. Not a CI/product gate. |
 | **S6-H01/H02/H05/H06** | Docs/CI/PR packaging — **start only in Slice 9** |
-| Optional NTH | Parenthesize multi-except style; promote/train-export/diagnose dry-run polish; `eval failures` filters — tracked, non-merge-gate |
+| Optional NTH | **Closed in pre-Slice-9 pack:** `failures` filters; `--dry-run` on promote/train-export/diagnose; multi-rater `eval review rollup`; G02(b)/NTH-06 evidence pack. **Style:** multi-except remains PEP 758 bare `except A, B:` (Ruff py314 canonical; parenthesize is not a residual) |
 
 ## PR close pack (paste target for Slice 9 — do not execute yet)
 
@@ -186,10 +186,24 @@ api_map + envelope sketches
 * Trailers: **Closes #246 only**; `Refs: #217` (never Closes #217 / #216 / #235)
 * Claim table: this file expanded + coverage summary
 * Restate dual-axis + FIND-007 + no required GEval CI gate
-* Attach G02(b) bench artifact or narrow claim text deliberately
+* G02(b) bench artifact attached under `docs/eval/evidence/s6-g02b-*`
 
 ## Explicitly not evidenced as complete here
 
 * Full Slice 9 DoD narrative / Zensical durable pages
 * Live network Opik Cloud dogfood
 * Opening/merging the S6 PR
+
+
+## Pre-Slice-9 NTH + G02(b) close pack (2026-08-25)
+
+Landed without starting Slice 9 docs/PR packaging:
+
+| Item | Evidence |
+|:---|:---|
+| NTH-02 failures filters | `list_failures(... regime/family/failure_id/severity)`; CLI flags; API map sketch; `tests/eval/test_explain.py::test_failures_filters_*` |
+| NTH-03 dry-run complete | `promote` (pre-landed); `train-export --dry-run` alias of `--no-write`; `diagnose --dry-run` no-write + would_write |
+| NTH-05 multi-rater UX | `eval review rollup` + `rollup_reviews()` advisory dimension/outcome majority; never sole-promotes gold |
+| Style hygiene | **N/A under py314:** Ruff target-version py314 keeps PEP 758 bare multi-except (`except A, B:`). Project documents this in `pyproject.toml` (`tool.interrogate`). No parenthesize residual. |
+| NTH-06 / S6-G02(b) | Maintainer hyperfine pack in `docs/eval/evidence/s6-g02b-*`; `justfile` summariser arg order OFF→ON |
+| S6-H01/H02/H05/H06 | **Still Slice 9** — not started here |
