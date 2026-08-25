@@ -42,14 +42,28 @@ SEVERITY_WARN: Final[str] = "warn"
 _PIN_RE: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9_]+@[0-9a-f]{64}$")
 
 # Deterministic remediation hints (closed copy map; never model output).
+# Failure-class hints include static offline deep-links to `eval explain` /
+# `eval failures` (NTH-01 / Slice 4 L742). Never Ollie/LLM RCA.
+_DEEP_LINK_EXPLAIN: Final[str] = "git-cg eval explain --experiment-id <experiment-id> --case <case-id>"
+_DEEP_LINK_FAILURES: Final[str] = "git-cg eval failures --experiment-id <experiment-id>"
+_DEEP_LINKS: Final[str] = f"Deep-links: `{_DEEP_LINK_EXPLAIN}`; `{_DEEP_LINK_FAILURES}`."
+
 _HINTS: Final[dict[str, str]] = {
-    "EVAL_PIN_FLOATING": "Freeze the catalog/schema pack to a content pin; never run eval on 'latest'.",
-    "EVAL_SUITE_PIN_MISMATCH": "Re-pin the suite to the live schema/catalog pins and rebuild the snapshot.",
-    "EVAL_INPUT_EMPTY": "FIND-026: bind a non-empty scored artifact (final_message or product/score card).",
-    "EVAL_INPUT_OVERSIZE": "FIND-026: reduce the scored artifact below the eval byte budget.",
-    "EVAL_COMPAT_HASH_MISMATCH": "Recover with `git-cg eval run` (fresh) or `git-cg eval recompute-scores`.",
-    "EVAL_PROMPT_PACK_DRIFT": "FIND-028: re-pin the suite snapshot against the current prompt pack.",
-    "EVAL_CONFIG_ERROR": "Resolve Opik mode/projects; see `git-cg eval opik config show`.",
+    "EVAL_PIN_FLOATING": (
+        f"Freeze the catalog/schema pack to a content pin; never run eval on 'latest'. {_DEEP_LINKS}"
+    ),
+    "EVAL_SUITE_PIN_MISMATCH": (
+        f"Re-pin the suite to the live schema/catalog pins and rebuild the snapshot. {_DEEP_LINKS}"
+    ),
+    "EVAL_INPUT_EMPTY": (
+        f"FIND-026: bind a non-empty scored artifact (final_message or product/score card). {_DEEP_LINKS}"
+    ),
+    "EVAL_INPUT_OVERSIZE": (f"FIND-026: reduce the scored artifact below the eval byte budget. {_DEEP_LINKS}"),
+    "EVAL_COMPAT_HASH_MISMATCH": (
+        f"Recover with `git-cg eval run` (fresh) or `git-cg eval recompute-scores`. {_DEEP_LINKS}"
+    ),
+    "EVAL_PROMPT_PACK_DRIFT": (f"FIND-028: re-pin the suite snapshot against the current prompt pack. {_DEEP_LINKS}"),
+    "EVAL_CONFIG_ERROR": (f"Resolve Opik mode/projects; see `git-cg eval opik config show`. {_DEEP_LINKS}"),
 }
 
 

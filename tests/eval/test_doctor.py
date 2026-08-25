@@ -151,3 +151,44 @@ def test_floating_pin_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     assert pin_check.severity == "block"
     assert report.green is False
     assert report.exit_code == 1
+
+
+def test_doctor_hints_include_static_deep_links() -> None:
+    """Slice 4 L742 / NTH-01: failure hints deep-link explain + failures (static)."""
+    from git_cg.eval.doctor import _HINTS
+
+    explain_cmd = "git-cg eval explain --experiment-id <experiment-id> --case <case-id>"
+    failures_cmd = "git-cg eval failures --experiment-id <experiment-id>"
+    # Every closed remediation hint must carry both offline deep-links.
+    assert _HINTS, "doctor hint map must be non-empty"
+    for code, hint in _HINTS.items():
+        assert explain_cmd in hint, f"{code} missing explain deep-link"
+        assert failures_cmd in hint, f"{code} missing failures deep-link"
+        # Never Ollie / LLM RCA.
+        lowered = hint.lower()
+        assert "ollie" not in lowered
+        assert "llm" not in lowered
+
+
+def test_compat_fail_hint_surfaces_deep_links(tmp_path: Path) -> None:
+    """A real block-fail check carries the static explain/failures deep-links."""
+    from git_cg.eval.checkpoint_store import build_checkpoint_record, write_checkpoint
+    from git_cg.eval.doctor import STATUS_FAIL, run_local_doctor
+
+    bad_hash = "0" * 64
+    record = build_checkpoint_record(
+        checkpoint_id="ckpt-deep-link",
+        experiment_id="exp-deep",
+        compat_hash=bad_hash,
+        completed_case_ids=[],
+        pending_case_ids=["seed-v1-valid-fixture"],
+        mode="fresh_suite_run",
+        suite_id="cm-eval-fixtures-core",
+    )
+    write_checkpoint(tmp_path, record)
+    report = run_local_doctor(repo_root=tmp_path)
+    compat_check = next(c for c in report.checks if c.check_id == "compat.hash_resume")
+    assert compat_check.status == STATUS_FAIL
+    assert compat_check.hint is not None
+    assert "git-cg eval explain --experiment-id <experiment-id> --case <case-id>" in compat_check.hint
+    assert "git-cg eval failures --experiment-id <experiment-id>" in compat_check.hint
