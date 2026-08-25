@@ -41,6 +41,7 @@ runner = CliRunner()
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+# Visible in regular `git-cg eval --help` (excludes dark-launched hidden commands).
 CANONICAL_HELP_NAMES = sorted(
     {
         # top-level leaves (help text on eval --help)
@@ -50,7 +51,7 @@ CANONICAL_HELP_NAMES = sorted(
         "doctor",
         "triage",
         "amend-brief",
-        "dogfood",
+        # "dogfood" is dark-launched (hidden=True) — still canonical/callable
         "train-export",
         "failures",
         "explain",
@@ -102,6 +103,25 @@ def test_eval_help_lists_supported_surface() -> None:
     assert result.exit_code == 0, result.output
     for name in CANONICAL_HELP_NAMES:
         assert name in result.output, f"missing from eval --help: {name}"
+    # Dark-launched maintainer surface: callable, but omitted from regular help.
+    assert "dogfood" not in result.output
+
+
+def test_eval_dogfood_dark_launched_hidden_but_callable() -> None:
+    """``eval dogfood`` stays registered for maintainers while hidden from help."""
+    help_result = runner.invoke(app, ["eval", "--help"])
+    assert help_result.exit_code == 0, help_result.output
+    assert "dogfood" not in help_result.output
+
+    # Still registered: ``eval dogfood --help`` works (direct invocation path).
+    cmd_help = runner.invoke(app, ["eval", "dogfood", "--help"])
+    assert cmd_help.exit_code == 0, cmd_help.output
+    assert "--commit-message" in cmd_help.output
+    assert "dark" in (cmd_help.output or "").lower() or "Lane C" in cmd_help.output
+
+    rendered = render_operator_api_map()
+    assert "eval dogfood" in rendered
+    assert "dark-launch" in rendered.lower()
 
 
 @pytest.mark.parametrize(

@@ -70,6 +70,13 @@ DEPRECATED_ALIASES: dict[str, str] = {
     "eval export-drain": "eval export drain",
 }
 
+# Canonical commands that remain callable but are omitted from regular help.
+DARK_LAUNCH_HIDDEN_COMMANDS: frozenset[str] = frozenset(
+    {
+        "eval dogfood",
+    }
+)
+
 SUPPORTED_PYTHON_ENTRYPOINTS: tuple[tuple[str, str, str], ...] = (
     ("score_bundle", "git_cg.eval.scoring", "Score one ape_bundle_v1 offline"),
     ("score_case", "git_cg.eval.scoring", "Score one fixture/case offline"),
@@ -159,6 +166,12 @@ def _status_for(path: str) -> tuple[str, str]:
             f"Canonical: `eval opik config show`. Removal: {REMOVAL_TARGET}.",
         )
     if path in CANONICAL_COMMANDS:
+        if path in DARK_LAUNCH_HIDDEN_COMMANDS:
+            return (
+                "canonical (dark-launch)",
+                "Maintainer/operator surface; registered and callable, but hidden "
+                "from regular `git-cg eval --help` (dark launch).",
+            )
         return ("canonical", "Public CLI operator surface.")
     if path.startswith("eval ") and path.count(" ") == 1:
         # top-level under eval that isn't listed — still public if registered
@@ -188,6 +201,8 @@ def _stability_tier(path: str, kind: str) -> str:
         return "public (group)"
     if path in DEPRECATED_ALIASES or path == "eval config" or path.startswith("eval export-"):
         return "public (deprecated alias)"
+    if path in DARK_LAUNCH_HIDDEN_COMMANDS:
+        return "public (dark-launch; hidden from regular help)"
     return "public"
 
 
@@ -215,6 +230,11 @@ def render_operator_api_map(nodes: Iterable[CommandNode] | None = None) -> str:
         "| **Public** | `git-cg` / `git-cg eval …` CLI | Primary operator API; help-tested |",
         "| **Supported** | Selected `git_cg.eval*` entrypoints listed below | Maintainer/harness-stable |",
         "| **Internal** | All other `git_cg.eval*` / product modules | No compatibility promise |",
+        "",
+        "Dark-launched canonical commands (currently `eval dogfood`) stay **callable**",
+        "for maintainers but are **hidden from regular `git-cg eval --help`** so basic",
+        "users do not see them in the default command menu. Direct invocation and",
+        "operator-map / claim-matrix references remain valid.",
         "",
         "Undocumented internals are **not** promised compatible (S6-A05).",
         "",

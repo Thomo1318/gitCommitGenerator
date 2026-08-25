@@ -19,6 +19,11 @@ This document is the Slice 2 operator API map (Issue #246 / RK-S6-10).
 | **Supported** | Selected `git_cg.eval*` entrypoints listed below | Maintainer/harness-stable |
 | **Internal** | All other `git_cg.eval*` / product modules | No compatibility promise |
 
+Dark-launched canonical commands (currently `eval dogfood`) stay **callable**
+for maintainers but are **hidden from regular `git-cg eval --help`** so basic
+users do not see them in the default command menu. Direct invocation and
+operator-map / claim-matrix references remain valid.
+
 Undocumented internals are **not** promised compatible (S6-A05).
 
 ## Policy constants
@@ -71,7 +76,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval config` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval opik config show`` (temporary bridge). Removal target: first minor release after S6 GA. — Canonical: `eval opik config show`. Removal: first minor release after S6 GA. |
 | `eval diagnose` | command | public | canonical | Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent). — Public CLI operator surface. |
 | `eval doctor` | command | public | canonical | Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, network-free. Fail-closed on floating ``latest`` pins and missing catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks only; warn-severity failures never flip green to red. Emits phantom-metric producers ``h.compat_hash_resume`` / ``h.doctor_green`` / ``h.export_config_resolved`` as ScoreResultV1 rows. — Public CLI operator surface. |
-| `eval dogfood` | command | public | canonical | Fire the Lane C dogfood shadow sidecar (§7.3). Lane C is advisory only: it never blocks the product commit path, never mutates intent/ranking, and async mode never awaits the judge outcome. — Public CLI operator surface. |
+| `eval dogfood` | command | public (dark-launch; hidden from regular help) | canonical (dark-launch) | Fire the Lane C dogfood shadow sidecar (§7.3). Dark-launched maintainer/operator surface: registered and callable as ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so basic users do not see it in the default command menu. Lane C is advisory only: it never blocks the product commit path, never mutates intent/ranking, and async mode never awaits the judge outcome. — Maintainer/operator surface; registered and callable, but hidden from regular `git-cg eval --help` (dark launch). |
 | `eval encode-fixture` | command | public | canonical | Encode a fixture into ``ape_bundle_v1`` and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exits non-zero on invalid options, missing fixtures, or encode failures. — Public CLI operator surface. |
 | `eval explain` | command | public | canonical | Deterministic explain contract (§18.3); no opaque LLM RCA. — Public CLI operator surface. |
 | `eval export` | group | public (group) | group | Layer-A export queue ops: status / retry / drain (F4 fail-open). — Nested Typer group (not invoked alone). |

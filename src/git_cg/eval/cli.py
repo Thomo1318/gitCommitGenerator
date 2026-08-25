@@ -585,7 +585,10 @@ def amend_brief_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("dogfood")
+@eval_app.command(
+    "dogfood",
+    hidden=True,  # dark-launch: callable, omitted from regular `git-cg eval --help`
+)
 def dogfood_cmd(
     commit_message: str = typer.Option(..., "--commit-message", help="Candidate commit message."),
     mode: str = typer.Option("async", "--mode", help="off|sample|always|async."),
@@ -605,6 +608,10 @@ def dogfood_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Fire the Lane C dogfood shadow sidecar (§7.3).
+
+    Dark-launched maintainer/operator surface: registered and callable as
+    ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so
+    basic users do not see it in the default command menu.
 
     Lane C is advisory only: it never blocks the product commit path, never
     mutates intent/ranking, and async mode never awaits the judge outcome.
