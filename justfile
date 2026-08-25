@@ -107,6 +107,29 @@ eval-fixture-index:
 eval-api-map-check:
     uv run python -m git_cg.eval.api_map --check
 
+# S6 offline proof spine (claim-matrix subset; no cov). Does not replace full CI pytest.
+eval-s6-proof:
+    uv run pytest \
+      tests/eval/test_api_map_help.py \
+      tests/eval/test_checkpoint_store.py \
+      tests/eval/test_compat_hash.py \
+      tests/eval/test_run_orchestrator.py \
+      tests/eval/test_eval_cli_run.py \
+      tests/eval/test_doctor.py \
+      tests/eval/test_eval_cli_doctor.py \
+      tests/eval/test_eval_opik_doctor.py \
+      tests/eval/test_explain.py \
+      tests/eval/test_diagnose.py \
+      tests/eval/test_eval_cli_explain.py \
+      tests/eval/test_replay.py \
+      tests/eval/test_promote.py \
+      tests/eval/test_review_queue.py \
+      tests/eval/test_eval_cli_replay_promote.py \
+      tests/eval/test_s6_slice7.py \
+      tests/eval/test_eval_cli_triage.py \
+      tests/eval/mirror/test_train.py \
+      -q --no-cov
+
 # S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
 dogfood-bench runs="20":
