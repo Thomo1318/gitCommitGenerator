@@ -3,8 +3,10 @@
 * Closed destinations after scrubbed_candidate.
 * Required provenance/source/thread/trace/owner/label/destination/redaction/split.
 * Explicit denial taxonomy (no silent gold, no popularity gold, no human-sole gold,
-  synthetic Expand-with-AI requires quarantine, antipattern ∉ positive).
+  synthetic Expand-with-AI requires quarantine, antipattern ∉ positive,
+  unresolved dispute, schema validation failure).
 * split_group_id contamination check.
+* Denied candidates remain candidate-class with denial audit rows (no fixture mint).
 * Optional dry-run.
 """
 
@@ -18,13 +20,16 @@ import pytest
 from git_cg.eval.binding.paths import acceptpath_bundles_dir, atomic_write_json
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 from git_cg.eval.promote import (
+    DENIAL_REASONS,
     DENY_ANTIPATTERN_POSITIVE,
     DENY_HUMAN_SOLE_GOLD,
     DENY_MISSING_FIELD,
     DENY_POPULARITY_GOLD,
+    DENY_SCHEMA,
     DENY_SILENT_GOLD,
     DENY_SPLIT_CONTAMINATION,
     DENY_SYNTHETIC_UNQUARANTINED,
+    DENY_UNRESOLVED_DISPUTE,
     DEST_FIXTURE_LANE_A,
     DEST_HARD_NEGATIVE,
     DEST_OBSERVABILITY_FIXTURE,
@@ -218,3 +223,155 @@ def test_invalid_destination(repo: Path) -> None:
     with pytest.raises(PromoteError) as ei:
         promote(repo, **_ok_kwargs(destination="gold_final"))
     assert ei.value.exit_code == 2
+
+
+def _promotions(repo: Path) -> list[Path]:
+    root = repo / ".eval" / "index" / "promotions"
+    if not root.is_dir():
+        return []
+    return sorted(root.glob("*.json"))
+
+
+def _assert_denial_audit(exc: PromoteError, *, reason: str, repo: Path) -> dict:
+    assert exc.denial_reason == reason
+    assert isinstance(exc.decision, dict)
+    assert exc.decision["accepted"] is False
+    assert exc.decision["denial_reason"] == reason
+    assert exc.decision["candidate_class"] in {"scrubbed_candidate", "quarantine_candidate"}
+    assert exc.decision_path is not None
+    path = Path(exc.decision_path)
+    assert path.is_file()
+    on_disk = json.loads(path.read_text(encoding="utf-8"))
+    assert on_disk["accepted"] is False
+    assert on_disk["denial_reason"] == reason
+    # Denial must not mint destination fixture/gold artifacts.
+    index = repo / ".eval" / "index"
+    for folder in (
+        "fixture_lane_a_candidates",
+        "observability_fixtures",
+        "hard_negatives",
+    ):
+        d = index / folder
+        if d.is_dir():
+            assert list(d.glob("*.json")) == []
+    return on_disk
+
+
+def test_deny_schema_validation_persists_candidate(repo: Path) -> None:
+    """Invalid ape_bundle_v1 shape is an explicit schema denial with audit row."""
+    bad = {
+        "schema_version": "ape_bundle_v1",
+        # required fields present but wrong types / illegal enum → schema fail
+        "case_id": "case-bad-schema",
+        "artifact_class": "not_a_real_class",
+        "bound": "yes",
+        "session_thread_id": "thread-bad-schema",
+        "meta": {"binding": {"trace_id": "trace-bad-schema"}},
+    }
+    _seed(repo, bad, stem="thread-bad-schema")
+    with pytest.raises(PromoteError) as ei:
+        promote(repo, **_ok_kwargs(bundle="thread-bad-schema"))
+    _assert_denial_audit(ei.value, reason=DENY_SCHEMA, repo=repo)
+
+
+def test_deny_unresolved_dispute_pending_review(repo: Path) -> None:
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1", gold_dispute=True)["item"]["review_id"]
+    with pytest.raises(PromoteError) as ei:
+        promote(
+            repo,
+            **_ok_kwargs(
+                destination=DEST_OBSERVABILITY_FIXTURE,
+                review_id=rid,
+                provenance="diag_issue",
+            ),
+        )
+    _assert_denial_audit(ei.value, reason=DENY_UNRESOLVED_DISPUTE, repo=repo)
+
+
+def test_deny_unresolved_dispute_needs_work_outcome(repo: Path) -> None:
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1", gold_dispute=True)["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="needs_work")
+    with pytest.raises(PromoteError) as ei:
+        promote(
+            repo,
+            **_ok_kwargs(
+                destination=DEST_OBSERVABILITY_FIXTURE,
+                review_id=rid,
+                provenance="diag_issue",
+            ),
+        )
+    _assert_denial_audit(ei.value, reason=DENY_UNRESOLVED_DISPUTE, repo=repo)
+
+
+def test_deny_unresolved_dispute_allows_quarantine_park(repo: Path) -> None:
+    """Park destinations may still retain an open dispute (operator quarantine)."""
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1", gold_dispute=True)["item"]["review_id"]
+    ok = promote(
+        repo,
+        **_ok_kwargs(destination=DEST_QUARANTINE, review_id=rid, provenance="diag_issue", label="parked"),
+    )
+    assert ok["accepted"] is True
+    assert ok["decision"]["destination"] == DEST_QUARANTINE
+
+
+def test_deny_popularity_gold_persists_audit_not_fixture(repo: Path) -> None:
+    _seed(repo)
+    before = len(_promotions(repo))
+    with pytest.raises(PromoteError) as ei:
+        promote(
+            repo,
+            **_ok_kwargs(
+                label="gold",
+                popularity_signal=True,
+                destination=DEST_FIXTURE_LANE_A,
+            ),
+        )
+    row = _assert_denial_audit(ei.value, reason=DENY_POPULARITY_GOLD, repo=repo)
+    assert len(_promotions(repo)) == before + 1
+    assert row["candidate_class"] == "scrubbed_candidate"
+    # No fixture_lane_a artifact minted on denial.
+    fixture_dir = repo / ".eval" / "index" / "fixture_lane_a_candidates"
+    assert not fixture_dir.exists() or list(fixture_dir.glob("*.json")) == []
+
+
+def test_dry_run_denial_does_not_write_audit(repo: Path) -> None:
+    _seed(repo)
+    with pytest.raises(PromoteError) as ei:
+        promote(
+            repo,
+            **_ok_kwargs(
+                label="gold",
+                popularity_signal=True,
+                destination=DEST_FIXTURE_LANE_A,
+                dry_run=True,
+            ),
+        )
+    assert ei.value.denial_reason == DENY_POPULARITY_GOLD
+    assert ei.value.decision is not None
+    assert ei.value.decision["dry_run"] is True
+    assert ei.value.decision_path is None
+    assert _promotions(repo) == []
+
+
+def test_s6_e09_denial_reason_set_is_closed() -> None:
+    """Guard the closed named-denial taxonomy (S6-E09)."""
+    expected = {
+        "missing_required_field",
+        "invalid_destination",
+        "invalid_stage_transition",
+        "split_group_contamination",
+        "silent_gold_mint_forbidden",
+        "popularity_promotion_forbidden",
+        "human_review_cannot_sole_promote_golden",
+        "synthetic_expand_requires_quarantine",
+        "antipattern_cannot_enter_positive_train",
+        "schema_validation_failed",
+        "source_bundle_missing",
+        "provenance_invalid",
+        "unresolved_dispute",
+    }
+    assert expected == DENIAL_REASONS

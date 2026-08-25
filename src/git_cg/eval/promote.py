@@ -18,6 +18,13 @@ Forbidden:
 * human-review-alone golden promotion
 * Expand-with-AI synthetic rows without quarantine
 * antipattern rows into positive_train destinations
+* unresolved HITL dispute / open review lifecycle on non-park destinations
+
+S6-E09 denial law: every rejection is a named ``denial_reason``. After the
+source candidate is resolved, denials persist a candidate-class audit row
+under ``.eval/index/promotions/`` (``accepted=false``) and never write
+fixture/gold destination artifacts. ``--dry-run`` validates and previews
+denial without writes.
 
 Import law: import-light. Path / schema helpers are lazy.
 """
@@ -69,6 +76,26 @@ DENY_ANTIPATTERN_POSITIVE: Final[str] = "antipattern_cannot_enter_positive_train
 DENY_SCHEMA: Final[str] = "schema_validation_failed"
 DENY_SOURCE_MISSING: Final[str] = "source_bundle_missing"
 DENY_PROVENANCE: Final[str] = "provenance_invalid"
+DENY_UNRESOLVED_DISPUTE: Final[str] = "unresolved_dispute"
+
+#: Every named denial class that S6-E09 must be able to surface.
+DENIAL_REASONS: Final[frozenset[str]] = frozenset(
+    {
+        DENY_MISSING_FIELD,
+        DENY_INVALID_DESTINATION,
+        DENY_INVALID_STAGE,
+        DENY_SPLIT_CONTAMINATION,
+        DENY_SILENT_GOLD,
+        DENY_POPULARITY_GOLD,
+        DENY_HUMAN_SOLE_GOLD,
+        DENY_SYNTHETIC_UNQUARANTINED,
+        DENY_ANTIPATTERN_POSITIVE,
+        DENY_SCHEMA,
+        DENY_SOURCE_MISSING,
+        DENY_PROVENANCE,
+        DENY_UNRESOLVED_DISPUTE,
+    }
+)
 
 REDACTION_PROFILES: Final[frozenset[str]] = frozenset(
     {
@@ -116,12 +143,16 @@ class PromoteError(ValueError):
         exit_code: int,
         hint: str | None = None,
         denial_reason: str | None = None,
+        decision: dict[str, Any] | None = None,
+        decision_path: str | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
         self.hint = hint
         self.denial_reason = denial_reason
+        self.decision = decision
+        self.decision_path = decision_path
 
 
 def _utc_now() -> str:
@@ -400,13 +431,209 @@ def _scan_split_contamination(
     return sorted(set(conflicts))
 
 
-def _deny(reason: str, message: str, *, hint: str | None = None) -> PromoteError:
+def _deny(
+    reason: str,
+    message: str,
+    *,
+    hint: str | None = None,
+    decision: dict[str, Any] | None = None,
+    decision_path: str | None = None,
+) -> PromoteError:
     return PromoteError(
         message,
         code="EVAL_USAGE",
         exit_code=2,
         denial_reason=reason,
         hint=hint,
+        decision=decision,
+        decision_path=decision_path,
+    )
+
+
+def _validate_source_bundle(source: dict[str, Any]) -> None:
+    """Fail closed when the source is not a valid ``ape_bundle_v1`` instance."""
+    from git_cg.eval.schema_pack import SchemaLoadError, SchemaPackError, validate_instance
+
+    try:
+        validate_instance(BUNDLE_SCHEMA, source)
+    except SchemaLoadError as exc:
+        raise PromoteError(
+            f"schema pack unavailable for promote validation: {exc}",
+            code="EVAL_STORE_INTEGRITY",
+            exit_code=4,
+            denial_reason=DENY_SCHEMA,
+            hint="Repair the offline schema pack pin before promoting.",
+        ) from exc
+    except SchemaPackError as exc:
+        raise _deny(
+            DENY_SCHEMA,
+            f"source bundle failed {BUNDLE_SCHEMA} validation: {exc}",
+            hint="Fix the candidate bundle schema before promotion.",
+        ) from exc
+
+
+def _unresolved_dispute_message(review: dict[str, Any]) -> str | None:
+    """Return a human message when an attached review still blocks promote.
+
+    Unresolved means: lifecycle not adjudicated, or ``human.gold_dispute`` is
+    still open (needs_work / dismissed / missing outcome). Reject/quarantine
+    park paths may still proceed — callers decide whether to skip this gate.
+    """
+    status = str(review.get("status") or "").strip()
+    review_id = str(review.get("review_id") or review.get("id") or "").strip() or "<unknown>"
+    if status in {"pending", "in_review"}:
+        return f"review {review_id} status={status!r} is unresolved"
+    nested = review.get("review") if isinstance(review.get("review"), dict) else {}
+    scores = nested.get("scores") if isinstance(nested.get("scores"), dict) else {}
+    disputed = scores.get("human.gold_dispute") is True
+    if not disputed:
+        return None
+    adjudication = review.get("adjudication") if isinstance(review.get("adjudication"), dict) else {}
+    outcome = str(adjudication.get("outcome") or "").strip()
+    if status != "adjudicated":
+        return f"review {review_id} has human.gold_dispute=true without adjudicated resolution (status={status!r})"
+    if outcome in {"", "needs_work"}:
+        return f"review {review_id} human.gold_dispute remains open (outcome={outcome or 'none'!r})"
+    return None
+
+
+def _build_decision_row(
+    *,
+    accepted: bool,
+    promotion_id: str,
+    st: str,
+    dest: str,
+    owner: str,
+    label: str,
+    provenance: str,
+    redaction_profile: str,
+    split: str,
+    source: dict[str, Any],
+    source_path: Path,
+    source_hash: str,
+    source_trace: str,
+    session_thread_id: str,
+    review: dict[str, Any] | None,
+    notes: str | None,
+    dry_run: bool,
+    denial_reason: str | None,
+    candidate_class: str,
+) -> dict[str, Any]:
+    decision: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "promotion_id": promotion_id,
+        "accepted": accepted,
+        "from_stage": st,
+        "via_stage": STAGE_SCRUBBED_CANDIDATE,
+        "destination": dest,
+        "owner": owner.strip(),
+        "label": label.strip(),
+        "provenance": provenance.strip(),
+        "redaction_profile": redaction_profile,
+        "split_group_id": split,
+        "candidate_class": candidate_class,
+        "source": {
+            "path": str(source_path),
+            "case_id": source.get("case_id"),
+            "session_thread_id": session_thread_id or None,
+            "trace_id": source_trace or None,
+            "bundle_hash": source_hash,
+            "artifact_class": source.get("artifact_class"),
+            "provenance_label": source.get("provenance_label"),
+        },
+        "review_id": (
+            (review.get("review_id") if isinstance(review, dict) else None)
+            or (
+                review.get("review", {}).get("review_id")
+                if isinstance(review, dict) and isinstance(review.get("review"), dict)
+                else None
+            )
+        ),
+        "review_authority": (
+            (review.get("review", {}) or {}).get("authority")
+            if isinstance(review, dict) and isinstance(review.get("review"), dict)
+            else (review.get("authority") if isinstance(review, dict) else None)
+        ),
+        "review_outcome_ref": (
+            (review.get("adjudication") or {}).get("outcome_ref")
+            if isinstance(review, dict) and isinstance(review.get("adjudication"), dict)
+            else None
+        ),
+        "denial_reason": denial_reason,
+        "notes": notes.strip() if notes and notes.strip() else None,
+        "created_at": _utc_now(),
+        "dry_run": dry_run,
+    }
+    return {k: v for k, v in decision.items() if v is not None}
+
+
+def _persist_decision(repo: Path, decision: dict[str, Any], *, dry_run: bool) -> str:
+    decision_path = _promotions_dir(repo) / f"{decision['promotion_id']}.json"
+    if not dry_run:
+        _atomic_write(decision_path, decision)
+    return str(decision_path)
+
+
+def _raise_named_denial(
+    repo: Path,
+    *,
+    reason: str,
+    message: str,
+    hint: str | None,
+    dry_run: bool,
+    st: str,
+    dest: str,
+    owner: str,
+    label: str,
+    provenance: str,
+    redaction_profile: str,
+    split: str,
+    source: dict[str, Any],
+    source_path: Path,
+    source_hash: str,
+    source_trace: str,
+    session_thread_id: str,
+    review: dict[str, Any] | None,
+    notes: str | None,
+) -> None:
+    """Record a candidate-class denial audit row, then fail closed.
+
+    Denied candidates stay non-gold: no destination fixture/gold artifact is
+    written. The audit row remains under ``.eval/index/promotions/`` with
+    ``accepted=false`` + named ``denial_reason`` so operators can inspect the
+    retained candidate decision without silent drops.
+    """
+    promotion_id = f"promo-{uuid.uuid4().hex[:12]}"
+    # Denial retention class: quarantine-shaped candidate, never gold/fixture mint.
+    candidate_class = "quarantine_candidate" if dest in {DEST_QUARANTINE, DEST_REJECT} else "scrubbed_candidate"
+    decision = _build_decision_row(
+        accepted=False,
+        promotion_id=promotion_id,
+        st=st,
+        dest=dest,
+        owner=owner,
+        label=label,
+        provenance=provenance,
+        redaction_profile=redaction_profile,
+        split=split,
+        source=source,
+        source_path=source_path,
+        source_hash=source_hash,
+        source_trace=source_trace,
+        session_thread_id=session_thread_id,
+        review=review,
+        notes=notes,
+        dry_run=dry_run,
+        denial_reason=reason,
+        candidate_class=candidate_class,
+    )
+    decision_path = _persist_decision(repo, decision, dry_run=dry_run)
+    raise _deny(
+        reason,
+        message,
+        hint=hint,
+        decision=decision,
+        decision_path=None if dry_run else decision_path,
     )
 
 
@@ -475,27 +702,99 @@ def promote(
     source_hash = _bundle_hash(source)
     source_trace = _extract_trace_id(source)
     session_thread_id = str(source.get("session_thread_id") or "").strip()
+
+    # Best-effort split for audit rows even when later gates fail.
+    try:
+        split = _extract_split_group(source, split_group_id)
+    except PromoteError as exc:
+        if exc.denial_reason != DENY_MISSING_FIELD:
+            raise
+        split = ""
+
+    def _deny_after_source(reason: str, message: str, *, hint: str | None = None) -> None:
+        # Once a candidate source exists, denials retain an audit row.
+        if not split:
+            raise _deny(reason, message, hint=hint)
+        _raise_named_denial(
+            repo,
+            reason=reason,
+            message=message,
+            hint=hint,
+            dry_run=dry_run,
+            st=st,
+            dest=dest,
+            owner=owner,
+            label=label,
+            provenance=provenance,
+            redaction_profile=redaction_profile,
+            split=split,
+            source=source,
+            source_path=source_path,
+            source_hash=source_hash,
+            source_trace=source_trace or "",
+            session_thread_id=session_thread_id,
+            review=None,
+            notes=notes,
+        )
+
     if not session_thread_id:
-        raise _deny(
+        _deny_after_source(
             DENY_MISSING_FIELD,
             "source bundle missing session_thread_id (required on promote)",
             hint="Replay/bind the bundle so session_thread_id is present, or pass a lineage-complete source.",
         )
     if not source_trace:
-        raise _deny(
+        _deny_after_source(
             DENY_MISSING_FIELD,
             "source bundle missing trace_id (required on promote)",
             hint="Ensure meta.binding.trace_id (or meta.trace_id) is present on the source bundle.",
         )
-    split = _extract_split_group(source, split_group_id)
+    if not split:
+        # Re-raise with stable denial after source resolve (no lineage unit).
+        raise _deny(
+            DENY_MISSING_FIELD,
+            "split_group_id required for contamination control",
+            hint="Pass --split-group-id or ensure the source bundle carries one.",
+        )
+
+    # Schema gate (S6-E09): invalid bundles cannot mint destinations.
+    try:
+        _validate_source_bundle(source)
+    except PromoteError as exc:
+        if exc.denial_reason != DENY_SCHEMA:
+            raise
+        _deny_after_source(DENY_SCHEMA, str(exc), hint=exc.hint)
 
     review = _load_review(repo, review_id)
     label_l = label.strip().lower()
     wants_gold = label_l in _GOLD_LABELS or allow_golden
 
+    def _deny_here(reason: str, message: str, *, hint: str | None = None) -> None:
+        _raise_named_denial(
+            repo,
+            reason=reason,
+            message=message,
+            hint=hint,
+            dry_run=dry_run,
+            st=st,
+            dest=dest,
+            owner=owner,
+            label=label,
+            provenance=provenance,
+            redaction_profile=redaction_profile,
+            split=split,
+            source=source,
+            source_path=source_path,
+            source_hash=source_hash,
+            source_trace=source_trace or "",
+            session_thread_id=session_thread_id,
+            review=review,
+            notes=notes,
+        )
+
     # --- Forbidden paths (explicit denial taxonomy) ---
     if popularity_signal and wants_gold:
-        raise _deny(
+        _deny_here(
             DENY_POPULARITY_GOLD,
             "popularity/user_acceptance cannot promote golden",
             hint="Gold requires deterministic gate eligibility + owner provenance, not popularity.",
@@ -505,7 +804,7 @@ def promote(
         # Human review is advisory and can never be the sole golden promoter,
         # even when an adjudicated review_id is attached.
         if review is not None:
-            raise _deny(
+            _deny_here(
                 DENY_HUMAN_SOLE_GOLD,
                 "human review cannot sole-promote golden",
                 hint="Adjudicated review is advisory. Golden needs gate eligibility + non-human authority.",
@@ -521,7 +820,7 @@ def promote(
             "human",
             "review",
         }:
-            raise _deny(
+            _deny_here(
                 DENY_SILENT_GOLD,
                 "silent gold mint from production acceptance/human provenance is forbidden",
                 hint="Use observability_fixture / hard_negative / quarantine, not gold labels from accept/review.",
@@ -530,7 +829,7 @@ def promote(
         # is a *candidate* lane only — refuse gold labels into non-quarantine paths
         # unless destination is explicitly reject/quarantine.
         if dest in {DEST_FIXTURE_LANE_A, DEST_PREFERENCE_PAIR, DEST_OBSERVABILITY_FIXTURE, DEST_HARD_NEGATIVE}:
-            raise _deny(
+            _deny_here(
                 DENY_SILENT_GOLD,
                 f"gold/golden labels cannot auto-mint via destination={dest!r}",
                 hint="Gold-final requires the full gate eligibility path; use non-gold labels for candidate lanes.",
@@ -540,14 +839,14 @@ def promote(
         DEST_QUARANTINE,
         DEST_REJECT,
     }:
-        raise _deny(
+        _deny_here(
             DENY_SYNTHETIC_UNQUARANTINED,
             "synthetic Expand-with-AI rows require quarantine before other destinations",
             hint="Promote to quarantine first; human/schema validate; then re-promote.",
         )
 
     if _is_antipattern(label.strip(), source) and (dest == DEST_FIXTURE_LANE_A or label_l in _POSITIVE_DEST_LABELS):
-        raise _deny(
+        _deny_here(
             DENY_ANTIPATTERN_POSITIVE,
             "antipattern rows cannot enter positive_train / fixture_lane_a gold paths",
             hint="Use hard_negative, quarantine, or antipattern_vault destinations.",
@@ -560,72 +859,56 @@ def promote(
         label=label.strip(),
     )
     if conflicts and dest not in {DEST_REJECT, DEST_QUARANTINE}:
-        raise _deny(
+        _deny_here(
             DENY_SPLIT_CONTAMINATION,
             f"split_group_id contamination: {split} already promoted as {conflicts}",
             hint="Keep preference/replay variants in one split_group; do not cross destinations.",
         )
 
+    # Unresolved HITL dispute / open review lifecycle blocks non-park destinations.
+    if review is not None and dest not in {DEST_REJECT, DEST_QUARANTINE}:
+        dispute_msg = _unresolved_dispute_message(review)
+        if dispute_msg is not None:
+            _deny_here(
+                DENY_UNRESOLVED_DISPUTE,
+                dispute_msg,
+                hint="Finish adjudication (or clear gold_dispute) before promoting out of candidate/park lanes.",
+            )
+
     # Stage transition: failure_or_capture must pass through scrubbed_candidate.
     effective_stage = STAGE_SCRUBBED_CANDIDATE if st == STAGE_FAILURE_OR_CAPTURE else st
     if effective_stage != STAGE_SCRUBBED_CANDIDATE:
-        raise _deny(
+        _deny_here(
             DENY_INVALID_STAGE,
             f"illegal stage for terminal promote: {effective_stage!r}",
         )
 
     promotion_id = f"promo-{uuid.uuid4().hex[:12]}"
-    decision: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "promotion_id": promotion_id,
-        "accepted": True,
-        "from_stage": st,
-        "via_stage": STAGE_SCRUBBED_CANDIDATE,
-        "destination": dest,
-        "owner": owner.strip(),
-        "label": label.strip(),
-        "provenance": provenance.strip(),
-        "redaction_profile": redaction_profile,
-        "split_group_id": split,
-        "source": {
-            "path": str(source_path),
-            "case_id": source.get("case_id"),
-            "session_thread_id": session_thread_id or None,
-            "trace_id": source_trace or None,
-            "bundle_hash": source_hash,
-            "artifact_class": source.get("artifact_class"),
-            "provenance_label": source.get("provenance_label"),
-        },
-        "review_id": (
-            (review.get("review_id") if isinstance(review, dict) else None)
-            or (
-                review.get("review", {}).get("review_id")
-                if isinstance(review, dict) and isinstance(review.get("review"), dict)
-                else None
-            )
-        ),
-        "review_authority": (
-            (review.get("review", {}) or {}).get("authority")
-            if isinstance(review, dict) and isinstance(review.get("review"), dict)
-            else (review.get("authority") if isinstance(review, dict) else None)
-        ),
-        "review_outcome_ref": (
-            (review.get("adjudication") or {}).get("outcome_ref")
-            if isinstance(review, dict) and isinstance(review.get("adjudication"), dict)
-            else None
-        ),
-        "denial_reason": None,
-        "notes": notes.strip() if notes and notes.strip() else None,
-        "created_at": _utc_now(),
-        "dry_run": dry_run,
-    }
-
-    # Drop null optional keys for cleaner audit rows.
-    decision = {k: v for k, v in decision.items() if v is not None}
+    decision = _build_decision_row(
+        accepted=True,
+        promotion_id=promotion_id,
+        st=st,
+        dest=dest,
+        owner=owner,
+        label=label,
+        provenance=provenance,
+        redaction_profile=redaction_profile,
+        split=split,
+        source=source,
+        source_path=source_path,
+        source_hash=source_hash,
+        source_trace=source_trace or "",
+        session_thread_id=session_thread_id,
+        review=review,
+        notes=notes,
+        dry_run=dry_run,
+        denial_reason=None,
+        candidate_class="scrubbed_candidate",
+    )
 
     dest_dir = _destination_dir(repo, dest)
     dest_path = dest_dir / f"{promotion_id}.json"
-    decision_path = _promotions_dir(repo) / f"{promotion_id}.json"
+    decision_path = _persist_decision(repo, decision, dry_run=dry_run)
 
     artifact: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -643,14 +926,12 @@ def promote(
         "created_at": decision["created_at"],
     }
 
-    if not dry_run:
-        _atomic_write(decision_path, decision)
-        if dest != DEST_REJECT:
-            _atomic_write(dest_path, artifact)
+    if not dry_run and dest != DEST_REJECT:
+        _atomic_write(dest_path, artifact)
 
     return {
         "decision": decision,
-        "decision_path": str(decision_path),
+        "decision_path": decision_path,
         "artifact_path": str(dest_path) if dest != DEST_REJECT else None,
         "accepted": True,
         "denial_reason": None,
@@ -659,6 +940,7 @@ def promote(
 
 
 __all__ = [
+    "DENIAL_REASONS",
     "DENY_ANTIPATTERN_POSITIVE",
     "DENY_HUMAN_SOLE_GOLD",
     "DENY_INVALID_DESTINATION",
@@ -671,6 +953,7 @@ __all__ = [
     "DENY_SOURCE_MISSING",
     "DENY_SPLIT_CONTAMINATION",
     "DENY_SYNTHETIC_UNQUARANTINED",
+    "DENY_UNRESOLVED_DISPUTE",
     "DEST_FIXTURE_LANE_A",
     "DEST_HARD_NEGATIVE",
     "DEST_OBSERVABILITY_FIXTURE",
