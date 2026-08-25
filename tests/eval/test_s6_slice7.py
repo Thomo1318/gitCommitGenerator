@@ -1264,3 +1264,15 @@ def test_train_export_masks_secret_in_retained_message(tmp_path: Path, monkeypat
     assert "sk-test" not in blob
     assert "•••[len=" in blob
     assert result["row_ids"], "secret-bearing but scrubbed row should still export"
+
+
+def test_train_export_dry_run_alias_no_write(tmp_path: Path) -> None:
+    """NTH-03: --dry-run is alias of --no-write and emits would_write."""
+    from git_cg.eval.train_export import train_export
+
+    (tmp_path / ".git").mkdir()
+    data = train_export(tmp_path, dry_run=True)
+    assert data["dry_run"] is True
+    assert data["written"] is False
+    assert data["paths"] is None
+    assert data["would_write"]["export_id"] == data["export_id"]

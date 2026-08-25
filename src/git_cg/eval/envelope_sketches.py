@@ -250,9 +250,15 @@ def _build_registry() -> dict[str, DataSketch]:
         ),
         "eval diagnose": _sketch(
             "eval diagnose",
-            required_keys=("issue", "upserted"),
-            nested=("issue: diag_issue_v1 row",),
-            notes="Idempotent fingerprint upsert into .eval/issues/.",
+            required_keys=("issue", "upserted", "dry_run", "would_write"),
+            nested=(
+                "issue: diag_issue_v1 row",
+                "would_write: {issue_path, diagnostics_path, fingerprint, occurrence_count, status}",
+            ),
+            notes=(
+                "Idempotent fingerprint upsert into .eval/issues/. "
+                "--dry-run validates + projects without writing issues/ or diagnostics/."
+            ),
         ),
         "eval issue list": _sketch(
             "eval issue list",
@@ -362,6 +368,8 @@ def _build_registry() -> dict[str, DataSketch]:
                 "authority",
                 "ci_sole_green",
                 "product_accept_authority",
+                "dry_run",
+                "would_write",
             ),
             enums={
                 "authority": ("corpus_retention",),
@@ -370,10 +378,12 @@ def _build_registry() -> dict[str, DataSketch]:
                 "export: train_export_v1 header",
                 "scrub_report: {status, ...} (row scrub-fail → drop + continue)",
                 "paths: null | {export_path, row_paths[], vault_paths[], row_count}",
+                "would_write: null | {export_path, rows_dir, row_count, export_id} when dry_run/no-write",
             ),
             notes=(
                 "ci_sole_green and product_accept_authority stay false. "
-                "No .eval/quarantine/ store; field quarantine remains S4 meta."
+                "No .eval/quarantine/ store; field quarantine remains S4 meta. "
+                "--dry-run is an alias of --no-write (validate + would-write; zero store mutation)."
             ),
         ),
         "eval session show": _sketch(

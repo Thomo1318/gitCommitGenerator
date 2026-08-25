@@ -109,7 +109,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval session show` | command | public | canonical | Read a local session twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation. — Public CLI operator surface. |
 | `eval thread` | group | public (group) | group | Local session-thread inspection. — Nested Typer group (not invoked alone). |
 | `eval thread show` | command | public | canonical | Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation. — Public CLI operator surface. |
-| `eval train-export` | command | public | canonical | Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). — Public CLI operator surface. |
+| `eval train-export` | command | public | canonical | Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of ``--no-write`` (validate + would-write summary; zero store mutation). — Public CLI operator surface. |
 | `eval triage` | command | public | canonical | Offline advisory router over doctor + failures + explain (Slice 8 / D27). Composes library engines only — never nests Typer presentation commands. Not score law: does not promote gold, rank intents, or revive Opik ``user_acceptance`` threshold triage. Emits one human report or one ``cli_output_envelope_v1`` with an ``eval_triage_v0`` data payload. — Public CLI operator surface. |
 
 ## Canonical S6 operator surface (Slice 0 lock)
@@ -257,11 +257,12 @@ documents — sketches name the envelope wrapper keys only.
 
 #### `eval diagnose`
 
-* **Required keys:** `issue`, `upserted`
+* **Required keys:** `dry_run`, `issue`, `upserted`, `would_write`
 * **Optional keys:** *(none)*
 * **Nested (informational):**
   * issue: diag_issue_v1 row
-* **Notes:** Idempotent fingerprint upsert into .eval/issues/.
+  * would_write: {issue_path, diagnostics_path, fingerprint, occurrence_count, status}
+* **Notes:** Idempotent fingerprint upsert into .eval/issues/. --dry-run validates + projects without writing issues/ or diagnostics/.
 
 #### `eval doctor`
 
@@ -437,7 +438,7 @@ documents — sketches name the envelope wrapper keys only.
 
 #### `eval train-export`
 
-* **Required keys:** `authority`, `ci_sole_green`, `dropped_row_ids`, `excluded_unlabeled`, `export`, `export_id`, `negative_count`, `paths`, `positive_gold_count`, `product_accept_authority`, `row_count`, `row_ids`, `scrub_report`, `written`
+* **Required keys:** `authority`, `ci_sole_green`, `dropped_row_ids`, `dry_run`, `excluded_unlabeled`, `export`, `export_id`, `negative_count`, `paths`, `positive_gold_count`, `product_accept_authority`, `row_count`, `row_ids`, `scrub_report`, `would_write`, `written`
 * **Optional keys:** *(none)*
 * **Closed enums:**
   * `authority`: `corpus_retention`
@@ -445,7 +446,8 @@ documents — sketches name the envelope wrapper keys only.
   * export: train_export_v1 header
   * scrub_report: {status, ...} (row scrub-fail → drop + continue)
   * paths: null | {export_path, row_paths[], vault_paths[], row_count}
-* **Notes:** ci_sole_green and product_accept_authority stay false. No .eval/quarantine/ store; field quarantine remains S4 meta.
+  * would_write: null | {export_path, rows_dir, row_count, export_id} when dry_run/no-write
+* **Notes:** ci_sole_green and product_accept_authority stay false. No .eval/quarantine/ store; field quarantine remains S4 meta. --dry-run is an alias of --no-write (validate + would-write; zero store mutation).
 
 ## Doctor report contract (Slice 4)
 

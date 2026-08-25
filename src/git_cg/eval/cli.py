@@ -663,13 +663,19 @@ def train_export_cmd(
     split_group_id: str | None = typer.Option(None, "--split-group-id"),
     notes: str | None = typer.Option(None, "--notes"),
     write: bool = typer.Option(True, "--write/--no-write"),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate + project export without writing (alias of --no-write).",
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Export governed train rows from landed bundles (R14 / §7.5).
 
     Row scrub-failure policy: drop + report (scrub_report) + continue; never
     emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never
-    enter positive_gold (S6-G06).
+    enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of
+    ``--no-write`` (validate + would-write summary; zero store mutation).
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.train_export import TrainExportError, train_export
@@ -684,6 +690,7 @@ def train_export_cmd(
             split_group_id=split_group_id,
             notes=notes,
             write=write,
+            dry_run=dry_run if dry_run else None,
         )
     except TrainExportError as exc:
         _emit_slice5_error("eval train-export", exc, as_json=as_json)
@@ -695,9 +702,16 @@ def train_export_cmd(
         emit_human_line(
             f"eval train-export: id={data['export_id']} rows={data['row_count']} "
             f"dropped={len(data['dropped_row_ids'])} scrub={scrub['status']} "
-            f"written={data['written']}",
+            f"written={data['written']} dry_run={data.get('dry_run', False)}",
             err=False,
         )
+        if data.get("dry_run") and isinstance(data.get("would_write"), dict):
+            ww = data["would_write"]
+            emit_human_line(
+                f"  would_write: export={ww.get('export_path')} rows_dir={ww.get('rows_dir')} "
+                f"row_count={ww.get('row_count')}",
+                err=False,
+            )
     raise typer.Exit(code=0)
 
 
@@ -1130,6 +1144,9 @@ def diagnose_cmd(
     ),
     owner: str | None = typer.Option(None, "--owner", help="Issue owner."),
     notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Validate + project issue without writing issues/diagnostics."
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent)."""
@@ -1147,21 +1164,36 @@ def diagnose_cmd(
             product_impact=product_impact,
             owner=owner,
             notes=notes,
+            dry_run=dry_run,
         )
     except DiagnoseError as exc:
         _emit_slice5_error("eval diagnose", exc, as_json=as_json)
         return
     issue = result["issue"]
-    data = {"issue": issue, "upserted": result["upserted"]}
+    data = {
+        "issue": issue,
+        "upserted": result["upserted"],
+        "dry_run": result.get("dry_run", False),
+        "would_write": result.get("would_write"),
+    }
     if as_json:
         emit_json_envelope(build_envelope("eval diagnose", ok=True, data=data))
     else:
         verb = "upserted" if result["upserted"] else "created"
+        if dry_run:
+            verb = f"dry-run-{verb}"
         emit_human_line(
             f"eval diagnose: {verb} {issue['issue_id']} status={issue['status']} "
-            f"occurrences={issue['occurrence_count']} fingerprint={issue['fingerprint'][:12]}",
+            f"occurrences={issue['occurrence_count']} fingerprint={issue['fingerprint'][:12]} "
+            f"dry_run={dry_run}",
             err=False,
         )
+        ww = result.get("would_write") if isinstance(result.get("would_write"), dict) else None
+        if dry_run and ww:
+            emit_human_line(
+                f"  would_write: issue={ww.get('issue_path')} diagnostics={ww.get('diagnostics_path')}",
+                err=False,
+            )
     raise typer.Exit(code=0)
 
 

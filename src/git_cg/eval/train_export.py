@@ -431,8 +431,16 @@ def train_export(
     split_group_id: str | None = None,
     notes: str | None = None,
     write: bool = True,
+    dry_run: bool | None = None,
 ) -> dict[str, Any]:
-    """Build + (optionally) persist a train export; return CLI data payload."""
+    """Build + (optionally) persist a train export; return CLI data payload.
+
+    ``dry_run=True`` is the NTH-03 alias for ``write=False``: fully build and
+    validate the export projection without mutating the train-export store.
+    When both are provided, ``dry_run=True`` wins (forces no write).
+    """
+    if dry_run is True:
+        write = False
     result = build_train_export(
         repo,
         bundle_ids=bundle_ids,
@@ -442,6 +450,17 @@ def train_export(
         notes=notes,
     )
     persisted = write_train_export(repo, result) if write else None
+    dry = not write
+    would_write = None
+    if dry:
+        eid = str(result["export"]["export_id"])
+        export_root = _train_export_dir(repo)
+        would_write = {
+            "export_path": (export_root / f"{eid}.json").as_posix(),
+            "rows_dir": (export_root / eid).as_posix(),
+            "row_count": len(result["row_ids"]),
+            "export_id": eid,
+        }
     return {
         "export": result["export"],
         "export_id": result["export"]["export_id"],
@@ -457,6 +476,8 @@ def train_export(
         "authority": "corpus_retention",
         "ci_sole_green": False,
         "product_accept_authority": False,
+        "dry_run": dry,
+        "would_write": would_write,
     }
 
 

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from git_cg.eval.binding.paths import atomic_write_json, experiments_dir, issues_dir
+from git_cg.eval.binding.paths import atomic_write_json, diagnostics_dir, experiments_dir, issues_dir
 from git_cg.eval.diagnose import (
     TRANSITIONS,
     DiagnoseError,
@@ -363,3 +363,17 @@ def test_diagnose_masks_secret_bearing_title_notes_and_store_row(failing_repo: P
     assert secret not in disk_blob
     assert "sk-test" not in disk_blob
     assert "•••[len=" in disk_blob
+
+
+def test_diagnose_dry_run_no_write(failing_repo: Path) -> None:
+
+    result = diagnose(failing_repo, experiment_id="exp-a", case_id="case-fail", dry_run=True)
+    assert result["dry_run"] is True
+    assert result["issue"]["issue_id"]
+    assert result["would_write"]["issue_path"]
+    assert result["would_write"]["diagnostics_path"]
+    # Zero store mutation.
+    assert list(issues_dir(failing_repo).glob("*.json")) == []
+    diag_root = diagnostics_dir(failing_repo)
+    if diag_root.exists():
+        assert list(diag_root.glob("*.json")) == []

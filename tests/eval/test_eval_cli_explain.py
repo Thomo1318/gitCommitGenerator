@@ -303,3 +303,18 @@ def test_cli_failures_filters_json(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert payload["ok"] is True
     assert payload["data"]["case_count"] == 1
     assert payload["data"]["filters"]["family"] == "I"
+
+
+def test_cli_diagnose_dry_run_no_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed(tmp_path)
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda: tmp_path)
+    result = runner.invoke(
+        cli_app,
+        ["eval", "diagnose", "--experiment-id", "exp-a", "--case", "case-fail", "--dry-run", "--json"],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["dry_run"] is True
+    assert payload["data"]["would_write"]["issue_path"]
+    assert list(issues_dir(tmp_path).glob("*.json")) == []

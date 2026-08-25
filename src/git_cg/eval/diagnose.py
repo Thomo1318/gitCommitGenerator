@@ -352,11 +352,16 @@ def diagnose(
     product_impact: str = "unknown",
     owner: str | None = None,
     notes: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Upsert a ``diag_issue_v1`` row for the failing case(s) (idempotent).
 
     Re-running on the same fingerprint updates ``last_seen_at`` and
     ``occurrence_count`` (and appends capped samples) instead of duplicating.
+
+    When ``dry_run=True`` (NTH-03), the issue row is fully built + schema-validated
+    and a would-write summary is returned, but neither the issue store nor the
+    diagnostics snapshot is mutated.
     """
     from git_cg.eval.explain import ExplainError, _load_experiment_record, _resolve_experiment_and_case
     from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
@@ -430,7 +435,7 @@ def diagnose(
 
     _validate(row)
     path = _issue_path(repo, str(row["issue_id"]))
-    _atomic_write(repo, path, row)
+    snapshot_path = _diagnostics_dir(repo) / f"{row['issue_id']}.json"
 
     # Diagnostics snapshot row (observability; rebuildable, never authority).
     snapshot = {
@@ -442,9 +447,26 @@ def diagnose(
         "upserted": upserted,
         "occurrence_count": row["occurrence_count"],
     }
-    _atomic_write(repo, _diagnostics_dir(repo) / f"{row['issue_id']}.json", snapshot)
 
-    return project_secret_safe({"issue": row, "upserted": upserted, "issue_path": str(path)})
+    if not dry_run:
+        _atomic_write(repo, path, row)
+        _atomic_write(repo, snapshot_path, snapshot)
+
+    return project_secret_safe(
+        {
+            "issue": row,
+            "upserted": upserted,
+            "issue_path": str(path),
+            "dry_run": dry_run,
+            "would_write": {
+                "issue_path": str(path),
+                "diagnostics_path": str(snapshot_path),
+                "fingerprint": fingerprint,
+                "occurrence_count": row["occurrence_count"],
+                "status": row.get("status"),
+            },
+        }
+    )
 
 
 def list_issues(repo: Path, *, status: str | None = None) -> dict[str, Any]:
