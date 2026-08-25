@@ -30,6 +30,37 @@ Undocumented internals are **not** promised compatible (S6-A05).
 
 Pruning semantics for `--keep-last` are live (per-suite family; failed-run retention until a completed supersedes). The default is recorded here so help/API map stay aligned.
 
+## Single-writer / operator-writer law
+
+This section documents the **current ownership boundary**. It does **not** introduce locking, compare-and-swap, or multi-writer concurrency primitives for the stores below.
+
+### Single-operator-writer stores
+
+The following Layer-A operator surfaces are **single-operator-writer** by law (one active mutator at a time per repo checkout):
+
+* `.eval/issues/` + `.eval/diagnostics/` — `eval diagnose` / `eval issue *` (`diag_issue_v1`)
+* `.eval/review_queue/` — `eval review *` (`human_review_v1` queue envelopes; advisory only)
+* `.eval/index/promotions/` — `eval promote` decision audit rows (never sole gold-promotion authority)
+* adjacent operator-authored artifacts under the same ownership posture (for example amend briefs, dogfood attachments, replay compares, train-export envelopes) when mutated via operator CLI
+
+### Suite vs operator mutation boundary
+
+* **Suite / orchestrator runs** (`eval run`, `eval resume`, checkpoint + experiment writers) may **read** operator stores for evidence and routing, and may write their **own** suite trees (`.eval/checkpoints/`, `.eval/experiments/`, case results).
+* Suite runs **must not concurrently mutate** issue, review-queue, or promotion stores. Those mutations remain operator-command paths (`diagnose` / `issue` / `review` / `promote`).
+* Doctor and triage are **observability/advisory only** and do not own writes to those mutation stores.
+
+### Write discipline (already required)
+
+Operator mutations use governed path helpers (`git_cg.eval.binding.paths`) and **atomic-write** discipline (N19.3: temp file in the target directory + `os.replace`, containment-checked under `.eval/`). Atomic replace prevents torn JSON; it is **not** a multi-writer lock.
+
+### Export-queue exception (claim/lease grade already exists)
+
+`.eval/export_queue/` is the existing multi-step ops queue with **claim/lease** coordination (`claim_queue_item`, stale-lease reclaim) plus atomic row writes. That grade is intentionally higher than the single-operator-writer stores listed above.
+
+### Future multi-writer gate
+
+Any design that allows concurrent writers (multiple operators, daemon workers, or suite+operator simultaneous mutation) on the single-operator-writer stores **must land export-queue-grade coordination first** — claim/lease, compare-and-swap, or an equivalent fail-closed locking protocol — before broadening writers. Documentation or CLI convenience alone is insufficient.
+
 ## CLI command tree
 
 | Path | Kind | Tier | Status | Help / notes |

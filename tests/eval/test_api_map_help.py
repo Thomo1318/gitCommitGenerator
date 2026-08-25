@@ -244,6 +244,22 @@ def test_api_map_check_detects_drift(tmp_path: Path) -> None:
     assert main(["--check", "--path", str(bogus)]) == 1
 
 
+def test_api_map_documents_single_writer_law() -> None:
+    """Operator API map must state single-writer ownership (doc law only)."""
+    rendered = render_operator_api_map()
+    assert "## Single-writer / operator-writer law" in rendered
+    # Ownership boundary + non-implementation posture.
+    assert "single-operator-writer" in rendered
+    assert "must not concurrently mutate" in rendered
+    assert "atomic-write" in rendered or "atomic write" in rendered.lower()
+    # Point at export-queue-grade coordination as the multi-writer gate.
+    assert "export-queue-grade" in rendered or "claim/lease" in rendered
+    assert "does **not** introduce locking" in rendered or "does not introduce locking" in rendered.lower()
+    # Key store paths remain named so operators know the boundary.
+    for needle in (".eval/issues/", ".eval/review_queue/", ".eval/index/promotions/", ".eval/export_queue/"):
+        assert needle in rendered
+
+
 def test_keep_last_default_on_run_help() -> None:
     result = runner.invoke(app, ["eval", "run", "--help"])
     assert result.exit_code == 0, result.output
