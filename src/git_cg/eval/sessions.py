@@ -217,16 +217,58 @@ def read_session_twin(repo: Path, session_thread_id: str | None) -> dict[str, An
 
 
 def show_session(repo: Path, session_thread_id: str | None) -> dict[str, Any]:
-    """Alias for :func:`read_session_twin` (CLI ``eval session show``)."""
-    return read_session_twin(repo, session_thread_id)
+    """CLI ``eval session show`` envelope over a local twin.
+
+    Returns ``data.session`` as the raw ``commit_session_thread_v1`` twin plus
+    operator-facing projection fields. Read/map only — no network, no chat
+    timeline, no graph browser (S6-F06 / S6-F07).
+    """
+    data = read_session_twin(repo, session_thread_id)
+    twin = data["twin"]
+    return {
+        "session": twin,
+        "session_thread_id": data["session_thread_id"],
+        "lifecycle": data["lifecycle"],
+        "message_version_count": data["message_version_count"],
+        "preference_pairs": list(data.get("preference_pairs") or []),
+        "opik_thread_ref": data.get("opik_thread_ref"),
+        "path": data["path"],
+        "authority": data["authority"],
+        "network": False,
+        "surface": "show_map_only",
+    }
 
 
 def show_thread(repo: Path, thread_id: str | None) -> dict[str, Any]:
-    """Alias for session show — thread id is the same ``sess_`` capture episode.
+    """CLI ``eval thread show`` map over the same ``sess_`` capture episode.
 
-    No chat timeline / graph browser (S6-F scope lock).
+    Exposes message_versions / preference_pairs as store fields only — not a
+    chat timeline or graph browser (S6-F scope lock).
     """
-    return read_session_twin(repo, thread_id)
+    data = read_session_twin(repo, thread_id)
+    twin = data["twin"]
+    meta = twin.get("meta") if isinstance(twin.get("meta"), dict) else {}
+    thread = {
+        "id": twin.get("id"),
+        "session_thread_id": data["session_thread_id"],
+        "schema_version": twin.get("schema_version"),
+        "message_versions": list(data.get("message_versions") or []),
+        "message_version_count": data["message_version_count"],
+        "preference_pairs": list(data.get("preference_pairs") or []),
+        "attempt_ids": list(data.get("attempt_ids") or []),
+        "meta": dict(meta),
+        "redaction_profile": twin.get("redaction_profile"),
+    }
+    return {
+        "thread": thread,
+        "session_thread_id": data["session_thread_id"],
+        "lifecycle": data["lifecycle"],
+        "opik_thread_ref": data.get("opik_thread_ref"),
+        "path": data["path"],
+        "authority": data["authority"],
+        "network": False,
+        "surface": "show_map_only",
+    }
 
 
 __all__ = [

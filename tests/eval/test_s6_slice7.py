@@ -5,6 +5,9 @@ Covers:
 * async structural seam: async mode never awaits the judge (never blocks).
 * train-export row scrub-failure policy: drop + report + continue; no
   .eval/quarantine/; hard_negative never enters positive_gold.
+* sessions reader identity contract (S6-F06/F07): happy-path local twin show,
+  sess_ + open|closed lifecycle, fail-closed missing/escape, show/map-only
+  surface (no chat timeline / graph browser), optional opik_thread_ref.
 * CLI envelope shape for the five Slice 7 commands.
 """
 
@@ -132,8 +135,58 @@ def test_train_export_rejects_raw_dev_unsafe(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Sessions: usage vs integrity exit classes
+# Sessions reader: S6-F06 / S6-F07 identity + happy-path contract
 # ---------------------------------------------------------------------------
+
+_SESS_ID = "sess_0123456789abcdef0123456789abcdef"
+
+
+def _write_session_twin(
+    root: Path,
+    *,
+    session_id: str = _SESS_ID,
+    lifecycle: str = "closed",
+    message_versions: list[dict] | None = None,
+    opik_thread_ref: str | dict | None = "opik-thread-demo",
+    filename: str | None = None,
+    mutate=None,
+) -> Path:
+    """Persist a schema-valid local twin under ``.eval/sessions/``."""
+    from git_cg.eval.binding.session_thread import build_session_twin
+
+    twin = build_session_twin(
+        session_id,
+        lifecycle=lifecycle,
+        attempt_ids=["a1"],
+        message_versions=message_versions
+        or [
+            {
+                "kind": "draft",
+                "message": "feat: draft",
+                "message_sha256": "a" * 64,
+                "source": "commit_editmsg",
+            },
+            {
+                "kind": "final_accept",
+                "message": "feat: final",
+                "message_sha256": "b" * 64,
+                "source": "commit_editmsg",
+            },
+        ],
+        opened_at="2026-08-25T00:00:00Z",
+        closed_at="2026-08-25T00:01:00Z" if lifecycle == "closed" else None,
+        generation_thread_id="repo-gitCommitGenerator",
+        notes="fixture twin for sessions reader",
+    )
+    if opik_thread_ref is not None:
+        twin["opik_thread_ref"] = opik_thread_ref
+    if mutate is not None:
+        mutate(twin)
+    sessions = root / ".eval" / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    path = sessions / (filename or f"{session_id}.json")
+    path.write_text(json.dumps(twin, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def test_session_not_found_is_usage(tmp_path: Path) -> None:
@@ -151,6 +204,204 @@ def test_session_invalid_id_is_usage(tmp_path: Path) -> None:
     with pytest.raises(SessionsError) as ei:
         show_session(tmp_path, "not-a-sess-id")
     assert ei.value.exit_code == 2
+    assert ei.value.code == "EVAL_USAGE"
+
+
+def test_session_repo_generation_thread_id_rejected(tmp_path: Path) -> None:
+    """D9: repo-… correlation threads are never session ids on the reader."""
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, "repo-gitCommitGenerator")
+    assert ei.value.exit_code == 2
+    assert "sess_" in str(ei.value)
+
+
+def test_session_show_happy_path_offline(tmp_path: Path) -> None:
+    """S6-F06: session show reads local twin without Opik/network."""
+    from git_cg.eval.sessions import show_session
+
+    _write_session_twin(tmp_path)
+    data = show_session(tmp_path, _SESS_ID)
+
+    assert data["network"] is False
+    assert data["authority"] == "local_layer_a"
+    assert data["surface"] == "show_map_only"
+    assert data["session_thread_id"] == _SESS_ID
+    assert data["lifecycle"] == "closed"
+    assert data["message_version_count"] == 2
+    assert data["opik_thread_ref"] == "opik-thread-demo"
+
+    sess = data["session"]
+    assert sess["schema_version"] == "commit_session_thread_v1"
+    assert sess["session_thread_id"] == _SESS_ID
+    assert sess["id"] == f"sessmeta_{_SESS_ID}"
+    assert sess["meta"]["lifecycle"] == "closed"
+    assert sess["meta"]["generation_thread_id"] == "repo-gitCommitGenerator"
+    assert len(sess["message_versions"]) == 2
+    # Show/map only — never promote chat-timeline / graph-browser fields.
+    for banned in ("messages", "graph", "timeline", "nodes", "edges", "chat"):
+        assert banned not in data
+        assert banned not in sess
+
+
+def test_thread_show_maps_message_versions_not_chat_timeline(tmp_path: Path) -> None:
+    """S6-F06/F07: thread show is the same sess_ twin, store fields only."""
+    from git_cg.eval.sessions import show_thread
+
+    _write_session_twin(tmp_path)
+    data = show_thread(tmp_path, _SESS_ID)
+
+    assert data["network"] is False
+    assert data["surface"] == "show_map_only"
+    thread = data["thread"]
+    assert thread["session_thread_id"] == _SESS_ID
+    assert thread["message_version_count"] == 2
+    assert len(thread["message_versions"]) == 2
+    assert "messages" not in thread  # not a chat timeline
+    for banned in ("graph", "timeline", "nodes", "edges", "chat"):
+        assert banned not in data
+        assert banned not in thread
+
+
+def test_session_show_accepts_sessmeta_alias(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import show_session
+
+    _write_session_twin(tmp_path)
+    data = show_session(tmp_path, f"sessmeta_{_SESS_ID}")
+    assert data["session_thread_id"] == _SESS_ID
+    assert data["session"]["id"] == f"sessmeta_{_SESS_ID}"
+
+
+def test_session_open_and_closed_lifecycle_accepted(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import show_session
+
+    _write_session_twin(tmp_path, lifecycle="open")
+    open_data = show_session(tmp_path, _SESS_ID)
+    assert open_data["lifecycle"] == "open"
+
+    # overwrite with closed
+    _write_session_twin(tmp_path, lifecycle="closed")
+    closed_data = show_session(tmp_path, _SESS_ID)
+    assert closed_data["lifecycle"] == "closed"
+
+
+def test_session_invalid_lifecycle_is_integrity(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    def _bad_lifecycle(twin: dict) -> None:
+        twin["meta"]["lifecycle"] = "archived"
+
+    _write_session_twin(tmp_path, mutate=_bad_lifecycle)
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, _SESS_ID)
+    assert ei.value.exit_code == 4
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert "lifecycle" in str(ei.value)
+
+
+def test_session_missing_lifecycle_is_integrity(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    def _drop_lifecycle(twin: dict) -> None:
+        twin["meta"].pop("lifecycle", None)
+
+    _write_session_twin(tmp_path, mutate=_drop_lifecycle)
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, _SESS_ID)
+    assert ei.value.exit_code == 4
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+
+
+def test_session_id_mismatch_is_integrity(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    other = "sess_ffffffffffffffffffffffffffffffff"
+
+    def _mismatch(twin: dict) -> None:
+        twin["session_thread_id"] = other
+        twin["id"] = f"sessmeta_{other}"
+
+    # File is named for requested id, but body claims another id.
+    _write_session_twin(tmp_path, filename=f"{_SESS_ID}.json", mutate=_mismatch)
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, _SESS_ID)
+    assert ei.value.exit_code == 4
+    assert "mismatch" in str(ei.value)
+
+
+def test_session_path_escape_is_integrity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Containment: resolved twin path must stay under .eval/sessions/."""
+    from git_cg.eval import sessions as sessions_mod
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+    root = tmp_path / ".eval" / "sessions"
+    root.mkdir(parents=True, exist_ok=True)
+
+    real_dir = sessions_mod._sessions_dir
+
+    def _fake_sessions_dir(repo: Path) -> Path:
+        return real_dir(repo)
+
+    monkeypatch.setattr(sessions_mod, "_sessions_dir", _fake_sessions_dir)
+
+    # Force path construction to a file outside sessions via symlink when possible.
+    target = root / f"{_SESS_ID}.json"
+    try:
+        target.symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+
+    # Even if symlink exists, reader must fail closed on schema/content or containment.
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, _SESS_ID)
+    assert ei.value.exit_code in {2, 4}
+
+
+def test_session_corrupt_json_is_integrity(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    sessions = tmp_path / ".eval" / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    (sessions / f"{_SESS_ID}.json").write_text("{not-json", encoding="utf-8")
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, _SESS_ID)
+    assert ei.value.exit_code == 4
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+
+
+def test_session_wrong_schema_version_is_integrity(tmp_path: Path) -> None:
+    from git_cg.eval.sessions import SessionsError, show_session
+
+    def _bad_schema(twin: dict) -> None:
+        twin["schema_version"] = "commit_session_thread_v0"
+
+    _write_session_twin(tmp_path, mutate=_bad_schema)
+    with pytest.raises(SessionsError) as ei:
+        show_session(tmp_path, _SESS_ID)
+    assert ei.value.exit_code == 4
+
+
+def test_cli_session_and_thread_show_happy_path(tmp_path: Path) -> None:
+    """CLI JSON envelopes for happy-path session/thread show (offline)."""
+    _write_session_twin(tmp_path)
+    sess_payload, sess_code = _cli(["eval", "session", "show", "--id", _SESS_ID, "--root", str(tmp_path), "--json"])
+    assert sess_code == 0
+    assert sess_payload["ok"] is True
+    assert sess_payload["command"] == "eval session show"
+    assert sess_payload["data"]["network"] is False
+    assert sess_payload["data"]["surface"] == "show_map_only"
+    assert sess_payload["data"]["session"]["session_thread_id"] == _SESS_ID
+    assert sess_payload["data"]["lifecycle"] == "closed"
+
+    thread_payload, thread_code = _cli(["eval", "thread", "show", "--id", _SESS_ID, "--root", str(tmp_path), "--json"])
+    assert thread_code == 0
+    assert thread_payload["ok"] is True
+    assert thread_payload["command"] == "eval thread show"
+    assert thread_payload["data"]["thread"]["message_version_count"] == 2
+    assert "messages" not in thread_payload["data"]["thread"]
 
 
 # ---------------------------------------------------------------------------

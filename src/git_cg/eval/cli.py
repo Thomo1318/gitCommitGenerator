@@ -1384,6 +1384,15 @@ eval_app.add_typer(session_app, name="session")
 @session_app.command("show")
 def session_show_cmd(
     session_id: str = typer.Option(..., "--id", help="Session id (sess_ or sessmeta_)."),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Read a local session twin under .eval/sessions/ (§7.6).
@@ -1394,7 +1403,7 @@ def session_show_cmd(
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.sessions import SessionsError, show_session
 
-    repo = _resolve_repo(None)
+    repo = _resolve_repo(root)
     try:
         data = show_session(repo, session_id)
     except SessionsError as exc:
@@ -1407,7 +1416,7 @@ def session_show_cmd(
         meta = sess.get("meta") or {}
         emit_human_line(
             f"eval session show: id={sess.get('id')} lifecycle={meta.get('lifecycle', '-')} "
-            f"schema={sess.get('schema_version', '-')}",
+            f"schema={sess.get('schema_version', '-')} network={data.get('network', False)}",
             err=False,
         )
     raise typer.Exit(code=0)
@@ -1424,6 +1433,15 @@ eval_app.add_typer(thread_app, name="thread")
 @thread_app.command("show")
 def thread_show_cmd(
     thread_id: str = typer.Option(..., "--id", help="Thread/session id (sess_ or sessmeta_)."),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Read a local message-thread twin under .eval/sessions/ (§7.6).
@@ -1434,7 +1452,7 @@ def thread_show_cmd(
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.sessions import SessionsError, show_thread
 
-    repo = _resolve_repo(None)
+    repo = _resolve_repo(root)
     try:
         data = show_thread(repo, thread_id)
     except SessionsError as exc:
@@ -1444,9 +1462,13 @@ def thread_show_cmd(
         emit_json_envelope(build_envelope("eval thread show", ok=True, data=data))
     else:
         thread = data["thread"]
-        msgs = thread.get("messages") or []
+        n = thread.get("message_version_count")
+        if n is None:
+            n = len(thread.get("message_versions") or [])
         emit_human_line(
-            f"eval thread show: id={thread.get('id')} messages={len(msgs)}",
+            f"eval thread show: id={thread.get('id')} "
+            f"message_versions={n} lifecycle={data.get('lifecycle', '-')} "
+            f"network={data.get('network', False)}",
             err=False,
         )
     raise typer.Exit(code=0)
