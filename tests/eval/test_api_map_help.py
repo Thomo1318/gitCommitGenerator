@@ -260,6 +260,102 @@ def test_api_map_documents_single_writer_law() -> None:
         assert needle in rendered
 
 
+# ---------------------------------------------------------------------------
+# S6-A08 — per-command envelope data sketches + fail-closed --check gate
+# ---------------------------------------------------------------------------
+
+
+def test_minimum_envelope_sketches_registered() -> None:
+    """Every Issue #246 minimum JSON command must have a closed data sketch."""
+    from git_cg.eval.envelope_sketches import (
+        ENVELOPE_DATA_SKETCHES,
+        MINIMUM_SKETCH_COMMANDS,
+        validate_sketch_registry,
+    )
+
+    ok, msg = validate_sketch_registry()
+    assert ok, msg
+    missing = sorted(cmd for cmd in MINIMUM_SKETCH_COMMANDS if cmd not in ENVELOPE_DATA_SKETCHES)
+    assert not missing, f"minimum commands lacking sketches: {missing}"
+    # Hygiene: sketch.command must equal registry key; required keys closed set.
+    for cmd, sketch in ENVELOPE_DATA_SKETCHES.items():
+        assert sketch.command == cmd
+        assert sketch.required_keys == tuple(sorted(sketch.required_keys))
+        assert sketch.optional_keys == tuple(sorted(sketch.optional_keys))
+        # Closed top-level universe is non-overlapping.
+        assert not (set(sketch.required_keys) & set(sketch.optional_keys))
+
+
+def test_rendered_api_map_contains_all_envelope_sketches() -> None:
+    """Generated operator API map must document every registered sketch."""
+    from git_cg.eval.envelope_sketches import ENVELOPE_DATA_SKETCHES, MINIMUM_SKETCH_COMMANDS
+
+    rendered = render_operator_api_map()
+    assert "## Per-command envelope `data` sketches (S6-A08)" in rendered
+    for cmd in sorted(MINIMUM_SKETCH_COMMANDS):
+        assert f"`{cmd}`" in rendered, f"minimum command missing from map: {cmd}"
+        assert f"#### `{cmd}`" in rendered, f"sketch heading missing: {cmd}"
+    for _cmd, sketch in ENVELOPE_DATA_SKETCHES.items():
+        for key in sketch.required_keys:
+            # Required keys appear in the command's sketch block.
+            assert f"`{key}`" in rendered
+        for field, values in sketch.enums.items():
+            assert f"`{field}`" in rendered
+            for value in values:
+                assert f"`{value}`" in rendered
+
+
+def test_missing_envelope_sketch_fails_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """validate_sketch_registry / check_map fail closed when a minimum sketch is absent."""
+    from git_cg.eval import api_map as api_map_mod, envelope_sketches as sketches_mod
+    from git_cg.eval.envelope_sketches import (
+        ENVELOPE_DATA_SKETCHES,
+        MINIMUM_SKETCH_COMMANDS,
+        missing_minimum_sketches,
+        validate_sketch_registry,
+    )
+
+    # Synthetic incomplete registry: drop one minimum command.
+    victim = sorted(MINIMUM_SKETCH_COMMANDS)[0]
+    incomplete = {k: v for k, v in ENVELOPE_DATA_SKETCHES.items() if k != victim}
+    assert victim not in incomplete
+    assert victim in missing_minimum_sketches(incomplete)
+
+    ok, msg = validate_sketch_registry(incomplete)
+    assert ok is False
+    assert victim in msg
+
+    # check_map must fail even when on-disk map content would otherwise match
+    # because the sketch registry is incomplete (monkeypatched live registry).
+    monkeypatch.setattr(sketches_mod, "ENVELOPE_DATA_SKETCHES", incomplete)
+    monkeypatch.setattr(api_map_mod, "validate_sketch_registry", lambda: validate_sketch_registry(incomplete))
+
+    # Write a fresh map under the incomplete registry so drift is not the signal.
+    map_path = tmp_path / "operator_api_map.md"
+    # Force render under incomplete sketches via monkeypatched render helper.
+    from git_cg.eval.envelope_sketches import render_sketches_markdown
+
+    monkeypatch.setattr(
+        api_map_mod,
+        "render_sketches_markdown",
+        lambda: render_sketches_markdown(incomplete),
+    )
+    map_path.write_text(api_map_mod.render_operator_api_map(), encoding="utf-8")
+
+    ok2, msg2 = api_map_mod.check_map(map_path)
+    assert ok2 is False, "check_map must fail when a minimum sketch is missing"
+    assert "sketch" in msg2.lower() or victim in msg2
+
+
+def test_api_map_check_still_detects_doc_drift(tmp_path: Path) -> None:
+    """Doc drift detection remains intact after A08 sketch gate."""
+    from git_cg.eval.api_map import main
+
+    bogus = tmp_path / "operator_api_map.md"
+    bogus.write_text("# drift\n", encoding="utf-8")
+    assert main(["--check", "--path", str(bogus)]) == 1
+
+
 def test_keep_last_default_on_run_help() -> None:
     result = runner.invoke(app, ["eval", "run", "--help"])
     assert result.exit_code == 0, result.output

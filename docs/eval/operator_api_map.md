@@ -196,6 +196,256 @@ JSON-capable operator commands emit exactly one
 * progress / diagnostics / human deprecations → **stderr**
 * deprecations also appear in envelope `warnings[]` in JSON mode
 
+## Per-command envelope `data` sketches (S6-A08)
+
+Command-discriminated top-level keys for `cli_output_envelope_v1.data`.
+The envelope schema keeps `data` as an object; **these sketches close the
+keys**. Implementers must not add undeclared result keys or smuggle
+scores/gates/promotion/secrets/raw diffs through `data` or `meta`.
+
+Nested artifact bodies (for example `amend_brief_v1`, `diag_issue_v1`,
+`replay_compare_v1`) remain governed by their own `schemas/eval/*`
+documents — sketches name the envelope wrapper keys only.
+
+### Minimum command set
+
+* `eval amend-brief`
+* `eval compare`
+* `eval diagnose`
+* `eval doctor`
+* `eval dogfood`
+* `eval explain`
+* `eval export drain`
+* `eval export retry`
+* `eval export status`
+* `eval failures`
+* `eval issue list`
+* `eval issue show`
+* `eval opik config show`
+* `eval opik doctor`
+* `eval promote`
+* `eval recompute-scores`
+* `eval replay`
+* `eval resume`
+* `eval run`
+* `eval session show`
+* `eval thread show`
+* `eval train-export`
+
+### Sketches
+
+#### `eval amend-brief`
+
+* **Required keys:** `authority`, `blocking`, `brief`, `brief_id`, `experiment_id`, `lane_c_attachments`, `path`, `preference_pair_emitted`, `written`
+* **Optional keys:** *(none)*
+* **Closed enums:**
+  * `authority`: `advisory`
+* **Nested (informational):**
+  * brief: amend_brief_v1 document
+* **Notes:** Advisory only; never auto-applies, accepts, or re-ranks.
+
+#### `eval compare`
+
+* **Required keys:** `a`, `b`, `compare_source`, `lineage_linked`, `metric_delta`, `structural_delta`
+* **Optional keys:** *(none)*
+* **Closed enums:**
+  * `compare_source`: `replay_compare_v1` \| `case_result_delta`
+* **Nested (informational):**
+  * a/b: {experiment_id, case_id}
+  * metric_delta[]: {metric_id, a, b, changed}
+* **Notes:** Structural + metric delta only; does not write replay artifacts.
+
+#### `eval diagnose`
+
+* **Required keys:** `issue`, `upserted`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * issue: diag_issue_v1 row
+* **Notes:** Idempotent fingerprint upsert into .eval/issues/.
+
+#### `eval doctor`
+
+* **Required keys:** `block_failures`, `checks`, `exit_code`, `green`, `scores`, `suite_id`, `warn_failures`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * checks[]: {check_id, status: pass|warn|fail, severity, message, metric_id?, hint?}
+  * scores[]: ScoreResultV1 rows (catalog-aligned phantom metrics)
+* **Notes:** Observability-only. h.doctor_green aggregates block-severity checks only. Secret-bearing values must already be mask_secret()-shaped. DoctorReport.extra may merge additional closed command-specific keys; do not invent free-form product keys.
+
+#### `eval dogfood`
+
+* **Required keys:** `async_never_awaits_judge`, `authority`, `captured`, `judge_invoked`, `mode`, `product_block`
+* **Optional keys:** `attachment`, `attachment_id`, `hard_negative_candidate`, `path`, `reason`, `sample_selected`, `skipped`
+* **Closed enums:**
+  * `authority`: `advisory`
+  * `mode`: `off` \| `sample` \| `always` \| `async`
+* **Nested (informational):**
+  * attachment?: dogfood_attachment_v1 when captured
+* **Notes:** Lane C shadow sidecar. product_block must stay false. async mode never invokes/awaits the judge.
+
+#### `eval explain`
+
+* **Required keys:** `case_count`, `cases`, `experiment_id`, `headers`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * cases[]: deterministic explain rows (blame_span, failure_ids, replay_command, ...)
+  * headers: INT-29 pins/meta projection
+* **Notes:** No opaque LLM RCA. Secret-safe projection via evidence_scrub.
+
+#### `eval export drain`
+
+* **Required keys:** *(none — see path notes)*
+* **Optional keys:** `attempted`, `error`, `error_classes`, `evaluation_job_result`, `export_result`, `exported`, `failed`, `health_hint`, `mirror_result`, `mode`, `note`, `pending`, `project`
+* **Nested (informational):**
+  * dry-run success: {mode, project, pending}
+  * mode=off: {mode: off, note: nothing_to_do}
+  * live drain: mirror_result + attempted/exported/failed/error_classes
+  * fail-open: {note: fail_open, error?}
+* **Notes:** F4 fail-open drain. Exact key subset depends on mode/dry-run/config path; do not invent keys outside the optional set. Config-invalid may use empty data {}.
+
+#### `eval export retry`
+
+* **Required keys:** `retried`, `skipped`, `unreadable`
+* **Optional keys:** `note`
+* **Notes:** failed→pending requeue summary. Fail-open on repo errors may include note=fail_open.
+
+#### `eval export status`
+
+* **Required keys:** `bad_mode`, `counts`, `health`, `queue_dir`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * counts: status → int (pending/sending/sent/failed/dropped/unreadable)
+* **Notes:** Read-only offline queue projection. Error path may emit empty data {} (repo unresolvable) outside the happy-path required set.
+
+#### `eval failures`
+
+* **Required keys:** `case_count`, `experiment_id`, `failing_cases`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}
+* **Notes:** Read-only. experiment_id may be null when no local runs exist.
+
+#### `eval issue list`
+
+* **Required keys:** `issue_count`, `issues`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * issues[]: diag_issue_v1 rows
+* **Notes:** Newest last_seen_at first. Optional --status filter applied before emit.
+
+#### `eval issue show`
+
+* **Required keys:** `issue`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * issue: diag_issue_v1 row
+* **Notes:** Single-issue read.
+
+#### `eval opik config show`
+
+* **Required keys:** `config`, `health_hint`, `mirror_result`, `secrets`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * secrets: {api_key: masked|null, api_key_present: bool}
+  * config: public_config_view (no raw tokens; may be null on config_error)
+  * mirror_result: S4 mirror result projection
+* **Notes:** Canonical config surface. Deprecated `eval config show` emits the same data shape plus envelope warnings[].
+
+#### `eval opik doctor`
+
+* **Required keys:** `block_failures`, `checks`, `exit_code`, `green`, `scores`, `suite_id`, `warn_failures`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * checks[]: {check_id, status: pass|warn|fail, severity, message, metric_id?, hint?}
+  * scores[]: ScoreResultV1 rows (catalog-aligned phantom metrics)
+* **Notes:** Secret-safe Opik/export/queue doctor. Same checks[]/scores[] contract as eval doctor; suite_id may be null.
+
+#### `eval promote`
+
+* **Required keys:** `accepted`, `denial_reason`
+* **Optional keys:** `artifact_path`, `decision`, `decision_path`, `dry_run`
+* **Nested (informational):**
+  * decision?: promotion audit row (closed denial_reason set on reject)
+* **Notes:** Success path emits all six keys (accepted/denial_reason/decision/decision_path/artifact_path/dry_run). Denial path always emits accepted=false + denial_reason and may attach decision/decision_path when an audit row was retained. Never sole gold authority.
+
+#### `eval recompute-scores`
+
+* **Required keys:** `all_pass`, `case_results`, `checkpoint_id`, `compat_hash`, `completed_case_ids`, `experiment_id`, `keep_last`, `mode`, `pending_case_ids`, `status`, `suite_id`
+* **Optional keys:** `notes`, `parent_experiment_id`, `pruned_checkpoint_ids`, `triage_filter`, `triage_only`
+* **Closed enums:**
+  * `mode`: `fresh_suite_run` \| `resume_missing` \| `recompute_scores` \| `export_only` \| `replay_generation`
+  * `status`: `completed` \| `failed` \| `blocked`
+* **Nested (informational):**
+  * case_results[]: {case_id, deterministic_pass, failed_metric_ids}
+* **Notes:** Shared by run/resume/recompute-scores via RunResult.to_data(). Failure envelopes may carry a subset with at least status (+ orchestrator error fields when present). Never smuggles raw diffs/secrets through data or envelope meta. Parent experiment retained read-only on recompute.
+
+#### `eval replay`
+
+* **Required keys:** `compare`, `compare_path`, `dry_run`, `replay_bundle`, `replay_bundle_hash`, `replay_bundle_path`, `source_bundle_hash`, `source_mutated`, `source_path`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * compare: replay_compare_v1 record
+  * replay_bundle: replayed bundle document
+* **Notes:** Never mutates the source bundle (source_mutated must be false).
+
+#### `eval resume`
+
+* **Required keys:** `all_pass`, `case_results`, `checkpoint_id`, `compat_hash`, `completed_case_ids`, `experiment_id`, `keep_last`, `mode`, `pending_case_ids`, `status`, `suite_id`
+* **Optional keys:** `notes`, `parent_experiment_id`, `pruned_checkpoint_ids`, `triage_filter`, `triage_only`
+* **Closed enums:**
+  * `mode`: `fresh_suite_run` \| `resume_missing` \| `recompute_scores` \| `export_only` \| `replay_generation`
+  * `status`: `completed` \| `failed` \| `blocked`
+* **Nested (informational):**
+  * case_results[]: {case_id, deterministic_pass, failed_metric_ids}
+* **Notes:** Shared by run/resume/recompute-scores via RunResult.to_data(). Failure envelopes may carry a subset with at least status (+ orchestrator error fields when present). Never smuggles raw diffs/secrets through data or envelope meta.
+
+#### `eval run`
+
+* **Required keys:** `all_pass`, `case_results`, `checkpoint_id`, `compat_hash`, `completed_case_ids`, `experiment_id`, `keep_last`, `mode`, `pending_case_ids`, `status`, `suite_id`
+* **Optional keys:** `notes`, `parent_experiment_id`, `pruned_checkpoint_ids`, `triage_filter`, `triage_only`
+* **Closed enums:**
+  * `mode`: `fresh_suite_run` \| `resume_missing` \| `recompute_scores` \| `export_only` \| `replay_generation`
+  * `status`: `completed` \| `failed` \| `blocked`
+* **Nested (informational):**
+  * case_results[]: {case_id, deterministic_pass, failed_metric_ids}
+* **Notes:** Shared by run/resume/recompute-scores via RunResult.to_data(). Failure envelopes may carry a subset with at least status (+ orchestrator error fields when present). Never smuggles raw diffs/secrets through data or envelope meta.
+
+#### `eval session show`
+
+* **Required keys:** `authority`, `lifecycle`, `message_version_count`, `network`, `opik_thread_ref`, `path`, `preference_pairs`, `session`, `session_thread_id`, `surface`
+* **Optional keys:** *(none)*
+* **Closed enums:**
+  * `authority`: `local_layer_a`
+  * `lifecycle`: `open` \| `closed`
+  * `surface`: `show_map_only`
+* **Nested (informational):**
+  * session: commit_session_thread_v1 twin
+* **Notes:** Read/map only. network is the boolean false (offline). Not a chat browser.
+
+#### `eval thread show`
+
+* **Required keys:** `authority`, `lifecycle`, `network`, `opik_thread_ref`, `path`, `session_thread_id`, `surface`, `thread`
+* **Optional keys:** *(none)*
+* **Closed enums:**
+  * `authority`: `local_layer_a`
+  * `lifecycle`: `open` \| `closed`
+  * `surface`: `show_map_only`
+* **Nested (informational):**
+  * thread: {id, message_versions[], preference_pairs[], message_version_count, ...}
+* **Notes:** Read/map only over the same sess_ capture episode. network is the boolean false (offline). Not a chat browser.
+
+#### `eval train-export`
+
+* **Required keys:** `authority`, `ci_sole_green`, `dropped_row_ids`, `excluded_unlabeled`, `export`, `export_id`, `negative_count`, `paths`, `positive_gold_count`, `product_accept_authority`, `row_count`, `row_ids`, `scrub_report`, `written`
+* **Optional keys:** *(none)*
+* **Closed enums:**
+  * `authority`: `corpus_retention`
+* **Nested (informational):**
+  * export: train_export_v1 header
+  * scrub_report: {status, ...} (row scrub-fail → drop + continue)
+  * paths: null | {export_path, row_paths[], vault_paths[], row_count}
+* **Notes:** ci_sole_green and product_accept_authority stay false. No .eval/quarantine/ store; field quarantine remains S4 meta.
+
 ## Doctor report contract (Slice 4)
 
 `git-cg eval doctor` (local suite/pin/metric) and `git-cg eval opik

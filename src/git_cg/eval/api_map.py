@@ -2,7 +2,8 @@
 
 Slice 2 / RK-S6-10: the operator API map is **not** hand-maintained. This
 module introspects ``git_cg.eval.cli.eval_app`` and renders a deterministic
-Markdown document. ``--check`` fails when the on-disk map drifts.
+Markdown document. ``--check`` fails when the on-disk map drifts **or** when
+S6-A08 per-command envelope ``data`` sketches are incomplete.
 
 No mkdocstrings / mkdocs / S7 autodoc dependency (D29 narrow exception).
 """
@@ -20,6 +21,10 @@ from typer.main import get_command
 
 from git_cg.eval.cli import eval_app
 from git_cg.eval.cli_output import DEFAULT_KEEP_LAST, REMOVAL_TARGET
+from git_cg.eval.envelope_sketches import (
+    render_sketches_markdown,
+    validate_sketch_registry,
+)
 
 DEFAULT_MAP_PATH = Path("docs/eval/operator_api_map.md")
 
@@ -378,6 +383,8 @@ def render_operator_api_map(nodes: Iterable[CommandNode] | None = None) -> str:
             "* progress / diagnostics / human deprecations → **stderr**",
             "* deprecations also appear in envelope `warnings[]` in JSON mode",
             "",
+            # S6-A08: closed per-command data sketches (fail-closed in --check).
+            *render_sketches_markdown(),
             "## Doctor report contract (Slice 4)",
             "",
             "`git-cg eval doctor` (local suite/pin/metric) and `git-cg eval opik",
@@ -449,14 +456,21 @@ def write_map(path: Path = DEFAULT_MAP_PATH) -> Path:
 
 
 def check_map(path: Path = DEFAULT_MAP_PATH) -> tuple[bool, str]:
-    """Return (ok, message). Fails when on-disk map != live render."""
+    """Return (ok, message). Fails on sketch gaps or on-disk map drift.
+
+    S6-A08: every minimum JSON command must have a closed ``data`` sketch.
+    Sketch incompleteness fails even before map drift is considered.
+    """
+    sketch_ok, sketch_msg = validate_sketch_registry()
+    if not sketch_ok:
+        return False, sketch_msg
     expected = render_operator_api_map()
     if not path.is_file():
         return False, f"missing operator API map: {path}"
     actual = path.read_text(encoding="utf-8")
     if actual != expected:
         return False, f"operator API map drift: {path} (run api_map.py --write)"
-    return True, f"ok: {path} matches live Typer tree"
+    return True, f"ok: {path} matches live Typer tree ({sketch_msg})"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
