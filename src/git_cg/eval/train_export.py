@@ -215,7 +215,10 @@ def _project_row(
     row["schema_pack"] = schema_pack_pin()
     row["metric_catalog"] = metric_catalog_pin()
 
+    from git_cg.eval.evidence_scrub import project_secret_safe
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
+
+    row = project_secret_safe(row)
 
     try:
         validate_instance(ROW_SCHEMA, row)
@@ -339,7 +342,9 @@ def build_train_export(
     if split_group_id:
         export["split_group_id"] = split_group_id
     if notes:
-        export["notes"] = notes
+        from git_cg.eval.evidence_scrub import mask_secrets_in_text
+
+        export["notes"] = mask_secrets_in_text(notes) or notes
     scrub_report: dict[str, Any] = {"status": scrub_status}
     if quarantined_fields:
         scrub_report["fields_quarantined"] = sorted(set(quarantined_fields))
@@ -363,16 +368,20 @@ def build_train_export(
             exit_code=4,
         ) from exc
 
-    return {
-        "export": export,
-        "rows": rows,
-        "row_ids": row_ids,
-        "dropped_row_ids": dropped,
-        "scrub_report": export.get("scrub_report", {"status": "ok"}),
-        "positive_gold_count": len(positives),
-        "negative_count": len(projection["negatives"]),
-        "excluded_unlabeled": projection["excluded_unlabeled"],
-    }
+    from git_cg.eval.evidence_scrub import project_secret_safe
+
+    return project_secret_safe(
+        {
+            "export": export,
+            "rows": rows,
+            "row_ids": row_ids,
+            "dropped_row_ids": dropped,
+            "scrub_report": export.get("scrub_report", {"status": "ok"}),
+            "positive_gold_count": len(positives),
+            "negative_count": len(projection["negatives"]),
+            "excluded_unlabeled": projection["excluded_unlabeled"],
+        }
+    )
 
 
 def write_train_export(

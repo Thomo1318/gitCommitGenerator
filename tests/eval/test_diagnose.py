@@ -339,3 +339,27 @@ def test_suppress_records_reason_in_notes(failing_repo: Path) -> None:
     )
     assert result["issue"]["status"] == "suppressed"
     assert "suppressed:" in result["issue"]["notes"]
+
+
+def test_diagnose_masks_secret_bearing_title_notes_and_store_row(failing_repo: Path) -> None:
+    """S6-C08: diagnose free-text + store rows never keep raw tokens/prefixes."""
+    secret = "sk-test-secret-token-value-0123456789"
+    result = diagnose(
+        failing_repo,
+        experiment_id="exp-a",
+        case_id="case-fail",
+        title=f"leak title {secret}",
+        owner=f"owner-{secret}",
+        notes=f"api_key={secret}",
+    )
+    issue = result["issue"]
+    blob = json.dumps(result, ensure_ascii=False)
+    assert secret not in blob
+    assert "sk-test" not in blob
+    assert "•••[len=" in blob
+
+    on_disk = json.loads((issues_dir(failing_repo) / f"{issue['issue_id']}.json").read_text("utf-8"))
+    disk_blob = json.dumps(on_disk, ensure_ascii=False)
+    assert secret not in disk_blob
+    assert "sk-test" not in disk_blob
+    assert "•••[len=" in disk_blob

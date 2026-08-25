@@ -202,3 +202,58 @@ def test_cli_amend_brief_missing_run_is_usage() -> None:
     assert code in (2, 4)  # 2 when store exists, 4 when store missing (fail-closed)
     assert payload["ok"] is False
     assert payload["errors"][0]["code"] in {"EVAL_USAGE", "EVAL_STORE_INTEGRITY"}
+
+
+def test_train_export_row_scrub_failure_drops_and_continues(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """S6-G05: row scrub fail ⇒ drop + scrub_report + continue; no quarantine store."""
+    from git_cg.eval.mirror.redaction import RedactionError
+    from git_cg.eval.train_export import build_train_export
+
+    secret = "sk-test-secret-token-value-0123456789"
+    _write_bundle(tmp_path, "b-ok", "positive", "feat: keep me")
+    _write_bundle(tmp_path, "b-bad", "positive", f"feat: drop me {secret}")
+
+    def _fake_redact(bundle, profile="train_rich"):
+        bid = str(bundle.get("id") or "")
+        if bid == "b-bad":
+            raise RedactionError(f"injected scrub failure for {bid}")
+        # Pass-through for the good row (still secret-safe via projection).
+        return dict(bundle)
+
+    monkeypatch.setattr(
+        "git_cg.eval.mirror.redaction.redact_bundle_for_export",
+        _fake_redact,
+    )
+
+    result = build_train_export(tmp_path, redaction_profile="train_rich")
+    assert "b-bad" in result["dropped_row_ids"]
+    assert "b-ok" in result["row_ids"] or any(r.get("id") == "b-ok" for r in result["rows"])
+    assert result["scrub_report"]["status"] == "quarantined"
+    report_blob = json.dumps(result["scrub_report"])
+    assert "b-bad" in report_blob
+    # No cleartext secret and no .eval/quarantine/ store.
+    full = json.dumps(result)
+    assert secret not in full
+    assert "sk-test" not in full
+    assert not (tmp_path / ".eval" / "quarantine").exists()
+
+
+def test_train_export_masks_secret_in_retained_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """S6-C08/G05: retained train rows never keep raw secret tokens/prefixes."""
+    from git_cg.eval.train_export import build_train_export
+
+    secret = "sk-test-secret-token-value-0123456789"
+    _write_bundle(tmp_path, "b-secret", "positive", f"feat: key {secret}")
+
+    # Force betterleaks path to a no-op so the local mask_secret floor is proven.
+    monkeypatch.setattr(
+        "git_cg.eval.mirror.redaction.redact_payload",
+        lambda v: v,
+    )
+
+    result = build_train_export(tmp_path, redaction_profile="train_rich")
+    blob = json.dumps(result, ensure_ascii=False)
+    assert secret not in blob
+    assert "sk-test" not in blob
+    assert "•••[len=" in blob
+    assert result["row_ids"], "secret-bearing but scrubbed row should still export"

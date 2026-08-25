@@ -36,6 +36,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
+from git_cg.eval.evidence_scrub import mask_secrets_in_text, project_secret_safe
+
 SCHEMA_NAME: Final[str] = "diag_issue_v1"
 SCHEMA_VERSION: Final[str] = "diag_issue_v1"
 
@@ -222,7 +224,9 @@ def _build_issue_row(
         surfaces = list(BLAME_SPAN_SURFACES[blame_span])
 
     resolved_code = code or (failure_ids[0] if failure_ids else "EVAL_DIAGNOSTIC")
-    resolved_title = title or f"{resolved_code}: {blame_span or 'deterministic eval failure'}"
+    resolved_title = (
+        mask_secrets_in_text(title or f"{resolved_code}: {blame_span or 'deterministic eval failure'}") or ""
+    )
 
     row: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -259,14 +263,14 @@ def _build_issue_row(
     if surfaces:
         row["suggested_surfaces"] = surfaces
     if owner and owner.strip():
-        row["owner"] = owner.strip()
+        row["owner"] = mask_secrets_in_text(owner.strip()) or owner.strip()
     if schema_pack and schema_pack.strip():
         row["schema_pack"] = schema_pack.strip()
     if metric_catalog and metric_catalog.strip():
         row["metric_catalog"] = metric_catalog.strip()
     if notes and notes.strip():
-        row["notes"] = notes.strip()
-    return row
+        row["notes"] = mask_secrets_in_text(notes.strip()) or notes.strip()
+    return project_secret_safe(row)
 
 
 def _severity_from(failing: list[dict[str, Any]]) -> str:
@@ -440,7 +444,7 @@ def diagnose(
     }
     _atomic_write(repo, _diagnostics_dir(repo) / f"{row['issue_id']}.json", snapshot)
 
-    return {"issue": row, "upserted": upserted, "issue_path": str(path)}
+    return project_secret_safe({"issue": row, "upserted": upserted, "issue_path": str(path)})
 
 
 def list_issues(repo: Path, *, status: str | None = None) -> dict[str, Any]:
@@ -462,12 +466,12 @@ def list_issues(repo: Path, *, status: str | None = None) -> dict[str, Any]:
     if status is not None:
         rows = [r for r in rows if r.get("status") == status]
     rows.sort(key=lambda r: str(r.get("last_seen_at") or ""), reverse=True)
-    return {"issues": rows, "issue_count": len(rows)}
+    return project_secret_safe({"issues": rows, "issue_count": len(rows)})
 
 
 def show_issue(repo: Path, *, issue_id: str) -> dict[str, Any]:
     """``eval issue show``: one issue row by id."""
-    return {"issue": _load_issue(repo, issue_id)}
+    return project_secret_safe({"issue": _load_issue(repo, issue_id)})
 
 
 def transition_issue(
@@ -497,7 +501,7 @@ def transition_issue(
         # Idempotent no-op; still enforce required evidence/reason on the verbs
         # so a scripted resolve/suppress always carries provenance.
         _require_transition_args(target, resolution_evidence=resolution_evidence, reason=reason)
-        return {"issue": row, "transitioned": False, "from": current, "to": target}
+        return project_secret_safe({"issue": row, "transitioned": False, "from": current, "to": target})
 
     allowed = TRANSITIONS.get(current, frozenset())
     if target not in allowed:
@@ -514,16 +518,21 @@ def transition_issue(
     updated["status"] = target
     updated["last_seen_at"] = _utc_now()
     if target == STATUS_RESOLVED and resolution_evidence and resolution_evidence.strip():
-        updated["resolution_evidence"] = resolution_evidence.strip()
+        updated["resolution_evidence"] = (
+            mask_secrets_in_text(resolution_evidence.strip()) or resolution_evidence.strip()
+        )
     if target == STATUS_SUPPRESSED and reason and reason.strip():
-        note = f"suppressed: {reason.strip()}"
+        safe_reason = mask_secrets_in_text(reason.strip()) or reason.strip()
+        note = f"suppressed: {safe_reason}"
         existing_notes = str(updated.get("notes") or "").strip()
         updated["notes"] = f"{existing_notes}\n{note}".strip() if existing_notes else note
 
+    # Final free-text projection before persist (S6-C08).
+    updated = project_secret_safe(updated)
     _validate(updated)
     path = _issue_path(repo, issue_id)
     _atomic_write(repo, path, updated)
-    return {"issue": updated, "transitioned": True, "from": current, "to": target}
+    return project_secret_safe({"issue": updated, "transitioned": True, "from": current, "to": target})
 
 
 def _require_transition_args(

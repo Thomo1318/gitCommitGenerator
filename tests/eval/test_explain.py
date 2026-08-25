@@ -332,3 +332,20 @@ def test_compare_detects_lineage_link(failing_repo: Path) -> None:
     )
     assert data["lineage_linked"] is True
     assert data["compare_source"] == "replay_compare_v1"
+
+
+def test_explain_masks_secret_shaped_evaluator_errors(failing_repo: Path) -> None:
+    """S6-C08: explain projections never emit raw secret tokens/prefixes."""
+    secret = "sk-test-secret-token-value-0123456789"
+    case_path = experiments_dir(failing_repo) / "exp-a" / "cases" / "case-fail.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["evaluator_errors"] = [f"upstream api_key={secret}"]
+    payload["trace_id"] = secret
+    case_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    data = explain(failing_repo, experiment_id="exp-a", case_id="case-fail")
+    # Walk parsed values (json.dumps may escape the bullet mask form).
+    flat = json.dumps(data, ensure_ascii=False)
+    assert secret not in flat
+    assert "sk-test" not in flat
+    assert "•••[len=" in flat

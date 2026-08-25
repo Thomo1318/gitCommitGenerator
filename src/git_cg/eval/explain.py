@@ -24,6 +24,8 @@ import json
 from pathlib import Path
 from typing import Any, Final
 
+from git_cg.eval.evidence_scrub import project_secret_safe
+
 # Local case-result row schema written by ``run_orchestrator._write_case_result``.
 CASE_RESULT_SCHEMA: Final[str] = "local_case_score_v0"
 
@@ -230,11 +232,13 @@ def list_failures(
                 "evaluator_errors": list(case.get("evaluator_errors") or []),
             }
         )
-    return {
-        "experiment_id": exp,
-        "failing_cases": failing,
-        "case_count": len(failing),
-    }
+    return project_secret_safe(
+        {
+            "experiment_id": exp,
+            "failing_cases": failing,
+            "case_count": len(failing),
+        }
+    )
 
 
 def _headers(experiment_record: dict[str, Any]) -> dict[str, Any]:
@@ -340,12 +344,14 @@ def explain(
     exp, cases = _resolve_experiment_and_case(repo, experiment_id=experiment_id, case_id=case_id)
     record = _load_experiment_record(repo, exp)
     explained = [_explain_one(case, record) for case in cases]
-    return {
-        "experiment_id": exp,
-        "case_count": len(explained),
-        "cases": explained,
-        "headers": _headers(record),
-    }
+    return project_secret_safe(
+        {
+            "experiment_id": exp,
+            "case_count": len(explained),
+            "cases": explained,
+            "headers": _headers(record),
+        }
+    )
 
 
 def _score_index(case: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -418,14 +424,16 @@ def compare(
         },
     }
 
-    return {
-        "a": {"experiment_id": a_experiment_id, "case_id": a_case_id},
-        "b": {"experiment_id": b_experiment_id, "case_id": b_case_id},
-        "lineage_linked": lineage_linked,
-        "compare_source": "replay_compare_v1" if lineage_linked else "case_result_delta",
-        "metric_delta": metric_delta,
-        "structural_delta": structural_delta,
-    }
+    return project_secret_safe(
+        {
+            "a": {"experiment_id": a_experiment_id, "case_id": a_case_id},
+            "b": {"experiment_id": b_experiment_id, "case_id": b_case_id},
+            "lineage_linked": lineage_linked,
+            "compare_source": "replay_compare_v1" if lineage_linked else "case_result_delta",
+            "metric_delta": metric_delta,
+            "structural_delta": structural_delta,
+        }
+    )
 
 
 __all__ = [

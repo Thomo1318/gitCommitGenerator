@@ -236,3 +236,56 @@ def test_cli_import_graph_stays_opik_free() -> None:
 
     importlib.import_module("git_cg.eval.cli")
     assert "opik" not in sys.modules
+
+
+def test_cli_explain_and_diagnose_never_print_raw_token(repo: Path) -> None:
+    """S6-C08 CLI negative: explain/diagnose stdout never carries raw tokens."""
+    secret = "sk-test-secret-token-value-0123456789"
+    # Poison the seeded case with a secret-shaped evaluator error + trace id.
+    case_path = experiments_dir(repo) / "exp-a" / "cases" / "case-fail.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["evaluator_errors"] = [f"token={secret}"]
+    payload["trace_id"] = secret
+    case_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    explain_result = runner.invoke(
+        cli_app,
+        ["eval", "explain", "--experiment-id", "exp-a", "--case", "case-fail", "--json"],
+    )
+    assert explain_result.exit_code == 0, explain_result.output
+    assert secret not in explain_result.stdout
+    assert "sk-test" not in explain_result.stdout
+    explain_env = json.loads(explain_result.stdout)
+    explain_flat = json.dumps(explain_env, ensure_ascii=False)
+    assert "•••[len=" in explain_flat
+
+    diagnose_result = runner.invoke(
+        cli_app,
+        [
+            "eval",
+            "diagnose",
+            "--experiment-id",
+            "exp-a",
+            "--case",
+            "case-fail",
+            "--title",
+            f"title {secret}",
+            "--notes",
+            f"api_key={secret}",
+            "--json",
+        ],
+    )
+    assert diagnose_result.exit_code == 0, diagnose_result.output
+    combined = diagnose_result.stdout + diagnose_result.stderr
+    assert secret not in combined
+    assert "sk-test" not in combined
+    diagnose_env = json.loads(diagnose_result.stdout)
+    assert "•••[len=" in json.dumps(diagnose_env, ensure_ascii=False)
+
+    # Store row must also be secret-safe.
+    issue = diagnose_env["data"]["issue"]
+    on_disk = json.loads((issues_dir(repo) / f"{issue['issue_id']}.json").read_text("utf-8"))
+    disk_blob = json.dumps(on_disk, ensure_ascii=False)
+    assert secret not in disk_blob
+    assert "sk-test" not in disk_blob
+    assert "•••[len=" in disk_blob
