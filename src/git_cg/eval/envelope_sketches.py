@@ -351,6 +351,26 @@ def _build_registry() -> dict[str, DataSketch]:
             nested=("attachment?: dogfood_attachment_v1 when captured",),
             notes=("Lane C shadow sidecar. product_block must stay false. async mode never invokes/awaits the judge."),
         ),
+        "eval review rollup": _sketch(
+            "eval review rollup",
+            required_keys=(
+                "rollups",
+                "rollup_count",
+                "authority",
+                "can_sole_promote_gold",
+                "filters",
+            ),
+            enums={
+                "authority": ("advisory",),
+            },
+            nested=(
+                "rollups[]: multi-rater dimension/outcome majority projection",
+                "filters: {case_id?, bundle_id?}",
+            ),
+            notes=(
+                "NTH-05 read-only multi-rater UX. authority is always advisory; can_sole_promote_gold is always false."
+            ),
+        ),
         "eval train-export": _sketch(
             "eval train-export",
             required_keys=(

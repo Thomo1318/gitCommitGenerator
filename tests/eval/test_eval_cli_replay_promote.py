@@ -288,3 +288,23 @@ def test_cli_promote_denial_persists_audit(repo: Path) -> None:
         not (repo / ".eval" / "index" / "fixture_lane_a_candidates").exists()
         or list((repo / ".eval" / "index" / "fixture_lane_a_candidates").glob("*.json")) == []
     )
+
+
+def test_cli_review_rollup_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / ".git").mkdir(exist_ok=True)
+    # isolate repo root
+    from git_cg.eval.binding import paths as binding_paths
+
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda: tmp_path)
+    # seed two reviews via library
+    from git_cg.eval.review_queue import enqueue
+
+    enqueue(tmp_path, case_id="c1", reviewer="alice", craft_rating=3.0, regime_label="A")
+    enqueue(tmp_path, case_id="c1", reviewer="bob", craft_rating=4.0, regime_label="A")
+    result = runner.invoke(cli_app, ["eval", "review", "rollup", "--case", "c1", "--json"])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["can_sole_promote_gold"] is False
+    assert payload["data"]["authority"] == "advisory"
+    assert payload["data"]["rollup_count"] == 1

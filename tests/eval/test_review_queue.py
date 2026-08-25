@@ -27,6 +27,7 @@ from git_cg.eval.review_queue import (
     dismiss,
     enqueue,
     list_reviews,
+    rollup_reviews,
     show_review,
 )
 from git_cg.eval.schema_pack import validate_instance
@@ -127,3 +128,58 @@ def test_dry_run_enqueue_no_write(repo: Path) -> None:
     result = enqueue(repo, case_id="case-1", reviewer="rev-1", dry_run=True)
     assert result["dry_run"] is True
     assert not Path(result["path"]).exists()
+
+
+def test_rollup_multi_rater_dimensions_and_disagreement(repo: Path) -> None:
+    a = enqueue(
+        repo,
+        case_id="case-1",
+        reviewer="r1",
+        craft_rating=2.0,
+        gold_dispute=True,
+        regime_label="A",
+    )
+    b = enqueue(
+        repo,
+        case_id="case-1",
+        reviewer="r2",
+        craft_rating=5.0,
+        gold_dispute=False,
+        regime_label="B",
+    )
+    # third reviewer tilts dispute majority true + regime split remains if 1 each then third
+    enqueue(
+        repo,
+        case_id="case-1",
+        reviewer="r3",
+        craft_rating=4.0,
+        gold_dispute=True,
+        regime_label="A",
+    )
+    claim(repo, review_id=a["item"]["review_id"], reviewer="r1")
+    adjudicate(repo, review_id=a["item"]["review_id"], outcome="approve_promote", adjudicator="r1")
+    claim(repo, review_id=b["item"]["review_id"], reviewer="r2")
+    adjudicate(repo, review_id=b["item"]["review_id"], outcome="reject", adjudicator="r2")
+
+    data = rollup_reviews(repo, case_id="case-1")
+    assert data["authority"] == "advisory"
+    assert data["can_sole_promote_gold"] is False
+    assert data["rollup_count"] == 1
+    row = data["rollups"][0]
+    assert row["target_kind"] == "case_id"
+    assert row["target_id"] == "case-1"
+    assert row["reviewer_count"] == 3
+    assert row["can_sole_promote_gold"] is False
+    craft = row["dimensions"]["human.craft_rating"]
+    assert craft["disagreement"] is True
+    assert craft["min"] == 2.0
+    assert craft["max"] == 5.0
+    assert row["dimensions"]["human.gold_dispute"]["majority"] == "true"
+    assert row["dimensions"]["human.regime_label"]["majority"] == "A"
+    assert row["outcomes"]["majority"] == "split"
+
+
+def test_rollup_empty_queue(repo: Path) -> None:
+    data = rollup_reviews(repo)
+    assert data["rollup_count"] == 0
+    assert data["rollups"] == []

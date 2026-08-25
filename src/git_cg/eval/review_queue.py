@@ -495,6 +495,203 @@ def dismiss(
     )
 
 
+def _target_key(item: dict[str, Any]) -> tuple[str, str] | None:
+    """Return stable grouping key: prefer case_id, else bundle_id."""
+    review = item.get("review") if isinstance(item.get("review"), dict) else {}
+    case_id = review.get("case_id")
+    bundle_id = review.get("bundle_id")
+    if isinstance(case_id, str) and case_id.strip():
+        return ("case_id", case_id.strip())
+    if isinstance(bundle_id, str) and bundle_id.strip():
+        return ("bundle_id", bundle_id.strip())
+    return None
+
+
+def _iter_queue_items(repo: Path) -> list[dict[str, Any]]:
+    root = _queue_dir(repo)
+    if not root.is_dir():
+        return []
+    items: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.json")):
+        try:
+            item, _ = _read_item(repo, path.stem)
+        except ReviewQueueError:
+            continue
+        items.append(item)
+    return items
+
+
+def _mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _majority_bool(votes: list[bool]) -> str:
+    if not votes:
+        return "none"
+    trues = sum(1 for v in votes if v)
+    falses = len(votes) - trues
+    if trues == falses:
+        return "split"
+    return "true" if trues > falses else "false"
+
+
+def _majority_str(votes: list[str]) -> str:
+    if not votes:
+        return "none"
+    counts: dict[str, int] = {}
+    for v in votes:
+        counts[v] = counts.get(v, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    if len(ranked) >= 2 and ranked[0][1] == ranked[1][1]:
+        return "split"
+    return ranked[0][0]
+
+
+def rollup_reviews(
+    repo: Path,
+    *,
+    case_id: str | None = None,
+    bundle_id: str | None = None,
+) -> dict[str, Any]:
+    """Deterministic multi-rater advisory rollup over human_review_v1 rows (NTH-05).
+
+    Groups queue items by ``case_id`` (preferred) or ``bundle_id``. Read-only:
+    never promotes gold, never mutates the store, never elevates authority
+    above ``advisory``.
+
+    Disagreement rules (closed, deterministic):
+    * craft ratings → min/max/mean/spread; ``disagreement`` when spread > 1.0
+    * gold_dispute → majority true/false; ``split`` on ties
+    * regime_label → majority among {A,B,unknown}; ``split`` on ties
+    * outcomes → majority adjudicated outcome; ``split``/``none`` otherwise
+    """
+    if case_id is not None and not str(case_id).strip():
+        raise ReviewQueueError("empty --case filter", code="EVAL_USAGE", exit_code=2)
+    if bundle_id is not None and not str(bundle_id).strip():
+        raise ReviewQueueError("empty --bundle-id filter", code="EVAL_USAGE", exit_code=2)
+
+    want_case = case_id.strip() if isinstance(case_id, str) and case_id.strip() else None
+    want_bundle = bundle_id.strip() if isinstance(bundle_id, str) and bundle_id.strip() else None
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in _iter_queue_items(repo):
+        review = item.get("review") if isinstance(item.get("review"), dict) else {}
+        item_case = (
+            review.get("case_id").strip()
+            if isinstance(review.get("case_id"), str) and review.get("case_id").strip()
+            else None
+        )
+        item_bundle = (
+            review.get("bundle_id").strip()
+            if isinstance(review.get("bundle_id"), str) and review.get("bundle_id").strip()
+            else None
+        )
+        if want_case is not None and item_case != want_case:
+            continue
+        if want_bundle is not None and item_bundle != want_bundle:
+            continue
+        key = _target_key(item)
+        if key is None:
+            continue
+        groups.setdefault(key, []).append(item)
+
+    rollups: list[dict[str, Any]] = []
+    for (kind, tid), items in sorted(groups.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+        reviewers: list[str] = []
+        craft_vals: list[float] = []
+        dispute_votes: list[bool] = []
+        regime_votes: list[str] = []
+        outcome_votes: list[str] = []
+        status_counts: dict[str, int] = {}
+        review_ids: list[str] = []
+
+        for item in items:
+            review = item.get("review") if isinstance(item.get("review"), dict) else {}
+            rid = str(item.get("review_id") or review.get("review_id") or "")
+            if rid:
+                review_ids.append(rid)
+            reviewer = review.get("reviewer") or review.get("reviewer_id")
+            if isinstance(reviewer, str) and reviewer.strip():
+                reviewers.append(reviewer.strip())
+            status = str(item.get("status") or "")
+            status_counts[status] = status_counts.get(status, 0) + 1
+            scores = review.get("scores") if isinstance(review.get("scores"), dict) else {}
+            craft = scores.get("human.craft_rating")
+            if isinstance(craft, (int, float)) and not isinstance(craft, bool):
+                craft_vals.append(float(craft))
+            dispute = scores.get("human.gold_dispute")
+            if isinstance(dispute, bool):
+                dispute_votes.append(dispute)
+            regime = scores.get("human.regime_label")
+            if isinstance(regime, str) and regime.strip():
+                regime_votes.append(regime.strip())
+            adj = item.get("adjudication") if isinstance(item.get("adjudication"), dict) else {}
+            outcome = adj.get("outcome")
+            if isinstance(outcome, str) and outcome.strip():
+                outcome_votes.append(outcome.strip())
+
+        craft_min = min(craft_vals) if craft_vals else None
+        craft_max = max(craft_vals) if craft_vals else None
+        craft_mean = _mean(craft_vals)
+        craft_spread = (
+            (craft_max - craft_min) if craft_vals and craft_min is not None and craft_max is not None else None
+        )
+        craft_disagreement = bool(craft_spread is not None and craft_spread > 1.0)
+        unique_reviewers = sorted(set(reviewers))
+        rollups.append(
+            {
+                "target_kind": kind,
+                "target_id": tid,
+                "review_count": len(items),
+                "reviewer_count": len(unique_reviewers),
+                "reviewers": unique_reviewers,
+                "review_ids": sorted(set(review_ids)),
+                "status_counts": dict(sorted(status_counts.items())),
+                "dimensions": {
+                    "human.craft_rating": {
+                        "count": len(craft_vals),
+                        "min": craft_min,
+                        "max": craft_max,
+                        "mean": craft_mean,
+                        "spread": craft_spread,
+                        "disagreement": craft_disagreement,
+                    },
+                    "human.gold_dispute": {
+                        "count": len(dispute_votes),
+                        "majority": _majority_bool(dispute_votes),
+                        "true_count": sum(1 for v in dispute_votes if v),
+                        "false_count": sum(1 for v in dispute_votes if not v),
+                    },
+                    "human.regime_label": {
+                        "count": len(regime_votes),
+                        "majority": _majority_str(regime_votes),
+                        "votes": sorted(regime_votes),
+                    },
+                },
+                "outcomes": {
+                    "count": len(outcome_votes),
+                    "majority": _majority_str(outcome_votes),
+                    "votes": sorted(outcome_votes),
+                },
+                "authority": "advisory",
+                "can_sole_promote_gold": False,
+            }
+        )
+
+    return {
+        "rollups": rollups,
+        "rollup_count": len(rollups),
+        "authority": "advisory",
+        "can_sole_promote_gold": False,
+        "filters": {
+            "case_id": want_case,
+            "bundle_id": want_bundle,
+        },
+    }
+
+
 __all__ = [
     "OUTCOMES",
     "OUTCOME_APPROVE_PROMOTE",
@@ -515,5 +712,6 @@ __all__ = [
     "dismiss",
     "enqueue",
     "list_reviews",
+    "rollup_reviews",
     "show_review",
 ]

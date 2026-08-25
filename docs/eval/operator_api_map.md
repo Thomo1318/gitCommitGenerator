@@ -103,6 +103,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval review dismiss` | command | public | registered | Dismiss a pending/in_review item (terminal). — Present on Typer tree; see help. |
 | `eval review enqueue` | command | public | registered | Enqueue an advisory human_review_v1 row (pending). — Present on Typer tree; see help. |
 | `eval review list` | command | public | registered | List local review-queue items. — Present on Typer tree; see help. |
+| `eval review rollup` | command | public | registered | Multi-rater advisory rollup over local human_review_v1 rows (NTH-05). Read-only dimension/outcome majority + craft spread. Authority stays advisory; never sole-promotes gold. — Present on Typer tree; see help. |
 | `eval review show` | command | public | registered | Show one local review-queue item. — Present on Typer tree; see help. |
 | `eval run` | command | public | canonical | Run an offline evaluation suite (canonical; not ``eval suite run``). — Public CLI operator surface. |
 | `eval session` | group | public (group) | group | Local commit-session inspection. — Nested Typer group (not invoked alone). |
@@ -400,6 +401,17 @@ documents — sketches name the envelope wrapper keys only.
 * **Nested (informational):**
   * case_results[]: {case_id, deterministic_pass, failed_metric_ids}
 * **Notes:** Shared by run/resume/recompute-scores via RunResult.to_data(). Failure envelopes may carry a subset with at least status (+ orchestrator error fields when present). Never smuggles raw diffs/secrets through data or envelope meta.
+
+#### `eval review rollup`
+
+* **Required keys:** `authority`, `can_sole_promote_gold`, `filters`, `rollup_count`, `rollups`
+* **Optional keys:** *(none)*
+* **Closed enums:**
+  * `authority`: `advisory`
+* **Nested (informational):**
+  * rollups[]: multi-rater dimension/outcome majority projection
+  * filters: {case_id?, bundle_id?}
+* **Notes:** NTH-05 read-only multi-rater UX. authority is always advisory; can_sole_promote_gold is always false.
 
 #### `eval run`
 

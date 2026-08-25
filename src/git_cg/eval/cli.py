@@ -1303,6 +1303,50 @@ def review_list_cmd(
     raise typer.Exit(code=0)
 
 
+@review_app.command("rollup")
+def review_rollup_cmd(
+    case_id: str | None = typer.Option(None, "--case", help="Optional case_id filter."),
+    bundle_id: str | None = typer.Option(None, "--bundle-id", help="Optional bundle_id filter."),
+    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+) -> None:
+    """Multi-rater advisory rollup over local human_review_v1 rows (NTH-05).
+
+    Read-only dimension/outcome majority + craft spread. Authority stays
+    advisory; never sole-promotes gold.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.review_queue import ReviewQueueError, rollup_reviews
+
+    repo = _resolve_repo(None)
+    try:
+        data = rollup_reviews(repo, case_id=case_id, bundle_id=bundle_id)
+    except ReviewQueueError as exc:
+        _emit_slice5_error("eval review rollup", exc, as_json=as_json)
+        return
+    if as_json:
+        emit_json_envelope(build_envelope("eval review rollup", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval review rollup: groups={data['rollup_count']} authority=advisory "
+            f"can_sole_promote_gold={data['can_sole_promote_gold']}",
+            err=False,
+        )
+        for row in data["rollups"]:
+            craft = (row.get("dimensions") or {}).get("human.craft_rating") or {}
+            dispute = (row.get("dimensions") or {}).get("human.gold_dispute") or {}
+            regime = (row.get("dimensions") or {}).get("human.regime_label") or {}
+            outcomes = row.get("outcomes") or {}
+            emit_human_line(
+                f"  {row['target_kind']}={row['target_id']}: reviewers={row['reviewer_count']} "
+                f"reviews={row['review_count']} craft_mean={craft.get('mean')} "
+                f"craft_disagreement={craft.get('disagreement')} "
+                f"dispute={dispute.get('majority')} regime={regime.get('majority')} "
+                f"outcome={outcomes.get('majority')}",
+                err=False,
+            )
+    raise typer.Exit(code=0)
+
+
 @review_app.command("show")
 def review_show_cmd(
     review_id: str = typer.Argument(..., help="Review id."),
