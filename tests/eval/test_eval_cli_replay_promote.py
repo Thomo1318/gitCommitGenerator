@@ -243,3 +243,48 @@ def test_cli_review_dismiss(repo: Path) -> None:
     env = _env(res)
     assert res.exit_code == 0
     assert env["data"]["item"]["status"] == "dismissed"
+
+
+def test_cli_promote_denial_persists_audit(repo: Path) -> None:
+    """S6-E09: CLI denial surfaces named reason + retained candidate audit path."""
+    result = runner.invoke(
+        cli_app,
+        [
+            "eval",
+            "promote",
+            "--bundle",
+            "thread-src-1",
+            "--destination",
+            "fixture_lane_a",
+            "--owner",
+            "owner-1",
+            "--label",
+            "gold",
+            "--provenance",
+            "user_acceptance",
+            "--redaction-profile",
+            "default_scrub",
+            "--popularity-signal",
+            "--json",
+        ],
+    )
+    env = _env(result)
+    assert result.exit_code == 2
+    assert env["ok"] is False
+    assert env["data"]["accepted"] is False
+    assert env["data"]["denial_reason"] in {
+        "popularity_promotion_forbidden",
+        "silent_gold_mint_forbidden",
+        "human_review_cannot_sole_promote_golden",
+    }
+    assert "decision" in env["data"]
+    assert env["data"]["decision"]["accepted"] is False
+    assert env["data"]["decision"]["denial_reason"] == env["data"]["denial_reason"]
+    assert env["data"]["decision"]["candidate_class"] == "scrubbed_candidate"
+    decision_path = Path(env["data"]["decision_path"])
+    assert decision_path.is_file()
+    # No destination fixture minted on denial.
+    assert (
+        not (repo / ".eval" / "index" / "fixture_lane_a_candidates").exists()
+        or list((repo / ".eval" / "index" / "fixture_lane_a_candidates").glob("*.json")) == []
+    )

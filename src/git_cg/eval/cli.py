@@ -1046,15 +1046,30 @@ def promote_cmd(
             dry_run=dry_run,
         )
     except PromoteError as exc:
-        # Surface denial_reason in envelope data when present.
+        # Surface denial_reason + retained candidate decision when present (S6-E09).
         if as_json:
             from git_cg.eval.cli_output import envelope_message
 
             err = envelope_message(getattr(exc, "code", "EVAL_USAGE"), str(exc), hint=getattr(exc, "hint", None))
-            data = {"accepted": False, "denial_reason": getattr(exc, "denial_reason", None)}
+            data: dict[str, object] = {
+                "accepted": False,
+                "denial_reason": getattr(exc, "denial_reason", None),
+            }
+            decision = getattr(exc, "decision", None)
+            decision_path = getattr(exc, "decision_path", None)
+            if isinstance(decision, dict):
+                data["decision"] = decision
+            if isinstance(decision_path, str) and decision_path:
+                data["decision_path"] = decision_path
             emit_json_envelope(build_envelope("eval promote", ok=False, data=data, errors=[err]))
             raise typer.Exit(code=int(getattr(exc, "exit_code", 2))) from None
         _emit_slice5_error("eval promote", exc, as_json=False)
+        denial = getattr(exc, "denial_reason", None)
+        decision_path = getattr(exc, "decision_path", None)
+        if denial:
+            emit_human_line(f"  denial_reason: {denial}", err=True)
+        if decision_path:
+            emit_human_line(f"  denial_audit: {decision_path}", err=True)
         return
     data = {
         "decision": result["decision"],
