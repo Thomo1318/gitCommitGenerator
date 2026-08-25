@@ -675,6 +675,9 @@ S5 ships the **gated advisory cohort only.** It does **not** land full doctor/am
 
 ## S6 Slice 7 — amend-brief · dogfood (Lane C) · train-export · sessions (#246)
 
+> **Claim → test matrix seed (pre-Slice 9):** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
+> Full Slice 9 close pack / PR claim table / DoD narrative is **not** started here.
+
 Slice 7 wires the five remaining offline operator surfaces to landed engines.
 All five emit `cli_output_envelope_v1`, are import-light (no Opik at import
 time), and are **advisory/corpus** surfaces — none is a gate or product-accept
