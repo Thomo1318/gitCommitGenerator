@@ -209,9 +209,16 @@ def _build_registry() -> dict[str, DataSketch]:
         ),
         "eval failures": _sketch(
             "eval failures",
-            required_keys=("experiment_id", "failing_cases", "case_count"),
-            nested=("failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}",),
-            notes="Read-only. experiment_id may be null when no local runs exist.",
+            required_keys=("experiment_id", "failing_cases", "case_count", "filters"),
+            nested=(
+                "failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}",
+                "filters: {regime?, family?, failure_id?, severity?} (NTH-02; null when unset)",
+            ),
+            notes=(
+                "Read-only. experiment_id may be null when no local runs exist. "
+                "Optional --regime/--family/--failure-id/--severity filters are AND-combined; "
+                "when active, metric_ids/failure_ids project the matching failing-score subset."
+            ),
         ),
         "eval explain": _sketch(
             "eval explain",

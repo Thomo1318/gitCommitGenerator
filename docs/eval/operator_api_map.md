@@ -81,7 +81,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval export-drain` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval export drain``. — Canonical: `eval export drain`. Removal: first minor release after S6 GA. |
 | `eval export-retry` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval export retry``. — Canonical: `eval export retry`. Removal: first minor release after S6 GA. |
 | `eval export-status` | command | public (deprecated alias) | temporary alias | Deprecated alias for ``eval export status``. — Canonical: `eval export status`. Removal: first minor release after S6 GA. |
-| `eval failures` | command | public | canonical | List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only). — Public CLI operator surface. |
+| `eval failures` | command | public | canonical | List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only). Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``, ``--severity``) are AND-combined and documented in the API map. The base unfiltered list remains the S6-D01 contract. — Public CLI operator surface. |
 | `eval issue` | group | public (group) | group | Local diagnostic issue store ops. — Nested Typer group (not invoked alone). |
 | `eval issue list` | command | public | canonical | List local diagnostic issues (newest last_seen first). — Public CLI operator surface. |
 | `eval issue reopen` | command | public | canonical | Reopen a previously resolved/suppressed local diagnostic issue. — Public CLI operator surface. |
@@ -319,11 +319,12 @@ documents — sketches name the envelope wrapper keys only.
 
 #### `eval failures`
 
-* **Required keys:** `case_count`, `experiment_id`, `failing_cases`
+* **Required keys:** `case_count`, `experiment_id`, `failing_cases`, `filters`
 * **Optional keys:** *(none)*
 * **Nested (informational):**
   * failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}
-* **Notes:** Read-only. experiment_id may be null when no local runs exist.
+  * filters: {regime?, family?, failure_id?, severity?} (NTH-02; null when unset)
+* **Notes:** Read-only. experiment_id may be null when no local runs exist. Optional --regime/--family/--failure-id/--severity filters are AND-combined; when active, metric_ids/failure_ids project the matching failing-score subset.
 
 #### `eval issue list`
 

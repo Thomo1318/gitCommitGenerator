@@ -289,3 +289,17 @@ def test_cli_explain_and_diagnose_never_print_raw_token(repo: Path) -> None:
     assert secret not in disk_blob
     assert "sk-test" not in disk_blob
     assert "•••[len=" in disk_blob
+
+
+def test_cli_failures_filters_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed(tmp_path)
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda: tmp_path)
+    result = runner.invoke(
+        cli_app,
+        ["eval", "failures", "--experiment-id", "exp-a", "--family", "I", "--json"],
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["data"]["case_count"] == 1
+    assert payload["data"]["filters"]["family"] == "I"

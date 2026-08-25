@@ -349,3 +349,81 @@ def test_explain_masks_secret_shaped_evaluator_errors(failing_repo: Path) -> Non
     assert secret not in flat
     assert "sk-test" not in flat
     assert "•••[len=" in flat
+
+
+# --------------------------------------------------------------------------
+# failures filters (NTH-02)
+# --------------------------------------------------------------------------
+
+
+def test_failures_filters_and_combine(repo: Path) -> None:
+    exp = "exp-filt"
+    _write_experiment(repo, exp)
+    # Family I / regime B / block / EVAL_TOPOLOGY
+    _write_case(
+        repo,
+        exp,
+        "case-i-b",
+        passed=False,
+        scores=[
+            _score(
+                "i.counter_span_consistent",
+                False,
+                fp=_fp_inputs(regime="B"),
+                failure_ids=["EVAL_TOPOLOGY"],
+            )
+        ],
+        failed_metric_ids=["i.counter_span_consistent"],
+    )
+    # Family H / regime A / warn-ish via second metric path
+    h_score = make_score(
+        "h.doctor_green",
+        False,
+        passed=False,
+        reason="warn_path",
+        evidence={
+            "diag_fingerprint_inputs": _fp_inputs(regime="A", metric_ids=["h.doctor_green"], failure_ids=["EVAL_DOC"])
+        },
+        failure_ids=["EVAL_DOC"],
+        product_authority="git_cg.eval.doctor",
+        severity="warn",
+    )
+    _write_case(
+        repo,
+        exp,
+        "case-h-a",
+        passed=False,
+        scores=[h_score],
+        failed_metric_ids=["h.doctor_green"],
+    )
+
+    all_rows = list_failures(repo, experiment_id=exp)
+    assert all_rows["case_count"] == 2
+    assert all_rows["filters"]["regime"] is None
+
+    only_i = list_failures(repo, experiment_id=exp, family="I")
+    assert only_i["case_count"] == 1
+    assert only_i["failing_cases"][0]["case_id"] == "case-i-b"
+    assert only_i["filters"]["family"] == "I"
+
+    only_b = list_failures(repo, experiment_id=exp, regime="B")
+    assert only_b["case_count"] == 1
+    assert only_b["failing_cases"][0]["case_id"] == "case-i-b"
+
+    by_fid = list_failures(repo, experiment_id=exp, failure_id="EVAL_DOC")
+    assert by_fid["case_count"] == 1
+    assert by_fid["failing_cases"][0]["case_id"] == "case-h-a"
+
+    by_sev = list_failures(repo, experiment_id=exp, severity="block")
+    assert by_sev["case_count"] == 1
+    assert by_sev["failing_cases"][0]["case_id"] == "case-i-b"
+
+    none = list_failures(repo, experiment_id=exp, family="I", regime="A")
+    assert none["case_count"] == 0
+
+
+def test_failures_invalid_severity_fails_closed(failing_repo: Path) -> None:
+    with pytest.raises(ExplainError) as ei:
+        list_failures(failing_repo, severity="critical")
+    assert ei.value.exit_code == 2
+    assert ei.value.code == "EVAL_USAGE"

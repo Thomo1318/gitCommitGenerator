@@ -203,32 +203,176 @@ def _failing_metric_rows(case: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+_ALLOWED_SEVERITIES: Final[frozenset[str]] = frozenset({"block", "warn", "info"})
+
+
+def _case_failing_score_rows(case: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return full failing score rows (passed is False) from a case result."""
+    out: list[dict[str, Any]] = []
+    for row in case.get("scores") or []:
+        if isinstance(row, dict) and row.get("passed") is False:
+            out.append(row)
+    return out
+
+
+def _metric_family(metric_id: str | None) -> str | None:
+    """Derive catalog family letter/token from a metric_id prefix (a.* → A)."""
+    if not metric_id or not isinstance(metric_id, str):
+        return None
+    head = metric_id.split(".", 1)[0].strip()
+    if not head:
+        return None
+    # Catalog uses single-letter families plus a few tokens (gate/human/lab/...).
+    if len(head) == 1:
+        return head.upper()
+    return head.lower()
+
+
+def _row_regime(row: dict[str, Any]) -> str | None:
+    evidence = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+    fp = evidence.get("diag_fingerprint_inputs") if isinstance(evidence.get("diag_fingerprint_inputs"), dict) else {}
+    regime = fp.get("regime")
+    if isinstance(regime, str) and regime.strip():
+        return regime.strip()
+    return None
+
+
+def _row_severity(row: dict[str, Any]) -> str | None:
+    sev = row.get("severity")
+    if isinstance(sev, str) and sev.strip():
+        return sev.strip().lower()
+    evidence = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+    sev2 = evidence.get("severity")
+    if isinstance(sev2, str) and sev2.strip():
+        return sev2.strip().lower()
+    return None
+
+
+def _row_family(row: dict[str, Any]) -> str | None:
+    fam = row.get("family")
+    if isinstance(fam, str) and fam.strip():
+        token = fam.strip()
+        return token.upper() if len(token) == 1 else token.lower()
+    return _metric_family(str(row.get("metric_id") or "") or None)
+
+
+def _normalize_filter_token(value: str | None, *, field: str) -> str | None:
+    if value is None:
+        return None
+    token = value.strip()
+    if not token:
+        raise ExplainError(
+            f"empty {field} filter",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint=f"Pass a non-empty --{field.replace('_', '-')} value.",
+        )
+    return token
+
+
 def list_failures(
     repo: Path,
     *,
     experiment_id: str | None = None,
+    regime: str | None = None,
+    family: str | None = None,
+    failure_id: str | None = None,
+    severity: str | None = None,
 ) -> dict[str, Any]:
-    """§18.3 ``eval failures``: failing cases with metric_ids + failure_ids."""
+    """§18.3 ``eval failures``: failing cases with metric_ids + failure_ids.
+
+    Optional deterministic filters (NTH-02) are AND-combined across dimensions.
+    A case is kept when at least one failing score row matches every provided
+    filter. When filters are active, ``metric_ids`` / ``failure_ids`` project the
+    matching failing-score subset (not the unfiltered case union).
+    """
+    regime_f = _normalize_filter_token(regime, field="regime")
+    family_raw = _normalize_filter_token(family, field="family")
+    failure_f = _normalize_filter_token(failure_id, field="failure-id")
+    severity_f = _normalize_filter_token(severity, field="severity")
+
+    family_f: str | None = None
+    if family_raw is not None:
+        family_f = family_raw.upper() if len(family_raw) == 1 else family_raw.lower()
+
+    if severity_f is not None and severity_f.lower() not in _ALLOWED_SEVERITIES:
+        raise ExplainError(
+            f"invalid severity filter: {severity!r}",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint=f"Allowed: {sorted(_ALLOWED_SEVERITIES)}",
+        )
+    if severity_f is not None:
+        severity_f = severity_f.lower()
+
     exp = experiment_id
     if not exp:
         ids = _iter_experiment_ids(repo)
         if not ids:
-            return {"experiment_id": None, "failing_cases": [], "case_count": 0}
+            return {
+                "experiment_id": None,
+                "failing_cases": [],
+                "case_count": 0,
+                "filters": {
+                    "regime": regime_f,
+                    "family": family_f,
+                    "failure_id": failure_f,
+                    "severity": severity_f,
+                },
+            }
         exp = ids[0]
     cases = _iter_case_results(repo, exp)
     failing: list[dict[str, Any]] = []
     for case in cases:
         if case.get("deterministic_pass") is True:
             continue
-        failing_metrics = _failing_metric_rows(case)
-        metric_ids = sorted({str(m["metric_id"]) for m in failing_metrics if m.get("metric_id")})
-        failure_ids = sorted({fid for m in failing_metrics for fid in (m.get("failure_ids") or [])})
+        score_rows = _case_failing_score_rows(case)
+        # Fallback projection path when scores[] is empty but failed_metric_ids set.
+        if not score_rows and case.get("failed_metric_ids"):
+            score_rows = [
+                {
+                    "metric_id": mid,
+                    "passed": False,
+                    "failure_ids": [],
+                    "family": _metric_family(str(mid)),
+                }
+                for mid in case.get("failed_metric_ids") or []
+            ]
+
+        matched_rows: list[dict[str, Any]] = []
+        for row in score_rows:
+            if regime_f is not None and _row_regime(row) != regime_f:
+                continue
+            if family_f is not None and _row_family(row) != family_f:
+                continue
+            if severity_f is not None and _row_severity(row) != severity_f:
+                continue
+            fids = [str(x) for x in (row.get("failure_ids") or [])]
+            if failure_f is not None and failure_f not in fids:
+                continue
+            matched_rows.append(row)
+
+        # When no filters are set, keep the legacy unfiltered failing-case shape
+        # even if score rows are sparse (use failed_metric_ids fallback).
+        filters_active = any(v is not None for v in (regime_f, family_f, failure_f, severity_f))
+        if filters_active and not matched_rows:
+            continue
+        if not filters_active:
+            failing_metrics = _failing_metric_rows(case)
+            metric_ids = sorted({str(m["metric_id"]) for m in failing_metrics if m.get("metric_id")})
+            failure_ids = sorted({fid for m in failing_metrics for fid in (m.get("failure_ids") or [])})
+            out_metric_ids = metric_ids or list(case.get("failed_metric_ids") or [])
+            out_failure_ids = failure_ids
+        else:
+            out_metric_ids = sorted({str(r.get("metric_id")) for r in matched_rows if r.get("metric_id")})
+            out_failure_ids = sorted({str(fid) for r in matched_rows for fid in (r.get("failure_ids") or []) if fid})
+
         failing.append(
             {
                 "case_id": case.get("case_id"),
                 "deterministic_pass": bool(case.get("deterministic_pass")),
-                "metric_ids": metric_ids or list(case.get("failed_metric_ids") or []),
-                "failure_ids": failure_ids,
+                "metric_ids": out_metric_ids,
+                "failure_ids": out_failure_ids,
                 "evaluator_errors": list(case.get("evaluator_errors") or []),
             }
         )
@@ -237,6 +381,12 @@ def list_failures(
             "experiment_id": exp,
             "failing_cases": failing,
             "case_count": len(failing),
+            "filters": {
+                "regime": regime_f,
+                "family": family_f,
+                "failure_id": failure_f,
+                "severity": severity_f,
+            },
         }
     )
 

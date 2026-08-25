@@ -823,23 +823,46 @@ def failures_cmd(
     experiment_id: str | None = typer.Option(
         None, "--experiment-id", help="Experiment id (defaults to latest local run)."
     ),
+    regime: str | None = typer.Option(
+        None, "--regime", help="Deterministic filter: regime label from fingerprint inputs (e.g. A|B)."
+    ),
+    family: str | None = typer.Option(None, "--family", help="Deterministic filter: score family (e.g. I|H|gate)."),
+    failure_id: str | None = typer.Option(
+        None, "--failure-id", help="Deterministic filter: require this failure_id on a failing score."
+    ),
+    severity: str | None = typer.Option(None, "--severity", help="Deterministic filter: block|warn|info."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only)."""
+    """List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only).
+
+    Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``,
+    ``--severity``) are AND-combined and documented in the API map. The base
+    unfiltered list remains the S6-D01 contract.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError, list_failures
 
     repo = _resolve_repo(None)
     try:
-        data = list_failures(repo, experiment_id=experiment_id)
+        data = list_failures(
+            repo,
+            experiment_id=experiment_id,
+            regime=regime,
+            family=family,
+            failure_id=failure_id,
+            severity=severity,
+        )
     except ExplainError as exc:
         _emit_slice5_error("eval failures", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval failures", ok=True, data=data))
     else:
+        filt = data.get("filters") if isinstance(data.get("filters"), dict) else {}
+        active = {k: v for k, v in filt.items() if v is not None}
         emit_human_line(
-            f"eval failures: experiment={data['experiment_id']} failing_cases={data['case_count']}",
+            f"eval failures: experiment={data['experiment_id']} failing_cases={data['case_count']}"
+            + (f" filters={active}" if active else ""),
             err=False,
         )
         for case in data["failing_cases"]:
