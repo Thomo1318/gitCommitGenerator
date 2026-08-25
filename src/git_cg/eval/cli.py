@@ -541,6 +541,15 @@ def amend_brief_cmd(
     last_dogfood: int = typer.Option(3, "--last", min=0, help="Last-N dogfood/Lane C attachments."),
     doctor: bool = typer.Option(False, "--doctor", help="Include the doctor projection."),
     write: bool = typer.Option(True, "--write/--no-write", help="Persist under .eval/amend_briefs/."),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
     """Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2).
@@ -551,7 +560,7 @@ def amend_brief_cmd(
     from git_cg.eval.brief import AmendBriefError, amend_brief
     from git_cg.eval.cli_output import emit_human_line
 
-    repo = _resolve_repo(None)
+    repo = _resolve_repo(root)
     try:
         data = amend_brief(
             repo,
