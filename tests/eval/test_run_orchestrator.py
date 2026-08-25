@@ -249,3 +249,54 @@ def test_recompute_score_history_append_only(tmp_path: Path) -> None:
     # Child has its own case scores under a different experiment id.
     child_cases = tmp_path / ".eval" / "experiments" / child.experiment_id / "cases"
     assert any(child_cases.glob("*.json"))
+
+
+def test_b11_per_case_checkpoint_cadence_at_most_one_case_loss(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """S6-B11: orchestrator checkpoints per case (≤1-case-loss on crash).
+
+    After each successful case write, completed/pending checkpoint cursors advance
+    so a crash loses at most the in-flight case — never the whole scored prefix.
+    """
+    from git_cg.eval import run_orchestrator as orch
+
+    persist_calls: list[tuple[tuple[str, ...], tuple[str, ...], str]] = []
+    real_persist = orch._persist_checkpoint
+
+    def spy_persist(repo, **kwargs):  # type: ignore[no-untyped-def]
+        completed = tuple(kwargs.get("completed") or [])
+        pending = tuple(kwargs.get("pending") or [])
+        status = str(kwargs.get("status") or "")
+        persist_calls.append((completed, pending, status))
+        return real_persist(repo, **kwargs)
+
+    monkeypatch.setattr(orch, "_persist_checkpoint", spy_persist)
+
+    case_ids = ("seed-v1-valid-fixture", "seed-b1-session12-regime-b")
+    result = run_evaluation(
+        _req(
+            mode="fresh_suite_run",
+            repo_root=tmp_path,
+            case_ids=case_ids,
+            keep_checkpoint=True,
+        )
+    )
+    assert result.pending_case_ids == []
+    assert set(result.completed_case_ids) >= set(case_ids)
+
+    # Initial running checkpoint (before any case) + one persist after each case + final.
+    running = [c for c in persist_calls if c[2] == "running"]
+    assert len(running) >= 1 + len(case_ids)
+
+    # After first case completes, checkpoint must already record that case and
+    # keep the second case pending (proves per-case cadence, not end-only flush).
+    mid = None
+    for completed, pending, status in running:
+        if "seed-v1-valid-fixture" in completed and "seed-b1-session12-regime-b" in pending:
+            mid = (completed, pending, status)
+            break
+    assert mid is not None, f"missing mid-run checkpoint cadence; saw={running!r}"
+
+    # Final completed set includes both cases with empty pending.
+    final_running_or_done = persist_calls[-1]
+    assert "seed-v1-valid-fixture" in final_running_or_done[0]
+    assert "seed-b1-session12-regime-b" in final_running_or_done[0]
