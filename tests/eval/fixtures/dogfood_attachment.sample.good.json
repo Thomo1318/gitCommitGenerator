@@ -16,10 +16,16 @@
   "sample_seed": "seed-fixed-1",
   "sample_rate": 0.5,
   "population_id": "suite:cm-eval-fixtures-core",
-  "selected_ids": [
+  "population_members": [
     "case-a",
-    "case-c"
+    "case-b",
+    "case-c",
+    "case-d"
   ],
-  "selected_set_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "selected_ids": [
+    "case-b",
+    "case-d"
+  ],
+  "selected_set_hash": "e8ee7ecb2b646178e0e7d5739fa62b362f051b22382c332720741057521e9463",
   "capture_on": "all"
 }

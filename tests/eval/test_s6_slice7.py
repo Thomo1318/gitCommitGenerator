@@ -2,6 +2,7 @@
 
 Covers:
 * dogfood deterministic sample reproducibility (schema pin + membership hash).
+* dogfood claim locks: S6-G01 / G02(a) / G03 / G04 / G08 + bench helper G02(b).
 * async structural seam: async mode never awaits the judge (never blocks).
 * train-export row scrub-failure policy: drop + report + continue; no
   .eval/quarantine/; hard_negative never enters positive_gold.
@@ -16,14 +17,19 @@ Covers:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
 # ---------------------------------------------------------------------------
-# Dogfood: deterministic sample reproducibility
+# Dogfood: S6-G01 / G02(a) / G03 / G04 / G08 + bench helper
 # ---------------------------------------------------------------------------
+
+
+def _msg_sha(text: str = "feat: x") -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def test_dogfood_sample_deterministic_membership() -> None:
@@ -38,46 +44,400 @@ def test_dogfood_sample_deterministic_membership() -> None:
 
 
 def test_dogfood_sample_schema_requires_repro_fields() -> None:
-    import hashlib
-
     from git_cg.eval.dogfood.capture import DOGFoodError, build_attachment
 
-    sha = hashlib.sha256(b"m").hexdigest()
+    sha = _msg_sha("m")
     with pytest.raises(DOGFoodError):
         build_attachment(message_sha256=sha, mode="sample")  # missing seed/rate/population
 
 
-def test_dogfood_async_never_awaits_judge() -> None:
-    """Structural seam: async mode marks never-await; product never blocks."""
-    import hashlib
+def test_dogfood_g01_non_maintainer_default_off() -> None:
+    """S6-G01 / A4: basic/unknown profiles default to mode=off."""
+    from git_cg.eval.dogfood.capture import MODE_ASYNC, MODE_OFF, resolve_dogfood_mode
 
+    assert resolve_dogfood_mode(env={}) == MODE_OFF
+    assert resolve_dogfood_mode(env={"GIT_CG_EVAL_PROFILE": "basic"}) == MODE_OFF
+    assert resolve_dogfood_mode(env={"GIT_CG_EVAL_PROFILE": "user"}) == MODE_OFF
+    assert resolve_dogfood_mode(env={"GIT_CG_EVAL_PROFILE": "maintainer"}) == MODE_ASYNC
+    assert resolve_dogfood_mode(env={"GIT_CG_EVAL_PROFILE": "train"}) == MODE_ASYNC
+    assert resolve_dogfood_mode(env={"GIT_CG_EVAL_PROFILE": "dogfood"}) == MODE_ASYNC
+    # Explicit mode wins over profile default.
+    assert resolve_dogfood_mode(mode="always", env={"GIT_CG_EVAL_PROFILE": "basic"}) == "always"
+    assert (
+        resolve_dogfood_mode(mode=None, env={"GIT_CG_EVAL_DOGFOOD_MODE": "sample", "GIT_CG_EVAL_PROFILE": "basic"})
+        == "sample"
+    )
+
+
+def test_dogfood_g01_capture_off_skips_without_product_block(tmp_path: Path) -> None:
     from git_cg.eval.dogfood.capture import capture_dogfood
 
-    sha = hashlib.sha256(b"feat: x").hexdigest()
     data = capture_dogfood(
-        Path.cwd(),
-        message_sha256=sha,
-        mode="async",
+        tmp_path,
+        message_sha256=_msg_sha(),
+        mode="off",
         write=False,
     )
+    assert data["skipped"] is True
+    assert data["captured"] is False
+    assert data["mode"] == "off"
+    assert data["product_block"] is False
+    assert data["authority"] == "advisory"
+    assert data.get("judge_invoked") is False
+
+
+def test_dogfood_g03_authority_always_advisory_and_non_overridable(tmp_path: Path) -> None:
+    """S6-G03: written attachment authority is advisory; non-advisory rejected."""
+    from git_cg.eval.dogfood.capture import DOGFoodError, build_attachment, capture_dogfood
+
+    with pytest.raises(DOGFoodError, match="advisory"):
+        build_attachment(message_sha256=_msg_sha(), mode="always", authority="law")
+
+    data = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha(),
+        mode="always",
+        write=True,
+    )
+    assert data["captured"] is True
+    assert data["product_block"] is False
+    att = data["attachment"]
+    assert att["authority"] == "advisory"
+    path = Path(data["path"])
+    written = json.loads(path.read_text(encoding="utf-8"))
+    assert written["authority"] == "advisory"
+
+
+def test_dogfood_g04_capture_on_fail_hard_negative_no_product_block(tmp_path: Path) -> None:
+    """S6-G04 / A7: capture_on=fail retains hard-negative without product fail."""
+    from git_cg.eval.dogfood.capture import capture_dogfood
+
+    fail_row = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha("fail-row"),
+        mode="always",
+        capture_on="fail",
+        deterministic_pass=False,
+        write=False,
+    )
+    assert fail_row["captured"] is True
+    assert fail_row["hard_negative_candidate"] is True
+    assert fail_row["product_block"] is False
+    assert fail_row["authority"] == "advisory"
+    assert fail_row["attachment"]["hard_negative_candidate"] is True
+    assert fail_row["attachment"]["capture_on"] == "fail"
+    assert fail_row["attachment"]["authority"] == "advisory"
+
+    pass_row = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha("pass-row"),
+        mode="always",
+        capture_on="fail",
+        deterministic_pass=True,
+        write=False,
+    )
+    assert pass_row["skipped"] is True
+    assert pass_row["captured"] is False
+    assert pass_row["product_block"] is False
+    assert "capture_on=fail skips passing rows" in pass_row["reason"]
+
+
+def test_dogfood_g04_capture_on_pass_skips_fail_rows(tmp_path: Path) -> None:
+    from git_cg.eval.dogfood.capture import capture_dogfood
+
+    data = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha(),
+        mode="always",
+        capture_on="pass",
+        deterministic_pass=False,
+        write=False,
+    )
+    assert data["skipped"] is True
+    assert data["product_block"] is False
+    assert "capture_on=pass" in data["reason"]
+
+
+def test_dogfood_g04_capture_on_all_marks_hard_negative_on_fail(tmp_path: Path) -> None:
+    from git_cg.eval.dogfood.capture import capture_dogfood
+
+    data = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha(),
+        mode="async",
+        capture_on="all",
+        deterministic_pass=False,
+        write=False,
+    )
+    assert data["captured"] is True
+    assert data["hard_negative_candidate"] is True
     assert data["product_block"] is False
     assert data["async_never_awaits_judge"] is True
+
+
+def test_dogfood_g02a_async_never_invokes_or_awaits_judge(tmp_path: Path) -> None:
+    """S6-G02(a): async seam never calls judge_runner; product_block stays false.
+
+    This is the offline hook-boundary/fake-clock substitute while dogfood is not
+    yet wired into prepare-commit-msg: the capture entrypoint used by the CLI
+    (and intended commit-adjacent seam) cannot block on judge completion.
+    """
+    from git_cg.eval.dogfood.capture import capture_dogfood
+
+    calls: list[str] = []
+
+    def _blocking_judge() -> dict:
+        calls.append("invoked")
+        # Would be a multi-second LLM call on the real path.
+        return {"score": 0.1, "latency_ms": 12_000.0, "rationale_short": "slow"}
+
+    data = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha(),
+        mode="async",
+        write=False,
+        judge_runner=_blocking_judge,
+    )
+    assert calls == []  # never invoked / awaited
+    assert data["judge_invoked"] is False
+    assert data["async_never_awaits_judge"] is True
+    assert data["product_block"] is False
     assert data["authority"] == "advisory"
+    assert data["captured"] is True
+    # No judge score/latency was filled from the runner.
+    assert "score" not in data["attachment"]
+    assert "latency_ms" not in data["attachment"]
+
+    # Non-async modes may invoke the runner (sync advisory path).
+    calls.clear()
+    sync = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha("sync"),
+        mode="always",
+        write=False,
+        judge_runner=_blocking_judge,
+    )
+    assert calls == ["invoked"]
+    assert sync["judge_invoked"] is True
+    assert sync["async_never_awaits_judge"] is False
+    assert sync["product_block"] is False
+    assert sync["attachment"]["score"] == 0.1
 
 
-def test_dogfood_attachment_reproduces_membership() -> None:
-    from git_cg.eval.dogfood.capture import attachment_reproduces_membership
+def test_dogfood_g02a_source_has_no_blocking_wait_primitives() -> None:
+    """Static fake-clock/regression guard: capture module has no await/sleep/wait.
 
+    Note: plain ``str.join`` in error-hint formatting is allowed; the banned set
+    targets concurrent wait/sleep primitives that would block the commit path.
+    """
+    import ast
+
+    src_path = Path("src/git_cg/eval/dogfood/capture.py")
+    tree = ast.parse(src_path.read_text(encoding="utf-8"))
+    banned_names = {
+        "sleep",
+        "wait",
+        "as_completed",
+        "gather",
+        "run_until_complete",
+        "Thread",
+        "Process",
+        "ThreadPoolExecutor",
+        "ProcessPoolExecutor",
+    }
+    banned_attrs = {"sleep", "wait", "result", "shutdown", "as_completed", "run_until_complete"}
+    hits: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Await):
+            hits.append(f"await@{node.lineno}")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id in banned_names:
+                hits.append(f"call:{func.id}@{node.lineno}")
+            if isinstance(func, ast.Attribute) and func.attr in banned_attrs:
+                # Allow str.join / Path.join-style helpers.
+                if func.attr == "join":
+                    continue
+                hits.append(f"attr:{func.attr}@{node.lineno}")
+    assert hits == [], f"blocking primitives in dogfood capture: {hits}"
+
+
+def test_dogfood_g08_sample_records_population_and_resamples_offline(tmp_path: Path) -> None:
+    """S6-G08: sample attachment alone reproduces membership (wall-clock free)."""
+    from git_cg.eval.dogfood.capture import (
+        attachment_reproduces_membership,
+        capture_dogfood,
+        select_sample_members,
+    )
+
+    pop = ["case-a", "case-b", "case-c", "case-d"]
+    data = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha("sample"),
+        mode="sample",
+        seed="seed-fixed-1",
+        rate=0.5,
+        population=pop,
+        suite_id="suite-g08",
+        write=False,
+    )
+    assert data["captured"] is True
+    att = data["attachment"]
+    assert att["mode"] == "sample"
+    assert att["sample_seed"] == "seed-fixed-1"
+    assert att["sample_rate"] == 0.5
+    assert att["population_id"] == "suite-g08:4"
+    assert att["population_members"] == sorted(pop)
+    expected = select_sample_members(pop, rate=0.5, seed="seed-fixed-1")
+    assert att["selected_ids"] == sorted(expected)
+    assert set(att["selected_ids"]) == set(expected)
+    assert attachment_reproduces_membership(att) is True
+
+    # Tamper hash → fail closed.
+    bad = dict(att)
+    bad["selected_set_hash"] = "0" * 64
+    assert attachment_reproduces_membership(bad) is False
+
+
+def test_dogfood_g08_env_seed_and_rate_are_honoured(tmp_path: Path) -> None:
+    """GIT_CG_EVAL_DOGFOOD_SEED/RATE wire into sample mode (args still win)."""
+    from git_cg.eval.dogfood.capture import capture_dogfood, select_sample_members
+
+    pop = ["a", "b", "c", "d", "e", "f"]
+    env = {
+        "GIT_CG_EVAL_DOGFOOD_SEED": "env-seed-9",
+        "GIT_CG_EVAL_DOGFOOD_RATE": "0.5",
+    }
+    data = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha("env"),
+        mode="sample",
+        population=pop,
+        write=False,
+        env=env,
+    )
+    att = data["attachment"]
+    assert att["sample_seed"] == "env-seed-9"
+    assert att["sample_rate"] == 0.5
+    expected = select_sample_members(pop, rate=0.5, seed="env-seed-9")
+    # Attachment stores selected_ids in canonical sorted order for set-hash stability.
+    assert att["selected_ids"] == sorted(expected)
+    assert set(att["selected_ids"]) == set(expected)
+
+    # Explicit args override env.
+    data2 = capture_dogfood(
+        tmp_path,
+        message_sha256=_msg_sha("env2"),
+        mode="sample",
+        population=pop,
+        seed="cli-seed",
+        rate=1.0,
+        write=False,
+        env=env,
+    )
+    assert data2["attachment"]["sample_seed"] == "cli-seed"
+    assert data2["attachment"]["sample_rate"] == 1.0
+    assert data2["attachment"]["selected_ids"] == sorted(pop)
+
+
+def test_dogfood_g08_membership_order_independent() -> None:
+    """Selected id order must not break offline resample equality."""
+    from git_cg.eval.dogfood.capture import (
+        _canonical_selected_hash,
+        attachment_reproduces_membership,
+        select_sample_members,
+    )
+
+    pop = ["z", "a", "m", "b", "q", "c"]
+    seed = "order-seed"
+    rate = 0.5
+    selected = select_sample_members(pop, rate=rate, seed=seed)
+    # Deliberately reverse storage order vs hash draw order.
+    att = {
+        "mode": "sample",
+        "sample_seed": seed,
+        "sample_rate": rate,
+        "population_id": "pop",
+        "population_members": sorted(pop),
+        "selected_ids": list(reversed(selected)),
+        "selected_set_hash": _canonical_selected_hash(selected),
+    }
+    assert attachment_reproduces_membership(att) is True
+
+
+def test_dogfood_invalid_capture_on_fails_closed_even_when_mode_off() -> None:
+    from git_cg.eval.dogfood.capture import DOGFoodError, capture_dogfood
+
+    with pytest.raises(DOGFoodError, match="capture_on"):
+        capture_dogfood(
+            Path.cwd(),
+            message_sha256=_msg_sha(),
+            mode="off",
+            capture_on="sometimes",  # type: ignore[arg-type]
+            write=False,
+        )
+
+
+def test_dogfood_attachment_reproduces_membership_hash_fallback() -> None:
+    from git_cg.eval.dogfood.capture import (
+        _canonical_selected_hash,
+        attachment_reproduces_membership,
+    )
+
+    selected = ["a"]
     att = {
         "mode": "sample",
         "sample_seed": "s",
         "sample_rate": 0.5,
         "population_id": "pop",
-        "selected_ids": ["a"],
-        "selected_set_hash": "0" * 64,
+        "selected_ids": selected,
+        "selected_set_hash": _canonical_selected_hash(selected),
     }
-    # Current helper verifies recorded metadata/hash consistency only.
-    assert attachment_reproduces_membership(att) is False  # hash is fake → mismatch
+    assert attachment_reproduces_membership(att) is True
+    att["selected_set_hash"] = "0" * 64
+    assert attachment_reproduces_membership(att) is False
+
+
+def test_dogfood_g02b_bench_summarise_delta_ci_overlap() -> None:
+    """S6-G02(b) helper: offline hyperfine JSON → delta + CI overlap report."""
+    from git_cg.eval.dogfood.bench import DogfoodBenchError, summarise_delta
+
+    overlap = summarise_delta(
+        [
+            {"mean": 0.100, "stddev": 0.010},  # off
+            {"mean": 0.102, "stddev": 0.010},  # on
+        ]
+    )
+    assert overlap["ci_overlap"] is True
+    assert abs(overlap["delta_ms"] - 2.0) < 0.01
+    assert "shorthand" in overlap
+    assert "structural-never-await" in overlap["shorthand"]
+
+    disjoint = summarise_delta(
+        [
+            {"mean": 0.100, "stddev": 0.001},
+            {"mean": 0.200, "stddev": 0.001},
+        ]
+    )
+    assert disjoint["ci_overlap"] is False
+    assert "investigate" in disjoint["claim"]
+
+    with pytest.raises(DogfoodBenchError):
+        summarise_delta([{"mean": 0.1}])
+
+
+def test_dogfood_g02b_parse_hyperfine_json(tmp_path: Path) -> None:
+    from git_cg.eval.dogfood.bench import DogfoodBenchError, parse_hyperfine_json
+
+    path = tmp_path / "hf.json"
+    path.write_text(json.dumps({"results": [{"mean": 0.1, "stddev": 0.01}]}))
+    data = parse_hyperfine_json(path)
+    assert data["results"][0]["mean"] == 0.1
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("{}")
+    with pytest.raises(DogfoodBenchError):
+        parse_hyperfine_json(bad)
 
 
 # ---------------------------------------------------------------------------

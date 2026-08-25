@@ -11,8 +11,8 @@ Mode law (closed):
   on a non-blocking seam that the commit path never awaits (S6-G02a).
 
 ``capture_on`` (``pass|fail|all``) is owner-set corpus eligibility, separate
-from product accept; ``fail`` retains a **hard-negative candidate** without
-failing the product path.
+from product accept; ``fail`` retains a **hard-negative candidate** on failing
+rows without failing the product path, and skips passing rows.
 
 Import law: import-light. Path / schema / pin helpers are lazy.
 """
@@ -173,7 +173,13 @@ def select_sample_members(
 
 
 def attachment_reproduces_membership(attachment: Mapping[str, Any]) -> bool:
-    """Verify a sample attachment reproduces its own selected set offline."""
+    """Verify a sample attachment reproduces its own selected set offline.
+
+    Preferred path (S6-G08): resample from recorded ``population_members`` using
+    ``sample_seed`` + ``sample_rate``, then compare selected ids and/or hash.
+    Fallback: when population members are absent, verify that any recorded
+    ``selected_ids`` match ``selected_set_hash`` (hash-only consistency).
+    """
     if attachment.get("mode") != MODE_SAMPLE:
         return True
     seed = str(attachment.get("sample_seed") or "")
@@ -182,9 +188,23 @@ def attachment_reproduces_membership(attachment: Mapping[str, Any]) -> bool:
         return False
     selected = [str(s) for s in (attachment.get("selected_ids") or [])]
     claimed_hash = str(attachment.get("selected_set_hash") or "")
+    population = [str(m) for m in (attachment.get("population_members") or []) if str(m).strip()]
+    if population:
+        try:
+            resampled = select_sample_members(population, rate=float(rate), seed=seed)
+        except DOGFoodError:
+            return False
+        # Membership is set-valued; attachments may store selected_ids sorted.
+        if selected and set(resampled) != set(selected):
+            return False
+        # rate=0 is a valid empty draw when population was recorded.
+        if not claimed_hash:
+            return True
+        return _canonical_selected_hash(resampled) == claimed_hash
+    # Hash-only fallback (legacy attachments without population_members).
     if claimed_hash and selected:
         return _canonical_selected_hash(selected) == claimed_hash
-    return bool(selected) or bool(claimed_hash)
+    return False
 
 
 def build_attachment(
@@ -206,12 +226,21 @@ def build_attachment(
     sample_seed: str | None = None,
     sample_rate: float | None = None,
     population_id: str | None = None,
+    population_members: Iterable[str] | None = None,
     selected_ids: Iterable[str] | None = None,
     notes: str | None = None,
+    authority: str | None = None,
 ) -> dict[str, Any]:
     """Build a schema-valid ``dogfood_attachment_v1`` (fail-closed)."""
     if mode not in DOGFOOD_MODES:
         raise DOGFoodError(f"invalid dogfood mode: {mode!r}", code="EVAL_USAGE", exit_code=2)
+    if authority is not None and str(authority).strip().lower() != "advisory":
+        raise DOGFoodError(
+            "dogfood authority is fixed to advisory (never sole gate/golden)",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint="R12/S6-G03: dogfood attachments cannot carry law/block authority.",
+        )
     if capture_on is not None and capture_on not in CAPTURE_ON_VALUES:
         raise DOGFoodError(
             f"invalid capture_on: {capture_on!r}",
@@ -278,12 +307,21 @@ def build_attachment(
                 exit_code=2,
                 hint="Provide --seed/--rate or let derive_sample_seed compute a stable seed.",
             )
+        pop_members = sorted({str(m) for m in (population_members or []) if str(m).strip()})
         attachment["sample_seed"] = str(sample_seed)
         attachment["sample_rate"] = float(sample_rate)
         attachment["population_id"] = str(population_id)
+        if pop_members:
+            attachment["population_members"] = pop_members
         if selected:
             attachment["selected_ids"] = selected
             attachment["selected_set_hash"] = _canonical_selected_hash(selected)
+        elif pop_members:
+            # Derive selected set when only population is supplied.
+            selected = select_sample_members(pop_members, rate=float(sample_rate), seed=str(sample_seed))
+            if selected:
+                attachment["selected_ids"] = selected
+                attachment["selected_set_hash"] = _canonical_selected_hash(selected)
 
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
@@ -332,12 +370,25 @@ def capture_dogfood(
     notes: str | None = None,
     write: bool = True,
     env: Mapping[str, str] | None = None,
+    judge_runner: Any | None = None,
 ) -> dict[str, Any]:
     """Capture one dogfood attachment (or report skip). Never blocks product.
 
     Returns a CLI data payload with ``captured``/``skipped`` + attachment.
+
+    S6-G02(a): when ``mode=async``, this seam records capture intent only and
+    **never** invokes ``judge_runner`` (if supplied). A blocking/sync judge is
+    therefore unreachable from the async commit-adjacent path.
     """
-    resolved_mode = resolve_dogfood_mode(mode=mode, env=env)
+    source = os.environ if env is None else env
+    if capture_on not in CAPTURE_ON_VALUES:
+        raise DOGFoodError(
+            f"invalid capture_on: {capture_on!r}",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint="Allowed: pass|fail|all",
+        )
+    resolved_mode = resolve_dogfood_mode(mode=mode, env=source)
     if resolved_mode == MODE_OFF:
         return {
             "captured": False,
@@ -346,9 +397,34 @@ def capture_dogfood(
             "reason": "dogfood_off",
             "authority": "advisory",
             "product_block": False,
+            "async_never_awaits_judge": False,
+            "judge_invoked": False,
         }
 
-    effective_rate = float(rate) if rate is not None else 1.0
+    # Env knobs (lab only): explicit args win; else GIT_CG_EVAL_DOGFOOD_*.
+    effective_seed = seed
+    if effective_seed is None:
+        env_seed = source.get(ENV_DOGFOOD_SEED)
+        if env_seed is not None and str(env_seed).strip():
+            effective_seed = str(env_seed).strip()
+
+    if rate is not None:
+        effective_rate = float(rate)
+    else:
+        env_rate = source.get(ENV_DOGFOOD_RATE)
+        if env_rate is not None and str(env_rate).strip():
+            try:
+                effective_rate = float(str(env_rate).strip())
+            except ValueError as exc:
+                raise DOGFoodError(
+                    f"invalid {ENV_DOGFOOD_RATE}: {env_rate!r}",
+                    code="EVAL_USAGE",
+                    exit_code=2,
+                ) from exc
+        else:
+            effective_rate = 1.0
+
+    pop: list[str] = []
     if resolved_mode == MODE_SAMPLE:
         pop = sorted({str(p) for p in (population or []) if str(p).strip()})
         if not pop:
@@ -359,9 +435,11 @@ def capture_dogfood(
                 "reason": "empty_population",
                 "authority": "advisory",
                 "product_block": False,
+                "async_never_awaits_judge": False,
+                "judge_invoked": False,
             }
         sample_seed = derive_sample_seed(
-            explicit_seed=seed,
+            explicit_seed=effective_seed,
             experiment_or_run_id=run_id,
             suite_id=suite_id,
             rate=effective_rate,
@@ -383,10 +461,39 @@ def capture_dogfood(
             "reason": "capture_on=pass skips failing rows",
             "authority": "advisory",
             "product_block": False,
+            "async_never_awaits_judge": resolved_mode == MODE_ASYNC,
+            "judge_invoked": False,
+        }
+    if capture_on == "fail" and deterministic_pass is True:
+        return {
+            "captured": False,
+            "skipped": True,
+            "mode": resolved_mode,
+            "reason": "capture_on=fail skips passing rows",
+            "authority": "advisory",
+            "product_block": False,
+            "async_never_awaits_judge": resolved_mode == MODE_ASYNC,
+            "judge_invoked": False,
         }
     if deterministic_pass is False and capture_on in {"fail", "all"}:
         # Hard-negative candidate retained WITHOUT failing product accept.
         hard_negative = True
+
+    # S6-G02(a) structural seam: async never invokes/awaits the judge runner.
+    judge_invoked = False
+    judge_score = score
+    judge_latency = latency_ms
+    judge_rationale = rationale_short
+    if resolved_mode != MODE_ASYNC and callable(judge_runner):
+        outcome = judge_runner()
+        judge_invoked = True
+        if isinstance(outcome, Mapping):
+            if "score" in outcome and judge_score is None:
+                judge_score = outcome.get("score")  # type: ignore[assignment]
+            if "latency_ms" in outcome and judge_latency is None:
+                judge_latency = outcome.get("latency_ms")  # type: ignore[assignment]
+            if "rationale_short" in outcome and judge_rationale is None:
+                judge_rationale = outcome.get("rationale_short")  # type: ignore[assignment]
 
     attachment = build_attachment(
         message_sha256=message_sha256,
@@ -394,10 +501,10 @@ def capture_dogfood(
         run_id=run_id,
         judge_id=judge_id,
         metric_id=metric_id,
-        score=score,
+        score=judge_score,
         polarity=polarity,
-        rationale_short=rationale_short,
-        latency_ms=latency_ms,
+        rationale_short=judge_rationale,
+        latency_ms=judge_latency,
         case_id=case_id,
         bundle_id=bundle_id,
         session_thread_id=session_thread_id,
@@ -406,6 +513,7 @@ def capture_dogfood(
         sample_seed=sample_seed,
         sample_rate=effective_rate if resolved_mode == MODE_SAMPLE else None,
         population_id=population_id,
+        population_members=pop if resolved_mode == MODE_SAMPLE else None,
         selected_ids=selected,
         notes=notes,
     )
@@ -422,6 +530,7 @@ def capture_dogfood(
         "authority": "advisory",
         "product_block": False,
         "async_never_awaits_judge": resolved_mode == MODE_ASYNC,
+        "judge_invoked": judge_invoked,
     }
 
 
