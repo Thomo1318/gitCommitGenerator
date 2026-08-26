@@ -14,7 +14,7 @@
     "summariser": "python -m git_cg.eval.dogfood.bench OFF.json ON.json",
     "note": "Maintainer capture (3 runs) for durable PR evidence; recipe default remains just dogfood-bench (20). Not a CI merge gate. justfile summariser arg order corrected to OFF then ON."
   },
-  "summary_line": "dogfood-bench: mean_off=3114.549ms mean_on=3443.781ms delta=329.232ms ci_overlap=True (no measurable commit-path latency from async dogfood)",
+  "summary_line": "dogfood-bench: mean_off=3114.549ms mean_on=3443.781ms delta=+329.232ms (~10.6%) n=3 runs ci_overlap=True (observed delta within overlapping CIs; not a no-latency proof; maintainer evidence only, not a merge gate)",
   "mean_on_s": 3.4437808765933333,
   "mean_off_s": 3.114549172153333,
   "stddev_on_s": 0.9106608670471257,
@@ -24,5 +24,6 @@
     "docs/eval/evidence/s6-g02b-bench_async_on.json",
     "docs/eval/evidence/s6-g02b-bench_async_off.json",
     "docs/eval/evidence/s6-g02b-dogfood-bench-summary.txt"
-  ]
+  ],
+  "claim_qualification": "Observed mean delta +329.232 ms (~10.6%) over n=3 runs with ci_overlap=True; high stddev_on relative to stddev_off. Does not independently prove zero commit-path latency."
 }

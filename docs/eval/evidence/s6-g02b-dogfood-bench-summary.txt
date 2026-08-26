@@ -1,1 +1,1 @@
-dogfood-bench: mean_off=3114.549ms mean_on=3443.781ms delta=329.232ms ci_overlap=True (no measurable commit-path latency from async dogfood)
+dogfood-bench: mean_off=3114.549ms mean_on=3443.781ms delta=+329.232ms (~10.6%) n=3 runs ci_overlap=True (observed delta within overlapping CIs; not a no-latency proof; maintainer evidence only, not a merge gate)
