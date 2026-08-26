@@ -101,9 +101,27 @@ class CommandNode:
 
 
 def _click_help(cmd: Any) -> str:
-    """Normalize Click/Typer help text into a single-line API-map blurb."""
-    help_text = getattr(cmd, "help", None) or getattr(cmd, "short_help", None) or ""
-    return " ".join(str(help_text).split())
+    """Normalize Click/Typer help text into a single-line API-map blurb.
+
+    Prefer short_help when present. Otherwise keep only the brief side of any
+    help-depth split (project detail marker or Click form-feed) so long bodies
+    do not leak into the operator map table.
+    """
+    short = getattr(cmd, "short_help", None)
+    if short:
+        return " ".join(str(short).split())
+
+    help_text = getattr(cmd, "help", None) or ""
+    text = str(help_text)
+    # Import locally to avoid expanding api_map's module import surface mid-cycle
+    # for callers that only need pure helpers; eval_app is already imported above.
+    from git_cg.eval.cli import _HELP_DETAIL_MARKER
+
+    for marker in (_HELP_DETAIL_MARKER, ""):
+        if marker in text:
+            text = text.split(marker, 1)[0]
+            break
+    return " ".join(text.split())
 
 
 def walk_eval_tree(prefix: str = "eval") -> list[CommandNode]:
