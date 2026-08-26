@@ -226,7 +226,8 @@
           "type": "boolean"
         },
         "first_divergent_span": {
-          "type": "string"
+          "type": "string",
+          "description": "First span name where source vs replay structural/metric comparison diverges (nested under deltas; producer/consumer primary field)."
         },
         "metric_deltas": {
           "type": "array",
@@ -286,7 +287,8 @@
       }
     },
     "first_divergence": {
-      "type": "string"
+      "type": "string",
+      "description": "Optional top-level alias/summary of the first divergence token. Prefer deltas.first_divergent_span as the canonical producer field; top-level may mirror it for operators."
     },
     "regression_status": {
       "enum": [

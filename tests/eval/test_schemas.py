@@ -164,15 +164,8 @@ def test_s6_s1_greenfield_schemas_validate_good_fixtures() -> None:
 
 def test_s6_s1_human_review_rejects_legacy_top_level_rating() -> None:
     """No dual-shape window: top-level rating is rejected after scores migration."""
-    legacy = {
-        "schema_version": "human_review_v1",
-        "id": "hr-legacy",
-        "review_id": "hr-legacy",
-        "authority": "advisory",
-        "redaction_profile": "meta_eval_scrub",
-        "rating": 4,
-        "scores": {},
-    }
+    legacy = dict(_load("human_review.good.json"))
+    legacy["rating"] = 4
     with pytest.raises(SchemaPackError):
         validate_instance("human_review_v1", legacy)
 

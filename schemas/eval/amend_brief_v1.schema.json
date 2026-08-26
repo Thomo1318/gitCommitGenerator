@@ -293,6 +293,7 @@
     "lane_c_attachments": {
       "type": "array",
       "description": "Last-N advisory Lane C′ / dogfood attachments (bounded).",
+      "maxItems": 32,
       "items": {
         "type": "object",
         "additionalProperties": false,

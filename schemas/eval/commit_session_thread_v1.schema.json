@@ -215,7 +215,7 @@
             "$ref": "#/$defs/non_empty_string"
           },
           "t": {
-            "type": "string"
+            "$ref": "#/$defs/iso8601"
           },
           "status": {
             "type": "string"
