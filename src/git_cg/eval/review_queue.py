@@ -25,6 +25,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
+from git_cg.eval.evidence_scrub import mask_secrets_in_text
+
 SCHEMA_NAME: Final[str] = "human_review_v1"
 SCHEMA_VERSION: Final[str] = "human_review_v1"
 QUEUE_SCHEMA_VERSION: Final[str] = "review_queue_item_v0"
@@ -283,7 +285,7 @@ def enqueue(
     if bundle_id and bundle_id.strip():
         review["bundle_id"] = bundle_id.strip()
     if notes and notes.strip():
-        review["notes"] = notes.strip()
+        review["notes"] = mask_secrets_in_text(notes.strip()) or notes.strip()
 
     _validate_human_review(review)
 
@@ -464,9 +466,10 @@ def adjudicate(
         "outcome_ref": f"review_outcome:{item['review_id']}:{oc}",
     }
     if destination_hint and destination_hint.strip():
-        adjudication["destination_hint"] = destination_hint.strip()
+        safe_hint = mask_secrets_in_text(destination_hint.strip()) or destination_hint.strip()
+        adjudication["destination_hint"] = safe_hint
     if notes and notes.strip():
-        adjudication["notes"] = notes.strip()
+        adjudication["notes"] = mask_secrets_in_text(notes.strip()) or notes.strip()
 
     item["status"] = target
     item["adjudication"] = adjudication

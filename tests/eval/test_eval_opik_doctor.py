@@ -20,7 +20,7 @@ from git_cg.main import app
 
 runner = CliRunner()
 
-SECRET = "sk-test-secret-token-value-0123456789"
+SECRET = "sk-" + "test-fixture-token-value-0123456789"
 
 
 def _parse(result) -> dict:
@@ -28,7 +28,15 @@ def _parse(result) -> dict:
     return json.loads(result.stdout)
 
 
-def test_opik_doctor_envelope_and_scores_off() -> None:
+def test_opik_doctor_envelope_and_scores_off(monkeypatch) -> None:
+    for key in (
+        "GIT_CG_OPIK_MODE",
+        "OPIK_API_KEY",
+        "OPIK_URL_OVERRIDE",
+        "OPIK_WORKSPACE",
+        "OPIK_PROJECT_NAME",
+    ):
+        monkeypatch.delenv(key, raising=False)
     env = _parse(runner.invoke(app, ["eval", "opik", "doctor", "--json"]))
     assert env["schema_version"] == "cli_output_envelope_v1"
     assert env["command"] == "eval opik doctor"

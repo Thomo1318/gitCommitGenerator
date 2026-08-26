@@ -192,8 +192,13 @@ def _find_issue_by_fingerprint(repo: Path, fingerprint: str) -> dict[str, Any] |
     for path in sorted(root.glob("*.json")):
         try:
             obj = json.loads(path.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
-            continue
+        except (OSError, json.JSONDecodeError) as exc:
+            # Fail closed: skipping damaged rows would mint duplicate fingerprints.
+            raise DiagnoseError(
+                f"issue row unreadable: {path.name}: {exc}",
+                code="EVAL_STORE_INTEGRITY",
+                exit_code=4,
+            ) from exc
         if isinstance(obj, dict) and obj.get("fingerprint") == fingerprint:
             return obj
     return None
@@ -423,6 +428,16 @@ def diagnose(
             row["sample_bundle_ids"] = merged_bundles[:32]
         if merged_traces:
             row["sample_trace_ids"] = merged_traces[:32]
+        # Operator-supplied free text on re-diagnose must not be silently dropped.
+        if code and str(code).strip():
+            row["code"] = str(code).strip()
+        if title and str(title).strip():
+            row["title"] = mask_secrets_in_text(str(title).strip()) or str(title).strip()
+        if owner and str(owner).strip():
+            row["owner"] = mask_secrets_in_text(str(owner).strip()) or str(owner).strip()
+        if notes and str(notes).strip():
+            row["notes"] = mask_secrets_in_text(str(notes).strip()) or str(notes).strip()
+        row = project_secret_safe(row)
         upserted = True
     else:
         row = _build_issue_row(

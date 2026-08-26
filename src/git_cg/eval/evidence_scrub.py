@@ -72,8 +72,12 @@ def mask_secrets_in_text(value: str | None) -> str | None:
         return value
 
     # Whole-value secret → single mask form (preferred for pure token fields).
+    # Assignment-shaped whole values fall through so the key= prefix is retained.
     stripped = value.strip()
+    assignment_pat = _SECRET_VALUE_PATTERNS[-1]
     for pat in _SECRET_VALUE_PATTERNS:
+        if pat is assignment_pat:
+            continue
         m = pat.fullmatch(stripped)
         if m is not None:
             return mask_secret(stripped)
