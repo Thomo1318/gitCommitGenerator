@@ -52,6 +52,7 @@ class CheckpointStoreError(ValueError):
     """Checkpoint IO / validation / containment failure."""
 
     def __init__(self, message: str, *, code: str = "EVAL_CHECKPOINT_IO") -> None:
+        """Initialize structured error/context fields for operator engines."""
         self.code = code
         super().__init__(message)
 
@@ -70,6 +71,7 @@ class CheckpointIndexRow:
     path: str
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize one checkpoint index row for durable store writes."""
         return {
             "checkpoint_id": self.checkpoint_id,
             "suite_id": self.suite_id,
@@ -88,6 +90,7 @@ def utc_now_iso() -> str:
 
 
 def _require_safe_id(value: str, *, field: str) -> str:
+    """Fail closed when an identifier is empty or path-unsafe."""
     text = str(value or "").strip()
     if not text or not _SAFE_ID.fullmatch(text):
         raise CheckpointStoreError(
@@ -98,11 +101,13 @@ def _require_safe_id(value: str, *, field: str) -> str:
 
 
 def checkpoint_file(repo_root: Path, checkpoint_id: str) -> Path:
+    """Return the governed on-disk path for a checkpoint id."""
     cid = _require_safe_id(checkpoint_id, field="checkpoint_id")
     return checkpoints_dir(repo_root) / f"{cid}.json"
 
 
 def index_file(repo_root: Path, checkpoint_id: str) -> Path:
+    """Return the governed checkpoint index path under the repo store."""
     cid = _require_safe_id(checkpoint_id, field="checkpoint_id")
     return index_dir(repo_root) / "checkpoints" / f"{cid}.json"
 
@@ -323,6 +328,7 @@ def delete_checkpoint(repo_root: Path, checkpoint_id: str) -> None:
 
 
 def _sort_key(row: CheckpointIndexRow) -> tuple[str, str]:
+    """Sort key for deterministic checkpoint/index ordering."""
     return (row.started_at or row.last_progress_at or "", row.checkpoint_id)
 
 

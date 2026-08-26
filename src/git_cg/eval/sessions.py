@@ -34,6 +34,7 @@ class SessionsError(ValueError):
     """Deterministic session/thread reader failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Initialize structured error/context fields for operator engines."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -41,6 +42,7 @@ class SessionsError(ValueError):
 
 
 def _sessions_dir(repo: Path) -> Path:
+    """Resolve the governed sessions/thread twin store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, sessions_dir
 
     try:
@@ -50,6 +52,7 @@ def _sessions_dir(repo: Path) -> Path:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
+    """Load a JSON object from disk; map I/O and decode failures to the module error type."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -77,6 +80,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _normalize_session_id(raw: str | None) -> str:
+    """Normalize operator/input tokens into the closed vocabulary form."""
     if raw is None or not str(raw).strip():
         raise SessionsError(
             "session/thread id is required",
@@ -105,6 +109,7 @@ def _normalize_session_id(raw: str | None) -> str:
 
 
 def _validate_twin(twin: dict[str, Any], *, expected_id: str) -> None:
+    """Validate a payload against the closed schema/contract (fail closed)."""
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
     if twin.get("schema_version") != SCHEMA_VERSION:

@@ -175,6 +175,7 @@ class LaneCEligibility:
     # Tip-era alias kept for peel tests / call sites.
     @property
     def judge_pins_resolvable(self) -> bool:
+        """True when Lane C judge pins resolve without floating latest refs."""
         return self.pins_resolvable
 
 

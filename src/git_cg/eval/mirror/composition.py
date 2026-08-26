@@ -112,6 +112,7 @@ class ExportPlanResult:
     product_accept_blocked: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
+        """Validate dataclass invariants after initialization."""
         object.__setattr__(self, "product_accept_blocked", False)
         if not isinstance(self.health, ExportHealth):
             object.__setattr__(self, "health", ExportHealth(str(self.health)))

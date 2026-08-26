@@ -6,12 +6,16 @@ from enum import StrEnum
 
 
 class Polarity(StrEnum):
+    """Score polarity for metric outcomes (higher_is_better vs lower_is_better)."""
+
     HIGHER_IS_BETTER = "higher_is_better"
     LOWER_IS_BETTER = "lower_is_better"
     PASS_FAIL = "pass_fail"
 
 
 class Authority(StrEnum):
+    """Authority class for eval outputs (blocking vs advisory vs observational)."""
+
     LAW = "law"
     ADVISORY = "advisory"
     LAB = "lab"
@@ -20,6 +24,8 @@ class Authority(StrEnum):
 
 
 class Family(StrEnum):
+    """Metric family identifiers (A-I) used by scoring and operator surfaces."""
+
     A = "A"
     B = "B"
     C = "C"
@@ -54,6 +60,8 @@ class Source(StrEnum):
 
 
 class Severity(StrEnum):
+    """Doctor/check severity ladder used for block vs warn aggregation."""
+
     BLOCK = "block"
     WARN = "warn"
     INFO = "info"

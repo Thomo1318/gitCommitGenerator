@@ -83,12 +83,14 @@ class DoctorCheck:
     hint: str | None = None
 
     def __post_init__(self) -> None:
+        """Validate dataclass invariants after initialization."""
         if self.status not in _DOCTOR_STATUSES:
             raise ValueError(f"doctor check status must be one of {_DOCTOR_STATUSES}: {self.status!r}")
         if not self.check_id.strip():
             raise ValueError("doctor check_id must be non-empty")
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize one doctor check row for envelope and report output."""
         out: dict[str, Any] = {
             "check_id": self.check_id,
             "status": self.status,

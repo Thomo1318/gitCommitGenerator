@@ -67,6 +67,7 @@ class DiagnoseError(ValueError):
     """Deterministic diagnose/issue-store failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Attach diagnose failure code, exit class, and operator hint."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -74,6 +75,7 @@ class DiagnoseError(ValueError):
 
 
 def _issues_dir(repo: Path) -> Path:
+    """Resolve the governed diagnostic issues store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, issues_dir
 
     try:
@@ -83,6 +85,7 @@ def _issues_dir(repo: Path) -> Path:
 
 
 def _diagnostics_dir(repo: Path) -> Path:
+    """Resolve the governed diagnostics store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, diagnostics_dir
 
     try:
@@ -92,6 +95,7 @@ def _diagnostics_dir(repo: Path) -> Path:
 
 
 def _atomic_write(repo: Path, path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -115,6 +119,7 @@ def _validate(row: dict[str, Any]) -> None:
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
@@ -142,6 +147,7 @@ def compute_fingerprint(inputs: dict[str, Any]) -> str:
 
 
 def _issue_path(repo: Path, issue_id: str) -> Path:
+    """Resolve one diagnostic issue path with containment checks."""
     if not _SAFE_ID.fullmatch(issue_id):
         raise DiagnoseError(
             f"invalid issue_id: {issue_id!r}",
@@ -152,6 +158,7 @@ def _issue_path(repo: Path, issue_id: str) -> Path:
 
 
 def _load_issue(repo: Path, issue_id: str) -> dict[str, Any]:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     path = _issue_path(repo, issue_id)
     if not path.is_file():
         raise DiagnoseError(
@@ -178,6 +185,7 @@ def _load_issue(repo: Path, issue_id: str) -> dict[str, Any]:
 
 
 def _find_issue_by_fingerprint(repo: Path, fingerprint: str) -> dict[str, Any] | None:
+    """Find an existing issue row by stable fingerprint (idempotent diagnose)."""
     root = _issues_dir(repo)
     if not root.is_dir():
         return None
@@ -207,6 +215,7 @@ def _build_issue_row(
     metric_catalog: str | None,
     notes: str | None,
 ) -> dict[str, Any]:
+    """Build a structured row/payload for the local operator store."""
     from git_cg.eval.explain import BLAME_SPAN_SURFACES
 
     metric_ids = sorted({str(m) for m in (aggregate_inputs.get("metric_ids") or [])})
@@ -563,6 +572,7 @@ def _require_transition_args(
     resolution_evidence: str | None,
     reason: str | None,
 ) -> None:
+    """Require the argument set mandated by a state transition."""
     if target == STATUS_RESOLVED and not (resolution_evidence and resolution_evidence.strip()):
         raise DiagnoseError(
             "resolve requires resolution evidence",

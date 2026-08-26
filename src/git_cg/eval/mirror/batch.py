@@ -269,6 +269,7 @@ def build_export_batches(
     current_payloads: list[dict[str, Any]] = []
 
     def flush() -> None:
+        """Flush buffered work through the governed write path."""
         nonlocal current_refs, current_payloads
         if not current_refs:
             return

@@ -63,6 +63,7 @@ class MirrorResult:
     notes: tuple[str, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        """Validate dataclass invariants after initialization."""
         # Frozen dataclass: use object.__setattr__ for invariant fields.
         object.__setattr__(self, "product_accept_blocked", False)
         object.__setattr__(self, "notes", _scrub_notes(self.notes))

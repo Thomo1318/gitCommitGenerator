@@ -11,10 +11,12 @@ from git_cg.eval.paths import CATALOG_PATH, schema_files
 
 
 def _sha256_bytes(data: bytes) -> str:
+    """Return the SHA-256 digest bytes for ``data``."""
     return hashlib.sha256(data).hexdigest()
 
 
 def _canonical_json_bytes(path: Path) -> bytes:
+    """Encode ``payload`` as canonical JSON bytes for hashing."""
     raw = json.loads(path.read_text(encoding="utf-8"))
     return json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
@@ -34,14 +36,17 @@ def schema_pack_digest() -> str:
 
 @lru_cache(maxsize=1)
 def metric_catalog_digest() -> str:
+    """Digest the pinned metric catalog contents for pin integrity checks."""
     return _sha256_bytes(_canonical_json_bytes(CATALOG_PATH))
 
 
 def schema_pack_pin() -> str:
+    """Return the frozen schema-pack content pin used by fail-closed stores."""
     return f"schema_pack_v0@{schema_pack_digest()}"
 
 
 def metric_catalog_pin() -> str:
+    """Return the frozen metric-catalog content pin used by fail-closed stores."""
     return f"metric_catalog_v0@{metric_catalog_digest()}"
 
 

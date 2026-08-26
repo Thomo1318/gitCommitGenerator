@@ -109,6 +109,7 @@ class JudgeCredentialView:
     identity_env: str = ENV_JUDGE_MODEL
 
     def __repr__(self) -> str:
+        """Secret-safe credential view: never include raw tokens in repr."""
         return (
             f"JudgeCredentialView(model={self.model!r}, base_url={self.base_url!r}, "
             f"credentials_present={self.credentials_present})"
@@ -125,7 +126,9 @@ class JudgeFn(Protocol):
         *,
         model: str,
         timeout_s: float = DEFAULT_TIMEOUT_S,
-    ) -> JudgeTransportResult | Mapping[str, Any] | str | JudgeOutcome: ...
+    ) -> JudgeTransportResult | Mapping[str, Any] | str | JudgeOutcome:
+        """Invoke the judge callable and return a transport result."""
+        ...
 
 
 def resolve_judge_credentials(
@@ -167,6 +170,7 @@ def resolve_judge_credentials(
 
 
 def _usage_dict(raw: object) -> dict[str, int] | None:
+    """Project token/usage stats into the closed diagnostics shape."""
     if not isinstance(raw, Mapping):
         return None
     out: dict[str, int] = {}
@@ -214,6 +218,7 @@ def parse_judge_score(text: str) -> tuple[int | float, str | None]:
 
 
 def _normalize_raw(raw: object) -> JudgeTransportResult:
+    """Normalize a raw judge transport payload into JudgeTransportResult."""
     if isinstance(raw, JudgeTransportResult):
         return raw
     if isinstance(raw, JudgeOutcome):
@@ -246,6 +251,7 @@ def _normalize_raw(raw: object) -> JudgeTransportResult:
 
 
 def _classify_exception(exc: BaseException) -> tuple[str, str]:
+    """Classify transport exceptions into closed error classes."""
     name = type(exc).__name__
     lowered = name.lower()
     if isinstance(exc, TimeoutError) or "timeout" in lowered:
@@ -254,12 +260,14 @@ def _classify_exception(exc: BaseException) -> tuple[str, str]:
 
 
 def _payload_dict(judge_input: JudgeInput | Mapping[str, str]) -> dict[str, str]:
+    """Project a JudgeInput/mapping into a plain string payload dict."""
     if isinstance(judge_input, JudgeInput):
         return judge_input.as_dict()
     return {str(k): str(v) for k, v in judge_input.items()}
 
 
 def _host_guard(payload: Mapping[str, str]) -> str | None:
+    """Fail closed when judge input exceeds the closed size policy."""
     text = str(payload.get("final_message_text") or "")
     extra = payload.get("diff_summary")
     size_text = text if not extra else f"{text}\n{extra}"
@@ -277,6 +285,7 @@ def _fail(
     text: str | None = None,
     duration_ms: float | None = None,
 ) -> JudgeOutcome:
+    """Build a structured Lane-C/judge failure payload."""
     return JudgeOutcome(
         ok=False,
         execution_code=assert_execution_code(code),
@@ -299,6 +308,7 @@ def _invoke_once(
     model: str,
     timeout_s: float,
 ) -> JudgeOutcome:
+    """Invoke the judge transport once with classified errors."""
     started = time.perf_counter()
     try:
         raw = judge_fn(prompt, payload, model=model, timeout_s=timeout_s)
@@ -474,6 +484,7 @@ def openai_compatible_judge_fn(
         model: str,
         timeout_s: float = DEFAULT_TIMEOUT_S,
     ) -> JudgeTransportResult:
+        """Perform one OpenAI-compatible judge HTTP/SDK call."""
         chosen_model = model or closed_model
         if injected is not None:
             return _normalize_raw(

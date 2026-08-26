@@ -83,6 +83,7 @@ def mask_secrets_in_text(value: str | None) -> str | None:
     for pat in _SECRET_VALUE_PATTERNS:
 
         def _repl(match: re.Match[str], _pat: re.Pattern[str] = pat) -> str:
+            """Internal helper: repl."""
             # Prefer the captured secret group when present (assignment forms).
             secret = match.group(1) if match.lastindex else match.group(0)
             if not secret:

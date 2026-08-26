@@ -27,6 +27,7 @@ class DatasetAliasError(ValueError):
 
 
 def _build_alias_index() -> dict[str, str]:
+    """Build a structured row/payload for the local operator store."""
     index: dict[str, str] = {}
     for stable, aliases in DATASET_ID_ALIASES.items():
         for alias in aliases:

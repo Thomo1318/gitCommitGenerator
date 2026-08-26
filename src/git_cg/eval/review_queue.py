@@ -77,6 +77,7 @@ class ReviewQueueError(ValueError):
     """Deterministic review-queue failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Attach review-queue failure code, exit class, and operator hint."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -84,10 +85,12 @@ class ReviewQueueError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _queue_dir(repo: Path) -> Path:
+    """Resolve the governed review-queue store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, review_queue_dir
 
     try:
@@ -97,6 +100,7 @@ def _queue_dir(repo: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -106,6 +110,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _validate_human_review(row: dict[str, Any]) -> None:
+    """Validate a payload against the closed schema/contract (fail closed)."""
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
     try:
@@ -119,6 +124,7 @@ def _validate_human_review(row: dict[str, Any]) -> None:
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
+    """Load a JSON object from disk; map I/O and decode failures to the module error type."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -133,12 +139,14 @@ def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int
 
 
 def _item_path(repo: Path, review_id: str) -> Path:
+    """Resolve one queue/store item path with containment checks."""
     if not _SAFE_ID.fullmatch(review_id):
         raise ReviewQueueError(f"invalid review_id: {review_id!r}", code="EVAL_USAGE", exit_code=2)
     return _queue_dir(repo) / f"{review_id}.json"
 
 
 def _read_item(repo: Path, review_id: str) -> tuple[dict[str, Any], Path]:
+    """Read one queue item JSON document (fail closed)."""
     path = _item_path(repo, review_id)
     if not path.is_file():
         raise ReviewQueueError(
@@ -172,6 +180,7 @@ def _read_item(repo: Path, review_id: str) -> tuple[dict[str, Any], Path]:
 
 
 def _write_item(repo: Path, item: dict[str, Any]) -> Path:
+    """Persist a governed artifact via atomic write (fail closed)."""
     review = item.get("review")
     if not isinstance(review, dict):
         raise ReviewQueueError(
@@ -193,6 +202,7 @@ def _build_scores(
     gold_dispute: bool | None,
     regime_label: str | None,
 ) -> dict[str, Any]:
+    """Build a structured row/payload for the local operator store."""
     scores: dict[str, Any] = {}
     if craft_rating is not None:
         scores["human.craft_rating"] = float(craft_rating)
@@ -387,6 +397,7 @@ def claim(
 
 
 def _transition_guard(item: dict[str, Any], target: str) -> None:
+    """Enforce a closed state-machine transition guard."""
     current = str(item.get("status") or "")
     allowed = TRANSITIONS.get(current, frozenset())
     if target not in allowed:
@@ -508,6 +519,7 @@ def _target_key(item: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def _iter_queue_items(repo: Path) -> list[dict[str, Any]]:
+    """Iterate governed store rows while skipping unreadable/foreign files safely."""
     root = _queue_dir(repo)
     if not root.is_dir():
         return []
@@ -522,12 +534,14 @@ def _iter_queue_items(repo: Path) -> list[dict[str, Any]]:
 
 
 def _mean(values: list[float]) -> float | None:
+    """Return the arithmetic mean, or ``None`` when the series is empty."""
     if not values:
         return None
     return sum(values) / len(values)
 
 
 def _majority_bool(votes: list[bool]) -> str:
+    """Majority-bool rollup over rater votes (ties stay unset/False by policy)."""
     if not votes:
         return "none"
     trues = sum(1 for v in votes if v)
@@ -538,6 +552,7 @@ def _majority_bool(votes: list[bool]) -> str:
 
 
 def _majority_str(votes: list[str]) -> str:
+    """Majority-string rollup over rater votes (ties stay unset by policy)."""
     if not votes:
         return "none"
     counts: dict[str, int] = {}

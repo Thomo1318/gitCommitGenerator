@@ -22,6 +22,7 @@ class SchemaLoadError(SchemaPackError):
 
 @cache
 def _validator_for(schema_name: str) -> Draft202012Validator:
+    """Return the schema validator for a named schema-pack document."""
     path = SCHEMA_DIR / f"{schema_name}.schema.json"
     if not path.is_file():
         raise SchemaLoadError(f"missing schema: {path}")
@@ -37,6 +38,7 @@ def _validator_for(schema_name: str) -> Draft202012Validator:
 
 
 def load_schema(name: str) -> dict[str, Any]:
+    """Load one schema-pack document by name from the frozen pack."""
     path = SCHEMA_DIR / f"{name}.schema.json"
     if not path.is_file():
         raise SchemaLoadError(f"missing schema: {path}")
@@ -47,6 +49,7 @@ def load_schema(name: str) -> dict[str, Any]:
 
 
 def validate_instance(schema_name: str, instance: dict[str, Any]) -> None:
+    """Validate ``instance`` against a named schema-pack document (fail closed)."""
     try:
         validator = _validator_for(schema_name)
     except SchemaLoadError:
@@ -73,6 +76,7 @@ def is_valid(schema_name: str, instance: dict[str, Any]) -> bool:
 
 
 def list_schema_names() -> list[str]:
+    """List schema document names available in the frozen pack."""
     return [p.name.removesuffix(".schema.json") for p in schema_files()]
 
 

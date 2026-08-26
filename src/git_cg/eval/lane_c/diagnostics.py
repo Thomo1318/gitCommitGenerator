@@ -284,6 +284,7 @@ def _pass_fail_ops_row(
     evidence: Mapping[str, Any],
     pin_refs: list[str] | None = None,
 ) -> ScoreResultV1:
+    """Project a pass/fail ops row for dogfood attachment summaries."""
     crow = metric_row(metric_id)
     if crow is None:
         raise KeyError(f"unknown metric_id not in catalog: {metric_id}")
@@ -324,10 +325,12 @@ class NlpDiagnosticResult:
 
 
 def _tokenize(text: str) -> list[str]:
+    """Internal helper: tokenize."""
     return [m.group(0).lower() for m in _TOKEN_RE.finditer(text or "")]
 
 
 def _levenshtein_distance(a: str, b: str) -> int:
+    """Levenshtein distance for craft/similarity diagnostics."""
     if a == b:
         return 0
     if not a:
@@ -401,6 +404,7 @@ def rouge_l_f1(candidate: str, reference: str) -> float:
 
 
 def _lcs_len(a: Sequence[str], b: Sequence[str]) -> int:
+    """Longest-common-subsequence length for craft diagnostics."""
     if not a or not b:
         return 0
     # Two-row LCS length

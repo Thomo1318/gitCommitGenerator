@@ -61,6 +61,7 @@ class AmendBriefError(ValueError):
     """Deterministic amend-brief failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Initialize structured error/context fields for operator engines."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -68,10 +69,12 @@ class AmendBriefError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
+    """Load a JSON object from disk; map I/O and decode failures to the module error type."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -86,6 +89,7 @@ def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -95,6 +99,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _briefs_dir(repo: Path) -> Path:
+    """Resolve the governed amend-brief store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, amend_briefs_dir
 
     try:
@@ -104,6 +109,7 @@ def _briefs_dir(repo: Path) -> Path:
 
 
 def _dogfood_dir(repo: Path) -> Path:
+    """Resolve the governed dogfood attachment store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, dogfood_dir
 
     try:
@@ -113,6 +119,7 @@ def _dogfood_dir(repo: Path) -> Path:
 
 
 def _family_of(metric_id: str) -> str | None:
+    """Map a metric id to its Family token, if known."""
     token = str(metric_id).strip().lower()
     if not token:
         return None
@@ -123,6 +130,7 @@ def _family_of(metric_id: str) -> str | None:
 
 
 def _score_rows(case: dict[str, Any]) -> list[dict[str, Any]]:
+    """Project or compute score rows used by operator surfaces (not product accept)."""
     return [r for r in (case.get("scores") or []) if isinstance(r, dict) and r.get("metric_id")]
 
 
@@ -156,6 +164,7 @@ def _family_rollups(cases: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 
 def _failure_ids(cases: list[dict[str, Any]]) -> list[str]:
+    """Collect failure ids from scored cases for operator summaries."""
     ids: set[str] = set()
     for case in cases:
         for row in _score_rows(case):
@@ -185,6 +194,7 @@ def _gold_counters(cases: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _regime(cases: list[dict[str, Any]], bundle: dict[str, Any] | None) -> str:
+    """Resolve the closed regime token for brief/diagnose routing."""
     if bundle is not None:
         token = str(bundle.get("regime") or (bundle.get("meta") or {}).get("regime") or "").strip().upper()
         if token in _REGIMES:
@@ -200,6 +210,7 @@ def _regime(cases: list[dict[str, Any]], bundle: dict[str, Any] | None) -> str:
 
 
 def _path_class(cases: list[dict[str, Any]], bundle: dict[str, Any] | None) -> str:
+    """Resolve the closed path-class token for brief/diagnose routing."""
     if bundle is not None:
         for key in ("path_class_gate", "path_class"):
             token = str(bundle.get(key) or "").strip()
@@ -220,6 +231,7 @@ def _path_class(cases: list[dict[str, Any]], bundle: dict[str, Any] | None) -> s
 
 
 def _blocking(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    """Project whether L1 context is blocking for amend-brief routing."""
     codes: list[str] = []
     reasons: list[str] = []
     for case in cases:
@@ -246,6 +258,7 @@ def _preference_pair_from_twin(twin: dict[str, Any] | None) -> dict[str, Any] | 
         return None
 
     def _vid(v: dict[str, Any], idx: int) -> str:
+        """Normalize a version/identity token for brief assembly."""
         sha = str(v.get("message_sha256") or "")
         kind = str(v.get("kind") or "version")
         return f"{kind}:{sha[:12]}" if sha else f"{kind}:{idx}"
@@ -368,6 +381,7 @@ def _resolve_case_rows(
 
 
 def _load_bundle(repo: Path, bundle_id: str | None) -> dict[str, Any] | None:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     if bundle_id is None:
         return None
     if not _SAFE_ID.fullmatch(bundle_id):
@@ -390,6 +404,7 @@ def _load_bundle(repo: Path, bundle_id: str | None) -> dict[str, Any] | None:
 
 
 def _load_session_twin(repo: Path, session_thread_id: str | None) -> dict[str, Any] | None:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     if not session_thread_id:
         return None
     from git_cg.eval.sessions import SessionsError, read_session_twin

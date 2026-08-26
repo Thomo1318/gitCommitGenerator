@@ -146,6 +146,7 @@ class PromoteError(ValueError):
         decision: dict[str, Any] | None = None,
         decision_path: str | None = None,
     ) -> None:
+        """Attach machine-readable promote failure code, exit class, and hint."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -156,6 +157,7 @@ class PromoteError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
@@ -170,6 +172,7 @@ def _promotions_dir(repo: Path) -> Path:
 
 
 def _acceptpath_dir(repo: Path) -> Path:
+    """Resolve the governed accept-path store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, acceptpath_bundles_dir
 
     try:
@@ -179,6 +182,7 @@ def _acceptpath_dir(repo: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -188,6 +192,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
+    """Load a JSON object from disk; map I/O and decode failures to the module error type."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -202,12 +207,14 @@ def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int
 
 
 def _bundle_hash(bundle: dict[str, Any]) -> str:
+    """Compute the stable content hash used for bundle lineage."""
     from git_cg.eval.corpus.canonical import content_sha256
 
     return content_sha256(bundle)
 
 
 def _extract_trace_id(bundle: dict[str, Any]) -> str:
+    """Extract a typed field from a bundle/record without inventing defaults that mute integrity failures."""
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
     binding = meta.get("binding") if isinstance(meta.get("binding"), dict) else {}
     for candidate in (binding.get("trace_id"), meta.get("trace_id"), bundle.get("trace_id")):
@@ -217,6 +224,7 @@ def _extract_trace_id(bundle: dict[str, Any]) -> str:
 
 
 def _extract_split_group(bundle: dict[str, Any], explicit: str | None) -> str:
+    """Extract a typed field from a bundle/record without inventing defaults that mute integrity failures."""
     if explicit and explicit.strip():
         return explicit.strip()
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
@@ -239,6 +247,7 @@ def _extract_split_group(bundle: dict[str, Any], explicit: str | None) -> str:
 
 
 def _resolve_source_bundle(repo: Path, bundle: str) -> tuple[dict[str, Any], Path]:
+    """Resolve a path/id against the governed store root (containment-checked)."""
     token = bundle.strip()
     if not token:
         raise PromoteError(
@@ -293,6 +302,7 @@ def _resolve_source_bundle(repo: Path, bundle: str) -> tuple[dict[str, Any], Pat
 
 
 def _load_review(repo: Path, review_id: str | None) -> dict[str, Any] | None:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     if not review_id or not review_id.strip():
         return None
     from git_cg.eval.review_queue import ReviewQueueError, show_review
@@ -311,6 +321,7 @@ def _load_review(repo: Path, review_id: str | None) -> dict[str, Any] | None:
 
 
 def _is_synthetic_expand(bundle: dict[str, Any], meta_flags: dict[str, Any]) -> bool:
+    """True when a promote candidate is synthetic-expand (not gold authority)."""
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
     markers = [
         meta.get("synthetic"),
@@ -340,6 +351,7 @@ def _is_synthetic_expand(bundle: dict[str, Any], meta_flags: dict[str, Any]) -> 
 
 
 def _is_antipattern(label: str, bundle: dict[str, Any]) -> bool:
+    """True when a candidate belongs to the antipattern/hard-negative class."""
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
     tokens = {
         label.lower(),
@@ -351,6 +363,7 @@ def _is_antipattern(label: str, bundle: dict[str, Any]) -> bool:
 
 
 def _destination_dir(repo: Path, destination: str) -> Path:
+    """Resolve the destination directory for a promotion decision."""
     from git_cg.eval.binding.paths import (
         LayerAPathError,
         antipattern_vault_dir,
@@ -439,6 +452,7 @@ def _deny(
     decision: dict[str, Any] | None = None,
     decision_path: str | None = None,
 ) -> PromoteError:
+    """Record a denied promote candidate and fail closed."""
     return PromoteError(
         message,
         code="EVAL_USAGE",
@@ -519,6 +533,7 @@ def _build_decision_row(
     denial_reason: str | None,
     candidate_class: str,
 ) -> dict[str, Any]:
+    """Build a structured row/payload for the local operator store."""
     decision: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "promotion_id": promotion_id,
@@ -568,6 +583,7 @@ def _build_decision_row(
 
 
 def _persist_decision(repo: Path, decision: dict[str, Any], *, dry_run: bool) -> str:
+    """Persist a governed intermediate artifact for resume/audit."""
     decision_path = _promotions_dir(repo) / f"{decision['promotion_id']}.json"
     if not dry_run:
         _atomic_write(decision_path, decision)
@@ -713,6 +729,7 @@ def promote(
 
     def _deny_after_source(reason: str, message: str, *, hint: str | None = None) -> None:
         # Once a candidate source exists, denials retain an audit row.
+        """Internal helper: deny after source."""
         if not split:
             raise _deny(reason, message, hint=hint)
         _raise_named_denial(
@@ -770,6 +787,7 @@ def promote(
     wants_gold = label_l in _GOLD_LABELS or allow_golden
 
     def _deny_here(reason: str, message: str, *, hint: str | None = None) -> None:
+        """Internal helper: deny here."""
         _raise_named_denial(
             repo,
             reason=reason,
