@@ -252,6 +252,7 @@ def _emit_run_result(
 
 
 def _parse_case_ids(raw: str | None) -> tuple[str, ...] | None:
+    """Parse comma-separated case IDs into a tuple, or return None if raw is None."""
     if raw is None:
         return None
     parts = [p.strip() for p in raw.split(",") if p.strip()]

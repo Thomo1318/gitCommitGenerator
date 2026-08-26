@@ -65,6 +65,7 @@ class TrainExportError(ValueError):
     """Deterministic train-export failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Initialize structured error/context fields for operator engines."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -72,10 +73,12 @@ class TrainExportError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _train_export_dir(repo: Path) -> Path:
+    """Resolve the governed train export store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, train_export_dir
 
     try:
@@ -85,6 +88,7 @@ def _train_export_dir(repo: Path) -> Path:
 
 
 def _vault_dir(repo: Path) -> Path:
+    """Resolve the governed antipattern vault store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, antipattern_vault_dir
 
     try:
@@ -94,6 +98,7 @@ def _vault_dir(repo: Path) -> Path:
 
 
 def _bundles_dir(repo: Path) -> Path:
+    """Resolve the governed acceptpath bundles store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, acceptpath_bundles_dir
 
     try:
@@ -103,6 +108,7 @@ def _bundles_dir(repo: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -112,6 +118,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
+    """Load a JSON object from disk; map I/O and decode failures to TrainExportError."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
