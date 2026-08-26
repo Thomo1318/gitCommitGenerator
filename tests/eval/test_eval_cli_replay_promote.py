@@ -144,11 +144,7 @@ def test_cli_promote_denies_gold_with_reason(repo: Path) -> None:
     assert result.exit_code == 2
     assert env["ok"] is False
     assert env["data"]["accepted"] is False
-    assert env["data"]["denial_reason"] in {
-        "popularity_promotion_forbidden",
-        "silent_gold_mint_forbidden",
-        "human_review_cannot_sole_promote_golden",
-    }
+    assert env["data"]["denial_reason"] == "popularity_promotion_forbidden"
 
 
 def test_cli_review_lifecycle(repo: Path) -> None:
@@ -272,11 +268,7 @@ def test_cli_promote_denial_persists_audit(repo: Path) -> None:
     assert result.exit_code == 2
     assert env["ok"] is False
     assert env["data"]["accepted"] is False
-    assert env["data"]["denial_reason"] in {
-        "popularity_promotion_forbidden",
-        "silent_gold_mint_forbidden",
-        "human_review_cannot_sole_promote_golden",
-    }
+    assert env["data"]["denial_reason"] == "popularity_promotion_forbidden"
     assert "decision" in env["data"]
     assert env["data"]["decision"]["accepted"] is False
     assert env["data"]["decision"]["denial_reason"] == env["data"]["denial_reason"]

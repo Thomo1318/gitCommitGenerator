@@ -323,20 +323,25 @@ def _load_review(repo: Path, review_id: str | None) -> dict[str, Any] | None:
 def _is_synthetic_expand(bundle: dict[str, Any], meta_flags: dict[str, Any]) -> bool:
     """True when a promote candidate is synthetic-expand (not gold authority)."""
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
-    markers = [
-        meta.get("synthetic"),
-        meta.get("expand_with_ai"),
-        meta.get("source_kind"),
-        meta.get("producer"),
-        meta_flags.get("synthetic"),
-        meta_flags.get("expand_with_ai"),
-        meta_flags.get("source_kind"),
-        bundle.get("provenance_label"),
-    ]
-    # Explicit boolean flags win.
+    # Explicit boolean flags win (True only). False/None must not trip token scan.
     for key in ("synthetic", "expand_with_ai"):
         if meta.get(key) is True or meta_flags.get(key) is True:
             return True
+        if meta.get(key) is False or meta_flags.get(key) is False:
+            # Explicit negative short-circuits token matching for that flag family.
+            pass
+    markers = [
+        meta.get("source_kind"),
+        meta.get("producer"),
+        meta_flags.get("source_kind"),
+        bundle.get("provenance_label"),
+    ]
+    # String markers only — never stringify whole meta dicts (would match key names).
+    for key in ("synthetic", "expand_with_ai"):
+        for src in (meta, meta_flags):
+            val = src.get(key)
+            if isinstance(val, str) and val.strip():
+                markers.append(val)
     blob = " ".join(str(m).lower() for m in markers if m is not None)
     return any(
         token in blob
@@ -412,6 +417,7 @@ def _scan_split_contamination(
     if not root.is_dir():
         return []
     conflicts: list[str] = []
+    rows: list[dict[str, Any]] = []
     for path in sorted(root.glob("*.json")):
         try:
             row = json.loads(path.read_text(encoding="utf-8"))
@@ -421,6 +427,8 @@ def _scan_split_contamination(
             continue
         if row.get("split_group_id") != split_group_id:
             continue
+        rows.append(row)
+    for row in rows:
         if not row.get("accepted"):
             continue
         prior_dest = str(row.get("destination") or "")
@@ -432,13 +440,7 @@ def _scan_split_contamination(
         conflicts.append(f"{row.get('promotion_id')}:{prior_dest}")
     # Positive train / gold labels cannot share a split with hard_negative vault.
     if label.lower() in _POSITIVE_DEST_LABELS or destination == DEST_FIXTURE_LANE_A:
-        for path in sorted(root.glob("*.json")):
-            try:
-                row = json.loads(path.read_text(encoding="utf-8"))
-            except OSError, json.JSONDecodeError:
-                continue
-            if not isinstance(row, dict) or row.get("split_group_id") != split_group_id:
-                continue
+        for row in rows:
             if row.get("accepted") and row.get("destination") == DEST_HARD_NEGATIVE:
                 conflicts.append(f"{row.get('promotion_id')}:hard_negative_vs_positive")
     return sorted(set(conflicts))
@@ -853,7 +855,7 @@ def promote(
                 hint="Gold-final requires the full gate eligibility path; use non-gold labels for candidate lanes.",
             )
 
-    if _is_synthetic_expand(source, {"synthetic": source.get("meta")}) and dest not in {
+    if _is_synthetic_expand(source, {}) and dest not in {
         DEST_QUARANTINE,
         DEST_REJECT,
     }:

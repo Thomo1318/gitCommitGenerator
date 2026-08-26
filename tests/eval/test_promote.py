@@ -17,7 +17,11 @@ from pathlib import Path
 
 import pytest
 
-from git_cg.eval.binding.paths import acceptpath_bundles_dir, atomic_write_json
+from git_cg.eval.binding.paths import (
+    acceptpath_bundles_dir,
+    antipattern_vault_dir,
+    atomic_write_json,
+)
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 from git_cg.eval.promote import (
     DENIAL_REASONS,
@@ -197,6 +201,16 @@ def test_deny_synthetic_without_quarantine(repo: Path) -> None:
     assert ok["accepted"] is True
 
 
+def test_explicit_non_synthetic_meta_is_promotable(repo: Path) -> None:
+    """meta.synthetic=False must not trip the unquarantined-synthetic denial."""
+    b = _bundle()
+    b.setdefault("meta", {})
+    b["meta"]["synthetic"] = False
+    _seed(repo, b)
+    ok = promote(repo, **_ok_kwargs(destination=DEST_OBSERVABILITY_FIXTURE, label="obs-non-synth"))
+    assert ok["accepted"] is True
+
+
 def test_deny_antipattern_positive(repo: Path) -> None:
     _seed(repo)
     with pytest.raises(PromoteError) as ei:
@@ -249,11 +263,13 @@ def _assert_denial_audit(exc: PromoteError, *, reason: str, repo: Path) -> dict:
     for folder in (
         "fixture_lane_a_candidates",
         "observability_fixtures",
-        "hard_negatives",
     ):
         d = index / folder
         if d.is_dir():
             assert list(d.glob("*.json")) == []
+    hard_neg = antipattern_vault_dir(repo) / "hard_negatives"
+    if hard_neg.is_dir():
+        assert list(hard_neg.glob("*.json")) == []
     return on_disk
 
 
