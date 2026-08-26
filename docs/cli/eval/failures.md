@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval failures …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only). Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``, ``--severity``) are AND-combined and documented in the API map. The base unfiltered list remains the S6-D01 contract.
+List failing cases with metric and failure ids. Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``, ``--severity``) are AND-combined and documented in the API map. The base unfiltered list remains the S6-D01 contract.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only). Op
 ```text
 Usage: git-cg eval failures [OPTIONS]                                                      
                                                                                 
- List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only).   
+ List failing cases with metric and failure ids.                                
                                                                                 
  Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``,         
  ``--severity``) are AND-combined and documented in the API map. The base       

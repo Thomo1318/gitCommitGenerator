@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval session show …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Read a local session twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation.
+Show one local commit session. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Read a local session twin under .eval/sessions/ (§7.6). Read-only: no Opik reac
 ```text
 Usage: git-cg eval session show [OPTIONS]                                                          
                                                                                 
- Read a local session twin under .eval/sessions/ (§7.6).                        
+ Show one local commit session.                                                 
                                                                                 
  Read-only: no Opik reach, no chat timeline, no graph browser, no accept        
  authority, no rerun, no ranking mutation.                                      

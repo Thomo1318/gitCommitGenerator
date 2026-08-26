@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval opik …`  
 > **Kind:** `group` · **Status:** group
 
-Opik/export health and secret-safe config (canonical).
+Opik health checks and secret-safe config.
 
 ## Authority boundary
 
@@ -16,21 +16,21 @@ Opik/export health and secret-safe config (canonical).
 ```text
 Usage: git-cg eval opik [OPTIONS] COMMAND [ARGS]...                                        
                                                                                 
- Opik/export health and secret-safe config (canonical).                         
+ Opik health checks and secret-safe config.                                     
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ doctor  Secret-safe Opik/export health doctor.                               │
-│ config  Secret-safe Opik/mirror config inspection.                           │
+│ doctor  Check Opik/export health without exposing secrets.                   │
+│ config  Inspect Opik/mirror config without exposing secrets.                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval opik config`](opik/config.md) — Secret-safe Opik/mirror config inspection.
-* [`git-cg eval opik doctor`](opik/doctor.md) — Secret-safe Opik/export health doctor. Inspects resolved config / export health / queue without transport or network. All secret-bearing out
+* [`git-cg eval opik config`](opik/config.md) — Inspect Opik/mirror config without exposing secrets.
+* [`git-cg eval opik doctor`](opik/doctor.md) — Check Opik/export health without exposing secrets. Inspects resolved config / export health / queue without transport or network. All secret
 
 ## See also
 

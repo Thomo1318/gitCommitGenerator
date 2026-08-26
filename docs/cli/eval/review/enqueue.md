@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval review enqueue …`  
 > **Kind:** `command` · **Status:** command
 
-Enqueue an advisory human_review_v1 row (pending).
+Enqueue an advisory human-review item.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Enqueue an advisory human_review_v1 row (pending).
 ```text
 Usage: git-cg eval review enqueue [OPTIONS]                                                       
                                                                                 
- Enqueue an advisory human_review_v1 row (pending).                             
+ Enqueue an advisory human-review item.                                         
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │    --case                     TEXT   Case id under review.                   │

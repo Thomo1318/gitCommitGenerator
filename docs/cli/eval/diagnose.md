@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval diagnose …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent).
+Create or update a diagnostic issue from a failure.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent).
 ```text
 Usage: git-cg eval diagnose [OPTIONS]                                                      
                                                                                 
- Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent).          
+ Create or update a diagnostic issue from a failure.                            
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --experiment-id         TEXT  Experiment id (defaults to latest local run).  │

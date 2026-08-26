@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval train-export …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of ``--no-write`` (validate + would-write summary; zero store mutation).
+Export redacted training rows from landed bundles. Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of ``--no-write`` (validate + would-write summary; zero store mutation).
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure 
 ```text
 Usage: git-cg eval train-export [OPTIONS]                                                  
                                                                                 
- Export governed train rows from landed bundles (R14 / §7.5).                   
+ Export redacted training rows from landed bundles.                             
                                                                                 
  Row scrub-failure policy: drop + report (scrub_report) + continue; never       
  emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never     

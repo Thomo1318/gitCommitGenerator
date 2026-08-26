@@ -16,7 +16,7 @@ This reference mirrors the live Typer tree (same source of truth as `docs/eval/o
 | Command | Description |
 |:---|:---|
 | [`git-cg commit`](commit.md) | Generate an AI commit message based on staged changes. |
-| [`git-cg eval`](eval.md) | Evaluation harness operator surface: corpus helpers, offline suite ops, doctor/triage, export queue, and Opik config (no product ranking). |
+| [`git-cg eval`](eval.md) | Run and inspect local evaluation suites, debug failures, manage review/sessions, and operate the export queue. Does not change product commit ranking. |
 | [`git-cg evals`](evals.md) | Manage and run the git-cg evals benchmarking suite |
 | [`git-cg preflight`](preflight.md) | Print a read-only diff-class / path-class preflight summary (Issue #204). |
 | [`git-cg record-telemetry`](record-telemetry.md) | Record final commit telemetry and bind accepted final bytes (S3). |
@@ -90,9 +90,9 @@ Usage: git-cg [OPTIONS] COMMAND [ARGS]...
 │ record-telemetry  Record final commit telemetry and bind accepted final      │
 │                   bytes (S3).                                                │
 │ evals             Manage and run the git-cg evals benchmarking suite         │
-│ eval              Evaluation harness operator surface: corpus helpers,       │
-│                   offline suite ops, doctor/triage, export queue, and Opik   │
-│                   config (no product ranking).                               │
+│ eval              Run and inspect local evaluation suites, debug failures,   │
+│                   manage review/sessions, and operate the export queue. Does │
+│                   not change product commit ranking.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -132,77 +132,77 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 ### Groups and aliases
 
 * **`git-cg eval amend-brief`**
-  * [`git-cg eval amend-brief`](eval/amend-brief.md) — Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2). Advisory authority: summarizes sc
+  * [`git-cg eval amend-brief`](eval/amend-brief.md) — Build an amend brief from landed evaluation data. Advisory authority: summarizes score/failure/regim
 * **`git-cg eval compare`**
-  * [`git-cg eval compare`](eval/compare.md) — Structural + metric delta; uses replay_compare lineage when linked (§18.3).
+  * [`git-cg eval compare`](eval/compare.md) — Diff two cases (structure and metrics).
 * **`git-cg eval config`**
-  * [`git-cg eval config`](eval/config.md) — Deprecated alias for ``eval opik config show`` (temporary bridge). Removal target: first minor relea
+  * [`git-cg eval config`](eval/config.md) — Alias of eval opik config show. Removal target: first minor release after S6 GA.
 * **`git-cg eval diagnose`**
-  * [`git-cg eval diagnose`](eval/diagnose.md) — Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent).
+  * [`git-cg eval diagnose`](eval/diagnose.md) — Create or update a diagnostic issue from a failure.
 * **`git-cg eval doctor`**
-  * [`git-cg eval doctor`](eval/doctor.md) — Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, network-free. Fail-clos
+  * [`git-cg eval doctor`](eval/doctor.md) — Check local suite health (pins, metrics, fixtures). Offline, network-free. Fail-closed on floating `
 * **`git-cg eval dogfood`**
-  * [`git-cg eval dogfood`](eval/dogfood.md) — Fire the Lane C dogfood shadow sidecar (§7.3). Dark-launched maintainer/operator surface: registered
+  * [`git-cg eval dogfood`](eval/dogfood.md) — Capture Lane C dogfood evidence for a candidate commit message. Dark-launched maintainer/operator su
 * **`git-cg eval encode-fixture`**
-  * [`git-cg eval encode-fixture`](eval/encode-fixture.md) — Encode a fixture into ``ape_bundle_v1`` and print its identity summary. Requires exactly one of ``--
+  * [`git-cg eval encode-fixture`](eval/encode-fixture.md) — Encode a fixture and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exi
 * **`git-cg eval explain`**
-  * [`git-cg eval explain`](eval/explain.md) — Deterministic explain contract (§18.3); no opaque LLM RCA.
+  * [`git-cg eval explain`](eval/explain.md) — Show a deterministic explanation for a failing case.
 * **`git-cg eval export`**
-  * [`git-cg eval export`](eval/export.md) — Layer-A export queue ops: status / retry / drain (F4 fail-open).
-  * [`git-cg eval export drain`](eval/export/drain.md) — Drain the export queue through the Opik transport (F4 fail-open). Always exits 0 unless the config i
-  * [`git-cg eval export retry`](eval/export/retry.md) — Re-queue failed export rows for another drain attempt (P1-4 / P1-11). Default policy: reclaim rows w
-  * [`git-cg eval export status`](eval/export/status.md) — Show the Layer-A export queue status (read-only, offline). Never mutates the queue and never contact
+  * [`git-cg eval export`](eval/export.md) — Export-queue status, retry, and drain.
+  * [`git-cg eval export drain`](eval/export/drain.md) — Drain the export queue through the Opik transport. Always exits 0 unless the config is invalid (fail
+  * [`git-cg eval export retry`](eval/export/retry.md) — Re-queue failed export rows for another drain attempt. Default policy: reclaim rows whose last_error
+  * [`git-cg eval export status`](eval/export/status.md) — Show export-queue status (read-only, offline). Never mutates the queue and never contacts Opik or th
 * **`git-cg eval export-drain`**
-  * [`git-cg eval export-drain`](eval/export-drain.md) — Deprecated alias for ``eval export drain``.
+  * [`git-cg eval export-drain`](eval/export-drain.md) — Alias of eval export drain.
 * **`git-cg eval export-retry`**
-  * [`git-cg eval export-retry`](eval/export-retry.md) — Deprecated alias for ``eval export retry``.
+  * [`git-cg eval export-retry`](eval/export-retry.md) — Alias of eval export retry.
 * **`git-cg eval export-status`**
-  * [`git-cg eval export-status`](eval/export-status.md) — Deprecated alias for ``eval export status``.
+  * [`git-cg eval export-status`](eval/export-status.md) — Alias of eval export status.
 * **`git-cg eval failures`**
-  * [`git-cg eval failures`](eval/failures.md) — List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only). Optional NTH-02 filters
+  * [`git-cg eval failures`](eval/failures.md) — List failing cases with metric and failure ids. Optional NTH-02 filters (``--regime``, ``--family``,
 * **`git-cg eval issue`**
-  * [`git-cg eval issue`](eval/issue.md) — Local diagnostic issue store ops.
+  * [`git-cg eval issue`](eval/issue.md) — Manage local diagnostic issues.
   * [`git-cg eval issue list`](eval/issue/list.md) — List local diagnostic issues (newest last_seen first).
   * [`git-cg eval issue reopen`](eval/issue/reopen.md) — Reopen a previously resolved/suppressed local diagnostic issue.
   * [`git-cg eval issue resolve`](eval/issue/resolve.md) — Mark a local diagnostic issue resolved (requires --resolution-evidence).
   * [`git-cg eval issue show`](eval/issue/show.md) — Show one local diagnostic issue.
   * [`git-cg eval issue suppress`](eval/issue/suppress.md) — Suppress a local diagnostic issue (requires --reason).
 * **`git-cg eval materialize-core-goldens`**
-  * [`git-cg eval materialize-core-goldens`](eval/materialize-core-goldens.md) — Materialize checked-in core golden bundles + snapshot (corpus write only).
+  * [`git-cg eval materialize-core-goldens`](eval/materialize-core-goldens.md) — Rebuild the checked-in evaluation reference files used by tests. Writes the main reference bundles a
 * **`git-cg eval opik`**
-  * [`git-cg eval opik`](eval/opik.md) — Opik/export health and secret-safe config (canonical).
-  * [`git-cg eval opik config`](eval/opik/config.md) — Secret-safe Opik/mirror config inspection.
-  * [`git-cg eval opik config show`](eval/opik/config/show.md) — Inspect resolved Opik/mirror config (secret-safe; canonical).
-  * [`git-cg eval opik doctor`](eval/opik/doctor.md) — Secret-safe Opik/export health doctor. Inspects resolved config / export health / queue without tran
+  * [`git-cg eval opik`](eval/opik.md) — Opik health checks and secret-safe config.
+  * [`git-cg eval opik config`](eval/opik/config.md) — Inspect Opik/mirror config without exposing secrets.
+  * [`git-cg eval opik config show`](eval/opik/config/show.md) — Show resolved Opik/mirror config without secrets.
+  * [`git-cg eval opik doctor`](eval/opik/doctor.md) — Check Opik/export health without exposing secrets. Inspects resolved config / export health / queue 
 * **`git-cg eval promote`**
-  * [`git-cg eval promote`](eval/promote.md) — Promotion state machine + split_group_id contamination check.
+  * [`git-cg eval promote`](eval/promote.md) — Promote a scrubbed candidate with contamination checks.
 * **`git-cg eval recompute-scores`**
-  * [`git-cg eval recompute-scores`](eval/recompute-scores.md) — Re-run the metric pack over already-landed evidence bundles.
+  * [`git-cg eval recompute-scores`](eval/recompute-scores.md) — Re-score evidence already written by a prior run.
 * **`git-cg eval replay`**
-  * [`git-cg eval replay`](eval/replay.md) — Replay generation into a new bundle + replay_compare_v1 (never mutates source).
+  * [`git-cg eval replay`](eval/replay.md) — Replay generation into a new bundle (source unchanged).
 * **`git-cg eval resume`**
-  * [`git-cg eval resume`](eval/resume.md) — Resume a suite run from a governed checkpoint + compat hash.
+  * [`git-cg eval resume`](eval/resume.md) — Resume a suite from a checkpoint.
 * **`git-cg eval review`**
-  * [`git-cg eval review`](eval/review.md) — Local HITL review queue (.eval/review_queue; advisory only).
+  * [`git-cg eval review`](eval/review.md) — Local human review queue (advisory only).
   * [`git-cg eval review adjudicate`](eval/review/adjudicate.md) — Adjudicate an in_review item (emits typed outcome_ref; never writes gold).
   * [`git-cg eval review claim`](eval/review/claim.md) — Claim a pending review item (pending → in_review).
   * [`git-cg eval review dismiss`](eval/review/dismiss.md) — Dismiss a pending/in_review item (terminal).
-  * [`git-cg eval review enqueue`](eval/review/enqueue.md) — Enqueue an advisory human_review_v1 row (pending).
+  * [`git-cg eval review enqueue`](eval/review/enqueue.md) — Enqueue an advisory human-review item.
   * [`git-cg eval review list`](eval/review/list.md) — List local review-queue items.
-  * [`git-cg eval review rollup`](eval/review/rollup.md) — Multi-rater advisory rollup over local human_review_v1 rows (NTH-05). Read-only dimension/outcome ma
+  * [`git-cg eval review rollup`](eval/review/rollup.md) — Roll up multi-rater advisory scores for review items. Read-only dimension/outcome majority + craft s
   * [`git-cg eval review show`](eval/review/show.md) — Show one local review-queue item.
 * **`git-cg eval run`**
-  * [`git-cg eval run`](eval/run.md) — Run an offline evaluation suite (canonical; not ``eval suite run``).
+  * [`git-cg eval run`](eval/run.md) — Run an offline evaluation suite.
 * **`git-cg eval session`**
-  * [`git-cg eval session`](eval/session.md) — Local commit-session inspection.
-  * [`git-cg eval session show`](eval/session/show.md) — Read a local session twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, 
+  * [`git-cg eval session`](eval/session.md) — Inspect local commit sessions.
+  * [`git-cg eval session show`](eval/session/show.md) — Show one local commit session. Read-only: no Opik reach, no chat timeline, no graph browser, no acce
 * **`git-cg eval thread`**
-  * [`git-cg eval thread`](eval/thread.md) — Local session-thread inspection.
-  * [`git-cg eval thread show`](eval/thread/show.md) — Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat tim
+  * [`git-cg eval thread`](eval/thread.md) — Inspect local session threads.
+  * [`git-cg eval thread show`](eval/thread/show.md) — Show one local session thread. Read-only: no Opik reach, no chat timeline, no graph browser, no acce
 * **`git-cg eval train-export`**
-  * [`git-cg eval train-export`](eval/train-export.md) — Export governed train rows from landed bundles (R14 / §7.5). Row scrub-failure policy: drop + report
+  * [`git-cg eval train-export`](eval/train-export.md) — Export redacted training rows from landed bundles. Row scrub-failure policy: drop + report (scrub_re
 * **`git-cg eval triage`**
-  * [`git-cg eval triage`](eval/triage.md) — Offline advisory router over doctor + failures + explain (Slice 8 / D27). Composes library engines o
+  * [`git-cg eval triage`](eval/triage.md) — One-shot advisory view: doctor + failures + explain. Composes library engines only — never nests Typ
 
 ## Stability tiers
 

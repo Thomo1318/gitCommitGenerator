@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval materialize-core-goldens …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Materialize checked-in core golden bundles + snapshot (corpus write only).
+Rebuild the checked-in evaluation reference files used by tests. Writes the main reference bundles and snapshot into the fixture directory (default: tests/fixtures/eval). If optional archive fixtures exist there, those are rebuilt too. Local disk only — does not run evaluations and does not change how commits are ranked. Use after you change eval fixtures and need the checked-in reference outputs refreshed. Prints the paths written and how many bundles were produced.
 
 ## Authority boundary
 
@@ -16,10 +16,19 @@ Materialize checked-in core golden bundles + snapshot (corpus write only).
 ```text
 Usage: git-cg eval materialize-core-goldens [OPTIONS]                                      
                                                                                 
- Materialize checked-in core golden bundles + snapshot (corpus write only).     
+ Rebuild the checked-in evaluation reference files used by tests.               
+                                                                                
+ Writes the main reference bundles and snapshot into the fixture directory      
+ (default: tests/fixtures/eval). If optional archive fixtures exist there,      
+ those are rebuilt too. Local disk only — does not run evaluations and does     
+ not change how commits are ranked.                                             
+                                                                                
+ Use after you change eval fixtures and need the checked-in reference outputs   
+ refreshed. Prints the paths written and how many bundles were produced.        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root        DIRECTORY  Fixture root (defaults to tests/fixtures/eval).     │
+│ --root        DIRECTORY  Directory to write into (default:                   │
+│                          tests/fixtures/eval).                               │
 │ --help                   Show this message and exit.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```

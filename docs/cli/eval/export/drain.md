@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export drain …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Drain the export queue through the Opik transport (F4 fail-open). Always exits 0 unless the config is invalid (fail-closed). Transport and secret failures are classified and recorded on the queue rows; they never produce a non-zero exit that could block a hook.
+Drain the export queue through the Opik transport. Always exits 0 unless the config is invalid (fail-closed). Transport and secret failures are classified and recorded on the queue rows; they never produce a non-zero exit that could block a hook.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Drain the export queue through the Opik transport (F4 fail-open). Always exits 0
 ```text
 Usage: git-cg eval export drain [OPTIONS]                                                         
                                                                                 
- Drain the export queue through the Opik transport (F4 fail-open).              
+ Drain the export queue through the Opik transport.                             
                                                                                 
  Always exits 0 unless the config is invalid (fail-closed). Transport and       
  secret failures are classified and recorded on the queue rows; they never      

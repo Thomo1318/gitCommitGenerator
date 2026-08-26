@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval promote …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Promotion state machine + split_group_id contamination check.
+Promote a scrubbed candidate with contamination checks.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Promotion state machine + split_group_id contamination check.
 ```text
 Usage: git-cg eval promote [OPTIONS]                                                       
                                                                                 
- Promotion state machine + split_group_id contamination check.                  
+ Promote a scrubbed candidate with contamination checks.                        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --bundle                   TEXT  Source ape_bundle_v1 path/id (acceptpath │

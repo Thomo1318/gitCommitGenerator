@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval amend-brief …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2). Advisory authority: summarizes score/failure/regime/family context and preference pairs; never auto-applies reruns, never accepts, never re-ranks.
+Build an amend brief from landed evaluation data. Advisory authority: summarizes score/failure/regime/family context and preference pairs; never auto-applies reruns, never accepts, never re-ranks.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2). Advisory aut
 ```text
 Usage: git-cg eval amend-brief [OPTIONS] SCORE_RUN_ID                                      
                                                                                 
- Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2).             
+ Build an amend brief from landed evaluation data.                              
                                                                                 
  Advisory authority: summarizes score/failure/regime/family context and         
  preference pairs; never auto-applies reruns, never accepts, never re-ranks.    

@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval replay …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Replay generation into a new bundle + replay_compare_v1 (never mutates source).
+Replay generation into a new bundle (source unchanged).
 
 ## Authority boundary
 
@@ -16,8 +16,7 @@ Replay generation into a new bundle + replay_compare_v1 (never mutates source).
 ```text
 Usage: git-cg eval replay [OPTIONS]                                                        
                                                                                 
- Replay generation into a new bundle + replay_compare_v1 (never mutates         
- source).                                                                       
+ Replay generation into a new bundle (source unchanged).                        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --bundle               TEXT  Source ape_bundle_v1 path or accept-path        │

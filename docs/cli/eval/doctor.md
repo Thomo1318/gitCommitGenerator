@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval doctor …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, network-free. Fail-closed on floating ``latest`` pins and missing catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks only; warn-severity failures never flip green to red. Emits phantom-metric producers ``h.compat_hash_resume`` / ``h.doctor_green`` / ``h.export_config_resolved`` as ScoreResultV1 rows.
+Check local suite health (pins, metrics, fixtures). Offline, network-free. Fail-closed on floating ``latest`` pins and missing catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks only; warn-severity failures never flip green to red. Emits phantom-metric producers ``h.compat_hash_resume`` / ``h.doctor_green`` / ``h.export_config_resolved`` as ScoreResultV1 rows.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Local suite/pin/metric doctor (distinct from ``eval opik doctor``). Offline, net
 ```text
 Usage: git-cg eval doctor [OPTIONS]                                                        
                                                                                 
- Local suite/pin/metric doctor (distinct from ``eval opik doctor``).            
+ Check local suite health (pins, metrics, fixtures).                            
                                                                                 
  Offline, network-free. Fail-closed on floating ``latest`` pins and missing     
  catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks     
