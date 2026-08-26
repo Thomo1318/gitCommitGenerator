@@ -194,6 +194,27 @@
 
 ---
 
+- Determine if we can `lazy-load` tresitter languages instead of pulling all languages on install (this may improve initial load time and reduce the tools footprint). Confirm that we can dynamically load the language parsers we need for a specific language, from python-tree-sitter.
+- Consider an optional step during installation to allow users to opt-out of certain language parsers they will never use (e.g. if a user will never use C++ or Rust, etc. they can opt-out of having those language parsers installed). This would reduce the tools footprint and improve initial load time.
+- Determine if it would be beneficial to add a `tree-sitter` package manager or similar to handle the downloading and management of language parsers. (this may improve initial load time and reduce the tools footprint). Confirm that `git-cg` would still be able to parse non-resident language parsers (e.g. if a user opts out of having the C++ parser installed, they will still be able to parse C++ files in their repository).
+
+---
+
+- Determine if we can implement moving forward whenever we add a new external tool it is an optional install, so `git-cg` can still run without it but it benefits from having the tool installed. e.g. currently `tree-sitter` is optional and `git-cg` can still run without it but it benefits from having the tool installed. We would need to determine a way to detect if the tool is installed and if it is not installed we can fall back to a default behavior that is not as good as having the tool installed but still works. We would also need to provide a way for the user to install the tool if they want to.
+- For example, all 3 inference engines aren't required to function, a user can use the tool with just one of them. We currently use MTPLX but `git-cg` works with all 3. This same logic can be applied across the entire git-cg tool in all its phases. e.g. if `tree-sitter` isn't installed `git-cg` will fall back to using `regex` for parsing (in the phases where `tree-sitter` is used). We would need to determine how to implement this logic across the entire tool.
+
+---
+
+- Improve failure output for the user, instead of ejecting them from the TUI they should be able to edit the message and fix whatever the issue is, or accept a reccomendation from the agent for example:
+
+```
+You use x which can only be used with y.
+Do you want to replace x with y?
+Yes / No
+```
+
+---
+
 - Update the `--rank-arbitrate` to display 5 items instead of 2 for the user to selct from.
 - Also include an explanation of each item and when it should be used so the user can make an informed decision of which to choose this can be pulled straight from the `sop` e.g.
 
