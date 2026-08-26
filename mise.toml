@@ -97,6 +97,26 @@ set -euo pipefail
 uvx --python 3.14 --from "interrogate==1.7.0" interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
 """
 
+[tasks."docstrings:guard"]
+description = "Report missing private docstrings and safe-insert feasibility (no writes)"
+run = "uv run python tools/docstring_guard.py check"
+
+[tasks."docstrings:guard-apply"]
+description = "Apply explicit docstring manifest with parse/compile write-if-green (set MANIFEST=...)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+if [ -z "${MANIFEST:-}" ]; then
+  echo "MANIFEST=/path/to/docs.json is required" >&2
+  exit 2
+fi
+args=(apply --manifest "$MANIFEST")
+if [ "${DRY_RUN:-}" = "1" ] || [ "${DRY_RUN:-}" = "true" ]; then
+  args+=(--dry-run)
+fi
+uv run python tools/docstring_guard.py "${args[@]}"
+"""
+
 [tasks."docstrings:patch"]
 description = "Patch-scoped docstring gate on changed src/git_cg files (fail-under 80, Python 3.14)"
 run = """
