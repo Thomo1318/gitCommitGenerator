@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import uuid
@@ -164,7 +165,7 @@ def select_sample_members(
         return []
     if not (0.0 <= rate <= 1.0):
         raise DOGFoodError(f"sample rate must be in [0,1]: {rate!r}", code="EVAL_USAGE", exit_code=2)
-    n = round(rate * len(members))
+    n = math.ceil(rate * len(members)) if rate > 0 else 0
     if n <= 0:
         return []
     if n >= len(members):

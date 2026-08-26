@@ -88,8 +88,8 @@ def _merge_doctor_exit(current: int, doctor_exit: int) -> int:
     # Precedence among success-path codes: 3 > 1 > 0.
     if current in {2, 4}:
         return current
-    if candidate == 3 or current == 3:
-        return 3 if candidate == 3 or current == 3 else candidate
+    if 3 in (candidate, current):
+        return 3
     if candidate == 1 or current == 1:
         return 1
     return 0

@@ -695,7 +695,8 @@ def run_evaluation(req: RunRequest) -> RunResult:
             exit_code=2,
         ) from exc
 
-    if not prepared.encoded_pairs:
+    # recompute_scores may fall back to accept-path bundles when fixtures are empty.
+    if not prepared.encoded_pairs and req.mode != "recompute_scores":
         raise RunOrchestratorError(
             f"suite {prepared.suite_id!r} has no cases",
             code="EVAL_USAGE",

@@ -218,7 +218,8 @@ def _emit_run_result(
             emit_human_line(line, err=True)
         raise typer.Exit(code=exit_code)
 
-    assert isinstance(result, RunResult)
+    if not isinstance(result, RunResult):
+        raise TypeError(f"{command}: expected RunResult, got {type(result)!r}")
     data = result.to_data()
     ok = result.exit_code == 0
     if as_json:
@@ -315,7 +316,7 @@ def run_cmd(
 ) -> None:
     """Run an offline evaluation suite (canonical; not ``eval suite run``)."""
     # Lazy import preserves Slice 2 import-isolation law (no scoring at import).
-    from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
+    from git_cg.eval.run_orchestrator import RunRequest, run_evaluation
 
     try:
         result = run_evaluation(
@@ -335,9 +336,8 @@ def run_cmd(
                 enable_dogfood=False,
             )
         )
-    except RunOrchestratorError as exc:
-        _emit_run_result("eval run", as_json=as_json, error=exc)
     except Exception as exc:
+        # RunOrchestratorError and unexpected failures share the same emitter.
         _emit_run_result("eval run", as_json=as_json, error=exc)
     else:
         _emit_run_result("eval run", as_json=as_json, result=result)
@@ -1108,14 +1108,24 @@ def promote_cmd(
                 data["decision_path"] = decision_path
             emit_json_envelope(build_envelope("eval promote", ok=False, data=data, errors=[err]))
             raise typer.Exit(code=int(getattr(exc, "exit_code", 2))) from None
-        _emit_slice5_error("eval promote", exc, as_json=False)
+        # Print S6-E09 denial context before exiting (_emit_slice5_error raises Exit).
+        from git_cg.eval.cli_output import emit_human_line, envelope_message
+
+        code = getattr(exc, "code", "EVAL_USAGE")
+        exit_code = int(getattr(exc, "exit_code", 2))
+        hint = getattr(exc, "hint", None)
+        err = envelope_message(code, str(exc), hint=hint)
+        line = f"eval promote: {err['message']}"
+        if hint := err.get("hint"):
+            line = f"{line} (hint: {hint})"
+        emit_human_line(line, err=True)
         denial = getattr(exc, "denial_reason", None)
         decision_path = getattr(exc, "decision_path", None)
         if denial:
             emit_human_line(f"  denial_reason: {denial}", err=True)
         if decision_path:
             emit_human_line(f"  denial_audit: {decision_path}", err=True)
-        return
+        raise typer.Exit(code=exit_code) from None
     data = {
         "decision": result["decision"],
         "decision_path": result["decision_path"],

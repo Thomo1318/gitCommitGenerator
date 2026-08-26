@@ -115,7 +115,6 @@ def test_all_sections_skipped_is_usage_error(repo: Path) -> None:
 
 
 def test_projection_shape_and_authority(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from git_cg.eval import triage as triage_mod
 
     doctor = SimpleNamespace(
         green=True,
@@ -129,15 +128,6 @@ def test_projection_shape_and_authority(repo: Path, monkeypatch: pytest.MonkeyPa
             "block_failures": [],
             "warn_failures": [],
         },
-    )
-    monkeypatch.setattr(
-        "git_cg.eval.doctor.run_local_doctor",
-        lambda **_k: doctor,
-    )
-    monkeypatch.setattr(
-        triage_mod,
-        "run_triage",
-        triage_mod.run_triage,  # keep identity; patch targets used via lazy import path
     )
     # Patch the symbols resolved by lazy import inside run_triage.
     import git_cg.eval.doctor as doctor_mod
@@ -379,8 +369,10 @@ def test_source_has_no_banned_imports_or_thresholds() -> None:
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Assign, ast.AnnAssign)):
             chunk = ast.get_source_segment(src, node) or ""
-            # Allow module-level constants that only list CLI replacements.
-            if "REPLACEMENTS_FOR_LEGACY_SCRIPT" in chunk or "SCHEMA_VERSION" in chunk:
+            # Allow-list only assignment/ann-assign nodes that define the constants.
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and (
+                "REPLACEMENTS_FOR_LEGACY_SCRIPT" in chunk or "SCHEMA_VERSION" in chunk
+            ):
                 continue
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 body_src = "\n".join(
