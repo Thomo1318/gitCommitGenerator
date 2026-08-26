@@ -20,6 +20,7 @@ _DOTENV_CANDIDATES: tuple[str, ...] = (".env", "manual.env")
 
 
 def _strip_env(value: str | None) -> str | None:
+    """Strip whitespace from an environment variable value, returning None for empty strings."""
     if value is None:
         return None
     text = value.strip()
@@ -250,6 +251,7 @@ def report_commit_plan_contract_violation(
     import sentry_sdk
 
     def _sem(value: object) -> str:
+        """Normalize a SemVer value to a standard string representation."""
         if value is None or value == "":
             return "unknown"
         if hasattr(value, "value"):

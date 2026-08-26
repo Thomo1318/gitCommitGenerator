@@ -142,6 +142,7 @@ def empty_scoped_history_evidence(*, fallback_reason: str = "none") -> ScopedHis
 
 
 def _as_str_list(value: Any, *, max_items: int = MAX_FLOWS_PER_FILE) -> list[str]:
+    """Convert various value types to a bounded list of non-empty strings."""
     if value is None:
         return []
     if isinstance(value, str):
@@ -188,6 +189,7 @@ def extract_file_to_flow_ids(
     mapping: dict[str, list[str]] = {}
 
     def _add(path: str, flow_ids: Sequence[str]) -> None:
+        """Add flow IDs for a path to the mapping if within limits."""
         path = str(path).strip()
         if not path:
             return
@@ -296,12 +298,14 @@ def evaluate_split_evidence(
     parent: dict[str, str] = {p: p for p in membership}
 
     def _find(x: str) -> str:
+        """Find the root of a union-find set with path compression."""
         while parent[x] != x:
             parent[x] = parent[parent[x]]
             x = parent[x]
         return x
 
     def _union(a: str, b: str) -> None:
+        """Union two sets in the union-find structure."""
         ra, rb = _find(a), _find(b)
         if ra != rb:
             parent[rb] = ra
@@ -392,6 +396,7 @@ _BAND_RANK = {
 
 
 def _max_band(current: str, candidate: RenameConfidence) -> str:
+    """Return the higher-ranked confidence band between current and candidate."""
     if _BAND_RANK.get(candidate.value, 0) > _BAND_RANK.get(current, 0):
         return candidate.value
     return current

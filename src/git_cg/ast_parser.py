@@ -84,6 +84,7 @@ class ParseResult:
     tree: Any | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Convert ParseResult to a JSON-serializable dictionary."""
         # Exclude non-serialisable tree-sitter objects before asdict deep-copy.
         payload = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "tree"}
         payload["status"] = str(self.status)
@@ -109,6 +110,7 @@ class SemanticParserMetrics:
     semantic_summary_chars: int = 0
 
     def to_dict(self) -> dict[str, Any]:
+        """Convert SemanticParserMetrics to a dictionary."""
         return asdict(self)
 
 
@@ -120,6 +122,7 @@ class ParseBatch:
     metrics: SemanticParserMetrics = field(default_factory=SemanticParserMetrics)
 
     def to_dict(self) -> dict[str, Any]:
+        """Convert ParseBatch to a dictionary with serialized results and metrics."""
         return {
             "results": [r.to_dict() for r in self.results],
             "metrics": self.metrics.to_dict(),
@@ -186,6 +189,7 @@ def get_parser_for(language: str) -> tree_sitter.Parser:
 
 
 def _source_sha16(source: bytes) -> str:
+    """Compute a 16-character SHA-256 hex digest prefix for source bytes."""
     return hashlib.sha256(source).hexdigest()[:16]
 
 

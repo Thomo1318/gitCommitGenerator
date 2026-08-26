@@ -276,7 +276,9 @@ _PUBLIC_API_PATTERNS = (
 
 
 def _normalize_diff_for_content_matching(diff_output: str) -> str:
+    """Normalize diff output for content matching by stripping metadata lines."""
     def _normalize_line(line: str) -> str:
+        """Normalize a single diff line for content matching."""
         if line.startswith(("diff --git ", "index ", "+++", "---")):
             return ""
         if line.startswith(("+a/", "-a/", "+b/", "-b/")):
@@ -400,6 +402,7 @@ def extract_diff_file_summary(diff_output: str) -> DiffFileSummary:
 
 
 def _apply_file_signals(signals: DiffSignals, file_summary: DiffFileSummary) -> None:
+    """Apply file-based signals from the diff file summary to the signals object."""
     paths = file_summary.paths
 
     if file_summary.added_paths:
@@ -469,6 +472,7 @@ def _paths_are_non_product_only(paths: list[str]) -> bool:
 
 
 def _apply_content_signals(signals: DiffSignals, diff_output: str, lowered_diff: str) -> None:
+    """Apply content-based signals from diff text to the signals object."""
     added_lines = [line for line in diff_output.splitlines() if line.startswith("+") and not line.startswith("+++")]
     # P-S12-5/6: fixture JSON, test AST/source, and Markdown prose must not promote
     # product/runtime ranking markers. Path/file-class signals remain authoritative.
@@ -539,6 +543,7 @@ def _apply_content_signals(signals: DiffSignals, diff_output: str, lowered_diff:
 
 
 def _apply_only_signals(signals: DiffSignals, paths: list[str]) -> None:
+    """Apply signals indicating changes are limited to specific file categories."""
     if not paths:
         return
 
@@ -569,6 +574,7 @@ def _apply_only_signals(signals: DiffSignals, paths: list[str]) -> None:
 
 
 def _parse_diff_git_paths(line: str) -> tuple[str, str] | None:
+    """Parse old and new paths from a diff --git line."""
     # Expected: diff --git a/path b/path
     parts = line.split()
     if len(parts) < 4:
@@ -586,6 +592,7 @@ def _parse_diff_git_paths(line: str) -> tuple[str, str] | None:
 
 
 def _is_docs_path(path: str) -> bool:
+    """Check if a path represents a documentation file."""
     p = PurePosixPath(path)
     lowered = path.lower()
     return (
@@ -597,6 +604,7 @@ def _is_docs_path(path: str) -> bool:
 
 
 def _is_test_path(path: str) -> bool:
+    """Check if a path represents a test file."""
     p = PurePosixPath(path)
     parts = {part.lower() for part in p.parts}
     name = p.name.lower()
@@ -616,40 +624,48 @@ def _is_fixture_path(path: str) -> bool:
 
 
 def _is_ci_path(path: str) -> bool:
+    """Check if a path represents a CI/CD workflow file."""
     lowered = path.lower()
     return lowered.startswith(_CI_PATH_PREFIXES) or "workflow" in lowered
 
 
 def _is_build_path(path: str) -> bool:
+    """Check if a path represents a build configuration file."""
     name = PurePosixPath(path).name
     return name in _BUILD_FILES
 
 
 def _is_hook_path(path: str) -> bool:
+    """Check if a path represents a git hook file."""
     lowered = path.lower()
     name = PurePosixPath(path).name.lower()
     return any(part in lowered for part in _HOOK_PATH_PARTS) or name in _HOOK_PATH_PARTS
 
 
 def _is_config_path(path: str) -> bool:
+    """Check if a path represents a configuration file."""
     p = PurePosixPath(path)
     return p.suffix.lower() in _CONFIG_EXTENSIONS or p.name in _BUILD_FILES
 
 
 def _is_release_path(path: str) -> bool:
+    """Check if a path represents a release-related file."""
     return PurePosixPath(path).name in _RELEASE_FILES
 
 
 def _is_security_path(path: str) -> bool:
+    """Check if a path represents a security-related file."""
     lowered = path.lower()
     return any(part in lowered for part in _SECURITY_PATH_PARTS)
 
 
 def _is_dependency_path(path: str) -> bool:
+    """Check if a path represents a dependency manifest file."""
     return PurePosixPath(path).name in _DEPENDENCY_FILES
 
 
 def _dependency_added(added_lines: list[str]) -> bool:
+    """Check if dependency additions are present in added lines."""
     dependency_indicators = (
         "dependencies",
         "dependency-groups",
@@ -662,6 +678,7 @@ def _dependency_added(added_lines: list[str]) -> bool:
 
 
 def _dependency_removed(diff_output: str) -> bool:
+    """Check if dependency removals are present in diff output."""
     removed_lines = [line for line in diff_output.splitlines() if line.startswith("-") and not line.startswith("---")]
     dependency_indicators = (
         "dependencies",
@@ -675,6 +692,7 @@ def _dependency_removed(diff_output: str) -> bool:
 
 
 def _append_unique(items: list[str], value: str) -> None:
+    """Append a value to a list if it is not already present."""
     if value not in items:
         items.append(value)
 
@@ -1174,6 +1192,7 @@ def rank_commit_intents(
 
 
 def _apply_diff_metrics(signals: DiffSignals, diff_output: str) -> None:
+    """Calculate and apply diff metrics such as lines added and removed."""
     for line in diff_output.splitlines():
         if line.startswith("+") and not line.startswith("+++"):
             signals.lines_added += 1

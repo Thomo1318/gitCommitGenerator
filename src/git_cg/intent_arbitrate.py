@@ -112,10 +112,12 @@ class EligibleIntent:
     scope_hint: str = "core"
 
     def label_short(self) -> str:
+        """Return a short label for the intent without score."""
         scope = self.scope_hint or "core"
         return f"{self.emoji} {self.cc_type}({scope}) — {self.intent_id}"
 
     def label_with_score(self) -> str:
+        """Return a label for the intent including its score if available."""
         base = self.label_short()
         if self.score is None:
             return base
@@ -147,6 +149,7 @@ class ArbitrationDeps:
 
 
 def _allowed_id_set(constraints: IntentSelectionConstraints) -> set[str] | None:
+    """Convert allowed intent IDs from constraints to a set, or return None if unrestricted."""
     if not constraints.allowed_intent_ids:
         return None
     return set(constraints.allowed_intent_ids)
@@ -399,9 +402,11 @@ def compose_arbitration_status_strip(
     seen_norm: set[str] = set()
 
     def _norm(s: str) -> str:
+        """Normalize whitespace in a string for comparison."""
         return " ".join(s.lower().split())
 
     def _add(piece: str | None) -> None:
+        """Add a unique piece to the banner parts if not already present."""
         if not piece:
             return
         cleaned = " ".join(str(piece).split()).strip()
@@ -445,6 +450,7 @@ def compose_arbitration_status_strip(
 
 
 def _fmt_score(score: float | None) -> str:
+    """Format a score as a string, returning a dash for None."""
     if score is None:
         return "—"
     return f"{score:.1f}"
@@ -457,6 +463,7 @@ def build_main_body(
     *,
     guidance_status: str | None = None,
 ) -> str:
+    """Build the main arbitration panel body text."""
     # Prefer presentation A/B margin when both have scores; fall back to confidence margin.
     if top is not None and runner is not None and top.score is not None and runner.score is not None:
         shown_margin = float(top.score) - float(runner.score)
@@ -493,6 +500,7 @@ def build_lock_body(
     override: bool,
     original_top: EligibleIntent | None = None,
 ) -> str:
+    """Build the locked intent confirmation panel body text."""
     lines = [
         "Contract to lock (wording generated after this):",
         "",
@@ -524,6 +532,7 @@ def _option_key(prefix: str, intent: EligibleIntent) -> str:
 
 
 def _intent_id_from_option(choice: str, mapping: dict[str, str]) -> str | None:
+    """Extract intent ID from user choice using provided mapping."""
     return mapping.get(choice)
 
 
@@ -541,6 +550,7 @@ def _result_locked(
     directives: dict[str, str] | None = None,
     residual: str | None = None,
 ) -> ArbitrationResult:
+    """Create an arbitration result for a locked intent selection."""
     return ArbitrationResult(
         action="locked",
         locked_intent_id=intent_id,
@@ -561,6 +571,7 @@ def _result_continue_top(
     directives: dict[str, str] | None = None,
     residual: str | None = None,
 ) -> ArbitrationResult:
+    """Create an arbitration result for continuing with the top-ranked intent."""
     return ArbitrationResult(
         action="continue_top",
         locked_intent_id=top_id,
@@ -575,6 +586,7 @@ def _result_continue_top(
 
 
 def _result_abort(*, guidance: str | None = None) -> ArbitrationResult:
+    """Create an arbitration result for an aborted flow."""
     return ArbitrationResult(
         action="aborted",
         locked_intent_id=None,
@@ -592,6 +604,7 @@ def _result_re_rank(
     directives: dict[str, str],
     residual: str | None,
 ) -> ArbitrationResult:
+    """Create an arbitration result requesting re-ranking."""
     return ArbitrationResult(
         action="re_rank",
         locked_intent_id=None,

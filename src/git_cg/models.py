@@ -69,6 +69,7 @@ class TrailerPriors(BaseModel):
 
     @model_validator(mode="after")
     def _validate_role(self) -> TrailerPriors:
+        """Validate that the role is in the allowed set of trailer roles."""
         if self.role not in _TRAILER_ROLES:
             raise ValueError(f"role must be one of {list(_TRAILER_ROLES)}; got {self.role!r}")
         return self
@@ -128,6 +129,7 @@ class BlueprintStub(BaseModel):
 
     @model_validator(mode="after")
     def _validate_stub(self) -> BlueprintStub:
+        """Validate stub role, surface format, and claim tags."""
         if self.role not in _BLUEPRINT_STUB_ROLES:
             raise ValueError(f"role must be one of {list(_BLUEPRINT_STUB_ROLES)}; got {self.role!r}")
         if any(ch in self.surface for ch in ("/", "\\", " ")):
@@ -179,6 +181,7 @@ class CommitBlueprint(BaseModel):
 
     @model_validator(mode="after")
     def _validate_bounds(self) -> CommitBlueprint:
+        """Validate field size limits for blueprint fields."""
         if self.change_types is not None and len(self.change_types) > 12:
             raise ValueError("change_types accepts at most 12 entries")
         if self.changelog_groups is not None and len(self.changelog_groups) > 12:

@@ -49,6 +49,7 @@ class StagedReadResult:
 
     @property
     def ok(self) -> bool:
+        """Return True if the result contains usable files, even if some errors occurred."""
         return not self.errors or bool(self.files)
 
 
@@ -61,6 +62,7 @@ def _run_git(
     input_data: bytes | None = None,
     timeout: float | None = DEFAULT_GIT_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[bytes]:
+    """Execute a git command with retry logic and timeout."""
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
