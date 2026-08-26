@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -65,6 +65,7 @@ class TrainExportError(ValueError):
     """Deterministic train-export failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Attach machine-readable ``code``, process ``exit_code``, and optional hint."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -72,10 +73,12 @@ class TrainExportError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _train_export_dir(repo: Path) -> Path:
+    """Resolve the governed ``.eval/train_export/`` directory for ``repo``."""
     from git_cg.eval.binding.paths import LayerAPathError, train_export_dir
 
     try:
@@ -85,6 +88,7 @@ def _train_export_dir(repo: Path) -> Path:
 
 
 def _vault_dir(repo: Path) -> Path:
+    """Resolve the governed antipattern vault directory for ``repo``."""
     from git_cg.eval.binding.paths import LayerAPathError, antipattern_vault_dir
 
     try:
@@ -94,6 +98,7 @@ def _vault_dir(repo: Path) -> Path:
 
 
 def _bundles_dir(repo: Path) -> Path:
+    """Resolve the accept-path bundles directory for ``repo``."""
     from git_cg.eval.binding.paths import LayerAPathError, acceptpath_bundles_dir
 
     try:
@@ -103,6 +108,7 @@ def _bundles_dir(repo: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -112,6 +118,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
+    """Load a JSON object from ``path``; map I/O and decode failures to TrainExportError."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -240,11 +247,15 @@ def build_train_export(
     split_group_id: str | None = None,
     notes: str | None = None,
     export_id: str | None = None,
+    redact_bundle: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Project → redact → row-policy → assemble a ``train_export_v1`` document.
 
     Row scrub-fail policy (locked): drop + report + continue; never cleartext;
     never ``.eval/quarantine/``.
+
+    ``redact_bundle`` is an injectable seam for tests; production callers leave
+    it ``None`` so the canonical export redactor is used.
     """
     if redaction_profile not in EXPORT_PROFILES:
         raise TrainExportError(
@@ -260,6 +271,8 @@ def build_train_export(
 
     from git_cg.eval.mirror.redaction import RedactionError, redact_bundle_for_export
     from git_cg.eval.mirror.train import build_train_projection, filter_positive_gold
+
+    redact = redact_bundle if redact_bundle is not None else redact_bundle_for_export
 
     rows: list[dict[str, Any]] = []
     row_ids: list[str] = []
@@ -283,7 +296,7 @@ def build_train_export(
             dropped.append(bundle_id)
             continue
         try:
-            redacted = redact_bundle_for_export(bundle, profile=redaction_profile)
+            redacted = redact(bundle, profile=redaction_profile)
         except RedactionError as exc:
             # Row cannot be emitted secret-safe → drop + report + continue.
             dropped.append(bundle_id)
