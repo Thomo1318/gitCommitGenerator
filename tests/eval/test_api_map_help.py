@@ -381,3 +381,60 @@ def test_keep_last_default_on_run_help() -> None:
     assert result.exit_code == 0, result.output
     assert re.search(r"keep-last", result.output)
     assert str(DEFAULT_KEEP_LAST) in result.output
+
+
+def test_eval_help_workflow_panels_and_plain_language() -> None:
+    """Top-level eval help is workflow-grouped and free of internal jargon."""
+    runner = CliRunner()
+    result = runner.invoke(app, ["eval", "--help"])
+    assert result.exit_code == 0
+    out = result.output
+
+    # Workflow panel order (Rich titles). Match panel headers, not prose.
+    panels = [
+        "Corpus",
+        "Run",
+        "Inspect",
+        "Review & sessions",
+        "Export & train",
+        "Advanced",
+        "Deprecated",
+    ]
+    positions = []
+    for name in panels:
+        # Rich renders "╭─ <title> ─..."; fall back to plain title if box-drawing is stripped.
+        header = f"─ {name} "
+        if header in out:
+            positions.append(out.index(header))
+        else:
+            positions.append(out.index(name))
+    assert positions == sorted(positions), positions
+
+    # Dark-launch stays hidden.
+    assert "dogfood" not in out
+
+    # No leaked ReST/backtick markup or internal-spec breadcrumbs in top help.
+    banned = [
+        "``",
+        "ape_bundle_v1",
+        "diag_issue_v1",
+        "replay_compare_v1",
+        "operator surface",
+        "no product ranking",
+        "§",
+        "R11",
+        "R14",
+        "Slice 8",
+        "D27",
+        "F4",
+        "Layer-A",
+        "fingerprint law",
+        "split_group_id",
+    ]
+    for token in banned:
+        assert token not in out, token
+
+    # Plain-language top description remains user-facing.
+    # Rich may wrap the sentence across terminal columns.
+    collapsed = re.sub(r"\s+", " ", out)
+    assert "Does not change product commit ranking." in collapsed
