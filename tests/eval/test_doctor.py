@@ -43,26 +43,26 @@ def test_check_requires_nonempty_id() -> None:
         DoctorCheck("  ", STATUS_PASS, "block", "x")
 
 
-def test_doctor_green_aggregates_block_severity_only() -> None:
+def test_doctor_green_aggregates_block_severity_only(tmp_path: Path) -> None:
     """A warn-severity fail must NOT flip h.doctor_green red."""
-    report = run_local_doctor(repo_root=REPO)
+    (tmp_path / ".git").mkdir()
+    report = run_local_doctor(repo_root=tmp_path)
     # Force-inject a synthetic warn fail alongside a clean block set to prove
     # the aggregation rule independent of environment state.
     synthetic_warn_fail = DoctorCheck("synthetic.warn", STATUS_FAIL, "warn", "simulated warn failure")
     checks = (*tuple(report.checks), synthetic_warn_fail)
     block_fails = [c for c in checks if c.severity == "block" and c.status == STATUS_FAIL]
-    recomputed_green = not block_fails
-    # Warn failure present but no block failure ⇒ still green.
-    if not block_fails:
-        assert recomputed_green is True
-    # The report's own green agrees with block-only aggregation.
-    expected = not any(c.severity == "block" and c.status == STATUS_FAIL for c in report.checks)
-    assert report.green is expected
+    report_block_fails = [c for c in report.checks if c.severity == "block" and c.status == STATUS_FAIL]
+    assert block_fails == report_block_fails
+    assert any(c.status == STATUS_FAIL and c.severity == "warn" for c in checks)
+    # The report's own green agrees with block-only aggregation on live checks.
+    assert report.green is (not report_block_fails)
 
 
-def test_local_doctor_emits_phantom_metric_scores() -> None:
+def test_local_doctor_emits_phantom_metric_scores(tmp_path: Path) -> None:
     """The three phantom-metric producers must be real ScoreResultV1 rows."""
-    report = run_local_doctor(repo_root=REPO)
+    (tmp_path / ".git").mkdir()
+    report = run_local_doctor(repo_root=tmp_path)
     ids = {s.metric_id for s in report.scores}
     assert "h.compat_hash_resume" in ids
     assert "h.doctor_green" in ids

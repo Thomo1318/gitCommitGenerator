@@ -435,14 +435,21 @@ def run_local_doctor(
     compat_ok = True
     compat_fail_checkpoint: str | None = None
     compat_checked = 0
-    if prepared is not None and suite_snapshot_pin:
+    if (
+        prepared is not None
+        and suite_snapshot_pin
+        and schema_pin
+        and catalog_pin
+        and _is_pinned(schema_pin)
+        and _is_pinned(catalog_pin)
+    ):
         from git_cg.eval.checkpoint_store import list_checkpoint_ids, load_checkpoint
         from git_cg.eval.compat import compute_compat_hash
 
         try:
             live_hash = compute_compat_hash(
-                schema_pack_pin=schema_pin or "",
-                metric_catalog_pin=catalog_pin or "",
+                schema_pack_pin=schema_pin,
+                metric_catalog_pin=catalog_pin,
                 suite_id=suite_id,
                 snapshot_hash=suite_snapshot_pin,
             )
@@ -548,6 +555,16 @@ def _export_config_score(make_score: Any) -> Any:
             False,
             reason=f"config_error: {exc}",
             evidence={"health": "config_error"},
+            failure_ids=["EVAL_CONFIG_ERROR"],
+            product_authority="git_cg.eval.doctor.run_local_doctor",
+        )
+    except Exception as exc:
+        # Schema/resolution failures must not abort the whole doctor report.
+        return make_score(
+            "h.export_config_resolved",
+            False,
+            reason=f"config_error: {exc}",
+            evidence={"health": "config_error", "error_type": type(exc).__name__},
             failure_ids=["EVAL_CONFIG_ERROR"],
             product_authority="git_cg.eval.doctor.run_local_doctor",
         )
@@ -669,7 +686,9 @@ def run_opik_doctor(*, repo_root: Path) -> DoctorReport:
             "opik.queue_readable",
             ok=unreadable == 0,
             severity=SEVERITY_WARN,
-            pass_message=f"export queue readable ({sum(queue_counts.values())} items)",
+            pass_message=(
+                f"export queue readable ({sum(v for k, v in queue_counts.items() if k != 'unreadable')} items)"
+            ),
             fail_message=f"{unreadable} unreadable export-queue row(s)",
             warn_only=True,
         )
