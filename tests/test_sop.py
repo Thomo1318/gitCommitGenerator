@@ -272,3 +272,114 @@ def test_changelog_generation_rules_taxonomy_covers_matrix_groups():
     matrix_groups = _matrix_changelog_groups()
     missing = sorted(matrix_groups - named)
     assert not missing, f"taxonomy missing matrix groups: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Dark Launch matrix row (🌑 / :new_moon: / dark_launch)
+# ---------------------------------------------------------------------------
+
+
+def _matrix_rows() -> list[dict]:
+    """Return the live SOP gitmoji reference matrix rows."""
+    return list(load_sop().get("gitmoji_reference_matrix") or [])
+
+
+def test_dark_launch_matrix_row_present_and_unique() -> None:
+    """🌑 dark_launch must exist exactly once with unique emoji/code/intent_id."""
+    import git_cg.sop as sop_module
+
+    sop_module.load_sop.cache_clear()
+    matrix = _matrix_rows()
+    rows = [r for r in matrix if r.get("intent_id") == "dark_launch"]
+    assert len(rows) == 1, f"expected exactly one dark_launch row, found {len(rows)}"
+    row = rows[0]
+
+    assert row.get("emoji") == "🌑"
+    assert row.get("code") == ":new_moon:"
+    assert row.get("cc_type") == "chore"
+    assert row.get("semver_impact") == "PATCH"
+    assert row.get("changelog_group") == "Changed"
+    assert row.get("intent_group") == "config_chore"
+    assert int(row.get("priority", 100)) <= 40
+    assert int(row.get("specificity", 0)) >= 90
+
+    # Uniqueness across the whole matrix (not only this row)
+    assert sum(1 for r in matrix if r.get("emoji") == "🌑") == 1
+    assert sum(1 for r in matrix if r.get("code") == ":new_moon:") == 1
+    assert sum(1 for r in matrix if r.get("intent_id") == "dark_launch") == 1
+
+
+def test_dark_launch_matrix_row_does_not_reuse_flag_feature_signals() -> None:
+    """Dark-launch positives must not collide with 🚩 feature_flags_update signal tokens."""
+    matrix = _matrix_rows()
+    dark = next(r for r in matrix if r.get("intent_id") == "dark_launch")
+    flags = next(r for r in matrix if r.get("intent_id") == "feature_flags_update")
+    dark_pos = set(dark.get("positive_signals") or [])
+    flag_pos = set(flags.get("positive_signals") or [])
+    overlap = sorted(dark_pos & flag_pos)
+    assert not overlap, f"dark_launch shares feature_flags positives: {overlap}"
+
+
+def test_validate_commit_accepts_dark_launch_hybrid_subject(tmp_path) -> None:
+    """scripts/validate_commit.mjs must accept 🌑 chore(...) Hybrid subjects."""
+    import os
+    import shutil
+    import subprocess
+
+    import git_cg.sop as sop_module
+
+    node = shutil.which("node")
+    assert node, "node is required to exercise validate_commit.mjs"
+
+    script = _REPO_ROOT / "scripts" / "validate_commit.mjs"
+    assert script.is_file(), f"missing {script}"
+
+    # validate_commit.mjs rejects absolute/outside-repo paths; use cwd-relative msg.
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "🌑 chore(semantic): ship graph refresh behind enable_semantic\n",
+        encoding="utf-8",
+    )
+
+    sop_module.load_sop.cache_clear()
+    proc = subprocess.run(
+        [node, str(script), "COMMIT_EDITMSG"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    assert proc.returncode == 0, (
+        f"validate_commit.mjs rejected dark_launch subject\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "PATCH" in proc.stdout or "Commit Validated" in proc.stdout
+
+
+def test_validate_commit_rejects_dark_launch_emoji_type_mismatch(tmp_path) -> None:
+    """🌑 must stay paired with matrix cc_type=chore (not feat)."""
+    import os
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    assert node, "node is required to exercise validate_commit.mjs"
+
+    script = _REPO_ROOT / "scripts" / "validate_commit.mjs"
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "🌑 feat(semantic): ship graph refresh behind enable_semantic\n",
+        encoding="utf-8",
+    )
+
+    proc = subprocess.run(
+        [node, str(script), "COMMIT_EDITMSG"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    assert proc.returncode != 0
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    assert "mismatch" in combined.lower() or "MUST be paired" in combined
