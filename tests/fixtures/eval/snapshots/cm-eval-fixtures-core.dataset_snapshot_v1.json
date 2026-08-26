@@ -10,23 +10,23 @@
     "items": [
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "50eaa761e1cc90ad42b02c1894095648181d9796757dcf81e507088ad3ec10fe",
-        "bundle_ref": "bundle:seed-v1-valid-fixture@50eaa761e1cc90ad42b02c1894095648181d9796757dcf81e507088ad3ec10fe",
-        "case_hash": "0204d2b87966e7c98fa7cef9e39877b2af876b1ad9b75f5418a8c52d275eeee3",
+        "bundle_hash": "717e191cb8f83784429ef92c720bd7c0ab9b3acb093f8822a6ae2505fbf28bde",
+        "bundle_ref": "bundle:seed-v1-valid-fixture@717e191cb8f83784429ef92c720bd7c0ab9b3acb093f8822a6ae2505fbf28bde",
+        "case_hash": "bd094cbed17844e2af1f78570e40b8f16911b340b0ff253a1f52644a3cec2fbd",
         "case_id": "seed-v1-valid-fixture"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "6ca3137b4fd5c6fb12056053f25ee78df6a2ee80d5603b667b29ea3bcd1e204b",
-        "bundle_ref": "bundle:seed-a1-session12-regime-a@6ca3137b4fd5c6fb12056053f25ee78df6a2ee80d5603b667b29ea3bcd1e204b",
-        "case_hash": "a2864488e4da54b7c302fdb4a15ce27eb1954ca5aef568eb7c41b7ecfaecc943",
+        "bundle_hash": "9dd3a7875ab74ad560b8f884e37d96841f6b77291e4935d35a421ab5e6aa984a",
+        "bundle_ref": "bundle:seed-a1-session12-regime-a@9dd3a7875ab74ad560b8f884e37d96841f6b77291e4935d35a421ab5e6aa984a",
+        "case_hash": "249954208f2257e3a8ebc126876fc0b7b824e9cd697b3375e4da12842d47777d",
         "case_id": "seed-a1-session12-regime-a"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "673d0693f80dabeeb71cff416ddd2163c3a73f467d4324e2da237eafcd104383",
-        "bundle_ref": "bundle:seed-b1-session12-regime-b@673d0693f80dabeeb71cff416ddd2163c3a73f467d4324e2da237eafcd104383",
-        "case_hash": "fc3ff7d29e30b701d71bf716ca988eebde6948ee7800c632d5a97281c7e191a5",
+        "bundle_hash": "39590a83fe4a71589b15418d3ed5f41146cad8668c8f9ae4c60672a2772d55c3",
+        "bundle_ref": "bundle:seed-b1-session12-regime-b@39590a83fe4a71589b15418d3ed5f41146cad8668c8f9ae4c60672a2772d55c3",
+        "case_hash": "cb71423661e11e9343184d7a92b7b38d818dbceb87ceac5e1a0392658c527a90",
         "case_id": "seed-b1-session12-regime-b"
       }
     ],
@@ -36,7 +36,7 @@
   },
   "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
   "notes": "Offline Lane A snapshot for cm-eval-fixtures-core",
-  "schema_pack": "schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6",
+  "schema_pack": "schema_pack_v0@8616781fb87ea4721253f7efacf120c7c602062a6c578b8a4173fbae5341c3c3",
   "schema_version": "dataset_snapshot_v1",
-  "snapshot_hash": "03fc43cfc2872ae1ff7c3df1c10cc09d9ef0c077b3e0bfad7a6bb4fef96f0b67"
+  "snapshot_hash": "00dcbefc857c264b8d8a09e860665ac433bd6241a928cc7532fb17d2d8e403c6"
 }
