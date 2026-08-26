@@ -52,6 +52,7 @@
 - [🧑‍💻 Development](#-development)
 - [🏆 Acknowledgements & Open Source Licenses](#-acknowledgements--open-source-licenses)
 - [📄 License](#-license)
+- [CLI reference](#cli-reference)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -567,3 +568,7 @@ This project heavily leverages the following open-source tools. We extend our im
 ## 📄 License
 
 MIT © 2026
+
+## CLI reference
+
+* [CLI reference](docs/cli/index.md) — live Typer tree, overview + one page per command

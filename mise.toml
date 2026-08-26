@@ -161,6 +161,10 @@ run = "uv run python -m git_cg.main --help"
 [tasks.pre-commit]
 run = "hk run pre-commit"
 
+[tasks."docs:cli"]
+description = "Regenerate docs/cli from live Typer trees"
+run = "uv run python tools/gen_cli_docs.py"
+
 [tasks."docs:build"]
 description = "Build the Zensical documentation site locally"
 run = "uv run zensical build --clean"

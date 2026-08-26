@@ -123,6 +123,10 @@ eval-fixture-index:
 eval-api-map-check:
     uv run python -m git_cg.eval.api_map --check
 
+# Regenerate docs/cli from live Typer trees (mise-style overview + one page per command)
+gen-cli-docs:
+    uv run python tools/gen_cli_docs.py
+
 # S6 offline proof spine (claim-matrix subset; no cov). Does not replace full CI pytest.
 eval-s6-proof:
     uv run pytest \

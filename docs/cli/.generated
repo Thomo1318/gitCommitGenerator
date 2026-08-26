@@ -1,0 +1,2 @@
+Generated from live Typer trees (git_cg.main.app + git_cg.eval.cli.eval_app).
+Regenerate via: uv run python tools/gen_cli_docs.py
