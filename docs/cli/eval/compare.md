@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval compare …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Structural + metric delta; uses replay_compare lineage when linked (§18.3).
+Diff two cases (structure and metrics).
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Structural + metric delta; uses replay_compare lineage when linked (§18.3).
 ```text
 Usage: git-cg eval compare [OPTIONS]                                                       
                                                                                 
- Structural + metric delta; uses replay_compare lineage when linked (§18.3).    
+ Diff two cases (structure and metrics).                                        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --a-experiment-id        TEXT  Left experiment id. [required]             │

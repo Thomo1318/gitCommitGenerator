@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval resume …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Resume a suite run from a governed checkpoint + compat hash.
+Resume a suite from a checkpoint.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Resume a suite run from a governed checkpoint + compat hash.
 ```text
 Usage: git-cg eval resume [OPTIONS]                                                        
                                                                                 
- Resume a suite run from a governed checkpoint + compat hash.                   
+ Resume a suite from a checkpoint.                                              
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --checkpoint             TEXT       Checkpoint id to resume (required).      │

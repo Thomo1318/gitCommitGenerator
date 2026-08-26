@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval explain …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Deterministic explain contract (§18.3); no opaque LLM RCA.
+Show a deterministic explanation for a failing case.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Deterministic explain contract (§18.3); no opaque LLM RCA.
 ```text
 Usage: git-cg eval explain [OPTIONS]                                                       
                                                                                 
- Deterministic explain contract (§18.3); no opaque LLM RCA.                     
+ Show a deterministic explanation for a failing case.                           
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --experiment-id        TEXT  Experiment id (defaults to latest local run).   │

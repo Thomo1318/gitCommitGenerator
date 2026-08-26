@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval config …`  
 > **Kind:** `command` · **Status:** deprecated alias → `eval opik config show`
 
-Deprecated alias for ``eval opik config show`` (temporary bridge). Removal target: first minor release after S6 GA.
+Alias of eval opik config show. Removal target: first minor release after S6 GA.
 
 ## Authority boundary
 
@@ -16,7 +16,8 @@ Deprecated alias for ``eval opik config show`` (temporary bridge). Removal targe
 ```text
 Usage: git-cg eval config [OPTIONS] ACTION                                                 
                                                                                 
- Deprecated alias for ``eval opik config show`` (temporary bridge).             
+ (deprecated)                                                                   
+ Alias of eval opik config show.                                                
                                                                                 
  Removal target: first minor release after S6 GA.                               
                                                                                 

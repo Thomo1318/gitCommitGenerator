@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval review rollup …`  
 > **Kind:** `command` · **Status:** command
 
-Multi-rater advisory rollup over local human_review_v1 rows (NTH-05). Read-only dimension/outcome majority + craft spread. Authority stays advisory; never sole-promotes gold.
+Roll up multi-rater advisory scores for review items. Read-only dimension/outcome majority + craft spread. Authority stays advisory; never sole-promotes gold.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Multi-rater advisory rollup over local human_review_v1 rows (NTH-05). Read-only 
 ```text
 Usage: git-cg eval review rollup [OPTIONS]                                                        
                                                                                 
- Multi-rater advisory rollup over local human_review_v1 rows (NTH-05).          
+ Roll up multi-rater advisory scores for review items.                          
                                                                                 
  Read-only dimension/outcome majority + craft spread. Authority stays           
  advisory; never sole-promotes gold.                                            

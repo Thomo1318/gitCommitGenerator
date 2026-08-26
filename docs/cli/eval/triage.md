@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval triage …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Offline advisory router over doctor + failures + explain (Slice 8 / D27). Composes library engines only — never nests Typer presentation commands. Not score law: does not promote gold, rank intents, or revive Opik ``user_acceptance`` threshold triage. Emits one human report or one ``cli_output_envelope_v1`` with an ``eval_triage_v0`` data payload.
+One-shot advisory view: doctor + failures + explain. Composes library engines only — never nests Typer presentation commands. Not score law: does not promote gold, rank intents, or revive Opik ``user_acceptance`` threshold triage. Emits one human report or one ``cli_output_envelope_v1`` with an ``eval_triage_v0`` data payload.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Offline advisory router over doctor + failures + explain (Slice 8 / D27). Compos
 ```text
 Usage: git-cg eval triage [OPTIONS]                                                        
                                                                                 
- Offline advisory router over doctor + failures + explain (Slice 8 / D27).      
+ One-shot advisory view: doctor + failures + explain.                           
                                                                                 
  Composes library engines only — never nests Typer presentation commands.       
  Not score law: does not promote gold, rank intents, or revive Opik             

@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval thread show …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation.
+Show one local session thread. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Op
 ```text
 Usage: git-cg eval thread show [OPTIONS]                                                          
                                                                                 
- Read a local message-thread twin under .eval/sessions/ (§7.6).                 
+ Show one local session thread.                                                 
                                                                                 
  Read-only: no Opik reach, no chat timeline, no graph browser, no accept        
  authority, no rerun, no ranking mutation.                                      

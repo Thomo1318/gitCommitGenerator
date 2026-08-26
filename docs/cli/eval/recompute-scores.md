@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval recompute-scores …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Re-run the metric pack over already-landed evidence bundles.
+Re-score evidence already written by a prior run.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Re-run the metric pack over already-landed evidence bundles.
 ```text
 Usage: git-cg eval recompute-scores [OPTIONS]                                              
                                                                                 
- Re-run the metric pack over already-landed evidence bundles.                   
+ Re-score evidence already written by a prior run.                              
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --experiment             TEXT       Parent experiment id whose evidence is   │

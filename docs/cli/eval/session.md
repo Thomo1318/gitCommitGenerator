@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval session …`  
 > **Kind:** `group` · **Status:** group
 
-Local commit-session inspection.
+Inspect local commit sessions.
 
 ## Authority boundary
 
@@ -16,19 +16,19 @@ Local commit-session inspection.
 ```text
 Usage: git-cg eval session [OPTIONS] COMMAND [ARGS]...                                     
                                                                                 
- Local commit-session inspection.                                               
+ Inspect local commit sessions.                                                 
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ show  Read a local session twin under .eval/sessions/ (§7.6).                │
+│ show  Show one local commit session.                                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval session show`](session/show.md) — Read a local session twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, n
+* [`git-cg eval session show`](session/show.md) — Show one local commit session. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutat
 
 ## See also
 

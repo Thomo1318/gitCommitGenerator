@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval thread …`  
 > **Kind:** `group` · **Status:** group
 
-Local session-thread inspection.
+Inspect local session threads.
 
 ## Authority boundary
 
@@ -16,19 +16,19 @@ Local session-thread inspection.
 ```text
 Usage: git-cg eval thread [OPTIONS] COMMAND [ARGS]...                                      
                                                                                 
- Local session-thread inspection.                                               
+ Inspect local session threads.                                                 
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ show  Read a local message-thread twin under .eval/sessions/ (§7.6).         │
+│ show  Show one local session thread.                                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval thread show`](thread/show.md) — Read a local message-thread twin under .eval/sessions/ (§7.6). Read-only: no Opik reach, no chat timeline, no graph browser, no accept autho
+* [`git-cg eval thread show`](thread/show.md) — Show one local session thread. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutat
 
 ## See also
 

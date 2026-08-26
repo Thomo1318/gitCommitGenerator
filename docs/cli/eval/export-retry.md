@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export-retry …`  
 > **Kind:** `command` · **Status:** deprecated alias → `eval export retry`
 
-Deprecated alias for ``eval export retry``.
+Alias of eval export retry.
 
 ## Authority boundary
 
@@ -16,7 +16,8 @@ Deprecated alias for ``eval export retry``.
 ```text
 Usage: git-cg eval export-retry [OPTIONS]                                                  
                                                                                 
- Deprecated alias for ``eval export retry``.                                    
+ (deprecated)                                                                   
+ Alias of eval export retry.                                                    
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --root             DIRECTORY                                                 │

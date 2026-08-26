@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval dogfood …`  
 > **Kind:** `command` · **Status:** dark-launch (hidden from regular help), canonical S6 surface
 
-Fire the Lane C dogfood shadow sidecar (§7.3). Dark-launched maintainer/operator surface: registered and callable as ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so basic users do not see it in the default command menu. Lane C is advisory only: it never blocks the product commit path, never mutates intent/ranking, and async mode never awaits the judge outcome.
+Capture Lane C dogfood evidence for a candidate commit message. Dark-launched maintainer/operator surface: registered and callable as ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so basic users do not see it in the default command menu. Lane C is advisory only: it never blocks the product commit path, never mutates intent/ranking, and async mode never awaits the judge outcome.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Fire the Lane C dogfood shadow sidecar (§7.3). Dark-launched maintainer/operato
 ```text
 Usage: git-cg eval dogfood [OPTIONS]                                                       
                                                                                 
- Fire the Lane C dogfood shadow sidecar (§7.3).                                 
+ Capture Lane C dogfood evidence for a candidate commit message.                
                                                                                 
  Dark-launched maintainer/operator surface: registered and callable as          
  ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so     

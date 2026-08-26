@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export retry …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Re-queue failed export rows for another drain attempt (P1-4 / P1-11). Default policy: reclaim rows whose last_error_class is retryable (``export_network`` / ``export_timeout`` / empty). Validation/auth/size failures require ``--force``. Transitions ``failed → pending`` so the next ``export drain`` can claim them. Never blocks product accept.
+Re-queue failed export rows for another drain attempt. Default policy: reclaim rows whose last_error_class is retryable (``export_network`` / ``export_timeout`` / empty). Validation/auth/size failures require ``--force``. Transitions ``failed → pending`` so the next ``export drain`` can claim them. Never blocks product accept.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Re-queue failed export rows for another drain attempt (P1-4 / P1-11). Default po
 ```text
 Usage: git-cg eval export retry [OPTIONS]                                                         
                                                                                 
- Re-queue failed export rows for another drain attempt (P1-4 / P1-11).          
+ Re-queue failed export rows for another drain attempt.                         
                                                                                 
  Default policy: reclaim rows whose last_error_class is retryable               
  (``export_network`` / ``export_timeout`` / empty). Validation/auth/size        

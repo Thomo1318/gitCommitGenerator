@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export status …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Show the Layer-A export queue status (read-only, offline). Never mutates the queue and never contacts Opik or the network.
+Show export-queue status (read-only, offline). Never mutates the queue and never contacts Opik or the network.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Show the Layer-A export queue status (read-only, offline). Never mutates the que
 ```text
 Usage: git-cg eval export status [OPTIONS]                                                        
                                                                                 
- Show the Layer-A export queue status (read-only, offline).                     
+ Show export-queue status (read-only, offline).                                 
                                                                                 
  Never mutates the queue and never contacts Opik or the network.                
                                                                                 

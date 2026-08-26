@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval issue …`  
 > **Kind:** `group` · **Status:** group
 
-Local diagnostic issue store ops.
+Manage local diagnostic issues.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Local diagnostic issue store ops.
 ```text
 Usage: git-cg eval issue [OPTIONS] COMMAND [ARGS]...                                       
                                                                                 
- Local diagnostic issue store ops.                                              
+ Manage local diagnostic issues.                                                
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │

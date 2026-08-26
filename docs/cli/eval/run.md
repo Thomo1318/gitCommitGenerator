@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval run …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Run an offline evaluation suite (canonical; not ``eval suite run``).
+Run an offline evaluation suite.
 
 ## Authority boundary
 
@@ -16,7 +16,7 @@ Run an offline evaluation suite (canonical; not ``eval suite run``).
 ```text
 Usage: git-cg eval run [OPTIONS]                                                           
                                                                                 
- Run an offline evaluation suite (canonical; not ``eval suite run``).           
+ Run an offline evaluation suite.                                               
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --suite                          TEXT       Suite id to run (default:        │

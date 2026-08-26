@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export-status …`  
 > **Kind:** `command` · **Status:** deprecated alias → `eval export status`
 
-Deprecated alias for ``eval export status``.
+Alias of eval export status.
 
 ## Authority boundary
 
@@ -16,7 +16,8 @@ Deprecated alias for ``eval export status``.
 ```text
 Usage: git-cg eval export-status [OPTIONS]                                                 
                                                                                 
- Deprecated alias for ``eval export status``.                                   
+ (deprecated)                                                                   
+ Alias of eval export status.                                                   
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --root        DIRECTORY                                                      │

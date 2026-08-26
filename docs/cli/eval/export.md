@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export …`  
 > **Kind:** `group` · **Status:** group
 
-Layer-A export queue ops: status / retry / drain (F4 fail-open).
+Export-queue status, retry, and drain.
 
 ## Authority boundary
 
@@ -16,24 +16,23 @@ Layer-A export queue ops: status / retry / drain (F4 fail-open).
 ```text
 Usage: git-cg eval export [OPTIONS] COMMAND [ARGS]...                                      
                                                                                 
- Layer-A export queue ops: status / retry / drain (F4 fail-open).               
+ Export-queue status, retry, and drain.                                         
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ status  Show the Layer-A export queue status (read-only, offline).           │
-│ retry   Re-queue failed export rows for another drain attempt (P1-4 /        │
-│         P1-11).                                                              │
-│ drain   Drain the export queue through the Opik transport (F4 fail-open).    │
+│ status  Show export-queue status (read-only, offline).                       │
+│ retry   Re-queue failed export rows for another drain attempt.               │
+│ drain   Drain the export queue through the Opik transport.                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval export drain`](export/drain.md) — Drain the export queue through the Opik transport (F4 fail-open). Always exits 0 unless the config is invalid (fail-closed). Transport and s
-* [`git-cg eval export retry`](export/retry.md) — Re-queue failed export rows for another drain attempt (P1-4 / P1-11). Default policy: reclaim rows whose last_error_class is retryable (``ex
-* [`git-cg eval export status`](export/status.md) — Show the Layer-A export queue status (read-only, offline). Never mutates the queue and never contacts Opik or the network.
+* [`git-cg eval export drain`](export/drain.md) — Drain the export queue through the Opik transport. Always exits 0 unless the config is invalid (fail-closed). Transport and secret failures 
+* [`git-cg eval export retry`](export/retry.md) — Re-queue failed export rows for another drain attempt. Default policy: reclaim rows whose last_error_class is retryable (``export_network`` 
+* [`git-cg eval export status`](export/status.md) — Show export-queue status (read-only, offline). Never mutates the queue and never contacts Opik or the network.
 
 ## See also
 

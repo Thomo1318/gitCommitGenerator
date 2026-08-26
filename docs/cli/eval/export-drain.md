@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export-drain …`  
 > **Kind:** `command` · **Status:** deprecated alias → `eval export drain`
 
-Deprecated alias for ``eval export drain``.
+Alias of eval export drain.
 
 ## Authority boundary
 
@@ -16,7 +16,8 @@ Deprecated alias for ``eval export drain``.
 ```text
 Usage: git-cg eval export-drain [OPTIONS]                                                  
                                                                                 
- Deprecated alias for ``eval export drain``.                                    
+ (deprecated)                                                                   
+ Alias of eval export drain.                                                    
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --root             DIRECTORY                                                 │
