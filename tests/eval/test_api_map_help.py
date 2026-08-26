@@ -38,6 +38,15 @@ from git_cg.eval.cli_output import (
 from git_cg.main import app
 
 runner = CliRunner()
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI SGR codes so help assertions survive FORCE_COLOR/CI."""
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -114,10 +123,11 @@ def test_eval_dogfood_dark_launched_hidden_but_callable() -> None:
     assert "dogfood" not in help_result.output
 
     # Still registered: ``eval dogfood --help`` works (direct invocation path).
-    cmd_help = runner.invoke(app, ["eval", "dogfood", "--help"])
+    cmd_help = runner.invoke(app, ["eval", "dogfood", "--help"], terminal_width=120)
     assert cmd_help.exit_code == 0, cmd_help.output
-    assert "--commit-message" in cmd_help.output
-    assert "dark" in (cmd_help.output or "").lower() or "Lane C" in cmd_help.output
+    help_text = _strip_ansi(cmd_help.output)
+    assert "--commit-message" in help_text
+    assert "dark" in help_text.lower() or "Lane C" in help_text
 
     rendered = render_operator_api_map()
     assert "eval dogfood" in rendered
@@ -377,7 +387,8 @@ def test_api_map_check_still_detects_doc_drift(tmp_path: Path) -> None:
 
 
 def test_keep_last_default_on_run_help() -> None:
-    result = runner.invoke(app, ["eval", "run", "--help"])
+    result = runner.invoke(app, ["eval", "run", "--help"], terminal_width=120)
     assert result.exit_code == 0, result.output
-    assert re.search(r"keep-last", result.output)
-    assert str(DEFAULT_KEEP_LAST) in result.output
+    help_text = _strip_ansi(result.output)
+    assert re.search(r"keep-last", help_text)
+    assert str(DEFAULT_KEEP_LAST) in help_text

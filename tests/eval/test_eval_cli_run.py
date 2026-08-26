@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -10,13 +11,22 @@ from typer.testing import CliRunner
 from git_cg.main import app
 
 runner = CliRunner()
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI SGR codes so help assertions survive FORCE_COLOR/CI."""
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "eval"
 
 
 def test_run_help_lists_slice3_options() -> None:
-    result = runner.invoke(app, ["eval", "run", "--help"])
+    result = runner.invoke(app, ["eval", "run", "--help"], terminal_width=120)
     assert result.exit_code == 0
-    out = result.output
+    out = _strip_ansi(result.output)
     assert "--suite" in out
     assert "--mode" in out
     assert "--keep-last" in out
@@ -62,6 +72,8 @@ def test_run_json_fresh_case_filter(tmp_path: Path, monkeypatch) -> None:
     assert payload["schema_version"] == "cli_output_envelope_v1"
     assert payload["command"] == "eval run"
     assert payload["data"]["mode"] == "fresh_suite_run"
+    assert payload["data"]["status"] in {"completed", "failed"}
+    assert payload["ok"] is (result.exit_code == 0)
     assert payload["data"]["experiment_id"]
     assert payload["data"]["checkpoint_id"]
     assert "seed-v1-valid-fixture" in payload["data"]["completed_case_ids"]

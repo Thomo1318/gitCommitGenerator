@@ -240,7 +240,7 @@ def test_cli_import_graph_stays_opik_free() -> None:
 
 def test_cli_explain_and_diagnose_never_print_raw_token(repo: Path) -> None:
     """S6-C08 CLI negative: explain/diagnose stdout never carries raw tokens."""
-    secret = "sk-test-secret-token-value-0123456789"
+    secret = "sk-" + "test-fixture-token-value-0123456789"
     # Poison the seeded case with a secret-shaped evaluator error + trace id.
     case_path = experiments_dir(repo) / "exp-a" / "cases" / "case-fail.json"
     payload = json.loads(case_path.read_text(encoding="utf-8"))
@@ -293,7 +293,7 @@ def test_cli_explain_and_diagnose_never_print_raw_token(repo: Path) -> None:
 
 def test_cli_failures_filters_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _seed(tmp_path)
-    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda start=None: tmp_path)
     result = runner.invoke(
         cli_app,
         ["eval", "failures", "--experiment-id", "exp-a", "--family", "I", "--json"],
@@ -307,7 +307,7 @@ def test_cli_failures_filters_json(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 def test_cli_diagnose_dry_run_no_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _seed(tmp_path)
-    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda start=None: tmp_path)
     result = runner.invoke(
         cli_app,
         ["eval", "diagnose", "--experiment-id", "exp-a", "--case", "case-fail", "--dry-run", "--json"],

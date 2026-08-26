@@ -2,6 +2,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from git_cg.sop import load_sop
 
 _COMMIT_LANGUAGE_PATTERN = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
@@ -326,10 +328,9 @@ def test_validate_commit_accepts_dark_launch_hybrid_subject(tmp_path) -> None:
     import shutil
     import subprocess
 
-    import git_cg.sop as sop_module
-
     node = shutil.which("node")
-    assert node, "node is required to exercise validate_commit.mjs"
+    if not node:
+        pytest.skip("node is required to exercise validate_commit.mjs")
 
     script = _REPO_ROOT / "scripts" / "validate_commit.mjs"
     assert script.is_file(), f"missing {script}"
@@ -341,7 +342,6 @@ def test_validate_commit_accepts_dark_launch_hybrid_subject(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    sop_module.load_sop.cache_clear()
     proc = subprocess.run(
         [node, str(script), "COMMIT_EDITMSG"],
         cwd=tmp_path,
@@ -363,7 +363,8 @@ def test_validate_commit_rejects_dark_launch_emoji_type_mismatch(tmp_path) -> No
     import subprocess
 
     node = shutil.which("node")
-    assert node, "node is required to exercise validate_commit.mjs"
+    if not node:
+        pytest.skip("node is required to exercise validate_commit.mjs")
 
     script = _REPO_ROOT / "scripts" / "validate_commit.mjs"
     msg = tmp_path / "COMMIT_EDITMSG"

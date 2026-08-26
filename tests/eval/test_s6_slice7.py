@@ -772,7 +772,7 @@ def test_cli_session_and_thread_show_happy_path(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _cli(args: list[str]) -> dict:
+def _cli(args: list[str]) -> tuple[dict, int]:
     from typer.testing import CliRunner
 
     from git_cg.main import app
