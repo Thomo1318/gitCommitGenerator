@@ -51,6 +51,10 @@ from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
 
+from git_cg.cli_theme import apply_cli_theme  # noqa: E402
+
+apply_cli_theme()
+
 from git_cg.intent import extract_diff_signals, rank_commit_intents  # noqa: E402
 from git_cg.interaction import (  # noqa: E402
     can_open_tty,
