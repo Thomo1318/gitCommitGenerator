@@ -445,3 +445,57 @@ class TestAtomicWriteJson:
         )
         with pytest.raises(binding_paths.RepoRootUnresolvedError, match="repo_root_unresolved"):
             binding_paths.resolve_repo_root(start)
+
+
+def test_paths_import_does_not_load_binder() -> None:
+    """Import-light law: binding.paths must not pull binder/accept-hook.
+
+    Package ``__init__`` is lazy so doctor/CLI Layer-A discovery can import
+    paths without caching the accept-path binder composition graph.
+    """
+    import subprocess
+    import sys
+
+    probe = """
+import sys
+import git_cg.eval.binding.paths  # noqa: F401
+
+forbidden = {
+    "git_cg.eval.binding.binder",
+    "git_cg.eval.binding.accept_hook",
+    "git_cg.eval.binding.message_versions",
+    "git_cg.eval.binding.session_thread",
+    "git_cg.eval.binding.trajectory",
+}
+bad = sorted(
+    name
+    for name in sys.modules
+    if name in forbidden or name == "opik" or name.startswith("opik.")
+)
+if bad:
+    raise SystemExit("unexpected modules: " + ", ".join(bad))
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", probe],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, (
+        "importing git_cg.eval.binding.paths must not load binder/accept-hook/opik; "
+        f"stderr={completed.stderr!r} stdout={completed.stdout!r}"
+    )
+
+
+def test_binding_package_lazy_public_api_still_resolves() -> None:
+    """Lazy package exports must preserve the locked public attribute surface."""
+    import importlib
+
+    pkg = importlib.import_module("git_cg.eval.binding")
+    capture_enabled = pkg.capture_enabled
+    assert callable(capture_enabled)
+    assert pkg.BindInput is not None
+    assert callable(pkg.bind_final_accept)
+    assert callable(pkg.bind_unbound)
+    assert callable(pkg.message_sha256_bytes)
+    assert "BindInput" in dir(pkg)
