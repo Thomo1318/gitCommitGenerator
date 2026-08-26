@@ -86,6 +86,7 @@ GITMOJI_CC_GROUPS: dict[str, tuple[str, frozenset[str], str]] = {
     "⬆": ("build", frozenset({"Changed"}), "PATCH"),
     "⬇": ("build", frozenset({"Changed"}), "PATCH"),
     "🌐": ("feat", frozenset({"Added"}), "MINOR"),
+    "🌑": ("chore", frozenset({"Changed"}), "PATCH"),
     "🌱": ("chore", frozenset({"Miscellaneous"}), "NONE"),
     "🍱": ("chore", frozenset({"Added"}), "PATCH"),
     "🍻": ("refactor", frozenset({"Miscellaneous"}), "NONE"),

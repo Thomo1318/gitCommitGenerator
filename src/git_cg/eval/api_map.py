@@ -101,6 +101,7 @@ class CommandNode:
 
 
 def _click_help(cmd: Any) -> str:
+    """Normalize Click/Typer help text into a single-line API-map blurb."""
     help_text = getattr(cmd, "help", None) or getattr(cmd, "short_help", None) or ""
     return " ".join(str(help_text).split())
 
@@ -111,6 +112,7 @@ def walk_eval_tree(prefix: str = "eval") -> list[CommandNode]:
     nodes: list[CommandNode] = []
 
     def walk(cmd: Any, path_parts: Sequence[str]) -> None:
+        """Recursively walk one Click command subtree into CommandNode records."""
         full = " ".join(path_parts) if path_parts else prefix
         is_group = hasattr(cmd, "list_commands") and callable(cmd.list_commands)
         if is_group:
@@ -197,6 +199,7 @@ def _status_for(path: str) -> tuple[str, str]:
 
 
 def _stability_tier(path: str, kind: str) -> str:
+    """Classify a command path into public/supported/internal stability tiers."""
     if kind == "group":
         return "public (group)"
     if path in DEPRECATED_ALIASES or path == "eval config" or path.startswith("eval export-"):

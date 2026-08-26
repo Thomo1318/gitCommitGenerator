@@ -34,6 +34,7 @@ class DataSketch:
     notes: str = ""
 
     def __post_init__(self) -> None:
+        """Validate dataclass invariants after initialization."""
         object.__setattr__(self, "enums", dict(self.enums or {}))
         # Stable ordering for deterministic render/tests.
         object.__setattr__(self, "required_keys", tuple(sorted(self.required_keys)))
@@ -93,6 +94,7 @@ def _sketch(
     nested: tuple[str, ...] = (),
     notes: str = "",
 ) -> DataSketch:
+    """Return the A08 envelope data sketch for a command path."""
     return DataSketch(
         command=command,
         required_keys=required_keys,

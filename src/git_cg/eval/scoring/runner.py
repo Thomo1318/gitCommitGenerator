@@ -673,6 +673,7 @@ class PreparedSuite:
 
     @property
     def case_ids(self) -> list[str]:
+        """Ordered case ids selected for this prepared suite workset."""
         return [cid for cid, _ in self.encoded_pairs]
 
 

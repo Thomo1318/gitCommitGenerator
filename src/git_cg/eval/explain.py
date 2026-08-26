@@ -53,6 +53,7 @@ class ExplainError(ValueError):
     """Deterministic explain/compare/failures failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Initialize structured error/context fields for operator engines."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -111,6 +112,7 @@ def _iter_experiment_ids(repo: Path) -> list[str]:
 
 
 def _load_experiment_record(repo: Path, experiment_id: str) -> dict[str, Any]:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     path = _experiments_dir(repo) / experiment_id / "experiment.json"
     if not path.is_file():
         raise ExplainError(
@@ -229,6 +231,7 @@ def _metric_family(metric_id: str | None) -> str | None:
 
 
 def _row_regime(row: dict[str, Any]) -> str | None:
+    """Project one row field used by filter/export classification."""
     evidence = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
     fp = evidence.get("diag_fingerprint_inputs") if isinstance(evidence.get("diag_fingerprint_inputs"), dict) else {}
     regime = fp.get("regime")
@@ -238,6 +241,7 @@ def _row_regime(row: dict[str, Any]) -> str | None:
 
 
 def _row_severity(row: dict[str, Any]) -> str | None:
+    """Project one row field used by filter/export classification."""
     sev = row.get("severity")
     if isinstance(sev, str) and sev.strip():
         return sev.strip().lower()
@@ -249,6 +253,7 @@ def _row_severity(row: dict[str, Any]) -> str | None:
 
 
 def _row_family(row: dict[str, Any]) -> str | None:
+    """Project one row field used by filter/export classification."""
     fam = row.get("family")
     if isinstance(fam, str) and fam.strip():
         token = fam.strip()
@@ -257,6 +262,7 @@ def _row_family(row: dict[str, Any]) -> str | None:
 
 
 def _normalize_filter_token(value: str | None, *, field: str) -> str | None:
+    """Normalize operator/input tokens into the closed vocabulary form."""
     if value is None:
         return None
     token = value.strip()
@@ -505,6 +511,7 @@ def explain(
 
 
 def _score_index(case: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Project or compute score rows used by operator surfaces (not product accept)."""
     out: dict[str, dict[str, Any]] = {}
     for row in case.get("scores") or []:
         if isinstance(row, dict) and row.get("metric_id"):

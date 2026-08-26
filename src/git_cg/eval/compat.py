@@ -59,12 +59,14 @@ class CompatHashMismatchError(ValueError):
         actual: str,
         checkpoint_id: str | None = None,
     ) -> None:
+        """Capture expected/actual compat hashes for resume recovery."""
         self.expected = expected
         self.actual = actual
         self.checkpoint_id = checkpoint_id
         super().__init__(message)
 
     def recovery_hint(self) -> str:
+        """Operator recovery hint when a checkpoint compat hash mismatches."""
         return recovery_hint(checkpoint_id=self.checkpoint_id)
 
 
@@ -80,6 +82,7 @@ def recovery_hint(*, checkpoint_id: str | None = None) -> str:
 
 
 def _as_token(value: Any, *, field: str) -> str:
+    """Normalize a pin/token string for exact compat comparisons."""
     if value is None:
         if field == "judge_pack_pin_or_none":
             return _NONE_TOKEN

@@ -35,6 +35,7 @@ class ReplayError(ValueError):
     """Deterministic replay failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Initialize structured error/context fields for operator engines."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -42,10 +43,12 @@ class ReplayError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _replays_dir(repo: Path) -> Path:
+    """Resolve the governed replay compare store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, replays_dir
 
     try:
@@ -55,6 +58,7 @@ def _replays_dir(repo: Path) -> Path:
 
 
 def _acceptpath_dir(repo: Path) -> Path:
+    """Resolve the governed accept-path store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, acceptpath_bundles_dir
 
     try:
@@ -64,6 +68,7 @@ def _acceptpath_dir(repo: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -73,6 +78,7 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _validate_compare(row: dict[str, Any]) -> None:
+    """Validate a payload against the closed schema/contract (fail closed)."""
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
     try:
@@ -86,6 +92,7 @@ def _validate_compare(row: dict[str, Any]) -> None:
 
 
 def _validate_bundle(row: dict[str, Any]) -> None:
+    """Validate a payload against the closed schema/contract (fail closed)."""
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
     try:
@@ -99,6 +106,7 @@ def _validate_bundle(row: dict[str, Any]) -> None:
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
+    """Load a JSON object from disk; map I/O and decode failures to the module error type."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -113,6 +121,7 @@ def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int
 
 
 def _bundle_hash(bundle: dict[str, Any]) -> str:
+    """Compute the stable content hash used for bundle lineage."""
     from git_cg.eval.corpus.canonical import content_sha256
 
     return content_sha256(bundle)
@@ -136,12 +145,14 @@ def _harness_version() -> str:
 
 
 def _current_pins() -> tuple[str, str]:
+    """Read the current schema/metric pins for offline integrity checks."""
     from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 
     return schema_pack_pin(), metric_catalog_pin()
 
 
 def _pin_or_current(value: Any, *, current: str) -> str:
+    """Use an explicit pin when provided, otherwise the current frozen pin."""
     text = str(value or "").strip()
     if re.fullmatch(r"^[a-z0-9_]+_v[0-9]+@[a-f0-9]{64}$", text):
         return text
@@ -149,6 +160,7 @@ def _pin_or_current(value: Any, *, current: str) -> str:
 
 
 def _extract_trace_id(bundle: dict[str, Any]) -> str:
+    """Extract a typed field from a bundle/record without inventing defaults that mute integrity failures."""
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
     binding = meta.get("binding") if isinstance(meta.get("binding"), dict) else {}
     for candidate in (
@@ -162,6 +174,7 @@ def _extract_trace_id(bundle: dict[str, Any]) -> str:
 
 
 def _extract_split_group(bundle: dict[str, Any]) -> str | None:
+    """Extract a typed field from a bundle/record without inventing defaults that mute integrity failures."""
     meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
     for candidate in (meta.get("split_group_id"), bundle.get("split_group_id")):
         if isinstance(candidate, str) and candidate.strip():
@@ -309,6 +322,7 @@ def _build_replay_bundle(
 
 
 def _regression_status(*, input_equal: bool, lineage_ok: bool) -> str:
+    """Classify replay/compare regression status from metric deltas."""
     if not lineage_ok:
         return "incomparable"
     if input_equal:

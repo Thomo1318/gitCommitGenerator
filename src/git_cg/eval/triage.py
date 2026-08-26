@@ -52,6 +52,7 @@ class TriageError(ValueError):
         exit_code: int,
         hint: str | None = None,
     ) -> None:
+        """Attach triage failure code, exit class, and operator hint."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code

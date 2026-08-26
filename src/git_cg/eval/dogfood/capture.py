@@ -55,6 +55,7 @@ class DOGFoodError(ValueError):
     """Deterministic dogfood failure (fail-closed)."""
 
     def __init__(self, message: str, *, code: str, exit_code: int, hint: str | None = None) -> None:
+        """Initialize structured error/context fields for operator engines."""
         super().__init__(message)
         self.code = code
         self.exit_code = exit_code
@@ -62,10 +63,12 @@ class DOGFoodError(ValueError):
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _dogfood_dir(repo: Path) -> Path:
+    """Resolve the governed dogfood attachment store directory."""
     from git_cg.eval.binding.paths import LayerAPathError, dogfood_dir
 
     try:
@@ -75,6 +78,7 @@ def _dogfood_dir(repo: Path) -> Path:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically write JSON through the Layer-A path helper (fail closed)."""
     from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json
 
     try:
@@ -138,6 +142,7 @@ def derive_sample_seed(
 
 
 def _canonical_selected_hash(selected: Iterable[str]) -> str:
+    """Hash the selected dogfood population for attach/idempotency."""
     canon = json.dumps(sorted(str(s) for s in selected), ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
@@ -166,6 +171,7 @@ def select_sample_members(
         return members
 
     def _key(member: str) -> str:
+        """Internal helper: key."""
         return hashlib.sha256(f"{seed}|{member}".encode()).hexdigest()
 
     ordered = sorted(members, key=_key)

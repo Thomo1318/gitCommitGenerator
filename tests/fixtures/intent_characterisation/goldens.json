@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
-  "sop_matrix_row_count": 75,
+  "sop_matrix_sha256": "c494cee6381b8abb773be0885212aa1526ed8e5366602fde8ff5aba72740a436",
+  "sop_matrix_row_count": 76,
   "cases": {
     "empty_baseline": {
       "markers": [],
@@ -626,6 +626,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",
@@ -1365,6 +1374,15 @@
           "cc_type": "feat"
         },
         {
+          "intent_id": "dark_launch",
+          "score": -109.3,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": -113.0,
           "priority": 20,
@@ -1455,7 +1473,8 @@
           "concurrency_update",
           "validation_update",
           "offline_support",
-          "backwards_compatibility"
+          "backwards_compatibility",
+          "dark_launch"
         ]
       }
     },
@@ -2143,6 +2162,15 @@
           "semver_impact": "PATCH",
           "intent_group": "feature",
           "cc_type": "feat"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": -109.3,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         }
       ],
       "constraints": {
@@ -2226,7 +2254,8 @@
           "concurrency_update",
           "validation_update",
           "offline_support",
-          "backwards_compatibility"
+          "backwards_compatibility",
+          "dark_launch"
         ]
       }
     },
@@ -2862,6 +2891,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": -79.3,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": -79.5,
           "priority": 40,
@@ -2997,7 +3035,8 @@
           "concurrency_update",
           "validation_update",
           "offline_support",
-          "backwards_compatibility"
+          "backwards_compatibility",
+          "dark_launch"
         ]
       }
     },
@@ -3627,6 +3666,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",
@@ -4312,6 +4360,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": 20.5,
           "priority": 40,
@@ -4993,6 +5050,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",
@@ -5690,6 +5756,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": 20.5,
           "priority": 40,
@@ -6358,6 +6433,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "typo_fix",
@@ -7086,6 +7170,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": 20.5,
           "priority": 40,
@@ -7778,6 +7871,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": 20.5,
           "priority": 40,
@@ -8464,6 +8566,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",
@@ -9157,6 +9268,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": 20.5,
           "priority": 40,
@@ -9843,6 +9963,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",
@@ -10543,6 +10672,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "code_structure_formatting",
           "score": 20.5,
           "priority": 40,
@@ -11224,6 +11362,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",
@@ -11925,6 +12072,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "dark_launch",
+          "score": 20.700000000000003,
+          "priority": 28,
+          "specificity": 95,
+          "semver_impact": "PATCH",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "code_structure_formatting",

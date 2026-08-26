@@ -70,6 +70,7 @@ class RunOrchestratorError(ValueError):
         hint: str | None = None,
         data: dict[str, Any] | None = None,
     ) -> None:
+        """Attach orchestrator failure code, exit class, hint, and data."""
         self.code = code
         self.exit_code = exit_code
         self.hint = hint
@@ -101,11 +102,14 @@ class RunRequest:
 
 @dataclass(slots=True)
 class CaseSummary:
+    """Compact per-case summary used in run progress and resume."""
+
     case_id: str
     deterministic_pass: bool | None
     failed_metric_ids: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the case summary for checkpoint and envelope payloads."""
         return {
             "case_id": self.case_id,
             "deterministic_pass": self.deterministic_pass,
@@ -115,6 +119,8 @@ class CaseSummary:
 
 @dataclass(slots=True)
 class RunResult:
+    """Terminal orchestrator result projected into the CLI envelope data payload."""
+
     status: Literal["completed", "failed", "blocked"]
     mode: RunMode
     suite_id: str
@@ -133,6 +139,7 @@ class RunResult:
     triage_filter: list[str] | None = None
 
     def to_data(self) -> dict[str, Any]:
+        """Project the run result into the supported envelope ``data`` shape."""
         payload: dict[str, Any] = {
             "status": self.status,
             "mode": self.mode,
@@ -159,10 +166,12 @@ class RunResult:
 
 
 def _safe_id(prefix: str) -> str:
+    """Mint a filesystem-safe identifier with the given prefix."""
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
 def _resolve_repo(req: RunRequest) -> Path:
+    """Resolve a path/id against the governed store root (containment-checked)."""
     if req.repo_root is not None:
         return Path(req.repo_root).resolve()
     try:
@@ -176,6 +185,7 @@ def _resolve_repo(req: RunRequest) -> Path:
 
 
 def _network_policy_from_suite(prepared: PreparedSuite, fallback: str) -> str:
+    """Derive offline/network policy tokens from the prepared suite."""
     meta = prepared.suite_doc.get("meta") if isinstance(prepared.suite_doc.get("meta"), dict) else {}
     value = meta.get("network_policy") if isinstance(meta, dict) else None
     text = str(value or fallback).strip()
@@ -183,6 +193,7 @@ def _network_policy_from_suite(prepared: PreparedSuite, fallback: str) -> str:
 
 
 def _live_compat_hash(prepared: PreparedSuite, req: RunRequest) -> str:
+    """Compute the live compat hash used for resume integrity."""
     return compute_compat_hash(
         schema_pack_pin=schema_pack_pin(),
         metric_catalog_pin=metric_catalog_pin(),
@@ -195,6 +206,7 @@ def _live_compat_hash(prepared: PreparedSuite, req: RunRequest) -> str:
 
 
 def _failed_metrics(case: ScoreCaseResult) -> list[str]:
+    """List metric ids that failed on a scored case."""
     failed: list[str] = []
     for row in case.all_results:
         if row.passed is False:
@@ -203,6 +215,7 @@ def _failed_metrics(case: ScoreCaseResult) -> list[str]:
 
 
 def _summarize(case: ScoreCaseResult) -> CaseSummary:
+    """Collapse a scored case into the compact run summary shape."""
     return CaseSummary(
         case_id=case.case_id,
         deterministic_pass=case.deterministic_pass,
@@ -211,6 +224,7 @@ def _summarize(case: ScoreCaseResult) -> CaseSummary:
 
 
 def _case_result_path(repo: Path, experiment_id: str, case_id: str) -> Path:
+    """Resolve the on-disk path for one experiment case result."""
     if not _SAFE.fullmatch(experiment_id):
         raise RunOrchestratorError(
             f"invalid experiment_id: {experiment_id!r}",
@@ -222,6 +236,7 @@ def _case_result_path(repo: Path, experiment_id: str, case_id: str) -> Path:
 
 
 def _write_case_result(repo: Path, experiment_id: str, case: ScoreCaseResult) -> Path:
+    """Persist a governed artifact via atomic write (fail closed)."""
     payload = {
         "schema_version": "local_case_score_v0",
         "experiment_id": experiment_id,
@@ -332,6 +347,7 @@ def _write_experiment_record(
     finished_at: str | None = None,
     parent_record: Mapping[str, Any] | None = None,
 ) -> Path:
+    """Persist a governed artifact via atomic write (fail closed)."""
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
     record = dict(experiment)
@@ -380,6 +396,7 @@ def _mint_experiment(
     mode: RunMode,
     parent_experiment_id: str | None = None,
 ) -> dict[str, Any]:
+    """Mint a new governed experiment/export identity."""
     meta: dict[str, Any] = {"suite_id": suite_id, "resume_mode": mode}
     if parent_experiment_id:
         meta["parent_experiment_id"] = parent_experiment_id
@@ -412,6 +429,7 @@ def _filter_workset(
     pending: Sequence[str] | None,
     case_filter: Sequence[str] | None,
 ) -> list[tuple[str, dict[str, Any]]]:
+    """Filter a workset by operator selectors without mutating authority."""
     pairs = list(prepared.encoded_pairs)
     if pending is not None:
         pending_set = set(pending)
@@ -429,6 +447,7 @@ def _score_one(
     bundle: dict[str, Any],
     req: RunRequest,
 ) -> ScoreCaseResult:
+    """Project or compute score rows used by operator surfaces (not product accept)."""
     if req.enable_lane_c:
         raise RunOrchestratorError(
             "Lane C attachments are not enabled on the default suite-run path",
@@ -464,6 +483,7 @@ def _persist_checkpoint(
     started_at: str,
     status: str,
 ) -> dict[str, Any]:
+    """Persist a governed intermediate artifact for resume/audit."""
     cursor = pending[0] if pending else (completed[-1] if completed else "")
     record = build_checkpoint_record(
         checkpoint_id=checkpoint_id,
@@ -484,6 +504,7 @@ def _persist_checkpoint(
 
 
 def _load_prior_case_summaries(repo: Path, experiment_id: str, case_ids: Sequence[str]) -> list[CaseSummary]:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     out: list[CaseSummary] = []
     for cid in case_ids:
         path = _case_result_path(repo, experiment_id, cid)
@@ -564,6 +585,7 @@ def _finalize_gc(
     checkpoint_id: str | None,
     status: str,
 ) -> list[str]:
+    """Run terminal GC/finalization for a completed run."""
     protect: list[str] = []
     if keep_checkpoint and checkpoint_id:
         protect.append(checkpoint_id)
