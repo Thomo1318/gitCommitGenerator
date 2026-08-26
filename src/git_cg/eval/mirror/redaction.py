@@ -240,7 +240,7 @@ def _key_denied(key: str, profile: RedactionProfile) -> bool:
 
 
 def _join_path(prefix: str, key: str | int) -> str:
-    """Join path segments under a governed root with containment checks."""
+    """Join report path segments into a dotted field path (reporting only)."""
     if prefix == "":
         return str(key)
     return f"{prefix}.{key}"

@@ -128,7 +128,7 @@
 
 - File Heading
 
-```
+```text
 # ==============================================================================
 # <script_name>
 # ------------------------------------------------------------------------------
@@ -140,7 +140,7 @@
 
 - Heading
 
-```
+```text
 # ============================================================================
 # SETTINGS & CONFIGURATION
 # ============================================================================
@@ -148,7 +148,7 @@
 
 - Sub-Heading
 
-```
+```text
 # ----------------------------------------------------------------------------
 # MLX Inference Backend
 # ----------------------------------------------------------------------------
@@ -156,7 +156,7 @@
 
 - Separator
 
-```
+```text
 # ----------------------------------------------------------------------------
 ```
 
@@ -197,13 +197,13 @@
 - Update the `--rank-arbitrate` to display 5 items instead of 2 for the user to selct from.
 - Also include an explanation of each item and when it should be used so the user can make an informed decision of which to choose this can be pulled straight from the `sop` e.g.
 
-```
+```json
 "selection_rule": "Use when the primary change improves formatting or code structure without changing runtime behaviour."
 ```
 
 ---
 
-Update our llms.txt action to also generate `llms-full.txt` using `-full` depth instead of `0` (current behavior) or `brief outline .`? - determine best approach. Reference `/Users/admin/dev/activeProjects/gitCommitGenerator/docs/plans/notReleased`
+Update our llms.txt action to also generate `llms-full.txt` using `-full` depth instead of `0` (current behavior) or `brief outline .`? - determine best approach. Reference `docs/plans/` (tracked planning notes; avoid machine-local absolute paths)
 
 - Explore using the `-full` flag with `brief` i.e. `brief outline -full` Although this may be too dense.
 - Compare using the `enrich` flag with `brief` i.e. `brief enrich .` to the existing llms.txt generation and determine if it produces a similar depth of information.

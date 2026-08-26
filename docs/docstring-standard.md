@@ -224,6 +224,7 @@ When fixing coverage: **document the law or edge**, or extract/rename until the 
 ## Adoption rules for authors & reviewers
 
 ### New / amended code
+
 1. Module touched non-trivially → refresh Tier 0 invariants if behaviour/authority changed  
 2. New public entrypoint → Tier 1 summary + side effects; add Google sections only on triggers  
 3. New private helper with law/edge → one-line Tier 2 doc  
@@ -231,6 +232,7 @@ When fixing coverage: **document the law or edge**, or extract/rename until the 
 5. Run `just docstrings-patch` before push when `src/git_cg` changed  
 
 ### Reviews
+
 | Finding | Valid? |
 |:---|:---|
 | “Missing Google `Args` on obvious typed params” | **Usually no** — ask what was non-obvious |
@@ -240,6 +242,7 @@ When fixing coverage: **document the law or edge**, or extract/rename until the 
 | “Please convert entire file to Google for consistency” | **No** unless a supported-export / escalation trigger pass |
 
 ### Relation to older phrases
+
 * ADR/phase text saying “project docstring idiom/standard” → **this document**  
 * `TODO.md` “adhere to Google Style” → **superseded** by selective-Google tiering here  
 * S5-H02 “public API docstring idiom” → module/public **contract** docs on supported surfaces, not full Google sprawl  
