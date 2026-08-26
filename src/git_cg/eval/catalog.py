@@ -62,6 +62,7 @@ def load_metric_catalog() -> dict[str, Any]:
 
 
 def metric_ids() -> set[str]:
+    """Return the set of all metric IDs from the loaded catalog."""
     return {row["metric_id"] for row in load_metric_catalog()["metrics"]}
 
 
