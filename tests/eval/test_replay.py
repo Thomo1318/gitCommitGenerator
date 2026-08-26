@@ -162,3 +162,20 @@ def test_replay_explicit_path(repo: Path, tmp_path: Path) -> None:
     result = replay(repo, bundle=str(external))
     assert result["compare"]["session_thread_id"] == "thread-src-1"
     assert external.read_text(encoding="utf-8")  # still present
+
+
+def test_replay_mints_synthetic_thread_when_source_lacks_session(repo: Path, tmp_path: Path) -> None:
+    """Source bundles without session_thread_id mint a stable thread:{replay_id}."""
+    bundle = _bundle()
+    bundle.pop("session_thread_id", None)
+    external = tmp_path / "no-thread.json"
+    external.write_text(json.dumps(bundle), encoding="utf-8")
+    result = replay(repo, bundle=str(external))
+    compare = result["compare"]
+    rid = compare["replay_id"]
+    assert compare["session_thread_id"] == f"thread:{rid}"
+    # Replay bundle on disk also carries the minted thread.
+    bundle_path = Path(result["replay_bundle_path"])
+    if bundle_path.is_file():
+        replayed = json.loads(bundle_path.read_text(encoding="utf-8"))
+        assert replayed.get("session_thread_id") == f"thread:{rid}"

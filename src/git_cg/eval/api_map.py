@@ -161,12 +161,6 @@ def _status_for(path: str) -> tuple[str, str]:
             "temporary alias",
             f"Canonical: `{DEPRECATED_ALIASES[path]}`. Removal: {REMOVAL_TARGET}.",
         )
-    # flat config is registered as command "eval config" (action arg)
-    if path == "eval config":
-        return (
-            "temporary alias",
-            f"Canonical: `eval opik config show`. Removal: {REMOVAL_TARGET}.",
-        )
     if path in CANONICAL_COMMANDS:
         if path in DARK_LAUNCH_HIDDEN_COMMANDS:
             return (

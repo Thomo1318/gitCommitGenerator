@@ -130,15 +130,24 @@ def _bundle_hash(bundle: dict[str, Any]) -> str:
 def _harness_version() -> str:
     """Best-effort package version; never raises."""
     try:
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            return version("gitcommitgenerator")
+        except PackageNotFoundError:
+            pass
+    except Exception:
+        pass
+    try:
         import tomllib
 
         root = Path(__file__).resolve().parents[3]
         data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
         project = data.get("project") if isinstance(data, dict) else None
         if isinstance(project, dict):
-            version = str(project.get("version") or "").strip()
-            if version:
-                return version
+            ver = str(project.get("version") or "").strip()
+            if ver:
+                return ver
     except Exception:
         pass
     return "0.0.0"

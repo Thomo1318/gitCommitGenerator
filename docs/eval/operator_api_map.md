@@ -389,11 +389,11 @@ documents — sketches name the envelope wrapper keys only.
 
 #### `eval replay`
 
-* **Required keys:** `compare`, `compare_path`, `dry_run`, `replay_bundle`, `replay_bundle_hash`, `replay_bundle_path`, `source_bundle_hash`, `source_mutated`, `source_path`
+* **Required keys:** `compare`, `compare_path`, `dry_run`, `replay_bundle_hash`, `replay_bundle_path`, `source_bundle_hash`, `source_mutated`, `source_path`
 * **Optional keys:** *(none)*
 * **Nested (informational):**
   * compare: replay_compare_v1 record
-  * replay_bundle: replayed bundle document
+  * replay_bundle_path: on-disk path to replayed bundle (document not inlined)
 * **Notes:** Never mutates the source bundle (source_mutated must be false).
 
 #### `eval resume`

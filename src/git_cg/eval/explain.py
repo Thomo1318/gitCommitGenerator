@@ -586,7 +586,8 @@ def compare(
             "a": {"experiment_id": a_experiment_id, "case_id": a_case_id},
             "b": {"experiment_id": b_experiment_id, "case_id": b_case_id},
             "lineage_linked": lineage_linked,
-            "compare_source": "replay_compare_v1" if lineage_linked else "case_result_delta",
+            # Delta is always derived from case-result rows; lineage is orthogonal.
+            "compare_source": "case_result_delta",
             "metric_delta": metric_delta,
             "structural_delta": structural_delta,
         }

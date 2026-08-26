@@ -29,7 +29,7 @@ class DataSketch:
     command: str
     required_keys: tuple[str, ...]
     optional_keys: tuple[str, ...] = ()
-    enums: Mapping[str, tuple[str, ...]] = None  # type: ignore[assignment]
+    enums: Mapping[str, tuple[str, ...]] | None = None
     nested: tuple[str, ...] = ()
     notes: str = ""
 
@@ -278,7 +278,6 @@ def _build_registry() -> dict[str, DataSketch]:
             "eval replay",
             required_keys=(
                 "compare",
-                "replay_bundle",
                 "source_path",
                 "compare_path",
                 "replay_bundle_path",
@@ -289,7 +288,7 @@ def _build_registry() -> dict[str, DataSketch]:
             ),
             nested=(
                 "compare: replay_compare_v1 record",
-                "replay_bundle: replayed bundle document",
+                "replay_bundle_path: on-disk path to replayed bundle (document not inlined)",
             ),
             notes="Never mutates the source bundle (source_mutated must be false).",
         ),
