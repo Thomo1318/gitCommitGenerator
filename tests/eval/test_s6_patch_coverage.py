@@ -43,6 +43,39 @@ def _write_json(path: Path, payload: Any) -> Path:
 # ---------------------------------------------------------------------------
 
 
+def test_click_help_prefers_short_and_strips_detail_split() -> None:
+    """Lock _click_help short_help preference and brief/detail split arms.
+
+    Codecov patch gate requires coverage of the dual-axis help truncation
+    path introduced for operator API map blurbs.
+    """
+    from types import SimpleNamespace
+
+    from git_cg.eval.api_map import _click_help
+    from git_cg.eval.cli import _HELP_DETAIL_MARKER
+
+    short_only = SimpleNamespace(short_help="  brief short  help ", help="ignored long body")
+    assert _click_help(short_only) == "brief short help"
+
+    marker_split = SimpleNamespace(
+        short_help=None,
+        help=f"Operator brief line.\n{_HELP_DETAIL_MARKER}\nDETAIL should not appear",
+    )
+    assert _click_help(marker_split) == "Operator brief line."
+
+    formfeed_split = SimpleNamespace(
+        short_help="",
+        help="First brief paragraph.\fHidden form-feed detail",
+    )
+    assert _click_help(formfeed_split) == "First brief paragraph."
+
+    plain = SimpleNamespace(short_help=None, help="  multi\n  line   help  ")
+    assert _click_help(plain) == "multi line help"
+
+    empty = SimpleNamespace(short_help=None, help=None)
+    assert _click_help(empty) == ""
+
+
 def test_api_map_write_and_main_print_write_paths(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from git_cg.eval.api_map import check_map, main, write_map
 
