@@ -194,7 +194,7 @@
 
 ---
 
-- Determine if we can `lazy-load` tresitter languages instead of pulling all languages on install (this may improve initial load time and reduce the tools footprint). Confirm that we can dynamically load the language parsers we need for a specific language, from python-tree-sitter.
+- Determine if we can `lazy-load` tree-sitter languages instead of pulling all languages on install (this may improve initial load time and reduce the tools footprint). Confirm that we can dynamically load the language parsers we need for a specific language, from python-tree-sitter.
 - Consider an optional step during installation to allow users to opt-out of certain language parsers they will never use (e.g. if a user will never use C++ or Rust, etc. they can opt-out of having those language parsers installed). This would reduce the tools footprint and improve initial load time.
 - Determine if it would be beneficial to add a `tree-sitter` package manager or similar to handle the downloading and management of language parsers. (this may improve initial load time and reduce the tools footprint). Confirm that `git-cg` would still be able to parse non-resident language parsers (e.g. if a user opts out of having the C++ parser installed, they will still be able to parse C++ files in their repository).
 
@@ -205,9 +205,9 @@
 
 ---
 
-- Improve failure output for the user, instead of ejecting them from the TUI they should be able to edit the message and fix whatever the issue is, or accept a reccomendation from the agent for example:
+- Improve failure output for the user, instead of ejecting them from the TUI they should be able to edit the message and fix whatever the issue is, or accept a recommendation from the agent for example:
 
-```
+```text
 You use x which can only be used with y.
 Do you want to replace x with y?
 Yes / No
