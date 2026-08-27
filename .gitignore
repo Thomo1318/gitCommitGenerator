@@ -35,7 +35,19 @@ docs/plans/notReleased
 # .vscode/
 .gemini/
 .claude/
-.agents/
+# Ignore agent runtime/state under .agents/, but keep owned deslop skills versioned.
+# IMPORTANT: do not ignore the directory node alone (`.agents/`) — that blocks re-includes.
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/code-deslop/
+!.agents/skills/code-deslop/**
+!.agents/skills/prose-deslop/
+!.agents/skills/prose-deslop/**
+!.agents/skills/deslop-gate/
+!.agents/skills/deslop-gate/**
+
+# Owned project path skills (deslop suite) live under the exceptions above.
 .idea/
 *.swp
 *.swo
