@@ -196,3 +196,52 @@ def _multi(
     # Docstring must land after the header closes, not among params.
     assert 'b: int,\n) -> int:\n    """Add two integers."""\n    return' in text
     guard.validate_source(text, filename=str(path))
+
+
+def test_same_line_non_ellipsis_body_skipped(tmp_path: Path) -> None:
+    path = tmp_path / "one_line.py"
+    path.write_text("class C:\n    def f(self): return 1\n", encoding="utf-8")
+    missing = guard.analyze_source(
+        path.read_text(encoding="utf-8"),
+        path=path,
+        private_only=False,
+        include_public=True,
+    )
+    by_qual = {m.qualname: m for m in missing}
+    assert "C.f" in by_qual
+    assert by_qual["C.f"].status == "skip_same_line_body"
+    assert by_qual["C.f"].insert_lineno is None
+
+
+def test_format_trailing_quote_and_backslash() -> None:
+    lines = guard._format_docstring('says "hi"', "    ")
+    assert lines == ['    """says "hi" """']
+    lines_bs = guard._format_docstring("path C:\\temp", "    ")
+    assert lines_bs[0].startswith("    r" + '"""')
+
+
+def test_apply_manifest_prevalidates_and_drops_nulls(tmp_path: Path) -> None:
+    target = tmp_path / "mod.py"
+    target.write_text("def _h() -> int:\n    return 1\n", encoding="utf-8")
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps([{"path": str(target), "text": "missing target"}]), encoding="utf-8")
+    with pytest.raises(ValueError, match="qualname"):
+        guard.apply_manifest(bad, private_only=True, include_public=False, dry_run=True)
+
+    good = tmp_path / "good.json"
+    good.write_text(
+        json.dumps(
+            [
+                {
+                    "path": str(target),
+                    "symbol": "_h",
+                    "qualname": None,
+                    "text": "Return the sentinel one.",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    results = guard.apply_manifest(good, private_only=True, include_public=False, dry_run=True)
+    assert len(results) == 1
+    assert results[0].ok

@@ -29,7 +29,8 @@ Examples
         --text "Fail closed when the pin is floating latest."
     uv run python tools/docstring_guard.py apply --manifest /tmp/docs.json
     just docstring-guard
-    just docstring-guard-apply MANIFEST=/tmp/docs.json
+    just docstring-guard-apply /tmp/docs.json
+    just docstring-guard-apply /tmp/docs.json 1
 """
 
 from __future__ import annotations
@@ -61,7 +62,7 @@ class MissingSymbol:
     private: bool
     insert_lineno: int | None
     insert_col: int | None
-    status: str  # ok_to_insert | skip_same_line_ellipsis | skip_empty_body | skip_undecidable
+    status: str  # ok_to_insert | skip_same_line_body | skip_same_line_ellipsis | skip_empty_body | skip_undecidable
     reason: str
 
 
@@ -171,14 +172,21 @@ def _format_docstring(text: str, indent: str) -> list[str]:
     else:
         body = cleaned
         quote = '"""'
+    # Keep backslash sequences literal when operators pass paths / \n via --text.
+    prefix = "r" if "\\" in body else ""
+    open_delim = f"{prefix}{quote}"
     if "\n" in body:
         inner_lines = body.splitlines()
-        out = [f"{indent}{quote}{inner_lines[0]}"]
+        out = [f"{indent}{open_delim}{inner_lines[0]}"]
         for part in inner_lines[1:]:
             out.append(f"{indent}{part}" if part else "")
         out.append(f"{indent}{quote}")
         return out
-    return [f"{indent}{quote}{body}{quote}"]
+    # If body ends with the selected quote character, add a separator space so
+    # the closing delimiter remains unambiguous (e.g. ... "hi" """).
+    if body.endswith(quote[0]):
+        body = f"{body} "
+    return [f"{indent}{open_delim}{body}{quote}"]
 
 
 def _walk_defs(
@@ -302,7 +310,15 @@ def analyze_source(
             )
             continue
 
-        if _is_ellipsis_stmt(first) and _line_has_same_line_def_ellipsis(lines, insert_lineno):
+        # Any body that begins on the header line is unsafe to patch in-place
+        # (insert would land before the def/class, attaching to the parent).
+        if insert_lineno <= lineno:
+            if _is_ellipsis_stmt(first):
+                status = "skip_same_line_ellipsis"
+                reason = "body is same-line ': ...' — rewrite to multiline before inserting"
+            else:
+                status = "skip_same_line_body"
+                reason = "body starts on the header line — rewrite to multiline before inserting"
             missing.append(
                 MissingSymbol(
                     path=_rel(path),
@@ -313,8 +329,8 @@ def analyze_source(
                     private=private,
                     insert_lineno=None,
                     insert_col=None,
-                    status="skip_same_line_ellipsis",
-                    reason="body is same-line ': ...' — rewrite to multiline before inserting",
+                    status=status,
+                    reason=reason,
                 )
             )
             continue
@@ -402,7 +418,9 @@ def validate_source(source: str, *, filename: str) -> None:
     tree = ast.parse(source, filename=filename)
     compile(tree, filename=filename, mode="exec")
     # Tokenize as a second cheap syntax signal (catches some oddities early).
-    tokenize.generate_tokens(iter(source.splitlines(keepends=True)).__next__)
+    # generate_tokens is lazy — must fully consume to surface TokenError.
+    for _token in tokenize.generate_tokens(iter(source.splitlines(keepends=True)).__next__):
+        pass
 
 
 def apply_one(
@@ -495,15 +513,24 @@ def apply_manifest(
         for row in data:
             if not isinstance(row, dict):
                 raise ValueError("manifest list entries must be objects")
-            items.append({k: str(v) for k, v in row.items()})
+            # Drop JSON nulls so optional qualname/symbol stay absent.
+            items.append({k: str(v) for k, v in row.items() if v is not None})
     elif isinstance(data, dict):
-        for key, text in data.items():
+        for key, text_value in data.items():
             if "::" not in key:
                 raise ValueError(f"manifest key {key!r} must be 'path::qualname' in mapping form")
             path_s, qn = key.split("::", 1)
-            items.append({"path": path_s, "qualname": qn, "text": str(text)})
+            items.append({"path": path_s, "qualname": qn, "text": str(text_value)})
     else:
         raise ValueError("manifest must be a list or object")
+
+    # Validate the full manifest before any file write so partial applies cannot
+    # leave the tree dirty without a per-row report.
+    for row in items:
+        if not row.get("path") or not row.get("text"):
+            raise ValueError(f"manifest row requires 'path' and 'text': {row!r}")
+        if not row.get("qualname") and not row.get("symbol"):
+            raise ValueError(f"manifest row requires 'qualname' or 'symbol': {row!r}")
 
     results: list[ApplyResult] = []
     for row in items:

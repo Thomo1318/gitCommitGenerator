@@ -89,8 +89,8 @@ docstring-guard *paths:
     uv run python tools/docstring_guard.py check {{paths}}
 
 # Apply explicit docstring manifest with parse/compile write-if-green
-# Usage: just docstring-guard-apply MANIFEST=/tmp/docs.json
-# Optional: just docstring-guard-apply MANIFEST=/tmp/docs.json DRY_RUN=1
+# Usage: just docstring-guard-apply /tmp/docs.json
+# Optional dry-run: just docstring-guard-apply /tmp/docs.json 1
 docstring-guard-apply manifest dry_run="":
     #!/usr/bin/env bash
     set -euo pipefail
