@@ -463,6 +463,10 @@ def run_local_doctor(
                 except Exception:
                     # Unreadable checkpoint is an I/O concern, not a compat fail.
                     continue
+                # Compat hash is suite+snapshot-scoped; skip other suites' checkpoints.
+                ckpt_suite = ckpt.get("suite_id")
+                if ckpt_suite not in (None, "", suite_id):
+                    continue
                 stored = str(ckpt.get("compat_hash") or "").strip().lower()
                 if not stored:
                     continue

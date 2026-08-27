@@ -134,17 +134,39 @@ def test_compat_mismatch_flips_block_and_exit_3(tmp_path: Path) -> None:
     assert compat_check.severity == "block"
 
 
-def test_floating_pin_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Unpinned ``latest`` on the schema pack must fail closed (block)."""
-    from git_cg.eval import doctor as doctor_mod
+def test_compat_ignores_other_suite_checkpoints(tmp_path: Path) -> None:
+    """Foreign-suite checkpoints must not poison h.compat_hash_resume for the active suite."""
+    from git_cg.eval.checkpoint_store import build_checkpoint_record, write_checkpoint
 
-    monkeypatch.setattr(doctor_mod, "run_local_doctor", doctor_mod.run_local_doctor)  # no-op guard
+    bad_hash = "0" * 64
+    record = build_checkpoint_record(
+        checkpoint_id="ckpt-other-suite",
+        experiment_id="exp-other",
+        compat_hash=bad_hash,
+        completed_case_ids=[],
+        pending_case_ids=["seed-v1-valid-fixture"],
+        mode="fresh_suite_run",
+        suite_id="other-suite",
+    )
+    write_checkpoint(tmp_path, record)
+    report = run_local_doctor(repo_root=tmp_path, suite_id="cm-eval-fixtures-core")
+    compat_check = next(c for c in report.checks if c.check_id == "compat.hash_resume")
+    assert compat_check.status == STATUS_PASS
+    compat_score = next(s for s in report.scores if s.metric_id == "h.compat_hash_resume")
+    assert compat_score.passed is True
+    assert report.exit_code != 3
+
+
+def test_floating_pin_fails_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unpinned ``latest`` on the schema pack must fail closed (block)."""
     # Patch the pin at the pins module boundary the doctor imports lazily.
     import git_cg.eval.pins as pins
 
     monkeypatch.setattr(pins, "schema_pack_pin", lambda: "schema_pack_v0@latest")
-    # Force the lazy import inside run_local_doctor to see the patched value.
-    report = run_local_doctor(repo_root=REPO)
+    # Isolate Layer-A checkpoint discovery so a local mismatched checkpoint cannot
+    # force exit_code 3 and hide the pin-failure class under test.
+    (tmp_path / ".git").mkdir()
+    report = run_local_doctor(repo_root=tmp_path)
     pin_check = next((c for c in report.checks if c.check_id == "pins.schema_pack_pinned"), None)
     assert pin_check is not None
     assert pin_check.status == STATUS_FAIL
