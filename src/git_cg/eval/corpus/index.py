@@ -9,7 +9,7 @@ from git_cg.eval.corpus.fixtures import default_fixture_root, load_fixture_dict
 
 
 def _iter_case_files(root: Path) -> list[Path]:
-    """Iterate governed store rows while skipping unreadable/foreign files safely."""
+    """Return JSON case files under the governed store's ``cases`` directory."""
     cases = root / "cases"
     if not cases.is_dir():
         return []
@@ -17,7 +17,7 @@ def _iter_case_files(root: Path) -> list[Path]:
 
 
 def _iter_suite_files(root: Path) -> list[Path]:
-    """Iterate governed store rows while skipping unreadable/foreign files safely."""
+    """Return top-level JSON suite files under the governed store's ``suites`` directory."""
     suites = root / "suites"
     if not suites.is_dir():
         return []

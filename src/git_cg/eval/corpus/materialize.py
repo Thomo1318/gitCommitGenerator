@@ -13,7 +13,7 @@ from git_cg.eval.corpus.suites import load_suite
 
 
 def _write_json(path: Path, obj: Any) -> None:
-    """Persist a governed artifact via atomic write (fail closed)."""
+    """Serialize and write a governed artifact to ``path``."""
     path.parent.mkdir(parents=True, exist_ok=True)
     # Pretty for reviewability; identity still proven via content hashes / re-encode tests.
     path.write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n", encoding="utf-8")

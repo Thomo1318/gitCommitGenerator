@@ -40,7 +40,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Internal helper: getattr ."""
+    """Lazily expose known corpus helpers; raise AttributeError otherwise."""
     if name in {"build_fixture_index", "write_fixture_index"}:
         from git_cg.eval.corpus.index import build_fixture_index, write_fixture_index
 

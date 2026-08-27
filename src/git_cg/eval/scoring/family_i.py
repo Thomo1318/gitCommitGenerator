@@ -160,14 +160,14 @@ class TopologyEvidence:
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any] | None:
-    """Return ``value`` when it is a mapping; otherwise an empty dict."""
+    """Return ``value`` when it is a mapping; otherwise ``None``."""
     if isinstance(value, Mapping):
         return value
     return None
 
 
 def _non_empty_str(value: Any) -> str | None:
-    """True when ``value`` is a non-empty string."""
+    """Return the stripped value when it is a non-empty string; otherwise ``None``."""
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None

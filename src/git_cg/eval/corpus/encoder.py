@@ -27,7 +27,7 @@ def _require_str(data: Mapping[str, Any], key: str) -> str:
 
 
 def _optional_str(data: Mapping[str, Any], key: str, *, allow_empty: bool = False) -> str | None:
-    """Return a stripped string or ``None`` when absent/blank."""
+    """Return the raw string when present; reject blank unless allow_empty."""
     val = data.get(key)
     if val is None:
         return None
@@ -39,7 +39,7 @@ def _optional_str(data: Mapping[str, Any], key: str, *, allow_empty: bool = Fals
 
 
 def _optional_str_list(data: Mapping[str, Any], key: str) -> list[str] | None:
-    """Return a list of non-empty strings, dropping blanks."""
+    """Return ``list(val)`` when present; require an array of strings."""
     val = data.get(key)
     if val is None:
         return None
@@ -69,7 +69,7 @@ def _meta_with_producer(meta: Mapping[str, Any] | None, *, extra: dict[str, Any]
 
 
 def _as_mapping(value: Any, field: str) -> Mapping[str, Any] | None:
-    """Return ``value`` when it is a mapping; otherwise an empty dict."""
+    """Return ``value`` when it is a mapping; ``None`` if absent."""
     if value is None:
         return None
     if not isinstance(value, Mapping):
