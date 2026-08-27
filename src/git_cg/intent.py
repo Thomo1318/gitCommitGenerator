@@ -277,6 +277,7 @@ _PUBLIC_API_PATTERNS = (
 
 def _normalize_diff_for_content_matching(diff_output: str) -> str:
     """Normalize diff output for content matching by stripping metadata lines."""
+
     def _normalize_line(line: str) -> str:
         """Normalize a single diff line for content matching."""
         if line.startswith(("diff --git ", "index ", "+++", "---")):
