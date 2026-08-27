@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from typer.core import TyperGroup
 
 from git_cg.eval.cli_output import (
     DEFAULT_KEEP_LAST,
@@ -29,14 +30,101 @@ from git_cg.eval.cli_output import (
     emit_not_implemented,
 )
 
+
+class EvalHelpGroup(TyperGroup):
+    """Order ``git-cg eval --help`` panels by operator workflow.
+
+    Typer registers leaf commands before nested groups, so plain registration
+    order always pushes Review/session groups to the bottom. This group keeps
+    command resolution unchanged while listing commands in panel-priority order
+    for Rich help rendering.
+    """
+
+    _HELP_PANEL_ORDER: tuple[str, ...] = (
+        "Corpus",
+        "Run",
+        "Inspect",
+        "Review & sessions",
+        "Export & train",
+        "Advanced",
+        "Deprecated",
+    )
+
+    def list_commands(self, ctx: typer.Context) -> list[str]:  # type: ignore[override]
+        names = list(super().list_commands(ctx))
+        priority = {name: idx for idx, name in enumerate(self._HELP_PANEL_ORDER)}
+        default_panel = "Commands"
+
+        def sort_key(command_name: str) -> tuple[int, int]:
+            command = self.get_command(ctx, command_name)
+            panel = default_panel
+            if command is not None:
+                panel = getattr(command, "rich_help_panel", None) or default_panel
+            panel_rank = priority.get(panel, len(priority))
+            # Stable within-panel: preserve registration order among peers.
+            return (panel_rank, names.index(command_name))
+
+        return sorted(names, key=sort_key)
+
+
 eval_app = typer.Typer(
+    cls=EvalHelpGroup,
     add_completion=False,
     help=(
-        "Evaluation harness operator surface: corpus helpers, offline suite "
-        "ops, doctor/triage, export queue, and Opik config (no product ranking)."
+        "Run and inspect local evaluation suites, debug failures, manage "
+        "review/sessions, and operate the export queue. Does not change "
+        "product commit ranking."
     ),
     no_args_is_help=True,
 )
+
+
+# Nested groups declared early so top-level help panels order by workflow:
+# Corpus → Run → Inspect → Review & sessions → Export & train → Advanced → Deprecated.
+review_app = typer.Typer(
+    add_completion=False,
+    help="Local human review queue (advisory only).",
+    no_args_is_help=True,
+)
+session_app = typer.Typer(
+    add_completion=False,
+    help="Inspect local commit sessions.",
+    no_args_is_help=True,
+)
+thread_app = typer.Typer(
+    add_completion=False,
+    help="Inspect local session threads.",
+    no_args_is_help=True,
+)
+issue_app = typer.Typer(
+    add_completion=False,
+    help="Manage local diagnostic issues.",
+    no_args_is_help=True,
+)
+opik_app = typer.Typer(
+    add_completion=False,
+    help="Opik health checks and secret-safe config.",
+    no_args_is_help=True,
+)
+opik_config_app = typer.Typer(
+    add_completion=False,
+    help="Inspect Opik/mirror config without exposing secrets.",
+    no_args_is_help=True,
+)
+export_app = typer.Typer(
+    add_completion=False,
+    help="Export-queue status, retry, and drain.",
+    no_args_is_help=True,
+)
+
+# Register groups before leaf Export/Advanced commands so panel order matches workflow.
+eval_app.add_typer(review_app, name="review", rich_help_panel="Review & sessions")
+eval_app.add_typer(session_app, name="session", rich_help_panel="Review & sessions")
+eval_app.add_typer(thread_app, name="thread", rich_help_panel="Review & sessions")
+eval_app.add_typer(issue_app, name="issue", rich_help_panel="Review & sessions")
+eval_app.add_typer(opik_app, name="opik", rich_help_panel="Export & train")
+opik_app.add_typer(opik_config_app, name="config")
+eval_app.add_typer(export_app, name="export", rich_help_panel="Export & train")
 
 
 # --------------------------------------------------------------------------
@@ -59,7 +147,7 @@ def _stub(
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("materialize-core-goldens")
+@eval_app.command("materialize-core-goldens", rich_help_panel="Corpus")
 def materialize_core_goldens_cmd(
     root: Path | None = typer.Option(
         None,
@@ -71,7 +159,7 @@ def materialize_core_goldens_cmd(
         resolve_path=True,
     ),
 ) -> None:
-    """Materialize checked-in core golden bundles + snapshot (corpus write only)."""
+    """Write checked-in core golden bundles and snapshot."""
     from git_cg.eval.corpus.materialize import materialize_core_goldens
 
     try:
@@ -88,7 +176,7 @@ def materialize_core_goldens_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("encode-fixture")
+@eval_app.command("encode-fixture", rich_help_panel="Corpus")
 def encode_fixture_cmd(
     path: Path | None = typer.Option(
         None,
@@ -110,7 +198,7 @@ def encode_fixture_cmd(
         help="Suite id to resolve --id against (default: cm-eval-fixtures-core).",
     ),
 ) -> None:
-    """Encode a fixture into ``ape_bundle_v1`` and print its identity summary.
+    """Encode a fixture and print its identity summary.
 
     Requires exactly one of ``--path`` or ``--id``; exits non-zero
     on invalid options, missing fixtures, or encode failures.
@@ -260,7 +348,7 @@ def _parse_case_ids(raw: str | None) -> tuple[str, ...] | None:
     return tuple(parts) if parts else None
 
 
-@eval_app.command("run")
+@eval_app.command("run", rich_help_panel="Run")
 def run_cmd(
     suite: str | None = typer.Option(
         "cm-eval-fixtures-core",
@@ -314,7 +402,7 @@ def run_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Run an offline evaluation suite (canonical; not ``eval suite run``)."""
+    """Run an offline evaluation suite."""
     # Lazy import preserves Slice 2 import-isolation law (no scoring at import).
     from git_cg.eval.run_orchestrator import RunRequest, run_evaluation
 
@@ -343,7 +431,7 @@ def run_cmd(
         _emit_run_result("eval run", as_json=as_json, result=result)
 
 
-@eval_app.command("resume")
+@eval_app.command("resume", rich_help_panel="Run")
 def resume_cmd(
     checkpoint: str | None = typer.Option(
         None,
@@ -372,7 +460,7 @@ def resume_cmd(
     gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Resume a suite run from a governed checkpoint + compat hash."""
+    """Resume a suite from a checkpoint."""
     from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
 
     if not checkpoint:
@@ -408,7 +496,7 @@ def resume_cmd(
         _emit_run_result("eval resume", as_json=as_json, result=result)
 
 
-@eval_app.command("recompute-scores")
+@eval_app.command("recompute-scores", rich_help_panel="Run")
 def recompute_scores_cmd(
     experiment: str | None = typer.Option(
         None,
@@ -442,7 +530,7 @@ def recompute_scores_cmd(
     gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Re-run the metric pack over already-landed evidence bundles."""
+    """Re-score evidence already written by a prior run."""
     from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
 
     if not experiment:
@@ -484,7 +572,7 @@ def recompute_scores_cmd(
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("doctor")
+@eval_app.command("doctor", rich_help_panel="Inspect")
 def doctor_cmd(
     suite: str = typer.Option(
         "cm-eval-fixtures-core",
@@ -502,7 +590,7 @@ def doctor_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Local suite/pin/metric doctor (distinct from ``eval opik doctor``).
+    """Check local suite health (pins, metrics, fixtures).
 
     Offline, network-free. Fail-closed on floating ``latest`` pins and missing
     catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks
@@ -533,7 +621,7 @@ def doctor_cmd(
     raise typer.Exit(code=report.exit_code)
 
 
-@eval_app.command("amend-brief")
+@eval_app.command("amend-brief", rich_help_panel="Export & train")
 def amend_brief_cmd(
     score_run_id: str = typer.Argument(..., help="Case score run id (rs_) to brief against."),
     session_thread_id: str | None = typer.Option(
@@ -553,7 +641,7 @@ def amend_brief_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Assemble the v1 amend brief from landed Layer-A data (R11 / §7.2).
+    """Build an amend brief from landed evaluation data.
 
     Advisory authority: summarizes score/failure/regime/family context and
     preference pairs; never auto-applies reruns, never accepts, never re-ranks.
@@ -589,6 +677,7 @@ def amend_brief_cmd(
 @eval_app.command(
     "dogfood",
     hidden=True,  # dark-launch: callable, omitted from regular `git-cg eval --help`
+    rich_help_panel="Advanced",
 )
 def dogfood_cmd(
     commit_message: str = typer.Option(..., "--commit-message", help="Candidate commit message."),
@@ -608,7 +697,7 @@ def dogfood_cmd(
     write: bool = typer.Option(True, "--write/--no-write"),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Fire the Lane C dogfood shadow sidecar (§7.3).
+    """Capture Lane C dogfood evidence for a candidate commit message.
 
     Dark-launched maintainer/operator surface: registered and callable as
     ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so
@@ -661,7 +750,7 @@ def dogfood_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("train-export")
+@eval_app.command("train-export", rich_help_panel="Export & train")
 def train_export_cmd(
     bundle_id: list[str] | None = typer.Option(
         None, "--bundle-id", help="Bundle id(s) to export; default exports all landed bundles."
@@ -678,7 +767,7 @@ def train_export_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Export governed train rows from landed bundles (R14 / §7.5).
+    """Export redacted training rows from landed bundles.
 
     Row scrub-failure policy: drop + report (scrub_report) + continue; never
     emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never
@@ -723,7 +812,7 @@ def train_export_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("triage")
+@eval_app.command("triage", rich_help_panel="Inspect")
 def triage_cmd(
     suite: str = typer.Option(
         "cm-eval-fixtures-core",
@@ -754,7 +843,7 @@ def triage_cmd(
     skip_explain: bool = typer.Option(False, "--skip-explain", help="Skip the explain section."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Offline advisory router over doctor + failures + explain (Slice 8 / D27).
+    """One-shot advisory view: doctor + failures + explain.
 
     Composes library engines only — never nests Typer presentation commands.
     Not score law: does not promote gold, rank intents, or revive Opik
@@ -840,7 +929,7 @@ def triage_cmd(
     raise typer.Exit(code=report.exit_code)
 
 
-@eval_app.command("failures")
+@eval_app.command("failures", rich_help_panel="Inspect")
 def failures_cmd(
     experiment_id: str | None = typer.Option(
         None, "--experiment-id", help="Experiment id (defaults to latest local run)."
@@ -855,7 +944,7 @@ def failures_cmd(
     severity: str | None = typer.Option(None, "--severity", help="Deterministic filter: block|warn|info."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """List failing bundles/cases with metric_ids + failure_ids (§18.3, read-only).
+    """List failing cases with metric and failure ids.
 
     Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``,
     ``--severity``) are AND-combined and documented in the API map. The base
@@ -896,7 +985,7 @@ def failures_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("explain")
+@eval_app.command("explain", rich_help_panel="Inspect")
 def explain_cmd(
     experiment_id: str | None = typer.Option(
         None, "--experiment-id", help="Experiment id (defaults to latest local run)."
@@ -904,7 +993,7 @@ def explain_cmd(
     case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Deterministic explain contract (§18.3); no opaque LLM RCA."""
+    """Show a deterministic explanation for a failing case."""
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError, explain
 
@@ -933,7 +1022,7 @@ def explain_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("compare")
+@eval_app.command("compare", rich_help_panel="Inspect")
 def compare_cmd(
     a_experiment_id: str = typer.Option(..., "--a-experiment-id", help="Left experiment id."),
     a_case_id: str = typer.Option(..., "--a-case", help="Left case id."),
@@ -941,7 +1030,7 @@ def compare_cmd(
     b_case_id: str = typer.Option(..., "--b-case", help="Right case id."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Structural + metric delta; uses replay_compare lineage when linked (§18.3)."""
+    """Diff two cases (structure and metrics)."""
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError, compare
 
@@ -974,7 +1063,7 @@ def compare_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("replay")
+@eval_app.command("replay", rich_help_panel="Advanced")
 def replay_cmd(
     bundle: str | None = typer.Option(
         None,
@@ -989,7 +1078,7 @@ def replay_cmd(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate and project without writing."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Replay generation into a new bundle + replay_compare_v1 (never mutates source)."""
+    """Replay generation into a new bundle (source unchanged)."""
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.replay import ReplayError, replay
 
@@ -1031,7 +1120,7 @@ def replay_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("promote")
+@eval_app.command("promote", rich_help_panel="Advanced")
 def promote_cmd(
     bundle: str = typer.Option(..., "--bundle", help="Source ape_bundle_v1 path/id (acceptpath or replay)."),
     destination: str = typer.Option(
@@ -1069,7 +1158,7 @@ def promote_cmd(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate decision without writing."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Promotion state machine + split_group_id contamination check."""
+    """Promote a scrubbed candidate with contamination checks."""
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.promote import PromoteError, promote
 
@@ -1149,7 +1238,7 @@ def promote_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("diagnose")
+@eval_app.command("diagnose", rich_help_panel="Inspect")
 def diagnose_cmd(
     experiment_id: str | None = typer.Option(
         None, "--experiment-id", help="Experiment id (defaults to latest local run)."
@@ -1167,7 +1256,7 @@ def diagnose_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Upsert diag_issue_v1 with stable fingerprint law (§18.4; idempotent)."""
+    """Create or update a diagnostic issue from a failure."""
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.diagnose import DiagnoseError, diagnose
 
@@ -1220,12 +1309,7 @@ def diagnose_cmd(
 # --------------------------------------------------------------------------
 
 
-review_app = typer.Typer(
-    add_completion=False,
-    help="Local HITL review queue (.eval/review_queue; advisory only).",
-    no_args_is_help=True,
-)
-eval_app.add_typer(review_app, name="review")
+# review_app registered near module top for help-panel order.
 
 
 @review_app.command("enqueue")
@@ -1245,7 +1329,7 @@ def review_enqueue_cmd(
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Enqueue an advisory human_review_v1 row (pending)."""
+    """Enqueue an advisory human-review item."""
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, enqueue
 
@@ -1327,7 +1411,7 @@ def review_rollup_cmd(
     bundle_id: str | None = typer.Option(None, "--bundle-id", help="Optional bundle_id filter."),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Multi-rater advisory rollup over local human_review_v1 rows (NTH-05).
+    """Roll up multi-rater advisory scores for review items.
 
     Read-only dimension/outcome majority + craft spread. Authority stays
     advisory; never sole-promotes gold.
@@ -1514,12 +1598,7 @@ def review_dismiss_cmd(
 # --------------------------------------------------------------------------
 
 
-session_app = typer.Typer(
-    add_completion=False,
-    help="Local commit-session inspection.",
-    no_args_is_help=True,
-)
-eval_app.add_typer(session_app, name="session")
+# session_app registered near module top for help-panel order.
 
 
 @session_app.command("show")
@@ -1536,7 +1615,7 @@ def session_show_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Read a local session twin under .eval/sessions/ (§7.6).
+    """Show one local commit session.
 
     Read-only: no Opik reach, no chat timeline, no graph browser, no accept
     authority, no rerun, no ranking mutation.
@@ -1563,12 +1642,7 @@ def session_show_cmd(
     raise typer.Exit(code=0)
 
 
-thread_app = typer.Typer(
-    add_completion=False,
-    help="Local session-thread inspection.",
-    no_args_is_help=True,
-)
-eval_app.add_typer(thread_app, name="thread")
+# thread_app registered near module top for help-panel order.
 
 
 @thread_app.command("show")
@@ -1585,7 +1659,7 @@ def thread_show_cmd(
     ),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Read a local message-thread twin under .eval/sessions/ (§7.6).
+    """Show one local session thread.
 
     Read-only: no Opik reach, no chat timeline, no graph browser, no accept
     authority, no rerun, no ranking mutation.
@@ -1620,12 +1694,7 @@ def thread_show_cmd(
 # --------------------------------------------------------------------------
 
 
-issue_app = typer.Typer(
-    add_completion=False,
-    help="Local diagnostic issue store ops.",
-    no_args_is_help=True,
-)
-eval_app.add_typer(issue_app, name="issue")
+# issue_app registered near module top for help-panel order.
 
 
 @issue_app.command("list")
@@ -1749,19 +1818,7 @@ def issue_suppress_cmd(
 # --------------------------------------------------------------------------
 
 
-opik_app = typer.Typer(
-    add_completion=False,
-    help="Opik/export health and secret-safe config (canonical).",
-    no_args_is_help=True,
-)
-eval_app.add_typer(opik_app, name="opik")
-
-opik_config_app = typer.Typer(
-    add_completion=False,
-    help="Secret-safe Opik/mirror config inspection.",
-    no_args_is_help=True,
-)
-opik_app.add_typer(opik_config_app, name="config")
+# opik_app / opik_config_app registered near module top for help-panel order.
 
 
 def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = None) -> None:
@@ -1880,7 +1937,7 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
 def opik_config_show_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Inspect resolved Opik/mirror config (secret-safe; canonical)."""
+    """Show resolved Opik/mirror config without secrets."""
     _config_show_impl(as_json=as_json, deprecated_from=None)
 
 
@@ -1888,7 +1945,7 @@ def opik_config_show_cmd(
 def opik_doctor_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Secret-safe Opik/export health doctor.
+    """Check Opik/export health without exposing secrets.
 
     Inspects resolved config / export health / queue without transport or
     network. All secret-bearing output passes through ``mask_secret()``
@@ -1919,12 +1976,12 @@ def opik_doctor_cmd(
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("config")
+@eval_app.command("config", rich_help_panel="Deprecated", deprecated=True)
 def config_cmd(
     action: str = typer.Argument(..., help="Subcommand: show"),
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
 ) -> None:
-    """Deprecated alias for ``eval opik config show`` (temporary bridge).
+    """Alias of eval opik config show.
 
     Removal target: first minor release after S6 GA.
     """
@@ -1939,12 +1996,7 @@ def config_cmd(
 # --------------------------------------------------------------------------
 
 
-export_app = typer.Typer(
-    add_completion=False,
-    help="Layer-A export queue ops: status / retry / drain (F4 fail-open).",
-    no_args_is_help=True,
-)
-eval_app.add_typer(export_app, name="export")
+# export_app registered near module top for help-panel order.
 
 
 def _resolve_repo(root: Path | None) -> Path:
@@ -2083,7 +2135,7 @@ def export_status_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
     _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
-    """Show the Layer-A export queue status (read-only, offline).
+    """Show export-queue status (read-only, offline).
 
     Never mutates the queue and never contacts Opik or the network.
     """
@@ -2185,7 +2237,7 @@ def export_retry_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
     _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
-    """Re-queue failed export rows for another drain attempt (P1-4 / P1-11).
+    """Re-queue failed export rows for another drain attempt.
 
     Default policy: reclaim rows whose last_error_class is retryable
     (``export_network`` / ``export_timeout`` / empty). Validation/auth/size
@@ -2294,7 +2346,7 @@ def export_drain_cmd(
     as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
     _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
-    """Drain the export queue through the Opik transport (F4 fail-open).
+    """Drain the export queue through the Opik transport.
 
     Always exits 0 unless the config is invalid (fail-closed). Transport and
     secret failures are classified and recorded on the queue rows; they never
@@ -2461,7 +2513,7 @@ def _export_status_alias(
     root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
     as_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Deprecated alias for ``eval export status``."""
+    """Alias of eval export status."""
     export_status_cmd(root=root, as_json=as_json, _deprecated_from="git-cg eval export-status")
 
 
@@ -2472,7 +2524,7 @@ def _export_retry_alias(
     max_items: int | None = typer.Option(None, "--max-items"),
     as_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Deprecated alias for ``eval export retry``."""
+    """Alias of eval export retry."""
     export_retry_cmd(
         root=root,
         queue_id=queue_id,
@@ -2489,7 +2541,7 @@ def _export_drain_alias(
     dry_run: bool = typer.Option(False, "--dry-run"),
     as_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Deprecated alias for ``eval export drain``."""
+    """Alias of eval export drain."""
     export_drain_cmd(
         root=root,
         max_items=max_items,
@@ -2499,6 +2551,6 @@ def _export_drain_alias(
     )
 
 
-eval_app.command("export-status")(_export_status_alias)
-eval_app.command("export-retry")(_export_retry_alias)
-eval_app.command("export-drain")(_export_drain_alias)
+eval_app.command("export-status", rich_help_panel="Deprecated", deprecated=True)(_export_status_alias)
+eval_app.command("export-retry", rich_help_panel="Deprecated", deprecated=True)(_export_retry_alias)
+eval_app.command("export-drain", rich_help_panel="Deprecated", deprecated=True)(_export_drain_alias)
