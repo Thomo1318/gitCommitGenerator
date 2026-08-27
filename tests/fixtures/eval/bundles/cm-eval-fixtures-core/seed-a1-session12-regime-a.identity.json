@@ -1,8 +1,8 @@
 {
-  "bundle_hash": "49b63d669090960ac62599e391c6be52c9a41549baf6bdc4d4c7d8f4e0887e1c",
-  "bundle_ref": "bundle:seed-a1-session12-regime-a@49b63d669090960ac62599e391c6be52c9a41549baf6bdc4d4c7d8f4e0887e1c",
-  "case_hash": "fa8c6c22d070757a1a9c002d416e9cb9e558726ce314ac34c4cd809540f34042",
+  "bundle_hash": "9dd3a7875ab74ad560b8f884e37d96841f6b77291e4935d35a421ab5e6aa984a",
+  "bundle_ref": "bundle:seed-a1-session12-regime-a@9dd3a7875ab74ad560b8f884e37d96841f6b77291e4935d35a421ab5e6aa984a",
+  "case_hash": "249954208f2257e3a8ebc126876fc0b7b824e9cd697b3375e4da12842d47777d",
   "case_id": "seed-a1-session12-regime-a",
   "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
-  "schema_pack": "schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe"
+  "schema_pack": "schema_pack_v0@8616781fb87ea4721253f7efacf120c7c602062a6c578b8a4173fbae5341c3c3"
 }

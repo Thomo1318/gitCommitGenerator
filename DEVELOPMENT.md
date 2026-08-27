@@ -451,6 +451,62 @@ same-filesystem local checkouts when measuring refresh latency.
 Shadow clone/sync wall time is folded into the existing `graph_build_latency_ms`
 telemetry field (no separate payload key).
 
+## 🌑 Dark Launch
+
+In this project, a **dark launch** is a surface that is **implemented and
+exercised in-tree** (tests, maintainer workflows, telemetry, evidence packs)
+while remaining **off, opt-in, advisory, or hidden** for ordinary users.
+
+Dark launch is not “dead code.” It is deliberate product/ops posture:
+
+* **Default contract preserved** — basic `git-cg commit` / ranking / Hybrid /
+  SOP authority must not change when the launch is off.
+* **Explicit activation** — env flags, CLI overrides, or a callable-but-hidden
+  command; never surprise enablement on the basic path.
+* **Fail-open / non-blocking where specified** — shadow refresh, dogfood, and
+  advisory judges must not block product accept when they fail or are skipped.
+* **Evidence without authority elevation** — telemetry, benches, and
+  attachments may be collected without promoting the surface to a CI or product
+  gate.
+* **Release honesty** — additive dark-launch / non-operator-visible work is
+  tagged so commit-quality SemVer stays at **PATCH** even when the hybrid type
+  is `feat` (`DARK_LAUNCH_TAGS` in `src/git_cg/commit_quality.py`).
+
+Use this section as the inventory of **current** dark-launch items. Nested
+producers that only run under a parent gate are listed under that gate, not as
+independent public features.
+
+
+**Hybrid commit gitmoji:** `🌑` / `:new_moon:` is a first-class SOP matrix row
+(`intent_id=dark_launch`, `cc_type=chore`, `semver_impact=PATCH`).
+
+* Use it for commits that **ship** dark-launched surfaces (default-off / opt-in /
+  advisory / help-hidden).
+* Prefer 🚩 for feature-flag machinery, ✨ for GA features, ⚗️ for experiments,
+  and 🚧 for unfinished WIP.
+* Ranker auto-selection is intentionally weak (novel high-specificity signals);
+  choose the row explicitly when appropriate.
+
+### Inventory
+
+| Item | Activation / visibility | What it does | Safety boundary |
+| --- | --- | --- | --- |
+| **Semantic core (master gate)** | Default **off**. Enable with `GIT_CG_ENABLE_SEMANTIC` = `1` / `true` / `yes` / `on`, or `--enable-semantic` / `--no-enable-semantic` on commit commands (`src/git_cg/semantic_flags.py`). | ADR-0005 Phase 1+ semantic producers on the commit path: parse metrics, fingerprint aggregates, optional graph product fields, and downstream Phase 7.5 / 9 work. Flag-off returns zero-safe defaults and must not invoke producers. | Ranking / SOP remain authority. Semantic path is evidence and optional enrichment; flag-off is a hard no-op for producers. See [usage flags](usage.md), README env table, Issues [#160](https://github.com/Thomo1318/gitCommitGenerator/issues/160) / phase table above. |
+| **↳ Fingerprint metrics (Phase 2)** | Nested under semantic core only. | HEAD vs index three-fingerprint compare (`shape` / `code` / `text`) and allowlisted aggregates (`fingerprint_*`, body similarity) for dark-launch telemetry. | Evidence-only; must not drive SemVer or override intent ranking. Module: `src/git_cg/fingerprints.py`. |
+| **↳ Semantic graph refresh + staged-index shadow (Phase 7.5)** | Nested under semantic core, **and** graph refresh requires `GIT_CG_SEMANTIC_REFRESH_GRAPH` = `1` / `true` / `yes` / `on` (`should_refresh_graph()` in `src/git_cg/git_index.py`). | Optional CRG refresh from an **index-only** shadow clone (`include_unstaged=False`) so dirty worktree content cannot pollute staged-truth graph product. Clone/sync latency folds into `graph_build_latency_ms`. | Fail-open: shadow/refresh errors never block commit generation (`ShadowFailOpenReason`). Keep refresh opt-in on large repos. Details: phase table + [Shadow workspace clone hardlinks](#shadow-workspace-clone-hardlinks-phase-75); Issue [#180](https://github.com/Thomo1318/gitCommitGenerator/issues/180). |
+| **↳ Scoped reasoning history (Phase 9)** | Nested under semantic core (`evaluate_scoped_history` no-ops when semantic is off). | Policy B shadow-lifetime producers: flow-disjoint split evidence, rename confidence bands, Channel-4 guidance, structural markers; telemetry under `scoped_history_*`. | Advisory / bounded evidence carrier; hub/bridge/community split product remains follow-on. ADR: [0163-scoped-reasoning-history](ADRs/0163-scoped-reasoning-history.md); Issue [#163](https://github.com/Thomo1318/gitCommitGenerator/issues/163). |
+| **Lane C dogfood CLI** | Registered as `git-cg eval dogfood`, **`hidden=True`** — callable and documented, omitted from regular `git-cg eval --help`. | Maintainer/operator shadow sidecar for advisory Lane C capture/judge attachments (`src/git_cg/eval/dogfood/capture.py`). Modes: `off` / `sample` / `always` / `async`. | **Never** blocks the product commit path, **never** mutates intent/ranking; async never awaits the judge. Canonical docs: [eval dogfood](cli/eval/dogfood.md), [eval operator map](eval/operator_api_map.md), [eval guide](eval/README.md) (Dark-launch public / S6). |
+
+### Related but not separate dark-launch product features
+
+| Surface | Why it is not a standalone inventory row |
+| --- | --- |
+| **S3 accept-path capture** (`GIT_CG_EVAL_CAPTURE`, default **off**) | Maintainer opt-in Layer-A bind/trajectory/session twin on accept. Off-by-default and fail-closed, but documented as S3 capture law rather than a “dark-launched command.” See [Offline evaluation contracts](#offline-evaluation-contracts-s0s3) and `docs/eval/README.md` §S3. |
+| **`DARK_LAUNCH_TAGS` / commit-quality ceilings** | Governance so dark-launch / flag-default-off / free-harvest work cannot claim an unearned **MINOR**. Machinery under `src/git_cg/commit_quality.py`, not an end-user feature. |
+| **Lane C′ on suite `eval run`** | Dogfood/Lane C remain **off** on the default offline suite runner; enablement is separate from the hidden `eval dogfood` command. |
+
+When adding a new dark launch, update **this inventory**, the activation story (flag / hidden help / nested gate), the safety boundary, and the matching operator or usage doc in the same change set.
+
 ## Offline evaluation contracts (S0–S3)
 
 Frozen schema pack + metric catalog pins (S0), offline fixture/corpus encoder (S1), offline Plane A score runner (S2a/S2b/S2c), and accept-path final-bytes binding + trajectory evidence (S3) live under:

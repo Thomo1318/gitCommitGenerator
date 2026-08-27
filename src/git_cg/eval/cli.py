@@ -14,11 +14,14 @@ Import law (locked):
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
+import click
 import typer
-from typer.core import TyperGroup
+from typer.core import TyperCommand, TyperGroup
 
 from git_cg.eval.cli_output import (
     DEFAULT_KEEP_LAST,
@@ -30,14 +33,218 @@ from git_cg.eval.cli_output import (
     emit_not_implemented,
 )
 
+# --------------------------------------------------------------------------
+# Help depth pilot (selected eval commands) — variant C
+# --------------------------------------------------------------------------
+#
+# Default ``--help`` shows the brief body (text before the detail marker).
+# Detailed operator help is a help-depth flag shown in the Options panel:
+#
+#   git-cg eval --help
+#   git-cg eval --detail
+#   git-cg eval materialize-core-goldens --help
+#   git-cg eval materialize-core-goldens --detail
+#   git-cg eval materialize-core-goldens --help --detail
+#   git-cg eval encode-fixture --detail
+#   git-cg eval run --detail
+#   git-cg eval resume --detail
+#   git-cg eval recompute-scores --detail
+#   git-cg eval doctor --detail
+#   git-cg eval triage --detail
+#   git-cg eval failures --detail
+#   git-cg eval explain --detail
+#   git-cg eval compare --detail
+#   git-cg eval diagnose --detail
+#   git-cg eval review --detail
+#   git-cg eval review enqueue --detail
+#   git-cg eval review list --detail
+#   git-cg eval review rollup --detail
+#   git-cg eval review show --detail
+#   git-cg eval review claim --detail
+#   git-cg eval review adjudicate --detail
+#   git-cg eval review dismiss --detail
+#   git-cg eval session --detail
+#   git-cg eval session show --detail
+#   git-cg eval thread --detail
+#   git-cg eval thread show --detail
+#   git-cg eval issue --detail
+#   git-cg eval issue list --detail
+#   git-cg eval issue show --detail
+#   git-cg eval issue resolve --detail
+#   git-cg eval issue reopen --detail
+#   git-cg eval issue suppress --detail
+#   git-cg eval session --detail
+#   git-cg eval thread --detail
+#   git-cg eval issue --detail
+#   git-cg eval amend-brief --detail
+#   git-cg eval train-export --detail
+#   git-cg eval opik --detail
+#   git-cg eval opik doctor --detail
+#   git-cg eval opik config --detail
+#   git-cg eval opik config show --detail
+#   git-cg eval export --detail
+#   git-cg eval export status --detail
+#   git-cg eval export retry --detail
+#   git-cg eval export drain --detail
+#   git-cg eval replay --detail
+#   git-cg eval promote --detail
+#   git-cg eval dogfood --detail
+#   git-cg eval config --detail
+#   git-cg eval export-status --detail
+#   git-cg eval export-retry --detail
+#   git-cg eval export-drain --detail
+#   GIT_CG_HELP=full git-cg eval materialize-core-goldens --help
+#
+# Implementation notes:
+# * Docstring uses a project marker between brief and detail body (not Click
+#   form-feed) so Ruff does not treat the splitter as trailing whitespace.
+# * ``--detail`` is a declared eager Typer option so it appears under Options,
+#   but it is help-only: the callback prints help and exits (never runs the command).
+# * Prefer ``--detail`` over names that sound like runtime modes or log verbosity.
+# * Compose once from ``_help_raw`` with a re-entry guard: Typer Rich reads
+#   ``obj.help`` directly after we expand it.
+# * Nested groups use ``BriefFullHelpGroup`` plus a callback-owned ``--detail``;
+#   leaf commands use ``BriefFullHelpCommand``.
+# * Scoped to selected eval surfaces so terminal UX can be judged before wider rollout.
 
-class EvalHelpGroup(TyperGroup):
-    """Order ``git-cg eval --help`` panels by operator workflow.
+
+_HELP_DETAIL_MARKER = "<<GIT_CG_HELP_DETAIL>>"
+_FULL_HELP_ENV = "GIT_CG_HELP"
+_FULL_HELP_ENV_VALUE = "full"
+_DETAIL_HELP_FLAG = "--detail"
+
+
+def _wants_detail_help(ctx: click.Context | None = None) -> bool:
+    """Return True when the caller asked for the long help body."""
+    env = (os.environ.get(_FULL_HELP_ENV) or "").strip().lower()
+    if env == _FULL_HELP_ENV_VALUE:
+        return True
+    if ctx is not None and getattr(ctx, "meta", None) and ctx.meta.get("git_cg_detail_help"):
+        return True
+    # Defensive: ``--help --detail`` may render via Click's eager ``--help``
+    # before our option callback runs; argv still carries ``--detail``.
+    return _DETAIL_HELP_FLAG in sys.argv
+
+
+def _split_brief_detail_help(help_text: str | None) -> tuple[str, str | None]:
+    """Split docstring help on the detail marker into (brief, detail_or_none)."""
+    if not help_text:
+        return "", None
+    brief, sep, detail = str(help_text).partition(_HELP_DETAIL_MARKER)
+    brief = brief.strip()
+    detail_body = detail.strip() if sep else None
+    return brief, detail_body or None
+
+
+def _compose_help_for_display(*, help_text: str | None, detail: bool) -> str:
+    """Build the help string Click/Typer should render for this invocation.
+
+    Always expands from the raw docstring (with optional detail marker). Brief
+    mode is text before the marker only; detail mode joins brief + detail body.
+    Discoverability for detail help lives in the Options panel (``--detail``).
+    """
+    brief, detail_body = _split_brief_detail_help(help_text)
+    if detail and detail_body:
+        return f"{brief}\n\n{detail_body}\n"
+    return (brief + "\n") if brief else ""
+
+
+def _detail_help_option_callback(
+    ctx: typer.Context,
+    param: click.Parameter,
+    value: bool,
+) -> bool:
+    """Eager ``--detail``: mark detailed help, print help, exit (never run command)."""
+    if ctx.resilient_parsing or not value:
+        return value
+    ctx.meta["git_cg_detail_help"] = True
+    # ``get_help`` → ``format_help`` which composes from ``_help_raw``.
+    click.echo(ctx.get_help(), color=ctx.color)
+    raise typer.Exit()
+
+
+def _detail_help_option() -> Any:
+    """Shared Typer option factory for the brief/detail pilot."""
+    return typer.Option(
+        False,
+        _DETAIL_HELP_FLAG,
+        help="Show detailed help text and exit.",
+        is_eager=True,
+        callback=_detail_help_option_callback,
+        # Visible on purpose: basic users should see this next to ``--help``.
+        hidden=False,
+    )
+
+
+class BriefFullHelpCommand(TyperCommand):
+    """Typer command: default brief ``--help``; ``--detail`` for long body.
+
+    Pilot only: attach via ``cls=BriefFullHelpCommand`` on selected commands.
+    Docstrings store brief text, a detail marker, then the long body.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Frozen source for composition. Never overwrite with composed text.
+        self._help_raw = self.help
+        self._git_cg_help_composing = False
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:  # type: ignore[override]
+        if self._git_cg_help_composing:
+            # Nested call (get_help → format_help): keep the already expanded help.
+            return super().format_help(ctx, formatter)
+
+        original = self.help
+        self._git_cg_help_composing = True
+        try:
+            self.help = _compose_help_for_display(
+                help_text=self._help_raw,
+                detail=_wants_detail_help(ctx),
+            )
+            return super().format_help(ctx, formatter)
+        finally:
+            self.help = original
+            self._git_cg_help_composing = False
+
+
+class BriefFullHelpGroup(TyperGroup):
+    """Typer group: default brief ``--help``; ``--detail`` for long body.
+
+    Pilot only: attach via ``cls=BriefFullHelpGroup`` on selected nested apps.
+    Group help lives on the Typer ``help=`` string (brief + marker + detail).
+    Visible ``--detail`` is owned by the group callback via ``_detail_help_option()``.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._help_raw = self.help
+        self._git_cg_help_composing = False
+
+    def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:  # type: ignore[override]
+        if self._git_cg_help_composing:
+            return super().format_help(ctx, formatter)
+
+        original = self.help
+        self._git_cg_help_composing = True
+        try:
+            self.help = _compose_help_for_display(
+                help_text=self._help_raw,
+                detail=_wants_detail_help(ctx),
+            )
+            return super().format_help(ctx, formatter)
+        finally:
+            self.help = original
+            self._git_cg_help_composing = False
+
+
+class EvalHelpGroup(BriefFullHelpGroup):
+    """Root ``git-cg eval`` group: workflow panel order + brief/detail help.
 
     Typer registers leaf commands before nested groups, so plain registration
     order always pushes Review/session groups to the bottom. This group keeps
     command resolution unchanged while listing commands in panel-priority order
-    for Rich help rendering.
+    for Rich help rendering, and reuses ``BriefFullHelpGroup`` so root
+    ``--help`` / ``--detail`` match nested surfaces.
     """
 
     _HELP_PANEL_ORDER: tuple[str, ...] = (
@@ -73,47 +280,254 @@ eval_app = typer.Typer(
     help=(
         "Run and inspect local evaluation suites, debug failures, manage "
         "review/sessions, and operate the export queue. Does not change "
-        "product commit ranking."
+        "product commit ranking.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Top-level workflow groups match the panels below:\n"
+        "\n"
+        "- Corpus: rebuild checked-in reference fixtures and identity hashes\n"
+        "- Run: offline suite run, resume from checkpoint, re-score prior evidence\n"
+        "- Inspect: doctor, triage, failures, explain, compare, diagnose\n"
+        "- Review & sessions: advisory human review, local sessions/threads, diagnostic issues\n"
+        "- Export & train: amend briefs, train export, Opik health/config, export queue\n"
+        "- Advanced: replay generation and governed promote\n"
+        "- Deprecated: temporary aliases for nested Opik config and export paths\n"
+        "\n"
+        "Guarantees:\n"
+        "- local inspect/run surfaces stay offline-first by default\n"
+        "- never changes product commit ranking or SOP intent authority\n"
+        "- gold stays governed (no silent mint from accept or popularity)\n"
+        "- dark-launched maintainer surfaces stay hidden from this menu\n"
+        "\n"
+        "Use git-cg eval <command> --help for brief leaf help, or --detail on any "
+        "surface for the long operator body. GIT_CG_HELP=full also expands detail."
     ),
+    short_help=("Run and inspect local evaluation suites without changing product ranking."),
     no_args_is_help=True,
 )
+
+
+# Group-level brief/detail help (root surface). Help-only; no eval I/O.
+@eval_app.callback()
+def eval_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
 
 
 # Nested groups declared early so top-level help panels order by workflow:
 # Corpus → Run → Inspect → Review & sessions → Export & train → Advanced → Deprecated.
 review_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Local human review queue (advisory only).",
+    help=(
+        "Local human review queue (advisory only).\n"
+        "\n"
+        "Manage advisory human-review items for eval cases. Never writes gold "
+        "or changes product commit ranking.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Local queue under .eval/review_queue/. Typical flow:\n"
+        "\n"
+        "  enqueue → claim → adjudicate | dismiss\n"
+        "  list / show for inspection\n"
+        "  rollup for multi-rater majority and craft spread (read-only)\n"
+        "\n"
+        "Guarantees:\n"
+        "- authority stays advisory\n"
+        "- adjudicate emits a typed outcome_ref and never writes gold\n"
+        "- claim moves pending → in_review\n"
+        "- dismiss is terminal for pending/in_review\n"
+        "- rollup never sole-promotes gold\n"
+        "\n"
+        "Subcommands:\n"
+        "- enqueue: create an advisory item for a case or bundle\n"
+        "- list / show: inspect queue items\n"
+        "- claim: take a pending item\n"
+        "- adjudicate: resolve with a typed outcome\n"
+        "- dismiss: close without promotion\n"
+        "- rollup: multi-rater advisory score summary"
+    ),
+    short_help="Local human review queue (advisory only).",
     no_args_is_help=True,
 )
 session_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Inspect local commit sessions.",
+    help=(
+        "Inspect local commit sessions.\n"
+        "\n"
+        "Read-only lookup of a local commit-session record. Does not change "
+        "commit ranking or gold.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Reads a local commit_session_thread_v1 twin under the eval session "
+        "store and prints a map-only projection.\n"
+        "\n"
+        "Guarantees (this surface):\n"
+        "- local only (no Opik / network reach)\n"
+        "- no chat timeline or graph browser\n"
+        "- no accept authority, rerun, or ranking mutation\n"
+        "\n"
+        "Subcommands:\n"
+        "- show: inspect one session by id (sess_ or sessmeta_)"
+    ),
+    short_help="Inspect local commit sessions.",
     no_args_is_help=True,
 )
 thread_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Inspect local session threads.",
+    help=(
+        "Inspect local session threads.\n"
+        "\n"
+        "Read-only lookup of a local session-thread record. Does not change "
+        "commit ranking or gold.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Reads the same local commit_session_thread_v1 capture episode and "
+        "projects thread-oriented fields (message versions, preference pairs, "
+        "attempt ids) as a map-only view.\n"
+        "\n"
+        "Guarantees (this surface):\n"
+        "- local only (no Opik / network reach)\n"
+        "- no chat timeline or graph browser\n"
+        "- no accept authority, rerun, or ranking mutation\n"
+        "\n"
+        "Subcommands:\n"
+        "- show: inspect one thread by id (sess_ or sessmeta_)"
+    ),
+    short_help="Inspect local session threads.",
     no_args_is_help=True,
 )
 issue_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Manage local diagnostic issues.",
+    help=(
+        "Manage local diagnostic issues.\n"
+        "\n"
+        "List, inspect, and transition local diagnostic issues created from "
+        "eval failures. Does not change commit ranking or gold.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Local store under issues/diagnostics (via eval diagnose / issue "
+        "commands). Operators can list and show issues, then resolve, reopen, "
+        "or suppress them.\n"
+        "\n"
+        "Status filter values: open | acknowledged | resolved | suppressed | "
+        "reopened.\n"
+        "\n"
+        "Guarantees / requirements:\n"
+        "- resolve requires --resolution-evidence\n"
+        "- suppress requires --reason\n"
+        "- reopen works from resolved/suppressed\n"
+        "- no product ranking mutation\n"
+        "\n"
+        "Subcommands:\n"
+        "- list: newest last_seen first (optional --status)\n"
+        "- show: one issue by id\n"
+        "- resolve: mark resolved with evidence\n"
+        "- reopen: reopen resolved/suppressed\n"
+        "- suppress: suppress with reason"
+    ),
+    short_help="Manage local diagnostic issues.",
     no_args_is_help=True,
 )
 opik_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Opik health checks and secret-safe config.",
+    help=(
+        "Opik health checks and secret-safe config.\n"
+        "\n"
+        "Inspect Opik/export health and resolved config offline. Never prints "
+        "raw secrets or reaches the network.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Offline operator surfaces for Opik/mirror integration. No transport, "
+        "no network, and no raw token values or prefixes — secret-bearing "
+        "output uses mask_secret() only (redacted length form) plus a presence boolean.\n"
+        "\n"
+        "Guarantees:\n"
+        "- observability only (no accept, ranking, gold, or queue drain)\n"
+        "- fail-closed config errors stay non-zero / non-green\n"
+        "- active modes require pinned projects; invalid mode tokens surface "
+        "as config_error\n"
+        "\n"
+        "Subcommands:\n"
+        "- doctor: Opik/export/queue health checks (local only)\n"
+        "- config: nested secret-safe config inspection (show)"
+    ),
+    short_help="Opik health checks and secret-safe config.",
     no_args_is_help=True,
 )
 opik_config_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Inspect Opik/mirror config without exposing secrets.",
+    help=(
+        "Inspect Opik/mirror config without exposing secrets.\n"
+        "\n"
+        "Show the resolved public Opik/mirror view. Never prints raw API keys.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Canonical path: git-cg eval opik config show. Prints public_config_view "
+        "plus a masked secrets block (api_key via mask_secret, api_key_present).\n"
+        "\n"
+        "Health hint values include skipped_off / deferred / pending / "
+        "config_error. Invalid mode tokens fail closed.\n"
+        "\n"
+        "Guarantees:\n"
+        "- no network / transport\n"
+        "- no cleartext secrets\n"
+        "- temporary flat alias remains: git-cg eval config show\n"
+        "\n"
+        "Subcommands:\n"
+        "- show: emit secret-safe resolved config (plain JSON or --json envelope)"
+    ),
+    short_help="Inspect Opik/mirror config without exposing secrets.",
     no_args_is_help=True,
 )
 export_app = typer.Typer(
+    cls=BriefFullHelpGroup,
     add_completion=False,
-    help="Export-queue status, retry, and drain.",
+    help=(
+        "Export-queue status, retry, and drain.\n"
+        "\n"
+        "Operate the local Opik export queue. Status is offline; drain may "
+        "upload. Never blocks product accept.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Local export queue under the eval mirror store. Operators inspect "
+        "counts, re-queue failed rows, and drain pending items through the "
+        "Opik transport.\n"
+        "\n"
+        "Typical flow:\n"
+        "\n"
+        "  status → (optional retry) → drain\n"
+        "\n"
+        "Guarantees:\n"
+        "- status is read-only and offline (no Opik / network)\n"
+        "- retry moves failed → pending; default only reclaim network/timeout/"
+        "empty errors (validation/auth/size need --force)\n"
+        "- drain exits 0 unless config is invalid (fail-closed); transport/"
+        "secret failures are classified on rows and never block hooks\n"
+        "- temporary flat aliases remain: export-status / export-retry / "
+        "export-drain\n"
+        "\n"
+        "Subcommands:\n"
+        "- status: queue directory + per-status counts\n"
+        "- retry: re-queue failed rows for another drain\n"
+        "- drain: upload pending rows (supports --dry-run)"
+    ),
+    short_help="Export-queue status, retry, and drain.",
     no_args_is_help=True,
 )
 
@@ -147,19 +561,37 @@ def _stub(
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("materialize-core-goldens", rich_help_panel="Corpus")
+@eval_app.command(
+    "materialize-core-goldens",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Corpus",
+    short_help="Rebuild checked-in evaluation reference files used by tests.",
+)
 def materialize_core_goldens_cmd(
     root: Path | None = typer.Option(
         None,
         "--root",
-        help="Fixture root (defaults to tests/fixtures/eval).",
+        help="Directory to write into (default: tests/fixtures/eval).",
         exists=False,
         file_okay=False,
         dir_okay=True,
         resolve_path=True,
     ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Write checked-in core golden bundles and snapshot."""
+    """Rebuild the checked-in evaluation reference files used by tests.
+
+    Local disk only. Does not run evaluations or change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Writes the main reference bundles and snapshot into the fixture directory
+    (default: tests/fixtures/eval). If optional archive fixtures exist there,
+    those are rebuilt too.
+
+    Use after you change eval fixtures and need the checked-in reference outputs
+    refreshed. Prints the paths written and how many bundles were produced.
+    """
     from git_cg.eval.corpus.materialize import materialize_core_goldens
 
     try:
@@ -176,12 +608,17 @@ def materialize_core_goldens_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("encode-fixture", rich_help_panel="Corpus")
+@eval_app.command(
+    "encode-fixture",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Corpus",
+    short_help="Print stable identity hashes for one evaluation fixture.",
+)
 def encode_fixture_cmd(
     path: Path | None = typer.Option(
         None,
         "--path",
-        help="Path to a fixture JSON file (canonical encode form).",
+        help="Path to one fixture JSON file.",
         exists=True,
         file_okay=True,
         dir_okay=False,
@@ -190,18 +627,28 @@ def encode_fixture_cmd(
     fixture_id: str | None = typer.Option(
         None,
         "--id",
-        help="Optional case_id resolver against known suite/fixture roots.",
+        help="Fixture case id to load from a suite (use instead of --path).",
     ),
     suite_id: str | None = typer.Option(
         None,
         "--suite",
-        help="Suite id to resolve --id against (default: cm-eval-fixtures-core).",
+        help="Suite to search when using --id (default: cm-eval-fixtures-core).",
     ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Encode a fixture and print its identity summary.
+    """Print stable identity hashes for one evaluation fixture.
 
-    Requires exactly one of ``--path`` or ``--id``; exits non-zero
-    on invalid options, missing fixtures, or encode failures.
+    Local disk only. Does not run evaluations or change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Load exactly one fixture with --path FILE or --id CASE_ID (not both).
+    With --id, --suite selects which suite to search (default:
+    cm-eval-fixtures-core).
+
+    Prints bundle_hash, case_hash, and bundle_ref so you can confirm the
+    fixture encodes cleanly and compare identities across tooling. Exits
+    non-zero on bad options, missing fixtures, or encode failures.
     """
     from git_cg.eval.corpus.encoder import encode_fixture
     from git_cg.eval.corpus.fixtures import (
@@ -348,17 +795,22 @@ def _parse_case_ids(raw: str | None) -> tuple[str, ...] | None:
     return tuple(parts) if parts else None
 
 
-@eval_app.command("run", rich_help_panel="Run")
+@eval_app.command(
+    "run",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Run",
+    short_help="Run a local offline evaluation suite.",
+)
 def run_cmd(
     suite: str | None = typer.Option(
         "cm-eval-fixtures-core",
         "--suite",
-        help="Suite id to run (default: cm-eval-fixtures-core).",
+        help="Which fixture suite to run (default: cm-eval-fixtures-core).",
     ),
     fixture_root: Path | None = typer.Option(
         None,
         "--fixture-root",
-        help="Optional fixture root override (tests/lab).",
+        help="Optional alternate fixture directory (for tests/lab layouts).",
         exists=False,
         file_okay=False,
         dir_okay=True,
@@ -367,42 +819,76 @@ def run_cmd(
     mode: str = typer.Option(
         "fresh_suite_run",
         "--mode",
-        help=("Run mode: fresh_suite_run | resume_missing | recompute_scores | replay_generation | export_only."),
+        help=(
+            "How to run: fresh_suite_run (default), resume_missing, "
+            "recompute_scores, replay_generation, or export_only."
+        ),
     ),
     keep_last: int = typer.Option(
         DEFAULT_KEEP_LAST,
         "--keep-last",
-        help="Checkpoint retention bound per suite family (default 10).",
+        help="How many recent checkpoints to keep per suite family (default: 10).",
     ),
     keep_checkpoint: bool = typer.Option(
         False,
         "--keep-checkpoint",
-        help="Retain this run's checkpoint even after success.",
+        help="Keep this run's checkpoint even when the run succeeds.",
     ),
-    gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
+    gold_mode: str = typer.Option(
+        "strict",
+        "--gold-mode",
+        help="How tightly to compare against reference answers (default: strict).",
+    ),
     case: str | None = typer.Option(
         None,
         "--case",
-        help="Optional comma-separated case id filter (triage/lab only; not CI golden).",
+        help="Limit to specific case ids (comma-separated). Lab/triage only, not CI golden.",
     ),
     experiment: str | None = typer.Option(
         None,
         "--experiment",
-        help="Required for export_only / optional parent for recompute via run --mode.",
+        help="Existing experiment id (required for export_only; optional parent for recompute_scores).",
     ),
     checkpoint: str | None = typer.Option(
         None,
         "--checkpoint",
-        help="Checkpoint id when --mode resume_missing.",
+        help="Checkpoint id to continue (used with --mode resume_missing).",
     ),
     allow_replay_generation: bool = typer.Option(
         False,
         "--allow-replay-generation",
-        help="Explicit gate for replay_generation (refused by default).",
+        help="Allow replay_generation mode (blocked unless you set this).",
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Run an offline evaluation suite."""
+    """Run a local offline evaluation suite.
+
+    Does not change how commits are ranked. Default mode starts a fresh suite run.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Modes:
+    - fresh_suite_run: score the suite from scratch (default)
+    - resume_missing: continue unfinished cases from --checkpoint
+    - recompute_scores: re-score evidence for an existing --experiment
+    - replay_generation: regenerate commit text (requires --allow-replay-generation)
+    - export_only: project local results for --experiment; no scoring or checkpoint
+
+    Common flags:
+    - --suite / --fixture-root choose fixtures
+    - --case limits work to listed case ids (lab/triage only)
+    - --keep-last / --keep-checkpoint control checkpoint retention
+    - --gold-mode controls reference comparison strictness
+    - --json emits the standard CLI JSON envelope
+
+    Prefer the dedicated resume / recompute-scores commands when you already
+    know that workflow. Default path stays offline and local-disk first.
+    """
     # Lazy import preserves Slice 2 import-isolation law (no scoring at import).
     from git_cg.eval.run_orchestrator import RunRequest, run_evaluation
 
@@ -431,17 +917,22 @@ def run_cmd(
         _emit_run_result("eval run", as_json=as_json, result=result)
 
 
-@eval_app.command("resume", rich_help_panel="Run")
+@eval_app.command(
+    "resume",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Run",
+    short_help="Continue an unfinished evaluation from a checkpoint.",
+)
 def resume_cmd(
     checkpoint: str | None = typer.Option(
         None,
         "--checkpoint",
-        help="Checkpoint id to resume (required).",
+        help="Checkpoint id from a prior suite run (required).",
     ),
     fixture_root: Path | None = typer.Option(
         None,
         "--fixture-root",
-        help="Optional fixture root override (tests/lab).",
+        help="Optional alternate fixture directory (for tests/lab layouts).",
         exists=False,
         file_okay=False,
         dir_okay=True,
@@ -450,17 +941,43 @@ def resume_cmd(
     keep_last: int = typer.Option(
         DEFAULT_KEEP_LAST,
         "--keep-last",
-        help="Checkpoint retention bound per suite family (default 10).",
+        help="How many recent checkpoints to keep per suite family (default: 10).",
     ),
     keep_checkpoint: bool = typer.Option(
         False,
         "--keep-checkpoint",
-        help="Retain this run's checkpoint even after success.",
+        help="Keep this run's checkpoint even when the run succeeds.",
     ),
-    gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    gold_mode: str = typer.Option(
+        "strict",
+        "--gold-mode",
+        help="How tightly to compare against reference answers (default: strict).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Resume a suite from a checkpoint."""
+    """Continue an unfinished evaluation from a checkpoint.
+
+    Does not change how commits are ranked. Requires --checkpoint from a prior run.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    This is the dedicated form of `git-cg eval run --mode resume_missing`.
+    Pass --checkpoint <id> from a previous suite run; only missing/unfinished
+    cases are continued.
+
+    Retention and comparison flags match eval run:
+    - --keep-last / --keep-checkpoint control checkpoint retention
+    - --gold-mode controls reference comparison strictness
+    - --fixture-root overrides the fixture directory when needed
+    - --json emits the standard CLI JSON envelope
+
+    Local offline path by default. Does not start a brand-new suite run.
+    """
     from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
 
     if not checkpoint:
@@ -496,7 +1013,12 @@ def resume_cmd(
         _emit_run_result("eval resume", as_json=as_json, result=result)
 
 
-@eval_app.command("recompute-scores", rich_help_panel="Run")
+@eval_app.command(
+    "recompute-scores",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Run",
+    short_help="Re-score evidence already written by a prior run.",
+)
 def recompute_scores_cmd(
     experiment: str | None = typer.Option(
         None,
@@ -506,12 +1028,12 @@ def recompute_scores_cmd(
     suite: str | None = typer.Option(
         "cm-eval-fixtures-core",
         "--suite",
-        help="Suite id / metric pack context (default: cm-eval-fixtures-core).",
+        help="Suite id / metric pack to use (default: cm-eval-fixtures-core).",
     ),
     fixture_root: Path | None = typer.Option(
         None,
         "--fixture-root",
-        help="Optional fixture root override (tests/lab).",
+        help="Optional alternate fixture directory (for tests/lab layouts).",
         exists=False,
         file_okay=False,
         dir_okay=True,
@@ -520,17 +1042,45 @@ def recompute_scores_cmd(
     keep_last: int = typer.Option(
         DEFAULT_KEEP_LAST,
         "--keep-last",
-        help="Checkpoint retention bound per suite family (default 10).",
+        help="How many recent checkpoints to keep per suite family (default: 10).",
     ),
     keep_checkpoint: bool = typer.Option(
         False,
         "--keep-checkpoint",
-        help="Retain this recompute checkpoint even after success.",
+        help="Keep this recompute checkpoint even when the run succeeds.",
     ),
-    gold_mode: str = typer.Option("strict", "--gold-mode", help="Gold comparison mode."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    gold_mode: str = typer.Option(
+        "strict",
+        "--gold-mode",
+        help="How tightly to compare against reference answers (default: strict).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Re-score evidence already written by a prior run."""
+    """Re-score evidence already written by a prior run.
+
+    Does not re-generate cases and does not change how commits are ranked.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    This is the dedicated form of `git-cg eval run --mode recompute_scores`.
+    Pass --experiment <id> from a prior suite run that still has evidence
+    bundles on disk. Scores are recomputed against that evidence using the
+    chosen suite/metric pack.
+
+    Flags:
+    - --suite selects the metric pack context (default: cm-eval-fixtures-core)
+    - --fixture-root overrides the fixture directory when needed
+    - --keep-last / --keep-checkpoint control checkpoint retention
+    - --gold-mode controls reference comparison strictness
+    - --json emits the standard CLI JSON envelope
+
+    Local offline path by default. Requires an existing experiment id.
+    """
     from git_cg.eval.run_orchestrator import RunOrchestratorError, RunRequest, run_evaluation
 
     if not experiment:
@@ -572,31 +1122,57 @@ def recompute_scores_cmd(
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("doctor", rich_help_panel="Inspect")
+@eval_app.command(
+    "doctor",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="Check local suite health (pins, metrics, fixtures).",
+)
 def doctor_cmd(
     suite: str = typer.Option(
         "cm-eval-fixtures-core",
         "--suite",
-        help="Suite id to doctor (default: cm-eval-fixtures-core).",
+        help="Suite id to check (default: cm-eval-fixtures-core).",
     ),
     fixture_root: Path | None = typer.Option(
         None,
         "--fixture-root",
-        help="Optional fixture root override (tests/lab).",
+        help="Optional alternate fixture directory (for tests/lab layouts).",
         exists=False,
         file_okay=False,
         dir_okay=True,
         resolve_path=True,
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Check local suite health (pins, metrics, fixtures).
 
-    Offline, network-free. Fail-closed on floating ``latest`` pins and missing
-    catalog/schema hashes. ``h.doctor_green`` aggregates block-severity checks
-    only; warn-severity failures never flip green to red. Emits phantom-metric
-    producers ``h.compat_hash_resume`` / ``h.doctor_green`` /
-    ``h.export_config_resolved`` as ScoreResultV1 rows.
+    Offline and network-free. Does not run evaluations or change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Reviews local pins, metric catalog wiring, fixture presence, and related
+    integrity checks for one suite. Fails closed on floating ``latest`` pins
+    and missing catalog/schema hashes.
+
+    Severity policy:
+    - block-severity failures flip the report red
+    - warn-severity findings stay advisory and never flip green to red
+
+    ``h.doctor_green`` aggregates block-severity checks only. Doctor also emits
+    phantom-metric producer rows (ScoreResultV1) for:
+    - ``h.compat_hash_resume``
+    - ``h.doctor_green``
+    - ``h.export_config_resolved``
+
+    Plain-text mode prints a green summary plus non-pass checks.
+    --json emits the standard CLI envelope with the full report payload.
+    Exit code follows the doctor report.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.doctor import run_local_doctor
@@ -621,15 +1197,38 @@ def doctor_cmd(
     raise typer.Exit(code=report.exit_code)
 
 
-@eval_app.command("amend-brief", rich_help_panel="Export & train")
+@eval_app.command(
+    "amend-brief",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Export & train",
+    short_help="Build an amend brief from landed evaluation data.",
+)
 def amend_brief_cmd(
-    score_run_id: str = typer.Argument(..., help="Case score run id (rs_) to brief against."),
-    session_thread_id: str | None = typer.Option(
-        None, "--session-thread-id", help="Optional session twin (sess_) this brief belongs to."
+    score_run_id: str = typer.Argument(
+        ...,
+        help="Score-run id (rs_) to build the brief from.",
     ),
-    last_dogfood: int = typer.Option(3, "--last", min=0, help="Last-N dogfood/Lane C attachments."),
-    doctor: bool = typer.Option(False, "--doctor", help="Include the doctor projection."),
-    write: bool = typer.Option(True, "--write/--no-write", help="Persist under .eval/amend_briefs/."),
+    session_thread_id: str | None = typer.Option(
+        None,
+        "--session-thread-id",
+        help="Optional session id (sess_) to attach to the brief.",
+    ),
+    last_dogfood: int = typer.Option(
+        3,
+        "--last",
+        min=0,
+        help="How many recent dogfood/Lane C attachments to include (default 3).",
+    ),
+    doctor: bool = typer.Option(
+        False,
+        "--doctor",
+        help="Include a doctor summary section in the brief.",
+    ),
+    write: bool = typer.Option(
+        True,
+        "--write/--no-write",
+        help="Write the brief under .eval/amend_briefs/ (default: write).",
+    ),
     root: Path | None = typer.Option(
         None,
         "--root",
@@ -639,12 +1238,39 @@ def amend_brief_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Build an amend brief from landed evaluation data.
 
-    Advisory authority: summarizes score/failure/regime/family context and
-    preference pairs; never auto-applies reruns, never accepts, never re-ranks.
+    Advisory summary of score/failure context. Never reruns, accepts, or re-ranks.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Builds a local amend_brief_v1 from landed evaluation evidence for one
+    score-run id (rs_). The brief is advisory only: it summarizes regime,
+    family rollups, failure ids, path class, gold counters, blocking state,
+    and optional preference pairs from a session twin.
+
+    Options:
+    - --session-thread-id attaches a sess_ twin when available
+    - --last N includes the newest N dogfood/Lane C attachments (default 3)
+    - --doctor adds a doctor projection section
+    - --write/--no-write controls persistence under .eval/amend_briefs/
+      (default writes)
+
+    Guarantees:
+    - authority stays advisory
+    - never auto-applies reruns
+    - never accepts or promotes gold
+    - never mutates product ranking
+
+    Plain text prints a short id/run/written summary.
+    --json emits the standard CLI envelope with the brief payload.
     """
     from git_cg.eval.brief import AmendBriefError, amend_brief
     from git_cg.eval.cli_output import emit_human_line
@@ -676,35 +1302,105 @@ def amend_brief_cmd(
 
 @eval_app.command(
     "dogfood",
+    cls=BriefFullHelpCommand,
     hidden=True,  # dark-launch: callable, omitted from regular `git-cg eval --help`
     rich_help_panel="Advanced",
+    short_help="Capture Lane C dogfood evidence for a candidate commit message.",
 )
 def dogfood_cmd(
-    commit_message: str = typer.Option(..., "--commit-message", help="Candidate commit message."),
-    mode: str = typer.Option("async", "--mode", help="off|sample|always|async."),
-    profile: str = typer.Option("default_scrub", "--profile", help="Redaction profile."),
+    commit_message: str = typer.Option(
+        ...,
+        "--commit-message",
+        help="Candidate commit message to capture evidence for.",
+    ),
+    mode: str = typer.Option(
+        "async",
+        "--mode",
+        help="Capture mode: off | sample | always | async (default async).",
+    ),
+    profile: str = typer.Option(
+        "default_scrub",
+        "--profile",
+        help="Redaction profile (default default_scrub).",
+    ),
     population: list[str] | None = typer.Option(
-        None, "--population", help="Deterministic sample population (repeatable)."
+        None,
+        "--population",
+        help="Deterministic sample population id(s) (repeatable; for mode=sample).",
     ),
-    seed: str | None = typer.Option(None, "--seed", help="Explicit sample seed."),
-    sample_rate: float = typer.Option(0.10, "--sample-rate", min=0.0, max=1.0),
-    capture_on: str = typer.Option("all", "--capture-on", help="pass|fail|all."),
+    seed: str | None = typer.Option(
+        None,
+        "--seed",
+        help="Explicit sample seed (for mode=sample).",
+    ),
+    sample_rate: float = typer.Option(
+        0.10,
+        "--sample-rate",
+        min=0.0,
+        max=1.0,
+        help="Sample rate 0.0-1.0 (default 0.1; for mode=sample).",
+    ),
+    capture_on: str = typer.Option(
+        "all",
+        "--capture-on",
+        help="Which rows are eligible: pass | fail | all (default all).",
+    ),
     payload_path: Path | None = typer.Option(
-        None, "--payload", help="Optional JSON payload for the Lane C judge (exists-check)."
+        None,
+        "--payload",
+        help="Optional existing JSON payload path for the Lane C judge.",
     ),
-    session_thread_id: str | None = typer.Option(None, "--session-thread-id"),
-    trigger: str = typer.Option("cli", "--trigger", help="cli|pre_commit|post_commit|hook."),
-    write: bool = typer.Option(True, "--write/--no-write"),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    session_thread_id: str | None = typer.Option(
+        None,
+        "--session-thread-id",
+        help="Optional local session-thread id to attach evidence to.",
+    ),
+    trigger: str = typer.Option(
+        "cli",
+        "--trigger",
+        help="How this capture was started: cli | pre_commit | post_commit | hook.",
+    ),
+    write: bool = typer.Option(
+        True,
+        "--write/--no-write",
+        help="Write dogfood attachment files (default: write).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Capture Lane C dogfood evidence for a candidate commit message.
 
-    Dark-launched maintainer/operator surface: registered and callable as
-    ``git-cg eval dogfood``, but hidden from regular ``git-cg eval --help`` so
-    basic users do not see it in the default command menu.
+    Dark-launched maintainer surface. Callable, but hidden from regular eval --help.
 
-    Lane C is advisory only: it never blocks the product commit path, never
-    mutates intent/ranking, and async mode never awaits the judge outcome.
+    <<GIT_CG_HELP_DETAIL>>
+
+    Registered and callable as ``git-cg eval dogfood``, but omitted from the
+    default ``git-cg eval --help`` menu so basic users do not see it.
+
+    Lane C is advisory only:
+    - never blocks the product commit path
+    - never mutates intent / ranking / accept
+    - authority is always advisory on dogfood_attachment_v1
+    - async mode records capture intent and never awaits the judge outcome
+
+    Mode law (closed):
+    - off: capture nothing
+    - sample: deterministic membership from seed + rate + population
+    - always: capture every eligible row
+    - async: non-blocking capture intent (default; S6-G02a)
+
+    capture_on (pass | fail | all) is corpus eligibility separate from product
+    accept. fail retains hard-negative candidates on failing rows without
+    failing the product path.
+
+    Env knobs (maintainer/lab only): GIT_CG_EVAL_DOGFOOD_MODE / _SEED / _RATE.
+
+    Plain text prints captured, mode, authority, and written.
+    --json emits the standard CLI envelope with the capture payload.
     """
     import hashlib
 
@@ -750,29 +1446,86 @@ def dogfood_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("train-export", rich_help_panel="Export & train")
+@eval_app.command(
+    "train-export",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Export & train",
+    short_help="Export redacted training rows from landed bundles.",
+)
 def train_export_cmd(
     bundle_id: list[str] | None = typer.Option(
-        None, "--bundle-id", help="Bundle id(s) to export; default exports all landed bundles."
+        None,
+        "--bundle-id",
+        help="Bundle id(s) to export (repeatable). Default: all landed bundles.",
     ),
-    profile: str = typer.Option("train_rich", "--profile", help="Redaction profile (never raw_dev_unsafe)."),
-    capture_on: str = typer.Option("all", "--capture-on", help="pass|fail|all corpus eligibility."),
-    split_group_id: str | None = typer.Option(None, "--split-group-id"),
-    notes: str | None = typer.Option(None, "--notes"),
-    write: bool = typer.Option(True, "--write/--no-write"),
+    profile: str = typer.Option(
+        "train_rich",
+        "--profile",
+        help="Redaction profile (default train_rich). Unsafe raw profiles are rejected.",
+    ),
+    capture_on: str = typer.Option(
+        "all",
+        "--capture-on",
+        help="Which rows to include: pass | fail | all (default all).",
+    ),
+    split_group_id: str | None = typer.Option(
+        None,
+        "--split-group-id",
+        help="Optional split-group label for the export batch.",
+    ),
+    notes: str | None = typer.Option(
+        None,
+        "--notes",
+        help="Optional free-text notes for the export record.",
+    ),
+    write: bool = typer.Option(
+        True,
+        "--write/--no-write",
+        help="Write export files under .eval/train_export/ (default: write).",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
-        help="Validate + project export without writing (alias of --no-write).",
+        help="Validate and preview paths without writing (same as --no-write).",
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Export redacted training rows from landed bundles.
 
-    Row scrub-failure policy: drop + report (scrub_report) + continue; never
-    emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never
-    enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of
-    ``--no-write`` (validate + would-write summary; zero store mutation).
+    Builds a local redacted training export. Never emits secrets cleartext.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Consumes landed evaluation bundles and writes a train_export_v1 document
+    plus per-row train_row_v1 files under .eval/train_export/ (unless
+    --no-write / --dry-run).
+
+    Defaults:
+    - --profile train_rich
+    - --capture-on all
+    - all landed bundles when --bundle-id is omitted
+    - write enabled
+
+    Scrub-failure policy (locked):
+    - row that cannot be made secret-safe is dropped
+    - failure is recorded in scrub_report
+    - export continues with remaining rows
+    - never emit cleartext
+    - no .eval/quarantine/ store
+
+    Dual-axis law (S6-G06):
+    - antipattern / hard-negative rows never enter positive_gold
+
+    --dry-run is an alias of --no-write: validate, project would-write paths,
+    and leave the store untouched.
+
+    Plain text prints export id, row counts, scrub status, and write/dry-run.
+    --json emits the standard CLI envelope with the export payload.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.train_export import TrainExportError, train_export
@@ -812,7 +1565,12 @@ def train_export_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("triage", rich_help_panel="Inspect")
+@eval_app.command(
+    "triage",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="One-shot advisory view: doctor + failures + explain.",
+)
 def triage_cmd(
     suite: str = typer.Option(
         "cm-eval-fixtures-core",
@@ -822,7 +1580,7 @@ def triage_cmd(
     fixture_root: Path | None = typer.Option(
         None,
         "--fixture-root",
-        help="Optional fixture root override for the doctor section.",
+        help="Optional alternate fixture directory for the doctor section.",
         exists=False,
         file_okay=False,
         dir_okay=True,
@@ -836,19 +1594,50 @@ def triage_cmd(
     case_id: str | None = typer.Option(
         None,
         "--case",
-        help="Case id for explain (auto-selects when exactly one failing case).",
+        help="Case id for explain (auto-picks when exactly one failing case).",
     ),
-    skip_doctor: bool = typer.Option(False, "--skip-doctor", help="Skip the doctor section."),
-    skip_failures: bool = typer.Option(False, "--skip-failures", help="Skip the failures section."),
-    skip_explain: bool = typer.Option(False, "--skip-explain", help="Skip the explain section."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    skip_doctor: bool = typer.Option(
+        False,
+        "--skip-doctor",
+        help="Skip the doctor health section.",
+    ),
+    skip_failures: bool = typer.Option(
+        False,
+        "--skip-failures",
+        help="Skip the failing-cases section.",
+    ),
+    skip_explain: bool = typer.Option(
+        False,
+        "--skip-explain",
+        help="Skip the explain/blame section.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """One-shot advisory view: doctor + failures + explain.
 
-    Composes library engines only — never nests Typer presentation commands.
-    Not score law: does not promote gold, rank intents, or revive Opik
-    ``user_acceptance`` threshold triage. Emits one human report or one
-    ``cli_output_envelope_v1`` with an ``eval_triage_v0`` data payload.
+    Advisory only. Does not promote gold, rank intents, or change score law.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Composes local library engines into one report (doctor health, failing
+    cases, and explain/blame). Never nests other Typer presentation commands.
+
+    Not score law and not an Opik ``user_acceptance`` threshold revival path.
+    Use --skip-doctor / --skip-failures / --skip-explain to omit sections.
+
+    Defaults:
+    - doctor uses --suite (and optional --fixture-root)
+    - failures/explain use --experiment-id, or the latest local run
+    - explain uses --case, or auto-selects when exactly one failing case
+
+    Plain text prints one combined human report.
+    --json emits one ``cli_output_envelope_v1`` with an ``eval_triage_v0``
+    data payload. Exit code follows the triage report.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError
@@ -929,26 +1718,62 @@ def triage_cmd(
     raise typer.Exit(code=report.exit_code)
 
 
-@eval_app.command("failures", rich_help_panel="Inspect")
+@eval_app.command(
+    "failures",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="List failing cases with metric and failure ids.",
+)
 def failures_cmd(
     experiment_id: str | None = typer.Option(
-        None, "--experiment-id", help="Experiment id (defaults to latest local run)."
+        None,
+        "--experiment-id",
+        help="Experiment id (defaults to latest local run).",
     ),
     regime: str | None = typer.Option(
-        None, "--regime", help="Deterministic filter: regime label from fingerprint inputs (e.g. A|B)."
+        None,
+        "--regime",
+        help="Keep cases matching this regime label (e.g. A|B).",
     ),
-    family: str | None = typer.Option(None, "--family", help="Deterministic filter: score family (e.g. I|H|gate)."),
+    family: str | None = typer.Option(
+        None,
+        "--family",
+        help="Keep cases matching this score family (e.g. I|H|gate).",
+    ),
     failure_id: str | None = typer.Option(
-        None, "--failure-id", help="Deterministic filter: require this failure_id on a failing score."
+        None,
+        "--failure-id",
+        help="Keep cases that include this failure id.",
     ),
-    severity: str | None = typer.Option(None, "--severity", help="Deterministic filter: block|warn|info."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    severity: str | None = typer.Option(
+        None,
+        "--severity",
+        help="Keep cases matching this severity (block|warn|info).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """List failing cases with metric and failure ids.
 
-    Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``,
-    ``--severity``) are AND-combined and documented in the API map. The base
-    unfiltered list remains the S6-D01 contract.
+    Local read-only. Does not re-score, promote gold, or change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Reads an experiment's landed score results and lists failing cases with
+    their metric ids and failure ids. With no experiment id, uses the latest
+    local run.
+
+    Optional filters (``--regime``, ``--family``, ``--failure-id``,
+    ``--severity``) are deterministic and AND-combined. They are documented
+    as NTH-02 in the operator API map. The unfiltered list remains the base
+    S6-D01 contract.
+
+    Plain text prints a summary line plus one line per failing case.
+    --json emits the standard CLI envelope with the failures payload.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError, list_failures
@@ -985,15 +1810,48 @@ def failures_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("explain", rich_help_panel="Inspect")
+@eval_app.command(
+    "explain",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="Show a deterministic explanation for a failing case.",
+)
 def explain_cmd(
     experiment_id: str | None = typer.Option(
-        None, "--experiment-id", help="Experiment id (defaults to latest local run)."
+        None,
+        "--experiment-id",
+        help="Experiment id (defaults to latest local run).",
     ),
-    case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    case_id: str | None = typer.Option(
+        None,
+        "--case",
+        help="Case id within the experiment (required when multiple fail).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Show a deterministic explanation for a failing case."""
+    """Show a deterministic explanation for a failing case.
+
+    Local read-only. Does not re-score, promote gold, or change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Reads landed score/evidence for one experiment case and prints a
+    deterministic explanation: blame span, first divergent span, artifact
+    class, failure/prevention ids, suggested surfaces, and a replay command.
+
+    Defaults:
+    - --experiment-id falls back to the latest local run
+    - --case selects the target case; when omitted, selection follows the
+      explain engine's local rules (including single-failure convenience)
+
+    Plain text prints one short multi-line report per selected case.
+    --json emits the standard CLI envelope with the explain payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError, explain
 
@@ -1022,15 +1880,62 @@ def explain_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("compare", rich_help_panel="Inspect")
+@eval_app.command(
+    "compare",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="Diff two cases (structure and metrics).",
+)
 def compare_cmd(
-    a_experiment_id: str = typer.Option(..., "--a-experiment-id", help="Left experiment id."),
-    a_case_id: str = typer.Option(..., "--a-case", help="Left case id."),
-    b_experiment_id: str = typer.Option(..., "--b-experiment-id", help="Right experiment id."),
-    b_case_id: str = typer.Option(..., "--b-case", help="Right case id."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    a_experiment_id: str = typer.Option(
+        ...,
+        "--a-experiment-id",
+        help="Left experiment id (required).",
+    ),
+    a_case_id: str = typer.Option(
+        ...,
+        "--a-case",
+        help="Left case id (required).",
+    ),
+    b_experiment_id: str = typer.Option(
+        ...,
+        "--b-experiment-id",
+        help="Right experiment id (required).",
+    ),
+    b_case_id: str = typer.Option(
+        ...,
+        "--b-case",
+        help="Right case id (required).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Diff two cases (structure and metrics)."""
+    """Diff two cases (structure and metrics).
+
+    Local read-only. Does not replay, re-score, or change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Compares two landed case results side by side:
+    - metric pass/value deltas
+    - structural fields such as deterministic_pass and failed_metric_ids
+    - lineage link detection when one experiment is a recompute child of the other
+
+    All four selectors are required:
+    --a-experiment-id / --a-case and --b-experiment-id / --b-case.
+
+    When the experiments are lineage-linked, compare_source is
+    ``replay_compare_v1``; otherwise it is ``case_result_delta``.
+    The delta itself is always derived deterministically from the two case
+    rows. Compare only reads; it never writes replay artifacts.
+
+    Plain text prints a short summary plus changed metrics.
+    --json emits the standard CLI envelope with the full compare payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.explain import ExplainError, compare
 
@@ -1063,22 +1968,69 @@ def compare_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("replay", rich_help_panel="Advanced")
+@eval_app.command(
+    "replay",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Advanced",
+    short_help="Replay generation into a new bundle (source unchanged).",
+)
 def replay_cmd(
     bundle: str | None = typer.Option(
         None,
         "--bundle",
-        help="Source ape_bundle_v1 path or accept-path session_thread_id/stem.",
+        help="Source bundle path or accept-path id/stem.",
     ),
     experiment_id: str | None = typer.Option(
-        None, "--experiment-id", help="Experiment id (with --case) for explain-linked replay."
+        None,
+        "--experiment-id",
+        help="Experiment id (use with --case for explain-linked replay).",
     ),
-    case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
-    notes: str | None = typer.Option(None, "--notes", help="Optional notes on the compare record."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate and project without writing."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    case_id: str | None = typer.Option(
+        None,
+        "--case",
+        help="Case id within the experiment.",
+    ),
+    notes: str | None = typer.Option(
+        None,
+        "--notes",
+        help="Optional notes stored on the compare record.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate and project paths without writing files.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Replay generation into a new bundle (source unchanged)."""
+    """Replay generation into a new bundle (source unchanged).
+
+    Offline structural replay. Writes a new bundle + compare; never mutates the source.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Reads an existing ape_bundle_v1 (explicit path/id via --bundle, or
+    explain-linked via --experiment-id + --case) and writes:
+
+    - a new replay bundle under the local replays store
+    - a schema-valid replay_compare_v1 record
+
+    Guarantees:
+    - source bundle bytes are never mutated (immutability law)
+    - session_thread_id is preserved; new replay identity / trace / hashes
+    - harness, metric catalog, and schema pack pins are recorded on compare
+    - offline-first structural lineage replay only
+      (live replay_generation is a separate run-orchestrator mode)
+
+    --dry-run validates and projects would-write paths without writing.
+
+    Plain text prints replay id, regression status, lineage_ok, source_mutated,
+    and paths. --json emits the standard CLI envelope with the replay payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.replay import ReplayError, replay
 
@@ -1120,45 +2072,123 @@ def replay_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("promote", rich_help_panel="Advanced")
+@eval_app.command(
+    "promote",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Advanced",
+    short_help="Promote a scrubbed candidate with contamination checks.",
+)
 def promote_cmd(
-    bundle: str = typer.Option(..., "--bundle", help="Source ape_bundle_v1 path/id (acceptpath or replay)."),
+    bundle: str = typer.Option(
+        ...,
+        "--bundle",
+        help="Source bundle path or id (accept-path or replay).",
+    ),
     destination: str = typer.Option(
         ...,
         "--destination",
         help=(
-            "Terminal destination: fixture_lane_a|hard_negative|preference_pair|observability_fixture|quarantine|reject"
+            "Where to send it: fixture_lane_a | hard_negative | preference_pair | "
+            "observability_fixture | quarantine | reject."
         ),
     ),
-    owner: str = typer.Option(..., "--owner", help="Promotion owner (opaque local handle)."),
-    label: str = typer.Option(..., "--label", help="Promotion label (not silent gold)."),
-    provenance: str = typer.Option(..., "--provenance", help="Provenance token (not popularity/accept alone)."),
+    owner: str = typer.Option(
+        ...,
+        "--owner",
+        help="Who owns this promotion (local handle).",
+    ),
+    label: str = typer.Option(
+        ...,
+        "--label",
+        help="Promotion label (not silent gold).",
+    ),
+    provenance: str = typer.Option(
+        ...,
+        "--provenance",
+        help="Why this is allowed (not popularity/accept alone).",
+    ),
     redaction_profile: str = typer.Option(
         ...,
         "--redaction-profile",
-        help="R14 redaction profile for the promoted artifact.",
+        help="Redaction profile applied to the promoted artifact.",
     ),
     stage: str = typer.Option(
         "scrubbed_candidate",
         "--stage",
-        help="Source stage: failure_or_capture|scrubbed_candidate (default scrubbed_candidate).",
+        help="Source stage: failure_or_capture | scrubbed_candidate (default scrubbed_candidate).",
     ),
     split_group_id: str | None = typer.Option(
-        None, "--split-group-id", help="Contamination unit (defaults from bundle/session)."
+        None,
+        "--split-group-id",
+        help="Contamination unit (defaults from bundle/session).",
     ),
     review_id: str | None = typer.Option(
-        None, "--review-id", help="Optional adjudicated review_queue id (advisory only)."
+        None,
+        "--review-id",
+        help="Optional reviewed item id (advisory only; never sole gold authority).",
     ),
-    notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
+    notes: str | None = typer.Option(
+        None,
+        "--notes",
+        help="Optional free-text notes for the decision record.",
+    ),
     popularity_signal: bool = typer.Option(
         False,
         "--popularity-signal",
-        help="Mark popularity/user_acceptance signal (cannot promote golden).",
+        help="Mark popularity/acceptance signal (cannot promote golden).",
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Validate decision without writing."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Validate the decision without writing files.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Promote a scrubbed candidate with contamination checks."""
+    """Promote a scrubbed candidate with contamination checks.
+
+    Governed promote path. Writes a decision audit; never silent-mints gold from accept or popularity.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Closed state machine:
+
+      failure_or_capture → scrubbed_candidate → terminal destination
+
+    Terminal destinations:
+    - fixture_lane_a
+    - hard_negative
+    - preference_pair
+    - observability_fixture
+    - quarantine
+    - reject
+
+    Required: --bundle, --destination, --owner, --label, --provenance,
+    --redaction-profile. split_group_id is required for contamination control
+    (explicit or derived from the source bundle/session).
+
+    Forbidden (named denials, never silent):
+    - silent gold mint from production accept / popularity
+    - human-review-alone golden promotion
+    - Expand-with-AI synthetic rows without quarantine
+    - antipattern rows into positive_train destinations
+    - unresolved HITL dispute / open review on non-park destinations
+
+    Denial law (S6-E09): every rejection has a named denial_reason. After the
+    source candidate is resolved, denials persist a candidate-class audit row
+    under .eval/index/promotions/ (accepted=false) and never write fixture/gold
+    destination artifacts.
+
+    --dry-run validates and previews accept/deny without writing.
+
+    Plain text prints accepted, promotion id, destination, and paths.
+    --json emits the standard CLI envelope (denials include denial_reason +
+    retained decision when present).
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.promote import PromoteError, promote
 
@@ -1238,25 +2268,80 @@ def promote_cmd(
     raise typer.Exit(code=0)
 
 
-@eval_app.command("diagnose", rich_help_panel="Inspect")
+@eval_app.command(
+    "diagnose",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="Create or update a diagnostic issue from a failure.",
+)
 def diagnose_cmd(
     experiment_id: str | None = typer.Option(
-        None, "--experiment-id", help="Experiment id (defaults to latest local run)."
+        None,
+        "--experiment-id",
+        help="Experiment id (defaults to latest local run).",
     ),
-    case_id: str | None = typer.Option(None, "--case", help="Case id within the experiment."),
-    code: str | None = typer.Option(None, "--code", help="Diagnostic code (defaults to first failure_id)."),
-    title: str | None = typer.Option(None, "--title", help="Issue title."),
+    case_id: str | None = typer.Option(
+        None,
+        "--case",
+        help="Case id within the experiment.",
+    ),
+    code: str | None = typer.Option(
+        None,
+        "--code",
+        help="Diagnostic code (defaults to the first failure id).",
+    ),
+    title: str | None = typer.Option(
+        None,
+        "--title",
+        help="Optional issue title override.",
+    ),
     product_impact: str = typer.Option(
-        "unknown", "--product-impact", help="accept_path|golden|train|export|docs|unknown."
+        "unknown",
+        "--product-impact",
+        help="Impact area: accept_path|golden|train|export|docs|unknown.",
     ),
-    owner: str | None = typer.Option(None, "--owner", help="Issue owner."),
-    notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
+    owner: str | None = typer.Option(
+        None,
+        "--owner",
+        help="Optional issue owner handle.",
+    ),
+    notes: str | None = typer.Option(
+        None,
+        "--notes",
+        help="Optional free-text notes for the issue.",
+    ),
     dry_run: bool = typer.Option(
-        False, "--dry-run", help="Validate + project issue without writing issues/diagnostics."
+        False,
+        "--dry-run",
+        help="Validate and project the issue without writing files.",
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Create or update a diagnostic issue from a failure."""
+    """Create or update a diagnostic issue from a failure.
+
+    Builds a local diagnostic issue record. Does not change commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Reads one failing case (or the selected case) from an experiment and
+    creates/updates a diagnostic issue under the local issues/diagnostics
+    store. With no experiment id, uses the latest local run.
+
+    Defaults:
+    - --code falls back to the first failure id on the case
+    - --product-impact defaults to unknown
+    - --title / --owner / --notes are optional annotations
+
+    --dry-run fully builds and schema-validates the issue, then reports the
+    paths that would be written without touching disk.
+    Plain text prints create/upsert summary (and would_write paths on dry-run).
+    --json emits the standard CLI envelope with the diagnose payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.diagnose import DiagnoseError, diagnose
 
@@ -1312,7 +2397,20 @@ def diagnose_cmd(
 # review_app registered near module top for help-panel order.
 
 
-@review_app.command("enqueue")
+# Group-level brief/detail help (parent surface). Help-only; no queue I/O.
+@review_app.callback()
+def review_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
+@review_app.command(
+    "enqueue",
+    cls=BriefFullHelpCommand,
+    short_help="Enqueue an advisory human-review item.",
+)
 def review_enqueue_cmd(
     case_id: str | None = typer.Option(None, "--case", help="Case id under review."),
     bundle_id: str | None = typer.Option(None, "--bundle-id", help="Bundle id under review."),
@@ -1327,9 +2425,31 @@ def review_enqueue_cmd(
     regime_label: str | None = typer.Option(None, "--regime-label", help="human.regime_label: A|B|unknown."),
     notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Enqueue an advisory human-review item."""
+    """Enqueue an advisory human-review item.
+
+    Creates a local queue entry for a case or bundle. Never writes gold or
+    changes product commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Writes under ``.eval/review_queue/`` unless ``--dry-run`` validates only.
+    Requires ``--reviewer`` (opaque local handle, not email). Target one of
+    ``--case`` or ``--bundle-id``.
+
+    Optional human dimensions: ``--craft-rating``, ``--gold-dispute``
+    (true|false), ``--regime-label`` (A|B|unknown), plus free-text ``--notes``.
+    Default redaction profile is ``meta_eval_scrub``.
+
+    Authority stays advisory. ``--json`` emits the standard CLI envelope with
+    the created item payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, enqueue
 
@@ -1377,12 +2497,32 @@ def review_enqueue_cmd(
     raise typer.Exit(code=0)
 
 
-@review_app.command("list")
+@review_app.command(
+    "list",
+    cls=BriefFullHelpCommand,
+    short_help="List local review-queue items.",
+)
 def review_list_cmd(
     status: str | None = typer.Option(None, "--status", help="Filter: pending|in_review|adjudicated|dismissed."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """List local review-queue items."""
+    """List local review-queue items.
+
+    Read-only inspection of the advisory queue. Never writes gold or changes
+    product commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Optional ``--status`` filter: pending | in_review | adjudicated | dismissed.
+    Plain text prints a count plus one line per item (id, status, case,
+    reviewer). ``--json`` emits the standard CLI envelope with the full list
+    payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, list_reviews
 
@@ -1405,16 +2545,34 @@ def review_list_cmd(
     raise typer.Exit(code=0)
 
 
-@review_app.command("rollup")
+@review_app.command(
+    "rollup",
+    cls=BriefFullHelpCommand,
+    short_help="Roll up multi-rater advisory scores for review items.",
+)
 def review_rollup_cmd(
     case_id: str | None = typer.Option(None, "--case", help="Optional case_id filter."),
     bundle_id: str | None = typer.Option(None, "--bundle-id", help="Optional bundle_id filter."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Roll up multi-rater advisory scores for review items.
 
-    Read-only dimension/outcome majority + craft spread. Authority stays
-    advisory; never sole-promotes gold.
+    Read-only. Authority stays advisory and never sole-promotes gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Aggregates multi-rater dimension/outcome majority and craft spread for
+    matching review items. Optional filters: ``--case``, ``--bundle-id``.
+
+    Plain text prints group count plus per-target summaries (reviewer_count,
+    craft mean/disagreement, dispute/regime majority, outcome majority).
+    ``--json`` emits the standard CLI envelope with the full rollup payload.
+    ``can_sole_promote_gold`` remains false by contract.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, rollup_reviews
@@ -1449,12 +2607,30 @@ def review_rollup_cmd(
     raise typer.Exit(code=0)
 
 
-@review_app.command("show")
+@review_app.command(
+    "show",
+    cls=BriefFullHelpCommand,
+    short_help="Show one local review-queue item.",
+)
 def review_show_cmd(
     review_id: str = typer.Argument(..., help="Review id."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Show one local review-queue item."""
+    """Show one local review-queue item.
+
+    Read-only inspection of a single advisory review. Never writes gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires a review id argument. Plain text prints status and authority
+    (always advisory) and, when present, adjudication outcome + outcome_ref.
+    ``--json`` emits the standard CLI envelope with the full item payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, show_review
 
@@ -1483,14 +2659,34 @@ def review_show_cmd(
     raise typer.Exit(code=0)
 
 
-@review_app.command("claim")
+@review_app.command(
+    "claim",
+    cls=BriefFullHelpCommand,
+    short_help="Claim a pending review item (pending → in_review).",
+)
 def review_claim_cmd(
     review_id: str = typer.Argument(..., help="Review id."),
     reviewer: str = typer.Option(..., "--reviewer", help="Opaque local reviewer handle."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Claim a pending review item (pending → in_review)."""
+    """Claim a pending review item (pending → in_review).
+
+    Local queue state only. Never writes gold or changes product commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires a review id and ``--reviewer`` (opaque local handle). Moves a
+    pending item to in_review and records claimed_by. ``--dry-run`` validates
+    without writing.
+
+    ``--json`` emits the standard CLI envelope with the updated item payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, claim
 
@@ -1512,7 +2708,11 @@ def review_claim_cmd(
     raise typer.Exit(code=0)
 
 
-@review_app.command("adjudicate")
+@review_app.command(
+    "adjudicate",
+    cls=BriefFullHelpCommand,
+    short_help="Adjudicate an in_review item (emits typed outcome_ref; never writes gold).",
+)
 def review_adjudicate_cmd(
     review_id: str = typer.Argument(..., help="Review id."),
     outcome: str = typer.Option(
@@ -1526,9 +2726,29 @@ def review_adjudicate_cmd(
     ),
     notes: str | None = typer.Option(None, "--notes", help="Free-text notes."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Adjudicate an in_review item (emits typed outcome_ref; never writes gold)."""
+    """Adjudicate an in_review item (emits typed outcome_ref; never writes gold).
+
+    Authority stays advisory. Never writes gold or changes product commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires a review id and typed ``--outcome``:
+    approve_promote | reject | needs_work | dismiss.
+
+    Emits a typed outcome_ref on success. Optional ``--adjudicator``,
+    ``--destination-hint`` (advisory promote hint only), and ``--notes``.
+    ``--dry-run`` validates without writing.
+
+    ``--json`` emits the standard CLI envelope with the item + outcome_ref
+    payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, adjudicate
 
@@ -1558,15 +2778,34 @@ def review_adjudicate_cmd(
     raise typer.Exit(code=0)
 
 
-@review_app.command("dismiss")
+@review_app.command(
+    "dismiss",
+    cls=BriefFullHelpCommand,
+    short_help="Dismiss a pending/in_review item (terminal).",
+)
 def review_dismiss_cmd(
     review_id: str = typer.Argument(..., help="Review id."),
     reason: str = typer.Option(..., "--reason", help="Required dismissal reason."),
     adjudicator: str | None = typer.Option(None, "--adjudicator", help="Opaque adjudicator handle."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without writing."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Dismiss a pending/in_review item (terminal)."""
+    """Dismiss a pending/in_review item (terminal).
+
+    Closes without promotion. Never writes gold or changes product commit ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires a review id and ``--reason``. Optional ``--adjudicator``. Terminal
+    for pending/in_review items. ``--dry-run`` validates without writing.
+
+    ``--json`` emits the standard CLI envelope with the updated item payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.review_queue import ReviewQueueError, dismiss
 
@@ -1601,7 +2840,20 @@ def review_dismiss_cmd(
 # session_app registered near module top for help-panel order.
 
 
-@session_app.command("show")
+# Group-level brief/detail help (parent surface). Help-only; no session I/O.
+@session_app.callback()
+def session_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
+@session_app.command(
+    "show",
+    cls=BriefFullHelpCommand,
+    short_help="Show one local commit session.",
+)
 def session_show_cmd(
     session_id: str = typer.Option(..., "--id", help="Session id (sess_ or sessmeta_)."),
     root: Path | None = typer.Option(
@@ -1613,12 +2865,30 @@ def session_show_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Show one local commit session.
 
-    Read-only: no Opik reach, no chat timeline, no graph browser, no accept
-    authority, no rerun, no ranking mutation.
+    Read-only lookup of one local commit-session twin. Does not change commit
+    ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires ``--id`` as ``sess_<uuid>`` (``sessmeta_`` alias accepted). Optional
+    ``--root`` overrides repo discovery.
+
+    Reads a local ``commit_session_thread_v1`` twin under ``.eval/sessions/`` and
+    prints a map-only projection (id, lifecycle, schema, network=false). Missing
+    twin / bad id shape fails closed. Never opens Opik/network, never builds a
+    chat timeline or graph browser, and never grants accept authority or ranking
+    mutation.
+
+    ``--json`` emits the standard CLI envelope with the full session payload.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.sessions import SessionsError, show_session
@@ -1645,7 +2915,20 @@ def session_show_cmd(
 # thread_app registered near module top for help-panel order.
 
 
-@thread_app.command("show")
+# Group-level brief/detail help (parent surface). Help-only; no thread I/O.
+@thread_app.callback()
+def thread_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
+@thread_app.command(
+    "show",
+    cls=BriefFullHelpCommand,
+    short_help="Show one local session thread.",
+)
 def thread_show_cmd(
     thread_id: str = typer.Option(..., "--id", help="Thread/session id (sess_ or sessmeta_)."),
     root: Path | None = typer.Option(
@@ -1657,12 +2940,29 @@ def thread_show_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Show one local session thread.
 
-    Read-only: no Opik reach, no chat timeline, no graph browser, no accept
-    authority, no rerun, no ranking mutation.
+    Read-only lookup of one local session-thread record. Does not change commit
+    ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires ``--id`` as ``sess_<uuid>`` (``sessmeta_`` alias accepted). Optional
+    ``--root`` overrides repo discovery.
+
+    Projects the same local ``commit_session_thread_v1`` capture episode as a
+    thread-oriented map (message version count, lifecycle, optional preference
+    pairs / attempt ids). Store fields only — not a chat timeline or graph
+    browser. Local-only; never opens Opik/network and never mutates ranking.
+
+    ``--json`` emits the standard CLI envelope with the full thread payload.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.sessions import SessionsError, show_thread
@@ -1697,14 +2997,43 @@ def thread_show_cmd(
 # issue_app registered near module top for help-panel order.
 
 
-@issue_app.command("list")
+# Group-level brief/detail help (parent surface). Help-only; no issue I/O.
+@issue_app.callback()
+def issue_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
+@issue_app.command(
+    "list",
+    cls=BriefFullHelpCommand,
+    short_help="List local diagnostic issues.",
+)
 def issue_list_cmd(
     status: str | None = typer.Option(
         None, "--status", help="Filter by status (open|acknowledged|resolved|suppressed|reopened)."
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """List local diagnostic issues (newest last_seen first)."""
+    """List local diagnostic issues.
+
+    Read-only inspection of local diagnostic issues created from eval failures.
+    Newest ``last_seen`` first. Does not change commit ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Optional ``--status`` filter: open | acknowledged | resolved | suppressed |
+    reopened. Plain text prints a count plus one line per issue (id, status,
+    severity, code, occurrences). ``--json`` emits the standard CLI envelope with
+    the full list payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.diagnose import DiagnoseError, list_issues
 
@@ -1727,12 +3056,32 @@ def issue_list_cmd(
     raise typer.Exit(code=0)
 
 
-@issue_app.command("show")
+@issue_app.command(
+    "show",
+    cls=BriefFullHelpCommand,
+    short_help="Show one local diagnostic issue.",
+)
 def issue_show_cmd(
     issue_id: str = typer.Argument(..., help="Issue id."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Show one local diagnostic issue."""
+    """Show one local diagnostic issue.
+
+    Read-only inspection of a single diagnostic issue. Does not change commit
+    ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires an issue id argument. Plain text prints status/severity/title plus
+    fingerprint, occurrence count, linked failure/metric ids, and any suggested
+    surfaces. ``--json`` emits the standard CLI envelope with the full issue
+    payload.
+    """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.diagnose import DiagnoseError, show_issue
 
@@ -1763,13 +3112,35 @@ def issue_show_cmd(
     raise typer.Exit(code=0)
 
 
-@issue_app.command("resolve")
+@issue_app.command(
+    "resolve",
+    cls=BriefFullHelpCommand,
+    short_help="Mark a local diagnostic issue resolved.",
+)
 def issue_resolve_cmd(
     issue_id: str = typer.Argument(..., help="Issue id."),
     resolution_evidence: str = typer.Option(..., "--resolution-evidence", help="Required fix-verification evidence."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Mark a local diagnostic issue resolved (requires --resolution-evidence)."""
+    """Mark a local diagnostic issue resolved.
+
+    Local issue lifecycle only. Requires fix-verification evidence. Does not
+    change commit ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires an issue id and ``--resolution-evidence``. Legal from open,
+    acknowledged, or reopened (closed transition matrix). Re-applying resolved
+    is an idempotent no-op that still requires evidence. Free text is secret-
+    projected before persist.
+
+    ``--json`` emits the standard CLI envelope with the transition payload.
+    """
     _run_issue_transition(
         "eval issue resolve",
         issue_id=issue_id,
@@ -1780,12 +3151,33 @@ def issue_resolve_cmd(
     )
 
 
-@issue_app.command("reopen")
+@issue_app.command(
+    "reopen",
+    cls=BriefFullHelpCommand,
+    short_help="Reopen a local diagnostic issue.",
+)
 def issue_reopen_cmd(
     issue_id: str = typer.Argument(..., help="Issue id."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Reopen a previously resolved/suppressed local diagnostic issue."""
+    """Reopen a local diagnostic issue.
+
+    Local issue lifecycle only. Typically used after resolved/suppressed.
+    Does not change commit ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires an issue id. Legal from acknowledged, resolved, or suppressed
+    (closed transition matrix). Re-applying reopened is an idempotent no-op.
+    From reopened, operators can acknowledge, resolve, or suppress again.
+
+    ``--json`` emits the standard CLI envelope with the transition payload.
+    """
     _run_issue_transition(
         "eval issue reopen",
         issue_id=issue_id,
@@ -1796,13 +3188,35 @@ def issue_reopen_cmd(
     )
 
 
-@issue_app.command("suppress")
+@issue_app.command(
+    "suppress",
+    cls=BriefFullHelpCommand,
+    short_help="Suppress a local diagnostic issue.",
+)
 def issue_suppress_cmd(
     issue_id: str = typer.Argument(..., help="Issue id."),
     reason: str = typer.Option(..., "--reason", help="Required suppression reason."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Suppress a local diagnostic issue (requires --reason)."""
+    """Suppress a local diagnostic issue.
+
+    Local issue lifecycle only. Requires a suppression reason. Does not change
+    commit ranking or gold.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires an issue id and ``--reason``. Legal from open, acknowledged, or
+    reopened (closed transition matrix). Re-applying suppressed is an
+    idempotent no-op that still requires a reason. Reason text is secret-
+    projected and recorded in notes.
+
+    ``--json`` emits the standard CLI envelope with the transition payload.
+    """
     _run_issue_transition(
         "eval issue suppress",
         issue_id=issue_id,
@@ -1819,6 +3233,24 @@ def issue_suppress_cmd(
 
 
 # opik_app / opik_config_app registered near module top for help-panel order.
+
+
+# Group-level brief/detail help (parent surface). Help-only; no Opik I/O.
+@opik_app.callback()
+def opik_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
+# Nested config group brief/detail help. Help-only; no config I/O.
+@opik_config_app.callback()
+def opik_config_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
 
 
 def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = None) -> None:
@@ -1933,23 +3365,77 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
     raise typer.Exit(code=exit_code)
 
 
-@opik_config_app.command("show")
+@opik_config_app.command(
+    "show",
+    cls=BriefFullHelpCommand,
+    short_help="Show resolved Opik/mirror config without secrets.",
+)
 def opik_config_show_cmd(
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Show resolved Opik/mirror config without secrets."""
+    """Show resolved Opik/mirror config without secrets.
+
+    Offline and secret-safe. Never prints raw API keys or reaches the network.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Prints ``public_config_view`` plus a masked secrets block
+    (``api_key`` via ``mask_secret()`` redacted length form, ``api_key_present``)
+    and an operator health hint.
+
+    Health hint values include skipped_off / deferred / pending / config_error.
+    Invalid mode tokens fail closed (exit 2). Successful show exits 0.
+
+    Plain text emits indented JSON of the secret-safe payload. ``--json`` wraps
+    the same payload in the standard CLI envelope (with deprecation warnings when
+    invoked via the temporary flat alias ``git-cg eval config show``).
+
+    No transport, no queue drain, and no accept/ranking side effects.
+    """
     _config_show_impl(as_json=as_json, deprecated_from=None)
 
 
-@opik_app.command("doctor")
+@opik_app.command(
+    "doctor",
+    cls=BriefFullHelpCommand,
+    short_help="Check Opik/export health without exposing secrets.",
+)
 def opik_doctor_cmd(
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Check Opik/export health without exposing secrets.
 
-    Inspects resolved config / export health / queue without transport or
-    network. All secret-bearing output passes through ``mask_secret()``
-    (``•••[len=N]``); raw token values and prefixes are never printed.
+    Local only: no transport and no network. Raw API keys are never printed.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Inspects resolved Opik/mirror config, export health, and local export-queue
+    counts without contacting Opik. Secret-bearing output always passes through
+    ``mask_secret()`` (redacted length form) plus a presence boolean — raw token
+    values and prefixes are never printed.
+
+    Typical checks include:
+    - ``opik.config_resolved`` (block): config health / invalid mode tokens
+    - ``opik.mode``: mode + health observability
+    - ``opik.api_key_present``: ambient key presence (warn when active mode
+      lacks a key)
+    - ``opik.queue_readable`` / ``opik.queue_failed_drainable``: local queue
+      readability and failed-row backlog
+
+    ``h.doctor_green`` follows block-severity only (config must resolve cleanly).
+    Exit code is 0 when config is healthy, otherwise 2 (fail-closed). Plain text
+    prints a green summary plus non-pass checks; ``--json`` emits the standard
+    CLI envelope with the full report payload.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.doctor import run_opik_doctor
@@ -1976,14 +3462,39 @@ def opik_doctor_cmd(
 # --------------------------------------------------------------------------
 
 
-@eval_app.command("config", rich_help_panel="Deprecated", deprecated=True)
+@eval_app.command(
+    "config",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Deprecated",
+    deprecated=True,
+    short_help="Alias of eval opik config show.",
+)
 def config_cmd(
-    action: str = typer.Argument(..., help="Subcommand: show"),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    action: str = typer.Argument(
+        ...,
+        help="Only 'show' is supported on this temporary alias.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
     """Alias of eval opik config show.
 
+    Temporary compatibility shim. Prefer the nested canonical path.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Canonical: git-cg eval opik config show
+
+    This flat alias still runs the secret-safe config show path and emits a
+    deprecation warning (stderr human / envelope warnings[] JSON).
+
     Removal target: first minor release after S6 GA.
+
+    Supported action: show only.
     """
     if action != "show":
         typer.echo(f"config: unknown action {action!r} (supported: show)", err=True)
@@ -2121,7 +3632,20 @@ def _maybe_export_alias_deprecation(deprecated: str, *, as_json: bool) -> list[d
     return [warning]
 
 
-@export_app.command("status")
+# Group-level brief/detail help (parent surface). Help-only; no queue I/O.
+@export_app.callback()
+def export_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
+@export_app.command(
+    "status",
+    cls=BriefFullHelpCommand,
+    short_help="Show export-queue status (read-only, offline).",
+)
 def export_status_cmd(
     root: Path | None = typer.Option(
         None,
@@ -2132,12 +3656,27 @@ def export_status_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
     _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
     """Show export-queue status (read-only, offline).
 
     Never mutates the queue and never contacts Opik or the network.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Prints the export queue directory and per-status counts (pending, sending,
+    sent, failed, dropped, unreadable). May also surface a config health hint
+    and fail closed on an invalid mode token.
+
+    ``--json`` emits the standard CLI envelope with queue_dir, counts, health,
+    and bad_mode fields. Exit codes: 0 when healthy, 1 if the repo root cannot
+    be resolved, 2 on invalid mode configuration.
     """
     from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
 
@@ -2208,7 +3747,11 @@ def export_status_cmd(
     raise typer.Exit(code=0)
 
 
-@export_app.command("retry")
+@export_app.command(
+    "retry",
+    cls=BriefFullHelpCommand,
+    short_help="Re-queue failed export rows for another drain attempt.",
+)
 def export_retry_cmd(
     root: Path | None = typer.Option(
         None,
@@ -2234,15 +3777,31 @@ def export_retry_cmd(
         "--max-items",
         help="Cap on failed rows re-queued this invocation.",
     ),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
     _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
     """Re-queue failed export rows for another drain attempt.
 
+    Moves ``failed → pending`` so the next ``export drain`` can claim them.
+    Never blocks product accept.
+
+    <<GIT_CG_HELP_DETAIL>>
+
     Default policy: reclaim rows whose last_error_class is retryable
     (``export_network`` / ``export_timeout`` / empty). Validation/auth/size
-    failures require ``--force``. Transitions ``failed → pending`` so the next
-    ``export drain`` can claim them. Never blocks product accept.
+    failures require ``--force``.
+
+    Optional ``--id`` limits retry to one queue row; ``--max-items`` caps how
+    many failed rows are re-queued this invocation.
+
+    ``--json`` emits the standard CLI envelope with retried/skipped/unreadable
+    counts. Exit code is 0 (including fail-open paths such as an unresolvable
+    repo root).
     """
     from git_cg.eval.mirror.queue import (
         ExportQueueError,
@@ -2330,7 +3889,11 @@ def export_retry_cmd(
     raise typer.Exit(code=0)
 
 
-@export_app.command("drain")
+@export_app.command(
+    "drain",
+    cls=BriefFullHelpCommand,
+    short_help="Drain the export queue through the Opik transport.",
+)
 def export_drain_cmd(
     root: Path | None = typer.Option(
         None,
@@ -2341,16 +3904,41 @@ def export_drain_cmd(
         dir_okay=True,
         resolve_path=True,
     ),
-    max_items: int | None = typer.Option(None, "--max-items", help="Cap on rows processed this drain."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Resolve config + list pending rows; no upload."),
-    as_json: bool = typer.Option(False, "--json", help="Emit cli_output_envelope_v1 on stdout."),
+    max_items: int | None = typer.Option(
+        None,
+        "--max-items",
+        help="Cap on rows processed this drain.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Resolve config + list pending rows; no upload.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
     _deprecated_from: str | None = typer.Option(None, hidden=True),
 ) -> None:
     """Drain the export queue through the Opik transport.
 
     Always exits 0 unless the config is invalid (fail-closed). Transport and
-    secret failures are classified and recorded on the queue rows; they never
-    produce a non-zero exit that could block a hook.
+    secret failures are classified on queue rows and never block hooks.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Uploads pending rows through the Opik transport (unless ``mode=off`` or
+    ``--dry-run``). ``--dry-run`` resolves config and lists pending rows without
+    uploading. ``--max-items`` caps how many rows are processed this drain.
+
+    Fail-closed on invalid config / mode tokens (non-zero exit). Transport and
+    secret failures are recorded on the affected queue rows and do not produce a
+    hook-blocking exit.
+
+    ``--json`` emits the standard CLI envelope with mirror/export result
+    payloads and any deprecation warnings when invoked via a dashed alias.
     """
     import json
 
@@ -2510,21 +4098,83 @@ def export_drain_cmd(
 
 # Temporary dashed aliases (R2) — removal: first minor after S6 GA.
 def _export_status_alias(
-    root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
-    as_json: bool = typer.Option(False, "--json"),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Alias of eval export status."""
+    """Alias of eval export status.
+
+    Temporary dashed alias. Prefer the nested canonical path.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Canonical: git-cg eval export status
+
+    Still runs the read-only offline queue-status path and emits a deprecation
+    warning (stderr human / envelope warnings[] JSON).
+
+    Removal target: first minor release after S6 GA.
+    """
     export_status_cmd(root=root, as_json=as_json, _deprecated_from="git-cg eval export-status")
 
 
 def _export_retry_alias(
-    root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
-    queue_id: str | None = typer.Option(None, "--id"),
-    force: bool = typer.Option(False, "--force"),
-    max_items: int | None = typer.Option(None, "--max-items"),
-    as_json: bool = typer.Option(False, "--json"),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    queue_id: str | None = typer.Option(
+        None,
+        "--id",
+        help="Retry a single failed queue id (default: all failed rows).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Also retry validation/auth/size failures.",
+    ),
+    max_items: int | None = typer.Option(
+        None,
+        "--max-items",
+        help="Cap on failed rows re-queued this invocation.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Alias of eval export retry."""
+    """Alias of eval export retry.
+
+    Temporary dashed alias. Prefer the nested canonical path.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Canonical: git-cg eval export retry
+
+    Still re-queues failed rows (failed → pending) under the same policy as the
+    nested command and emits a deprecation warning.
+
+    Removal target: first minor release after S6 GA.
+    """
     export_retry_cmd(
         root=root,
         queue_id=queue_id,
@@ -2536,12 +4186,46 @@ def _export_retry_alias(
 
 
 def _export_drain_alias(
-    root: Path | None = typer.Option(None, "--root", exists=False, file_okay=False, dir_okay=True, resolve_path=True),
-    max_items: int | None = typer.Option(None, "--max-items"),
-    dry_run: bool = typer.Option(False, "--dry-run"),
-    as_json: bool = typer.Option(False, "--json"),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    max_items: int | None = typer.Option(
+        None,
+        "--max-items",
+        help="Cap on rows processed this drain.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Resolve config + list pending rows; no upload.",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
 ) -> None:
-    """Alias of eval export drain."""
+    """Alias of eval export drain.
+
+    Temporary dashed alias. Prefer the nested canonical path.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Canonical: git-cg eval export drain
+
+    Still drains pending queue rows through the Opik transport under the same
+    fail-closed/config and hook-safe exit policy, and emits a deprecation
+    warning.
+
+    Removal target: first minor release after S6 GA.
+    """
     export_drain_cmd(
         root=root,
         max_items=max_items,
@@ -2551,6 +4235,24 @@ def _export_drain_alias(
     )
 
 
-eval_app.command("export-status", rich_help_panel="Deprecated", deprecated=True)(_export_status_alias)
-eval_app.command("export-retry", rich_help_panel="Deprecated", deprecated=True)(_export_retry_alias)
-eval_app.command("export-drain", rich_help_panel="Deprecated", deprecated=True)(_export_drain_alias)
+eval_app.command(
+    "export-status",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Deprecated",
+    deprecated=True,
+    short_help="Alias of eval export status.",
+)(_export_status_alias)
+eval_app.command(
+    "export-retry",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Deprecated",
+    deprecated=True,
+    short_help="Alias of eval export retry.",
+)(_export_retry_alias)
+eval_app.command(
+    "export-drain",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Deprecated",
+    deprecated=True,
+    short_help="Alias of eval export drain.",
+)(_export_drain_alias)

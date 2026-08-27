@@ -1,5 +1,8 @@
 # Evaluation harness contracts (S0–S3)
 
+> **CLI reference:** dedicated Zensical pages for every `git-cg` / `git-cg eval` command live under [`docs/cli/`](../cli/index.md) (overview + one page per command).
+
+
 Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), **Plane A score runner** (S2a/S2b/S2c), and **accept-path final-bytes binding + trajectory evidence** (S3) for the Opik evaluation harness.
 
 > **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.6-s6-slice0-reconciliation` (retains `0.9.5-s5-s6-s7-api-surface` / `0.9.4-s5-eligibility-split` / `0.9.3-s2b-clarifications` locks)
