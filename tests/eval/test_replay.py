@@ -176,6 +176,6 @@ def test_replay_mints_synthetic_thread_when_source_lacks_session(repo: Path, tmp
     assert compare["session_thread_id"] == f"thread:{rid}"
     # Replay bundle on disk also carries the minted thread.
     bundle_path = Path(result["replay_bundle_path"])
-    if bundle_path.is_file():
-        replayed = json.loads(bundle_path.read_text(encoding="utf-8"))
-        assert replayed.get("session_thread_id") == f"thread:{rid}"
+    assert bundle_path.is_file()
+    replayed = json.loads(bundle_path.read_text(encoding="utf-8"))
+    assert replayed.get("session_thread_id") == f"thread:{rid}"

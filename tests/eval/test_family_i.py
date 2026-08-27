@@ -845,10 +845,10 @@ def test_s2c_h_no_s3_s4_thread_star_or_pin_drift() -> None:
     # Pin identity is content-addressed (not floating) and process-stable
     schema_pin = schema_pack_pin()
     catalog_pin = metric_catalog_pin()
-    assert "@" in schema_pin and not schema_pin.endswith("@latest")
-    assert "@" in catalog_pin and not catalog_pin.endswith("@latest")
-    assert len(schema_pin.split("@", 1)[1]) == 64
-    assert len(catalog_pin.split("@", 1)[1]) == 64
+    assert schema_pin.startswith("schema_pack_v0@")
+    assert catalog_pin.startswith("metric_catalog_v0@")
+    assert re.fullmatch(r"[0-9a-f]{64}", schema_pin.split("@", 1)[1])
+    assert re.fullmatch(r"[0-9a-f]{64}", catalog_pin.split("@", 1)[1])
     assert schema_pack_pin() == schema_pin
     assert metric_catalog_pin() == catalog_pin
     # No S3 accept-path emitter / S4 Opik client surface under scoring package.

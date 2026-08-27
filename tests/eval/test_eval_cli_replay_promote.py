@@ -287,7 +287,7 @@ def test_cli_review_rollup_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     # isolate repo root
     from git_cg.eval.binding import paths as binding_paths
 
-    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda start=None: tmp_path)
     # seed two reviews via library
     from git_cg.eval.review_queue import enqueue
 
