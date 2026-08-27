@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval issue reopen …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Reopen a previously resolved/suppressed local diagnostic issue.
+Reopen a local diagnostic issue.
 
 ## Authority boundary
 
@@ -14,17 +14,21 @@ Reopen a previously resolved/suppressed local diagnostic issue.
 ## Help
 
 ```text
-Usage: git-cg eval issue reopen [OPTIONS] ISSUE_ID                                               
-                                                                                
- Reopen a previously resolved/suppressed local diagnostic issue.                
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    issue_id      TEXT  Issue id. [required]                                │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json          Emit cli_output_envelope_v1 on stdout.                       │
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval issue reopen [OPTIONS] ISSUE_ID
+
+ Reopen a local diagnostic issue.
+
+ Local issue lifecycle only. Typically used after resolved/suppressed.
+ Does not change commit ranking or gold.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    issue_id      TEXT  Issue id. [required]                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json            Print machine-readable JSON instead of plain text.                                                 │
+│ --detail          Show detailed help text and exit.                                                                  │
+│ --help            Show this message and exit.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

@@ -14,21 +14,24 @@ Inspect local commit sessions.
 ## Help
 
 ```text
-Usage: git-cg eval session [OPTIONS] COMMAND [ARGS]...                                     
-                                                                                
- Inspect local commit sessions.                                                 
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ show  Show one local commit session.                                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval session [OPTIONS] COMMAND [ARGS]...
+
+ Inspect local commit sessions.
+
+ Read-only lookup of a local commit-session record. Does not change commit ranking or gold.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --detail          Show detailed help text and exit.                                                                  │
+│ --help            Show this message and exit.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ show  Show one local commit session.                                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval session show`](session/show.md) — Show one local commit session. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutat
+* [`git-cg eval session show`](session/show.md) — Show one local commit session.
 
 ## See also
 

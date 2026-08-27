@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval session show …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Show one local commit session. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutation.
+Show one local commit session.
 
 ## Authority boundary
 
@@ -14,19 +14,20 @@ Show one local commit session. Read-only: no Opik reach, no chat timeline, no gr
 ## Help
 
 ```text
-Usage: git-cg eval session show [OPTIONS]                                                          
-                                                                                
- Show one local commit session.                                                 
-                                                                                
- Read-only: no Opik reach, no chat timeline, no graph browser, no accept        
- authority, no rerun, no ranking mutation.                                      
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --id          TEXT       Session id (sess_ or sessmeta_). [required]      │
-│    --root        DIRECTORY  Repo root (defaults to discovery).               │
-│    --json                   Emit cli_output_envelope_v1 on stdout.           │
-│    --help                   Show this message and exit.                      │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval session show [OPTIONS]
+
+ Show one local commit session.
+
+ Read-only lookup of one local commit-session twin. Does not change commit
+ ranking or gold.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --id            TEXT       Session id (sess_ or sessmeta_). [required]                                            │
+│    --root          DIRECTORY  Repo root (defaults to discovery).                                                     │
+│    --json                     Print machine-readable JSON instead of plain text.                                     │
+│    --detail                   Show detailed help text and exit.                                                      │
+│    --help                     Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

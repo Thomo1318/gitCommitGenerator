@@ -14,42 +14,33 @@ Promote a scrubbed candidate with contamination checks.
 ## Help
 
 ```text
-Usage: git-cg eval promote [OPTIONS]                                                       
-                                                                                
- Promote a scrubbed candidate with contamination checks.                        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --bundle                   TEXT  Source ape_bundle_v1 path/id (acceptpath │
-│                                     or replay).                              │
-│                                     [required]                               │
-│ *  --destination              TEXT  Terminal destination:                    │
-│                                     fixture_lane_a|hard_negative|preference… │
-│                                     [required]                               │
-│ *  --owner                    TEXT  Promotion owner (opaque local handle).   │
-│                                     [required]                               │
-│ *  --label                    TEXT  Promotion label (not silent gold).       │
-│                                     [required]                               │
-│ *  --provenance               TEXT  Provenance token (not popularity/accept  │
-│                                     alone).                                  │
-│                                     [required]                               │
-│ *  --redaction-profile        TEXT  R14 redaction profile for the promoted   │
-│                                     artifact.                                │
-│                                     [required]                               │
-│    --stage                    TEXT  Source stage:                            │
-│                                     failure_or_capture|scrubbed_candidate    │
-│                                     (default scrubbed_candidate).            │
-│                                     [default: scrubbed_candidate]            │
-│    --split-group-id           TEXT  Contamination unit (defaults from        │
-│                                     bundle/session).                         │
-│    --review-id                TEXT  Optional adjudicated review_queue id     │
-│                                     (advisory only).                         │
-│    --notes                    TEXT  Free-text notes.                         │
-│    --popularity-signal              Mark popularity/user_acceptance signal   │
-│                                     (cannot promote golden).                 │
-│    --dry-run                        Validate decision without writing.       │
-│    --json                           Emit cli_output_envelope_v1 on stdout.   │
-│    --help                           Show this message and exit.              │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval promote [OPTIONS]
+
+ Promote a scrubbed candidate with contamination checks.
+
+ Governed promote path. Writes a decision audit; never silent-mints gold from accept or popularity.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --bundle                   TEXT  Source bundle path or id (accept-path or replay). [required]                     │
+│ *  --destination              TEXT  Where to send it: fixture_lane_a | hard_negative | preference_pair |             │
+│                                     observability_fixture | quarantine | reject.                                     │
+│                                     [required]                                                                       │
+│ *  --owner                    TEXT  Who owns this promotion (local handle). [required]                               │
+│ *  --label                    TEXT  Promotion label (not silent gold). [required]                                    │
+│ *  --provenance               TEXT  Why this is allowed (not popularity/accept alone). [required]                    │
+│ *  --redaction-profile        TEXT  Redaction profile applied to the promoted artifact. [required]                   │
+│    --stage                    TEXT  Source stage: failure_or_capture | scrubbed_candidate (default                   │
+│                                     scrubbed_candidate).                                                             │
+│                                     [default: scrubbed_candidate]                                                    │
+│    --split-group-id           TEXT  Contamination unit (defaults from bundle/session).                               │
+│    --review-id                TEXT  Optional reviewed item id (advisory only; never sole gold authority).            │
+│    --notes                    TEXT  Optional free-text notes for the decision record.                                │
+│    --popularity-signal              Mark popularity/acceptance signal (cannot promote golden).                       │
+│    --dry-run                        Validate the decision without writing files.                                     │
+│    --json                           Print machine-readable JSON instead of plain text.                               │
+│    --detail                         Show detailed help text and exit.                                                │
+│    --help                           Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

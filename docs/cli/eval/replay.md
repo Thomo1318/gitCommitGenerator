@@ -14,21 +14,22 @@ Replay generation into a new bundle (source unchanged).
 ## Help
 
 ```text
-Usage: git-cg eval replay [OPTIONS]                                                        
-                                                                                
- Replay generation into a new bundle (source unchanged).                        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --bundle               TEXT  Source ape_bundle_v1 path or accept-path        │
-│                              session_thread_id/stem.                         │
-│ --experiment-id        TEXT  Experiment id (with --case) for explain-linked  │
-│                              replay.                                         │
-│ --case                 TEXT  Case id within the experiment.                  │
-│ --notes                TEXT  Optional notes on the compare record.           │
-│ --dry-run                    Validate and project without writing.           │
-│ --json                       Emit cli_output_envelope_v1 on stdout.          │
-│ --help                       Show this message and exit.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval replay [OPTIONS]
+
+ Replay generation into a new bundle (source unchanged).
+
+ Offline structural replay. Writes a new bundle + compare; never mutates the source.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --bundle               TEXT  Source bundle path or accept-path id/stem.                                              │
+│ --experiment-id        TEXT  Experiment id (use with --case for explain-linked replay).                              │
+│ --case                 TEXT  Case id within the experiment.                                                          │
+│ --notes                TEXT  Optional notes stored on the compare record.                                            │
+│ --dry-run                    Validate and project paths without writing files.                                       │
+│ --json                       Print machine-readable JSON instead of plain text.                                      │
+│ --detail                     Show detailed help text and exit.                                                       │
+│ --help                       Show this message and exit.                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

@@ -14,17 +14,20 @@ Show one local review-queue item.
 ## Help
 
 ```text
-Usage: git-cg eval review show [OPTIONS] REVIEW_ID                                                
-                                                                                
- Show one local review-queue item.                                              
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    review_id      TEXT  Review id. [required]                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json          Emit cli_output_envelope_v1 on stdout.                       │
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval review show [OPTIONS] REVIEW_ID
+
+ Show one local review-queue item.
+
+ Read-only inspection of a single advisory review. Never writes gold.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    review_id      TEXT  Review id. [required]                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json            Print machine-readable JSON instead of plain text.                                                 │
+│ --detail          Show detailed help text and exit.                                                                  │
+│ --help            Show this message and exit.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

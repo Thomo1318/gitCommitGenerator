@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export retry …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Re-queue failed export rows for another drain attempt. Default policy: reclaim rows whose last_error_class is retryable (``export_network`` / ``export_timeout`` / empty). Validation/auth/size failures require ``--force``. Transitions ``failed → pending`` so the next ``export drain`` can claim them. Never blocks product accept.
+Re-queue failed export rows for another drain attempt.
 
 ## Authority boundary
 
@@ -14,25 +14,22 @@ Re-queue failed export rows for another drain attempt. Default policy: reclaim r
 ## Help
 
 ```text
-Usage: git-cg eval export retry [OPTIONS]                                                         
-                                                                                
- Re-queue failed export rows for another drain attempt.                         
-                                                                                
- Default policy: reclaim rows whose last_error_class is retryable               
- (``export_network`` / ``export_timeout`` / empty). Validation/auth/size        
- failures require ``--force``. Transitions ``failed → pending`` so the next     
- ``export drain`` can claim them. Never blocks product accept.                  
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root             DIRECTORY  Repo root (defaults to discovery).             │
-│ --id               TEXT       Retry a single failed queue id (default: all   │
-│                               failed rows).                                  │
-│ --force                       Also retry export_validation / export_auth /   │
-│                               export_size failures.                          │
-│ --max-items        INTEGER    Cap on failed rows re-queued this invocation.  │
-│ --json                        Emit cli_output_envelope_v1 on stdout.         │
-│ --help                        Show this message and exit.                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval export retry [OPTIONS]
+
+ Re-queue failed export rows for another drain attempt.
+
+ Moves ``failed → pending`` so the next ``export drain`` can claim them.
+ Never blocks product accept.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --root             DIRECTORY  Repo root (defaults to discovery).                                                     │
+│ --id               TEXT       Retry a single failed queue id (default: all failed rows).                             │
+│ --force                       Also retry export_validation / export_auth / export_size failures.                     │
+│ --max-items        INTEGER    Cap on failed rows re-queued this invocation.                                          │
+│ --json                        Print machine-readable JSON instead of plain text.                                     │
+│ --detail                      Show detailed help text and exit.                                                      │
+│ --help                        Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

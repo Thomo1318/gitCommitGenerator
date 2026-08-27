@@ -14,16 +14,19 @@ Alias of eval export status.
 ## Help
 
 ```text
-Usage: git-cg eval export-status [OPTIONS]                                                 
-                                                                                
- (deprecated)                                                                   
- Alias of eval export status.                                                   
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root        DIRECTORY                                                      │
-│ --json                                                                       │
-│ --help                   Show this message and exit.                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval export-status [OPTIONS]
+
+ (deprecated)
+ Alias of eval export status.
+
+ Temporary dashed alias. Prefer the nested canonical path.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --root          DIRECTORY  Repo root (defaults to discovery).                                                        │
+│ --json                     Print machine-readable JSON instead of plain text.                                        │
+│ --detail                   Show detailed help text and exit.                                                         │
+│ --help                     Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

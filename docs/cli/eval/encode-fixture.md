@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval encode-fixture …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Encode a fixture and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exits non-zero on invalid options, missing fixtures, or encode failures.
+Print stable identity hashes for one evaluation fixture.
 
 ## Authority boundary
 
@@ -14,21 +14,19 @@ Encode a fixture and print its identity summary. Requires exactly one of ``--pat
 ## Help
 
 ```text
-Usage: git-cg eval encode-fixture [OPTIONS]                                                
-                                                                                
- Encode a fixture and print its identity summary.                               
-                                                                                
- Requires exactly one of ``--path`` or ``--id``; exits non-zero                 
- on invalid options, missing fixtures, or encode failures.                      
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --path         FILE  Path to a fixture JSON file (canonical encode form).    │
-│ --id           TEXT  Optional case_id resolver against known suite/fixture   │
-│                      roots.                                                  │
-│ --suite        TEXT  Suite id to resolve --id against (default:              │
-│                      cm-eval-fixtures-core).                                 │
-│ --help               Show this message and exit.                             │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval encode-fixture [OPTIONS]
+
+ Print stable identity hashes for one evaluation fixture.
+
+ Local disk only. Does not run evaluations or change commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --path          FILE  Path to one fixture JSON file.                                                                 │
+│ --id            TEXT  Fixture case id to load from a suite (use instead of --path).                                  │
+│ --suite         TEXT  Suite to search when using --id (default: cm-eval-fixtures-core).                              │
+│ --detail              Show detailed help text and exit.                                                              │
+│ --help                Show this message and exit.                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

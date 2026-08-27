@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval resume …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Resume a suite from a checkpoint.
+Continue an unfinished evaluation from a checkpoint.
 
 ## Authority boundary
 
@@ -14,23 +14,24 @@ Resume a suite from a checkpoint.
 ## Help
 
 ```text
-Usage: git-cg eval resume [OPTIONS]                                                        
-                                                                                
- Resume a suite from a checkpoint.                                              
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --checkpoint             TEXT       Checkpoint id to resume (required).      │
-│ --fixture-root           DIRECTORY  Optional fixture root override           │
-│                                     (tests/lab).                             │
-│ --keep-last              INTEGER    Checkpoint retention bound per suite     │
-│                                     family (default 10).                     │
-│                                     [default: 10]                            │
-│ --keep-checkpoint                   Retain this run's checkpoint even after  │
-│                                     success.                                 │
-│ --gold-mode              TEXT       Gold comparison mode. [default: strict]  │
-│ --json                              Emit cli_output_envelope_v1 on stdout.   │
-│ --help                              Show this message and exit.              │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval resume [OPTIONS]
+
+ Continue an unfinished evaluation from a checkpoint.
+
+ Does not change how commits are ranked. Requires --checkpoint from a prior run.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --checkpoint             TEXT       Checkpoint id from a prior suite run (required).                                 │
+│ --fixture-root           DIRECTORY  Optional alternate fixture directory (for tests/lab layouts).                    │
+│ --keep-last              INTEGER    How many recent checkpoints to keep per suite family (default: 10).              │
+│                                     [default: 10]                                                                    │
+│ --keep-checkpoint                   Keep this run's checkpoint even when the run succeeds.                           │
+│ --gold-mode              TEXT       How tightly to compare against reference answers (default: strict).              │
+│                                     [default: strict]                                                                │
+│ --json                              Print machine-readable JSON instead of plain text.                               │
+│ --detail                            Show detailed help text and exit.                                                │
+│ --help                              Show this message and exit.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

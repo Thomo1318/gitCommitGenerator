@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval failures …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-List failing cases with metric and failure ids. Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``, ``--severity``) are AND-combined and documented in the API map. The base unfiltered list remains the S6-D01 contract.
+List failing cases with metric and failure ids.
 
 ## Authority boundary
 
@@ -14,26 +14,22 @@ List failing cases with metric and failure ids. Optional NTH-02 filters (``--reg
 ## Help
 
 ```text
-Usage: git-cg eval failures [OPTIONS]                                                      
-                                                                                
- List failing cases with metric and failure ids.                                
-                                                                                
- Optional NTH-02 filters (``--regime``, ``--family``, ``--failure-id``,         
- ``--severity``) are AND-combined and documented in the API map. The base       
- unfiltered list remains the S6-D01 contract.                                   
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --experiment-id        TEXT  Experiment id (defaults to latest local run).   │
-│ --regime               TEXT  Deterministic filter: regime label from         │
-│                              fingerprint inputs (e.g. A|B).                  │
-│ --family               TEXT  Deterministic filter: score family (e.g.        │
-│                              I|H|gate).                                      │
-│ --failure-id           TEXT  Deterministic filter: require this failure_id   │
-│                              on a failing score.                             │
-│ --severity             TEXT  Deterministic filter: block|warn|info.          │
-│ --json                       Emit cli_output_envelope_v1 on stdout.          │
-│ --help                       Show this message and exit.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval failures [OPTIONS]
+
+ List failing cases with metric and failure ids.
+
+ Local read-only. Does not re-score, promote gold, or change commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --experiment-id        TEXT  Experiment id (defaults to latest local run).                                           │
+│ --regime               TEXT  Keep cases matching this regime label (e.g. A|B).                                       │
+│ --family               TEXT  Keep cases matching this score family (e.g. I|H|gate).                                  │
+│ --failure-id           TEXT  Keep cases that include this failure id.                                                │
+│ --severity             TEXT  Keep cases matching this severity (block|warn|info).                                    │
+│ --json                       Print machine-readable JSON instead of plain text.                                      │
+│ --detail                     Show detailed help text and exit.                                                       │
+│ --help                       Show this message and exit.                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

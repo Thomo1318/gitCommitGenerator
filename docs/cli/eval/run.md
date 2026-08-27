@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval run …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Run an offline evaluation suite.
+Run a local offline evaluation suite.
 
 ## Authority boundary
 
@@ -14,43 +14,34 @@ Run an offline evaluation suite.
 ## Help
 
 ```text
-Usage: git-cg eval run [OPTIONS]                                                           
-                                                                                
- Run an offline evaluation suite.                                               
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --suite                          TEXT       Suite id to run (default:        │
-│                                             cm-eval-fixtures-core).          │
-│                                             [default: cm-eval-fixtures-core] │
-│ --fixture-root                   DIRECTORY  Optional fixture root override   │
-│                                             (tests/lab).                     │
-│ --mode                           TEXT       Run mode: fresh_suite_run |      │
-│                                             resume_missing |                 │
-│                                             recompute_scores |               │
-│                                             replay_generation | export_only. │
-│                                             [default: fresh_suite_run]       │
-│ --keep-last                      INTEGER    Checkpoint retention bound per   │
-│                                             suite family (default 10).       │
-│                                             [default: 10]                    │
-│ --keep-checkpoint                           Retain this run's checkpoint     │
-│                                             even after success.              │
-│ --gold-mode                      TEXT       Gold comparison mode.            │
-│                                             [default: strict]                │
-│ --case                           TEXT       Optional comma-separated case id │
-│                                             filter (triage/lab only; not CI  │
-│                                             golden).                         │
-│ --experiment                     TEXT       Required for export_only /       │
-│                                             optional parent for recompute    │
-│                                             via run --mode.                  │
-│ --checkpoint                     TEXT       Checkpoint id when --mode        │
-│                                             resume_missing.                  │
-│ --allow-replay-generation                   Explicit gate for                │
-│                                             replay_generation (refused by    │
-│                                             default).                        │
-│ --json                                      Emit cli_output_envelope_v1 on   │
-│                                             stdout.                          │
-│ --help                                      Show this message and exit.      │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval run [OPTIONS]
+
+ Run a local offline evaluation suite.
+
+ Does not change how commits are ranked. Default mode starts a fresh suite run.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --suite                          TEXT       Which fixture suite to run (default: cm-eval-fixtures-core).             │
+│                                             [default: cm-eval-fixtures-core]                                         │
+│ --fixture-root                   DIRECTORY  Optional alternate fixture directory (for tests/lab layouts).            │
+│ --mode                           TEXT       How to run: fresh_suite_run (default), resume_missing, recompute_scores, │
+│                                             replay_generation, or export_only.                                       │
+│                                             [default: fresh_suite_run]                                               │
+│ --keep-last                      INTEGER    How many recent checkpoints to keep per suite family (default: 10).      │
+│                                             [default: 10]                                                            │
+│ --keep-checkpoint                           Keep this run's checkpoint even when the run succeeds.                   │
+│ --gold-mode                      TEXT       How tightly to compare against reference answers (default: strict).      │
+│                                             [default: strict]                                                        │
+│ --case                           TEXT       Limit to specific case ids (comma-separated). Lab/triage only, not CI    │
+│                                             golden.                                                                  │
+│ --experiment                     TEXT       Existing experiment id (required for export_only; optional parent for    │
+│                                             recompute_scores).                                                       │
+│ --checkpoint                     TEXT       Checkpoint id to continue (used with --mode resume_missing).             │
+│ --allow-replay-generation                   Allow replay_generation mode (blocked unless you set this).              │
+│ --json                                      Print machine-readable JSON instead of plain text.                       │
+│ --detail                                    Show detailed help text and exit.                                        │
+│ --help                                      Show this message and exit.                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

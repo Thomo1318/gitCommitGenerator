@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval config …`  
 > **Kind:** `command` · **Status:** deprecated alias → `eval opik config show`
 
-Alias of eval opik config show. Removal target: first minor release after S6 GA.
+Alias of eval opik config show.
 
 ## Authority boundary
 
@@ -14,20 +14,21 @@ Alias of eval opik config show. Removal target: first minor release after S6 GA.
 ## Help
 
 ```text
-Usage: git-cg eval config [OPTIONS] ACTION                                                 
-                                                                                
- (deprecated)                                                                   
- Alias of eval opik config show.                                                
-                                                                                
- Removal target: first minor release after S6 GA.                               
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    action      TEXT  Subcommand: show [required]                           │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json          Emit cli_output_envelope_v1 on stdout.                       │
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval config [OPTIONS] ACTION
+
+ (deprecated)
+ Alias of eval opik config show.
+
+ Temporary compatibility shim. Prefer the nested canonical path.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    action      TEXT  Only 'show' is supported on this temporary alias. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json            Print machine-readable JSON instead of plain text.                                                 │
+│ --detail          Show detailed help text and exit.                                                                  │
+│ --help            Show this message and exit.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

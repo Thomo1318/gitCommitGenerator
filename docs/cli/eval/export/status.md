@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval export status …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Show export-queue status (read-only, offline). Never mutates the queue and never contacts Opik or the network.
+Show export-queue status (read-only, offline).
 
 ## Authority boundary
 
@@ -14,17 +14,18 @@ Show export-queue status (read-only, offline). Never mutates the queue and never
 ## Help
 
 ```text
-Usage: git-cg eval export status [OPTIONS]                                                        
-                                                                                
- Show export-queue status (read-only, offline).                                 
-                                                                                
- Never mutates the queue and never contacts Opik or the network.                
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root        DIRECTORY  Repo root (defaults to discovery).                  │
-│ --json                   Emit cli_output_envelope_v1 on stdout.              │
-│ --help                   Show this message and exit.                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval export status [OPTIONS]
+
+ Show export-queue status (read-only, offline).
+
+ Never mutates the queue and never contacts Opik or the network.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --root          DIRECTORY  Repo root (defaults to discovery).                                                        │
+│ --json                     Print machine-readable JSON instead of plain text.                                        │
+│ --detail                   Show detailed help text and exit.                                                         │
+│ --help                     Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

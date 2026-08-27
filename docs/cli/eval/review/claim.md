@@ -14,19 +14,22 @@ Claim a pending review item (pending → in_review).
 ## Help
 
 ```text
-Usage: git-cg eval review claim [OPTIONS] REVIEW_ID                                               
-                                                                                
- Claim a pending review item (pending → in_review).                             
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    review_id      TEXT  Review id. [required]                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --reviewer        TEXT  Opaque local reviewer handle. [required]          │
-│    --dry-run               Validate without writing.                         │
-│    --json                  Emit cli_output_envelope_v1 on stdout.            │
-│    --help                  Show this message and exit.                       │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval review claim [OPTIONS] REVIEW_ID
+
+ Claim a pending review item (pending → in_review).
+
+ Local queue state only. Never writes gold or changes product commit ranking.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    review_id      TEXT  Review id. [required]                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --reviewer        TEXT  Opaque local reviewer handle. [required]                                                  │
+│    --dry-run               Validate without writing.                                                                 │
+│    --json                  Print machine-readable JSON instead of plain text.                                        │
+│    --detail                Show detailed help text and exit.                                                         │
+│    --help                  Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

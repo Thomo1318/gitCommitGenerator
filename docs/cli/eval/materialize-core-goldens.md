@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval materialize-core-goldens …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Rebuild the checked-in evaluation reference files used by tests. Writes the main reference bundles and snapshot into the fixture directory (default: tests/fixtures/eval). If optional archive fixtures exist there, those are rebuilt too. Local disk only — does not run evaluations and does not change how commits are ranked. Use after you change eval fixtures and need the checked-in reference outputs refreshed. Prints the paths written and how many bundles were produced.
+Rebuild checked-in evaluation reference files used by tests.
 
 ## Authority boundary
 
@@ -14,23 +14,17 @@ Rebuild the checked-in evaluation reference files used by tests. Writes the main
 ## Help
 
 ```text
-Usage: git-cg eval materialize-core-goldens [OPTIONS]                                      
-                                                                                
- Rebuild the checked-in evaluation reference files used by tests.               
-                                                                                
- Writes the main reference bundles and snapshot into the fixture directory      
- (default: tests/fixtures/eval). If optional archive fixtures exist there,      
- those are rebuilt too. Local disk only — does not run evaluations and does     
- not change how commits are ranked.                                             
-                                                                                
- Use after you change eval fixtures and need the checked-in reference outputs   
- refreshed. Prints the paths written and how many bundles were produced.        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root        DIRECTORY  Directory to write into (default:                   │
-│                          tests/fixtures/eval).                               │
-│ --help                   Show this message and exit.                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval materialize-core-goldens [OPTIONS]
+
+ Rebuild the checked-in evaluation reference files used by tests.
+
+ Local disk only. Does not run evaluations or change commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --root          DIRECTORY  Directory to write into (default: tests/fixtures/eval).                                   │
+│ --detail                   Show detailed help text and exit.                                                         │
+│ --help                     Show this message and exit.                                                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

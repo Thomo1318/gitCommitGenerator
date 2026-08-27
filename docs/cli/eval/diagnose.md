@@ -14,25 +14,25 @@ Create or update a diagnostic issue from a failure.
 ## Help
 
 ```text
-Usage: git-cg eval diagnose [OPTIONS]                                                      
-                                                                                
- Create or update a diagnostic issue from a failure.                            
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --experiment-id         TEXT  Experiment id (defaults to latest local run).  │
-│ --case                  TEXT  Case id within the experiment.                 │
-│ --code                  TEXT  Diagnostic code (defaults to first             │
-│                               failure_id).                                   │
-│ --title                 TEXT  Issue title.                                   │
-│ --product-impact        TEXT  accept_path|golden|train|export|docs|unknown.  │
-│                               [default: unknown]                             │
-│ --owner                 TEXT  Issue owner.                                   │
-│ --notes                 TEXT  Free-text notes.                               │
-│ --dry-run                     Validate + project issue without writing       │
-│                               issues/diagnostics.                            │
-│ --json                        Emit cli_output_envelope_v1 on stdout.         │
-│ --help                        Show this message and exit.                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval diagnose [OPTIONS]
+
+ Create or update a diagnostic issue from a failure.
+
+ Builds a local diagnostic issue record. Does not change commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --experiment-id         TEXT  Experiment id (defaults to latest local run).                                          │
+│ --case                  TEXT  Case id within the experiment.                                                         │
+│ --code                  TEXT  Diagnostic code (defaults to the first failure id).                                    │
+│ --title                 TEXT  Optional issue title override.                                                         │
+│ --product-impact        TEXT  Impact area: accept_path|golden|train|export|docs|unknown. [default: unknown]          │
+│ --owner                 TEXT  Optional issue owner handle.                                                           │
+│ --notes                 TEXT  Optional free-text notes for the issue.                                                │
+│ --dry-run                     Validate and project the issue without writing files.                                  │
+│ --json                        Print machine-readable JSON instead of plain text.                                     │
+│ --detail                      Show detailed help text and exit.                                                      │
+│ --help                        Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

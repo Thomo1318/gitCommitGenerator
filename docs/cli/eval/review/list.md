@@ -14,15 +14,19 @@ List local review-queue items.
 ## Help
 
 ```text
-Usage: git-cg eval review list [OPTIONS]                                                          
-                                                                                
- List local review-queue items.                                                 
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --status        TEXT  Filter: pending|in_review|adjudicated|dismissed.       │
-│ --json                Emit cli_output_envelope_v1 on stdout.                 │
-│ --help                Show this message and exit.                            │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval review list [OPTIONS]
+
+ List local review-queue items.
+
+ Read-only inspection of the advisory queue. Never writes gold or changes
+ product commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --status        TEXT  Filter: pending|in_review|adjudicated|dismissed.                                               │
+│ --json                Print machine-readable JSON instead of plain text.                                             │
+│ --detail              Show detailed help text and exit.                                                              │
+│ --help                Show this message and exit.                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

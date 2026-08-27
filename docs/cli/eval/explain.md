@@ -14,16 +14,19 @@ Show a deterministic explanation for a failing case.
 ## Help
 
 ```text
-Usage: git-cg eval explain [OPTIONS]                                                       
-                                                                                
- Show a deterministic explanation for a failing case.                           
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --experiment-id        TEXT  Experiment id (defaults to latest local run).   │
-│ --case                 TEXT  Case id within the experiment.                  │
-│ --json                       Emit cli_output_envelope_v1 on stdout.          │
-│ --help                       Show this message and exit.                     │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval explain [OPTIONS]
+
+ Show a deterministic explanation for a failing case.
+
+ Local read-only. Does not re-score, promote gold, or change commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --experiment-id        TEXT  Experiment id (defaults to latest local run).                                           │
+│ --case                 TEXT  Case id within the experiment (required when multiple fail).                            │
+│ --json                       Print machine-readable JSON instead of plain text.                                      │
+│ --detail                     Show detailed help text and exit.                                                       │
+│ --help                       Show this message and exit.                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

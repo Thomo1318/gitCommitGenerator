@@ -14,19 +14,22 @@ Alias of eval export retry.
 ## Help
 
 ```text
-Usage: git-cg eval export-retry [OPTIONS]                                                  
-                                                                                
- (deprecated)                                                                   
- Alias of eval export retry.                                                    
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root             DIRECTORY                                                 │
-│ --id               TEXT                                                      │
-│ --force                                                                      │
-│ --max-items        INTEGER                                                   │
-│ --json                                                                       │
-│ --help                        Show this message and exit.                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval export-retry [OPTIONS]
+
+ (deprecated)
+ Alias of eval export retry.
+
+ Temporary dashed alias. Prefer the nested canonical path.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --root             DIRECTORY  Repo root (defaults to discovery).                                                     │
+│ --id               TEXT       Retry a single failed queue id (default: all failed rows).                             │
+│ --force                       Also retry validation/auth/size failures.                                              │
+│ --max-items        INTEGER    Cap on failed rows re-queued this invocation.                                          │
+│ --json                        Print machine-readable JSON instead of plain text.                                     │
+│ --detail                      Show detailed help text and exit.                                                      │
+│ --help                        Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

@@ -57,8 +57,14 @@ nav = [
                 { "dismiss" = "cli/eval/review/dismiss.md" },
                 { "rollup" = "cli/eval/review/rollup.md" },
             ] },
-            { "session show" = "cli/eval/session/show.md" },
-            { "thread show" = "cli/eval/thread/show.md" },
+            { "session" = [
+                { "Overview" = "cli/eval/session.md" },
+                { "show" = "cli/eval/session/show.md" },
+            ] },
+            { "thread" = [
+                { "Overview" = "cli/eval/thread.md" },
+                { "show" = "cli/eval/thread/show.md" },
+            ] },
             { "issue" = [
                 { "Overview" = "cli/eval/issue.md" },
                 { "list" = "cli/eval/issue/list.md" },

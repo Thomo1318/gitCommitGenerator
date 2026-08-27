@@ -14,18 +14,21 @@ Diff two cases (structure and metrics).
 ## Help
 
 ```text
-Usage: git-cg eval compare [OPTIONS]                                                       
-                                                                                
- Diff two cases (structure and metrics).                                        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --a-experiment-id        TEXT  Left experiment id. [required]             │
-│ *  --a-case                 TEXT  Left case id. [required]                   │
-│ *  --b-experiment-id        TEXT  Right experiment id. [required]            │
-│ *  --b-case                 TEXT  Right case id. [required]                  │
-│    --json                         Emit cli_output_envelope_v1 on stdout.     │
-│    --help                         Show this message and exit.                │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval compare [OPTIONS]
+
+ Diff two cases (structure and metrics).
+
+ Local read-only. Does not replay, re-score, or change commit ranking.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --a-experiment-id        TEXT  Left experiment id (required). [required]                                          │
+│ *  --a-case                 TEXT  Left case id (required). [required]                                                │
+│ *  --b-experiment-id        TEXT  Right experiment id (required). [required]                                         │
+│ *  --b-case                 TEXT  Right case id (required). [required]                                               │
+│    --json                         Print machine-readable JSON instead of plain text.                                 │
+│    --detail                       Show detailed help text and exit.                                                  │
+│    --help                         Show this message and exit.                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

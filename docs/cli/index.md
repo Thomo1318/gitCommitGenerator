@@ -26,74 +26,43 @@ This reference mirrors the live Typer tree (same source of truth as `docs/eval/o
 ## Global flags
 
 ```text
-Usage: git-cg [OPTIONS] COMMAND [ARGS]...                                        
-                                                                                
- GitOps AI Commit Generator and Release Automation                              
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --interactive      -i                                Enable terminal-native  │
-│                                                      interactive review via  │
-│                                                      gum.                    │
-│ --term             -t                                Use Terminal Editor     │
-│                                                      ($EDITOR) when editing  │
-│                                                      commit messages         │
-│                                                      (Default).              │
-│                                                      [default: True]         │
-│ --gui              -g                                Use GUI Editor          │
-│                                                      ($VISUAL) when editing  │
-│                                                      commit messages.        │
-│ --enable-semantic      --no-enable-semantic          Enable Phase 1 semantic │
-│                                                      producers (default:     │
-│                                                      GIT_CG_ENABLE_SEMANTIC  │
-│                                                      env or off).            │
-│ --rank-arbitrate       --no-rank-arbitrate           Allow Low-confidence    │
-│                                                      pre-LLM intent          │
-│                                                      arbitration when -i +   │
-│                                                      TTY (default:           │
-│                                                      GIT_CG_RANK_ARBITRATE   │
-│                                                      env or auto).           │
-│ --gold-strict                                        Resolve gold lint to    │
-│                                                      strict mode without     │
-│                                                      enabling general        │
-│                                                      --strict.               │
-│ --blueprint                                    TEXT  Optional presentation   │
-│                                                      CommitBlueprint as      │
-│                                                      inline JSON or          │
-│                                                      @path.json (max 64KiB;  │
-│                                                      never overrides ranked  │
-│                                                      intent_id).             │
-│ --engine           -e                          TEXT  AI engine to use when   │
-│                                                      running git-cg          │
-│                                                      directly.               │
-│                                                      [default: mtplx]        │
-│ --dry-run          -d                                Generate and print the  │
-│                                                      commit message without  │
-│                                                      applying a commit.      │
-│ --verbose          -v                                Enable verbose output.  │
-│ --strict                                             Exit non-zero on        │
-│                                                      failure for standalone  │
-│                                                      CLI use.                │
-│                                                      [default: True]         │
-│ --recover          -r                                Recover and retry the   │
-│                                                      last generated commit   │
-│                                                      message without         │
-│                                                      querying the AI.        │
-│ --help                                               Show this message and   │
-│                                                      exit.                   │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ commit            Generate an AI commit message based on staged changes.     │
-│ preflight         Print a read-only diff-class / path-class preflight        │
-│                   summary (Issue #204).                                      │
-│ sop               Display the GitOps SOP matrices and workflows.             │
-│ release           Run the release workflow.                                  │
-│ record-telemetry  Record final commit telemetry and bind accepted final      │
-│                   bytes (S3).                                                │
-│ evals             Manage and run the git-cg evals benchmarking suite         │
-│ eval              Run and inspect local evaluation suites, debug failures,   │
-│                   manage review/sessions, and operate the export queue. Does │
-│                   not change product commit ranking.                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg [OPTIONS] COMMAND [ARGS]...
+
+ GitOps AI Commit Generator and Release Automation
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --interactive      -i                                Enable terminal-native interactive review via gum.              │
+│ --term             -t                                Use Terminal Editor ($EDITOR) when editing commit messages      │
+│                                                      (Default).                                                      │
+│                                                      [default: True]                                                 │
+│ --gui              -g                                Use GUI Editor ($VISUAL) when editing commit messages.          │
+│ --enable-semantic      --no-enable-semantic          Enable Phase 1 semantic producers (default:                     │
+│                                                      GIT_CG_ENABLE_SEMANTIC env or off).                             │
+│ --rank-arbitrate       --no-rank-arbitrate           Allow Low-confidence pre-LLM intent arbitration when -i + TTY   │
+│                                                      (default: GIT_CG_RANK_ARBITRATE env or auto).                   │
+│ --gold-strict                                        Resolve gold lint to strict mode without enabling general       │
+│                                                      --strict.                                                       │
+│ --blueprint                                    TEXT  Optional presentation CommitBlueprint as inline JSON or         │
+│                                                      @path.json (max 64KiB; never overrides ranked intent_id).       │
+│ --engine           -e                          TEXT  AI engine to use when running git-cg directly. [default: mtplx] │
+│ --dry-run          -d                                Generate and print the commit message without applying a        │
+│                                                      commit.                                                         │
+│ --verbose          -v                                Enable verbose output.                                          │
+│ --strict                                             Exit non-zero on failure for standalone CLI use.                │
+│                                                      [default: True]                                                 │
+│ --recover          -r                                Recover and retry the last generated commit message without     │
+│                                                      querying the AI.                                                │
+│ --help                                               Show this message and exit.                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ commit            Generate an AI commit message based on staged changes.                                             │
+│ preflight         Print a read-only diff-class / path-class preflight summary (Issue #204).                          │
+│ sop               Display the GitOps SOP matrices and workflows.                                                     │
+│ release           Run the release workflow.                                                                          │
+│ record-telemetry  Record final commit telemetry and bind accepted final bytes (S3).                                  │
+│ evals             Manage and run the git-cg evals benchmarking suite                                                 │
+│ eval              Run and inspect local evaluation suites without changing product ranking.                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Evaluation harness (`git-cg eval`)
@@ -132,26 +101,26 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 ### Groups and aliases
 
 * **`git-cg eval amend-brief`**
-  * [`git-cg eval amend-brief`](eval/amend-brief.md) — Build an amend brief from landed evaluation data. Advisory authority: summarizes score/failure/regim
+  * [`git-cg eval amend-brief`](eval/amend-brief.md) — Build an amend brief from landed evaluation data.
 * **`git-cg eval compare`**
   * [`git-cg eval compare`](eval/compare.md) — Diff two cases (structure and metrics).
 * **`git-cg eval config`**
-  * [`git-cg eval config`](eval/config.md) — Alias of eval opik config show. Removal target: first minor release after S6 GA.
+  * [`git-cg eval config`](eval/config.md) — Alias of eval opik config show.
 * **`git-cg eval diagnose`**
   * [`git-cg eval diagnose`](eval/diagnose.md) — Create or update a diagnostic issue from a failure.
 * **`git-cg eval doctor`**
-  * [`git-cg eval doctor`](eval/doctor.md) — Check local suite health (pins, metrics, fixtures). Offline, network-free. Fail-closed on floating `
+  * [`git-cg eval doctor`](eval/doctor.md) — Check local suite health (pins, metrics, fixtures).
 * **`git-cg eval dogfood`**
-  * [`git-cg eval dogfood`](eval/dogfood.md) — Capture Lane C dogfood evidence for a candidate commit message. Dark-launched maintainer/operator su
+  * [`git-cg eval dogfood`](eval/dogfood.md) — Capture Lane C dogfood evidence for a candidate commit message.
 * **`git-cg eval encode-fixture`**
-  * [`git-cg eval encode-fixture`](eval/encode-fixture.md) — Encode a fixture and print its identity summary. Requires exactly one of ``--path`` or ``--id``; exi
+  * [`git-cg eval encode-fixture`](eval/encode-fixture.md) — Print stable identity hashes for one evaluation fixture.
 * **`git-cg eval explain`**
   * [`git-cg eval explain`](eval/explain.md) — Show a deterministic explanation for a failing case.
 * **`git-cg eval export`**
   * [`git-cg eval export`](eval/export.md) — Export-queue status, retry, and drain.
-  * [`git-cg eval export drain`](eval/export/drain.md) — Drain the export queue through the Opik transport. Always exits 0 unless the config is invalid (fail
-  * [`git-cg eval export retry`](eval/export/retry.md) — Re-queue failed export rows for another drain attempt. Default policy: reclaim rows whose last_error
-  * [`git-cg eval export status`](eval/export/status.md) — Show export-queue status (read-only, offline). Never mutates the queue and never contacts Opik or th
+  * [`git-cg eval export drain`](eval/export/drain.md) — Drain the export queue through the Opik transport.
+  * [`git-cg eval export retry`](eval/export/retry.md) — Re-queue failed export rows for another drain attempt.
+  * [`git-cg eval export status`](eval/export/status.md) — Show export-queue status (read-only, offline).
 * **`git-cg eval export-drain`**
   * [`git-cg eval export-drain`](eval/export-drain.md) — Alias of eval export drain.
 * **`git-cg eval export-retry`**
@@ -159,21 +128,21 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 * **`git-cg eval export-status`**
   * [`git-cg eval export-status`](eval/export-status.md) — Alias of eval export status.
 * **`git-cg eval failures`**
-  * [`git-cg eval failures`](eval/failures.md) — List failing cases with metric and failure ids. Optional NTH-02 filters (``--regime``, ``--family``,
+  * [`git-cg eval failures`](eval/failures.md) — List failing cases with metric and failure ids.
 * **`git-cg eval issue`**
   * [`git-cg eval issue`](eval/issue.md) — Manage local diagnostic issues.
-  * [`git-cg eval issue list`](eval/issue/list.md) — List local diagnostic issues (newest last_seen first).
-  * [`git-cg eval issue reopen`](eval/issue/reopen.md) — Reopen a previously resolved/suppressed local diagnostic issue.
-  * [`git-cg eval issue resolve`](eval/issue/resolve.md) — Mark a local diagnostic issue resolved (requires --resolution-evidence).
+  * [`git-cg eval issue list`](eval/issue/list.md) — List local diagnostic issues.
+  * [`git-cg eval issue reopen`](eval/issue/reopen.md) — Reopen a local diagnostic issue.
+  * [`git-cg eval issue resolve`](eval/issue/resolve.md) — Mark a local diagnostic issue resolved.
   * [`git-cg eval issue show`](eval/issue/show.md) — Show one local diagnostic issue.
-  * [`git-cg eval issue suppress`](eval/issue/suppress.md) — Suppress a local diagnostic issue (requires --reason).
+  * [`git-cg eval issue suppress`](eval/issue/suppress.md) — Suppress a local diagnostic issue.
 * **`git-cg eval materialize-core-goldens`**
-  * [`git-cg eval materialize-core-goldens`](eval/materialize-core-goldens.md) — Rebuild the checked-in evaluation reference files used by tests. Writes the main reference bundles a
+  * [`git-cg eval materialize-core-goldens`](eval/materialize-core-goldens.md) — Rebuild checked-in evaluation reference files used by tests.
 * **`git-cg eval opik`**
   * [`git-cg eval opik`](eval/opik.md) — Opik health checks and secret-safe config.
   * [`git-cg eval opik config`](eval/opik/config.md) — Inspect Opik/mirror config without exposing secrets.
   * [`git-cg eval opik config show`](eval/opik/config/show.md) — Show resolved Opik/mirror config without secrets.
-  * [`git-cg eval opik doctor`](eval/opik/doctor.md) — Check Opik/export health without exposing secrets. Inspects resolved config / export health / queue 
+  * [`git-cg eval opik doctor`](eval/opik/doctor.md) — Check Opik/export health without exposing secrets.
 * **`git-cg eval promote`**
   * [`git-cg eval promote`](eval/promote.md) — Promote a scrubbed candidate with contamination checks.
 * **`git-cg eval recompute-scores`**
@@ -181,7 +150,7 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 * **`git-cg eval replay`**
   * [`git-cg eval replay`](eval/replay.md) — Replay generation into a new bundle (source unchanged).
 * **`git-cg eval resume`**
-  * [`git-cg eval resume`](eval/resume.md) — Resume a suite from a checkpoint.
+  * [`git-cg eval resume`](eval/resume.md) — Continue an unfinished evaluation from a checkpoint.
 * **`git-cg eval review`**
   * [`git-cg eval review`](eval/review.md) — Local human review queue (advisory only).
   * [`git-cg eval review adjudicate`](eval/review/adjudicate.md) — Adjudicate an in_review item (emits typed outcome_ref; never writes gold).
@@ -189,20 +158,20 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
   * [`git-cg eval review dismiss`](eval/review/dismiss.md) — Dismiss a pending/in_review item (terminal).
   * [`git-cg eval review enqueue`](eval/review/enqueue.md) — Enqueue an advisory human-review item.
   * [`git-cg eval review list`](eval/review/list.md) — List local review-queue items.
-  * [`git-cg eval review rollup`](eval/review/rollup.md) — Roll up multi-rater advisory scores for review items. Read-only dimension/outcome majority + craft s
+  * [`git-cg eval review rollup`](eval/review/rollup.md) — Roll up multi-rater advisory scores for review items.
   * [`git-cg eval review show`](eval/review/show.md) — Show one local review-queue item.
 * **`git-cg eval run`**
-  * [`git-cg eval run`](eval/run.md) — Run an offline evaluation suite.
+  * [`git-cg eval run`](eval/run.md) — Run a local offline evaluation suite.
 * **`git-cg eval session`**
   * [`git-cg eval session`](eval/session.md) — Inspect local commit sessions.
-  * [`git-cg eval session show`](eval/session/show.md) — Show one local commit session. Read-only: no Opik reach, no chat timeline, no graph browser, no acce
+  * [`git-cg eval session show`](eval/session/show.md) — Show one local commit session.
 * **`git-cg eval thread`**
   * [`git-cg eval thread`](eval/thread.md) — Inspect local session threads.
-  * [`git-cg eval thread show`](eval/thread/show.md) — Show one local session thread. Read-only: no Opik reach, no chat timeline, no graph browser, no acce
+  * [`git-cg eval thread show`](eval/thread/show.md) — Show one local session thread.
 * **`git-cg eval train-export`**
-  * [`git-cg eval train-export`](eval/train-export.md) — Export redacted training rows from landed bundles. Row scrub-failure policy: drop + report (scrub_re
+  * [`git-cg eval train-export`](eval/train-export.md) — Export redacted training rows from landed bundles.
 * **`git-cg eval triage`**
-  * [`git-cg eval triage`](eval/triage.md) — One-shot advisory view: doctor + failures + explain. Composes library engines only — never nests Typ
+  * [`git-cg eval triage`](eval/triage.md) — One-shot advisory view: doctor + failures + explain.
 
 ## Stability tiers
 

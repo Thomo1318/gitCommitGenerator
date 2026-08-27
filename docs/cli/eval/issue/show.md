@@ -14,17 +14,21 @@ Show one local diagnostic issue.
 ## Help
 
 ```text
-Usage: git-cg eval issue show [OPTIONS] ISSUE_ID                                                 
-                                                                                
- Show one local diagnostic issue.                                               
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    issue_id      TEXT  Issue id. [required]                                │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json          Emit cli_output_envelope_v1 on stdout.                       │
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval issue show [OPTIONS] ISSUE_ID
+
+ Show one local diagnostic issue.
+
+ Read-only inspection of a single diagnostic issue. Does not change commit
+ ranking or gold.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    issue_id      TEXT  Issue id. [required]                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --json            Print machine-readable JSON instead of plain text.                                                 │
+│ --detail          Show detailed help text and exit.                                                                  │
+│ --help            Show this message and exit.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

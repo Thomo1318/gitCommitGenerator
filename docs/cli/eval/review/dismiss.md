@@ -14,20 +14,23 @@ Dismiss a pending/in_review item (terminal).
 ## Help
 
 ```text
-Usage: git-cg eval review dismiss [OPTIONS] REVIEW_ID                                             
-                                                                                
- Dismiss a pending/in_review item (terminal).                                   
-                                                                                
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    review_id      TEXT  Review id. [required]                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --reason             TEXT  Required dismissal reason. [required]          │
-│    --adjudicator        TEXT  Opaque adjudicator handle.                     │
-│    --dry-run                  Validate without writing.                      │
-│    --json                     Emit cli_output_envelope_v1 on stdout.         │
-│    --help                     Show this message and exit.                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval review dismiss [OPTIONS] REVIEW_ID
+
+ Dismiss a pending/in_review item (terminal).
+
+ Closes without promotion. Never writes gold or changes product commit ranking.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    review_id      TEXT  Review id. [required]                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --reason             TEXT  Required dismissal reason. [required]                                                  │
+│    --adjudicator        TEXT  Opaque adjudicator handle.                                                             │
+│    --dry-run                  Validate without writing.                                                              │
+│    --json                     Print machine-readable JSON instead of plain text.                                     │
+│    --detail                   Show detailed help text and exit.                                                      │
+│    --help                     Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

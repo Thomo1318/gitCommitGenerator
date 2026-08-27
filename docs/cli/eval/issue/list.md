@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval issue list …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-List local diagnostic issues (newest last_seen first).
+List local diagnostic issues.
 
 ## Authority boundary
 
@@ -14,16 +14,19 @@ List local diagnostic issues (newest last_seen first).
 ## Help
 
 ```text
-Usage: git-cg eval issue list [OPTIONS]                                                          
-                                                                                
- List local diagnostic issues (newest last_seen first).                         
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --status        TEXT  Filter by status                                       │
-│                       (open|acknowledged|resolved|suppressed|reopened).      │
-│ --json                Emit cli_output_envelope_v1 on stdout.                 │
-│ --help                Show this message and exit.                            │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval issue list [OPTIONS]
+
+ List local diagnostic issues.
+
+ Read-only inspection of local diagnostic issues created from eval failures.
+ Newest ``last_seen`` first. Does not change commit ranking or gold.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --status        TEXT  Filter by status (open|acknowledged|resolved|suppressed|reopened).                             │
+│ --json                Print machine-readable JSON instead of plain text.                                             │
+│ --detail              Show detailed help text and exit.                                                              │
+│ --help                Show this message and exit.                                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

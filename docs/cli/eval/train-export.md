@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval train-export …`  
 > **Kind:** `command` · **Status:** canonical S6 surface
 
-Export redacted training rows from landed bundles. Row scrub-failure policy: drop + report (scrub_report) + continue; never emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of ``--no-write`` (validate + would-write summary; zero store mutation).
+Export redacted training rows from landed bundles.
 
 ## Authority boundary
 
@@ -14,32 +14,26 @@ Export redacted training rows from landed bundles. Row scrub-failure policy: dro
 ## Help
 
 ```text
-Usage: git-cg eval train-export [OPTIONS]                                                  
-                                                                                
- Export redacted training rows from landed bundles.                             
-                                                                                
- Row scrub-failure policy: drop + report (scrub_report) + continue; never       
- emit cleartext; no .eval/quarantine/. Antipattern/hard-negative rows never     
- enter positive_gold (S6-G06). ``--dry-run`` is the NTH-03 alias of             
- ``--no-write`` (validate + would-write summary; zero store mutation).          
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --bundle-id                       TEXT  Bundle id(s) to export; default      │
-│                                         exports all landed bundles.          │
-│ --profile                         TEXT  Redaction profile (never             │
-│                                         raw_dev_unsafe).                     │
-│                                         [default: train_rich]                │
-│ --capture-on                      TEXT  pass|fail|all corpus eligibility.    │
-│                                         [default: all]                       │
-│ --split-group-id                  TEXT                                       │
-│ --notes                           TEXT                                       │
-│ --write             --no-write          [default: write]                     │
-│ --dry-run                               Validate + project export without    │
-│                                         writing (alias of --no-write).       │
-│ --json                                  Emit cli_output_envelope_v1 on       │
-│                                         stdout.                              │
-│ --help                                  Show this message and exit.          │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval train-export [OPTIONS]
+
+ Export redacted training rows from landed bundles.
+
+ Builds a local redacted training export. Never emits secrets cleartext.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --bundle-id                       TEXT  Bundle id(s) to export (repeatable). Default: all landed bundles.            │
+│ --profile                         TEXT  Redaction profile (default train_rich). Unsafe raw profiles are rejected.    │
+│                                         [default: train_rich]                                                        │
+│ --capture-on                      TEXT  Which rows to include: pass | fail | all (default all). [default: all]       │
+│ --split-group-id                  TEXT  Optional split-group label for the export batch.                             │
+│ --notes                           TEXT  Optional free-text notes for the export record.                              │
+│ --write             --no-write          Write export files under .eval/train_export/ (default: write).               │
+│                                         [default: write]                                                             │
+│ --dry-run                               Validate and preview paths without writing (same as --no-write).             │
+│ --json                                  Print machine-readable JSON instead of plain text.                           │
+│ --detail                                Show detailed help text and exit.                                            │
+│ --help                                  Show this message and exit.                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

@@ -14,18 +14,21 @@ Alias of eval export drain.
 ## Help
 
 ```text
-Usage: git-cg eval export-drain [OPTIONS]                                                  
-                                                                                
- (deprecated)                                                                   
- Alias of eval export drain.                                                    
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --root             DIRECTORY                                                 │
-│ --max-items        INTEGER                                                   │
-│ --dry-run                                                                    │
-│ --json                                                                       │
-│ --help                        Show this message and exit.                    │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval export-drain [OPTIONS]
+
+ (deprecated)
+ Alias of eval export drain.
+
+ Temporary dashed alias. Prefer the nested canonical path.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --root             DIRECTORY  Repo root (defaults to discovery).                                                     │
+│ --max-items        INTEGER    Cap on rows processed this drain.                                                      │
+│ --dry-run                     Resolve config + list pending rows; no upload.                                         │
+│ --json                        Print machine-readable JSON instead of plain text.                                     │
+│ --detail                      Show detailed help text and exit.                                                      │
+│ --help                        Show this message and exit.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also

@@ -14,21 +14,24 @@ Inspect local session threads.
 ## Help
 
 ```text
-Usage: git-cg eval thread [OPTIONS] COMMAND [ARGS]...                                      
-                                                                                
- Inspect local session threads.                                                 
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ show  Show one local session thread.                                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval thread [OPTIONS] COMMAND [ARGS]...
+
+ Inspect local session threads.
+
+ Read-only lookup of a local session-thread record. Does not change commit ranking or gold.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --detail          Show detailed help text and exit.                                                                  │
+│ --help            Show this message and exit.                                                                        │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ show  Show one local session thread.                                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval thread show`](thread/show.md) — Show one local session thread. Read-only: no Opik reach, no chat timeline, no graph browser, no accept authority, no rerun, no ranking mutat
+* [`git-cg eval thread show`](thread/show.md) — Show one local session thread.
 
 ## See also
 

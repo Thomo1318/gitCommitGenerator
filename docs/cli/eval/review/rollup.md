@@ -3,7 +3,7 @@
 > **Usage:** `git-cg eval review rollup …`  
 > **Kind:** `command` · **Status:** command
 
-Roll up multi-rater advisory scores for review items. Read-only dimension/outcome majority + craft spread. Authority stays advisory; never sole-promotes gold.
+Roll up multi-rater advisory scores for review items.
 
 ## Authority boundary
 
@@ -14,19 +14,19 @@ Roll up multi-rater advisory scores for review items. Read-only dimension/outcom
 ## Help
 
 ```text
-Usage: git-cg eval review rollup [OPTIONS]                                                        
-                                                                                
- Roll up multi-rater advisory scores for review items.                          
-                                                                                
- Read-only dimension/outcome majority + craft spread. Authority stays           
- advisory; never sole-promotes gold.                                            
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --case             TEXT  Optional case_id filter.                            │
-│ --bundle-id        TEXT  Optional bundle_id filter.                          │
-│ --json                   Emit cli_output_envelope_v1 on stdout.              │
-│ --help                   Show this message and exit.                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Usage: git-cg eval review rollup [OPTIONS]
+
+ Roll up multi-rater advisory scores for review items.
+
+ Read-only. Authority stays advisory and never sole-promotes gold.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --case             TEXT  Optional case_id filter.                                                                    │
+│ --bundle-id        TEXT  Optional bundle_id filter.                                                                  │
+│ --json                   Print machine-readable JSON instead of plain text.                                          │
+│ --detail                 Show detailed help text and exit.                                                           │
+│ --help                   Show this message and exit.                                                                 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also
