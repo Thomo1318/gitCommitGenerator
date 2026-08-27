@@ -40,6 +40,56 @@ def _is_group(cmd: object) -> bool:
     return callable(getattr(cmd, "list_commands", None)) and callable(getattr(cmd, "get_command", None))
 
 
+def _docs_help_env() -> dict[str, str]:
+    """Environment for non-truncating, plain help capture."""
+    env = dict(os.environ)
+    # Rich/Typer truncate option names and choice lists under narrow terminals.
+    # Docs must publish complete operator-facing tokens, so pin a wide width.
+    #
+    # Typer reads TERMINAL_WIDTH into typer.rich_utils.MAX_WIDTH at import time.
+    # COLUMNS alone is not enough once the module is already imported.
+    env["TERMINAL_WIDTH"] = "120"
+    env["COLUMNS"] = "120"
+    env["TERM"] = "dumb"
+    env["NO_COLOR"] = "1"
+    env["FORCE_COLOR"] = "0"
+    env["_TYPER_FORCE_DISABLE_TERMINAL"] = "1"
+    return env
+
+
+def _force_typer_help_width(width: int = 120) -> None:
+    """Override Typer/Rich help width for docs generation after imports."""
+    os.environ["TERMINAL_WIDTH"] = str(width)
+    os.environ["COLUMNS"] = str(width)
+    try:
+        import typer.rich_utils as rich_utils
+
+        rich_utils.MAX_WIDTH = width
+        # Keep plain docs capture deterministic (no color/force-tty drift).
+        rich_utils.FORCE_TERMINAL = False
+        rich_utils.COLOR_SYSTEM = None
+    except Exception:  # pragma: no cover - defensive for alternate typer builds
+        pass
+
+
+def _plain_blurb(text: str, limit: int) -> str:
+    """Normalize help text into a plain one-line blurb for Markdown lists.
+
+    Strips inline backticks / form-feeds, collapses whitespace, and truncates on
+    a word boundary with an explicit ellipsis when the limit is exceeded.
+    """
+    cleaned = (text or "").replace("`", "").replace("\f", " ").replace("\n", " ")
+    cleaned = " ".join(cleaned.split())
+    if not cleaned:
+        return ""
+    if len(cleaned) <= limit:
+        return cleaned
+    cut = cleaned[: max(1, limit - 1)].rstrip()
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0].rstrip(" ,;:.-")
+    return f"{cut}…"
+
+
 def help_for_click(cmd: click.Command, prog: str) -> str:
     """Capture rendered help text for docs pages.
 
@@ -47,13 +97,17 @@ def help_for_click(cmd: click.Command, prog: str) -> str:
     while still rendering a full panel through the Click runner path.
     Prefer ``CliRunner`` output and normalize the synthetic usage path.
     """
-    runner = CliRunner()
+    _force_typer_help_width(120)
+    runner = CliRunner(env=_docs_help_env())
     try:
-        result = runner.invoke(cmd, ["--help"], color=False)
+        # Keep env on invoke too: some Rich builds re-read process/console width.
+        result = runner.invoke(cmd, ["--help"], color=False, env=_docs_help_env())
         text = (result.output or "").strip()
         if text:
             fixed: list[str] = []
             for line in text.splitlines():
+                # Rich help pads lines with trailing spaces; drop them for stable docs.
+                line = line.rstrip()
                 stripped = line.lstrip()
                 indent = line[: len(line) - len(stripped)]
                 if stripped.startswith("Usage:"):
@@ -70,7 +124,7 @@ def help_for_click(cmd: click.Command, prog: str) -> str:
                     else:
                         line = f"{indent}Usage: {prog}"
                 fixed.append(line)
-            return chr(10).join(fixed)
+            return chr(10).join(fixed).strip()
     except Exception as exc:  # pragma: no cover
         return f"(help unavailable: {exc})"
     ctx = click.Context(cmd, info_name=prog, color=False)
@@ -124,6 +178,7 @@ def _rel(from_file: Path, to_file: Path) -> str:
 
 
 def generate() -> None:
+    _force_typer_help_width(120)
     OUT.mkdir(parents=True, exist_ok=True)
     for p in OUT.rglob("*.md"):
         p.unlink()
@@ -264,7 +319,7 @@ def generate() -> None:
                 child_file = eval_page_path(child_path)
                 link = _rel(this_file, child_file)
                 meta = eval_meta.get(child_path)
-                blurb = (meta.help if meta else "")[:140]
+                blurb = _plain_blurb(meta.help if meta else "", 140)
                 body.append(f"* [`git-cg {child_path}`]({link}) — {blurb}")
             body.append("")
         overview_link = _rel(this_file, OUT / "index.md")
@@ -333,7 +388,7 @@ def generate() -> None:
         overview.append(f"* **`git-cg eval {top}`**")
         for path, page, _kind, _status, help_ in sorted(groups[top]):
             link = _rel(OUT / "index.md", page)
-            blurb = (help_ or "")[:100].replace("\n", " ")
+            blurb = _plain_blurb(help_ or "", 100)
             overview.append(f"  * [`git-cg {path}`]({link}) — {blurb}")
     overview += [
         "",
