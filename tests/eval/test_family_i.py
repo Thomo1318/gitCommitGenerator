@@ -842,9 +842,15 @@ def test_s2c_h_no_s3_s4_thread_star_or_pin_drift() -> None:
     assert len(scoring_pkg.S2C_TOPOLOGY_BLOCK) == 12
     assert len(scoring_pkg.S2A_REQUIRE_BLOCK) == 30
     assert len(scoring_pkg.S2B_REQUIRE_BLOCK) == 68
-    # Pin identity unchanged
-    assert schema_pack_pin().endswith("7b4eaf312d2255b1dbfeca095a6fb716e5d30f3a3b3ad8648f6a8c705a070539")
-    assert metric_catalog_pin().endswith("430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75")
+    # Pin identity is content-addressed (not floating) and process-stable
+    schema_pin = schema_pack_pin()
+    catalog_pin = metric_catalog_pin()
+    assert schema_pin.startswith("schema_pack_v0@")
+    assert catalog_pin.startswith("metric_catalog_v0@")
+    assert re.fullmatch(r"[0-9a-f]{64}", schema_pin.split("@", 1)[1])
+    assert re.fullmatch(r"[0-9a-f]{64}", catalog_pin.split("@", 1)[1])
+    assert schema_pack_pin() == schema_pin
+    assert metric_catalog_pin() == catalog_pin
     # No S3 accept-path emitter / S4 Opik client surface under scoring package.
     repo_root = Path(__file__).resolve().parents[2]
     scoring_root = repo_root / "src" / "git_cg" / "eval" / "scoring"

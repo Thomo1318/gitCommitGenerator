@@ -26,6 +26,9 @@ def test_module_exports_freeze_surface() -> None:
     assert "src/git_cg/eval/scoring/" in ecm.CANONICAL_EVAL_HOMES
     assert "src/git_cg/eval/lane_c/" in ecm.CANONICAL_EVAL_HOMES
     assert "tests/eval/" in ecm.CANONICAL_EVAL_HOMES
+    assert "git-cg eval run" in ecm.CANONICAL_EVAL_HOMES
+    assert "git-cg eval triage" in ecm.CANONICAL_EVAL_HOMES
+    assert "git-cg eval doctor" in ecm.CANONICAL_EVAL_HOMES
     assert "refuse_legacy_eval_commit_message" in ecm.__all__
     assert "evaluation_task" in ecm.__all__
     assert "main" in ecm.__all__
@@ -58,6 +61,9 @@ def test_refuse_prints_pointer_and_returns_2() -> None:
     assert "frozen" in msg or "retired" in msg or "demotion" in msg
     assert "scoring" in msg
     assert "lane_c" in msg or "lane c" in msg
+    assert "eval run" in msg
+    assert "eval triage" in msg
+    assert "eval doctor" in msg
 
 
 def test_main_refuses() -> None:

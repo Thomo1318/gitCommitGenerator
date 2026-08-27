@@ -135,51 +135,102 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_empty_string_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/human_review_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Human review attachment (advisory). S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "Human review attachment (advisory HITL row). authority is advisory only; no human review state can sole-promote gold. Frozen rating shape is the typed scores object with dotted metric keys (human.craft_rating?, human.gold_dispute?, human.regime_label?) — supersedes the open top-level rating alternative. reviewer is an opaque local handle (not email/display name).",
   "properties": {
+    "schema_version": {
+      "const": "human_review_v1"
+    },
     "id": {
       "$ref": "#/$defs/non_empty_string"
     },
-    "meta": {
-      "type": "object"
+    "review_id": {
+      "$ref": "#/$defs/non_empty_string"
     },
-    "metric_catalog": {
-      "$ref": "#/$defs/pin_ref"
-    },
-    "notes": {
+    "case_id": {
       "type": "string"
     },
-    "rating": {
-      "type": "number"
+    "bundle_id": {
+      "type": "string"
     },
     "reviewer": {
       "description": "Opaque reviewer id (not email/display name).",
       "pattern": "^[A-Za-z0-9._:-]{1,128}$",
       "type": "string"
     },
-    "schema_pack": {
-      "$ref": "#/$defs/pin_ref"
+    "reviewer_id": {
+      "description": "Alias-friendly opaque reviewer id (same constraints as reviewer).",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "type": "string"
     },
-    "schema_version": {
-      "const": "human_review_v1"
+    "created_at": {
+      "$ref": "#/$defs/iso8601"
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Typed dotted-key human.* scores (frozen shape).",
+      "properties": {
+        "human.craft_rating": {
+          "type": "number"
+        },
+        "human.gold_dispute": {
+          "type": "boolean"
+        },
+        "human.regime_label": {
+          "enum": [
+            "A",
+            "B",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
     },
     "authority": {
       "const": "advisory"
     },
     "redaction_profile": {
       "$ref": "#/$defs/redaction_profile"
+    },
+    "schema_pack": {
+      "$ref": "#/$defs/pin_ref"
+    },
+    "metric_catalog": {
+      "$ref": "#/$defs/pin_ref"
     }
   },
   "required": [
     "schema_version",
     "id",
+    "review_id",
     "authority",
-    "redaction_profile"
+    "redaction_profile",
+    "scores"
   ],
   "title": "human_review_v1",
   "type": "object"

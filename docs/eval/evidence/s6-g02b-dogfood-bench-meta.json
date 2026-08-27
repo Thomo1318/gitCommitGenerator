@@ -1,0 +1,29 @@
+{
+  "schema_version": "s6_g02b_bench_evidence_v0",
+  "claim": "S6-G02(b)",
+  "authority": "maintainer_evidence",
+  "ci_gate": false,
+  "product_accept_gate": false,
+  "captured_at": "2026-08-25T07:26:26.382231+00:00",
+  "host": "local-maintainer",
+  "command": {
+    "async_on": "GIT_CG_EVAL_DOGFOOD_MODE=async ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template",
+    "async_off": "GIT_CG_EVAL_DOGFOOD_MODE=off ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template",
+    "warmup": 1,
+    "runs": 3,
+    "summariser": "python -m git_cg.eval.dogfood.bench OFF.json ON.json",
+    "note": "Maintainer capture (3 runs) for durable PR evidence; recipe default remains just dogfood-bench (20). Not a CI merge gate. justfile summariser arg order corrected to OFF then ON."
+  },
+  "summary_line": "dogfood-bench: mean_off=3114.549ms mean_on=3443.781ms delta=+329.232ms (~10.6%) n=3 runs ci_overlap=True (observed delta within overlapping CIs; not a no-latency proof; maintainer evidence only, not a merge gate)",
+  "mean_on_s": 3.4437808765933333,
+  "mean_off_s": 3.114549172153333,
+  "stddev_on_s": 0.9106608670471257,
+  "stddev_off_s": 0.2650496187613248,
+  "delta_on_minus_off_s": 0.32923170444000016,
+  "artifacts": [
+    "docs/eval/evidence/s6-g02b-bench_async_on.json",
+    "docs/eval/evidence/s6-g02b-bench_async_off.json",
+    "docs/eval/evidence/s6-g02b-dogfood-bench-summary.txt"
+  ],
+  "claim_qualification": "Observed mean delta +329.232 ms (~10.6%) over n=3 runs with ci_overlap=True; high stddev_on relative to stddev_off. Does not independently prove zero commit-path latency."
+}

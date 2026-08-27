@@ -36,6 +36,7 @@ class GraphOperationResult:
     error_type: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Convert GraphOperationResult to a dictionary with serialized outcome."""
         payload = asdict(self)
         payload["outcome"] = str(self.outcome)
         return payload
@@ -53,6 +54,7 @@ def _classify_graph_exception(exc: BaseException) -> GraphOutcome:
 
 
 def _timed_call(operation: str, fn, *args, **kwargs) -> GraphOperationResult:
+    """Execute a graph operation with timing and exception handling."""
     started = time.perf_counter()
     try:
         data = fn(*args, **kwargs)
@@ -84,6 +86,7 @@ def _build_or_update_graph_raw(
     base: str,
     postprocess: str,
 ) -> dict[str, Any]:
+    """Build or update the code review graph with retry logic."""
     from code_review_graph.tools import build_or_update_graph
 
     return build_or_update_graph(
@@ -96,6 +99,7 @@ def _build_or_update_graph_raw(
 
 @graph_retry
 def _list_graph_stats_raw(*, repo_root: str | None) -> dict[str, Any]:
+    """Retrieve graph statistics with retry logic."""
     from code_review_graph.tools import list_graph_stats
 
     return list_graph_stats(repo_root=repo_root)
@@ -111,6 +115,7 @@ def _detect_changes_raw(
     max_depth: int,
     detail_level: str,
 ) -> dict[str, Any]:
+    """Detect changes in the code review graph with retry logic."""
     from code_review_graph.tools import detect_changes_func
 
     return detect_changes_func(
@@ -133,6 +138,7 @@ def _impact_radius_raw(
     base: str,
     detail_level: str,
 ) -> dict[str, Any]:
+    """Get impact radius analysis with retry logic."""
     from code_review_graph.tools import get_impact_radius
 
     return get_impact_radius(
@@ -152,6 +158,7 @@ def _affected_flows_raw(
     changed_files: list[str] | None,
     base: str,
 ) -> dict[str, Any]:
+    """Get affected flows analysis with retry logic."""
     from code_review_graph.tools import get_affected_flows_func
 
     return get_affected_flows_func(
@@ -172,6 +179,7 @@ def _review_context_raw(
     base: str,
     detail_level: str,
 ) -> dict[str, Any]:
+    """Get review context with retry logic."""
     from code_review_graph.tools import get_review_context
 
     return get_review_context(
@@ -193,6 +201,7 @@ def _query_graph_raw(
     repo_root: str | None,
     detail_level: str,
 ) -> dict[str, Any]:
+    """Query the graph with retry logic."""
     from code_review_graph.tools import query_graph
 
     return query_graph(

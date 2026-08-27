@@ -18,8 +18,10 @@ from git_cg.eval.scoring.gates import (
     compose_gates,
 )
 from git_cg.eval.scoring.runner import (
+    PreparedSuite,
     ScoreCaseResult,
     ScoreSuiteResult,
+    prepare_suite_cases,
     resolve_require_topology,
     score_bundle,
     score_case,
@@ -31,10 +33,12 @@ __all__ = [
     "S2A_REQUIRE_BLOCK",
     "S2B_REQUIRE_BLOCK",
     "S2C_TOPOLOGY_BLOCK",
+    "PreparedSuite",
     "ScoreCaseResult",
     "ScoreSuiteResult",
     "build_session_thread_index",
     "compose_gates",
+    "prepare_suite_cases",
     "resolve_case_session_thread_id",
     "resolve_require_topology",
     "score_bundle",

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
-  "sop_matrix_row_count": 75,
+  "sop_matrix_sha256": "c494cee6381b8abb773be0885212aa1526ed8e5366602fde8ff5aba72740a436",
+  "sop_matrix_row_count": 76,
   "cases": {
     "P9-G1": {
       "diff_class": {
@@ -45,7 +45,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "scoped-history",
         "semver_impact": "PATCH",
@@ -61,7 +61,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -107,7 +107,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "scoped-history",
         "semver_impact": "PATCH",
@@ -134,7 +134,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -180,7 +180,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "intent",
         "semver_impact": "PATCH",
@@ -196,7 +196,7 @@
           "intent"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -242,7 +242,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "main",
         "semver_impact": "PATCH",
@@ -258,7 +258,7 @@
           "main"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -313,7 +313,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "scoped-history",
         "semver_impact": "NONE",
@@ -329,7 +329,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -383,7 +383,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "test",
         "semver_impact": "NONE",
@@ -399,7 +399,7 @@
           "test"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -454,7 +454,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "docs",
         "scope": "adr",
         "semver_impact": "NONE",
@@ -470,7 +470,7 @@
           "adr"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -524,7 +524,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "scoped-history",
         "semver_impact": "NONE",
@@ -540,7 +540,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -594,7 +594,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "fixtures",
         "semver_impact": "NONE",
@@ -610,7 +610,7 @@
           "fixtures"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -665,7 +665,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "docs",
         "scope": "adr",
         "semver_impact": "NONE",
@@ -681,7 +681,7 @@
           "adr"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -738,7 +738,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "docs",
         "scope": "usage",
         "semver_impact": "NONE",
@@ -754,7 +754,7 @@
           "usage"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -800,7 +800,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "fix",
         "scope": "git_cg",
         "semver_impact": "PATCH",
@@ -816,7 +816,7 @@
           "git_cg"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -871,7 +871,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "scoped-history",
         "semver_impact": "NONE",
@@ -898,7 +898,7 @@
           "adr"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -944,7 +944,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "fix",
         "scope": "scoped-history",
         "semver_impact": "PATCH",
@@ -960,7 +960,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -1015,7 +1015,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "scoped-history",
         "semver_impact": "NONE",
@@ -1042,7 +1042,7 @@
           "adr"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -1088,7 +1088,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "fix",
         "scope": "scoped-history",
         "semver_impact": "PATCH",
@@ -1115,7 +1115,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -1161,7 +1161,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "semantic",
         "semver_impact": "PATCH",
@@ -1188,7 +1188,7 @@
           "test"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -1234,7 +1234,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "scoped-history",
         "semver_impact": "PATCH",
@@ -1261,7 +1261,7 @@
           "test"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -1315,7 +1315,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "docs",
         "scope": "adr",
         "semver_impact": "NONE",
@@ -1331,7 +1331,7 @@
           "adr"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -1377,7 +1377,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "feat",
         "scope": "telemetry",
         "semver_impact": "MINOR",
@@ -1393,7 +1393,7 @@
           "telemetry"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -1447,7 +1447,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "test",
         "semver_impact": "NONE",
@@ -1463,7 +1463,7 @@
           "test"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -1509,7 +1509,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "fix",
         "scope": "sentry",
         "semver_impact": "PATCH",
@@ -1525,7 +1525,7 @@
           "sentry"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -1571,7 +1571,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "fix",
         "scope": "main",
         "semver_impact": "PATCH",
@@ -1587,7 +1587,7 @@
           "main"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": true
     },
@@ -1642,7 +1642,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "test",
         "semver_impact": "NONE",
@@ -1669,7 +1669,7 @@
           "docs"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -1723,7 +1723,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "docs",
         "scope": "adr",
         "semver_impact": "NONE",
@@ -1739,7 +1739,7 @@
           "adr"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     },
@@ -1794,7 +1794,7 @@
       },
       "overlay": {
         "intent_id": "feature_addition",
-        "gitmoji": "\u2728",
+        "gitmoji": "✨",
         "cc_type": "test",
         "scope": "scoped-history",
         "semver_impact": "NONE",
@@ -1810,7 +1810,7 @@
           "scoped-history"
         ],
         "preserved_ranked_intent_id": "feature_addition",
-        "preserved_ranked_gitmoji": "\u2728"
+        "preserved_ranked_gitmoji": "✨"
       },
       "high_risk_path": false
     }

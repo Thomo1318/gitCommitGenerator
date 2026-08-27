@@ -1,3 +1,11 @@
+"""Sentry telemetry configuration with host-injection detection.
+
+Provides DSN resolution logic that prevents git-cg events from being shipped to
+host applications (like Raycast or Electron shells) when those apps inject their
+own Sentry environment variables. Includes event scrubbing to prevent diffs and
+local variables from leaking source code or PII.
+"""
+
 import contextlib
 import importlib.metadata
 import os
@@ -20,6 +28,7 @@ _DOTENV_CANDIDATES: tuple[str, ...] = (".env", "manual.env")
 
 
 def _strip_env(value: str | None) -> str | None:
+    """Strip whitespace from an environment variable value, returning None for empty strings."""
     if value is None:
         return None
     text = value.strip()
@@ -250,6 +259,7 @@ def report_commit_plan_contract_violation(
     import sentry_sdk
 
     def _sem(value: object) -> str:
+        """Normalize a SemVer value to a standard string representation."""
         if value is None or value == "":
             return "unknown"
         if hasattr(value, "value"):

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "sop_matrix_sha256": "7c746456c2da5f23d52d29f29538e6509580ac6cfdde9a92c991ffe044a454e7",
-  "sop_matrix_row_count": 75,
+  "sop_matrix_sha256": "c494cee6381b8abb773be0885212aa1526ed8e5366602fde8ff5aba72740a436",
+  "sop_matrix_row_count": 76,
   "tie_break": {
     "presentation_authority": [
       "path_class_force_forbid",
@@ -15,7 +15,7 @@
       "primary_intent.intent_id",
       "primary_intent.gitmoji"
     ],
-    "notes": "Slice 3 freezes pure presentation helpers only. Slice 9 adds eval letters A\u2013N and S9-E/S9-H gap cases on the same pure helpers. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
+    "notes": "Slice 3 freezes pure presentation helpers only. Slice 9 adds eval letters A–N and S9-E/S9-H gap cases on the same pure helpers. rank_commit_intents and live LLM are never invoked. Goldens capture derive_trailer_priors + diff-class constraints + semver/type ceilings + apply_presentation_overlay outputs from a deliberately illegal feat/MINOR seed plan."
   },
   "cases": [
     {
@@ -342,7 +342,7 @@
     },
     {
       "id": "TIP-G2",
-      "description": "Tip fixtures README only \u2014 no security from prose",
+      "description": "Tip fixtures README only — no security from prose",
       "staged_paths": [
         "tests/fixtures/scoped_history/README.md"
       ],
@@ -381,7 +381,7 @@
           "Security"
         ],
         "gitmoji": [
-          "\ud83d\udd10"
+          "🔐"
         ]
       },
       "eval_letters": [
@@ -650,7 +650,7 @@
     },
     {
       "id": "TIP-G8",
-      "description": "Tip tests+ADR claim-lock \u2014 no feat invention",
+      "description": "Tip tests+ADR claim-lock — no feat invention",
       "staged_paths": [
         "tests/test_scoped_history.py",
         "docs/ADRs/0163-scoped-reasoning-history.md"
@@ -852,7 +852,7 @@
     },
     {
       "id": "TIP-G12",
-      "description": "Tip ADR + usage mermaid docs \u2014 no fix/runtime recovery",
+      "description": "Tip ADR + usage mermaid docs — no fix/runtime recovery",
       "staged_paths": [
         "docs/ADRs/0163-scoped-reasoning-history.md",
         "docs/usage.md"
@@ -898,7 +898,7 @@
           "Fixed"
         ],
         "gitmoji": [
-          "\ud83e\udd45"
+          "🥅"
         ],
         "runtime_verbs": [
           "recover",
@@ -1153,7 +1153,7 @@
     },
     {
       "id": "S9-E",
-      "description": "Slice 9 case E: docs mention graph_unavailable/redaction \u2014 still docs, never runtime fix",
+      "description": "Slice 9 case E: docs mention graph_unavailable/redaction — still docs, never runtime fix",
       "eval_letters": [
         "E"
       ],
@@ -1208,8 +1208,8 @@
           "Fixed"
         ],
         "gitmoji": [
-          "\ud83e\udd45",
-          "\ud83d\udd10"
+          "🥅",
+          "🔐"
         ],
         "runtime_verbs": [
           "recover",
@@ -1308,6 +1308,6 @@
       "M": "TIP-G11",
       "N": "TIP-G12"
     },
-    "notes": "Slice 9 pure characterisation harness. Letters A\u2013N map onto TIP-G* plus S9-E/S9-H gap cases. TIP-G13\u2013G17 are Session 6 message-quality rows (not letter-mapped). No live LLM and no rank_commit_intents."
+    "notes": "Slice 9 pure characterisation harness. Letters A–N map onto TIP-G* plus S9-E/S9-H gap cases. TIP-G13–G17 are Session 6 message-quality rows (not letter-mapped). No live LLM and no rank_commit_intents."
   }
 }

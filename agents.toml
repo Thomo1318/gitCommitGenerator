@@ -263,6 +263,18 @@ source = "path:.agents/skills/mermaid-diagrams"
 name = "uv-package-manager"
 source = "path:.agents/skills/uv-package-manager"
 
+[[skills]]
+name = "code-deslop"
+source = "path:.agents/skills/code-deslop"
+
+[[skills]]
+name = "prose-deslop"
+source = "path:.agents/skills/prose-deslop"
+
+[[skills]]
+name = "deslop-gate"
+source = "path:.agents/skills/deslop-gate"
+
 [[mcp]]
 name = "deepwiki"
 url = "https://mcp.deepwiki.com/mcp"

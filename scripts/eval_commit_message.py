@@ -34,6 +34,9 @@ CANONICAL_EVAL_HOMES: Final[tuple[str, ...]] = (
     "src/git_cg/eval/scoring/",
     "src/git_cg/eval/lane_c/",
     "tests/eval/",
+    "git-cg eval run",
+    "git-cg eval triage",
+    "git-cg eval doctor",
 )
 
 _REFUSE_MESSAGE: Final[str] = f"""\
@@ -48,6 +51,9 @@ Canonical homes:
   * Scoring: {CANONICAL_EVAL_HOMES[0]}
   * Lane C:  {CANONICAL_EVAL_HOMES[1]}
   * Tests:   {CANONICAL_EVAL_HOMES[2]}
+  * Run:     {CANONICAL_EVAL_HOMES[3]}
+  * Triage:  {CANONICAL_EVAL_HOMES[4]}
+  * Doctor:  {CANONICAL_EVAL_HOMES[5]}
 """
 
 

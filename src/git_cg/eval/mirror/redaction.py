@@ -206,13 +206,21 @@ def _scrub_text(value: Any) -> tuple[Any, bool]:
     ``quarantined`` is True when the scrubber failed safe (omission sentinel)
     — the caller must drop the field rather than emit the sentinel or the raw
     payload.
+
+    After betterleaks, apply S6-C08 ``mask_secrets_in_text`` so known secret
+    shapes still route through S4 ``mask_secret()`` even when the external
+    scanner misses them (offline deterministic floor).
     """
     if not isinstance(value, str) or value == "":
         return value, False
     scrubbed = redact_payload(value)
     if scrubbed == _OMISSION_SENTINEL:
         return None, True
-    return scrubbed, False
+    # Local import keeps redaction free of config cycles at module import time.
+    from git_cg.eval.evidence_scrub import mask_secrets_in_text
+
+    masked = mask_secrets_in_text(scrubbed)
+    return masked if masked is not None else scrubbed, False
 
 
 def _key_denied(key: str, profile: RedactionProfile) -> bool:
@@ -232,6 +240,7 @@ def _key_denied(key: str, profile: RedactionProfile) -> bool:
 
 
 def _join_path(prefix: str, key: str | int) -> str:
+    """Join report path segments into a dotted field path (reporting only)."""
     if prefix == "":
         return str(key)
     return f"{prefix}.{key}"

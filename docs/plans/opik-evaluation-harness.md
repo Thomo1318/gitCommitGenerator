@@ -1,6 +1,6 @@
 # Opik Evaluation Harness — Design & Implementation Plan
 
-> **Status:** v0.9.5 S5/S6/S7 API-surface policy (CLI-first) · v0.9.4 S5 eligibility/availability split (#233 Slice 0) · v0.9.3 S2b clarifications (#227 T1–T12) · v0.9.2 body-residual ingest · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed)  
+> **Status:** v0.9.6 S6 Slice 0 reconciliation (#246) · v0.9.5 S5/S6/S7 API-surface policy (CLI-first) · v0.9.4 S5 eligibility/availability split (#233 Slice 0) · v0.9.3 S2b clarifications (#227 T1–T12) · v0.9.2 body-residual ingest · v0.9.1 briefing locks · v0.9.0 comment-depth · §14 filing gate complete (Q1=A + #220 S0 filed)
 > **Document class:** formal design + implementation SSOT (promoted from scratch)  
 > **Parent epic:** #216 — E2E Observability Stack  
 > **Governing issue:** #217 — formalise Opik commit-message evaluation harness  
@@ -18,10 +18,10 @@
 
 | Field | Value |
 |:---|:---|
-| Version | `0.9.5-s5-s6-s7-api-surface` |
-| Stage | Formal design SSOT · S5/S6/S7 API-surface policy locked (CLI-first; selected `git_cg.eval*` supported; internals internal) · S5 eligibility/availability split + §8.5 spine/residual locks (#233) remain · S2b T1–T12 + body residual + briefing locks remain |
+| Version | `0.9.6-s6-slice0-reconciliation` |
+| Stage | Formal design SSOT · **S6 Slice 0 reconciliation** (#246): `compat_hash` naming, five resume modes + recovery law, `eval session show`, S6-G02 two-part async dogfood claim · S5/S6/S7 API-surface policy locked (CLI-first; selected `git_cg.eval*` supported; internals internal) · S5 eligibility/availability split + §8.5 spine/residual locks (#233) remain · S2b T1–T12 + body residual + briefing locks remain |
 | Location | `docs/plans/opik-evaluation-harness.md` (versioned; was `scratch/0.OpikIntegration/opik.md`) |
-| Filled from | #217 body residual (2026-08-13) + #217 (all 26 comments) + full plan compile + owner training-corpus / thread / redaction-ladder approval + comment-depth + live Daily Briefing locks + owner API-surface split (S5 narrow export / S6 operator map / S7 Zensical+ADR) |
+| Filled from | #217 body residual (2026-08-13) + #217 (all 26 comments) + full plan compile + owner training-corpus / thread / redaction-ladder approval + comment-depth + live Daily Briefing locks + owner API-surface split (S5 narrow export / S6 operator map / S7 Zensical+ADR) + #246 S6 Slice 0 landed-state reconciliation |
 | Filled through §14 gate | SSOT pointer in #217 body + Q1=A + S0 filed as #220; implement S0 next |
 | Companion artefacts (planned) | optional YAML machine map under `docs/plans/`; optional per-slice briefs |
 | Out of scope for this file | Runtime product behaviour changes; Promptfoo deep design (#219); Sentry deep design (#218) |
@@ -31,6 +31,22 @@
 ### 0.5 Live pin honesty (D44 / #233 Slice 0)
 
 Planning text may use `schema_pack_v0@…` / `metric_catalog_v0@…` as **shape** examples. **Live frozen identities** are whatever `just eval-schema-hash` / `tests/eval/test_catalog_pins.py` assert on the current tree (also printed in [`docs/eval/README.md`](../eval/README.md)). After any S5 docs touch that mentions pins, reconcile README ↔ generator output; never leave contradictory concrete hashes unexplained.
+
+### 0.6 S6 Slice 0 reconciliation (#246 / v0.9.6)
+
+Issue [#246](https://github.com/Thomo1318/gitCommitGenerator/issues/246) Slice 0 is the **implementation handoff lock** for S6 operator UX. It does not reopen D1–D31 / I1–I12 authority.
+
+Landed-state census + baseline:
+
+* [`docs/eval/s6-slice0-landed-state-census.md`](../eval/s6-slice0-landed-state-census.md)
+* [`docs/eval/s6-slice0-baseline.json`](../eval/s6-slice0-baseline.json)
+
+Normative naming locks applied in this version:
+
+* stored resume identity field = **`compat_hash`** (not `compatibility_hash`)
+* session reader command = **`git-cg eval session show`**
+* resume modes = five (`fresh_suite_run` / `resume_missing` / `recompute_scores` / `replay_generation` / `export_only`) + recovery law
+* R12 async “+0ms” = **S6-G02** two-part structural + empirical claim
 
 ### 0.1 How to use this file
 
@@ -540,7 +556,7 @@ amend_brief_v1:
 | Mode | Latency target | Blocking | Default audience |
 |:---|:---|:---|:---|
 | `off` | 0 | — | **All basic users** |
-| `async` | commit path +0ms user-visible; judge finishes in background | non-blocking; result → brief/Opik | **Recommended dogfood default** |
+| `async` | commit path never awaits dogfood (S6-G02); judge finishes in background | non-blocking; result → brief/Opik | **Recommended dogfood default** |
 | `sample` | same as always/async on selected commits only (e.g. 20% or risky path-class) | per selected mode | Cost control |
 | `always` + async | same as async | non-blocking | High-signal dogfood |
 | `always` + sync advisory | **≤ ~5s** soft; **≤ ~15s** only if owner accepts | warn/attach only | Optional local pinned judge |
@@ -548,6 +564,11 @@ amend_brief_v1:
 | `always` + sync hard-block | explicit owner opt-in only | blocks commit/push checklist | Painful lab gate — never default, never sole CI law |
 
 **Pinning required for any on mode:** model id, prompt/template version, temperature, timeout, score polarity registry entry, redaction profile. Floating “latest” judge = reject.
+
+> **S6-G02 / “+0ms” law (v0.9.6):** raw “+0ms” is **shorthand, not a literal wall-clock claim**. Zero wall-clock is not physically possible — async handoff still costs a queue push / thread spawn. The operative claim is two-part:
+> 1. **Structural (CI-gated, offline):** the commit path **never awaits** dogfood completion (hook-boundary / never-awaited seam + fake-clock regression guard).
+> 2. **Empirical (maintainer-run evidence, not a merge gate):** measured commit-latency delta for dogfood `async`-on vs `off` is below the measurement floor on the reference benchmark (`just dogfood-bench` / hyperfine on the real commit path; delta + CI overlap recorded in the claim matrix).
+
 
 **Payload default (basic / public_ci):** message hash/subject + redacted metadata.  
 **Payload default (maintainer train/dogfood):** owner **redaction ladder** (R14) — commonly `train_rich` for private owner project; secrets still scrubbed; raw diffs only under explicit profile + quarantine on scrub fail.
@@ -1726,7 +1747,7 @@ eval_suite_v1:
   nb_samples?: int                          # lab/triage only
   network_policy: offline_required|network_optional|mirror_optional
   redaction_profile: string
-  compatibility_hash_inputs: string[]       # explicit list folded into hash
+  compat_hash_inputs: string[]               # explicit list folded into hash (canonical name; no compatibility_hash alias)
 ```
 
 #### 7.2.2 `eval_case_v1`
@@ -1777,7 +1798,7 @@ experiment_v1:
   started_at / finished_at?: iso8601
   mode: fixture_offline|acceptpath_bound|live_regen|dogfood|lab_meta
   pins: <copy of effective pins>
-  compatibility_hash: string
+  compat_hash: string
   result_summary:
     n_total / n_pass / n_fail / n_warn / n_error / n_skip
     gate_deterministic_pass_rate?: number
@@ -1793,11 +1814,11 @@ evaluation_checkpoint_v1:
   schema_version: "evaluation_checkpoint_v1"
   checkpoint_id: string
   experiment_id: string
-  compatibility_hash: string                # MUST match to resume
+  compat_hash: string                # MUST match to resume
   completed_case_ids: string[]
   pending_case_ids: string[]
   last_progress_at: iso8601
-  mode: resume_missing|recompute_scores|replay_generation|fresh_suite_run
+  mode: fresh_suite_run|resume_missing|recompute_scores|replay_generation|export_only
 ```
 
 #### 7.2.6 `trajectory_evidence_v1` (R7)
@@ -2242,12 +2263,12 @@ Local checkpoints first (Opik resume is non-authoritative convenience only).
 | Mode | Behaviour | Allowed when | Refuses when |
 |:---|:---|:---|:---|
 | `fresh_suite_run` | New experiment_id; ignore prior checkpoint | always | — |
-| `resume_missing` | Score only cases not in `completed_case_ids` | compatibility_hash match | hash mismatch; missing checkpoint |
-| `recompute_scores` | Keep bundles/inputs; re-run metric pack only | hash match on schema+catalog+snapshot | generation pin required but missing for modes that need it |
+| `resume_missing` | Score only cases not in `completed_case_ids` | `compat_hash` match | hash mismatch; missing checkpoint |
+| `recompute_scores` | Keep bundles/inputs; re-run metric pack only | retained evidence bundle present — **does not require a matching checkpoint hash**; this is the governed recovery path after a terminal `EVAL_COMPAT_HASH_MISMATCH` | generation pin required but missing when needed; required evidence missing |
 | `replay_generation` | Opt-in live regen then score | explicit flag; network policy allows | default CI; offline_required suites |
 | `export_only` | Project existing local results to Opik | local experiment complete/partial | never scores; failure = export class only |
 
-**Compatibility hash (minimum preimage):**
+**`compat_hash` (minimum preimage; canonical stored name):**
 
 ```text
 sha256(
@@ -2256,7 +2277,9 @@ sha256(
 )
 ```
 
-Mismatch ⇒ hard stop with `EVAL_COMPAT_HASH_MISMATCH` (Family H); no silent partial merge.
+Mismatch ⇒ hard stop with `EVAL_COMPAT_HASH_MISMATCH` (Family H); no silent partial merge. Do **not** create an untracked `compatibility_hash` field alias.
+
+**Recovery law (locks the table):** on `EVAL_COMPAT_HASH_MISMATCH` the checkpoint is preserved read-only; the CLI never auto-deletes, auto-overwrites, or re-pins it. Recovery is exactly one of: (a) `fresh_suite_run` (new experiment), or (b) `recompute_scores` over the already-landed evidence bundle. “Deliberate pin migration” means a human changes pins in git and starts a **new** experiment/checkpoint — never a tool that rewrites an existing checkpoint’s `compat_hash` or completed-case set. **Checkpoint migration tooling is an explicit non-goal.**
 
 ---
 
@@ -2533,12 +2556,12 @@ schemas/eval/
 | **Goal** | Maintainer-facing UX: run/resume/triage offline suites; R11 brief for L2 amend; R12 dogfood; doctor; local HITL queue. |
 | **Depends on** | S1+; full value after S2–S4; dogfood may use S5 pins |
 | **Network** | optional |
-| **Delivers** | (1) `git-cg eval` subcommands (or `just eval-*`): `run`, `resume`, `recompute-scores`, `export`, `doctor`, `amend-brief`, `dogfood`, `train-export`, `session-show`, **`failures`**, **`explain`**, **`compare`**, **`replay`**, **`promote`**, **`diagnose`**, **`issue list\|show\|resolve\|reopen\|suppress`**, **`opik doctor`**, **`opik config show`**, **`export status\|retry\|drain`**, **`thread show`**. (2) Resume modes §7.5 + checkpoints. (3) **FIND-003** `eval doctor` + FIND-020/021 debug+diag loop. (4) **R11** `amend_brief_v1` + preference-pair write. (5) **R12** dogfood + **R12-MVP** path. (6) **R13** session thread local store + Opik map. (7) **R14** train_export_v1 + antipattern vault helpers. (8) Local `.eval/review_queue` + `human_review_v1` (R4). (9) R9 triage filters. (10) CI recipe: offline Lane A on PR. (11) Absorb triage scripts. (12) Hidden from basic commit UX; **I10** no product help/path regression. (13) Local indexes: `.eval/index/`, `.eval/diagnostics/`, `.eval/issues/`, `.eval/replays/`, `.eval/export_queue/`. (14) Operator E-LOOP SOP §18.2. (15) **API-surface policy + operator API map (CLI-first):** CLI = **primary public API**; selected `git_cg.eval*` entrypoints = **supported** maintainer/harness APIs; product internals = **internal**. Map covers supported `git-cg eval` commands and canonical Python entrypoints (**not** a general-purpose SDK). Canonical library names include `score_bundle`, `score_case`, `score_suite`, `compose_gates`, `ScoreResultV1`, pin constructors, and `run_lane_c` where implemented. (16) **Generated CLI usage/help alignment:** `git-cg --help` / eval help / usage snippets stay synchronized with the S6 command surface; basic commit path remains free of Opik configuration requirements and eval-only noise. |
+| **Delivers** | (1) `git-cg eval` subcommands (or `just eval-*`): `run`, `resume`, `recompute-scores`, `export`, `doctor`, `amend-brief`, `dogfood`, `train-export`, `session show`, **`failures`**, **`explain`**, **`compare`**, **`replay`**, **`promote`**, **`diagnose`**, **`issue list\|show\|resolve\|reopen\|suppress`**, **`opik doctor`**, **`opik config show`**, **`export status\|retry\|drain`**, **`thread show`**. (2) Resume modes §7.5 + checkpoints. (3) **FIND-003** `eval doctor` + FIND-020/021 debug+diag loop. (4) **R11** `amend_brief_v1` + preference-pair write. (5) **R12** dogfood + **R12-MVP** path. (6) **R13** session thread local store + Opik map. (7) **R14** train_export_v1 + antipattern vault helpers. (8) Local `.eval/review_queue` + `human_review_v1` (R4). (9) R9 triage filters. (10) CI recipe: offline Lane A on PR. (11) Absorb triage scripts. (12) Hidden from basic commit UX; **I10** no product help/path regression. (13) Local indexes: `.eval/index/`, `.eval/diagnostics/`, `.eval/issues/`, `.eval/replays/`, `.eval/export_queue/`. (14) Operator E-LOOP SOP §18.2. (15) **API-surface policy + operator API map (CLI-first):** CLI = **primary public API**; selected `git_cg.eval*` entrypoints = **supported** maintainer/harness APIs; product internals = **internal**. Map covers supported `git-cg eval` commands and canonical Python entrypoints (**not** a general-purpose SDK). Canonical library names include `score_bundle`, `score_case`, `score_suite`, `compose_gates`, `ScoreResultV1`, pin constructors, and `run_lane_c` where implemented. (16) **Generated CLI usage/help alignment:** `git-cg --help` / eval help / usage snippets stay synchronized with the S6 command surface; basic commit path remains free of Opik configuration requirements and eval-only noise. |
 | **Non-goals** | End-user onboarding through Opik; hard-block dogfood default; cloud queue SoT; full Python SDK autodocumentation; broad source-tree API extraction; REST/OpenAPI documentation; external API-documentation services (Scalar/Redoc/SwaggerHub/etc.); mandatory `mkdocstrings` / `mkdocs-click` integration in S6 (optional allowlist autodoc is S7). |
 | **Primary paths** | `src/git_cg/eval/cli.py`, `brief.py`, `doctor.py`, `dogfood/**`, `justfile`/`mise` entries, `tests/eval/test_cli*.py` |
 | **R-items** | **R4, R9, R11, R12, R13, R14** (+ uses R3 export) |
 | **Findings** | FIND-003, FIND-006, FIND-007 docs touch, FIND-008, FIND-009–016, FIND-019–024 |
-| **AC** | ☐ `eval doctor` fails on unpinned latest / missing catalog hash. ☐ `amend-brief` prints family rollups + failure_ids without network and can reference session_thread_id. ☐ Preference pair emitted on amend when versions ≥2. ☐ dogfood `off` default for non-maintainer profiles. ☐ async dogfood +0ms user-visible when wired. ☐ `train-export` respects redaction ladder + scrub quarantine. ☐ capture_on=fail stores hard_negative candidate without failing product accept. ☐ resume hard-fails on compat hash mismatch. ☐ review_queue cannot sole-promote golden. ☐ Basic `git-cg --help` does not force Opik setup. ☐ Existing commit path behaviour unchanged when eval off (I10). ☐ `eval explain` returns IDs, artifact/result classes, first divergent/blame span, failure/prevention IDs, counters, replay command, bundle path, export state, static surfaces — **no** opaque LLM RCA. ☐ `eval diagnose` upserts `diag_issue_v1` with stable fingerprint. ☐ `eval replay` writes new bundle + `replay_compare_v1` without mutating source. ☐ `eval promote` enforces promotion state machine + split_group_id. ☐ `opik doctor` / `opik config show` are secret-safe. ☐ export queue retry/drain never blocks accept-path. ☐ doctor red on empty-output fan-out config / unbound online format metrics (FIND-026/027). ☐ doctor warn/red when prompt pack changed without local suite pin/result (FIND-028). ☐ explain surfaces artifact_class + scored-field source for format metrics. ☐ API stability tiers documented for operators: **CLI = public**; **selected `git_cg.eval*` = supported**; **product internals = internal**. ☐ Operator API map names supported `git-cg eval` commands and canonical Python entrypoints (`score_bundle`, `score_case`, `score_suite`, `compose_gates`, `ScoreResultV1`, pins, `run_lane_c` where implemented) without implying a general-purpose SDK. ☐ Generated CLI usage/help covers supported S6 commands; basic `git-cg --help` and normal commit path stay free of Opik setup requirements and eval-specific noise. ☐ S6 API map does **not** promise compatibility for undocumented internal modules. |
+| **AC** | ☐ `eval doctor` fails on unpinned latest / missing catalog hash. ☐ `amend-brief` prints family rollups + failure_ids without network and can reference session_thread_id. ☐ Preference pair emitted on amend when versions ≥2. ☐ dogfood `off` default for non-maintainer profiles. ☐ async dogfood never blocks the commit path when wired (S6-G02 two-part claim: structural never-awaited seam + empirical `just dogfood-bench` evidence; “+0ms” is shorthand only). ☐ `train-export` respects redaction ladder + scrub quarantine. ☐ capture_on=fail stores hard_negative candidate without failing product accept. ☐ resume hard-fails on compat hash mismatch. ☐ review_queue cannot sole-promote golden. ☐ Basic `git-cg --help` does not force Opik setup. ☐ Existing commit path behaviour unchanged when eval off (I10). ☐ `eval explain` returns IDs, artifact/result classes, first divergent/blame span, failure/prevention IDs, counters, replay command, bundle path, export state, static surfaces — **no** opaque LLM RCA. ☐ `eval diagnose` upserts `diag_issue_v1` with stable fingerprint. ☐ `eval replay` writes new bundle + `replay_compare_v1` without mutating source. ☐ `eval promote` enforces promotion state machine + split_group_id. ☐ `opik doctor` / `opik config show` are secret-safe. ☐ export queue retry/drain never blocks accept-path. ☐ doctor red on empty-output fan-out config / unbound online format metrics (FIND-026/027). ☐ doctor warn/red when prompt pack changed without local suite pin/result (FIND-028). ☐ explain surfaces artifact_class + scored-field source for format metrics. ☐ API stability tiers documented for operators: **CLI = public**; **selected `git_cg.eval*` = supported**; **product internals = internal**. ☐ Operator API map names supported `git-cg eval` commands and canonical Python entrypoints (`score_bundle`, `score_case`, `score_suite`, `compose_gates`, `ScoreResultV1`, pins, `run_lane_c` where implemented) without implying a general-purpose SDK. ☐ Generated CLI usage/help covers supported S6 commands; basic `git-cg --help` and normal commit path stay free of Opik setup requirements and eval-specific noise. ☐ S6 API map does **not** promise compatibility for undocumented internal modules. |
 | **Exit risk** | CLI sprawl — keep subcommands thin; API-map drift vs actual Typer surface. |
 
 ---
@@ -2785,7 +2808,7 @@ Fields below are **eval-layer** (bundle/experiment/brief). Prefer reusing produc
 | `snapshot_id` / `content_hash` | string | ✅ | |
 | `metric_catalog_pin` | string | ✅ | `metric_catalog_v0@sha` |
 | `schema_pack_pin` | string | ✅ | |
-| `compatibility_hash` | string | ✅ | resume/export |
+| `compat_hash` | string | ✅ | resume/export (canonical stored name; no `compatibility_hash` alias) |
 | `prompt_pack_hash` | string | when gen recorded | |
 | `judge_pins` | map | when Lane C ran | |
 | `harness_version` | string | ✅ preferred | |
@@ -3133,7 +3156,7 @@ looks valuable inside the floor.
 
 | ID | Risk | Sev | Class | Trigger | Mitigation | Own |
 |:---|:---|:---:|:---|:---|:---|:---:|
-| **RK-D1** | **User-visible latency** from sync dogfood on commit path | P1 | product-ux | Sync mode default; >budget stalls | R12 async+advisory preferred; +0ms async target; measure M4 | S6 |
+| **RK-D1** | **User-visible latency** from sync dogfood on commit path | P1 | product-ux | Sync mode default; >budget stalls | R12 async+advisory preferred; S6-G02 two-part async claim (never-awaited seam + `just dogfood-bench`); measure M4 | S6 |
 | **RK-D2** | **Cost blow-up** always-on paid judge | P2 | economics | No sample mode; huge payloads | `sample`; message-first payload; pins/timeouts | S6 |
 | **RK-D3** | **L2/judge conflict** — amend optimizes GEval prose against Hybrid/SOP | P1 | authority | Brief treated as maximize-score objective | R12 arbitration; L1 wins; L2 must not auto-rewrite solely for judge | S6/L2 |
 | **RK-D4** | **Anchor bias** — last-N attachments dominate amend without L1 rollup | P2 | authority | Brief omits family scores/failure_ids | R11 schema requires L1 block first | S6 |
@@ -3342,7 +3365,7 @@ looks valuable inside the floor.
 - [x] R13/R14 + FIND-009…018 owner-approved and logged  
 - [x] **v0.9.2 body-residual ingest** (scaffold gap, Regime pedagogy, Session-12 seed, provenance enum, aliases, 4MB/naming)  
 - [x] **v0.9.3 S2b clarifications** (#227 T1–T12: gate-label, C/D dual-emit, empty/oversize, GoldReport API, C/E helper split, S2b block tuple, secret/policy-fork, joint script/test absorption, Family I out of S2b)  
-- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.5-s5-s6-s7-api-surface` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217); S5 handoff on [#233](https://github.com/Thomo1318/gitCommitGenerator/issues/233); prior S2b locks on [#227](https://github.com/Thomo1318/gitCommitGenerator/issues/227))  
+- [x] SSOT pointer on #217 (**issue body preferred**; comments optional status only) → `docs/plans/opik-evaluation-harness.md` @ `0.9.6-s6-slice0-reconciliation` ([issue body](https://github.com/Thomo1318/gitCommitGenerator/issues/217); S5 handoff on [#233](https://github.com/Thomo1318/gitCommitGenerator/issues/233); prior S2b locks on [#227](https://github.com/Thomo1318/gitCommitGenerator/issues/227))
 - [x] **S0 filed:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) `eval(S0): freeze schema pack + metric catalog pins`
 - [x] **Q1=A** resolved (body pointer + S0 only; S1–S7 not filed)
 - [x] Owner decisions recorded on §17 FIND-* rows (approved 2026-08-12 + 2026-08-13)  
@@ -3378,7 +3401,8 @@ looks valuable inside the floor.
 0c. [x] **v0.9.2 #217 body-residual ingest** — §1.6 / §7.4 pedagogy / §9.0 scaffold gap / aliases / S4 4MB+naming / body supersession §18.14.  
 0d. [x] **v0.9.3 S2b clarifications** — §6.4–§6.9 / §6.11 / §8.2 / §8.9 T1–T12 locks for #227.  
 0e. [x] **v0.9.4 S5 eligibility/availability split** — #233 Slice 0 locks in §6.11 / §7.2.18 / §8.5.  
-0f. [x] **v0.9.5 S5/S6/S7 API-surface policy** — CLI-first; selected `git_cg.eval*` supported; internals internal; S5 narrow export; S6 operator API map + help alignment; S7 Zensical/ADR durable API docs + optional allowlist autodoc (RS17).  
+0f. [x] **v0.9.5 S5/S6/S7 API-surface policy** — CLI-first; selected `git_cg.eval*` supported; internals internal; S5 narrow export; S6 operator API map + help alignment; S7 Zensical/ADR durable API docs + optional allowlist autodoc (RS17).
+0g. [x] **v0.9.6 S6 Slice 0 reconciliation** — #246: `compat_hash` naming; five resume modes + recovery law; `eval session show`; S6-G02 two-part “+0ms”; plans README pointer; landed-state census.
 
 1. [x] Skeleton structure locked (`v0.1.0-skeleton`).  
 2. [x] **§1 mission / non-goals** compiled.  
@@ -3423,7 +3447,7 @@ looks valuable inside the floor.
 | **FIND-005** | **Optional developer moderation/safety scan on prompt packs or sample outputs (R6)** feeding review queue — never commit block. | Extra safety net for prompt-pack changes and dogfood corpora; complementary to #219. | Accept/Hybrid gate bans remain. Sensitive payload rules. | False positives; corpus handling; plane confusion with #219. | Keep **R6 off-by-default**; coordinate ownership note with #219; scrubbed local-only default. | **approved** 2026-08-12 |
 | **FIND-006** | **First-class “amend-session evidence pack”** — local, Opik-optional bundle summary (family scores, failure IDs, gold counters, path-class, optional C′ rationales) shaped for AI assistant review/amend before push. | Aligns harness with real L2 workflow; makes advisory metrics useful where the actual LLM review happens; reduces need to open Opik UI mid-amend. | None if local-first and non-blocking. Weak tension only with “no LLM authority” if pack is mistaken for auto-gate. | Over-coupling assistant prompts to unstable score schemas; noise in amend context. | **R11** + **S6** `git-cg eval amend-brief`; schema versioned; default local stdout/file; **MAY attach last-N GEval/C′** from R12 (see FIND-008). | **approved** 2026-08-12 |
 | **FIND-007** | **Narrow anti-pattern + document L1/L2/L4/T3 separation** — Ban only **product-plane, universal, unattended, sole-authoritative** “GEval on every commit.” Do **not** ban maintainer high-frequency advisory/async dogfood GEval. Document so future agents neither (a) ship Opik as default commit gate, nor (b) refuse useful dev dogfood thinking all GEval-on-commit is forbidden. | Prevents duplicate product blockers **and** prevents over-reading the ban as “never judge near commits.” Protects basic-user path; keeps L2 primary interactive LLM gate; enables T3 lab signal. | — (clarifies F3/F4/G13; enables R12 without floor weaken) | If wording stays sloppy, agents will either over-build online gates or under-dogfood Lane C. | **S7 docs + §2.6–2.7 + §11 skills policy**; pair with FIND-008. | **approved** 2026-08-12 |
-| **FIND-008** | **Maintainer `eval.dogfood` profile (R12)** — `off\|sample\|always\|async` Lane C GEval/C′ on git-cg developer commits while building the eval stack. Recommended default for dogfood: **`always` + `async` + advisory** → feed **R11 amend-brief** last-N attachments. Overhead budgets (async +0ms user path; sync advisory ≤~5s preferred / ≤~15s owner-accept; hard-block explicit opt-in only). Pin model/prompt/temp; message-first payload; L1 always wins arbitration. | High-frequency lab signal catches assistant drift, stabilizes rubric, produces real failure→fixture fuel, battle-tests Opik path — without making GEval product law. Matches reality that L2 already spends LLM tokens on every message. | Controlled tension with “no LLM on accept path” **only if** mis-implemented as default/sole/hard gate — mitigated by audience+authority locks. | Latency; cost; false conflict with L2 (optimize for judge prose); anchor bias; SKIP fatigue; CI flake if wrongly promoted. | Approve **R12** as S6; wire into R11 attachments; measure budgets on M4 Max before any sync-warn default; keep `off` for basic users; never sole CI/golden. | **approved** 2026-08-12 |
+| **FIND-008** | **Maintainer `eval.dogfood` profile (R12)** — `off\|sample\|always\|async` Lane C GEval/C′ on git-cg developer commits while building the eval stack. Recommended default for dogfood: **`always` + `async` + advisory** → feed **R11 amend-brief** last-N attachments. Overhead budgets (async never blocks commit path per S6-G02 two-part claim; sync advisory ≤~5s preferred / ≤~15s owner-accept; hard-block explicit opt-in only). Pin model/prompt/temp; message-first payload; L1 always wins arbitration. | High-frequency lab signal catches assistant drift, stabilizes rubric, produces real failure→fixture fuel, battle-tests Opik path — without making GEval product law. Matches reality that L2 already spends LLM tokens on every message. | Controlled tension with “no LLM on accept path” **only if** mis-implemented as default/sole/hard gate — mitigated by audience+authority locks. | Latency; cost; false conflict with L2 (optimize for judge prose); anchor bias; SKIP fatigue; CI flake if wrongly promoted. | Approve **R12** as S6; wire into R11 attachments; measure budgets on M4 Max before any sync-warn default; keep `off` for basic users; never sole CI/golden. | **approved** 2026-08-12 |
 
 | **FIND-009** | **Training-corpus mission as first-class plan axis** — dogfood + L2 amend builds golden metrics/data for future train/fine-tune; Opik owner project is mirror **and** longitudinal corpus lake. | Aligns harness with actual purpose of full-history amend + Opik dogfood; stops agents from thinning “non-gate” fields. | Older “mirror-only / maximize denial” tone | If misread, could pressure gate authority or secret leak | **§0.3.6 + §2.8 dual axis**; F0 clarified; record≠gate M11 | **approved** 2026-08-13 |
 | **FIND-010** | **R12-MVP early** — one pinned craft GEval (async advisory) as soon as S2a + final_message capture exists; do not wait for full S5 cohort. | Prevents starving training stream and dogfood signal during long S2/S5 | S5-after-everything reading of F9 | Premature dashboard trust | R12 addendum; still advisory; R2 readiness before “operator-ready” Lane C | **approved** 2026-08-13 |
@@ -3820,5 +3844,5 @@ has_body = message_has_body_or_trailers(final)
 
 ---
 
-*End of v0.9.5-s5-s6-s7-api-surface — S5/S6/S7 API-surface policy locked (CLI-first public API; selected `git_cg.eval*` supported; internals internal; S5 narrow export; S6 operator API map + help alignment; S7 Zensical/ADR durable docs + optional allowlist autodoc). Prior v0.9.4 S5 eligibility/availability split + v0.9.3 S2b locks + v0.9.2 body residual + v0.9.1 briefing locks + v0.9.0 comment-depth remain locked. Post-S4 `main` (`v0.20.0`) is the contract base; implement S5 from #233 without SDK-scope creep.*
+*End of v0.9.6-s6-slice0-reconciliation — S6 Slice 0 (#246) reconciles plan drift to locked implementation terms (`compat_hash`, five resume modes + recovery law, `eval session show`, S6-G02 two-part async dogfood claim) without reopening authority. Prior v0.9.5 S5/S6/S7 API-surface policy + v0.9.4 S5 eligibility/availability split + v0.9.3 S2b locks + v0.9.2 body residual + v0.9.1 briefing locks + v0.9.0 comment-depth remain locked. Post-S5 `main` (`v0.21.0`+) is the contract base; implement S6 from #246 without SDK-scope creep or a third law surface.*
 

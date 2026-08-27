@@ -34,14 +34,17 @@ def schema_pack_digest() -> str:
 
 @lru_cache(maxsize=1)
 def metric_catalog_digest() -> str:
+    """SHA-256 over canonical JSON of the metric catalog."""
     return _sha256_bytes(_canonical_json_bytes(CATALOG_PATH))
 
 
 def schema_pack_pin() -> str:
+    """Return the pinned schema pack identifier with embedded digest."""
     return f"schema_pack_v0@{schema_pack_digest()}"
 
 
 def metric_catalog_pin() -> str:
+    """Return the pinned metric catalog identifier with embedded digest."""
     return f"metric_catalog_v0@{metric_catalog_digest()}"
 
 

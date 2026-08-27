@@ -86,6 +86,7 @@ GITMOJI_CC_GROUPS: dict[str, tuple[str, frozenset[str], str]] = {
     "⬆": ("build", frozenset({"Changed"}), "PATCH"),
     "⬇": ("build", frozenset({"Changed"}), "PATCH"),
     "🌐": ("feat", frozenset({"Added"}), "MINOR"),
+    "🌑": ("chore", frozenset({"Changed"}), "PATCH"),
     "🌱": ("chore", frozenset({"Miscellaneous"}), "NONE"),
     "🍱": ("chore", frozenset({"Added"}), "PATCH"),
     "🍻": ("refactor", frozenset({"Miscellaneous"}), "NONE"),
@@ -899,11 +900,13 @@ def _message_blob(plan: CommitPlan, *, include_rationale: bool = True) -> str:
 
 
 def _is_fixture_path_gold(path: str) -> bool:
+    """Return True when a path is a fixture/corpus/golden directory."""
     parts = {part.lower() for part in str(path).replace("\\", "/").split("/") if part}
     return bool(parts & {"fixtures", "fixture", "goldens", "corpus"})
 
 
 def _is_docs_path_gold(path: str) -> bool:
+    """Return True when a path is a documentation file or directory."""
     lowered = str(path).replace("\\", "/").lower()
     name = lowered.rsplit("/", 1)[-1]
     return (
@@ -915,6 +918,7 @@ def _is_docs_path_gold(path: str) -> bool:
 
 
 def _is_test_path_gold(path: str) -> bool:
+    """Return True when a path is a test file or test directory."""
     lowered = str(path).replace("\\", "/").lower()
     parts = {p for p in lowered.split("/") if p}
     name = lowered.rsplit("/", 1)[-1]

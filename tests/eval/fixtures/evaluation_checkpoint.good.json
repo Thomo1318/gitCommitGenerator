@@ -1,0 +1,19 @@
+{
+  "schema_version": "evaluation_checkpoint_v1",
+  "id": "ckpt-1",
+  "checkpoint_id": "ckpt-1",
+  "experiment_id": "exp-1",
+  "compat_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "completed_case_ids": [
+    "case-a"
+  ],
+  "pending_case_ids": [
+    "case-b"
+  ],
+  "last_progress_at": "2026-08-20T12:00:00Z",
+  "mode": "resume_missing",
+  "cursor": "case-b",
+  "schema_pack": "schema_pack_v0@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "metric_catalog": "metric_catalog_v0@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "suite_id": "cm-eval-fixtures-core"
+}

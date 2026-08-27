@@ -2,7 +2,7 @@
 
 Offline **schema pack + metric catalog pins** (S0), **fixture/corpus encoder** (S1), **Plane A score runner** (S2a/S2b/S2c), and **accept-path final-bytes binding + trajectory evidence** (S3) for the Opik evaluation harness.
 
-> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.5-s5-s6-s7-api-surface` (retains `0.9.3-s2b-clarifications` / `0.9.4-s5-eligibility-split` locks)
+> **Design SSOT:** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) @ `0.9.6-s6-slice0-reconciliation` (retains `0.9.5-s5-s6-s7-api-surface` / `0.9.4-s5-eligibility-split` / `0.9.3-s2b-clarifications` locks)
 > **Implementation issues:** [#220](https://github.com/Thomo1318/gitCommitGenerator/issues/220) (S0) · [#231](https://github.com/Thomo1318/gitCommitGenerator/issues/231) (S3)
 > **Parent design:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
 
@@ -32,7 +32,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6`
+  * `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -55,6 +55,25 @@ Pins are content hashes (`name@sha256`):
 
 Legacy `src/git_cg/evals/` (soak/report helpers) is **not** the contract home. S0 uses singular `eval/`.
 
+
+
+## S6 — operator UX Slice 0 lock (#246)
+
+> **Implementation issue:** [#246](https://github.com/Thomo1318/gitCommitGenerator/issues/246)
+> **Plan SSOT version:** `0.9.6-s6-slice0-reconciliation`
+> **Census:** [`s6-slice0-landed-state-census.md`](./s6-slice0-landed-state-census.md)
+> **Baseline:** [`s6-slice0-baseline.json`](./s6-slice0-baseline.json)
+
+Slice 0 is **policy lock + landed-state census + canonical CLI naming** only. It does not ship runtime S6 writers. Schema re-freeze starts in Slice 1; CLI skeleton in Slice 2.
+
+Canonical command names (locked):
+
+* `git-cg eval run` (not `eval suite run`)
+* `git-cg eval session show` (not `session-show`)
+* `git-cg eval opik config show` (flat `eval config show` = temporary deprecated alias)
+* nested `git-cg eval export status|retry|drain` (dashed `export-*` = temporary bridges)
+
+Path-helper split: `src/git_cg/eval/paths.py` = static schema/catalog discovery; all Layer-A runtime stores extend `src/git_cg/eval/binding/paths.py` only.
 
 ## S2a — offline Plane A score runner
 
@@ -652,4 +671,260 @@ Composition/runner claim mapping lives in [`s5-claim-evidence.md`](./s5-claim-ev
 ### Boundary
 
 S5 ships the **gated advisory cohort only.** It does **not** land full doctor/amend-brief/review-queue UX (**S6**), rewrite ADR-0011 / durable Zensical API pages (**S7**), or install a required GEval CI gate (**never**).
+
+
+## S6 Slice 7 — amend-brief · dogfood (Lane C) · train-export · sessions (#246)
+
+> **Claim → test matrix (Slice 9 close pack):** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
+> Operator UX surface for #246; boundaries and E-LOOP close narrative live in [S6 close-out](#s6--operator-ux-close-out-slice-9--246).
+
+Slice 7 wires the five remaining offline operator surfaces to landed engines.
+All five emit `cli_output_envelope_v1`, are import-light (no Opik at import
+time), and are **advisory/corpus** surfaces — none is a gate or product-accept
+authority.
+
+| Command | Engine | Data `data` shape | Exit classes |
+|:---|:---|:---|:---|
+| `eval amend-brief <run_id>` | `eval/brief.py` | `brief`, `written`, `family_rollup`, `blocking`, `preference_pairs` | 2 usage · 4 store |
+| `eval dogfood --commit-message …` | `eval/dogfood/capture.py` | `attachment`, `captured`, `skipped`, `product_block:false`, `async_never_awaits_judge` | 2 usage · 4 store |
+| `eval train-export [--bundle-id …]` | `eval/train_export.py` | `export`, `row_ids`, `dropped_row_ids`, `scrub_report`, `positive_gold_count` | 2 usage · 4 store |
+| `eval session show --id sess_…` | `eval/sessions.py` | session projection (`lifecycle`, `message_versions`, …) | 2 usage · 4 store |
+| `eval thread show --id sess_…` | `eval/sessions.py` | thread projection (`messages`) | 2 usage · 4 store |
+
+### Lane C dogfood (advisory, never-blocking)
+
+* Modes `off|sample|always|async`; maintainer profile defaults to `async`, non-maintainer to `off`.
+* `async` mode records `async_never_awaits_judge=true` and **never** awaits the judge on the product path (`product_block` is always `false`).
+* `sample` mode is deterministic: explicit `--seed` or a stable hash of the population; `mode=sample` requires `sample_seed`, `sample_rate`, `population_id` (schema-conditional requirement).
+* `capture_on=fail` marks `hard_negative_candidate=true` for R14 vault routing.
+* Bench: `just dogfood-bench` runs `hyperfine` async-on vs async-off on the real commit path and reports mean delta + CI-overlap. Maintainer evidence only — never a CI or product gate. Durable S6-G02(b) pack: `docs/eval/evidence/s6-g02b-*`.
+
+### Train export row scrub-failure policy (locked)
+
+Field-level quarantine stays S4 (`meta.redaction_quarantine`, never emitted
+clear). A **row** that cannot be emitted secret-safe is **dropped** from the
+batch, recorded in the export `scrub_report` (`status=quarantined|omitted`
+with the affected ids/fields), and the export **continues**. No cleartext is
+ever emitted and there is **no `.eval/quarantine/` store**.
+
+**S6-G06 preserved:** `filter_positive_gold` / `build_train_projection`
+dual-axis law holds — antipattern / hard-negative rows never silent-merge into
+`positive_gold`; `hard_negative` rows are routed to the antipattern vault copy
+when `vault_destination=antipattern_vault`.
+
+## Slice 8 / D27 triage absorption
+
+Legacy `scripts/opik_trace_triage.py` is a frozen refusal shim. Use the offline advisory router:
+
+```bash
+git-cg eval triage
+git-cg eval doctor
+git-cg eval failures
+git-cg eval explain
+```
+
+`eval triage` composes doctor + failures + explain library engines. It is **not** score law and does not revive Opik `user_acceptance` threshold triage.
+
+
+## S6 — operator UX close-out (Slice 9 / #246)
+
+> **Issue:** [#246](https://github.com/Thomo1318/gitCommitGenerator/issues/246) · **Parent:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)  
+> **Claim → test matrix:** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
+> **Live CLI map:** [`operator_api_map.md`](./operator_api_map.md) (generate/check via `just eval-api-map-check`)  
+> **Plan SSOT:** `docs/plans/opik-evaluation-harness.md` @ `0.9.6-s6-slice0-reconciliation`  
+> **Pins (local SoT):** `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
+
+Slice 9 is **documentation / CI recipe / claim-evidence packaging** for the S6 operator surface already landed in Slices 0–8. It does **not** add score authority, REST/OpenAPI, ADR-0011 rewrite, or Zensical durable API pages (those stay S7 / deferred).
+
+### Dual-axis + I10 (basic users)
+
+| Axis | Law |
+|:---|:---|
+| Product accept / ranking / Hybrid gate / normal `git-cg commit` | Unchanged when eval/dogfood/capture off (**I10**) |
+| Operator / lab / export / doctor | May go red, skip, drop rows, or emit advisory attachments without flipping product accept |
+| Basic help | `git-cg --help` stays free of Opik setup requirements and eval-only noise (**S6-A02** / **A10**) |
+| `git_cg.eval.__init__.__all__` | Frozen S0 contract exports only — **not** silently broadened in S6 (**S6-A09** / D5) |
+
+### Authority tiers (CLI-first)
+
+| Tier | Surface | Promise |
+|:---|:---|:---|
+| **Public** | `git-cg` / `git-cg eval …` CLI | Primary operator API; help-tested |
+| **Supported** | Selected `git_cg.eval*` entrypoints named in the operator API map | Maintainer/harness-stable |
+| **Internal** | All other `git_cg.eval*` / product modules | **No** compatibility promise (**S6-A05**) |
+| **Dark-launch public** | `eval dogfood` | Canonical and callable; **hidden** from regular `git-cg eval --help` |
+
+S6 is **not** a general-purpose Python SDK, REST surface, or S7 autodoc site.
+
+### Operator E-LOOP SOP (INT-27 / §18.2)
+
+```text
+CAPTURE/OBSERVE
+  → LOCAL SCORE (Families A–I / offline Lane A)
+  → EXPLAIN / DIAGNOSE (deterministic; no Ollie authority)
+  → PROMOTE / LABEL (state machine; human review never sole gold)
+  → SUITE RUN / RESUME / RECOMPUTE (compat-hash governed)
+  → optional MIRROR (S4 fail-open export queue)
+  → AMEND-BRIEF / REVIEW (advisory)
+  → RESOLVE ISSUE (local diag_issue_v1 lifecycle)
+```
+
+| Surface | Authority |
+|:---|:---|
+| Local suite + Families A–I | **Eval/CI law** (offline Lane A default) |
+| Local dataset snapshot / fixtures | **Corpus SoT** |
+| Local experiment + checkpoint | Run provenance (`compat_hash`) |
+| Opik project/experiment UI | Projection / lake UX only (S4) |
+| Human review queue / dogfood / triage | **Advisory** — never sole golden, never product gate |
+| Ollie / Playground / Optimizer | **Non-authority** |
+
+### Deterministic debug loop (FIND-020 / §18.3)
+
+```text
+FIND → EXPLAIN → COMPARE → REPLAY → PROMOTE → VERIFY
+```
+
+| Step | Command | Contract |
+|:---|:---|:---|
+| FIND | `git-cg eval failures` | metric_ids + failure_ids; optional `--regime/--family/--failure-id/--severity` AND filters |
+| EXPLAIN | `git-cg eval explain …` | IDs, artifact/result classes, blame span, failure/prevention IDs, counters, export state, static surfaces, exact replay command — **no** opaque LLM RCA |
+| COMPARE | `git-cg eval compare <a> <b>` | Structural + metric delta; uses `replay_compare_v1` lineage when linked |
+| REPLAY | `git-cg eval replay …` | New bundle + compare; **never** mutates source |
+| PROMOTE | `git-cg eval promote …` | Provenance + label + destination + redaction + `split_group_id`; named denial taxonomy |
+| VERIFY | `git-cg eval doctor` / suite re-run / issue resolve | Pin integrity + local green; issue lifecycle evidence-gated |
+
+Shortcut router: `git-cg eval triage` composes doctor + failures + explain (Slice 8 / D27). It is **not** score law.
+
+### Canonical command map (Slice 0 decision)
+
+Full live tree: [`operator_api_map.md`](./operator_api_map.md). Highlights:
+
+| Kind | Commands |
+|:---|:---|
+| Suite ops | `eval run` · `eval resume` · `eval recompute-scores` · `eval encode-fixture` · `eval materialize-core-goldens` |
+| Health | `eval doctor` · `eval opik doctor` · `eval opik config show` · `eval triage` |
+| Debug / diag | `eval failures` · `eval explain` · `eval compare` · `eval diagnose` · `eval issue list\|show\|resolve\|reopen\|suppress` |
+| Replay / review / promote | `eval replay` · `eval review *` (incl. `rollup`) · `eval promote` |
+| Sessions / brief | `eval session show` · `eval thread show` · `eval amend-brief` |
+| Train / dogfood | `eval train-export` · `eval dogfood` (**dark-launch**; hidden from regular help) |
+| Export queue | nested `eval export status\|retry\|drain` |
+
+**Deprecated temporary aliases** (removal: first minor release after S6 GA):
+
+| Alias | Canonical |
+|:---|:---|
+| `eval config` / `eval config show` | `eval opik config show` |
+| `eval export-status` | `eval export status` |
+| `eval export-retry` | `eval export retry` |
+| `eval export-drain` | `eval export drain` |
+
+Naming locks: **`eval run`** is canonical (not `eval suite run`); session/thread use nested `show` (not dashed `session-show`).
+
+### Exit-code registry (frozen 0/1/2/3/4)
+
+| Code | Class | Typical codes / meaning |
+|:---:|:---|:---|
+| **0** | ok / green | Success; doctor green; fail-open export drain success path |
+| **1** | soft / warn or scored red | Doctor warn-only or non-terminal red aggregate where command defines it |
+| **2** | usage | `EVAL_USAGE` — bad args, illegal issue transition, invalid ids |
+| **3** | pin / compat | `EVAL_COMPAT_HASH_MISMATCH` — resume hard-stop; checkpoint bytes preserved |
+| **4** | store integrity | `EVAL_STORE_INTEGRITY` — missing/corrupt Layer-A JSON, path escape, schema-invalid store |
+
+JSON operator commands emit one `cli_output_envelope_v1` (`ok`, `code`, `message`, `data`, `warnings`). Envelope `data` sketches are gated by `python -m git_cg.eval.api_map --check` (**S6-A07/A08**).
+
+### Issue state machine (`diag_issue_v1`)
+
+Closed lifecycle (illegal transitions → exit **2**):
+
+```text
+open → {acknowledged, resolved, suppressed}
+acknowledged → {resolved, suppressed, reopened}
+resolved | suppressed → {reopened}
+reopened → {acknowledged, resolved, suppressed}
+```
+
+* `resolve` requires `--resolution-evidence`.
+* `suppress` requires `--reason`.
+* Fingerprint law excludes ephemeral/time/raw/URL fields (**S6-D05**).
+* Store is **single-operator-writer** (see operator API map).
+
+### Offline Lane A CI recipe (**S6-H02**)
+
+Default PR/merge CI stays **offline Lane A**. There is **no** required GEval / Lane C′ gate job and **no** network Opik requirement on the product path (**FIND-007**).
+
+| Lane | What runs in default CI | What does not |
+|:---|:---|:---|
+| **A — offline deterministic** | Full `uv run pytest` on GitHub Actions (`CI / Tests` → **Run Tests**), including `tests/eval/**` fixtures, doctors, orchestrator, debug loop, dual-axis composition | Live provider calls as merge gate |
+| **B — local corpus / goldens** | Fixture encode/materialize helpers available via `just eval-materialize` / `eval-fixture-index` | Not a separate required GEval job |
+| **C′ — advisory judge lab** | Covered by offline injectable tests; maintainer `just dogfood-bench` is **evidence only** | Never first/sole CI gate; never product accept gate |
+
+**PR recipe (operators / agents):**
+
+```bash
+# 1) Full offline suite (CI-shaped)
+uv run pytest -q
+
+# 2) S6 operator proof spine (fast subset; claim matrix)
+uv run pytest \
+  tests/eval/test_api_map_help.py \
+  tests/eval/test_checkpoint_store.py \
+  tests/eval/test_compat_hash.py \
+  tests/eval/test_run_orchestrator.py \
+  tests/eval/test_eval_cli_run.py \
+  tests/eval/test_doctor.py \
+  tests/eval/test_eval_cli_doctor.py \
+  tests/eval/test_eval_opik_doctor.py \
+  tests/eval/test_explain.py \
+  tests/eval/test_diagnose.py \
+  tests/eval/test_eval_cli_explain.py \
+  tests/eval/test_replay.py \
+  tests/eval/test_promote.py \
+  tests/eval/test_review_queue.py \
+  tests/eval/test_eval_cli_replay_promote.py \
+  tests/eval/test_s6_slice7.py \
+  tests/eval/test_eval_cli_triage.py \
+  tests/eval/mirror/test_train.py \
+  -q --no-cov
+
+# 3) Operator API map drift gate
+just eval-api-map-check
+
+# 4) Pin echo (informational)
+just eval-schema-hash
+```
+
+Equivalent task wrappers: `mise run test` / project `just test` smoke. Coverage XML upload and docstring patch gates remain orthogonal quality jobs — they are **not** GEval gates.
+
+Maintainer-only async dogfood latency evidence: `docs/eval/evidence/s6-g02b-*` via `just dogfood-bench` (**S6-G02(b)** / NTH-06). Authority stamps: `maintainer_evidence`, `ci_gate=false`, `product_accept_gate=false`.
+
+### S6 boundary vs S3 / S4 / S5 / S7
+
+| Slice | S6 consumes | S6 must not |
+|:---|:---|:---|
+| **S3** accept-path bind + sessions twin | Read local session/thread; reference `session_thread_id` in amend-brief | Redesign binder / final-bytes accept authority |
+| **S4** mirror + export queue + train projection | Nested export ops; train-export scrub; secret-safe config/doctor | Block product accept on export; invent second score SoT |
+| **S5** Lane C′ advisory | Dogfood shadow sidecar; eligibility≠credentials; FIND-007 narrow ban | Elevate GEval to CI/product gate; gold-vision default |
+| **S6** operator UX | CLI-first doctor/debug/review/train/dogfood/sessions surface | General SDK claim; silent `__all__` expansion |
+| **S7** (deferred) | — | ADR-0011 full rewrite, Zensical API site, REST/OpenAPI/autodoc scope |
+| **S8 / #235** (deferred) | — | Unallocated hygiene unless explicitly reopened with IDs |
+
+### Script absorption (reminder)
+
+Legacy `scripts/opik_trace_triage.py` and related setup helpers remain **refusal shims / absorbed**. Operator path is `git-cg eval …` only (**S6-H03**).
+
+### Public package surface freeze
+
+`git_cg.eval.__init__.__all__` remains the S0 contract floor:
+
+`ARTIFACT_CLASS`, `AUTHORITY`, `FAMILY`, `POLARITY`, `REDACTION_PROFILE`, `SOURCE`, `ScoreResultV1`, `load_metric_catalog`, `metric_catalog_pin`, `schema_pack_pin`.
+
+Supported maintainer entrypoints beyond `__all__` are **named in the operator API map**, not implied by import star.
+
+### Explicit deferred after #246
+
+* S7 durable ADR-0011 / Zensical API documentation
+* REST / OpenAPI / Scalar / Redoc / mandatory mkdocstrings
+* Live network Opik Cloud dogfood as a merge requirement
+* Parent board close on #217 / portfolio #216
+* Unallocated NTH/hygiene without explicit IDs → #235 / S8 only
 

@@ -23,6 +23,7 @@ SETUP_RULE = SCRIPTS / "setup_opik_eval_rule.py"
 SETUP_SUITES = SCRIPTS / "setup_opik_test_suites.py"
 EVAL_COMMIT = SCRIPTS / "eval_commit_message.py"
 OPIK_METRICS = SCRIPTS / "opik_metrics.py"
+OPIK_TRACE_TRIAGE = SCRIPTS / "opik_trace_triage.py"
 
 
 def _install_banned_module_sentinels(monkeypatch, banned_roots=None):
@@ -108,6 +109,13 @@ def _assert_no_banned_imports(path: Path, banned_roots: set[str]) -> None:
             "refuse_legacy_opik_metrics",
             "scoring",
         ),
+        (
+            OPIK_TRACE_TRIAGE,
+            "opik_trace_triage",
+            "LEGACY_OPIK_TRACE_TRIAGE_RETIRED",
+            "refuse_legacy_opik_trace_triage",
+            "triage",
+        ),
     ],
 )
 class TestLegacyScriptFreeze:
@@ -180,3 +188,21 @@ class TestOpikMetricsFormatMetricRefuses:
         with pytest.raises(SystemExit) as ei:
             metric.score("✨ feat(test): x")
         assert ei.value.code == 2
+
+
+class TestOpikTraceTriageRefuses:
+    def test_triage_traces_refuses(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mod = _load(OPIK_TRACE_TRIAGE, monkeypatch=monkeypatch, module_name="opik_trace_triage")
+        with pytest.raises(SystemExit) as ei:
+            mod.triage_traces("gitCommitGenerator")
+        assert ei.value.code == 2
+
+    def test_refuse_mentions_no_user_acceptance_law(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mod = _load(OPIK_TRACE_TRIAGE, monkeypatch=monkeypatch, module_name="opik_trace_triage")
+        buf = __import__("io").StringIO()
+        assert mod.refuse_legacy_opik_trace_triage(stream=buf) == 2
+        msg = buf.getvalue().lower()
+        assert "user_acceptance" in msg
+        assert "not gold" in msg or "not" in msg
+        for home in ("eval triage", "eval doctor", "eval failures", "eval explain"):
+            assert home in msg

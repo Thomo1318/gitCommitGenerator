@@ -372,6 +372,7 @@ class Stub:
 
 
 def _is_changelog_path(path: str) -> bool:
+    """Check if a path represents a changelog file."""
     return PurePosixPath(path).name.lower() in CHANGELOG_BASENAMES
 
 
@@ -1264,6 +1265,7 @@ def _doc_surface_keys(paths: list[str]) -> list[tuple[str, str, str]]:
 
 
 def _path_role_for_product_stem(stem: str) -> str:
+    """Map a product module stem to its role category."""
     key = stem.lower().replace("-", "_")
     if key in {"telemetry"}:
         return "telemetry"
@@ -1298,6 +1300,7 @@ def _suggested_cc_for_role(
 
 
 def _scope_for_stub(role: str, surface: str, paths: list[str]) -> str | None:
+    """Determine the appropriate scope for a stub based on role, surface, and paths."""
     behaviour = _behaviour_scope_hint(paths)
     # Behaviour cross-wires prefer scoped-history over leaf module alone.
     if behaviour == "scoped-history" and role in {"prod", "test", "telemetry", "sentry", "perf", "refactor"}:
@@ -1384,6 +1387,7 @@ def build_included_change_stubs(
     seen_keys: set[str] = set()
 
     def _add(stub: Stub) -> None:
+        """Add a stub to the collection if it's not a duplicate."""
         key = f"{stub.role}|{stub.surface}|{(stub.note or '').lower()}|{stub.suggested_cc_type.value}"
         if key in seen_keys:
             return
@@ -2219,6 +2223,7 @@ def _ensure_secondary_for_type(
     desc = str(description or "")[:50]
 
     def _same_scope(existing_scope: str | None) -> bool:
+        """Check if an existing scope matches the wanted scope."""
         return _intent_scope_key(existing_scope) == wanted_scope
 
     if match_scope:
@@ -3361,9 +3366,11 @@ class GuardReport:
 
     @property
     def dirty(self) -> bool:
+        """Return True if any guard findings are present."""
         return bool(self.findings)
 
     def codes(self) -> frozenset[str]:
+        """Return a set of all guard finding codes."""
         return frozenset(f.code for f in self.findings)
 
 
@@ -3409,6 +3416,7 @@ def harvest_claim_tags(
 
 
 def _plan_subject_body(plan: CommitPlan | None) -> tuple[str, str]:
+    """Extract subject and body text from a commit plan."""
     if plan is None:
         return "", ""
     primary = getattr(plan, "primary_intent", None)
@@ -3421,11 +3429,13 @@ def _plan_subject_body(plan: CommitPlan | None) -> tuple[str, str]:
 
 
 def _message_blob(plan: CommitPlan | None) -> str:
+    """Combine subject and body into a single message string."""
     subject, body = _plan_subject_body(plan)
     return f"{subject}\n{body}".strip()
 
 
 def _docs_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
+    """Check if changes are documentation-only."""
     # Fixtures are test-family (P-S12-4), not documentation prose.
     if diff_class_name in {DIFF_CLASS_DOCS, DIFF_CLASS_ADR}:
         return True
@@ -3440,6 +3450,7 @@ def _docs_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
 
 
 def _tests_only_class(diff_class_name: str | None, paths: list[str]) -> bool:
+    """Check if changes are test-only."""
     if diff_class_name in {DIFF_CLASS_TESTS, DIFF_CLASS_FIXTURES}:
         return True
     if not paths:
@@ -3772,6 +3783,7 @@ def check_craft_guard(
 
 
 def _first_subject_token(subject: str) -> str:
+    """Extract the first alphabetic token from a commit subject."""
     words = [w for w in (subject or "").strip().split() if any(ch.isalpha() for ch in w)]
     if not words:
         return ""
@@ -4253,6 +4265,7 @@ def _sentence_case(text: str) -> str:
 
 
 def _ensure_terminal_punct(text: str) -> str:
+    """Ensure text ends with terminal punctuation."""
     stripped = text.rstrip()
     if not stripped:
         return stripped
@@ -4658,16 +4671,19 @@ class GateReport:
     gate_status: tuple[tuple[str, str], ...] = ()  # (gate, pass|fail|skip)
 
     def codeset(self) -> frozenset[str]:
+        """Return gate finding codes as a frozen set."""
         return frozenset(self.codes)
 
 
 def _enum_val(value: object) -> str:
+    """Extract string value from an enum or return empty string for None."""
     if value is None:
         return ""
     return str(value.value if hasattr(value, "value") else value)
 
 
 def _plan_types_groups(plan: CommitPlan | None) -> tuple[list[str], list[str], list[str]]:
+    """Extract commit types, changelog groups, and scopes from a plan."""
     if plan is None:
         return [], [], []
     primary = plan.primary_intent
@@ -4682,6 +4698,7 @@ def _plan_types_groups(plan: CommitPlan | None) -> tuple[list[str], list[str], l
 
 
 def _inventory_blob(plan: CommitPlan | None, included_changes: list[str] | None = None) -> str:
+    """Generate a text representation of the plan inventory and included changes."""
     bits: list[str] = []
     if included_changes:
         bits.extend(str(x) for x in included_changes)
@@ -4762,6 +4779,7 @@ def _check_type_gate(
     concern_tags: set[str] | frozenset[str] | None,
     priors: TrailerPriors | None,
 ) -> list[GateFinding]:
+    """Check commit type constraints and return gate findings."""
     findings: list[GateFinding] = []
     primary = plan.primary_intent
     cc = _enum_val(primary.cc_type)
@@ -4893,6 +4911,7 @@ def _check_semver_gate(
     constraints: PresentationConstraints,
     concern_tags: set[str] | frozenset[str] | None,
 ) -> list[GateFinding]:
+    """Check semantic versioning constraints and return gate findings."""
     findings: list[GateFinding] = []
     primary = plan.primary_intent
     sem = _enum_val(primary.semver_impact)
@@ -4956,6 +4975,7 @@ def _check_inventory_gate(
     included_changes: list[str] | None,
     require_stub_note_tokens: list[str] | tuple[str, ...] | None = None,
 ) -> list[GateFinding]:
+    """Check inventory constraints and return gate findings."""
     findings: list[GateFinding] = []
     min_bullets = min_included_change_bullets(paths, concern_tags=concern_tags)
     stubs = build_included_change_stubs(

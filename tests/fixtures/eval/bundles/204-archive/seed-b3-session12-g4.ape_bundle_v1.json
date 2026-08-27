@@ -57,7 +57,7 @@
   "provenance_label": "Opik-unbound",
   "redaction_profile": "default_scrub",
   "regime": "B",
-  "schema_pack": "schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6",
+  "schema_pack": "schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe",
   "schema_version": "ape_bundle_v1",
   "unbound_reason": "historical_204_archive_seed_not_acceptpath_bound"
 }

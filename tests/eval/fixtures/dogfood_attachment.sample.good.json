@@ -1,0 +1,31 @@
+{
+  "schema_version": "dogfood_attachment_v1",
+  "id": "dog-sample-1",
+  "run_id": "run-sample-1",
+  "judge_id": "judge-craft-v1",
+  "pin_ref": "schema_pack_v0@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "mode": "sample",
+  "metric_id": "dogfood.geval_last",
+  "score": 0.8,
+  "polarity": "higher_is_better",
+  "rationale_short": "Sample-mode attachment with reproducible membership.",
+  "latency_ms": 10.0,
+  "created_at": "2026-08-20T12:00:00Z",
+  "authority": "advisory",
+  "message_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "sample_seed": "seed-fixed-1",
+  "sample_rate": 0.5,
+  "population_id": "suite:cm-eval-fixtures-core",
+  "population_members": [
+    "case-a",
+    "case-b",
+    "case-c",
+    "case-d"
+  ],
+  "selected_ids": [
+    "case-b",
+    "case-d"
+  ],
+  "selected_set_hash": "e8ee7ecb2b646178e0e7d5739fa62b362f051b22382c332720741057521e9463",
+  "capture_on": "all"
+}

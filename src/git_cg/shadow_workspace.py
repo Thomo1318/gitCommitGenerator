@@ -1,3 +1,10 @@
+"""Temporary isolated Git repository clones for safe speculative operations.
+
+Provides ShadowWorkspace and context managers for creating sandboxed Git
+repository clones that mirror staged and optionally unstaged changes without
+risking the user's working directory.
+"""
+
 import os
 import subprocess
 import tempfile

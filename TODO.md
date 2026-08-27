@@ -93,7 +93,245 @@
 
 ---
 
-TODO:
+## TODO:
+
+- Develop and maintain comprehensive code formatting and architectural standards:
+  - **Comment & Documentation Style** (normative: [`docs/docstring-standard.md`](docs/docstring-standard.md)):
+    - Module docstrings: purpose, invariants/forbidden behaviour, authority & import/secret/network laws
+    - Public functions/classes: PEP 257 summary + side effects; **selective** Google `Args`/`Returns`/`Raises` only when behaviour is not obvious from names/types (not Google-everywhere)
+    - Private helpers: short law/edge one-liners when needed (coverage counts; no stub spam)
+    - CLI (Typer) first line = operator help; keep issue/RFC citations in the body
+    - In-line comments focused on _why_ (intent/trade-offs), not _what_
+    - Section banners & visual dividers (standardized width matching Ruff 120-char limit)
+    - Docstring coverage target enforced via `interrogate` (>= 80% patch-scoped on changed `src/git_cg`)
+    - File Headings, version, date, explanation, etc.
+  - **Code & Typing Style (Python 3.14+)**:
+    - Line Length: 120 characters (enforced by `ruff format`)
+    - Imports: Sorted via `isort` with `combine-as-imports`, grouped (stdlib > 3rd-party > 1st-party)
+    - Type Annotations: Mandatory on all public functions/methods using modern syntax (`list[T]`, `T | None`, `type Alias = ...`)
+    - Data Structures: Pydantic v2 for I/O & schemas, `@dataclass(slots=True)` for internal state, `StrEnum` for constants
+    - Error Handling: Custom exception hierarchy, explicit `raise ... from err` chaining, boundary-only `typer.Exit`
+  - **Naming Conventions**:
+    - Modules & Packages: `snake_case` (no hyphens)
+    - Tests: `test_<module_or_feature>.py`
+    - Classes & Types: `PascalCase`
+    - Functions, Methods & Variables: `snake_case`
+    - Constants & Enum Members: `UPPER_SNAKE_CASE`
+    - Shell Scripts: `snake_case.sh` or `snake_case.zsh`
+    - Docs: `kebab-case.md` (except canonical root files like `README.md`, `TODO.md`)
+  - **Directory & Multi-language Standards**:
+    - Shell Scripts: `set -euo pipefail`, double-quoted variables, shellcheck compliance
+    - Markdown/Docs: Single H1, hierarchical headings (no skipped levels), fenced codeblocks with language tags
+    - Configs (JSON/TOML/YAML): 2-space indentation, validated against JSON schemas where applicable
+  - **Automated Enforcement**:
+    - Wire into `just check` / `just lint` (`ruff`, `pyright`, `interrogate`, `pytest`)
+
+- File Heading
+
+```text
+# ==============================================================================
+# <script_name>
+# ------------------------------------------------------------------------------
+# Version: v0.0.x
+# Description: Description of the file
+# Usage: ./<script_name> <arg1> [arg2] [arg3]
+# ==============================================================================
+```
+
+- Heading
+
+```text
+# ============================================================================
+# SETTINGS & CONFIGURATION
+# ============================================================================
+```
+
+- Sub-Heading
+
+```text
+# ----------------------------------------------------------------------------
+# MLX Inference Backend
+# ----------------------------------------------------------------------------
+```
+
+- Separator
+
+```text
+# ----------------------------------------------------------------------------
+```
+
+---
+
+- Update the README.md file to list the currently supported inference engines and their capabilities. Ensure there are links to each engines GitHub repo and official websites if they exist.
+  - Currently tested and supported engines are:
+    - MTPLX
+    - Lightning LMX
+    - oMLX
+- Need to confirm other popular inference engines work with git-cg (plug-in ready, partial or full support):
+  - Ollama
+  - LM Studio
+  - others?
+- Need to confirm it can use paid providers (plug-in ready, partial or full support):
+  - xAI - Groq
+  - OpenAI - Chat GPT
+  - Google - Gemini
+  - Anthropic - Claude
+  - Kimi
+  - Qwen
+  - GLM
+  - Apple Intelligence
+    - SDK
+    - Apfel or similar tools
+  - others?
+- Use tables to show feature support for different inference engines and providers e.g. reasoning, hardware acceleration, threading, quantization options, context window, etc. (need to determine what columns to include).
+- Benchmarks section that shows performance metrics for different inference engines and providers (need to determine what metrics to include).
+- Include benchmarks for different model types and sizes.
+- Outline supported model types specifically calling out `MTPLX` model architecture. Ensure there is a link to Youssofal's huggingface page [Youssofal](https://huggingface.co/Youssofal) so users can identify models they want to use that we know has the MTP heads (for `MTPLX` architecture).
+- Explain that models without the MTP heads will suffer speed penalties (by how much? Need to test - may be able to be offset by using 4-bit quantization instead of 8-bit quantization, need to test this as well).
+- Consider adding an example of the app in action (GIF Charm ecosystem has a tool to do this, check repo for details).
+- Include the updated .jpeg image, update the install section to include `Homebrew` integration instructions for `git-cg`,
+- Add more detail to the Usage section to show a more detailed example of how to use the app (this includes a more detailed example of the `Hybrid Commit` format, etc.)
+
+---
+
+- Update the `--rank-arbitrate` to display 5 items instead of 2 for the user to selct from.
+- Also include an explanation of each item and when it should be used so the user can make an informed decision of which to choose this can be pulled straight from the `sop` e.g.
+
+```json
+"selection_rule": "Use when the primary change improves formatting or code structure without changing runtime behaviour."
+```
+
+---
+
+Update our llms.txt action to also generate `llms-full.txt` using `-full` depth instead of `0` (current behavior) or `brief outline .`? - determine best approach. Reference `docs/plans/` (tracked planning notes; avoid machine-local absolute paths)
+
+- Explore using the `-full` flag with `brief` i.e. `brief outline -full` Although this may be too dense.
+- Compare using the `enrich` flag with `brief` i.e. `brief enrich .` to the existing llms.txt generation and determine if it produces a similar depth of information.
+- Expolore custom wiring useing [Brief - How it Works](https://github.com/git-pkgs/brief#how-it-works)
+
+---
+
+- Continue to investigate the way we are using the current models and determine if there are any improvements we can make to the way we are using them that would improve `git-cg`.
+- Test the different settings we can use in different engines, such as `Temperature`, `Top P`, `Top K`, `Quantization`, `Context Window`, `Pre-fill`, `Presence Penalty` `Reasoning` and `Reasoning Effort`, `Batch Step Size` and other "Advanced" `MTPLX` settings to determine if there are any improvements we can make to the way we are using them that would improve `git-cg`.
+- Determine if there are better models available that would improve `git-cg`.
+- Continue to investigate `Atypical` models and determine if there are any that would improve `git-cg`.
+
+---
+
+- Integrate a status line similar to [Antigravity CLI Status line](https://github.com/google-antigravity/antigravity-cli/tree/main/examples/statusline) for the CLI component of the app.
+
+---
+
+- Integrate a title bar similar to [Antigravity Title Bar](https://github.com/google-antigravity/antigravity-cli/tree/main/examples/title) for the CLI component of the app.
+
+---
+
+- Determine what `AIX Core` is and how it would benefit the tool and or how it compares to the current approach. I belive it is a model + harness/engine created by `IBM` (need to confirm).
+
+---
+
+- Determine if it would be possible for `git-cg` to update the `TODO.md` file when the `-m` flag is used for quick commits. This would allow the tool to track its own progress and allow the developer to see what needs to be done next.
+
+---
+
+Look at methods to slim down git-cg:
+
+```shell
+gitCommitGenerator  evals/246-s6-eval-cli-doctor-amend-brief-dogfood-train-export-sessions !2 🐍 v3.14.5 (gitcommitgenerator)
+❯ du .
+ 28M   ┌── tests                                                       │██                                                                                                   │   1%
+ 34M   │ ┌── hk.log                                                    │██                                                                                                   │   2%
+ 34M   ├─┴ logs                                                        │██                                                                                                   │   2%
+ 44M   │ ┌── fonts                                                     │██                                                                                                   │   2%
+ 44M   ├─┴ dist                                                        │██                                                                                                   │   2%
+ 45M   ├── scratch                                                     │██                                                                                                   │   2%
+ 42M   │   ┌── lightning-mlx-reference                                 │██▒                                                                                                  │   2%
+ 46M   │ ┌─┴ evals                                                     │███                                                                                                  │   2%
+ 51M   ├─┴ src                                                         │███                                                                                                  │   2%
+ 45M   │     ┌── assets                                                │██▒                                                                                                  │   2%
+ 45M   │   ┌─┴ tests                                                   │██▒                                                                                                  │   2%
+ 55M   │ ┌─┴ ADR                                                       │███                                                                                                  │   2%
+ 55M   ├─┴ config                                                      │███                                                                                                  │   2%
+ 65M   │     ┌── pack-f0b2cc3a63a4092f03fc7d0e0e3c777ece647264.pack    │███▒                                                                                                 │   3%
+ 68M   │   ┌─┴ pack                                                    │███▒                                                                                                 │   3%
+ 69M   │ ┌─┴ objects                                                   │████                                                                                                 │   3%
+ 72M   ├─┴ .git                                                        │████                                                                                                 │   3%
+ 80M   │ ┌── graph.db                                                  │████                                                                                                 │   4%
+ 85M   ├─┴ .code-review-graph                                          │████                                                                                                 │   4%
+115M   │ ┌── repomix-output.xmlgitCommitGenerator.xml                  │██████                                                                                               │   5%
+115M   ├─┴ .repomix                                                    │██████                                                                                               │   5%
+123M   │ ┌── state.db                                                  │██████                                                                                               │   5%
+123M   ├─┴ Backup.codeatlas                                            │██████                                                                                               │   5%
+ 46M   │ ┌── assets                                                    │███░░░                                                                                               │   2%
+ 79M   │ │   ┌── adr-0005-HEADER_IMAGES-semantic-context-graph-analysis│████░░                                                                                               │   4%
+ 79M   │ │ ┌─┴ ADR-0005                                                │████░░                                                                                               │   4%
+ 80M   │ ├─┴ supportingDocumentation                                   │████░░                                                                                               │   4%
+130M   ├─┴ site                                                        │██████                                                                                               │   6%
+ 50M   │ ┌── assets                                                    │███░░░░                                                                                              │   2%
+ 79M   │ │   ┌── adr-0005-HEADER_IMAGES-semantic-context-graph-analysis│████░░░                                                                                              │   4%
+ 80M   │ │ ┌─┴ ADR-0005                                                │████░░░                                                                                              │   4%
+ 80M   │ ├─┴ supportingDocumentation                                   │████░░░                                                                                              │   4%
+138M   ├─┴ docs                                                        │███████                                                                                              │   6%
+ 43M   │     ┌── chunks                                                │██▓▓░░░                                                                                              │   2%
+ 82M   │   ┌─┴ dist                                                    │████░░░                                                                                              │   4%
+ 83M   │ ┌─┴ mermaid                                                   │████░░░                                                                                              │   4%
+156M   ├─┴ node_modules                                                │███████                                                                                              │   7%
+195M   │       ┌── gitCommitGenerator                                  │█████████                                                                                            │   9%
+195M   │     ┌─┴ projects                                              │█████████                                                                                            │   9%
+197M   │   ┌─┴ thomo1318                                               │█████████                                                                                            │   9%
+197M   │ ┌─┴ opik_exports                                              │█████████                                                                                            │   9%
+197M   ├─┴ opik                                                        │█████████                                                                                            │   9%
+ 23M   │ ┌── bin                                                       │██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                                          │   1%
+ 24M   │ │     ┌── numpy                                               │██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   1%
+ 37M   │ │     ├── opik                                                │██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   2%
+ 41M   │ │     │ ┌── models                                            │██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   2%
+ 48M   │ │     ├─┴ transformers                                        │███▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   2%
+ 33M   │ │     │ ┌── proxy                                             │██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   1%
+ 71M   │ │     ├─┴ litellm                                             │████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   3%
+160M   │ │     │   ┌── mlx.metallib                                    │████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   7%
+183M   │ │     │ ┌─┴ lib                                               │█████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   8%
+189M   │ │     ├─┴ mlx                                                 │█████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   8%
+ 24M   │ │     │   ┌── cobol.abi3.so                                   │██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   1%
+ 34M   │ │     │   ├── verilog.abi3.so                                 │██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │   2%
+350M   │ │     │ ┌─┴ bindings                                          │████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │  15%
+350M   │ │     ├─┴ tree_sitter_language_pack                           │████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░                                                          │  15%
+945M   │ │   ┌─┴ site-packages                                         │██████████████████████████████████████████░                                                          │  42%
+945M   │ │ ┌─┴ python3.14                                              │██████████████████████████████████████████░                                                          │  42%
+945M   │ ├─┴ lib                                                       │██████████████████████████████████████████░                                                          │  42%
+969M   ├─┴ .venv                                                       │███████████████████████████████████████████                                                          │  43%
+2.2G ┌─┴ .                                                             │████████████████████████████████████████████████████████████████████████████████████████████████████ │ 100%
+
+```
+
+> Ran command: `du -sh /Users/admin/dev/activeProjects/gitCommitGenerator/.venv /Users/admin/dev/activeProjects/gitCommitGenerator/.venv/lib/python*/* | sort -h`
+>
+> Ran command: `du -sh /Users/admin/dev/activeProjects/gitCommitGenerator/.venv/lib/python3.14/site-packages/* | sort -h | tail -n 30`
+>
+> The virtual environment for `gitCommitGenerator` is approximately **969 MB**.
+>
+> Inspecting the packages in `.venv/lib/python3.14/site-packages`, the size is driven almost entirely by heavy native binary wheels, compiled tree-sitter grammars, and local machine learning libraries:
+>
+> ---
+>
+> ### 📊 Top Space Contributors
+>
+> | Package Group                | Top Packages                                                 | Combined Size | Why It's Large                                                                                                             |
+> | :--------------------------- | :----------------------------------------------------------- | :-----------: | :------------------------------------------------------------------------------------------------------------------------- |
+> | **AST / Code Parsing**       | `tree_sitter_language_pack`<br>`tree_sitter_*` grammars      |  **~360 MB**  | Bundles compiled native C/C++ parser binaries for dozens of programming languages to support graph/AST analysis.           |
+> | **Local ML & Inference**     | `mlx`<br>`transformers`<br>`tokenizers`<br>`sentencepiece`   |  **~250 MB**  | Apple Silicon Metal/C++ native compute kernels (`mlx` alone is 189 MB) plus model architectures and tokenization binaries. |
+> | **LLM & Eval Layer**         | `litellm`<br>`opik`<br>`openai`                              |  **~125 MB**  | Multi-provider LLM integrations, serialization schemas, and the Opik evaluation/telemetry SDK.                             |
+> | **Native SDKs & Scientific** | `numpy`<br>`onepassword`<br>`cryptography`<br>`PIL` (Pillow) |  **~70 MB**   | Native compiled C/Rust/Go extension libraries (e.g. 1Password SDK embeds a native binary backend).                         |
+>
+> ---
+>
+> ### 💡 Summary
+>
+> Over **80% of the entire `.venv`** comes from just two components:
+>
+> 1. **`tree_sitter_language_pack`** (351 MB) for multi-language AST parsing.
+> 2. **`mlx` + `transformers`** (~237 MB) for on-device Apple Silicon machine learning inference.
+
+---
 
 - Determine how difficult it would be to rename the tool ACE (A.C.E) "Automatic Commit Engine"
 

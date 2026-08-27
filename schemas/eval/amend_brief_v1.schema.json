@@ -135,21 +135,261 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_empty_string_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/amend_brief_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "R11 amend-session brief (operator; not accept gate). S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "R11 amend-session brief (operator evidence pack; not an accept gate). l1 rollups are computed from ScoreCaseResult/ScoreSuiteResult projections. Attachments (lane_c / dogfood / doctor) remain advisory and last-N bounded.",
   "properties": {
-    "brief_id": {
-      "$ref": "#/$defs/non_empty_string"
+    "schema_version": {
+      "const": "amend_brief_v1"
     },
     "id": {
       "$ref": "#/$defs/non_empty_string"
     },
-    "meta": {
-      "type": "object"
+    "brief_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "session_thread_id": {
+      "type": "string"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "bundle_id": {
+      "type": "string"
+    },
+    "commit_subject": {
+      "type": "string"
+    },
+    "trailers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ]
+      },
+      "description": "Typed trailer map (redacted as needed); free-form values only."
+    },
+    "l1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regime",
+        "family_rollups",
+        "failure_ids",
+        "path_class",
+        "gold_counters",
+        "blocking"
+      ],
+      "properties": {
+        "regime": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "family_rollups": {
+          "type": "object",
+          "description": "Per-family rollup projections (computed, not bundle fields).",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "number",
+                "boolean",
+                "string",
+                "null",
+                "array",
+                "object"
+              ]
+            }
+          }
+        },
+        "failure_ids": {
+          "$ref": "#/$defs/string_list"
+        },
+        "path_class": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "gold_counters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "blocking": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "blocked": {
+              "type": "boolean"
+            },
+            "codes": {
+              "$ref": "#/$defs/string_list"
+            },
+            "reasons": {
+              "$ref": "#/$defs/string_list"
+            }
+          },
+          "required": [
+            "blocked"
+          ]
+        }
+      }
+    },
+    "l2_hints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "$ref": "#/$defs/string_list"
+        },
+        "sop_tension_notes": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "preference_pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chosen_version_id": {
+          "type": "string"
+        },
+        "rejected_version_ids": {
+          "$ref": "#/$defs/string_list"
+        },
+        "owner_approved": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "lane_c_attachments": {
+      "type": "array",
+      "description": "Last-N advisory Lane C′ / dogfood attachments (bounded).",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "judge_id",
+          "pin_ref",
+          "mode",
+          "authority"
+        ],
+        "properties": {
+          "run_id": {
+            "$ref": "#/$defs/non_empty_string"
+          },
+          "judge_id": {
+            "$ref": "#/$defs/non_empty_string"
+          },
+          "pin_ref": {
+            "$ref": "#/$defs/pin_ref"
+          },
+          "mode": {
+            "enum": [
+              "off",
+              "sample",
+              "always",
+              "async"
+            ],
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "polarity": {
+            "$ref": "#/$defs/polarity"
+          },
+          "rationale_short": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "latency_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "created_at": {
+            "$ref": "#/$defs/iso8601"
+          },
+          "authority": {
+            "const": "advisory"
+          },
+          "metric_id": {
+            "type": "string"
+          },
+          "message_sha256": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      }
+    },
+    "doctor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "green": {
+          "type": "boolean"
+        },
+        "check_ids": {
+          "$ref": "#/$defs/string_list"
+        },
+        "failure_ids": {
+          "$ref": "#/$defs/string_list"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "opik_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "trace_ids": {
+          "$ref": "#/$defs/string_list"
+        },
+        "experiment_name": {
+          "type": "string"
+        },
+        "dataset_name": {
+          "type": "string"
+        }
+      }
+    },
+    "schema_pack": {
+      "$ref": "#/$defs/pin_ref"
     },
     "metric_catalog": {
       "$ref": "#/$defs/pin_ref"
@@ -157,20 +397,22 @@
     "notes": {
       "type": "string"
     },
-    "schema_pack": {
-      "$ref": "#/$defs/pin_ref"
+    "created_at": {
+      "$ref": "#/$defs/iso8601"
     },
-    "schema_version": {
-      "const": "amend_brief_v1"
+    "authority": {
+      "description": "Brief is operator evidence only.",
+      "const": "advisory"
     },
-    "session_thread_id": {
-      "type": "string"
+    "redaction_profile": {
+      "$ref": "#/$defs/redaction_profile"
     }
   },
   "required": [
     "schema_version",
     "id",
-    "brief_id"
+    "brief_id",
+    "l1"
   ],
   "title": "amend_brief_v1",
   "type": "object"

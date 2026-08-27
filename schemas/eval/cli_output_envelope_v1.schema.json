@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "iso8601": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    },
+    "envelope_message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable machine code (secret-safe, path-safe)."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable message; no tokens, raw diffs, or absolute paths in default output."
+        },
+        "hint": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional remediation hint (secret-safe, path-safe)."
+        }
+      }
+    },
+    "envelope_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Non-normative enumerated-only metadata. Must not carry scores, gates, promotion decisions, secrets, or raw diffs. Prefer omitting meta when empty.",
+      "properties": {
+        "timing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "started_at": {
+              "$ref": "#/$defs/iso8601"
+            },
+            "finished_at": {
+              "$ref": "#/$defs/iso8601"
+            },
+            "duration_ms": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "request_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "harness_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "deprecations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          },
+          "description": "Optional deprecation notices already mirrored in warnings[] when present."
+        }
+      }
+    }
+  },
+  "$id": "https://git-cg.local/schemas/eval/cli_output_envelope_v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Common --json response envelope for git-cg eval operator commands (S6). stdout carries exactly one envelope document; progress/log chatter stays on stderr. data is command-specific and closed by Slice 2 API-map sketches (envelope keeps data as object). errors[]/warnings[] items are {code, message, hint?}. meta is non-normative enumerated-only (timing/request_id/harness_version/deprecations) and must not carry scores/gates/promotion/secrets/raw diffs.",
+  "properties": {
+    "schema_version": {
+      "const": "cli_output_envelope_v1"
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical command identity that produced this envelope (e.g. eval doctor, eval run)."
+    },
+    "ok": {
+      "type": "boolean",
+      "description": "True when the command completed without envelope-level errors. Independent of product accept / gate.deterministic_pass authority."
+    },
+    "data": {
+      "type": "object",
+      "description": "Command-specific payload. Keys are closed by Slice 2 API-map sketches (command-discriminated). Must not smuggle scores/gates/promotion/secrets/raw diffs through undeclared keys or meta."
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/envelope_message"
+      },
+      "description": "Structured errors; empty array when ok is true in the common success path."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/envelope_message"
+      },
+      "description": "Structured warnings including deprecations in JSON mode."
+    },
+    "meta": {
+      "$ref": "#/$defs/envelope_meta"
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "ok",
+    "data",
+    "errors",
+    "warnings"
+  ],
+  "title": "cli_output_envelope_v1",
+  "type": "object"
+}

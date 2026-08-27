@@ -135,20 +135,43 @@
         "export_health"
       ],
       "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 timestamp string (UTC preferred)",
+      "minLength": 1,
+      "type": "string"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_empty_string_list": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
     }
   },
   "$id": "https://git-cg.local/schemas/eval/dogfood_attachment_v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "R12 dogfood attachment (advisory). S0 stub: identifiers + closed enums + representative required fields.",
+  "description": "R12 dogfood attachment (advisory). mode is closed off|sample|always|async. authority is always advisory; never sole gate or gold promoter. message_sha256 links without storing full text twice. rationale is bounded. When mode=sample, sample_seed/sample_rate/population_id plus selected_ids and/or selected_set_hash are required so membership is offline-reproducible (no wall-clock membership changes). population_members is preferred so the attachment alone can resample membership offline (S6-G08).",
   "properties": {
+    "schema_version": {
+      "const": "dogfood_attachment_v1"
+    },
     "id": {
       "$ref": "#/$defs/non_empty_string"
     },
-    "meta": {
-      "type": "object"
+    "run_id": {
+      "$ref": "#/$defs/non_empty_string"
     },
-    "metric_catalog": {
+    "judge_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "pin_ref": {
       "$ref": "#/$defs/pin_ref"
     },
     "mode": {
@@ -160,24 +183,136 @@
       ],
       "type": "string"
     },
-    "notes": {
+    "metric_id": {
       "type": "string"
+    },
+    "score": {
+      "type": "number"
+    },
+    "polarity": {
+      "$ref": "#/$defs/polarity"
+    },
+    "rationale_short": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Bounded short rationale; no raw diffs/secrets."
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "created_at": {
+      "$ref": "#/$defs/iso8601"
+    },
+    "authority": {
+      "const": "advisory"
+    },
+    "message_sha256": {
+      "$ref": "#/$defs/sha256"
     },
     "schema_pack": {
       "$ref": "#/$defs/pin_ref"
     },
-    "schema_version": {
-      "const": "dogfood_attachment_v1"
+    "metric_catalog": {
+      "$ref": "#/$defs/pin_ref"
     },
-    "score": {
-      "type": "number"
+    "notes": {
+      "type": "string"
+    },
+    "session_thread_id": {
+      "type": "string"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "bundle_id": {
+      "type": "string"
+    },
+    "sample_seed": {
+      "type": "string",
+      "description": "Deterministic sample seed (explicit --seed or stable hash of population identity).",
+      "minLength": 1
+    },
+    "sample_rate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Sample rate in [0,1] used for membership selection."
+    },
+    "population_id": {
+      "type": "string",
+      "description": "Stable population identity (e.g. suite_id or experiment_id|suite_id).",
+      "minLength": 1
+    },
+    "population_members": {
+      "$ref": "#/$defs/string_list",
+      "description": "Full closed population member ids used for the sample draw (S6-G08). When present, offline resampling from sample_seed+sample_rate reproduces selected membership."
+    },
+    "selected_ids": {
+      "$ref": "#/$defs/string_list",
+      "description": "Selected member ids for this sample draw (optional when selected_set_hash is present)."
+    },
+    "selected_set_hash": {
+      "$ref": "#/$defs/sha256",
+      "description": "SHA-256 over canonical sorted selected_ids; alone permits offline membership reproduction with seed/rate/population."
+    },
+    "capture_on": {
+      "enum": [
+        "pass",
+        "fail",
+        "all"
+      ],
+      "type": "string",
+      "description": "Corpus capture eligibility for this attachment (owner-set; separate from product accept)."
+    },
+    "hard_negative_candidate": {
+      "type": "boolean",
+      "description": "True when capture_on includes fail and the row is retained as a hard-negative candidate (never a product fail)."
     }
   },
   "required": [
     "schema_version",
     "id",
-    "mode"
+    "run_id",
+    "judge_id",
+    "pin_ref",
+    "mode",
+    "authority",
+    "message_sha256"
   ],
   "title": "dogfood_attachment_v1",
-  "type": "object"
+  "type": "object",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "sample"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "required": [
+          "sample_seed",
+          "sample_rate",
+          "population_id"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "selected_ids"
+            ]
+          },
+          {
+            "required": [
+              "selected_set_hash"
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

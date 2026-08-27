@@ -89,6 +89,7 @@ def _classify_lock_rejection(
 
 
 def _matrix_row_for_intent(matrix: list[dict], intent_id: str) -> dict | None:
+    """Find the matrix row matching the given intent ID."""
     return next((r for r in matrix if matrix_row_intent_id(r) == intent_id), None)
 
 
@@ -189,6 +190,7 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
     lock_resolution: LockResolution = "absent"
 
     def _try_lock() -> dict | None:
+        """Try to resolve the locked intent ID to a matrix row."""
         nonlocal lock_resolution
         if locked_intent_id is None:
             lock_resolution = "absent"
@@ -208,6 +210,7 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
         return row
 
     def _try_previous_plan() -> dict | None:
+        """Try to reuse the previous plan's intent if still eligible."""
         if state.previous_plan is None:
             return None
         prev_intent_id = state.previous_plan.primary_intent.intent_id
@@ -216,6 +219,7 @@ def resolve_semantic_contract(context: GenerationContext, state: RegenerationSta
         return _matrix_row_for_intent(matrix, prev_intent_id)
 
     def _try_ranked_or_matrix(*, cc_type_filter: str | None = None) -> dict | None:
+        """Try ranked intents first, falling back to matrix rows within eligible set."""
         for ranked in context.ranked_intents:
             if allowed_ids and ranked.intent_id not in allowed_ids:
                 continue

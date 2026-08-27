@@ -102,3 +102,47 @@ eval-materialize:
 # Regenerate tests/fixtures/eval/FIXTURE_INDEX.md
 eval-fixture-index:
     uv run python -m git_cg.eval.corpus.index --write
+
+# Check docs/eval/operator_api_map.md matches live Typer tree (S6 Slice 2)
+eval-api-map-check:
+    uv run python -m git_cg.eval.api_map --check
+
+# S6 offline proof spine (claim-matrix subset; no cov). Does not replace full CI pytest.
+eval-s6-proof:
+    uv run pytest \
+      tests/eval/test_api_map_help.py \
+      tests/eval/test_checkpoint_store.py \
+      tests/eval/test_compat_hash.py \
+      tests/eval/test_run_orchestrator.py \
+      tests/eval/test_eval_cli_run.py \
+      tests/eval/test_doctor.py \
+      tests/eval/test_eval_cli_doctor.py \
+      tests/eval/test_eval_opik_doctor.py \
+      tests/eval/test_explain.py \
+      tests/eval/test_diagnose.py \
+      tests/eval/test_eval_cli_explain.py \
+      tests/eval/test_replay.py \
+      tests/eval/test_promote.py \
+      tests/eval/test_review_queue.py \
+      tests/eval/test_eval_cli_replay_promote.py \
+      tests/eval/test_s6_slice7.py \
+      tests/eval/test_eval_cli_triage.py \
+      tests/eval/mirror/test_train.py \
+      -q --no-cov
+
+# S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
+# Maintainer evidence only — never a CI gate, never a product-accept gate.
+dogfood-bench runs="20":
+    @echo "🔬 dogfood-bench: hyperfine {{runs}} runs ×2 (async on/off) on real commit path"
+    @command -v hyperfine >/dev/null || { echo "hyperfine not installed" >&2; exit 1; }
+    @mkdir -p .eval/dogfood
+    @GIT_CG_EVAL_DOGFOOD_MODE=async hyperfine --warmup 2 --runs {{runs}} \
+        --export-json .eval/dogfood/bench_async_on.json \
+        --command-name dogfood_async_on \
+        "GIT_CG_EVAL_DOGFOOD_MODE=async ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
+    @GIT_CG_EVAL_DOGFOOD_MODE=off hyperfine --warmup 2 --runs {{runs}} \
+        --export-json .eval/dogfood/bench_async_off.json \
+        --command-name dogfood_async_off \
+        "GIT_CG_EVAL_DOGFOOD_MODE=off ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
+    @uv run python -m git_cg.eval.dogfood.bench \
+        .eval/dogfood/bench_async_off.json .eval/dogfood/bench_async_on.json

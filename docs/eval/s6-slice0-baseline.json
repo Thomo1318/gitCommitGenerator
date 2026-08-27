@@ -1,0 +1,156 @@
+{
+  "schema_version": "s6_slice0_baseline_v1",
+  "issue": 246,
+  "slice": 0,
+  "branch": "evals/246-s6-eval-cli-doctor-amend-brief-dogfood-train-export-sessions",
+  "branch_sha": "86fed7ebdb4a699a2d6434ce0e397047ae30b0f8",
+  "base_ref": "origin/main",
+  "base_sha": "86fed7ebdb4a699a2d6434ce0e397047ae30b0f8",
+  "merge_base_sha": "86fed7ebdb4a699a2d6434ce0e397047ae30b0f8",
+  "plan_version": "0.9.6-s6-slice0-reconciliation",
+  "plan_path": "docs/plans/opik-evaluation-harness.md",
+  "census_path": "docs/eval/s6-slice0-landed-state-census.md",
+  "eval_schema_hash": {
+    "command": "just eval-schema-hash",
+    "schema_pack_pin": "schema_pack_v0@d00988d1e926969741f6db7a47b65e87b4a7adcc060489975b5054e15fc7df2e",
+    "metric_catalog_pin": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+    "schema_count_non_underscore": 25
+  },
+  "package_home": {
+    "root": "src/git_cg/eval/",
+    "cli": "src/git_cg/eval/cli.py::eval_app",
+    "paths_static": "src/git_cg/eval/paths.py",
+    "paths_runtime": "src/git_cg/eval/binding/paths.py",
+    "init_all_expansion": false
+  },
+  "canonical_cli": {
+    "run": "git-cg eval run",
+    "session_show": "git-cg eval session show",
+    "opik_config_show": "git-cg eval opik config show",
+    "export": "git-cg eval export status|retry|drain",
+    "operator_api_map_path": "docs/eval/operator_api_map.md"
+  },
+  "alias_deprecations": {
+    "eval config show": {
+      "status": "temporary_compatibility_alias",
+      "canonical": "git-cg eval opik config show",
+      "removal": "first_minor_after_s6_ga"
+    },
+    "eval export-status|export-retry|export-drain": {
+      "status": "temporary_dashed_bridge",
+      "canonical": "git-cg eval export status|retry|drain",
+      "removal": "first_minor_after_s6_ga"
+    }
+  },
+  "schema_census": {
+    "greenfield_refreeze": [
+      "evaluation_checkpoint_v1",
+      "amend_brief_v1",
+      "diag_issue_v1",
+      "replay_compare_v1",
+      "human_review_v1",
+      "dogfood_attachment_v1"
+    ],
+    "new_schemas": [
+      "cli_output_envelope_v1"
+    ],
+    "live_writer_additive": [
+      "commit_session_thread_v1",
+      "train_row_v1",
+      "train_export_v1",
+      "experiment_v1"
+    ]
+  },
+  "script_disposition": {
+    "scripts/compile_opik_dataset.py": "already_retired_s4",
+    "scripts/eval_commit_message.py": "frozen_thin_shim_s5",
+    "scripts/opik_metrics.py": "frozen_thin_shim_s5",
+    "scripts/setup_opik_eval_rule.py": "frozen_thin_shim_s5",
+    "scripts/setup_opik_test_suites.py": "frozen_thin_shim_s5",
+    "scripts/opik_trace_triage.py": "absorbed_pointer_cli_s8",
+    "scripts/sync_promptfoo_to_opik.py": "out_of_s6_scope",
+    "scripts/sync_prompts_to_opik.py": "out_of_s6_scope"
+  },
+  "phantom_family_h_metrics": [
+    "h.compat_hash_resume",
+    "h.doctor_green",
+    "h.export_config_resolved"
+  ],
+  "landed_consume": {
+    "score_bundle": "src/git_cg/eval/scoring/runner.py",
+    "score_case": "src/git_cg/eval/scoring/runner.py",
+    "score_suite": "src/git_cg/eval/scoring/runner.py",
+    "compose_gates": "src/git_cg/eval/scoring/gates.py",
+    "build_session_twin": "src/git_cg/eval/binding/session_thread.py",
+    "write_session_twin": "src/git_cg/eval/binding/session_thread.py",
+    "run_lane_c": "src/git_cg/eval/lane_c/runner.py",
+    "build_train_projection": "src/git_cg/eval/mirror/train.py",
+    "resolve_opik_config": "src/git_cg/eval/mirror/config.py",
+    "mask_secret": "src/git_cg/eval/mirror/config.py",
+    "atomic_write_json": "src/git_cg/eval/binding/paths.py"
+  },
+  "base1": {
+    "commands": [
+      {
+        "cmd": "uv run pytest tests/eval -q",
+        "exit_code": 0,
+        "summary": "1105 passed in 92.54s",
+        "recorded_at": "2026-08-20T12:00:00+10:00",
+        "note": "pre-edit baseline from Slice 0 handoff; re-confirmed target after docs-only patch"
+      },
+      {
+        "cmd": "just eval-schema-hash",
+        "exit_code": 0,
+        "summary": "schema_pack_v0@d00988d1e926969741f6db7a47b65e87b4a7adcc060489975b5054e15fc7df2e / metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
+        "recorded_at": "2026-08-20T23:35:24+10:00"
+      }
+    ],
+    "overall_pass": true
+  },
+  "policy_lock": {
+    "slice0_no_runtime_writers": true,
+    "schema_refreeze_starts_slice1": true,
+    "cli_skeleton_starts_slice2": true
+  },
+  "plan_drift_reconciled": {
+    "compat_hash": true,
+    "session_show_naming": true,
+    "five_resume_modes_and_recovery_law": true,
+    "s6_g02_two_part_plus0ms": true,
+    "plans_readme_pointer": true,
+    "compat_hash_canonical": true,
+    "resume_modes_five": true,
+    "session_show_canonical": true,
+    "s6_g02_two_part_async_claim": true,
+    "checkpoint_migration_nongoal": true
+  },
+  "product_code_changed": false,
+  "recorded_at": "2026-08-20T23:38:09+10:00",
+  "exit": {
+    "architecture_unreopened": true,
+    "baseline_recorded": true,
+    "canonical_names_decided": true,
+    "schema_classifications_decided": true,
+    "plan_body_alignment_target_version": "0.9.6-s6-slice0-reconciliation",
+    "slice_1_may_start": true,
+    "no_s6_runtime_code_in_slice_0": true
+  },
+  "eval_validate_checksum": {
+    "algorithm": "sha256",
+    "input": "canonical JSON of s6 slice0 baseline fields excluding this checksum object and recorded_at",
+    "hex": "c2a7efa404f687dd328e486e7c1baaf16cf162562e56f49c921f8a7a69aeae08",
+    "note": "Machine-checkable census checksum; pins also recorded via just eval-schema-hash."
+  },
+  "script_disposition_notes": {
+    "scripts/opik_trace_triage.py": "Frozen refusal shim; replacement is offline git-cg eval triage composing doctor/failures/explain; no Opik user_acceptance threshold law.",
+    "scripts/eval_commit_message.py": "Frozen thin shim retained; S8 tightened pointers to eval run/triage/doctor."
+  },
+  "slice8_d27": {
+    "status": "landed",
+    "router": "git-cg eval triage",
+    "service": "src/git_cg/eval/triage.py",
+    "schema": "eval_triage_v0",
+    "authority": "advisory_offline_router",
+    "not_score_law": true
+  }
+}

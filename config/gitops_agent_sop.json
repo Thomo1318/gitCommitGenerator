@@ -2222,6 +2222,37 @@
         "dependency_pin_only"
       ],
       "selection_rule": "Use when the primary change preserves or adds backwards compatibility."
+    },
+    {
+      "emoji": "🌑",
+      "code": ":new_moon:",
+      "intent_id": "dark_launch",
+      "intent_group": "config_chore",
+      "description": "Ship dark-launched capability (default-off, opt-in, advisory, or help-hidden)",
+      "cc_type": "chore",
+      "semver_impact": "PATCH",
+      "changelog_group": "Changed",
+      "priority": 28,
+      "specificity": 95,
+      "split_weight": 18,
+      "positive_signals": [
+        "dark_launch_shipped_default_off",
+        "dark_launch_opt_in_gate",
+        "dark_launch_advisory_only",
+        "dark_launch_help_hidden_surface",
+        "dark_launch_evidence_without_authority"
+      ],
+      "negative_signals": [
+        "feature_flag_authoring_primary",
+        "ga_user_facing_feature",
+        "production_ready_feature_default_on",
+        "ordinary_feature_without_dark_launch",
+        "docs_only",
+        "test_only",
+        "wip_marker",
+        "experiment_spike_primary"
+      ],
+      "selection_rule": "Use when the primary change ships a dark-launched surface: default-off flag, opt-in CLI/env gate, advisory/non-blocking sidecar, or help-hidden maintainer command. Prefer 🚩 for authoring/updating feature-flag machinery, ✨ for GA user-facing features, ⚗️ for throwaway experiments/spikes, and 🚧 for unfinished WIP. Matrix SemVer is PATCH (presentation may still ceiling via DARK_LAUNCH_TAGS)."
     }
   ]
 }

@@ -91,6 +91,8 @@ We use `pytest` for the Python test suite and `just` as our command runner.
 
 ### Docstring coverage (`interrogate`)
 
+**House standard:** [Contract Docstring Standard](docs/docstring-standard.md) — PEP 257 baseline, invariant-first module docs, **selective** Google `Args`/`Returns`/`Raises` (not Google-everywhere; not NumPy/Sphinx field lists).
+
 Docstring coverage is measured with [`interrogate`](https://github.com/econchick/interrogate).
 
 **CI gate is patch-scoped:** only `src/git_cg/**/*.py` files changed in the PR/push are checked (`fail-under` **80**). Untouched files are not part of the gate. Legacy `src/git_cg/evals/**` is excluded.

@@ -34,8 +34,10 @@ from git_cg.eval.scoring.preconditions import evaluate_preconditions
 from git_cg.eval.scoring.result_builder import make_score
 
 __all__ = [
+    "PreparedSuite",
     "ScoreCaseResult",
     "ScoreSuiteResult",
+    "prepare_suite_cases",
     "resolve_require_topology",
     "resolve_require_trajectory",
     "score_bundle",
@@ -651,6 +653,96 @@ def score_case(
     )
 
 
+@dataclass(slots=True)
+class PreparedSuite:
+    """Suite document + encoded bundles ready for per-case ``score_bundle`` calls.
+
+    Shared by :func:`score_suite` and the S6 run orchestrator so resume/checkpoint
+    cadence can score case-by-case without a second scorer implementation.
+    """
+
+    suite_id: str
+    suite_doc: dict[str, Any]
+    suite_snapshot_pin: str
+    snapshot: dict[str, Any]
+    require_block: tuple[str, ...]
+    require_topology: bool
+    encoded_pairs: list[tuple[str, dict[str, Any]]]
+    session_thread_index: dict[str, tuple[str, ...]]
+    fixture_root: Path
+
+    @property
+    def case_ids(self) -> list[str]:
+        """Ordered case ids selected for this prepared suite workset."""
+        return [cid for cid, _ in self.encoded_pairs]
+
+
+def prepare_suite_cases(
+    suite_id: str = "cm-eval-fixtures-core",
+    *,
+    fixture_root: str | Path | None = None,
+    require_block: tuple[str, ...] | None = None,
+    require_topology: bool | None = None,
+    suite_path: str | Path | None = None,
+) -> PreparedSuite:
+    """Load suite, bind snapshot pin, encode cases, build session-thread index.
+
+    This is the shared prelude of :func:`score_suite` — no scoring occurs here.
+    """
+    root = Path(fixture_root) if fixture_root else default_fixture_root()
+
+    if suite_path is not None:
+        path = Path(suite_path)
+        suite_doc = json.loads(path.read_text(encoding="utf-8"))
+        sid = str(suite_doc.get("suite_id") or suite_id)
+        if "meta" not in suite_doc or not isinstance(suite_doc.get("meta"), dict):
+            suite_doc["meta"] = {}
+    else:
+        suite_doc = load_suite(suite_id, fixture_root=root)
+        sid = str(suite_doc.get("suite_id") or suite_id)
+
+    metrics = suite_doc.get("metrics") or {}
+    if require_block is not None:
+        req = tuple(require_block)
+    elif isinstance(metrics, dict) and metrics.get("require_block"):
+        req = tuple(metrics["require_block"])
+    else:
+        req = S2A_REQUIRE_BLOCK
+
+    topo_required = resolve_require_topology(require_topology, suite_doc)
+
+    snapshot = build_snapshot(sid, fixture_root=root, validate=True)
+    suite_pin = str(snapshot.get("snapshot_hash") or snapshot.get("id") or "")
+    raw_pinned_suite = snapshot.get("suite")
+    pinned_suite: dict[str, Any] = raw_pinned_suite if isinstance(raw_pinned_suite, dict) else {}
+    pinned_case_ids = list(pinned_suite.get("case_ids") or [])
+    scored_case_ids = list(suite_doc.get("case_ids") or [])
+    if suite_path is not None and scored_case_ids != pinned_case_ids:
+        raise ValueError(
+            "suite_path case_ids diverge from canonical suite "
+            f"{sid!r}: scored={scored_case_ids!r} pinned={pinned_case_ids!r}"
+        )
+
+    pairs = load_suite_fixtures(suite_doc, fixture_root=root)
+    encoded_pairs: list[tuple[str, dict[str, Any]]] = []
+    for cid, fixture in pairs:
+        encoded = encode_fixture(fixture, case_id=cid, suite_id=sid, validate=True)
+        encoded_pairs.append((cid, encoded["bundle"]))
+    thread_index = build_session_thread_index(encoded_pairs)
+
+    return PreparedSuite(
+        suite_id=sid,
+        suite_doc=suite_doc,
+        suite_snapshot_pin=suite_pin,
+        snapshot=snapshot,
+        require_block=req,
+        require_topology=topo_required,
+        encoded_pairs=encoded_pairs,
+        session_thread_index=dict(thread_index),
+        fixture_root=root,
+    )
+
+
 def score_suite(
     suite_id: str = "cm-eval-fixtures-core",
     *,
@@ -672,66 +764,24 @@ def score_suite(
     index, then score each case with that index.
 
     """
-    root = Path(fixture_root) if fixture_root else default_fixture_root()
+    prepared = prepare_suite_cases(
+        suite_id,
+        fixture_root=fixture_root,
+        require_block=require_block,
+        require_topology=require_topology,
+        suite_path=suite_path,
+    )
 
-    # Optional path form for tests
-    if suite_path is not None:
-        path = Path(suite_path)
-        suite_doc = json.loads(path.read_text(encoding="utf-8"))
-        sid = str(suite_doc.get("suite_id") or suite_id)
-        # Preserve meta for N19 when loading from an alternate suite_path.
-        if "meta" not in suite_doc or not isinstance(suite_doc.get("meta"), dict):
-            suite_doc["meta"] = {}
-    else:
-        suite_doc = load_suite(suite_id, fixture_root=root)
-        sid = str(suite_doc.get("suite_id") or suite_id)
-
-    # Require-block resolution (legacy suite metrics.require_block still honored).
-    metrics = suite_doc.get("metrics") or {}
-    if require_block is not None:
-        req = tuple(require_block)
-    elif isinstance(metrics, dict) and metrics.get("require_block"):
-        req = tuple(metrics["require_block"])
-    else:
-        req = S2A_REQUIRE_BLOCK
-
-    topo_required = resolve_require_topology(require_topology, suite_doc)
-
-    # Snapshot pin (content-addressed) always binds the *canonical* committed suite.
-    # suite_path is a test override only - reject it when case membership diverges
-    # so the pin cannot claim one corpus while we score another.
-    snapshot = build_snapshot(sid, fixture_root=root, validate=True)
-    suite_pin = str(snapshot.get("snapshot_hash") or snapshot.get("id") or "")
-    raw_pinned_suite = snapshot.get("suite")
-    pinned_suite: dict[str, Any] = raw_pinned_suite if isinstance(raw_pinned_suite, dict) else {}
-    pinned_case_ids = list(pinned_suite.get("case_ids") or [])
-    scored_case_ids = list(suite_doc.get("case_ids") or [])
-    if suite_path is not None and scored_case_ids != pinned_case_ids:
-        raise ValueError(
-            "suite_path case_ids diverge from canonical suite "
-            f"{sid!r}: scored={scored_case_ids!r} pinned={pinned_case_ids!r}"
-        )
-
-    pairs = load_suite_fixtures(suite_doc, fixture_root=root)
-
-    # Pass 1: encode every case and build the N14 thread index.
-    encoded_pairs: list[tuple[str, dict[str, Any]]] = []
-    for cid, fixture in pairs:
-        encoded = encode_fixture(fixture, case_id=cid, suite_id=sid, validate=True)
-        encoded_pairs.append((cid, encoded["bundle"]))
-    thread_index = build_session_thread_index(encoded_pairs)
-
-    # Pass 2: score with the read-only index.
     cases_out: list[ScoreCaseResult] = []
-    for cid, bundle in encoded_pairs:
+    for cid, bundle in prepared.encoded_pairs:
         cases_out.append(
             score_bundle(
                 bundle,
-                suite=suite_doc,
-                suite_snapshot_pin=suite_pin,
-                require_block=req,
-                require_topology=topo_required,
-                session_thread_index=thread_index,
+                suite=prepared.suite_doc,
+                suite_snapshot_pin=prepared.suite_snapshot_pin,
+                require_block=prepared.require_block,
+                require_topology=prepared.require_topology,
+                session_thread_index=prepared.session_thread_index,
                 gold_mode=gold_mode,
                 gold_bridge=gold_bridge,
                 offline=offline,
@@ -740,11 +790,11 @@ def score_suite(
         )
 
     return ScoreSuiteResult(
-        suite_id=sid,
+        suite_id=prepared.suite_id,
         cases=cases_out,
-        suite_snapshot_pin=suite_pin,
-        require_block=req,
-        snapshot=snapshot,
-        require_topology=topo_required,
-        session_thread_index=dict(thread_index),
+        suite_snapshot_pin=prepared.suite_snapshot_pin,
+        require_block=prepared.require_block,
+        snapshot=prepared.snapshot,
+        require_topology=prepared.require_topology,
+        session_thread_index=dict(prepared.session_thread_index),
     )

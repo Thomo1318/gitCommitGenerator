@@ -17,31 +17,14 @@ emitted via ``build_trajectory_evidence`` and the ``DECLARED_STAGES``
 vocabulary. Session-thread twins (R13/D12) via ``build_session_twin`` /
 ``write_session_twin``; message_versions hooks (D12/M7) via
 ``build_message_versions``.
+
+Import law: import-light. Package attribute exports are lazy so submodule
+imports such as ``git_cg.eval.binding.paths`` stay binder/accept-hook free.
 """
 
 from __future__ import annotations
 
-from git_cg.eval.binding.accept_hook import (
-    AcceptBindResult,
-    bind_accept_path,
-)
-from git_cg.eval.binding.binder import (
-    BindInput,
-    BindResult,
-    bind_final_accept,
-    bind_unbound,
-    message_sha256_bytes,
-)
-from git_cg.eval.binding.message_versions import build_message_versions
-from git_cg.eval.binding.profiles import capture_enabled
-from git_cg.eval.binding.session_thread import (
-    build_session_twin,
-    write_session_twin,
-)
-from git_cg.eval.binding.trajectory import (
-    DECLARED_STAGES,
-    build_trajectory_evidence,
-)
+from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "DECLARED_STAGES",
@@ -58,3 +41,93 @@ __all__ = [
     "message_sha256_bytes",
     "write_session_twin",
 ]
+
+if TYPE_CHECKING:
+    from git_cg.eval.binding.accept_hook import AcceptBindResult, bind_accept_path
+    from git_cg.eval.binding.binder import (
+        BindInput,
+        BindResult,
+        bind_final_accept,
+        bind_unbound,
+        message_sha256_bytes,
+    )
+    from git_cg.eval.binding.message_versions import build_message_versions
+    from git_cg.eval.binding.profiles import capture_enabled
+    from git_cg.eval.binding.session_thread import (
+        build_session_twin,
+        write_session_twin,
+    )
+    from git_cg.eval.binding.trajectory import (
+        DECLARED_STAGES,
+        build_trajectory_evidence,
+    )
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve public exports lazily (import-light package surface)."""
+    if name in {"AcceptBindResult", "bind_accept_path"}:
+        from git_cg.eval.binding.accept_hook import AcceptBindResult, bind_accept_path
+
+        values = {
+            "AcceptBindResult": AcceptBindResult,
+            "bind_accept_path": bind_accept_path,
+        }
+    elif name in {
+        "BindInput",
+        "BindResult",
+        "bind_final_accept",
+        "bind_unbound",
+        "message_sha256_bytes",
+    }:
+        from git_cg.eval.binding.binder import (
+            BindInput,
+            BindResult,
+            bind_final_accept,
+            bind_unbound,
+            message_sha256_bytes,
+        )
+
+        values = {
+            "BindInput": BindInput,
+            "BindResult": BindResult,
+            "bind_final_accept": bind_final_accept,
+            "bind_unbound": bind_unbound,
+            "message_sha256_bytes": message_sha256_bytes,
+        }
+    elif name == "build_message_versions":
+        from git_cg.eval.binding.message_versions import build_message_versions
+
+        values = {"build_message_versions": build_message_versions}
+    elif name == "capture_enabled":
+        from git_cg.eval.binding.profiles import capture_enabled
+
+        values = {"capture_enabled": capture_enabled}
+    elif name in {"build_session_twin", "write_session_twin"}:
+        from git_cg.eval.binding.session_thread import (
+            build_session_twin,
+            write_session_twin,
+        )
+
+        values = {
+            "build_session_twin": build_session_twin,
+            "write_session_twin": write_session_twin,
+        }
+    elif name in {"DECLARED_STAGES", "build_trajectory_evidence"}:
+        from git_cg.eval.binding.trajectory import (
+            DECLARED_STAGES,
+            build_trajectory_evidence,
+        )
+
+        values = {
+            "DECLARED_STAGES": DECLARED_STAGES,
+            "build_trajectory_evidence": build_trajectory_evidence,
+        }
+    else:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    globals().update(values)
+    return values[name]
+
+
+def __dir__() -> list[str]:
+    return sorted(list(globals().keys()) + list(__all__))

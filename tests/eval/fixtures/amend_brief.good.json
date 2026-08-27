@@ -1,0 +1,36 @@
+{
+  "schema_version": "amend_brief_v1",
+  "id": "brief-1",
+  "brief_id": "brief-1",
+  "session_thread_id": "sess_abc",
+  "commit_subject": "fix(eval): example",
+  "trailers": {
+    "Refs": "#246"
+  },
+  "l1": {
+    "regime": "A",
+    "family_rollups": {
+      "D": {
+        "pass_rate": 1.0
+      }
+    },
+    "failure_ids": [],
+    "path_class": "docs",
+    "gold_counters": {
+      "strict_fail": 0
+    },
+    "blocking": {
+      "blocked": false,
+      "codes": []
+    }
+  },
+  "l2_hints": {
+    "questions": [
+      "Is the subject accurate?"
+    ],
+    "sop_tension_notes": []
+  },
+  "authority": "advisory",
+  "redaction_profile": "default_scrub",
+  "created_at": "2026-08-20T12:00:00Z"
+}
