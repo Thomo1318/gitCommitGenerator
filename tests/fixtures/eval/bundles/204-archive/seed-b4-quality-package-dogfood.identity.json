@@ -1,8 +1,8 @@
 {
-  "bundle_hash": "93c60acf05362b2ac2fb271c76c9d673670a8692fb5af0a18a239b52a5a777e5",
-  "bundle_ref": "bundle:seed-b4-quality-package-dogfood@93c60acf05362b2ac2fb271c76c9d673670a8692fb5af0a18a239b52a5a777e5",
-  "case_hash": "2d826447e752e6af25d6113d3cd984ebb4727db2440a264eb5a444b0462563fc",
+  "bundle_hash": "0614f810c151f15ff723d3aae306a95b6e924238a450de773aaeaa006efe51e1",
+  "bundle_ref": "bundle:seed-b4-quality-package-dogfood@0614f810c151f15ff723d3aae306a95b6e924238a450de773aaeaa006efe51e1",
+  "case_hash": "823f25a9024a01513fa102381600ca6659b174f818935d348f22f1cb2a66254f",
   "case_id": "seed-b4-quality-package-dogfood",
   "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
-  "schema_pack": "schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe"
+  "schema_pack": "schema_pack_v0@8616781fb87ea4721253f7efacf120c7c602062a6c578b8a4173fbae5341c3c3"
 }
