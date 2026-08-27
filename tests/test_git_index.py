@@ -7,6 +7,7 @@ import tempfile
 import pytest
 
 from git_cg.git_index import (
+    StagedReadResult,
     list_staged_paths,
     read_head_blob,
     read_head_sources,
@@ -72,6 +73,14 @@ def test_read_staged_sources_batch(staged_repo):
     assert "fresh.py" in result.files
     assert b"def fresh()" in result.files["fresh.py"]
     assert "uv.lock" not in result.files
+
+
+def test_staged_read_result_ok_requires_usable_files():
+    """ok means usable payload is present, not merely error-free empty reads."""
+    assert StagedReadResult(files={}, skipped=[], errors=[]).ok is False
+    assert StagedReadResult(files={}, skipped=["a.py:oversize"], errors=[]).ok is False
+    assert StagedReadResult(files={"a.py": b"x"}, skipped=[], errors=["b.py:missing"]).ok is True
+    assert StagedReadResult(files={"a.py": b"x"}, skipped=[], errors=[]).ok is True
 
 
 def test_read_staged_sources_oversize_skip(staged_repo):

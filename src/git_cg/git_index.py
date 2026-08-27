@@ -49,8 +49,8 @@ class StagedReadResult:
 
     @property
     def ok(self) -> bool:
-        """Return True if the result contains usable files, even if some errors occurred."""
-        return not self.errors or bool(self.files)
+        """Return True if at least one usable file is available (errors may still exist)."""
+        return bool(self.files)
 
 
 @git_retry
