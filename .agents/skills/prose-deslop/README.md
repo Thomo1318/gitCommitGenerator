@@ -58,7 +58,7 @@ Below 35/50: revise.
 
 ## Skill structure
 
-```
+```text
 deslop/
 ├── SKILL.md              # Core rules, quick checks, scoring rubric
 ├── README.md             # This file

@@ -51,10 +51,10 @@ Phrases that assume the reader needs a teacher. Cut them.
 
 ## Business Jargon
 
-Replace with plain language.
+Replace filler jargon with plain language **when the substitute is semantically equivalent**. Keep domain terms when they carry technical meaning (for example a real framework name, robustness contract, or system architecture label).
 
-| Avoid | Use instead |
-|-------|-------------|
+| Avoid (when filler) | Use instead |
+|---------------------|-------------|
 | Navigate (challenges) | Handle, address |
 | Unpack (analysis) | Explain, examine |
 | Lean into | Accept, embrace |
@@ -68,13 +68,13 @@ Replace with plain language.
 | On the same page | Aligned, agreed |
 | Leverage (verb) | Use |
 | Utilize | Use |
-| Robust | Strong, solid |
+| Robust (as empty praise) | Strong, solid, or drop |
 | Streamline | Simplify |
 | Harness | Use, apply |
 | Paradigm | Model, approach |
 | Synergy | Cooperation, combined effect |
-| Ecosystem | System, field, community |
-| Framework | Structure, approach |
+| Ecosystem (as vague scope) | System, field, community |
+| Framework (as filler) | Structure, approach |
 
 ## AI Vocabulary Tells
 
@@ -88,10 +88,10 @@ Words that became dramatically overrepresented in AI-generated text. Avoid or re
 
 ## The "Serves As" Dodge
 
-AI replaces simple "is" or "are" with pompous alternatives. Use the simple verb.
+AI often replaces a plain "is" or "are" with pompous alternatives. Prefer the simple verb **when that is the actual meaning**. Keep "represents", "marks", or "serves as" when they are the precise technical claim (for example a schema that represents a contract, or a service that serves as a fallback path).
 
-| Avoid | Use instead |
-|-------|-------------|
+| Avoid (when meaning "is") | Use instead |
+|---------------------------|-------------|
 | serves as | is |
 | stands as | is |
 | marks (when meaning "is") | is |
@@ -99,9 +99,9 @@ AI replaces simple "is" or "are" with pompous alternatives. Use the simple verb.
 
 ## Adverbs
 
-Kill all adverbs. No -ly words. No softeners, no intensifiers, no hedges.
+Remove unnecessary adverbs, softeners, intensifiers, and hedges. Preserve words required for technical precision (for example rate-limiting policy, formally verified, or concurrent-only guarantees).
 
-Specific offenders:
+Specific offenders when they add no information:
 
 - "really"
 - "just"
