@@ -81,7 +81,7 @@ def test_s1_g01_encoder_consumes_live_s0_pins() -> None:
     assert out["bundle"]["metric_catalog"].startswith("metric_catalog_v0@")
     # Frozen S0 identities unless an explicit pin-bump PR changes them.
     assert out["bundle"]["schema_pack"] == (
-        "schema_pack_v0@8616781fb87ea4721253f7efacf120c7c602062a6c578b8a4173fbae5341c3c3"
+        "schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe"
     )
     assert out["bundle"]["metric_catalog"] == (
         "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75"

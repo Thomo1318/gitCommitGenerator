@@ -32,7 +32,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@8616781fb87ea4721253f7efacf120c7c602062a6c578b8a4173fbae5341c3c3`
+  * `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -732,7 +732,7 @@ git-cg eval explain
 > **Claim → test matrix:** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
 > **Live CLI map:** [`operator_api_map.md`](./operator_api_map.md) (generate/check via `just eval-api-map-check`)  
 > **Plan SSOT:** `docs/plans/opik-evaluation-harness.md` @ `0.9.6-s6-slice0-reconciliation`  
-> **Pins (local SoT):** `schema_pack_v0@8616781fb87ea4721253f7efacf120c7c602062a6c578b8a4173fbae5341c3c3` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
+> **Pins (local SoT):** `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
 
 Slice 9 is **documentation / CI recipe / claim-evidence packaging** for the S6 operator surface already landed in Slices 0–8. It does **not** add score authority, REST/OpenAPI, ADR-0011 rewrite, or Zensical durable API pages (those stay S7 / deferred).
 

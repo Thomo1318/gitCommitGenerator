@@ -13,44 +13,44 @@
     "items": [
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "a4de64fec0449a542d0848c3564e80299ddcda3d3a236860a3d102fbecfeecb3",
-        "bundle_ref": "bundle:seed-a1-session12-regime-a@a4de64fec0449a542d0848c3564e80299ddcda3d3a236860a3d102fbecfeecb3",
-        "case_hash": "e9beb943a36ec11f6ce14bcc85b02206b7f03ee4f8391c6410a7c2e64c2112c1",
+        "bundle_hash": "ccb8728fe30e59bd2bd67fa7f56d33d7594f29f750618a6f55e7ddeda8b11ea1",
+        "bundle_ref": "bundle:seed-a1-session12-regime-a@ccb8728fe30e59bd2bd67fa7f56d33d7594f29f750618a6f55e7ddeda8b11ea1",
+        "case_hash": "5695314c6ce2623f8a1c6d7fb8728fafd657fad0afd511629290c10048ac7b3e",
         "case_id": "seed-a1-session12-regime-a"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "e9e8ec8fbe4df67e62044457776308bfff278bd9a85e00240f3a42be2f7c8f0d",
-        "bundle_ref": "bundle:seed-b1-session12-regime-b@e9e8ec8fbe4df67e62044457776308bfff278bd9a85e00240f3a42be2f7c8f0d",
-        "case_hash": "9839ccb2e4da814d572f6f9783abec5f4a9dff94aa4ba1ce8e346dd5b0573bcd",
+        "bundle_hash": "a53f84a328a7845009b61b9fb07519d6d25d71480b9e67fcedc9fe0a541d9df7",
+        "bundle_ref": "bundle:seed-b1-session12-regime-b@a53f84a328a7845009b61b9fb07519d6d25d71480b9e67fcedc9fe0a541d9df7",
+        "case_hash": "1c1be7be3727a5b30c5ada427719eae3d0dfd70d06f8db58f1e9fcc5b7d6097f",
         "case_id": "seed-b1-session12-regime-b"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "896a58218261201876ff6713c14eec867d62f88d510f351d596d145df17ea691",
-        "bundle_ref": "bundle:seed-b2-session12-g3@896a58218261201876ff6713c14eec867d62f88d510f351d596d145df17ea691",
-        "case_hash": "f33f84e8b7e6bca4ee5065287b91e4603856d67cf2bf50c009e3a2e378e1af97",
+        "bundle_hash": "8e6738d7ff1ba47a516e30102644043326fb0b8c8c9e8b5875b2134a2af938f0",
+        "bundle_ref": "bundle:seed-b2-session12-g3@8e6738d7ff1ba47a516e30102644043326fb0b8c8c9e8b5875b2134a2af938f0",
+        "case_hash": "97a758d196687ab749a717c1d775179df8dccf4a846ecaf045aa70084d7d23e6",
         "case_id": "seed-b2-session12-g3"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "93b28b64fe6b492a56f060a662e0c8d1d99b85d08a1360cbf88d0bd945e8d7b4",
-        "bundle_ref": "bundle:seed-b3-session12-g4@93b28b64fe6b492a56f060a662e0c8d1d99b85d08a1360cbf88d0bd945e8d7b4",
-        "case_hash": "c065cbbcc91dcb06de6fa81fc32155918286952d813a78258215615885fd2466",
+        "bundle_hash": "e3bd71852b65553e62446c2b74878b357b59e16f0e2eb0780d3e93a2b873a4d7",
+        "bundle_ref": "bundle:seed-b3-session12-g4@e3bd71852b65553e62446c2b74878b357b59e16f0e2eb0780d3e93a2b873a4d7",
+        "case_hash": "d3b8091f62f0606f81b8fec6565d789085b3d9522b675f585ad40b2e32d27e2b",
         "case_id": "seed-b3-session12-g4"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "3e5e70f28d56a3c1051f717c8f44c2164a1c1870bb6718a56f1c38f06a548625",
-        "bundle_ref": "bundle:seed-b4-quality-package-dogfood@3e5e70f28d56a3c1051f717c8f44c2164a1c1870bb6718a56f1c38f06a548625",
-        "case_hash": "733a4c2e6ee36dbfab0858acb8dbc64076d1882d062c5eba405f070910256f00",
+        "bundle_hash": "93c60acf05362b2ac2fb271c76c9d673670a8692fb5af0a18a239b52a5a777e5",
+        "bundle_ref": "bundle:seed-b4-quality-package-dogfood@93c60acf05362b2ac2fb271c76c9d673670a8692fb5af0a18a239b52a5a777e5",
+        "case_hash": "2d826447e752e6af25d6113d3cd984ebb4727db2440a264eb5a444b0462563fc",
         "case_id": "seed-b4-quality-package-dogfood"
       },
       {
         "artifact_class": "fixture_expected",
-        "bundle_hash": "a95c84d04ed877335280b088bd778c6021da873e070e7b5dc56f6917df406932",
-        "bundle_ref": "bundle:seed-a2-instance-a-precursor@a95c84d04ed877335280b088bd778c6021da873e070e7b5dc56f6917df406932",
-        "case_hash": "a498dc775b91e427f8a417574dfe99d4eabf48842560777fe0be5ebb4901a637",
+        "bundle_hash": "86a1dab8fb73b8ea8bcab230816c71067e0e7b38b8b13a21839787093bc3d76a",
+        "bundle_ref": "bundle:seed-a2-instance-a-precursor@86a1dab8fb73b8ea8bcab230816c71067e0e7b38b8b13a21839787093bc3d76a",
+        "case_hash": "e0782a930b29abfd71697b2bdd6ea7c3d24129e63f0126066c9b365d8b9ad972",
         "case_id": "seed-a2-instance-a-precursor"
       }
     ],
@@ -60,7 +60,7 @@
   },
   "metric_catalog": "metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75",
   "notes": "Offline Lane A snapshot for 204-archive",
-  "schema_pack": "schema_pack_v0@6647b3a3c45e5b22743ccc686eb662f70d8d65858c06fb5f19dafe849e27a5d6",
+  "schema_pack": "schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe",
   "schema_version": "dataset_snapshot_v1",
-  "snapshot_hash": "71ff3468bd48c83523774437cb904b208d43b625df90c39262668caa9a3e303e"
+  "snapshot_hash": "7e7e0ca2495b9028c833ed497ea2382891dcc4585b6d56eee8c2dbe7d96e252c"
 }
