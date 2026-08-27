@@ -30,6 +30,8 @@ Dependencies: 21 runtime, 1 dev
 | eval-schema-hash | `just eval-schema-hash` |
 | eval-materialize | `just eval-materialize` |
 | eval-fixture-index | `just eval-fixture-index` |
+| eval-api-map-check | `just eval-api-map-check` |
+| eval-s6-proof | `just eval-s6-proof` |
 
 ## Scripts (package.json)
 
@@ -247,4 +249,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-81.6ms | 738 files checked | 21/539 tools matched
+73.4ms | 738 files checked | 21/539 tools matched
