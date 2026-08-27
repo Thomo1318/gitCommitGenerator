@@ -1227,12 +1227,18 @@ def test_train_export_row_scrub_failure_drops_and_continues(tmp_path: Path, monk
         # Pass-through for the good row (still secret-safe via projection).
         return dict(bundle)
 
+    # Prefer the injectable seam so full-suite import/order noise cannot
+    # bypass the scrub-failure path. Keep the module patch as defence-in-depth.
     monkeypatch.setattr(
         "git_cg.eval.mirror.redaction.redact_bundle_for_export",
         _fake_redact,
     )
 
-    result = build_train_export(tmp_path, redaction_profile="train_rich")
+    result = build_train_export(
+        tmp_path,
+        redaction_profile="train_rich",
+        redact_bundle=_fake_redact,
+    )
     assert "b-bad" in result["dropped_row_ids"]
     assert "b-ok" in result["row_ids"] or any(r.get("id") == "b-ok" for r in result["rows"])
     assert result["scrub_report"]["status"] == "quarantined"

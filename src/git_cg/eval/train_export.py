@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -247,11 +247,15 @@ def build_train_export(
     split_group_id: str | None = None,
     notes: str | None = None,
     export_id: str | None = None,
+    redact_bundle: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Project → redact → row-policy → assemble a ``train_export_v1`` document.
 
     Row scrub-fail policy (locked): drop + report + continue; never cleartext;
     never ``.eval/quarantine/``.
+
+    ``redact_bundle`` is an injectable seam for tests; production callers leave
+    it ``None`` so the canonical export redactor is used.
     """
     if redaction_profile not in EXPORT_PROFILES:
         raise TrainExportError(
@@ -267,6 +271,8 @@ def build_train_export(
 
     from git_cg.eval.mirror.redaction import RedactionError, redact_bundle_for_export
     from git_cg.eval.mirror.train import build_train_projection, filter_positive_gold
+
+    redact = redact_bundle if redact_bundle is not None else redact_bundle_for_export
 
     rows: list[dict[str, Any]] = []
     row_ids: list[str] = []
@@ -290,7 +296,7 @@ def build_train_export(
             dropped.append(bundle_id)
             continue
         try:
-            redacted = redact_bundle_for_export(bundle, profile=redaction_profile)
+            redacted = redact(bundle, profile=redaction_profile)
         except RedactionError as exc:
             # Row cannot be emitted secret-safe → drop + report + continue.
             dropped.append(bundle_id)
