@@ -31,15 +31,16 @@ Dependencies: 21 runtime, 1 dev
 | eval-materialize | `just eval-materialize` |
 | eval-fixture-index | `just eval-fixture-index` |
 | eval-api-map-check | `just eval-api-map-check` |
+| gen-cli-docs | `just gen-cli-docs` |
 | eval-s6-proof | `just eval-s6-proof` |
 
 ## Scripts (package.json)
 
 | Name | Command |
 |------|---------|
+| release | `uv run python -m git_cg.main release` |
 | test | `echo "Error: no test specified" && exit 1` |
 | validate | `node scripts/validate_commit.mjs` |
-| release | `uv run python -m git_cg.main release` |
 
 
 ## Tools
@@ -228,6 +229,10 @@ run = "uv run python -m git_cg.main --help"
 [tasks.pre-commit]
 run = "hk run pre-commit"
 
+[tasks."docs:cli"]
+description = "Regenerate docs/cli from live Typer trees"
+run = "uv run python tools/gen_cli_docs.py"
+
 [tasks."docs:build"]
 description = "Build the Zensical documentation site locally"
 run = "uv run zensical build --clean"
@@ -269,4 +274,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-70.4ms | 738 files checked | 21/539 tools matched
+70.8ms | 738 files checked | 21/539 tools matched
