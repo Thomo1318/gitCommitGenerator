@@ -11,10 +11,12 @@ from git_cg.eval.paths import CATALOG_PATH, schema_files
 
 
 def _sha256_bytes(data: bytes) -> str:
+    """Return the SHA-256 hexadecimal digest for ``data``."""
     return hashlib.sha256(data).hexdigest()
 
 
 def _canonical_json_bytes(path: Path) -> bytes:
+    """Read JSON from ``path`` and encode it as canonical bytes for hashing."""
     raw = json.loads(path.read_text(encoding="utf-8"))
     return json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 

@@ -9,6 +9,7 @@ from git_cg.eval.corpus.fixtures import default_fixture_root, load_fixture_dict
 
 
 def _iter_case_files(root: Path) -> list[Path]:
+    """Return JSON case files under the governed store's ``cases`` directory."""
     cases = root / "cases"
     if not cases.is_dir():
         return []
@@ -16,6 +17,7 @@ def _iter_case_files(root: Path) -> list[Path]:
 
 
 def _iter_suite_files(root: Path) -> list[Path]:
+    """Return top-level JSON suite files under the governed store's ``suites`` directory."""
     suites = root / "suites"
     if not suites.is_dir():
         return []
@@ -105,6 +107,7 @@ def write_fixture_index(
     fixture_root: Path | None = None,
     out_path: Path | None = None,
 ) -> Path:
+    """Write the deterministic fixture index used by offline suite discovery."""
     root = fixture_root or default_fixture_root()
     target = out_path or (root / "FIXTURE_INDEX.md")
     target.write_text(build_fixture_index(fixture_root=root), encoding="utf-8")
@@ -112,6 +115,7 @@ def write_fixture_index(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entrypoint for fixture-index generation."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate eval fixture index markdown")

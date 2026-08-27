@@ -205,6 +205,50 @@ def promote_cmd(...) -> None:
 
 ---
 
+## Bulk insertion guard
+
+Bulk docstring lifts are **mechanical high-risk edits**. Prefer the guard over free-form AST surgery or editor macros.
+
+### Placement law (A)
+
+1. Insert **only after a complete header** (`):` / `-> …:`) — never between parameters.  
+2. For Protocol / stub bodies, rewrite same-line `def f(...): ...` to a multiline body before inserting; put the docstring after the header and before `...`.  
+3. Default bulk scope is **private helpers** (`_name`). Public / CLI / module-law docs stay human-authored.  
+4. **Never** auto-invent Google `Args`/`Returns` templates or coverage stubs (`TODO`, `documented`, …).  
+5. Do **not** bulk-touch Typer command docstrings (they **are** `--help`) unless explicitly requested.
+
+### Write-if-green (B)
+
+Use the maintainer tool:
+
+```bash
+# Report missing private symbols + insertability (no writes)
+just docstring-guard
+just docstring-guard src/git_cg/eval
+mise run docstrings:guard
+
+# Apply only explicit text (manifest or single symbol)
+uv run python tools/docstring_guard.py apply \
+  --path src/git_cg/eval/foo.py --symbol _helper \
+  --text "Fail closed when the pin is floating latest."
+
+# Manifest form: [{"path":"src/...","qualname":"Cls._fn","text":"..."}]
+MANIFEST=/tmp/docs.json DRY_RUN=1 mise run docstrings:guard-apply
+just docstring-guard-apply /tmp/docs.json 1
+```
+
+Semantics:
+
+* Candidate source is validated with ``ast.parse`` + ``compile`` (+ tokenize) **in memory**.  
+* On failure the original file is left untouched and the symbol is reported as a miss.  
+* Content quality remains the Contract standard: **law one-liners**; Google sections only on triggers.
+
+### Agent / human rule
+
+If a bulk docstring pass is requested: run ``check`` first, apply only with explicit text, re-run ``check`` / ``just docstrings-patch``, and never leave a syntax-broken tree.
+
+---
+
 ## Coverage & tooling
 
 | Mechanism | Behaviour |
@@ -212,7 +256,7 @@ def promote_cmd(...) -> None:
 | CI patch gate | Changed `src/git_cg/**/*.py` only; `fail-under` 80; Python **3.14** mandatory |
 | Full-tree scan | Informational health + README badge via `just docstrings` |
 | Config | `[tool.interrogate]` in `pyproject.toml` (`ignore-private = false`, excludes `src/git_cg/evals`) |
-| Commands | `just docstrings-patch` · `just docstrings` (see Development Guide) |
+| Commands | `just docstrings-patch` · `just docstrings` · `just docstring-guard` (see Development Guide) |
 | Ruff pydocstyle Google enforcement | **Not enabled** as a repo-wide shape gate (by design) |
 
 **Stretch goal (not merge gate):** raise docstring quality on touched state-machine modules with real one-liners (promote/replay/orchestrator helpers), aiming toward healthier full-tree percentages without stub spam.

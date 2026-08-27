@@ -84,6 +84,22 @@ docstrings-patch base="origin/main":
 docstrings:
     uvx --python 3.14 --from "interrogate==1.7.0" interrogate src/git_cg -v --generate-badge docs/assets/badges --badge-format svg --badge-style flat
 
+# Report missing private docstrings + safe-insert feasibility (no writes)
+docstring-guard *paths:
+    uv run python tools/docstring_guard.py check {{paths}}
+
+# Apply explicit docstring manifest with parse/compile write-if-green
+# Usage: just docstring-guard-apply /tmp/docs.json
+# Optional dry-run: just docstring-guard-apply /tmp/docs.json 1
+docstring-guard-apply manifest dry_run="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(apply --manifest "{{manifest}}")
+    if [ -n "{{dry_run}}" ]; then
+      args+=(--dry-run)
+    fi
+    uv run python tools/docstring_guard.py "${args[@]}"
+
 # Uninstall the tool and completions
 uninstall:
     @echo "🗑 Uninstalling git-cg..."

@@ -55,12 +55,14 @@ class ScoreResultV1(BaseModel):
     @field_validator("metric_id")
     @classmethod
     def _metric_id_non_empty(cls, v: str) -> str:
+        """Pydantic guard: metric_id must be a non-empty string."""
         if not v.strip():
             raise ValueError("metric_id must be non-empty")
         return v
 
     @model_validator(mode="after")
     def _value_matches_polarity(self) -> ScoreResultV1:
+        """Pydantic guard: value domain matches the metric polarity contract."""
         is_bool = type(self.value) is bool
         if self.polarity is Polarity.PASS_FAIL:
             if not is_bool:

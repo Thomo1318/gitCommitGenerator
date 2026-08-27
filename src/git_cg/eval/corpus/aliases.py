@@ -27,6 +27,7 @@ class DatasetAliasError(ValueError):
 
 
 def _build_alias_index() -> dict[str, str]:
+    """Build an alias-to-canonical dataset ID index."""
     index: dict[str, str] = {}
     for stable, aliases in DATASET_ID_ALIASES.items():
         for alias in aliases:

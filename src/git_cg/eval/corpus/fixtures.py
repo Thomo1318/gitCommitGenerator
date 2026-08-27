@@ -16,10 +16,12 @@ class FixtureLoadError(ValueError):
 
 
 def default_fixture_root() -> Path:
+    """Default on-disk fixture root used by offline corpus helpers."""
     return DEFAULT_FIXTURE_ROOT
 
 
 def load_fixture_dict(path: Path | str) -> dict[str, Any]:
+    """Load one fixture document as a plain dict (fail closed on bad JSON)."""
     p = Path(path)
     if not p.is_file():
         raise FixtureLoadError(f"missing fixture: {p}")
@@ -33,9 +35,11 @@ def load_fixture_dict(path: Path | str) -> dict[str, Any]:
 
 
 def _resolve_case_path(fixture_root: Path, rel: str) -> Path:
+    """Resolve a path/id against the governed store root (containment-checked)."""
     root = fixture_root.resolve()
 
     def resolve_under_root(path: Path) -> Path:
+        """Resolve a user path while containing it under the fixture root."""
         candidate = path.resolve()
         if not candidate.is_relative_to(root):
             raise FixtureLoadError(f"case path escapes fixture root: {rel}")

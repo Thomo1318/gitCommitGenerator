@@ -156,6 +156,7 @@ def score_family_c(
             gate_codes = {f"GATE_EVAL_ERROR:{type(exc).__name__}"}
 
     def _gate_pass(allowed_codes: frozenset[str], *, status_keys: tuple[str, ...] = ()) -> tuple[bool, str | None]:
+        """Internal helper: gate pass."""
         if gate_report is None:
             return False, "gates_not_evaluated"
         for c in gate_codes:

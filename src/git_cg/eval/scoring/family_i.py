@@ -160,12 +160,14 @@ class TopologyEvidence:
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any] | None:
+    """Return ``value`` when it is a mapping; otherwise ``None``."""
     if isinstance(value, Mapping):
         return value
     return None
 
 
 def _non_empty_str(value: Any) -> str | None:
+    """Return the stripped value when it is a non-empty string; otherwise ``None``."""
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
@@ -898,6 +900,7 @@ def score_family_i(
     bound = bool(ctx.bound)
 
     def base_evidence(**extra: Any) -> dict[str, Any]:
+        """Shared base evidence fields for metric emission."""
         out: dict[str, Any] = {
             "require_topology": require_topology,
             "topology_present": bool(ev and ev.present),
@@ -1276,6 +1279,7 @@ def score_family_i(
         blame: str | None = None,
         divergent: str | None = None,
     ) -> ScoreResultV1:
+        """Emit one ScoreResultV1 row from prepared evidence."""
         evd = base_evidence(**evidence)
         if missing:
             evd["missing_required_spans"] = list(missing)

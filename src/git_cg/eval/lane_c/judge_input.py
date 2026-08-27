@@ -173,6 +173,7 @@ def _strip_forbidden(obj: Any) -> Any:
 
 
 def _isolation_targets(evidence: BindResult | Mapping[str, Any], context: Mapping[str, Any] | None) -> list[Any]:
+    """Return isolation targets for dogfood capture resampling."""
     targets: list[Any] = []
     if isinstance(evidence, BindResult):
         if evidence.bundle is not None:
