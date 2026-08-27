@@ -1,3 +1,10 @@
+"""1Password SDK integration for secure secret resolution.
+
+Provides a caching layer for 1Password service account authentication and field
+resolution, with automatic environment variable mirroring for allowed keys and
+disk-based caching to prevent rate-limiting across hook invocations.
+"""
+
 import asyncio
 import json
 import os

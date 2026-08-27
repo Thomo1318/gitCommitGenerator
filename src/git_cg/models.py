@@ -1,3 +1,11 @@
+"""Core data models for commit generation and structured commit plans.
+
+This module defines the primary Pydantic models and enums used throughout the
+git-cg workflow, including Conventional Commit types, SemVer impact levels,
+commit intents, blueprints, and the structured commit plan that drives message
+generation and rendering.
+"""
+
 from __future__ import annotations
 
 import enum

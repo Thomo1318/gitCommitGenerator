@@ -1,3 +1,9 @@
+"""macOS alerter integration for commit message notifications.
+
+Provides a native macOS notification interface using the alerter tool to prompt
+the user with generated commit messages and capture their chosen action.
+"""
+
 import subprocess
 import sys
 from typing import Literal
