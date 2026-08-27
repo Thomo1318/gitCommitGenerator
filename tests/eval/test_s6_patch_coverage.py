@@ -124,14 +124,15 @@ def test_brief_load_json_os_decode_and_non_object(tmp_path: Path) -> None:
 
 def test_brief_path_wrappers_map_layer_a_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.eval import brief as brief_mod
+    from git_cg.eval.binding import paths as binding_paths
     from git_cg.eval.brief import AmendBriefError
 
     def boom(*_args: object, **_kwargs: object) -> Path:
         raise LayerAPathError("path escaped store")
 
-    monkeypatch.setattr("git_cg.eval.binding.paths.amend_briefs_dir", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.dogfood_dir", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.atomic_write_json", boom)
+    monkeypatch.setattr(binding_paths, "amend_briefs_dir", boom)
+    monkeypatch.setattr(binding_paths, "dogfood_dir", boom)
+    monkeypatch.setattr(binding_paths, "atomic_write_json", boom)
 
     with pytest.raises(AmendBriefError) as ei:
         brief_mod._briefs_dir(tmp_path)
@@ -493,6 +494,7 @@ def test_doctor_pin_unreadable_fail_closed(tmp_path: Path, monkeypatch: pytest.M
 
 def test_opik_doctor_config_error_and_queue_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.eval import doctor as doctor_mod
+    from git_cg.eval.mirror import config as mirror_config
     from git_cg.eval.mirror.config import OpikConfigError
 
     repo = _git_repo(tmp_path)
@@ -500,7 +502,7 @@ def test_opik_doctor_config_error_and_queue_paths(tmp_path: Path, monkeypatch: p
     def boom_config() -> Any:
         raise OpikConfigError("bad mode")
 
-    monkeypatch.setattr("git_cg.eval.mirror.config.resolve_opik_config", boom_config)
+    monkeypatch.setattr(mirror_config, "resolve_opik_config", boom_config)
     report = doctor_mod.run_opik_doctor(repo_root=repo)
     assert report.exit_code == 2
     assert report.green is False
@@ -508,22 +510,13 @@ def test_opik_doctor_config_error_and_queue_paths(tmp_path: Path, monkeypatch: p
 
     # Happy config path with queue unreadable + failed rows
     cfg = SimpleNamespace(mode="off")
-    monkeypatch.setattr(
-        "git_cg.eval.mirror.config.resolve_opik_config",
-        lambda: cfg,
-    )
-    monkeypatch.setattr(
-        "git_cg.eval.mirror.config.public_config_view",
-        lambda _c: {"mode": "off"},
-    )
-    monkeypatch.setattr(
-        "git_cg.eval.mirror.config.operator_config_health",
-        lambda _c: "ok",
-    )
+    monkeypatch.setattr(mirror_config, "resolve_opik_config", lambda: cfg)
+    monkeypatch.setattr(mirror_config, "public_config_view", lambda _c: {"mode": "off"})
+    monkeypatch.setattr(mirror_config, "operator_config_health", lambda _c: "ok")
 
     qdir = repo / ".eval" / "export_queue"
     qdir.mkdir(parents=True)
-    _write_json(qdir / "bad.json", "{nope")
+    (qdir / "bad.json").write_text("{nope", encoding="utf-8")
     _write_json(
         qdir / "failed.json",
         {
@@ -534,9 +527,12 @@ def test_opik_doctor_config_error_and_queue_paths(tmp_path: Path, monkeypatch: p
         },
     )
 
-    # load_queue_item may still fail schema; _queue_counts buckets exceptions.
     report2 = doctor_mod.run_opik_doctor(repo_root=repo)
+    assert report2.exit_code == 0
     assert isinstance(report2.extra.get("queue_counts"), dict)
+    counts = report2.extra["queue_counts"]
+    assert counts.get("failed") == 1
+    assert counts.get("unreadable") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -616,14 +612,15 @@ def test_orchestrator_prior_summaries_and_recompute_evidence(tmp_path: Path) -> 
 
 def test_replay_path_wrappers_and_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.eval import replay as replay_mod
+    from git_cg.eval.binding import paths as binding_paths
     from git_cg.eval.replay import ReplayError
 
     def boom(*_args: object, **_kwargs: object) -> Path:
         raise LayerAPathError("escaped")
 
-    monkeypatch.setattr("git_cg.eval.binding.paths.replays_dir", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.acceptpath_bundles_dir", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.atomic_write_json", boom)
+    monkeypatch.setattr(binding_paths, "replays_dir", boom)
+    monkeypatch.setattr(binding_paths, "acceptpath_bundles_dir", boom)
+    monkeypatch.setattr(binding_paths, "atomic_write_json", boom)
 
     with pytest.raises(ReplayError) as ei:
         replay_mod._replays_dir(tmp_path)
@@ -661,14 +658,15 @@ def test_replay_path_wrappers_and_helpers(tmp_path: Path, monkeypatch: pytest.Mo
 
 def test_promote_path_wrappers_and_load_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.eval import promote as promote_mod
+    from git_cg.eval.binding import paths as binding_paths
     from git_cg.eval.promote import PromoteError
 
     def boom_index(*_args: object, **_kwargs: object) -> Path:
         raise LayerAPathError("escaped")
 
-    monkeypatch.setattr("git_cg.eval.binding.paths.index_dir", boom_index)
-    monkeypatch.setattr("git_cg.eval.binding.paths.acceptpath_bundles_dir", boom_index)
-    monkeypatch.setattr("git_cg.eval.binding.paths.atomic_write_json", boom_index)
+    monkeypatch.setattr(binding_paths, "index_dir", boom_index)
+    monkeypatch.setattr(binding_paths, "acceptpath_bundles_dir", boom_index)
+    monkeypatch.setattr(binding_paths, "atomic_write_json", boom_index)
 
     with pytest.raises(PromoteError) as ei:
         promote_mod._promotions_dir(tmp_path)
@@ -751,15 +749,16 @@ def test_promote_destination_dir_and_split_scan(tmp_path: Path) -> None:
 
 def test_train_export_path_wrappers_and_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.eval import train_export as te
+    from git_cg.eval.binding import paths as binding_paths
     from git_cg.eval.train_export import TrainExportError
 
     def boom(*_args: object, **_kwargs: object) -> Path:
         raise LayerAPathError("escaped")
 
-    monkeypatch.setattr("git_cg.eval.binding.paths.train_export_dir", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.antipattern_vault_dir", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.atomic_write_json", boom)
-    monkeypatch.setattr("git_cg.eval.binding.paths.acceptpath_bundles_dir", boom)
+    monkeypatch.setattr(binding_paths, "train_export_dir", boom)
+    monkeypatch.setattr(binding_paths, "antipattern_vault_dir", boom)
+    monkeypatch.setattr(binding_paths, "atomic_write_json", boom)
+    monkeypatch.setattr(binding_paths, "acceptpath_bundles_dir", boom)
 
     with pytest.raises(TrainExportError) as ei:
         te._train_export_dir(tmp_path)
@@ -771,15 +770,12 @@ def test_train_export_path_wrappers_and_write(tmp_path: Path, monkeypatch: pytes
         te._atomic_write(tmp_path / "x.json", {"a": 1})
     assert ei.value.code == "EVAL_STORE_INTEGRITY"
 
-    # load_json / _load_bundles integrity
     with pytest.raises(TrainExportError):
         te._load_json(tmp_path / "missing.json")
 
     repo = _git_repo(tmp_path)
-    # restore real path helpers for write path by undoing monkeypatches selectively
     monkeypatch.undo()
 
-    # invalid / missing bundle IDs are only checked once the store dir exists
     from git_cg.eval.binding.paths import acceptpath_bundles_dir
 
     acceptpath_bundles_dir(repo).mkdir(parents=True, exist_ok=True)
@@ -918,21 +914,22 @@ def test_cli_status_queue_counts_and_emit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from git_cg.eval import cli as cli_mod
+    from git_cg.eval.mirror import queue as mirror_queue
 
     repo = _git_repo(tmp_path)
-    qdir = repo / ".eval" / "queue"
+    qdir = repo / ".eval" / "export_queue"
     qdir.mkdir(parents=True)
     (qdir / "bad.json").write_text("{", encoding="utf-8")
     (qdir / "good.json").write_text('{"status": "pending"}', encoding="utf-8")
 
-    monkeypatch.setattr("git_cg.eval.mirror.queue.export_queue_dir", lambda _repo: qdir)
+    monkeypatch.setattr(mirror_queue, "export_queue_dir", lambda _repo: qdir)
 
     def load_item(stem: str, *, repo_root: Path | None = None) -> dict[str, str]:
         if stem == "bad":
             raise ValueError("unreadable")
         return {"status": "pending"}
 
-    monkeypatch.setattr("git_cg.eval.mirror.queue.load_queue_item", load_item)
+    monkeypatch.setattr(mirror_queue, "load_queue_item", load_item)
     counts = cli_mod._queue_status_counts(repo)
     assert counts.get("pending") == 1
     assert counts.get("unreadable") == 1
