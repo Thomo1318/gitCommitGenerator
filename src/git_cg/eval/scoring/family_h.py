@@ -521,6 +521,7 @@ def _collect_pack_identities(
                 hashes.append(digest)
 
     def _add_hash(raw: Any) -> None:
+        """Internal helper: add hash."""
         if isinstance(raw, str) and len(raw) == 64 and raw not in hashes:
             hashes.append(raw)
 

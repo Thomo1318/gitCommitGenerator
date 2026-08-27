@@ -121,6 +121,7 @@ def classify_equals_error(
 
 
 def _normalize_label(label: str) -> str:
+    """Normalize operator/input tokens into the closed vocabulary form."""
     return " ".join(str(label).strip().lower().split())
 
 
@@ -143,10 +144,12 @@ _POSITIVE: Final[frozenset[str]] = frozenset(
 
 
 def _is_positive_label(normalized: str) -> bool:
+    """True when a train/review label is the positive class."""
     return normalized in _POSITIVE
 
 
 def _pin_or_default(pin_ref: str | None) -> str:
+    """Use an explicit pin when provided, otherwise the current frozen pin."""
     if pin_ref is None or not str(pin_ref).strip():
         # Stable lab pin identity over schema pack (content-addressed).
         base = schema_pack_pin()
@@ -282,6 +285,7 @@ def summarize_meta_eval(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def _coerce_item(raw: MetaEvalItem | Mapping[str, Any]) -> MetaEvalItem:
+    """Coerce a loosely typed queue/store item into the engine shape."""
     if isinstance(raw, MetaEvalItem):
         if not raw.item_id.strip():
             raise MetaEvalError("item_id must be non-empty")

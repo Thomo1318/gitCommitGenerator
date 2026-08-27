@@ -68,6 +68,7 @@ class ProjectionError(ValueError):
     """Projection failed closed (``export_validation`` class equivalent)."""
 
     def __init__(self, message: str, *, error_class: str = "export_validation") -> None:
+        """Initialize structured error/context fields for operator engines."""
         self.error_class = error_class
         super().__init__(message)
 
@@ -153,6 +154,7 @@ def select_final_attempt(bundle: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _bundle_meta(bundle: dict[str, Any]) -> dict[str, Any]:
+    """Project bundle metadata fields needed by operator engines."""
     meta = bundle.get("meta")
     return dict(meta) if isinstance(meta, dict) else {}
 

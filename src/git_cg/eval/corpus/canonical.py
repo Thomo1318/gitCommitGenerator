@@ -19,16 +19,20 @@ def canonical_json_bytes(obj: Any) -> bytes:
 
 
 def canonical_json_text(obj: Any) -> str:
+    """Canonical JSON text form used for content hashing."""
     return canonical_json_bytes(obj).decode("utf-8")
 
 
 def sha256_hex(data: bytes) -> str:
+    """Hex-encode a SHA-256 digest for pin and identity fields."""
     return hashlib.sha256(data).hexdigest()
 
 
 def content_sha256(obj: Any) -> str:
+    """SHA-256 content identity over canonical JSON bytes."""
     return sha256_hex(canonical_json_bytes(obj))
 
 
 def message_sha256(text: str) -> str:
+    """SHA-256 identity over a final commit message payload."""
     return sha256_hex(text.encode("utf-8"))

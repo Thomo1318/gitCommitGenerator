@@ -109,6 +109,7 @@ def _queue_item_path(repo_root: Path, queue_id: str) -> Path:
 
 
 def _utc_now() -> datetime:
+    """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC)
 
 

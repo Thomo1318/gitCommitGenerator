@@ -25,6 +25,7 @@ class CatalogError(ValueError):
 
 @lru_cache(maxsize=1)
 def _load_metric_catalog_cached() -> dict[str, Any]:
+    """Load a governed artifact from the Layer-A store (fail closed)."""
     if not CATALOG_PATH.is_file():
         raise CatalogError(f"missing catalog: {CATALOG_PATH}")
     data = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))

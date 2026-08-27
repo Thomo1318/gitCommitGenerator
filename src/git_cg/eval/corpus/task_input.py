@@ -31,6 +31,7 @@ class TaskInputError(ValueError):
 
 
 def _is_forbidden_key(key: str) -> bool:
+    """True when a payload key is forbidden under the scrub/export profile."""
     if key in _FORBIDDEN_EXACT:
         return True
     return _FORBIDDEN_NAME.match(key) is not None

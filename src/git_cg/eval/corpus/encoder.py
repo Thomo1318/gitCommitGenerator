@@ -19,6 +19,7 @@ class CorpusEncodeError(ValueError):
 
 
 def _require_str(data: Mapping[str, Any], key: str) -> str:
+    """Require a non-empty string field and fail closed otherwise."""
     val = data.get(key)
     if not isinstance(val, str) or not val.strip():
         raise CorpusEncodeError(f"missing or empty required field: {key}")
@@ -26,6 +27,7 @@ def _require_str(data: Mapping[str, Any], key: str) -> str:
 
 
 def _optional_str(data: Mapping[str, Any], key: str, *, allow_empty: bool = False) -> str | None:
+    """Return a stripped string or ``None`` when absent/blank."""
     val = data.get(key)
     if val is None:
         return None
@@ -37,6 +39,7 @@ def _optional_str(data: Mapping[str, Any], key: str, *, allow_empty: bool = Fals
 
 
 def _optional_str_list(data: Mapping[str, Any], key: str) -> list[str] | None:
+    """Return a list of non-empty strings, dropping blanks."""
     val = data.get(key)
     if val is None:
         return None
@@ -46,12 +49,14 @@ def _optional_str_list(data: Mapping[str, Any], key: str) -> list[str] | None:
 
 
 def _validate_enum(value: str, allowed: tuple[str, ...], field: str) -> str:
+    """Fail closed when ``value`` is outside the closed enum vocabulary."""
     if value not in allowed:
         raise CorpusEncodeError(f"unknown {field}: {value!r}; allowed={list(allowed)}")
     return value
 
 
 def _meta_with_producer(meta: Mapping[str, Any] | None, *, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Attach producer metadata while preserving scrub-safe fields."""
     out: dict[str, Any] = {}
     if meta:
         if not isinstance(meta, Mapping):
@@ -64,6 +69,7 @@ def _meta_with_producer(meta: Mapping[str, Any] | None, *, extra: dict[str, Any]
 
 
 def _as_mapping(value: Any, field: str) -> Mapping[str, Any] | None:
+    """Return ``value`` when it is a mapping; otherwise an empty dict."""
     if value is None:
         return None
     if not isinstance(value, Mapping):

@@ -71,6 +71,7 @@ def score_family_f(
             built_plan = None
 
     def _attr_ok(relevant: frozenset[str]) -> tuple[bool, str | None, bool | None]:
+        """Internal helper: attr ok."""
         if gold_slot is None:
             return False, "gold_slot_missing", None
         if gold_slot.skipped:
