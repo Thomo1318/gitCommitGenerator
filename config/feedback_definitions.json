@@ -1,0 +1,45 @@
+{
+  "schema_version": "feedback_definition_v1",
+  "definitions": {
+    "user_acceptance": {
+      "type": "numerical",
+      "scale_min": 0.0,
+      "scale_max": 1.0,
+      "emitter": "main.py:4543",
+      "value_boundary": "Emitted directly as a 0.0-1.0 float score."
+    },
+    "ranking_override": {
+      "type": "numerical",
+      "scale_min": 0.0,
+      "scale_max": 1.0,
+      "emitter": "main.py:4546",
+      "value_boundary": "Internally a metadata bool (GenerationTelemetry.ranking_override, telemetry.py:227); converted to 1.0/0.0 float only at the Opik boundary by ranking_override_feedback_score (telemetry.py:291). Never store the raw bool as a score value."
+    },
+    "contract_consistent": {
+      "type": "numerical",
+      "scale_min": 0.0,
+      "scale_max": 1.0,
+      "emitter": "main.py:4552",
+      "value_boundary": "1.0 when no contract violation, else 0.0 (Issue #204 Slice 5.5)."
+    },
+    "human.craft_rating": {
+      "type": "numerical",
+      "scale_min": 1.0,
+      "scale_max": 5.0,
+      "emitter": "review_queue._build_scores",
+      "value_boundary": "Harness convention 1-5; human_review_v1 leaves craft_rating an unconstrained number (drift-guard / workspace FD enforces the scale, not the schema)."
+    },
+    "human.gold_dispute": {
+      "type": "boolean",
+      "emitter": "review_queue._build_scores",
+      "value_boundary": "Harness convention disputed/not_disputed; human_review_v1 leaves gold_dispute a plain boolean (no enum)."
+    },
+    "human.regime_label": {
+      "type": "categorical",
+      "categories": [ "A", "B", "unknown" ],
+      "emitter": "review_queue._build_scores",
+      "value_boundary": "The only schema-enforced FD scale: human_review_v1 pins enum ['A','B','unknown']."
+    }
+  },
+  "notes": "human.notes_present is derived/read-only metadata (notes is a top-level free-text string in human_review_v1 with scores.additionalProperties=false); it is never minted as a workspace Feedback Definition and is excluded from the drift guard. final_accept is an artifact_class/provenance_label binding-identity enum value (a provenance tag), not a review-outcome score, and is excluded from the Tier-1 FD vocabulary. Scales are harness conventions enforced by the drift-guard test and the Opik workspace FDs, not by human_review_v1."
+}
