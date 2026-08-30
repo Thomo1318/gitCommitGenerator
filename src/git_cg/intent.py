@@ -80,6 +80,8 @@ class DiffSignals(BaseModel):
     only_formatting: bool = False
     only_dependency_changes: bool = False
     only_config: bool = False
+    only_vcs_dotfiles: bool = False
+    only_gitignore: bool = False
 
     new_shared_module: bool = False
     removed_duplicate_logic: bool = False
@@ -94,6 +96,8 @@ class DiffSignals(BaseModel):
     package_metadata_changed: bool = False
     packaged_data_changed: bool = False
 
+    vcs_dotfile_changed: bool = False
+    gitignore_changed: bool = False
     validation_added: bool = False
     error_handling_added: bool = False
     logging_changed: bool = False
@@ -187,13 +191,21 @@ _SECURITY_PATH_PARTS = {
     "credentials",
 }
 
-_HOOK_PATH_PARTS = {
-    "hooks",
-    ".git",
+# Directory-segment matches: keep ".git" as a *segment* match only so dotfiles
+# like .gitignore/.gitattributes/.gitmodules are not misclassified as hooks.
+_HOOK_PATH_DIR_SEGMENTS = {"hooks", ".git"}
+
+_HOOK_PATH_NAMES = {
     "hk.pkl",
     "pre-commit",
     "prepare-commit-msg",
     "commit-msg",
+}
+
+_VCS_DOTFILE_NAMES = {
+    ".gitignore",
+    ".gitattributes",
+    ".gitmodules",
 }
 
 _DEPENDENCY_FILES = {
@@ -265,6 +277,14 @@ _SECRETS_MANAGEMENT_TERMS = (
     "secrets",
     "credential",
     "token",
+)
+
+# Word-boundary matching for secrets terms: substring hits like "age" inside
+# ".coverage" or "token" inside "tokenizer" must not flag secrets management.
+# "op" keeps its legacy shapes ("op ", "op_") via lookahead instead of \b.
+_SECRETS_MANAGEMENT_PATTERN = re.compile(
+    r"\b(?:1password|fnox|age|secrets?|credentials?|tokens?)\b|\bop(?=[\s_])",
+    re.IGNORECASE,
 )
 
 _PUBLIC_API_PATTERNS = (
@@ -436,6 +456,14 @@ def _apply_file_signals(signals: DiffSignals, file_summary: DiffFileSummary) -> 
         signals.touches_build = True
         signals.evidence.append("Build/tooling files changed")
 
+    if any(_is_vcs_dotfile_path(path) for path in paths):
+        signals.vcs_dotfile_changed = True
+        signals.evidence.append("VCS dotfiles changed (.gitignore/.gitattributes/.gitmodules)")
+
+    if any(_is_gitignore_path(path) for path in paths):
+        signals.gitignore_changed = True
+        signals.evidence.append(".gitignore changed")
+
     if any(_is_hook_path(path) for path in paths):
         signals.touches_hooks = True
         signals.evidence.append("Git hook configuration or hook-adjacent files changed")
@@ -528,7 +556,7 @@ def _apply_content_signals(signals: DiffSignals, diff_output: str, lowered_diff:
             signals.touches_security = True
             signals.evidence.append("Secret scanning tooling detected")
 
-        if any(term in lowered_diff for term in _SECRETS_MANAGEMENT_TERMS):
+        if _SECRETS_MANAGEMENT_PATTERN.search(lowered_diff):
             signals.secrets_management_changed = True
             signals.evidence.append("Secrets-management terms detected")
 
@@ -557,6 +585,9 @@ def _apply_only_signals(signals: DiffSignals, paths: list[str]) -> None:
     dependency_paths = [_is_dependency_path(path) for path in paths]
     signals.only_dependency_changes = bool(paths) and all(dependency_paths)
 
+    signals.only_vcs_dotfiles = all(_is_vcs_dotfile_path(path) for path in paths)
+    signals.only_gitignore = all(_is_gitignore_path(path) for path in paths)
+
     # Conservative placeholder: formatting-only detection should later use
     # a parser/formatter diff or language-aware analysis.
     signals.only_formatting = False
@@ -572,6 +603,12 @@ def _apply_only_signals(signals: DiffSignals, paths: list[str]) -> None:
 
     if signals.only_dependency_changes:
         signals.evidence.append("All changed files are dependency/package metadata files")
+
+    if signals.only_vcs_dotfiles:
+        signals.evidence.append("All changed files are VCS dotfiles")
+
+    if signals.only_gitignore:
+        signals.evidence.append("All changed files are .gitignore")
 
 
 def _parse_diff_git_paths(line: str) -> tuple[str, str] | None:
@@ -637,10 +674,26 @@ def _is_build_path(path: str) -> bool:
 
 
 def _is_hook_path(path: str) -> bool:
-    """Check if a path represents a git hook file."""
-    lowered = path.lower()
+    """Check if a path represents a git hook file.
+
+    Directory segments (``.git``, ``hooks``) match only as full path segments,
+    so VCS dotfiles such as ``.gitignore`` are not misclassified as hooks.
+    Hook-adjacent filenames (``hk.pkl``, ``commit-msg``, ...) match by name.
+    """
+    parts = PurePosixPath(path).parts
+    lowered_parts = tuple(part.lower() for part in parts)
     name = PurePosixPath(path).name.lower()
-    return any(part in lowered for part in _HOOK_PATH_PARTS) or name in _HOOK_PATH_PARTS
+    return any(seg in lowered_parts for seg in _HOOK_PATH_DIR_SEGMENTS) or name in _HOOK_PATH_NAMES
+
+
+def _is_vcs_dotfile_path(path: str) -> bool:
+    """Check if a path is a VCS dotfile (.gitignore/.gitattributes/.gitmodules)."""
+    return PurePosixPath(path).name.lower() in _VCS_DOTFILE_NAMES
+
+
+def _is_gitignore_path(path: str) -> bool:
+    """Check if a path is specifically .gitignore (not .gitattributes/.gitmodules)."""
+    return PurePosixPath(path).name.lower() == ".gitignore"
 
 
 def _is_config_path(path: str) -> bool:
@@ -1076,6 +1129,14 @@ def _generate_signal_markers(signals: DiffSignals) -> set[str]:
     if signals.only_docs or signals.only_tests or signals.only_fixtures:
         markers -= _PRODUCT_ONLY_MARKERS
 
+    # .gitignore specifically drives gitignore markers.
+    # .gitattributes and .gitmodules set vcs_dotfile_changed (for hook-path
+    # exclusion) but do not produce gitignore-specific markers.
+    if signals.gitignore_changed:
+        markers.update(["gitignore_changed", "vcs_ignore_updated"])
+    if signals.only_gitignore:
+        markers.update(["ignore_pattern_added", "ignore_pattern_removed"])
+
     # CI/CD & Hooks
     if signals.touches_ci:
         markers.update(["ci_workflow_updated", "github_actions_changed", "pipeline_fix"])
@@ -1165,6 +1226,10 @@ def rank_commit_intents(
         if signals.only_dependency_changes and intent_group not in ("runtime_build_package", "miscellaneous"):
             score -= 100.0
             penalties.append("Hard veto: Only dependencies changed, but intent is not build/package")
+
+        if signals.only_gitignore and intent_group not in ("config_chore", "miscellaneous"):
+            score -= 100.0
+            penalties.append("Hard veto: Only .gitignore changed, but intent is not config chore")
 
         # Create the RankedIntent
         ranked.append(
