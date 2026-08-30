@@ -64,6 +64,11 @@ _HINTS: Final[dict[str, str]] = {
     ),
     "EVAL_PROMPT_PACK_DRIFT": (f"FIND-028: re-pin the suite snapshot against the current prompt pack. {_DEEP_LINKS}"),
     "EVAL_CONFIG_ERROR": (f"Resolve Opik mode/projects; see `git-cg eval opik config show`. {_DEEP_LINKS}"),
+    "EVAL_PROJECT_LANE_MISSING": (
+        "Pin the four-lane Opik projects via GIT_CG_OPIK_PROJECT_LIVE / GIT_CG_OPIK_PROJECT_EVAL / "
+        "GIT_CG_OPIK_PROJECT_CI / GIT_CG_OPIK_PROJECT_IMPORT (EVAL or legacy OPIK_PROJECT_NAME "
+        f"bootstraps all four). {_DEEP_LINKS}"
+    ),
 }
 
 
@@ -579,6 +584,66 @@ def _export_config_score(make_score: Any) -> Any:
 # --------------------------------------------------------------------------
 
 
+def _opik_project_lane_checks(mode: str) -> list[DoctorCheck]:
+    """Per-lane Opik project-pin diagnostics (S7-1a).
+
+    Pure, offline, secret-safe: names each canonical lane's state and (for
+    bootstrap) the origin env var. Never BLOCK — the authoritative fail-closed
+    ``opik.config_resolved`` row already covers active-mode misconfiguration;
+    these rows are observability so operators can see *which* lane is missing
+    or bootstrapped. ``mode=off`` ⇒ missing lanes WARN; any active mode ⇒
+    missing lanes FAIL at ``warn`` severity (never flip block-green by themselves).
+    """
+    from git_cg.eval.mirror.config import LaneSource, resolve_lane_provenance
+
+    active = mode not in {"off", "local_only", "local"}
+    checks: list[DoctorCheck] = []
+    for lane, pin in resolve_lane_provenance().items():
+        check_id = f"opik.projects.{lane}"
+        if pin.source is LaneSource.MISSING:
+            if active:
+                status, severity = STATUS_FAIL, SEVERITY_WARN
+            else:
+                status, severity = STATUS_WARN, SEVERITY_WARN
+            checks.append(
+                DoctorCheck(
+                    check_id,
+                    status,
+                    severity,
+                    f"projects.{lane} not pinned — set {pin.env_var}",
+                    hint=_HINTS["EVAL_PROJECT_LANE_MISSING"],
+                )
+            )
+        elif pin.source in (LaneSource.BOOTSTRAP_EVAL, LaneSource.BOOTSTRAP_LEGACY):
+            checks.append(
+                DoctorCheck(
+                    check_id,
+                    STATUS_PASS,
+                    SEVERITY_WARN,
+                    f"projects.{lane} ← bootstrap ({pin.origin_env_var} '{pin.value}')",
+                )
+            )
+        elif pin.source is LaneSource.LEGACY:
+            checks.append(
+                DoctorCheck(
+                    check_id,
+                    STATUS_PASS,
+                    SEVERITY_WARN,
+                    f"projects.{lane} ← legacy {pin.origin_env_var} '{pin.value}'",
+                )
+            )
+        else:  # EXPLICIT
+            checks.append(
+                DoctorCheck(
+                    check_id,
+                    STATUS_PASS,
+                    SEVERITY_WARN,
+                    f"projects.{lane} pinned via {pin.env_var} '{pin.value}'",
+                )
+            )
+    return checks
+
+
 def run_opik_doctor(*, repo_root: Path) -> DoctorReport:
     """Secret-safe Opik/export/queue health doctor. No transport, no network.
 
@@ -599,6 +664,7 @@ def run_opik_doctor(*, repo_root: Path) -> DoctorReport:
     checks: list[DoctorCheck] = []
     config_view: dict[str, Any] | None = None
     health: str = "config_error"
+    lane_checks = _opik_project_lane_checks(str(os.environ.get("GIT_CG_OPIK_MODE") or "off"))
 
     try:
         config = resolve_opik_config()
@@ -616,6 +682,7 @@ def run_opik_doctor(*, repo_root: Path) -> DoctorReport:
                 hint_code="EVAL_CONFIG_ERROR",
             )
         )
+        checks.extend(lane_checks)
         green = False
         scores = _opik_scores(resolved=False, health=health)
         return DoctorReport(
@@ -650,6 +717,9 @@ def run_opik_doctor(*, repo_root: Path) -> DoctorReport:
             f"mode={mode} health={health}",
         )
     )
+
+    # Per-lane project-pin provenance (S7-1a; observability, never BLOCK).
+    checks.extend(lane_checks)
 
     # Secret presence: masked form only, never value/prefix.
     ambient_key = os.environ.get("OPIK_API_KEY") or os.environ.get("GIT_CG_OPIK_API_KEY")
