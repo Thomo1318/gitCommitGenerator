@@ -790,8 +790,15 @@ def test_cli_dogfood_envelope() -> None:
     assert payload["data"]["product_block"] is False
 
 
-def test_cli_train_export_envelope_empty() -> None:
-    payload, code = _cli(["eval", "train-export", "--no-write", "--json"])
+def test_cli_train_export_envelope_empty(tmp_path: Path) -> None:
+    """Empty-repo train-export envelope stays scrub=ok when isolated from ambient .eval/.
+
+    S7-0 / R-11: without ``--root``, this command discovers the ambient repo and
+    can report ``scrub_report.status=omitted`` when unlabeled live sessions exist
+    (e.g. sess_3f34…). Pin isolation via tmp ``--root``.
+    """
+    (tmp_path / ".git").mkdir()
+    payload, code = _cli(["eval", "train-export", "--no-write", "--json", "--root", str(tmp_path)])
     assert code == 0
     assert payload["command"] == "eval train-export"
     assert payload["data"]["scrub_report"]["status"] == "ok"

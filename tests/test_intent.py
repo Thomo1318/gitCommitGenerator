@@ -6,8 +6,11 @@ from git_cg.intent import (
     _is_test_path,
     extract_diff_file_summary,
     extract_diff_signals,
+    rank_commit_intents,
 )
 from git_cg.models import CommitIntent, CommitType, SemVerImpact
+from git_cg.ranking_confidence import compute_ranking_confidence
+from git_cg.sop import get_gitmoji_matrix
 
 
 def test_is_hook_path():
@@ -225,3 +228,92 @@ def test_docs_markdown_content_markers_quarantined() -> None:
     assert "validation_added" not in markers
     assert "new_api" not in markers
     assert "major_subsystem_restructured" not in markers
+
+
+def test_is_hook_path_excludes_vcs_dotfiles() -> None:
+    """VCS dotfiles must not be misclassified as git hooks via .git substring."""
+    assert _is_hook_path(".gitignore") is False
+    assert _is_hook_path(".gitattributes") is False
+    assert _is_hook_path(".gitmodules") is False
+    assert _is_hook_path(".github/workflows/ci.yml") is False
+    # Positive hook paths still classify
+    assert _is_hook_path(".git/hooks/commit-msg") is True
+    assert _is_hook_path("hooks/build.sh") is True
+
+
+def test_gitignore_only_diff_ranks_gitignore_update_high_confidence() -> None:
+    """A pure .gitignore diff must rank gitignore_update top with high confidence."""
+    diff = """diff --git a/.gitignore b/.gitignore
+index 6f2d41e..1695f21 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -189,4 +189,5 @@ mermaid_github_guide.md
+ # ----------------------------------------------------------------------------
+ # TEMPORARY IGNORE ITEMS
+ # ----------------------------------------------------------------------------
+-best_practices.md
++best_practices.md
++src/evals
+"""
+    signals = extract_diff_signals(diff)
+    assert signals.vcs_dotfile_changed is True
+    assert signals.only_vcs_dotfiles is True
+    assert signals.gitignore_changed is True
+    assert signals.only_gitignore is True
+    assert signals.touches_hooks is False
+    assert signals.secrets_management_changed is False
+
+    matrix = get_gitmoji_matrix()
+    ranked = rank_commit_intents(signals, matrix, enable_semantic=False)
+    assert ranked[0].intent_id == "gitignore_update"
+
+    conf = compute_ranking_confidence(ranked)
+    assert conf.level == "high"
+    assert conf.top_intent_id == "gitignore_update"
+
+
+def test_gitattributes_does_not_rank_gitignore_update() -> None:
+    """A pure .gitattributes diff must NOT rank gitignore_update top."""
+    diff = """diff --git a/.gitattributes b/.gitattributes
+index 1234567..abcdefg 100644
+--- a/.gitattributes
++++ b/.gitattributes
+@@ -1,3 +1,4 @@
+ *.py text eol=lf
+ *.md text eol=lf
++*.bin binary
+"""
+    signals = extract_diff_signals(diff)
+    assert signals.vcs_dotfile_changed is True
+    assert signals.gitignore_changed is False
+    assert signals.only_gitignore is False
+
+    matrix = get_gitmoji_matrix()
+    ranked = rank_commit_intents(signals, matrix, enable_semantic=False)
+    assert ranked[0].intent_id != "gitignore_update"
+
+
+def test_secrets_terms_use_word_boundaries() -> None:
+    """Substring traps (.coverage, tokenizer, message) must not flag secrets."""
+    diff = """diff --git a/.gitignore b/.gitignore
+index 1111111..2222222 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,4 @@
+ node_modules/
++.coverage.*
++tokenizer_cache/
+"""
+    signals = extract_diff_signals(diff)
+    assert signals.secrets_management_changed is False
+
+    diff_secret = """diff --git a/src/config.py b/src/config.py
+index 1111111..2222222 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -1 +1,2 @@
+ TIMEOUT = 30
++# rotate the token quarterly
+"""
+    signals_secret = extract_diff_signals(diff_secret)
+    assert signals_secret.secrets_management_changed is True

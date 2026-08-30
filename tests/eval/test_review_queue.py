@@ -35,11 +35,13 @@ from git_cg.eval.schema_pack import validate_instance
 
 @pytest.fixture()
 def repo(tmp_path: Path) -> Path:
+    """Return a tmp dir seeded with a ``.git`` marker so queue paths resolve."""
     (tmp_path / ".git").mkdir()
     return tmp_path
 
 
 def test_transition_matrix_closed() -> None:
+    """Assert the review lifecycle transition map is closed and matches §7.2.7 law."""
     assert TRANSITIONS[STATUS_PENDING] == frozenset({STATUS_IN_REVIEW, STATUS_DISMISSED})
     assert TRANSITIONS[STATUS_IN_REVIEW] == frozenset({STATUS_ADJUDICATED, STATUS_DISMISSED, STATUS_PENDING})
     assert TRANSITIONS[STATUS_ADJUDICATED] == frozenset()
@@ -47,6 +49,7 @@ def test_transition_matrix_closed() -> None:
 
 
 def test_enqueue_writes_schema_valid_human_review(repo: Path) -> None:
+    """Enqueue persists a frozen ``human_review_v1`` payload with advisory authority."""
     result = enqueue(
         repo,
         case_id="case-1",
@@ -71,12 +74,14 @@ def test_enqueue_writes_schema_valid_human_review(repo: Path) -> None:
 
 
 def test_enqueue_rejects_email_reviewer(repo: Path) -> None:
+    """Reviewer identifiers must be opaque: an email raises ``ReviewQueueError`` (exit 2)."""
     with pytest.raises(ReviewQueueError) as ei:
         enqueue(repo, case_id="c1", reviewer="user@example.com")
     assert ei.value.exit_code == 2
 
 
 def test_claim_adjudicate_lifecycle(repo: Path) -> None:
+    """Full pending→in_review→adjudicated path emits typed outcome_ref and never writes fixtures."""
     created = enqueue(repo, case_id="case-1", reviewer="rev-1")
     rid = created["item"]["review_id"]
 
@@ -99,12 +104,14 @@ def test_claim_adjudicate_lifecycle(repo: Path) -> None:
 
 
 def test_dismiss_from_pending(repo: Path) -> None:
+    """Dismissing straight from pending is a legal terminal transition."""
     rid = enqueue(repo, case_id="case-1", reviewer="rev-1")["item"]["review_id"]
     result = dismiss(repo, review_id=rid, reason="duplicate")
     assert result["item"]["status"] == STATUS_DISMISSED
 
 
 def test_illegal_adjudicate_from_pending(repo: Path) -> None:
+    """Adjudicating from pending (skipping claim) is rejected with exit 2."""
     rid = enqueue(repo, case_id="case-1", reviewer="rev-1")["item"]["review_id"]
     with pytest.raises(ReviewQueueError) as ei:
         adjudicate(repo, review_id=rid, outcome="approve_promote")
@@ -112,6 +119,7 @@ def test_illegal_adjudicate_from_pending(repo: Path) -> None:
 
 
 def test_list_and_show(repo: Path) -> None:
+    """List honours status filters and show returns the full stored review item."""
     a = enqueue(repo, case_id="case-a", reviewer="rev-1")["item"]["review_id"]
     b = enqueue(repo, case_id="case-b", reviewer="rev-2")["item"]["review_id"]
     claim(repo, review_id=b, reviewer="rev-2")
@@ -125,12 +133,14 @@ def test_list_and_show(repo: Path) -> None:
 
 
 def test_dry_run_enqueue_no_write(repo: Path) -> None:
+    """``dry_run=True`` returns the would-be item without touching the queue on disk."""
     result = enqueue(repo, case_id="case-1", reviewer="rev-1", dry_run=True)
     assert result["dry_run"] is True
     assert not Path(result["path"]).exists()
 
 
 def test_rollup_multi_rater_dimensions_and_disagreement(repo: Path) -> None:
+    """Multi-rater rollup aggregates dimensions, flags disagreement, and stays non-sole-promote."""
     a = enqueue(
         repo,
         case_id="case-1",
@@ -180,6 +190,108 @@ def test_rollup_multi_rater_dimensions_and_disagreement(repo: Path) -> None:
 
 
 def test_rollup_empty_queue(repo: Path) -> None:
+    """An empty queue rolls up to a zero-count, empty-list advisory result."""
     data = rollup_reviews(repo)
     assert data["rollup_count"] == 0
     assert data["rollups"] == []
+
+
+# --- H65: secret-mask fallback law (mask_secrets_in_text(...) or raw) ---------
+
+
+def test_enqueue_notes_never_store_raw_when_mask_returns_nonempty(repo: Path) -> None:
+    """H65: mask_secrets_in_text fallback must never store raw for known secret shapes.
+
+    The ``or notes.strip()`` fallback in enqueue/adjudicate fires only when the
+    mask returns a falsy value. For every probed secret shape the mask returns
+    ``•••[len=N]`` (non-empty), so the fallback never stores raw. This test
+    pins that contract against regression.
+
+    NOTE: Bearer JWT uses a long-segment payload (>=10 chars) to match the
+    current ``_SECRET_VALUE_PATTERNS`` regex. Short-segment JWTs (e.g.
+    ``eyJ…h65probe.signature`` with a 4-char middle) are NOT masked — see
+    ``test_bearer_jwt_short_segment_gap_finding`` below.
+    """
+    tokens = [
+        "sk-live-H65probeTokenABCDEFGHIJKLMNOP",
+        "ghp_H65probeTokenABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.aGVsbG93b3JsZA.signature1234",
+        "api_key=h65secretvalue",
+    ]
+    for i, token in enumerate(tokens):
+        result = enqueue(repo, case_id=f"case-mask-{i}", reviewer="rev-1", notes=f"found {token} here")
+        notes = result["item"]["review"]["notes"]
+        assert "•••" in notes, f"expected masked sentinel in notes for token shape {i}"
+        assert token not in notes, f"raw token must not appear in persisted notes (shape {i})"
+        # persisted on disk must also be masked
+        on_disk = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+        assert token not in json.dumps(on_disk), f"raw token must not appear anywhere in persisted JSON (shape {i})"
+
+
+def test_adjudicate_notes_and_destination_hint_masked(repo: Path) -> None:
+    """H65: adjudicate notes and destination_hint are masked before persist."""
+    token = "sk-live-H65probeTokenABCDEFGHIJKLMNOP"
+    ghp = "ghp_H65probeTokenABCDEFGHIJKLMNOPQRSTUVWXYZ12"
+    rid = enqueue(repo, case_id="case-adj-mask", reviewer="rev-1")["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    result = adjudicate(
+        repo,
+        review_id=rid,
+        outcome="approve_promote",
+        notes=f"approved with {token}",
+        destination_hint=f"hard_negative {ghp}",
+    )
+    on_disk = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+    adj = on_disk["adjudication"]
+    assert token not in adj["notes"]
+    assert "•••" in adj["notes"]
+    assert ghp not in adj["destination_hint"]
+    assert "•••" in adj["destination_hint"]
+
+
+def test_mask_secrets_in_text_returns_nonempty_for_nonempty_secret_input() -> None:
+    """H65: mask_secrets_in_text must never return a falsy value for non-empty secret input.
+
+    If it ever does, the ``or notes.strip()`` fallback in review_queue would
+    store the raw secret. Pin the non-empty contract directly.
+
+    NOTE: Bearer JWT uses long-segment payload (>=10 chars per segment) to
+    match the current regex. See short-segment gap test below.
+    """
+    from git_cg.eval.evidence_scrub import mask_secrets_in_text
+
+    secret_inputs = [
+        "sk-live-H65probeTokenABCDEFGHIJKLMNOP",
+        "ghp_H65probeTokenABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.aGVsbG93b3JsZA.signature1234",
+        "api_key=h65secretvalue",
+        "password=supersecretpassword123",
+        "token: abcdefgh12345678",
+    ]
+    for value in secret_inputs:
+        masked = mask_secrets_in_text(value)
+        assert masked, f"mask_secrets_in_text returned falsy for non-empty secret input: {value!r}"
+        assert value not in masked, f"raw secret must not survive masking: {value!r}"
+
+
+def test_bearer_jwt_short_segment_gap_finding(repo: Path) -> None:
+    """H65 FIND: Bearer JWT with short middle segment (<10 chars) is NOT masked.
+
+    The JWT pattern ``eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}``
+    requires >=10 chars per segment. Real-world JWTs (e.g. Firebase custom tokens,
+    some OIDC id_tokens) can have payload segments shorter than 10 chars. These
+    pass through ``mask_secrets_in_text`` unmasked and are stored raw in review
+    notes — a secret-safety gap in the evidence scrub layer.
+
+    This test documents the gap as a known FIND. It should be converted to a
+    PASS assertion once the pattern is widened (e.g. ``{1,}`` on middle segment).
+    """
+    from git_cg.eval.evidence_scrub import mask_secrets_in_text
+
+    short_jwt = "Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature"
+    masked = mask_secrets_in_text(short_jwt)
+    # Document current (gap) behaviour: raw survives
+    assert short_jwt in (masked or ""), (
+        "H65 FIND: short-segment Bearer JWT should be masked but is not. "
+        "If this assertion fails, the gap has been fixed — update this test."
+    )
