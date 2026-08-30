@@ -196,6 +196,107 @@ def test_rollup_empty_queue(repo: Path) -> None:
     assert data["rollups"] == []
 
 
+def test_bound_human_score_names_match_feedback_definitions() -> None:
+    """Review UX human.* names stay 1:1 with the Tier-1 Feedback Definition map."""
+    from git_cg.eval.feedback_definitions import HUMAN_SCORES
+    from git_cg.eval.review_queue import BOUND_HUMAN_SCORE_NAMES
+
+    assert set(BOUND_HUMAN_SCORE_NAMES) == set(HUMAN_SCORES)
+
+
+def test_enqueue_rejects_raw_diff_annotation_keys(repo: Path) -> None:
+    """Malformed annotation: raw diff bodies are rejected (metadata/reference only)."""
+    from git_cg.eval.review_queue import _reject_raw_annotation_payload
+
+    with pytest.raises(ReviewQueueError) as ei:
+        _reject_raw_annotation_payload(
+            {"notes": "ok", "diff_body": "@@ -1 +1 @@\n-secret patch"},
+            where="enqueue",
+        )
+    assert ei.value.exit_code == 2
+    assert "diff_body" in str(ei.value)
+
+
+def test_enqueue_schema_rejects_unknown_annotation_fields(repo: Path) -> None:
+    """human_review_v1 additionalProperties=false rejects raw diff smuggling."""
+    from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
+    from git_cg.eval.review_queue import SCHEMA_VERSION, _validate_human_review
+
+    bad = {
+        "schema_version": SCHEMA_VERSION,
+        "id": "hr-malformed01",
+        "review_id": "hr-malformed01",
+        "authority": "advisory",
+        "redaction_profile": "meta_eval_scrub",
+        "scores": {"human.craft_rating": 3},
+        "schema_pack": schema_pack_pin(),
+        "metric_catalog": metric_catalog_pin(),
+        "diff_body": "@@ raw diff not allowed @@",
+    }
+    with pytest.raises(ReviewQueueError) as ei:
+        _validate_human_review(bad)
+    assert ei.value.exit_code == 4
+
+
+def test_claim_rejects_duplicate_overclaim(repo: Path) -> None:
+    """Second operator cannot over-claim an already in_review row."""
+    rid = enqueue(repo, case_id="case-1", reviewer="rev-1")["item"]["review_id"]
+    first = claim(repo, review_id=rid, reviewer="rev-1")
+    assert first["changed"] is True
+    again = claim(repo, review_id=rid, reviewer="rev-1")
+    assert again["changed"] is False
+    with pytest.raises(ReviewQueueError) as ei:
+        claim(repo, review_id=rid, reviewer="rev-2")
+    assert ei.value.exit_code == 2
+    assert "illegal claim" in str(ei.value)
+
+
+def test_claim_contention_lock_rejects_concurrent_second_writer(repo: Path) -> None:
+    """Held .claim lock fails closed for a concurrent second claim attempt."""
+    from git_cg.eval.review_queue import _acquire_claim_lock, _claim_lock_path, _release_claim_lock
+
+    rid = enqueue(repo, case_id="case-lock", reviewer="rev-1")["item"]["review_id"]
+    lock = _acquire_claim_lock(repo, rid, "rev-1")
+    try:
+        assert lock == _claim_lock_path(repo, rid)
+        assert lock.is_file()
+        with pytest.raises(ReviewQueueError) as ei:
+            claim(repo, review_id=rid, reviewer="rev-2")
+        assert ei.value.exit_code == 2
+        assert "contention" in str(ei.value).lower()
+        shown = show_review(repo, review_id=rid)
+        assert shown["item"]["status"] == STATUS_PENDING
+    finally:
+        _release_claim_lock(lock)
+    claimed = claim(repo, review_id=rid, reviewer="rev-1")
+    assert claimed["item"]["status"] == STATUS_IN_REVIEW
+    assert claimed["item"]["claimed_by"] == "rev-1"
+    assert not _claim_lock_path(repo, rid).exists()
+
+
+def test_atomic_queue_row_write_is_replace_based(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Queue row persistence goes through atomic_write_json (temp + os.replace)."""
+    import git_cg.eval.binding.paths as paths
+
+    calls: list[Path] = []
+    original = paths.atomic_write_json
+
+    def _spy(path: Path, payload: dict) -> Path:
+        calls.append(Path(path))
+        return original(path, payload)
+
+    monkeypatch.setattr(paths, "atomic_write_json", _spy)
+    result = enqueue(repo, case_id="case-atomic", reviewer="rev-1")
+    rid = result["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="approve_promote")
+    assert calls, "expected atomic_write_json to be used for queue row writes"
+    assert all(p.suffix == ".json" for p in calls)
+    on_disk = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+    assert on_disk["status"] == STATUS_ADJUDICATED
+    validate_instance("human_review_v1", on_disk["review"])
+
+
 # --- H65: secret-mask fallback law (mask_secrets_in_text(...) or raw) ---------
 
 

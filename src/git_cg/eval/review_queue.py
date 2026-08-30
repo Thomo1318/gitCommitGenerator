@@ -11,7 +11,12 @@ Laws:
   ``pending → in_review → {adjudicated | dismissed}``
   with closed transitions; claim is the only path into ``in_review``.
 * Adjudication emits a typed outcome reference consumed by ``eval promote``;
-  review never writes fixtures/gold directly.
+  ``approve_promote`` is the human leg (advisory only).
+* Tier-1 Feedback Definition vocabulary for human scores is bound to
+  ``human.craft_rating`` / ``human.gold_dispute`` / ``human.regime_label``
+  only — scores are never accept/golden authority.
+* Annotation payloads are metadata + reference oriented: no raw diff bodies.
+* Review never writes fixtures/gold directly.
 
 Import law: import-light. Path / schema helpers are lazy.
 """
@@ -198,13 +203,43 @@ def _write_item(repo: Path, item: dict[str, Any]) -> Path:
     return _atomic_write(path, cleaned)
 
 
+#: Tier-1 human Feedback Definition names bound into review UX (S7-2/S7-3).
+#: Kept local (not imported from feedback_definitions) so review_queue stays
+#: import-light and the drift-guard can still assert emitter parity by source.
+BOUND_HUMAN_SCORE_NAMES: Final[frozenset[str]] = frozenset(
+    {
+        "human.craft_rating",
+        "human.gold_dispute",
+        "human.regime_label",
+    }
+)
+
+#: Annotation payload keys that must never ride on human_review rows.
+_FORBIDDEN_ANNOTATION_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "diff",
+        "diff_body",
+        "raw_diff",
+        "patch",
+        "unified_diff",
+        "full_diff",
+        "message_body",
+        "commit_message",
+    }
+)
+
+
 def _build_scores(
     *,
     craft_rating: float | None,
     gold_dispute: bool | None,
     regime_label: str | None,
 ) -> dict[str, Any]:
-    """Build a structured row/payload for the local operator store."""
+    """Build Tier-1 human.* scores for the nested human_review_v1 payload.
+
+    Score names are the bound Feedback Definition vocabulary only. They are
+    advisory metadata for review UX / rollup — never accept or golden authority.
+    """
     scores: dict[str, Any] = {}
     if craft_rating is not None:
         scores["human.craft_rating"] = float(craft_rating)
@@ -221,6 +256,19 @@ def _build_scores(
             )
         scores["human.regime_label"] = label
     return scores
+
+
+def _reject_raw_annotation_payload(payload: dict[str, Any], *, where: str) -> None:
+    """Fail closed when annotation-like payloads try to carry raw diff bodies."""
+    bad = sorted(k for k in payload if k in _FORBIDDEN_ANNOTATION_KEYS)
+    if not bad:
+        return
+    raise ReviewQueueError(
+        f"{where} rejects raw diff/annotation bodies: {bad}",
+        code="EVAL_USAGE",
+        exit_code=2,
+        hint="Annotation payloads are metadata + reference only; no raw diffs.",
+    )
 
 
 def enqueue(
@@ -357,6 +405,44 @@ def show_review(repo: Path, *, review_id: str) -> dict[str, Any]:
     return {"item": item, "path": str(path)}
 
 
+def _claim_lock_path(repo: Path, review_id: str) -> Path:
+    """Return the exclusive claim lock path beside the queue row."""
+    return _item_path(repo, review_id).with_suffix(".claim")
+
+
+def _acquire_claim_lock(repo: Path, review_id: str, reviewer: str) -> Path:
+    """Acquire an O_EXCL claim lock for contention-safe row transitions."""
+    import os
+
+    lock_path = _claim_lock_path(repo, review_id)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        fd = os.open(str(lock_path), flags, 0o600)
+    except FileExistsError as exc:
+        raise ReviewQueueError(
+            f"review {review_id!r} is already under claim contention",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint="Another operator is claiming this row; retry after it settles.",
+        ) from exc
+    try:
+        os.write(fd, reviewer.encode("utf-8"))
+    finally:
+        os.close(fd)
+    return lock_path
+
+
+def _release_claim_lock(lock_path: Path | None) -> None:
+    """Best-effort release of a claim lock file."""
+    if lock_path is None:
+        return
+    try:
+        lock_path.unlink(missing_ok=True)
+    except OSError:
+        return
+
+
 def claim(
     repo: Path,
     *,
@@ -364,38 +450,51 @@ def claim(
     reviewer: str,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Claim a pending item → in_review."""
+    """Claim a pending item → in_review.
+
+    Uses an exclusive ``.claim`` lock beside the queue row to reduce
+    duplicate/over-claim races between concurrent operators, then relies on
+    atomic JSON replace for the row write.
+    """
     if not reviewer or not _REVIEWER_RE.fullmatch(reviewer.strip()):
         raise ReviewQueueError(
             "claim requires opaque --reviewer handle",
             code="EVAL_USAGE",
             exit_code=2,
         )
-    item, path = _read_item(repo, review_id)
-    current = str(item.get("status") or "")
-    if current != STATUS_PENDING:
-        # Idempotent re-claim by same reviewer while in_review.
-        if current == STATUS_IN_REVIEW and item.get("claimed_by") == reviewer.strip():
-            return {"item": item, "path": str(path), "changed": False, "dry_run": dry_run}
-        raise ReviewQueueError(
-            f"illegal claim from status={current!r} (need pending)",
-            code="EVAL_USAGE",
-            exit_code=2,
-            hint="Only pending items can be claimed.",
-        )
-    now = _utc_now()
-    item["status"] = STATUS_IN_REVIEW
-    item["claimed_by"] = reviewer.strip()
-    item["claimed_at"] = now
-    item["updated_at"] = now
-    if not dry_run:
-        _write_item(repo, item)
-    return {
-        "item": {k: v for k, v in item.items() if v is not None},
-        "path": str(path),
-        "changed": True,
-        "dry_run": dry_run,
-    }
+    who = reviewer.strip()
+    lock_path: Path | None = None
+    try:
+        if not dry_run:
+            lock_path = _acquire_claim_lock(repo, review_id, who)
+        item, path = _read_item(repo, review_id)
+        current = str(item.get("status") or "")
+        if current != STATUS_PENDING:
+            # Idempotent re-claim by same reviewer while in_review.
+            if current == STATUS_IN_REVIEW and item.get("claimed_by") == who:
+                return {"item": item, "path": str(path), "changed": False, "dry_run": dry_run}
+            raise ReviewQueueError(
+                f"illegal claim from status={current!r} (need pending)",
+                code="EVAL_USAGE",
+                exit_code=2,
+                hint="Only pending items can be claimed (duplicate/over-claim rejected).",
+            )
+        now = _utc_now()
+        item["status"] = STATUS_IN_REVIEW
+        item["claimed_by"] = who
+        item["claimed_at"] = now
+        item["updated_at"] = now
+        if not dry_run:
+            _write_item(repo, item)
+        return {
+            "item": {k: v for k, v in item.items() if v is not None},
+            "path": str(path),
+            "changed": True,
+            "dry_run": dry_run,
+        }
+    finally:
+        # Lock is only needed across the read→decide→write window.
+        _release_claim_lock(lock_path)
 
 
 def _transition_guard(item: dict[str, Any], target: str) -> None:
@@ -711,6 +810,7 @@ def rollup_reviews(
 
 
 __all__ = [
+    "BOUND_HUMAN_SCORE_NAMES",
     "OUTCOMES",
     "OUTCOME_APPROVE_PROMOTE",
     "OUTCOME_DISMISS",
