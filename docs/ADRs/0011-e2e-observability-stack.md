@@ -46,7 +46,7 @@ superseded_by: []
 
 ## Related Plans
 
-- **Opik evaluation harness (living SSOT):** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) — #217 governing design/implementation plan (S0–S7). Complements this ADR’s Opik pillar without replacing Promptfoo (#219) or Sentry (#218) scope.
+- **Opik evaluation harness (living SSOT):** [`docs/plans/opik-evaluation-harness.md`](../plans/opik-evaluation-harness.md) — #217 governing design/implementation plan (S0–S8; S7=user interaction, S8=deferral/docs). Complements this ADR’s Opik pillar without replacing Promptfoo (#219) or Sentry (#218) scope.
 
 ## 1. Introduction and Goals
 
