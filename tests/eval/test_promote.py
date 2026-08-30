@@ -8,6 +8,7 @@
 * split_group_id contamination check.
 * Denied candidates remain candidate-class with denial audit rows (no fixture mint).
 * Optional dry-run.
+* ``decision.human_rollup`` is advisory-only evidence (never sole-gold / accept).
 """
 
 from __future__ import annotations
@@ -187,6 +188,10 @@ def test_deny_human_sole_gold_with_review(repo: Path) -> None:
             ),
         )
     assert ei.value.denial_reason in {DENY_HUMAN_SOLE_GOLD, DENY_SILENT_GOLD}
+    assert ei.value.decision is not None
+    rollup = ei.value.decision["human_rollup"]
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
 
 
 def test_deny_synthetic_without_quarantine(repo: Path) -> None:
@@ -507,3 +512,179 @@ def test_human_sole_gold_still_denied_with_satisfied_leg(repo: Path) -> None:
     assert ei.value.decision is not None
     assert ei.value.decision["human_leg"]["satisfied"] is True
     assert ei.value.decision["human_leg"]["can_sole_promote_gold"] is False
+    rollup = ei.value.decision["human_rollup"]
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
+    assert rollup["scores_are_accept_authority"] is False
+
+
+def test_human_rollup_attached_on_accept_case_keyed(repo: Path) -> None:
+    """Promote attaches case-keyed rollup_reviews as decision.human_rollup."""
+    _seed(repo)
+    a = enqueue(
+        repo,
+        case_id="case-src-1",
+        reviewer="rev-1",
+        craft_rating=4.0,
+        gold_dispute=False,
+        regime_label="A",
+    )
+    b = enqueue(
+        repo,
+        case_id="case-src-1",
+        reviewer="rev-2",
+        craft_rating=5.0,
+        gold_dispute=False,
+        regime_label="A",
+    )
+    rid = a["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="approve_promote", adjudicator="rev-1")
+    claim(repo, review_id=b["item"]["review_id"], reviewer="rev-2")
+    adjudicate(
+        repo,
+        review_id=b["item"]["review_id"],
+        outcome="approve_promote",
+        adjudicator="rev-2",
+    )
+
+    result = promote(repo, **_ok_kwargs(review_id=rid, provenance="diag_issue"))
+    assert result["accepted"] is True
+    rollup = result["decision"]["human_rollup"]
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
+    assert rollup["scores_are_accept_authority"] is False
+    assert rollup["source_case_id"] == "case-src-1"
+    assert rollup["filters"]["case_id"] == "case-src-1"
+    assert rollup["filters"]["bundle_id"] is None
+    assert rollup["rollup_count"] == 1
+    row = rollup["rollups"][0]
+    assert row["target_kind"] == "case_id"
+    assert row["target_id"] == "case-src-1"
+    assert row["reviewer_count"] == 2
+    assert row["authority"] == "advisory"
+    assert row["can_sole_promote_gold"] is False
+    assert row["outcomes"]["majority"] == "approve_promote"
+    on_disk = json.loads(Path(result["decision_path"]).read_text(encoding="utf-8"))
+    assert on_disk["human_rollup"]["authority"] == "advisory"
+    assert on_disk["human_rollup"]["can_sole_promote_gold"] is False
+
+
+def test_human_rollup_bundle_keyed_fallback(repo: Path) -> None:
+    """Bundle-only queue rows still attach via session_thread_id fallback."""
+    _seed(repo)
+    rid = enqueue(
+        repo,
+        bundle_id="thread-src-1",
+        reviewer="rev-1",
+        craft_rating=3.0,
+        gold_dispute=False,
+        regime_label="B",
+    )["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="approve_promote")
+
+    result = promote(repo, **_ok_kwargs(review_id=rid, provenance="diag_issue"))
+    assert result["accepted"] is True
+    rollup = result["decision"]["human_rollup"]
+    assert rollup["source_case_id"] == "case-src-1"
+    assert rollup["source_bundle_id"] == "thread-src-1"
+    assert rollup["filters"]["case_id"] is None
+    assert rollup["filters"]["bundle_id"] == "thread-src-1"
+    assert rollup["rollup_count"] == 1
+    row = rollup["rollups"][0]
+    assert row["target_kind"] == "bundle_id"
+    assert row["target_id"] == "thread-src-1"
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
+
+
+def test_human_rollup_empty_queue_still_advisory(repo: Path) -> None:
+    """No queue rows → empty advisory rollup evidence, never missing authority stamps."""
+    _seed(repo)
+    result = promote(repo, **_ok_kwargs())
+    assert result["accepted"] is True
+    rollup = result["decision"]["human_rollup"]
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
+    assert rollup["scores_are_accept_authority"] is False
+    assert rollup["rollup_count"] == 0
+    assert rollup["rollups"] == []
+    assert rollup["source_case_id"] == "case-src-1"
+
+
+def test_majority_approve_promote_rollup_cannot_sole_promote_gold(repo: Path) -> None:
+    """Majority approve_promote rollup still cannot sole-promote golden."""
+    _seed(repo)
+    reviews = []
+    for i, rating in enumerate((4.0, 5.0, 4.5), start=1):
+        item = enqueue(
+            repo,
+            case_id="case-src-1",
+            reviewer=f"rev-{i}",
+            craft_rating=rating,
+            gold_dispute=False,
+            regime_label="A",
+        )
+        rid = item["item"]["review_id"]
+        claim(repo, review_id=rid, reviewer=f"rev-{i}")
+        adjudicate(repo, review_id=rid, outcome="approve_promote", adjudicator=f"rev-{i}")
+        reviews.append(rid)
+
+    with pytest.raises(PromoteError) as ei:
+        promote(
+            repo,
+            **_ok_kwargs(
+                label="gold",
+                destination=DEST_FIXTURE_LANE_A,
+                review_id=reviews[0],
+                provenance="human_review",
+            ),
+        )
+    assert ei.value.denial_reason == DENY_HUMAN_SOLE_GOLD
+    decision = ei.value.decision
+    assert decision is not None
+    assert decision["human_leg"]["satisfied"] is True
+    assert decision["human_leg"]["can_sole_promote_gold"] is False
+    rollup = decision["human_rollup"]
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
+    assert rollup["scores_are_accept_authority"] is False
+    assert rollup["rollup_count"] == 1
+    row = rollup["rollups"][0]
+    assert row["outcomes"]["majority"] == "approve_promote"
+    assert row["reviewer_count"] == 3
+    assert row["can_sole_promote_gold"] is False
+    _assert_denial_audit(ei.value, reason=DENY_HUMAN_SOLE_GOLD, repo=repo)
+
+
+def test_human_rollup_never_overrides_unresolved_dispute_guard(repo: Path) -> None:
+    """Rollup evidence cannot bypass the unresolved-dispute deny path."""
+    _seed(repo)
+    done = enqueue(
+        repo,
+        case_id="case-src-1",
+        reviewer="rev-1",
+        craft_rating=5.0,
+        gold_dispute=False,
+        regime_label="A",
+    )
+    pending = enqueue(
+        repo,
+        case_id="case-src-1",
+        reviewer="rev-2",
+        craft_rating=2.0,
+        gold_dispute=True,
+        regime_label="B",
+    )
+    rid = done["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="approve_promote", adjudicator="rev-1")
+    with pytest.raises(PromoteError) as ei:
+        promote(repo, **_ok_kwargs(review_id=pending["item"]["review_id"]))
+    assert ei.value.denial_reason == DENY_UNRESOLVED_DISPUTE
+    rollup = ei.value.decision["human_rollup"]
+    assert rollup["authority"] == "advisory"
+    assert rollup["can_sole_promote_gold"] is False
+    assert rollup["rollup_count"] == 1
+    assert rollup["rollups"][0]["reviewer_count"] == 2

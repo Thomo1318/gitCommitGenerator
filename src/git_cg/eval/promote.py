@@ -21,6 +21,8 @@ Forbidden:
 * unresolved HITL dispute / open review lifecycle on non-park destinations
 * attached ``--review-id`` on non-park destinations without advisory
   ``adjudicate(outcome="approve_promote")`` human-leg binding (S7-3)
+* human/advisory rollup evidence elevating into accept or sole-gold
+  authority (``decision.human_rollup`` is advisory evidence only)
 
 S6-E09 denial law: every rejection is a named ``denial_reason``. After the
 source candidate is resolved, denials persist a candidate-class audit row
@@ -605,6 +607,60 @@ def _human_leg_block_message(review: dict[str, Any], human_leg: dict[str, Any] |
     )
 
 
+def _build_human_rollup_evidence(repo: Path, source: dict[str, Any]) -> dict[str, Any]:
+    """Attach landed ``rollup_reviews`` as advisory promote evidence.
+
+    Lookup prefers source ``case_id``, then falls back to ``session_thread_id``
+    as ``bundle_id`` when the case rollup is empty. Output is always stamped
+    ``authority=advisory`` / ``can_sole_promote_gold=False`` and is never an
+    accept gate — callers may consult it only to deny.
+    """
+    from git_cg.eval.review_queue import rollup_reviews
+
+    case_raw = source.get("case_id")
+    case_id = case_raw.strip() if isinstance(case_raw, str) and case_raw.strip() else None
+    thread_raw = source.get("session_thread_id")
+    bundle_id = thread_raw.strip() if isinstance(thread_raw, str) and thread_raw.strip() else None
+
+    selected: list[dict[str, Any]] = []
+    used_filter: dict[str, str | None] = {"case_id": None, "bundle_id": None}
+
+    if case_id is not None:
+        raw = rollup_reviews(repo, case_id=case_id)
+        rows = raw.get("rollups") if isinstance(raw.get("rollups"), list) else []
+        selected = [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and str(row.get("target_kind") or "") == "case_id"
+            and str(row.get("target_id") or "") == case_id
+        ]
+        used_filter = {"case_id": case_id, "bundle_id": None}
+
+    if not selected and bundle_id is not None:
+        raw = rollup_reviews(repo, bundle_id=bundle_id)
+        rows = raw.get("rollups") if isinstance(raw.get("rollups"), list) else []
+        selected = [
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and str(row.get("target_kind") or "") == "bundle_id"
+            and str(row.get("target_id") or "") == bundle_id
+        ]
+        used_filter = {"case_id": None, "bundle_id": bundle_id}
+
+    return {
+        "authority": "advisory",
+        "can_sole_promote_gold": False,
+        "scores_are_accept_authority": False,
+        "source_case_id": case_id,
+        "source_bundle_id": bundle_id,
+        "filters": used_filter,
+        "rollup_count": len(selected),
+        "rollups": selected,
+    }
+
+
 def _build_decision_row(
     *,
     accepted: bool,
@@ -626,6 +682,7 @@ def _build_decision_row(
     dry_run: bool,
     denial_reason: str | None,
     candidate_class: str,
+    human_rollup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a structured row/payload for the local operator store."""
     decision: dict[str, Any] = {
@@ -669,6 +726,7 @@ def _build_decision_row(
             else None
         ),
         "human_leg": _extract_human_leg(review),
+        "human_rollup": human_rollup,
         "denial_reason": denial_reason,
         "notes": notes.strip() if notes and notes.strip() else None,
         "created_at": _utc_now(),
@@ -706,6 +764,7 @@ def _raise_named_denial(
     session_thread_id: str,
     review: dict[str, Any] | None,
     notes: str | None,
+    human_rollup: dict[str, Any] | None = None,
 ) -> None:
     """Record a candidate-class denial audit row, then fail closed.
 
@@ -737,6 +796,7 @@ def _raise_named_denial(
         dry_run=dry_run,
         denial_reason=reason,
         candidate_class=candidate_class,
+        human_rollup=human_rollup,
     )
     decision_path = _persist_decision(repo, decision, dry_run=dry_run)
     raise _deny(
@@ -822,6 +882,9 @@ def promote(
             raise
         split = ""
 
+    # Advisory multi-rater evidence for accept + denial audit rows (never elevates).
+    human_rollup = _build_human_rollup_evidence(repo, source)
+
     def _deny_after_source(reason: str, message: str, *, hint: str | None = None) -> None:
         # Once a candidate source exists, denials retain an audit row.
         """Internal helper: deny after source."""
@@ -847,6 +910,7 @@ def promote(
             session_thread_id=session_thread_id,
             review=None,
             notes=notes,
+            human_rollup=human_rollup,
         )
 
     if not session_thread_id:
@@ -903,6 +967,7 @@ def promote(
             session_thread_id=session_thread_id,
             review=review,
             notes=notes,
+            human_rollup=human_rollup,
         )
 
     # --- Forbidden paths (explicit denial taxonomy) ---
@@ -1029,6 +1094,7 @@ def promote(
         dry_run=dry_run,
         denial_reason=None,
         candidate_class="scrubbed_candidate",
+        human_rollup=human_rollup,
     )
 
     dest_dir = _destination_dir(repo, dest)
