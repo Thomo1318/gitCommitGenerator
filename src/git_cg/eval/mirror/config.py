@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Final
 
@@ -62,6 +63,8 @@ __all__ = [
     "OPIK_ENV_PROJECT_NAME",
     "OWNER_ONLY_REDACTION_PROFILES",
     "PROJECT_LANES",
+    "LanePin",
+    "LaneSource",
     "OpikConfigError",
     "OpikEnvironment",
     "OpikMode",
@@ -69,6 +72,7 @@ __all__ = [
     "mode_fallback_token",
     "operator_config_health",
     "public_config_view",
+    "resolve_lane_provenance",
     "resolve_opik_config",
 ]
 
@@ -136,6 +140,33 @@ class OpikEnvironment(StrEnum):
     EVAL = "eval"
     STAGING = "staging"
     PRODUCTION = "production"
+
+
+class LaneSource(StrEnum):
+    """Provenance of one project-lane pin value (diagnostic-only, S7-1a)."""
+
+    EXPLICIT = "explicit"
+    BOOTSTRAP_EVAL = "bootstrap-eval"
+    BOOTSTRAP_LEGACY = "bootstrap-legacy"
+    LEGACY = "legacy"
+    MISSING = "missing"
+
+
+@dataclass(frozen=True, slots=True)
+class LanePin:
+    """One canonical project lane's resolved value and provenance.
+
+    Diagnostic-only metadata: it explains where ``resolve_opik_config``'s
+    fail-closed pins came from without changing that resolution. ``value``
+    is a project *name* (non-secret; already shown by config views) — never
+    an API key or token.
+    """
+
+    lane: str
+    value: str | None
+    source: LaneSource
+    env_var: str
+    origin_env_var: str | None
 
 
 class OpikConfigError(ValueError):
@@ -237,6 +268,58 @@ def _parse_flush_timeout(raw: str | None) -> int:
     if value < 1:
         return DEFAULT_FLUSH_TIMEOUT_MS
     return value
+
+
+def resolve_lane_provenance(source: Mapping[str, str] | None = None) -> dict[str, LanePin]:
+    """Per-lane pin provenance for doctor diagnostics (S7-1a).
+
+    Pure, diagnostic-only, and never raises: mirrors the canonical lane
+    resolution of ``_resolve_projects`` (EVAL bootstrap when only EVAL —
+    including its legacy ``OPIK_PROJECT_NAME`` fallback — is set; otherwise
+    an explicit per-lane mix) so ``run_opik_doctor`` can name each lane's
+    state and origin env var without re-deriving or altering the fail-closed
+    resolution. Whitespace stripping matches ``_resolve_projects``.
+    """
+    env = os.environ if source is None else source
+
+    def _pin(var: str) -> str | None:
+        value = (env.get(var) or "").strip()
+        return value or None
+
+    lane_vars = {
+        "live": ENV_PROJECT_LIVE,
+        "eval": ENV_PROJECT_EVAL,
+        "ci": ENV_PROJECT_CI,
+        "import": ENV_PROJECT_IMPORT,
+    }
+    live = _pin(ENV_PROJECT_LIVE)
+    eval_explicit = _pin(ENV_PROJECT_EVAL)
+    legacy = _pin(OPIK_ENV_PROJECT_NAME)
+    eval_p = eval_explicit or legacy
+    ci = _pin(ENV_PROJECT_CI)
+    import_p = _pin(ENV_PROJECT_IMPORT)
+    resolved = {"live": live, "eval": eval_p, "ci": ci, "import": import_p}
+
+    # EVAL bootstrap: only EVAL (explicit or legacy fallback) populated.
+    if eval_p and not any((live, ci, import_p)):
+        if eval_explicit:
+            kind, origin = LaneSource.BOOTSTRAP_EVAL, ENV_PROJECT_EVAL
+        else:
+            kind, origin = LaneSource.BOOTSTRAP_LEGACY, OPIK_ENV_PROJECT_NAME
+        return {lane: LanePin(lane, eval_p, kind, var, origin) for lane, var in lane_vars.items()}
+
+    # Explicit/partial mix: EVAL may still fall back to the legacy pin.
+    pins: dict[str, LanePin] = {}
+    for lane in PROJECT_LANES:
+        env_var = lane_vars[lane]
+        value = resolved[lane]
+        if value is None:
+            pins[lane] = LanePin(lane, None, LaneSource.MISSING, env_var, None)
+        elif lane == "eval" and not eval_explicit and legacy:
+            pins[lane] = LanePin(lane, value, LaneSource.LEGACY, env_var, OPIK_ENV_PROJECT_NAME)
+        else:
+            pins[lane] = LanePin(lane, value, LaneSource.EXPLICIT, env_var, env_var)
+    return pins
 
 
 def _resolve_projects(source: Mapping[str, str]) -> dict[str, str] | None:
