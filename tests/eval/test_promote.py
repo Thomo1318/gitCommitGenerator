@@ -26,6 +26,7 @@ from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 from git_cg.eval.promote import (
     DENIAL_REASONS,
     DENY_ANTIPATTERN_POSITIVE,
+    DENY_HUMAN_LEG,
     DENY_HUMAN_SOLE_GOLD,
     DENY_MISSING_FIELD,
     DENY_POPULARITY_GOLD,
@@ -374,7 +375,7 @@ def test_dry_run_denial_does_not_write_audit(repo: Path) -> None:
 
 
 def test_s6_e09_denial_reason_set_is_closed() -> None:
-    """Guard the closed named-denial taxonomy (S6-E09)."""
+    """Guard the closed named-denial taxonomy (S6-E09 + human leg)."""
     expected = {
         "missing_required_field",
         "invalid_destination",
@@ -389,5 +390,120 @@ def test_s6_e09_denial_reason_set_is_closed() -> None:
         "source_bundle_missing",
         "provenance_invalid",
         "unresolved_dispute",
+        "human_leg_not_satisfied",
     }
     assert expected == DENIAL_REASONS
+
+
+def test_human_leg_approve_promote_binds_on_non_park(repo: Path) -> None:
+    """adjudicate(approve_promote) satisfies the human leg on non-park promote."""
+    _seed(repo)
+    rid = enqueue(
+        repo,
+        case_id="case-src-1",
+        reviewer="rev-1",
+        craft_rating=4.0,
+        gold_dispute=False,
+        regime_label="A",
+    )["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adj = adjudicate(repo, review_id=rid, outcome="approve_promote")
+    result = promote(repo, **_ok_kwargs(review_id=rid, provenance="diag_issue"))
+    assert result["accepted"] is True
+    decision = result["decision"]
+    leg = decision["human_leg"]
+    assert leg["satisfied"] is True
+    assert leg["review_id"] == rid
+    assert leg["outcome"] == "approve_promote"
+    assert leg["outcome_ref"] == adj["outcome_ref"]
+    assert leg["authority"] == "advisory"
+    assert leg["can_sole_promote_gold"] is False
+    assert leg["scores_are_accept_authority"] is False
+    assert set(leg["score_names"]) == {
+        "human.craft_rating",
+        "human.gold_dispute",
+        "human.regime_label",
+    }
+    assert decision["review_id"] == rid
+    assert decision["review_authority"] == "advisory"
+    assert decision["review_outcome_ref"] == adj["outcome_ref"]
+
+
+def test_human_leg_reject_blocks_non_park(repo: Path) -> None:
+    """reject adjudication does not satisfy the human leg on non-park destinations."""
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1")["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="reject")
+    with pytest.raises(PromoteError) as ei:
+        promote(repo, **_ok_kwargs(review_id=rid, provenance="diag_issue"))
+    _assert_denial_audit(ei.value, reason=DENY_HUMAN_LEG, repo=repo)
+    leg = ei.value.decision["human_leg"]
+    assert leg["satisfied"] is False
+    assert leg["outcome"] == "reject"
+    assert leg["can_sole_promote_gold"] is False
+
+
+def test_human_leg_needs_work_blocks_non_park(repo: Path) -> None:
+    """needs_work is defer/override, not the accept leg."""
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1")["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="needs_work")
+    with pytest.raises(PromoteError) as ei:
+        promote(repo, **_ok_kwargs(review_id=rid))
+    assert ei.value.denial_reason == DENY_HUMAN_LEG
+
+
+def test_human_leg_pending_still_unresolved_before_leg(repo: Path) -> None:
+    """Open lifecycle remains unresolved_dispute (pre-leg) on non-park destinations."""
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1")["item"]["review_id"]
+    with pytest.raises(PromoteError) as ei:
+        promote(repo, **_ok_kwargs(review_id=rid))
+    assert ei.value.denial_reason == DENY_UNRESOLVED_DISPUTE
+
+
+def test_human_leg_not_required_without_review_id(repo: Path) -> None:
+    """Promote without --review-id does not invent a human-leg requirement."""
+    _seed(repo)
+    result = promote(repo, **_ok_kwargs())
+    assert result["accepted"] is True
+    assert "human_leg" not in result["decision"]
+
+
+def test_human_leg_park_allows_non_approve(repo: Path) -> None:
+    """Park destinations may retain non-approve reviews (operator quarantine)."""
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1")["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="reject")
+    ok = promote(
+        repo,
+        **_ok_kwargs(destination=DEST_QUARANTINE, review_id=rid, label="parked"),
+    )
+    assert ok["accepted"] is True
+    assert ok["decision"]["human_leg"]["satisfied"] is False
+    assert ok["decision"]["human_leg"]["outcome"] == "reject"
+
+
+def test_human_sole_gold_still_denied_with_satisfied_leg(repo: Path) -> None:
+    """Satisfied human leg never escalates into sole-gold authority."""
+    _seed(repo)
+    rid = enqueue(repo, case_id="case-src-1", reviewer="rev-1")["item"]["review_id"]
+    claim(repo, review_id=rid, reviewer="rev-1")
+    adjudicate(repo, review_id=rid, outcome="approve_promote")
+    with pytest.raises(PromoteError) as ei:
+        promote(
+            repo,
+            **_ok_kwargs(
+                label="gold",
+                destination=DEST_FIXTURE_LANE_A,
+                review_id=rid,
+                provenance="human_review",
+            ),
+        )
+    assert ei.value.denial_reason in {DENY_HUMAN_SOLE_GOLD, DENY_SILENT_GOLD}
+    assert ei.value.decision is not None
+    assert ei.value.decision["human_leg"]["satisfied"] is True
+    assert ei.value.decision["human_leg"]["can_sole_promote_gold"] is False

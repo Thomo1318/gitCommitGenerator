@@ -19,6 +19,8 @@ Forbidden:
 * Expand-with-AI synthetic rows without quarantine
 * antipattern rows into positive_train destinations
 * unresolved HITL dispute / open review lifecycle on non-park destinations
+* attached ``--review-id`` on non-park destinations without advisory
+  ``adjudicate(outcome="approve_promote")`` human-leg binding (S7-3)
 
 S6-E09 denial law: every rejection is a named ``denial_reason``. After the
 source candidate is resolved, denials persist a candidate-class audit row
@@ -77,6 +79,7 @@ DENY_SCHEMA: Final[str] = "schema_validation_failed"
 DENY_SOURCE_MISSING: Final[str] = "source_bundle_missing"
 DENY_PROVENANCE: Final[str] = "provenance_invalid"
 DENY_UNRESOLVED_DISPUTE: Final[str] = "unresolved_dispute"
+DENY_HUMAN_LEG: Final[str] = "human_leg_not_satisfied"
 
 #: Every named denial class that S6-E09 must be able to surface.
 DENIAL_REASONS: Final[frozenset[str]] = frozenset(
@@ -94,6 +97,7 @@ DENIAL_REASONS: Final[frozenset[str]] = frozenset(
         DENY_SOURCE_MISSING,
         DENY_PROVENANCE,
         DENY_UNRESOLVED_DISPUTE,
+        DENY_HUMAN_LEG,
     }
 )
 
@@ -513,6 +517,94 @@ def _unresolved_dispute_message(review: dict[str, Any]) -> str | None:
     return None
 
 
+def _extract_human_leg(review: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Extract the advisory human-leg binding from an attached review row.
+
+    ``adjudicate(outcome="approve_promote")`` is the accept leg. Satisfied only
+    when the queue row is adjudicated with that outcome, authority remains
+    advisory, and a typed ``outcome_ref`` is present. Tier-1 ``human.*`` scores
+    are vocabulary metadata only — they never satisfy the leg and never
+    sole-promote golden.
+    """
+    if not isinstance(review, dict):
+        return None
+
+    review_id = str(review.get("review_id") or review.get("id") or "").strip() or None
+    status = str(review.get("status") or "").strip() or None
+    nested = review.get("review") if isinstance(review.get("review"), dict) else {}
+    adjudication = review.get("adjudication") if isinstance(review.get("adjudication"), dict) else {}
+
+    # Prefer nested human_review_v1 authority; fall back to envelope/adjudication.
+    authority = None
+    for candidate in (
+        nested.get("authority") if isinstance(nested, dict) else None,
+        review.get("authority"),
+        adjudication.get("authority"),
+    ):
+        if candidate is None:
+            continue
+        cleaned = str(candidate).strip()
+        if cleaned:
+            authority = cleaned
+            break
+    if authority is None:
+        authority = "advisory"
+
+    outcome = str(adjudication.get("outcome") or "").strip() or None
+    outcome_ref = str(adjudication.get("outcome_ref") or "").strip() or None
+
+    scores = nested.get("scores") if isinstance(nested.get("scores"), dict) else {}
+    score_names = sorted(str(k) for k in scores if str(k).startswith("human."))
+
+    satisfied = (
+        status == "adjudicated"
+        and outcome == "approve_promote"
+        and authority == "advisory"
+        and bool(outcome_ref)
+        and outcome_ref.startswith("review_outcome:")
+        and outcome_ref.endswith(":approve_promote")
+    )
+
+    leg: dict[str, Any] = {
+        "satisfied": satisfied,
+        "review_id": review_id,
+        "status": status,
+        "outcome": outcome,
+        "outcome_ref": outcome_ref,
+        "authority": authority,
+        "score_names": score_names,
+        "can_sole_promote_gold": False,
+        "scores_are_accept_authority": False,
+    }
+    return {k: v for k, v in leg.items() if v is not None}
+
+
+def _human_leg_block_message(review: dict[str, Any], human_leg: dict[str, Any] | None) -> str | None:
+    """Return a message when an attached review cannot serve as the human leg.
+
+    Non-park destinations that carry ``--review-id`` require an advisory
+    ``approve_promote`` adjudication. Reject / needs_work / dismiss cover the
+    override/defer paths and do not satisfy the leg. Park destinations skip
+    this gate at the caller.
+    """
+    if human_leg is not None and human_leg.get("satisfied") is True:
+        return None
+
+    review_id = (
+        (human_leg or {}).get("review_id")
+        or str(review.get("review_id") or review.get("id") or "").strip()
+        or "<unknown>"
+    )
+    status = (human_leg or {}).get("status") or str(review.get("status") or "").strip() or "unknown"
+    outcome = (human_leg or {}).get("outcome") or "none"
+    authority = (human_leg or {}).get("authority") or "advisory"
+    return (
+        f"review {review_id} does not satisfy the human leg "
+        f"(status={status!r}, outcome={outcome!r}, authority={authority!r}; "
+        "need adjudicated approve_promote with advisory authority)"
+    )
+
+
 def _build_decision_row(
     *,
     accepted: bool,
@@ -576,6 +668,7 @@ def _build_decision_row(
             if isinstance(review, dict) and isinstance(review.get("adjudication"), dict)
             else None
         ),
+        "human_leg": _extract_human_leg(review),
         "denial_reason": denial_reason,
         "notes": notes.strip() if notes and notes.strip() else None,
         "created_at": _utc_now(),
@@ -894,6 +987,18 @@ def promote(
                 dispute_msg,
                 hint="Finish adjudication (or clear gold_dispute) before promoting out of candidate/park lanes.",
             )
+        # Attached reviews must be adjudicated approve_promote (advisory only).
+        human_leg = _extract_human_leg(review)
+        leg_msg = _human_leg_block_message(review, human_leg)
+        if leg_msg is not None:
+            _deny_here(
+                DENY_HUMAN_LEG,
+                leg_msg,
+                hint=(
+                    "Adjudicate with outcome=approve_promote before attaching "
+                    "--review-id on non-park destinations. Human review remains advisory."
+                ),
+            )
 
     # Stage transition: failure_or_capture must pass through scrubbed_candidate.
     effective_stage = STAGE_SCRUBBED_CANDIDATE if st == STAGE_FAILURE_OR_CAPTURE else st
@@ -962,6 +1067,7 @@ def promote(
 __all__ = [
     "DENIAL_REASONS",
     "DENY_ANTIPATTERN_POSITIVE",
+    "DENY_HUMAN_LEG",
     "DENY_HUMAN_SOLE_GOLD",
     "DENY_INVALID_DESTINATION",
     "DENY_INVALID_STAGE",
