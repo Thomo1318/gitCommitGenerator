@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 
+import conftest as _cq
 from typer.testing import CliRunner
 
 from git_cg.main import app
@@ -95,3 +96,113 @@ def test_flat_config_show_alias_keeps_deprecation_pointer() -> None:
     codes = {w.get("code") for w in env.get("warnings", [])}
     assert "EVAL_CLI_DEPRECATED" in codes
     assert any("git-cg eval opik config show" in (w.get("message") or "") for w in env.get("warnings", []))
+
+
+# --- S7-1a: per-lane Opik project-pin doctor diagnostics ------------------
+
+# Lane-pin env scrubbing is shared via tests/conftest.py (scrub_opik_project_lanes).
+
+
+def _lane_checks(env: dict) -> dict:
+    """Map lane → check row for the four opik.projects.* checks."""
+    return {
+        c["check_id"].rsplit(".", 1)[1]: c for c in env["data"]["checks"] if c["check_id"].startswith("opik.projects.")
+    }
+
+
+def test_doctor_off_mode_missing_lanes_warn_not_block(monkeypatch) -> None:
+    """mode=off + no pins ⇒ exit 0, four WARN lane rows (never BLOCK)."""
+    _cq.scrub_opik_project_lanes(monkeypatch)
+    monkeypatch.delenv("GIT_CG_OPIK_MODE", raising=False)
+    result = runner.invoke(app, ["eval", "opik", "doctor", "--json"])
+    assert result.exit_code == 0, result.output
+    env = _parse(result)
+    assert env["ok"] is True
+    lanes = _lane_checks(env)
+    assert set(lanes) == {"live", "eval", "ci", "import"}
+    assert all(row["status"] == "warn" for row in lanes.values())
+    assert all(row["severity"] == "warn" for row in lanes.values())  # never block
+    for lane, row in lanes.items():
+        assert f"GIT_CG_OPIK_PROJECT_{lane.upper()}" in row["message"]
+        assert row.get("hint")
+
+
+def test_doctor_eval_only_bootstrap_disclosed(monkeypatch) -> None:
+    """EVAL-only pin bootstraps all four lanes with disclosed origin."""
+    _cq.scrub_opik_project_lanes(monkeypatch)
+    monkeypatch.delenv("GIT_CG_OPIK_MODE", raising=False)
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "my-eval-proj")
+    result = runner.invoke(app, ["eval", "opik", "doctor", "--json"])
+    assert result.exit_code == 0, result.output
+    lanes = _lane_checks(_parse(result))
+    assert all(row["status"] == "pass" for row in lanes.values())
+    for row in lanes.values():
+        assert "bootstrap" in row["message"]
+        assert "GIT_CG_OPIK_PROJECT_EVAL" in row["message"]
+        assert "my-eval-proj" in row["message"]
+
+
+def test_doctor_legacy_bootstrap_disclosed(monkeypatch) -> None:
+    """Legacy OPIK_PROJECT_NAME bootstraps all four lanes with disclosed origin."""
+    _cq.scrub_opik_project_lanes(monkeypatch)
+    monkeypatch.delenv("GIT_CG_OPIK_MODE", raising=False)
+    monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+    result = runner.invoke(app, ["eval", "opik", "doctor", "--json"])
+    assert result.exit_code == 0, result.output
+    lanes = _lane_checks(_parse(result))
+    assert all(row["status"] == "pass" for row in lanes.values())
+    for row in lanes.values():
+        assert "bootstrap" in row["message"]
+        assert "OPIK_PROJECT_NAME" in row["message"]
+        assert "legacy-proj" in row["message"]
+
+
+def test_doctor_full_explicit_lanes_pass(monkeypatch) -> None:
+    _cq.scrub_opik_project_lanes(monkeypatch)
+    monkeypatch.delenv("GIT_CG_OPIK_MODE", raising=False)
+    for lane in ("LIVE", "EVAL", "CI", "IMPORT"):
+        monkeypatch.setenv(f"GIT_CG_OPIK_PROJECT_{lane}", f"proj-{lane.lower()}")
+    result = runner.invoke(app, ["eval", "opik", "doctor", "--json"])
+    assert result.exit_code == 0, result.output
+    lanes = _lane_checks(_parse(result))
+    assert all(row["status"] == "pass" for row in lanes.values())
+    assert "proj-live" in lanes["live"]["message"]
+    assert "GIT_CG_OPIK_PROJECT_IMPORT" in lanes["import"]["message"]
+
+
+def test_doctor_active_mode_partial_lanes_fail_closed_with_lane_detail(monkeypatch) -> None:
+    """Active mode + partial lanes ⇒ config BLOCK exit 2 AND named missing lanes."""
+    _cq.scrub_opik_project_lanes(monkeypatch)
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "mirror")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "e")
+    result = runner.invoke(app, ["eval", "opik", "doctor", "--json"])
+    assert result.exit_code == 2, result.output
+    env = _parse(result)
+    assert env["ok"] is False
+    config_row = next(c for c in env["data"]["checks"] if c["check_id"] == "opik.config_resolved")
+    assert config_row["status"] == "fail"
+    assert config_row["severity"] == "block"
+    lanes = _lane_checks(env)
+    # Populated lanes still report; the two missing lanes are named.
+    assert lanes["live"]["status"] == "pass"
+    assert lanes["eval"]["status"] == "pass"
+    assert lanes["ci"]["status"] == "fail"
+    assert lanes["import"]["status"] == "fail"
+    assert "GIT_CG_OPIK_PROJECT_CI" in lanes["ci"]["message"]
+    assert "GIT_CG_OPIK_PROJECT_IMPORT" in lanes["import"]["message"]
+
+
+def test_doctor_lane_rows_never_leak_secret(monkeypatch) -> None:
+    """Lane rows coexist with secret masking; no raw token/prefix anywhere."""
+    _cq.scrub_opik_project_lanes(monkeypatch)
+    monkeypatch.setenv("OPIK_API_KEY", SECRET)
+    monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "my-eval-proj")
+    result = runner.invoke(app, ["eval", "opik", "doctor", "--json"])
+    combined = result.stdout + result.stderr
+    assert SECRET not in combined
+    assert "sk-test" not in combined
+    # json.dumps escapes non-ASCII; assert masked form on the parsed messages.
+    env = _parse(result)
+    messages = [c["message"] for c in env["data"]["checks"]]
+    assert any(f"•••[len={len(SECRET)}]" in m for m in messages)

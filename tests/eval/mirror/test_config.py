@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import conftest as _cq
 import pytest
 
 from git_cg.eval.mirror.config import (
     DEFAULT_ENVIRONMENT,
     DEFAULT_FLUSH_TIMEOUT_MS,
+    LaneSource,
     OpikConfigError,
     OpikEnvironment,
     OpikMode,
@@ -17,6 +19,7 @@ from git_cg.eval.mirror.config import (
     mode_fallback_token,
     operator_config_health,
     public_config_view,
+    resolve_lane_provenance,
     resolve_opik_config,
 )
 from git_cg.eval.mirror.health import EXPORT_HEALTH, ExportHealth
@@ -462,3 +465,80 @@ def test_truthy_explicit_true_tokens() -> None:
 def test_truthy_empty_keeps_default() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_CHECK_TLS": ""})
     assert cfg["check_tls_certificate"] is True
+
+
+# --- S7-1a: per-lane project-pin provenance (diagnostic-only) -------------
+
+# Lane-pin env scrubbing is shared via tests/conftest.py (scrub_opik_project_lanes).
+
+
+class TestLaneProvenance:
+    """resolve_lane_provenance mirrors _resolve_projects precedence."""
+
+    def test_empty_env_all_missing(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        pins = resolve_lane_provenance()
+        assert set(pins) == {"live", "eval", "ci", "import"}
+        for lane, pin in pins.items():
+            assert pin.lane == lane
+            assert pin.source is LaneSource.MISSING
+            assert pin.value is None
+            assert pin.origin_env_var is None
+            assert pin.env_var == f"GIT_CG_OPIK_PROJECT_{lane.upper()}"
+
+    def test_eval_only_bootstraps_all_lanes(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "  proj-x  ")
+        pins = resolve_lane_provenance()
+        assert all(p.source is LaneSource.BOOTSTRAP_EVAL for p in pins.values())
+        assert all(p.value == "proj-x" for p in pins.values())  # stripped
+        assert all(p.origin_env_var == "GIT_CG_OPIK_PROJECT_EVAL" for p in pins.values())
+
+    def test_legacy_only_bootstraps_all_lanes(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+        pins = resolve_lane_provenance()
+        assert all(p.source is LaneSource.BOOTSTRAP_LEGACY for p in pins.values())
+        assert all(p.value == "legacy-proj" for p in pins.values())
+        assert all(p.origin_env_var == "OPIK_PROJECT_NAME" for p in pins.values())
+
+    def test_full_explicit_lanes(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "e")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_CI", "c")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_IMPORT", "i")
+        pins = resolve_lane_provenance()
+        for lane, pin in pins.items():
+            assert pin.source is LaneSource.EXPLICIT
+            assert pin.value == lane[0]  # l/e/c/i
+            assert pin.origin_env_var == pin.env_var
+
+    def test_partial_marks_unset_lanes_missing(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "e")
+        pins = resolve_lane_provenance()
+        assert pins["live"].source is LaneSource.EXPLICIT
+        assert pins["eval"].source is LaneSource.EXPLICIT
+        assert pins["ci"].source is LaneSource.MISSING
+        assert pins["import"].source is LaneSource.MISSING
+
+    def test_legacy_fills_eval_lane_in_partial_mix(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+        monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+        pins = resolve_lane_provenance()
+        assert pins["live"].source is LaneSource.EXPLICIT
+        assert pins["eval"].source is LaneSource.LEGACY
+        assert pins["eval"].value == "legacy-proj"
+        assert pins["eval"].origin_env_var == "OPIK_PROJECT_NAME"
+        assert pins["ci"].source is LaneSource.MISSING
+
+    def test_explicit_mapping_does_not_touch_os_environ(self, monkeypatch) -> None:
+        """Explicit source mapping is used verbatim (pure, testable)."""
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "from-os-environ")
+        pins = resolve_lane_provenance({"GIT_CG_OPIK_PROJECT_EVAL": "mapped"})
+        assert all(p.value == "mapped" for p in pins.values())
+        assert all(p.source is LaneSource.BOOTSTRAP_EVAL for p in pins.values())
