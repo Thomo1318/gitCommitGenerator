@@ -150,6 +150,15 @@ eval-s6-proof:
       tests/eval/mirror/test_train.py \
       -q --no-cov
 
+# S7 (AC-13/R-11): package-scoped eval coverage floor. `-o addopts=""` clears the
+# global `--cov=src/git_cg --cov=scripts` union from pyproject.toml:89 so the floor
+# measures only src/git_cg/eval. Floor 80 anchored to the measured S7-0 baseline
+# (90.68%, census comment on #254). Local/maintainer proof — not wired into CI here.
+eval-s7-proof:
+    uv run pytest tests/eval -o addopts="" \
+      --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
+      --cov-fail-under=80 -q
+
 # S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
 dogfood-bench runs="20":
