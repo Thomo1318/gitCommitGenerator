@@ -1488,6 +1488,15 @@ def train_export_cmd(
         "--dry-run",
         help="Validate and preview paths without writing (same as --no-write).",
     ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     as_json: bool = typer.Option(
         False,
         "--json",
@@ -1511,6 +1520,8 @@ def train_export_cmd(
     - all landed bundles when --bundle-id is omitted
     - write enabled
 
+    Optional ``--root`` overrides repo discovery (test isolation / multi-worktree).
+
     Scrub-failure policy (locked):
     - row that cannot be made secret-safe is dropped
     - failure is recorded in scrub_report
@@ -1530,7 +1541,7 @@ def train_export_cmd(
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.train_export import TrainExportError, train_export
 
-    repo = _resolve_repo(None)
+    repo = _resolve_repo(root)
     try:
         data = train_export(
             repo,
