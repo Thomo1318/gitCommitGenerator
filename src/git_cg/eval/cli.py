@@ -1239,6 +1239,11 @@ def amend_brief_cmd(
         "--session-thread-id",
         help="Optional session id (sess_) to attach to the brief.",
     ),
+    case_id: str | None = typer.Option(
+        None,
+        "--case",
+        help="Scope the brief to a single case id (default: experiment aggregate).",
+    ),
     last_dogfood: int = typer.Option(
         3,
         "--last",
@@ -1284,6 +1289,7 @@ def amend_brief_cmd(
 
     Options:
     - --session-thread-id attaches a sess_ twin when available
+    - --case ID scopes the brief to one case (default: experiment aggregate)
     - --last N includes the newest N dogfood/Lane C attachments (default 3)
     - --doctor adds a doctor projection section
     - --write/--no-write controls persistence under .eval/amend_briefs/
@@ -1306,6 +1312,7 @@ def amend_brief_cmd(
         data = amend_brief(
             repo,
             experiment_id=score_run_id,
+            case_id=case_id,
             session_thread_id=session_thread_id,
             include_doctor=doctor,
             lane_c_last_n=last_dogfood,
