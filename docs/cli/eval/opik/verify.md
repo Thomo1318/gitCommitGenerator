@@ -1,9 +1,9 @@
 # git-cg eval opik verify
 
-> **Usage:** `git-cg eval opik verify [OPTIONS]`  
+> **Usage:** `git-cg eval opik verify …`  
 > **Kind:** `command` · **Status:** optional / advisory
 
-Optional online Opik project and Feedback Definition verification.
+Optional online Opik project/FD verification (advisory).
 
 ## Authority boundary
 
@@ -24,16 +24,17 @@ Usage: git-cg eval opik verify [OPTIONS]
  Disabled by default. Never a CI/product-accept gate. Network failure is
  warning-only. Doctor remains the offline authority surface.
 
-╭─ Options ──────────────────────────────────────────────────────────╮
-│ --remote            Enable online verification (default: skip).   │
-│ --create-missing    Create missing remote projects (needs --remote)│
-│ --json              Machine-readable JSON envelope.               │
-│ --detail            Show detailed help text and exit.             │
-│ --help              Show this message and exit.                   │
-╰────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --remote                  Enable online verification (default: offline skip).                                        │
+│ --create-missing          Also attempt to create missing remote projects (requires --remote).                        │
+│ --json                    Print machine-readable JSON instead of plain text.                                         │
+│ --detail                  Show detailed help text and exit.                                                          │
+│ --help                    Show this message and exit.                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## See also
 
-* [`git-cg eval opik doctor`](doctor.md) — offline authority surface
+* [CLI overview](../../index.md)
 * [Operator API map](../../../eval/operator_api_map.md)
+* [Eval operator guide](../../../eval/README.md)

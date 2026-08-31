@@ -131,8 +131,8 @@ four-lane pin doctor (offline)
 | **S7-5 live** | Live queue projection is opt-in, write-only, fail-open; never read back | `tests/eval/mirror/test_queue_projector.py`; `src/git_cg/eval/mirror/queue_projector.py` | landed (optional) |
 | **Doctor matrix** | Exit-code x credential matrix documented + tested (offline authority unchanged) | `tests/eval/test_opik_doctor_exit_matrix.py`; `OPIK_DOCTOR_EXIT_MATRIX` | landed (optional) |
 | **FD migration** | Additive-only v1 policy; unknown schema_version fails closed | `tests/eval/test_feedback_definitions.py::test_unknown_schema_version_fails_closed`; `MIGRATION_POLICY` | landed (optional) |
-| **Per-file coverage** | Report-only `just eval-s7-coverage-files` (not a gate) | `justfile` recipe `eval-s7-coverage-files` | landed (optional) |
-| **R-13 syntax** | `except (TypeError, ValueError)` cosmetic fix under pinned 3.14 | `src/git_cg/eval/mirror/config.py` | landed (optional) |
+| **Per-file coverage** | Per-file ≥80% gate via `just eval-s7-coverage-files` (JSON + `tools/check_per_file_coverage.py`) | `justfile` recipe `eval-s7-coverage-files`; `tools/check_per_file_coverage.py` | landed (optional) |
+| **R-13 syntax** | `except (TypeError, ValueError)` normalised under pinned 3.14 + AST lock test | `src/git_cg/eval/mirror/config.py`; `tests/eval/mirror/test_config.py` | landed (optional) |
 | **Lab issue** | `.eval` issue `issue-2f5a73be6a0f81dd` restored to `suppressed` | local diagnose transition | landed (optional) |
 
 ## S8 boundary (hard non-goal)
