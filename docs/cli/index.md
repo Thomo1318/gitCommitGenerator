@@ -70,6 +70,7 @@ Usage: git-cg [OPTIONS] COMMAND [ARGS]...
 See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator commands:
 
 * [`git-cg eval amend-brief`](eval/amend-brief.md)
+* [`git-cg eval checkpoint list`](eval/checkpoint/list.md)
 * [`git-cg eval compare`](eval/compare.md)
 * [`git-cg eval diagnose`](eval/diagnose.md)
 * [`git-cg eval doctor`](eval/doctor.md)
@@ -102,6 +103,9 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 
 * **`git-cg eval amend-brief`**
   * [`git-cg eval amend-brief`](eval/amend-brief.md) — Build an amend brief from landed evaluation data.
+* **`git-cg eval checkpoint`**
+  * [`git-cg eval checkpoint`](eval/checkpoint.md) — Local evaluation checkpoint inventory (read-only).
+  * [`git-cg eval checkpoint list`](eval/checkpoint/list.md) — List local evaluation checkpoints (read-only).
 * **`git-cg eval compare`**
   * [`git-cg eval compare`](eval/compare.md) — Diff two cases (structure and metrics).
 * **`git-cg eval config`**

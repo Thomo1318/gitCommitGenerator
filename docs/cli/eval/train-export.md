@@ -21,18 +21,20 @@ Usage: git-cg eval train-export [OPTIONS]
  Builds a local redacted training export. Never emits secrets cleartext.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --bundle-id                       TEXT  Bundle id(s) to export (repeatable). Default: all landed bundles.            │
-│ --profile                         TEXT  Redaction profile (default train_rich). Unsafe raw profiles are rejected.    │
-│                                         [default: train_rich]                                                        │
-│ --capture-on                      TEXT  Which rows to include: pass | fail | all (default all). [default: all]       │
-│ --split-group-id                  TEXT  Optional split-group label for the export batch.                             │
-│ --notes                           TEXT  Optional free-text notes for the export record.                              │
-│ --write             --no-write          Write export files under .eval/train_export/ (default: write).               │
-│                                         [default: write]                                                             │
-│ --dry-run                               Validate and preview paths without writing (same as --no-write).             │
-│ --json                                  Print machine-readable JSON instead of plain text.                           │
-│ --detail                                Show detailed help text and exit.                                            │
-│ --help                                  Show this message and exit.                                                  │
+│ --bundle-id                       TEXT       Bundle id(s) to export (repeatable). Default: all landed bundles.       │
+│ --profile                         TEXT       Redaction profile (default train_rich). Unsafe raw profiles are         │
+│                                              rejected.                                                               │
+│                                              [default: train_rich]                                                   │
+│ --capture-on                      TEXT       Which rows to include: pass | fail | all (default all). [default: all]  │
+│ --split-group-id                  TEXT       Optional split-group label for the export batch.                        │
+│ --notes                           TEXT       Optional free-text notes for the export record.                         │
+│ --write             --no-write               Write export files under .eval/train_export/ (default: write).          │
+│                                              [default: write]                                                        │
+│ --dry-run                                    Validate and preview paths without writing (same as --no-write).        │
+│ --root                            DIRECTORY  Repo root (defaults to discovery).                                      │
+│ --json                                       Print machine-readable JSON instead of plain text.                      │
+│ --detail                                     Show detailed help text and exit.                                       │
+│ --help                                       Show this message and exit.                                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

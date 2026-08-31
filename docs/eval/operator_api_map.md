@@ -72,6 +72,8 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 |:---|:---|:---|:---|:---|
 | `eval` | group | public (group) | group | Run and inspect local evaluation suites without changing product ranking. — Root eval Typer group. |
 | `eval amend-brief` | command | public | canonical | Build an amend brief from landed evaluation data. — Public CLI operator surface. |
+| `eval checkpoint` | group | public (group) | group | Local evaluation checkpoint inventory (read-only). — Nested Typer group (not invoked alone). |
+| `eval checkpoint list` | command | public | canonical | List local evaluation checkpoints (read-only). — Public CLI operator surface. |
 | `eval compare` | command | public | canonical | Diff two cases (structure and metrics). — Public CLI operator surface. |
 | `eval config` | command | public (deprecated alias) | temporary alias | Alias of eval opik config show. — Canonical: `eval opik config show`. Removal: first minor release after S6 GA. |
 | `eval diagnose` | command | public | canonical | Create or update a diagnostic issue from a failure. — Public CLI operator surface. |
@@ -122,6 +124,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 
 ```text
 git-cg eval amend-brief …
+git-cg eval checkpoint list …
 git-cg eval compare …
 git-cg eval diagnose …
 git-cg eval doctor …
@@ -216,6 +219,7 @@ documents — sketches name the envelope wrapper keys only.
 ### Minimum command set
 
 * `eval amend-brief`
+* `eval checkpoint list`
 * `eval compare`
 * `eval diagnose`
 * `eval doctor`
@@ -249,6 +253,14 @@ documents — sketches name the envelope wrapper keys only.
 * **Nested (informational):**
   * brief: amend_brief_v1 document
 * **Notes:** Advisory only; never auto-applies, accepts, or re-ranks.
+
+#### `eval checkpoint list`
+
+* **Required keys:** `checkpoint_count`, `checkpoints`, `suite_id`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * checkpoints[]: {checkpoint_id, mtime, suite_id, experiment_id, status, mode, compat_hash_short, pin_short, live_match, completed_count, pending_count, path}
+* **Notes:** Read-only .eval/checkpoints inventory (newest mtime first). Optional --suite filter. live_match compares stored compat_hash to live preimage. Unreadable checkpoints are skipped. suite_id is null when no filter is set.
 
 #### `eval compare`
 
