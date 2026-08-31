@@ -688,3 +688,39 @@ def test_human_rollup_never_overrides_unresolved_dispute_guard(repo: Path) -> No
     assert rollup["can_sole_promote_gold"] is False
     assert rollup["rollup_count"] == 1
     assert rollup["rollups"][0]["reviewer_count"] == 2
+
+
+def test_promote_notes_mask_secrets_before_persist(repo: Path) -> None:
+    """Promote decision notes never persist raw secret-shaped text."""
+    _seed(repo)
+    token = "sk-live-H65probeTokenABCDEFGHIJKLMNOP"
+    short_jwt = "Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature"
+    result = promote(
+        repo,
+        **_ok_kwargs(notes=f"operator note with {token} and {short_jwt}"),
+    )
+    decision = result["decision"]
+    notes = decision["notes"]
+    assert token not in notes
+    assert short_jwt not in notes
+    assert "•••" in notes
+    on_disk = json.loads(Path(result["decision_path"]).read_text(encoding="utf-8"))
+    dumped = json.dumps(on_disk)
+    assert token not in dumped
+    assert short_jwt not in dumped
+    assert on_disk["notes"] == notes
+
+
+def test_promote_notes_mask_to_empty_never_restores_raw(repo: Path, monkeypatch) -> None:
+    """Falsy mask result persists redacted empty, never raw notes."""
+    from git_cg.eval import promote as promote_mod
+
+    monkeypatch.setattr(promote_mod, "mask_optional_operator_text", lambda _value: "")
+    _seed(repo)
+    raw = "sk-live-H65probeTokenABCDEFGHIJKLMNOP"
+    result = promote(repo, **_ok_kwargs(notes=raw))
+    decision = result["decision"]
+    assert decision["notes"] == ""
+    on_disk = json.loads(Path(result["decision_path"]).read_text(encoding="utf-8"))
+    assert on_disk["notes"] == ""
+    assert raw not in json.dumps(on_disk)

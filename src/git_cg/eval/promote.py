@@ -42,6 +42,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
+from git_cg.eval.evidence_scrub import mask_optional_operator_text
+
 SCHEMA_VERSION: Final[str] = "promotion_decision_v0"
 BUNDLE_SCHEMA: Final[str] = "ape_bundle_v1"
 
@@ -728,7 +730,7 @@ def _build_decision_row(
         "human_leg": _extract_human_leg(review),
         "human_rollup": human_rollup,
         "denial_reason": denial_reason,
-        "notes": notes.strip() if notes and notes.strip() else None,
+        "notes": mask_optional_operator_text(notes),
         "created_at": _utc_now(),
         "dry_run": dry_run,
     }
