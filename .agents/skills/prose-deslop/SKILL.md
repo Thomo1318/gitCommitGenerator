@@ -2,6 +2,7 @@
 name: prose-deslop
 description: Remove AI writing patterns from prose (docs, PR bodies, ADRs, technical writing). Use for deslop/de-AI/humanize on prose only. Never use on commit messages, git-cg output, Hybrid trailers, code diffs, pin hashes, or SOP matrices.
 ---
+
 # prose-deslop — technical prose anti-slop
 
 Project-owned fork of Stephen Turner `skill-deslop`, with hard guards for `gitCommitGenerator`.
@@ -17,6 +18,7 @@ Project-owned fork of Stephen Turner `skill-deslop`, with hard guards for `gitCo
   - Hybrid trailers (`Refs`/`Resolves`/…, `SemVer-Impact`, `Change-Types`, `Changelog-Groups`)
   - code fences, CLI flags, metric IDs, file paths, issue numbers
   - tables where cells are machine identifiers
+- **Smallest defective span & technical exemption:** A rule match alone never authorizes an edit if the term is literal, quoted, attributed, or technically domain-valid (e.g. cryptographic robustness, official framework name). Only edit the smallest defective span; prefer a no-op to an uncertain edit.
 - Prefer **crisp technical** register for this repo (docs/ADR/PR). Skip warm-blog voice unless the user asks.
 - Do not rewrite source code; hand code residue to `code-deslop` / `deslop-gate`.
 
@@ -73,12 +75,28 @@ No bold-first bullets (every list item starting with a bolded keyword). No unico
 
 One point per section. Do not restate the same argument in ten different ways across thousands of words. Do not beat a single metaphor to death. Do not stack historical analogies for false authority ("Apple didn't build Uber. Facebook didn't build Spotify...").
 
+### 11. Eliminate plan and review meta-indices
+
+Never use ephemeral task numbers, checklist indices, or prompt markers ("finding 6", "item 4", "step 3 of the plan", "per issue 2") as if they are self-standing domain concepts. Once the review or plan cycle finishes, these numbers lose all context. Name the concrete technical problem, invariant, or architectural change directly (e.g. "Enforced strict ISO8601 timestamp validation" instead of "Fixed finding 6").
+
+### 12. Strip conversational scaffolding and paired buzzwords
+
+Strip conversational assistant openers from technical docs, ADRs, and PR bodies ("Certainly! Below is the updated document...", "Here is the implementation plan as requested:"). Ban inflated paired buzzwords ("seamlessly integrate", "robust solution", "comprehensive mechanism", "state-of-the-art"). Start directly with the domain subject, title, or decision.
+
+### 13. Ban tech puffery and false concessions
+
+Ban marketing superlatives in technical writing ("blazing-fast", "rock-solid", "battle-tested", "groundbreaking", "effortless", "cutting-edge"). Replace them with concrete benchmarks, algorithmic complexity, or protocol details. Eliminate false rhetorical concessions ("To be fair...", "Admittedly..."); state constraints and tradeoffs directly.
+
+### 14. Eliminate synonym cycling and mid-sentence colon crutches
+
+Do not cycle through artificial synonyms for the same entity across a single paragraph or section ("the client", "the caller", "the consumer", "the subscriber"). Pick the single canonical domain noun and use it consistently. Avoid mid-sentence colons used as dramatic comparison pivots, and do not use stacked parentheticals as em-dash substitutes.
+
 ## Quick Checks
 
 Run these before delivering any prose:
 
 - Heavy use of adverbs or -ly words? Cut them.
-- Any passive voice? Find the actor, make them the subject. 
+- Any passive voice? Find the actor, make them the subject.
 - Inanimate thing doing a human verb? Name the person.
 - Any "here's what/this/that" throat-clearing? Cut to the point.
 - Any "not X, it's Y" contrasts? State Y directly.
@@ -87,6 +105,14 @@ Run these before delivering any prose:
 - Paragraph ends with a punchy one-liner? Vary it.
 - Em dash anywhere? Remove it. Use a comma or period or a parenthetical.
 - Vague declarative ("The implications are significant")? Name the specific implication.
+- Ephemeral plan/review index used ("finding 6", "step 3", "item 4")? Name the specific technical subject and resolution.
+- Conversational assistant openers ("Certainly!", "Here is the summary...")? Delete and start directly with content.
+- Inflated buzzword pairs ("seamlessly integrates", "robust solution")? Replace with concrete technical actions.
+- Tech puffery superlatives ("blazing-fast", "rock-solid", "effortless")? Replace with verifiable metrics or algorithmic bounds.
+- False concessions ("To be fair", "Admittedly")? Drop stagecraft and state tradeoffs directly.
+- Synonym cycling across the same paragraph? Standardize on the canonical domain noun.
+- Mid-sentence colons used as contrast pivots or parenthetical stacking? Rewrite to direct sentences.
+- Are technical domain terms, quoted strings, and exact numbers preserved? (Keep intact).
 - Any sentence starting with What/When/Where/Which/Who/Why/How as a crutch? Restructure.
 - Meta-joiners ("The rest of this essay...")? Delete.
 - "It's worth noting" or similar filler transitions? Delete.
@@ -99,13 +125,13 @@ Run these before delivering any prose:
 
 When reviewing text, rate 1-10 on each dimension:
 
-| Dimension | Question |
-|-----------|----------|
-| Directness | Statements or announcements? |
-| Rhythm | Varied or metronomic? |
-| Trust | Respects reader intelligence? |
+| Dimension    | Question                               |
+| ------------ | -------------------------------------- |
+| Directness   | Statements or announcements?           |
+| Rhythm       | Varied or metronomic?                  |
+| Trust        | Respects reader intelligence?          |
 | Authenticity | Sounds like a specific human wrote it? |
-| Density | Anything cuttable? |
+| Density      | Anything cuttable?                     |
 
 Below 35/50: revise.
 
@@ -125,9 +151,11 @@ See [references/examples.md](references/examples.md) for before/after transforma
 **Quick inline example (scientific writing):**
 
 Before:
+
 > "It's worth noting that these findings have important implications for how we navigate the challenges of forecast ensembling moving forward. Despite these challenges, this work contributes meaningfully to the growing body of literature, highlighting the need for continued evaluation."
 
 After:
+
 > "If individual model rankings are unstable across geography and time, ensemble methods that weight models by past performance may not improve on equal-weight approaches."
 
 Changes: Replaced filler transition, vague declarative, "despite these challenges" formula, and superficial participle analysis with the specific implication.
@@ -135,9 +163,11 @@ Changes: Replaced filler transition, vague declarative, "despite these challenge
 **Quick inline example (blog post):**
 
 Before:
+
 > "Here's the thing: most bioinformatics pipelines break in production. Not because the code is bad. Because the data is bad. Let that sink in."
 
 After:
+
 > "Most bioinformatics pipelines break in production. The code runs fine. The data doesn't match the assumptions baked into it."
 
 Changes: Removed opener, binary contrast, and emphasis crutch. Named the specific problem.
@@ -146,4 +176,3 @@ Changes: Removed opener, binary contrast, and emphasis crutch. Named the specifi
 
 - Router / policy entrypoint: `deslop-gate`
 - Code counterpart: `code-deslop`
-
