@@ -159,16 +159,28 @@ eval-s7-proof:
       --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
       --cov-fail-under=80 -q
 
-# S7 NTH: report-only per-file coverage for interaction-owned modules.
-# Never a gate. Package-scoped eval-s7-proof remains the only coverage floor.
+# S7 NTH: per-file coverage gate for interaction-owned modules (≥80% each).
+# pytest-cov --cov-fail-under is aggregate-only, so JSON + tools/check_per_file_coverage.py
+# enforce the threshold per file. Package-scoped eval-s7-proof remains the primary floor.
 eval-s7-coverage-files:
-    @echo "📊 S7 per-file coverage (report-only; not a gate)"
+    @echo "📊 S7 per-file coverage gate (≥80% each owned file)"
+    @rm -f .eval/s7_per_file_coverage.json
     uv run pytest tests/eval -o addopts="" \
       --cov=git_cg.eval.review_queue \
       --cov=git_cg.eval.promote \
       --cov=git_cg.eval.evidence_scrub \
       --cov=git_cg.eval.feedback_definitions \
-      --cov-branch --cov-report=term-missing -q
+      --cov-branch \
+      --cov-report=term-missing \
+      --cov-report=json:.eval/s7_per_file_coverage.json \
+      -q
+    uv run python tools/check_per_file_coverage.py \
+      --json .eval/s7_per_file_coverage.json \
+      --fail-under 80 \
+      --file src/git_cg/eval/review_queue.py \
+      --file src/git_cg/eval/promote.py \
+      --file src/git_cg/eval/evidence_scrub.py \
+      --file src/git_cg/eval/feedback_definitions.py
 
 # S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
