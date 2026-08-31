@@ -462,6 +462,7 @@ opik_app = typer.Typer(
         "\n"
         "Subcommands:\n"
         "- doctor: Opik/export/queue health checks (local only)\n"
+        "- verify: optional online project/FD verification (advisory)\n"
         "- config: nested secret-safe config inspection (show)"
     ),
     short_help="Opik health checks and secret-safe config.",
@@ -3536,6 +3537,76 @@ def opik_doctor_cmd(
             if check.hint:
                 line = f"{line} (hint: {check.hint})"
             emit_human_line(line, err=True)
+    raise typer.Exit(code=report.exit_code)
+
+
+@opik_app.command(
+    "verify",
+    cls=BriefFullHelpCommand,
+    short_help="Optional online Opik project/FD verification (advisory).",
+)
+def opik_verify_cmd(
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Enable online verification (default: offline skip).",
+    ),
+    create_missing: bool = typer.Option(
+        False,
+        "--create-missing",
+        help="Also attempt to create missing remote projects (requires --remote).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Optional online Opik project/FD verification (advisory).
+
+    Disabled by default. Never a CI/product-accept gate. Network failure is
+    warning-only. Doctor remains the offline authority surface.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    With default flags this command skips online work and exits 0. Pass
+    ``--remote`` to compare local four-lane project pins and the Tier-1
+    Feedback Definition map against the Opik workspace. Pass
+    ``--create-missing`` together with ``--remote`` to attempt optional
+    project creation for missing lane pins.
+
+    Guarantees:
+    - authority is always advisory_non_sot
+    - never feeds promote/doctor/gates
+    - never prints raw secrets
+    - remote/network/auth failures stay warning-class (exit 0)
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.mirror.opik_verify import run_opik_verify
+
+    if create_missing and not remote:
+        emit_human_line(
+            "eval opik verify: --create-missing requires --remote",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    report = run_opik_verify(remote=remote, create_missing=create_missing)
+    if as_json:
+        emit_json_envelope(build_envelope("eval opik verify", ok=report.ok, data=report.to_data()))
+    else:
+        emit_human_line(
+            f"eval opik verify: remote={report.remote} rows={len(report.rows)} authority={report.authority}",
+            err=False,
+        )
+        for row in report.rows:
+            line = f"  [{row.status}] {row.check_id}: {row.message}"
+            if row.hint:
+                line = f"{line} (hint: {row.hint})"
+            emit_human_line(line, err=True)
+        for note in report.notes:
+            emit_human_line(f"  note: {note}", err=True)
     raise typer.Exit(code=report.exit_code)
 
 

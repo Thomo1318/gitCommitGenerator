@@ -54,6 +54,7 @@ MINIMUM_SKETCH_COMMANDS: Final[frozenset[str]] = frozenset(
         "eval recompute-scores",
         "eval doctor",
         "eval opik doctor",
+        "eval opik verify",
         "eval opik config show",
         "eval failures",
         "eval explain",
@@ -195,6 +196,27 @@ def _build_registry() -> dict[str, DataSketch]:
             notes=(
                 "Secret-safe Opik/export/queue doctor. Same checks[]/scores[] "
                 "contract as eval doctor; suite_id may be null."
+            ),
+        ),
+        "eval opik verify": _sketch(
+            "eval opik verify",
+            required_keys=(
+                "authority",
+                "create_missing",
+                "doctor_authority",
+                "exit_code",
+                "notes",
+                "ok",
+                "product_accept_blocked",
+                "remote",
+                "rows",
+            ),
+            nested=("rows[]: {check_id, status: pass|warn|fail|skip, message, hint?}",),
+            notes=(
+                "Optional online project/FD verification. Default offline skip. "
+                "`--remote` enables advisory checks; `--create-missing` requires "
+                "`--remote`. Never doctor/CI/product-accept authority. Network "
+                "failure is warning-only (exit 0)."
             ),
         ),
         "eval opik config show": _sketch(

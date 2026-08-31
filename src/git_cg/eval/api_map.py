@@ -54,6 +54,7 @@ CANONICAL_COMMANDS: frozenset[str] = frozenset(
         "eval issue suppress",
         "eval checkpoint list",
         "eval opik doctor",
+        "eval opik verify",
         "eval opik config show",
         "eval export status",
         "eval export retry",

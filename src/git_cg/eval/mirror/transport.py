@@ -52,6 +52,7 @@ EXPORT_ERROR_CLASSES = frozenset({"export_network", "export_auth", "export_valid
 LAZY_OPIK_IMPORT_ALLOWLIST: Final[frozenset[str]] = frozenset(
     {
         "src/git_cg/eval/mirror/transport.py:OpikSdkTransport.upload",
+        "src/git_cg/eval/mirror/opik_verify.py:_default_client_factory",
     }
 )
 
