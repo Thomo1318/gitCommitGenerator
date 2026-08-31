@@ -25,7 +25,11 @@ _SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bghp_[A-Za-z0-9]{36,}\b"),
     re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
-    re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
+    re.compile(
+        r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\."
+        r"[A-Za-z0-9_-]{1,}\."
+        r"[A-Za-z0-9_-]{5,}(?![A-Za-z0-9_-])"
+    ),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(r"(?i)\b(?:api[_-]?key|secret|password|token|authorization)\s*[:=]\s*['\"]?([^\s'\"]{8,})['\"]?"),
 )
