@@ -1381,13 +1381,13 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 
 ## Refinement: S7/S8 harness scope clarification (v3.2.1)
 
-Append-only clarification for Issue #254 / PR #255. The Related Plans bullet above retains the historical S0–S7 framing from the original ADR text.
+Issue #254 / PR #255. Related Plans above keeps the historical S0–S7 framing.
 
-**Current harness board (non-destructive clarification):**
+**Current harness board:**
 - **S7** = user interaction (pins, Feedback Definitions, HITL annotation) — implemented on #254.
 - **S8 / #235** = deferred docs-platform work (ADR-0011 durable rewrite prose, Zensical API site, REST/OpenAPI/autodoc scope). Live Opik Cloud remains a non-required merge gate (S8-LAW-01).
 
-This refinement does not supersede ADR-0011. It only names the living plan board’s S7/S8 split so operators do not read S7 as still deferred.
+Does not supersede ADR-0011. Names the living plan board’s S7/S8 split so S7 is not read as still deferred.
 
 ## CHANGELOG
 
