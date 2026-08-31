@@ -165,3 +165,781 @@ Calculate SemVer bump (SemVer 2.0.0 Rule 4 and 9 compliant), inject versions int
 #### `--pre-release <IDENTIFIER>`
 
 Add or bump a pre-release identifier (e.g., 'alpha', 'rc')
+
+## `git-cg record-telemetry`
+
+- **Usage**: `git-cg record-telemetry [-v --verbose] [COMMIT_MSG_FILE]`
+
+Record final commit telemetry and bind accepted final bytes (S3). Missing telemetry state never blocks product accept.
+
+### Arguments
+
+#### `[COMMIT_MSG_FILE]`
+
+Path to the final commit message file
+
+**Default:** `.git/COMMIT_EDITMSG`
+
+### Flags
+
+#### `-v --verbose`
+
+Enable verbose output.
+
+## `git-cg evals`
+
+- **Usage**: `git-cg evals [FLAGS]`
+
+Manage and run the git-cg evals benchmarking suite (legacy Streamlit/bench path; distinct from git-cg eval).
+
+### Flags
+
+#### `--install`
+
+Install evaluation dependencies.
+
+#### `--dashboard`
+
+Start the Streamlit dashboard.
+
+#### `--run`
+
+Run the evaluation benchmark.
+
+#### `--thinking`
+
+Enable reasoning benchmarks.
+
+#### `--gen-img`
+
+Generate static PNGs.
+
+## `git-cg eval`
+
+- **Usage**: `git-cg eval <SUBCOMMAND>`
+
+Run and inspect local evaluation suites, debug failures, manage review/sessions, and operate the export queue. Does not change product commit ranking.
+
+## `git-cg eval materialize-core-goldens`
+
+- **Usage**: `git-cg eval materialize-core-goldens`
+
+Rebuild checked-in evaluation reference files used by tests.
+
+## `git-cg eval encode-fixture`
+
+- **Usage**: `git-cg eval encode-fixture [--id <ID>] [--path <PATH>]`
+
+Print stable identity hashes for one evaluation fixture.
+
+### Flags
+
+#### `--id <ID>`
+
+Fixture id.
+
+#### `--path <PATH>`
+
+Fixture path.
+
+## `git-cg eval run`
+
+- **Usage**: `git-cg eval run [FLAGS]`
+
+Run a local offline evaluation suite.
+
+### Flags
+
+#### `--suite <SUITE>`
+
+Suite id to run.
+
+#### `--mode <MODE>`
+
+Run mode (e.g. full, resume_missing).
+
+#### `--checkpoint <ID>`
+
+Checkpoint id when resuming.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval resume`
+
+- **Usage**: `git-cg eval resume <FLAGS>`
+
+Continue an unfinished evaluation from a checkpoint.
+
+### Flags
+
+#### `--checkpoint <ID>`
+
+Checkpoint id (required).
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval recompute-scores`
+
+- **Usage**: `git-cg eval recompute-scores [FLAGS]`
+
+Re-score evidence already written by a prior run.
+
+### Flags
+
+#### `--checkpoint <ID>`
+
+Parent checkpoint / run id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval doctor`
+
+- **Usage**: `git-cg eval doctor [--json] [--root <DIR>]`
+
+Check local suite health (pins, metrics, fixtures).
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval triage`
+
+- **Usage**: `git-cg eval triage [--json] [--root <DIR>]`
+
+One-shot advisory view: doctor + failures + explain.
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval failures`
+
+- **Usage**: `git-cg eval failures [--json] [--root <DIR>]`
+
+List failing cases with metric and failure ids.
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval explain`
+
+- **Usage**: `git-cg eval explain [FLAGS]`
+
+Show a deterministic explanation for a failing case.
+
+### Flags
+
+#### `--case <ID>`
+
+Case id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval compare`
+
+- **Usage**: `git-cg eval compare [--json] [--root <DIR>]`
+
+Diff two cases (structure and metrics).
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval diagnose`
+
+- **Usage**: `git-cg eval diagnose [--json] [--root <DIR>]`
+
+Create or update a diagnostic issue from a failure.
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval checkpoint`
+
+- **Usage**: `git-cg eval checkpoint <SUBCOMMAND>`
+
+Local evaluation checkpoint inventory (read-only).
+
+## `git-cg eval checkpoint list`
+
+- **Usage**: `git-cg eval checkpoint list [FLAGS]`
+
+List local evaluation checkpoints (read-only). Offline inventory of .eval/checkpoints for resume/GC planning.
+
+### Flags
+
+#### `--suite <SUITE>`
+
+Optional suite_id filter.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review`
+
+- **Usage**: `git-cg eval review <SUBCOMMAND>`
+
+Local human review queue (advisory only). Never writes gold or changes product commit ranking.
+
+## `git-cg eval review enqueue`
+
+- **Usage**: `git-cg eval review enqueue <FLAGS>`
+
+Enqueue an advisory human-review item.
+
+### Flags
+
+#### `--case <ID>`
+
+Case id under review.
+
+#### `--bundle-id <ID>`
+
+Bundle id under review.
+
+#### `--reviewer <HANDLE>`
+
+Opaque local reviewer handle (not email).
+
+#### `--redaction-profile <PROFILE>`
+
+R14 redaction profile (default meta_eval_scrub).
+
+**Default:** `meta_eval_scrub`
+
+#### `--craft-rating <FLOAT>`
+
+human.craft_rating score.
+
+#### `--gold-dispute <BOOL>`
+
+human.gold_dispute: true|false.
+
+#### `--regime-label <LABEL>`
+
+human.regime_label: A|B|unknown.
+
+#### `--notes <TEXT>`
+
+Free-text notes (masked on persist).
+
+#### `--dry-run`
+
+Validate without writing.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review claim`
+
+- **Usage**: `git-cg eval review claim [FLAGS]`
+
+Claim a pending review item (exclusive lock).
+
+### Flags
+
+#### `--id <ID>`
+
+Review item id.
+
+#### `--reviewer <HANDLE>`
+
+Opaque local reviewer handle.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review adjudicate`
+
+- **Usage**: `git-cg eval review adjudicate [FLAGS]`
+
+Adjudicate an in-review item (advisory outcome only).
+
+### Flags
+
+#### `--id <ID>`
+
+Review item id.
+
+#### `--outcome <OUTCOME>`
+
+Adjudication outcome.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review dismiss`
+
+- **Usage**: `git-cg eval review dismiss [--id <ID>] [--json]`
+
+Dismiss a review item without promotion effect.
+
+### Flags
+
+#### `--id <ID>`
+
+Review item id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review list`
+
+- **Usage**: `git-cg eval review list [--status <STATUS>] [--json]`
+
+List local review-queue items.
+
+### Flags
+
+#### `--status <STATUS>`
+
+Optional status filter.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review show`
+
+- **Usage**: `git-cg eval review show [--id <ID>] [--json]`
+
+Show one review-queue item.
+
+### Flags
+
+#### `--id <ID>`
+
+Review item id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval review rollup`
+
+- **Usage**: `git-cg eval review rollup [--case <ID>] [--json]`
+
+Multi-rater advisory rollup over human_review_v1 rows (never sole-promotes gold).
+
+### Flags
+
+#### `--case <ID>`
+
+Optional case id filter.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval session`
+
+- **Usage**: `git-cg eval session <SUBCOMMAND>`
+
+Inspect local commit sessions.
+
+## `git-cg eval session show`
+
+- **Usage**: `git-cg eval session show [--id <ID>] [--json]`
+
+Show a local session record.
+
+### Flags
+
+#### `--id <ID>`
+
+Session id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval thread`
+
+- **Usage**: `git-cg eval thread <SUBCOMMAND>`
+
+Inspect local session threads.
+
+## `git-cg eval thread show`
+
+- **Usage**: `git-cg eval thread show [--id <ID>] [--json]`
+
+Show a local thread record.
+
+### Flags
+
+#### `--id <ID>`
+
+Thread id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval issue`
+
+- **Usage**: `git-cg eval issue <SUBCOMMAND>`
+
+Manage local diagnostic issues.
+
+## `git-cg eval issue list`
+
+- **Usage**: `git-cg eval issue list [--status <STATUS>] [--json]`
+
+List local diagnostic issues.
+
+### Flags
+
+#### `--status <STATUS>`
+
+Optional status filter.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval issue show`
+
+- **Usage**: `git-cg eval issue show [--id <ID>] [--json]`
+
+Show one diagnostic issue.
+
+### Flags
+
+#### `--id <ID>`
+
+Issue id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval issue resolve`
+
+- **Usage**: `git-cg eval issue resolve [--id <ID>] [--json]`
+
+Resolve a diagnostic issue.
+
+### Flags
+
+#### `--id <ID>`
+
+Issue id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval issue reopen`
+
+- **Usage**: `git-cg eval issue reopen [--id <ID>] [--json]`
+
+Reopen a diagnostic issue.
+
+### Flags
+
+#### `--id <ID>`
+
+Issue id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval issue suppress`
+
+- **Usage**: `git-cg eval issue suppress [--id <ID>] [--json]`
+
+Suppress a diagnostic issue (lab hygiene).
+
+### Flags
+
+#### `--id <ID>`
+
+Issue id.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval amend-brief`
+
+- **Usage**: `git-cg eval amend-brief [FLAGS]`
+
+Build an amend brief from landed evaluation data.
+
+### Flags
+
+#### `--case <ID>`
+
+Optional case id scope.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval train-export`
+
+- **Usage**: `git-cg eval train-export [--root <DIR>] [--json]`
+
+Export redacted training rows from landed bundles.
+
+### Flags
+
+#### `--root <DIR>`
+
+Repo root isolation override.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval opik`
+
+- **Usage**: `git-cg eval opik <SUBCOMMAND>`
+
+Opik health checks and secret-safe config.
+
+## `git-cg eval opik config`
+
+- **Usage**: `git-cg eval opik config <SUBCOMMAND>`
+
+Secret-safe Opik/mirror configuration surfaces.
+
+## `git-cg eval opik config show`
+
+- **Usage**: `git-cg eval opik config show [--json]`
+
+Show resolved Opik/mirror config without secrets. Offline and secret-safe.
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval opik doctor`
+
+- **Usage**: `git-cg eval opik doctor [--json]`
+
+Check Opik/export health without exposing secrets. Local only: no transport and no network.
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval opik verify`
+
+- **Usage**: `git-cg eval opik verify [FLAGS]`
+
+Optional online Opik project/FD verification (advisory). Disabled by default. Never a CI/product-accept gate.
+
+### Flags
+
+#### `--remote`
+
+Enable online verification (default: offline skip).
+
+#### `--create-missing`
+
+Also attempt to create missing remote projects (requires --remote).
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+## `git-cg eval export`
+
+- **Usage**: `git-cg eval export <SUBCOMMAND>`
+
+Export-queue status, retry, and drain.
+
+## `git-cg eval export status`
+
+- **Usage**: `git-cg eval export status [--json] [--root <DIR>]`
+
+Show export-queue status (empty/absent queue is healthy).
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval export retry`
+
+- **Usage**: `git-cg eval export retry [FLAGS]`
+
+Retry export-queue items (no-op on empty queue).
+
+### Flags
+
+#### `--id <ID>`
+
+Queue item id.
+
+#### `--force`
+
+Force retry path where supported.
+
+#### `--max-items <N>`
+
+Maximum items to retry.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval export drain`
+
+- **Usage**: `git-cg eval export drain [FLAGS]`
+
+Drain export queue according to mirror mode (mode=off => nothing_to_do).
+
+### Flags
+
+#### `--dry-run`
+
+Plan drain without upload side effects.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval replay`
+
+- **Usage**: `git-cg eval replay [--json] [--root <DIR>]`
+
+Replay generation into a new bundle (source unchanged).
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval promote`
+
+- **Usage**: `git-cg eval promote [--json] [--root <DIR>]`
+
+Promote a scrubbed candidate with contamination checks. Human approve_promote is advisory and cannot sole-promote gold.
+
+### Flags
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
+## `git-cg eval config`
+
+- **Usage**: `git-cg eval config`
+
+Deprecated alias of eval opik config show.
+
+## `git-cg eval export-status`
+
+- **Usage**: `git-cg eval export-status`
+
+Deprecated alias of eval export status.
+
+## `git-cg eval export-retry`
+
+- **Usage**: `git-cg eval export-retry`
+
+Deprecated alias of eval export retry.
+
+## `git-cg eval export-drain`
+
+- **Usage**: `git-cg eval export-drain`
+
+Deprecated alias of eval export drain.

@@ -130,3 +130,529 @@ cmd "release" {
         arg "<IDENTIFIER>"
     }
 }
+
+cmd "record-telemetry" {
+    help "Record final commit telemetry and bind accepted final bytes (S3). Missing telemetry state never blocks product accept."
+    arg "<COMMIT_MSG_FILE>" {
+        help "Path to the final commit message file"
+        required #false
+        default ".git/COMMIT_EDITMSG"
+    }
+    flag "-v --verbose" {
+        help "Enable verbose output."
+    }
+}
+
+cmd "evals" {
+    help "Manage and run the git-cg evals benchmarking suite (legacy Streamlit/bench path; distinct from git-cg eval)."
+    flag "--install" {
+        help "Install evaluation dependencies."
+    }
+    flag "--dashboard" {
+        help "Start the Streamlit dashboard."
+    }
+    flag "--run" {
+        help "Run the evaluation benchmark."
+    }
+    flag "--thinking" {
+        help "Enable reasoning benchmarks."
+    }
+    flag "--gen-img" {
+        help "Generate static PNGs."
+    }
+}
+
+cmd "eval" {
+    help "Run and inspect local evaluation suites, debug failures, manage review/sessions, and operate the export queue. Does not change product commit ranking."
+
+    // Corpus
+    cmd "materialize-core-goldens" {
+        help "Rebuild checked-in evaluation reference files used by tests."
+    }
+    cmd "encode-fixture" {
+        help "Print stable identity hashes for one evaluation fixture."
+        flag "--id" {
+            help "Fixture id."
+            arg "<ID>"
+        }
+        flag "--path" {
+            help "Fixture path."
+            arg "<PATH>"
+        }
+    }
+
+    // Run
+    cmd "run" {
+        help "Run a local offline evaluation suite."
+        flag "--suite" {
+            help "Suite id to run."
+            arg "<SUITE>"
+        }
+        flag "--mode" {
+            help "Run mode (e.g. full, resume_missing)."
+            arg "<MODE>"
+        }
+        flag "--checkpoint" {
+            help "Checkpoint id when resuming."
+            arg "<ID>"
+        }
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "resume" {
+        help "Continue an unfinished evaluation from a checkpoint."
+        flag "--checkpoint" {
+            help "Checkpoint id (required)."
+            arg "<ID>"
+            required #true
+        }
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "recompute-scores" {
+        help "Re-score evidence already written by a prior run."
+        flag "--checkpoint" {
+            help "Parent checkpoint / run id."
+            arg "<ID>"
+        }
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+
+    // Inspect
+    cmd "doctor" {
+        help "Check local suite health (pins, metrics, fixtures)."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "triage" {
+        help "One-shot advisory view: doctor + failures + explain."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "failures" {
+        help "List failing cases with metric and failure ids."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "explain" {
+        help "Show a deterministic explanation for a failing case."
+        flag "--case" {
+            help "Case id."
+            arg "<ID>"
+        }
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "compare" {
+        help "Diff two cases (structure and metrics)."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "diagnose" {
+        help "Create or update a diagnostic issue from a failure."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "checkpoint" {
+        help "Local evaluation checkpoint inventory (read-only)."
+        cmd "list" {
+            help "List local evaluation checkpoints (read-only). Offline inventory of .eval/checkpoints for resume/GC planning."
+            flag "--suite" {
+                help "Optional suite_id filter."
+                arg "<SUITE>"
+            }
+            flag "--root" {
+                help "Repo root (defaults to discovery)."
+                arg "<DIR>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+    }
+
+    // Review & sessions
+    cmd "review" {
+        help "Local human review queue (advisory only). Never writes gold or changes product commit ranking."
+        cmd "enqueue" {
+            help "Enqueue an advisory human-review item."
+            flag "--case" {
+                help "Case id under review."
+                arg "<ID>"
+            }
+            flag "--bundle-id" {
+                help "Bundle id under review."
+                arg "<ID>"
+            }
+            flag "--reviewer" {
+                help "Opaque local reviewer handle (not email)."
+                arg "<HANDLE>"
+                required #true
+            }
+            flag "--redaction-profile" {
+                help "R14 redaction profile (default meta_eval_scrub)."
+                arg "<PROFILE>"
+                default "meta_eval_scrub"
+            }
+            flag "--craft-rating" {
+                help "human.craft_rating score."
+                arg "<FLOAT>"
+            }
+            flag "--gold-dispute" {
+                help "human.gold_dispute: true|false."
+                arg "<BOOL>"
+            }
+            flag "--regime-label" {
+                help "human.regime_label: A|B|unknown."
+                arg "<LABEL>"
+            }
+            flag "--notes" {
+                help "Free-text notes (masked on persist)."
+                arg "<TEXT>"
+            }
+            flag "--dry-run" {
+                help "Validate without writing."
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "claim" {
+            help "Claim a pending review item (exclusive lock)."
+            flag "--id" {
+                help "Review item id."
+                arg "<ID>"
+            }
+            flag "--reviewer" {
+                help "Opaque local reviewer handle."
+                arg "<HANDLE>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "adjudicate" {
+            help "Adjudicate an in-review item (advisory outcome only)."
+            flag "--id" {
+                help "Review item id."
+                arg "<ID>"
+            }
+            flag "--outcome" {
+                help "Adjudication outcome."
+                arg "<OUTCOME>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "dismiss" {
+            help "Dismiss a review item without promotion effect."
+            flag "--id" {
+                help "Review item id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "list" {
+            help "List local review-queue items."
+            flag "--status" {
+                help "Optional status filter."
+                arg "<STATUS>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "show" {
+            help "Show one review-queue item."
+            flag "--id" {
+                help "Review item id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "rollup" {
+            help "Multi-rater advisory rollup over human_review_v1 rows (never sole-promotes gold)."
+            flag "--case" {
+                help "Optional case id filter."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+    }
+    cmd "session" {
+        help "Inspect local commit sessions."
+        cmd "show" {
+            help "Show a local session record."
+            flag "--id" {
+                help "Session id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+    }
+    cmd "thread" {
+        help "Inspect local session threads."
+        cmd "show" {
+            help "Show a local thread record."
+            flag "--id" {
+                help "Thread id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+    }
+    cmd "issue" {
+        help "Manage local diagnostic issues."
+        cmd "list" {
+            help "List local diagnostic issues."
+            flag "--status" {
+                help "Optional status filter."
+                arg "<STATUS>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "show" {
+            help "Show one diagnostic issue."
+            flag "--id" {
+                help "Issue id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "resolve" {
+            help "Resolve a diagnostic issue."
+            flag "--id" {
+                help "Issue id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "reopen" {
+            help "Reopen a diagnostic issue."
+            flag "--id" {
+                help "Issue id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "suppress" {
+            help "Suppress a diagnostic issue (lab hygiene)."
+            flag "--id" {
+                help "Issue id."
+                arg "<ID>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+    }
+
+    // Export & train
+    cmd "amend-brief" {
+        help "Build an amend brief from landed evaluation data."
+        flag "--case" {
+            help "Optional case id scope."
+            arg "<ID>"
+        }
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "train-export" {
+        help "Export redacted training rows from landed bundles."
+        flag "--root" {
+            help "Repo root isolation override."
+            arg "<DIR>"
+        }
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+    }
+    cmd "opik" {
+        help "Opik health checks and secret-safe config."
+        cmd "config" {
+            help "Secret-safe Opik/mirror configuration surfaces."
+            cmd "show" {
+                help "Show resolved Opik/mirror config without secrets. Offline and secret-safe."
+                flag "--json" {
+                    help "Print machine-readable JSON instead of plain text."
+                }
+            }
+        }
+        cmd "doctor" {
+            help "Check Opik/export health without exposing secrets. Local only: no transport and no network."
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+        cmd "verify" {
+            help "Optional online Opik project/FD verification (advisory). Disabled by default. Never a CI/product-accept gate."
+            flag "--remote" {
+                help "Enable online verification (default: offline skip)."
+            }
+            flag "--create-missing" {
+                help "Also attempt to create missing remote projects (requires --remote)."
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+        }
+    }
+    cmd "export" {
+        help "Export-queue status, retry, and drain."
+        cmd "status" {
+            help "Show export-queue status (empty/absent queue is healthy)."
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+            flag "--root" {
+                help "Repo root (defaults to discovery)."
+                arg "<DIR>"
+            }
+        }
+        cmd "retry" {
+            help "Retry export-queue items (no-op on empty queue)."
+            flag "--id" {
+                help "Queue item id."
+                arg "<ID>"
+            }
+            flag "--force" {
+                help "Force retry path where supported."
+            }
+            flag "--max-items" {
+                help "Maximum items to retry."
+                arg "<N>"
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+            flag "--root" {
+                help "Repo root (defaults to discovery)."
+                arg "<DIR>"
+            }
+        }
+        cmd "drain" {
+            help "Drain export queue according to mirror mode (mode=off => nothing_to_do)."
+            flag "--dry-run" {
+                help "Plan drain without upload side effects."
+            }
+            flag "--json" {
+                help "Print machine-readable JSON instead of plain text."
+            }
+            flag "--root" {
+                help "Repo root (defaults to discovery)."
+                arg "<DIR>"
+            }
+        }
+    }
+
+    // Advanced
+    cmd "replay" {
+        help "Replay generation into a new bundle (source unchanged)."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+    cmd "promote" {
+        help "Promote a scrubbed candidate with contamination checks. Human approve_promote is advisory and cannot sole-promote gold."
+        flag "--json" {
+            help "Print machine-readable JSON instead of plain text."
+        }
+        flag "--root" {
+            help "Repo root (defaults to discovery)."
+            arg "<DIR>"
+        }
+    }
+
+    // Deprecated aliases (kept discoverable)
+    cmd "config" {
+        help "Deprecated alias of eval opik config show."
+        hide #true
+    }
+    cmd "export-status" {
+        help "Deprecated alias of eval export status."
+        hide #true
+    }
+    cmd "export-retry" {
+        help "Deprecated alias of eval export retry."
+        hide #true
+    }
+    cmd "export-drain" {
+        help "Deprecated alias of eval export drain."
+        hide #true
+    }
+}
+
