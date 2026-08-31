@@ -249,6 +249,57 @@ def test_export_status_dashed_alias(tmp_path: Path) -> None:
     assert result.exit_code in {0, 1}
 
 
+def test_export_status_empty_queue_zeroed_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty/absent queue emits a stable zeroed counts object (JSON)."""
+    import json
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path), "--json"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    counts = payload["data"]["counts"]
+    assert counts == {
+        "pending": 0,
+        "sending": 0,
+        "sent": 0,
+        "failed": 0,
+        "dropped": 0,
+        "unreadable": 0,
+    }
+    # no queue dir invented by status
+    assert not (tmp_path / ".eval" / "export_queue").exists()
+
+
+def test_export_retry_missing_id_reports_not_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`export retry --id <missing>` prints a plain id-not-found line."""
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_missing"])
+    assert result.exit_code == 0, result.output
+    assert "id not found: q_missing" in result.output
+    assert "unreadable 1" in result.output
+
+
+def test_export_retry_missing_id_json_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """JSON mode surfaces a not-found warning code + not_found list."""
+    import json
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_missing", "--json"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["data"]["not_found"] == ["q_missing"]
+    assert payload["data"]["unreadable"] == 1
+    codes = {w.get("code") for w in payload.get("warnings", [])}
+    assert "EVAL_EXPORT_ID_NOT_FOUND" in codes
+
+
 def test_export_retry_failed_rows(tmp_path: Path) -> None:
     from git_cg.eval.mirror.batch import build_export_batches
     from git_cg.eval.mirror.queue import enqueue_export_batch, load_queue_item, mark_queue_item

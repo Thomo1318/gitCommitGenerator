@@ -3730,13 +3730,22 @@ def _queue_status_counts(repo: Path) -> dict[str, int]:
     from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
 
     qdir = export_queue_dir(repo)
-    counts: dict[str, int] = {}
+    # Always emit a stable zeroed shape so machine consumers see a consistent
+    # key set on an empty/absent queue (healthy, not a defect).
+    counts: dict[str, int] = {
+        "pending": 0,
+        "sending": 0,
+        "sent": 0,
+        "failed": 0,
+        "dropped": 0,
+        "unreadable": 0,
+    }
     if qdir.is_dir():
         for path in sorted(qdir.glob("*.json")):
             try:
                 item = load_queue_item(path.stem, repo_root=repo)
             except Exception:
-                counts["unreadable"] = counts.get("unreadable", 0) + 1
+                counts["unreadable"] += 1
                 continue
             status = str(item.get("status", "unknown"))
             counts[status] = counts.get(status, 0) + 1
@@ -3750,11 +3759,13 @@ def _emit_status(repo: Path) -> None:
     qdir = export_queue_dir(repo)
     counts = _queue_status_counts(repo)
     typer.echo(f"queue_dir {qdir}")
-    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
-        if status in counts:
-            typer.echo(f"{status} {counts[status]}")
-    if not counts:
+    if not any(counts.values()):
+        # Empty/absent queue is healthy; report it without inventing rows.
         typer.echo("queue empty")
+        return
+    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
+        if counts.get(status):
+            typer.echo(f"{status} {counts[status]}")
 
 
 def _maybe_export_alias_deprecation(deprecated: str, *, as_json: bool) -> list[dict[str, str]]:
@@ -3987,6 +3998,7 @@ def export_retry_cmd(
     retried = 0
     skipped = 0
     unreadable = 0
+    not_found: list[str] = []
     for qid in targets:
         if max_items is not None and retried >= max_items:
             break
@@ -3994,9 +4006,14 @@ def export_retry_cmd(
             item = load_queue_item(qid, repo_root=repo)
         except ExportQueueError:
             unreadable += 1
+            # Explicit --id miss is not-found, not silent corruption.
+            if queue_id and qid == queue_id:
+                not_found.append(qid)
             continue
         except Exception:
             unreadable += 1
+            if queue_id and qid == queue_id:
+                not_found.append(qid)
             continue
         if item.get("status") != "failed":
             skipped += 1
@@ -4020,15 +4037,28 @@ def export_retry_cmd(
             skipped += 1
 
     if as_json:
+        data: dict[str, object] = {"retried": retried, "skipped": skipped, "unreadable": unreadable}
+        if not_found:
+            # Surface not-found ids alongside the counts for machine consumers.
+            data["not_found"] = not_found
+            warnings = [
+                *warnings,
+                {
+                    "code": "EVAL_EXPORT_ID_NOT_FOUND",
+                    "message": f"queue id not found: {', '.join(not_found)}",
+                },
+            ]
         emit_json_envelope(
             build_envelope(
                 "eval export retry",
                 ok=True,
-                data={"retried": retried, "skipped": skipped, "unreadable": unreadable},
+                data=data,
                 warnings=warnings,
             )
         )
     else:
+        for qid in not_found:
+            typer.echo(f"id not found: {qid}")
         typer.echo(f"retried {retried} skipped {skipped} unreadable {unreadable}")
     raise typer.Exit(code=0)
 
