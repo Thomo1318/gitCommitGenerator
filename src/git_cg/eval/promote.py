@@ -105,6 +105,12 @@ DENIAL_REASONS: Final[frozenset[str]] = frozenset(
     }
 )
 
+# Promote intentionally accepts and stamps ``raw_dev_unsafe`` as an
+# audit/provenance label; promote does not export data externally.
+# ``train_export`` already refuses ``raw_dev_unsafe`` fail-closed.
+# This asymmetry is deliberate: promote stamps provenance; export guards egress.
+# Do not add a fail-closed promote guard here; that would break the label contract.
+# See issue #254.
 REDACTION_PROFILES: Final[frozenset[str]] = frozenset(
     {
         "public_ci",
@@ -489,10 +495,17 @@ def _validate_source_bundle(source: dict[str, Any]) -> None:
             hint="Repair the offline schema pack pin before promoting.",
         ) from exc
     except SchemaPackError as exc:
+        # ape_bundle_v1 sets additionalProperties=false, so a top-level "id"
+        # (or any illegal key) fails validation even though adjacent identity
+        # vocabulary uses IDs.
         raise _deny(
             DENY_SCHEMA,
             f"source bundle failed {BUNDLE_SCHEMA} validation: {exc}",
-            hint="Fix the candidate bundle schema before promotion.",
+            hint=(
+                f"Fix the candidate bundle schema before promotion. {BUNDLE_SCHEMA} "
+                "disallows additional properties: omit any top-level 'id' and other "
+                "non-schema keys from the bundle body."
+            ),
         ) from exc
 
 
@@ -925,7 +938,10 @@ def promote(
         _deny_after_source(
             DENY_MISSING_FIELD,
             "source bundle missing trace_id (required on promote)",
-            hint="Ensure meta.binding.trace_id (or meta.trace_id) is present on the source bundle.",
+            hint=(
+                "Set meta.binding.trace_id on the source bundle (canonical). "
+                "Precedence: meta.binding.trace_id > meta.trace_id > bundle.trace_id."
+            ),
         )
     if not split:
         # Re-raise with stable denial after source resolve (no lineage unit).

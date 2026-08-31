@@ -2208,6 +2208,17 @@ def promote_cmd(
     --redaction-profile. split_group_id is required for contamination control
     (explicit or derived from the source bundle/session).
 
+    Promote-ready bundle spine (ape_bundle_v1):
+    - meta.binding.trace_id is REQUIRED on promote. Precedence when resolving
+      the source trace id (first non-empty wins):
+          meta.binding.trace_id  >  meta.trace_id  >  bundle.trace_id
+      A stale top-level bundle.trace_id never shadows a present
+      meta.binding.trace_id.
+    - The bundle must NOT carry a top-level "id" field: ape_bundle_v1 uses
+      additionalProperties=false, so a top-level "id" fails schema validation
+      even though adjacent identity/export vocabulary speaks in IDs. Omit "id"
+      from the bundle body.
+
     Forbidden (named denials, never silent):
     - silent gold mint from production accept / popularity
     - human-review-alone golden promotion
