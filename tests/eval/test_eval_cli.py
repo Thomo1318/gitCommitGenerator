@@ -389,7 +389,11 @@ def test_config_show_ok_exit_0(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
     result = runner.invoke(app, ["eval", "config", "show"])
     assert result.exit_code == 0, result.output
-    assert "config" in result.output
+    out = result.output
+    assert "mode=off" in out
+    assert "health=" in out
+    assert "api_key_present=false" in out
+    assert "product_accept_blocked=false" in out
 
 
 def test_config_show_opik_config_error(monkeypatch: pytest.MonkeyPatch) -> None:

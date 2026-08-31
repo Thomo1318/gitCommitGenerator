@@ -489,7 +489,7 @@ opik_config_app = typer.Typer(
         "- temporary flat alias remains: git-cg eval config show\n"
         "\n"
         "Subcommands:\n"
-        "- show: emit secret-safe resolved config (plain JSON or --json envelope)"
+        "- show: emit secret-safe resolved config (plain summary or --json envelope)"
     ),
     short_help="Inspect Opik/mirror config without exposing secrets.",
     no_args_is_help=True,
@@ -3266,10 +3266,11 @@ def opik_config_group_callback(
 
 def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = None) -> None:
     """Shared secret-safe config show implementation (canonical + alias)."""
-    import json
     import os
 
+    from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.mirror.config import (
+        PROJECT_LANES,
         OpikConfigError,
         mask_secret,
         mode_fallback_token,
@@ -3325,8 +3326,11 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
                 )
             )
         else:
-            typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-            typer.echo(f"config show: invalid (fail-closed): {exc}", err=True)
+            emit_human_line("eval opik config show: invalid (fail-closed)", err=True)
+            emit_human_line(f"  health={ExportHealth.CONFIG_ERROR.value}", err=True)
+            emit_human_line(f"  error={exc}", err=True)
+            emit_human_line("  api_key_present=false", err=True)
+            emit_human_line("  product_accept_blocked=false", err=True)
         raise typer.Exit(code=2) from None
 
     view = public_config_view(config)
@@ -3372,7 +3376,28 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
             )
         )
     else:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        mode = str(view.get("mode") or "off")
+        workspace = view.get("workspace")
+        redaction = view.get("redaction_profile")
+        projects = view.get("projects") if isinstance(view.get("projects"), dict) else {}
+        emit_human_line("eval opik config show:")
+        emit_human_line(f"  mode={mode}")
+        emit_human_line(f"  health={health_hint}")
+        emit_human_line(f"  workspace={workspace if workspace not in (None, '') else '-'}")
+        if projects:
+            for lane in PROJECT_LANES:
+                pin = projects.get(lane)
+                emit_human_line(f"  project.{lane}={pin if pin not in (None, '') else '-'}")
+        else:
+            emit_human_line("  projects=-")
+        emit_human_line(f"  api_key_present={str(bool(masked.get('api_key_present'))).lower()}")
+        if masked.get("api_key"):
+            emit_human_line(f"  api_key={masked['api_key']}")
+        emit_human_line(f"  redaction_profile={redaction if redaction not in (None, '') else '-'}")
+        emit_human_line("  product_accept_blocked=false")
+        fallback = mode_fallback_token(config)
+        if fallback:
+            emit_human_line(f"  mode_fallback={fallback}")
     raise typer.Exit(code=exit_code)
 
 
@@ -3402,9 +3427,11 @@ def opik_config_show_cmd(
     Health hint values include skipped_off / deferred / pending / config_error.
     Invalid mode tokens fail closed (exit 2). Successful show exits 0.
 
-    Plain text emits indented JSON of the secret-safe payload. ``--json`` wraps
-    the same payload in the standard CLI envelope (with deprecation warnings when
-    invoked via the temporary flat alias ``git-cg eval config show``).
+    Plain text is a multi-line summary (mode, health, workspace, four-lane
+    project pins, ``api_key_present``, redaction profile,
+    ``product_accept_blocked``). ``--json`` wraps the full secret-safe payload in
+    the standard CLI envelope (deprecation warnings apply on the temporary flat
+    alias ``git-cg eval config show``).
 
     No transport, no queue drain, and no accept/ranking side effects.
     """
