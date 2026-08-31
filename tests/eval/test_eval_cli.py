@@ -219,9 +219,7 @@ def test_materialize_skips_archive_snapshot_when_absent(monkeypatch: pytest.Monk
     assert "archive_bundles 0" in result.output
 
 
-# ---------------------------------------------------------------------------
 # S4 / P1-4 export CLI surface (nested + dashed aliases)
-# ---------------------------------------------------------------------------
 
 
 def test_export_nested_and_dashed_help_registered() -> None:
@@ -421,7 +419,8 @@ def test_export_drain_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPat
     result = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path)])
     assert result.exit_code == 2, result.output
     assert "config_error" in result.output
-    assert "bogus" in result.output
+    assert "bogus" not in result.output
+    assert "<redacted-mode-token>" in result.output
     assert '"health": "config_error"' in result.output or '"health":"config_error"' in result.output.replace(" ", "")
 
 
@@ -431,7 +430,8 @@ def test_export_status_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPa
     result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path)])
     assert result.exit_code == 2, result.output
     assert "health config_error" in result.output
-    assert "bogus" in result.output
+    assert "bogus" not in result.output
+    assert "<redacted-mode-token>" in result.output
 
 
 def test_config_show_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -443,11 +443,8 @@ def test_config_show_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatc
         result = runner.invoke(app, ["eval", "opik-config-show"])
     assert result.exit_code == 2, result.output
     assert "config_error" in result.output
-
-
-# ---------------------------------------------------------------------------
-# Coverage pack: config/export status/retry/drain branches (PR #236 patch ≥80%)
-# ---------------------------------------------------------------------------
+    assert "bogus" not in result.output
+    assert "<redacted-mode-token>" in result.output
 
 
 def test_config_unknown_action_exits_2() -> None:

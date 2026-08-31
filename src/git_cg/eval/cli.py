@@ -107,7 +107,6 @@ from git_cg.eval.cli_output import (
 #   leaf commands use ``BriefFullHelpCommand``.
 # * Scoped to selected eval surfaces so terminal UX can be judged before wider rollout.
 
-
 _HELP_DETAIL_MARKER = "<<GIT_CG_HELP_DETAIL>>"
 _FULL_HELP_ENV = "GIT_CG_HELP"
 _FULL_HELP_ENV_VALUE = "full"
@@ -566,7 +565,6 @@ eval_app.add_typer(checkpoint_app, name="checkpoint", rich_help_panel="Inspect")
 eval_app.add_typer(opik_app, name="opik", rich_help_panel="Export & train")
 opik_app.add_typer(opik_config_app, name="config")
 eval_app.add_typer(export_app, name="export", rich_help_panel="Export & train")
-
 
 # --------------------------------------------------------------------------
 # Shared helpers
@@ -2449,7 +2447,6 @@ def diagnose_cmd(
 # Nested: review queue (HITL / human_review_v1)
 # --------------------------------------------------------------------------
 
-
 # review_app registered near module top for help-panel order.
 
 
@@ -2892,7 +2889,6 @@ def review_dismiss_cmd(
 # Nested: session / thread
 # --------------------------------------------------------------------------
 
-
 # session_app registered near module top for help-panel order.
 
 
@@ -3048,7 +3044,6 @@ def thread_show_cmd(
 # --------------------------------------------------------------------------
 # Nested: issue
 # --------------------------------------------------------------------------
-
 
 # issue_app registered near module top for help-panel order.
 
@@ -3287,7 +3282,6 @@ def issue_suppress_cmd(
 # Nested: opik (canonical config + doctor)
 # --------------------------------------------------------------------------
 
-
 # opik_app / opik_config_app registered near module top for help-panel order.
 
 
@@ -3318,8 +3312,8 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
         PROJECT_LANES,
         OpikConfigError,
         mask_secret,
-        mode_fallback_token,
         operator_config_health,
+        operator_mode_fallback_token,
         public_config_view,
         resolve_opik_config,
     )
@@ -3393,8 +3387,8 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
             mode=str(view.get("mode") or "off"),
             health=ExportHealth(health_hint),
             notes=(
-                (f"config_error: invalid mode token {mode_fallback_token(config)!r}",)
-                if mode_fallback_token(config)
+                (f"config_error: invalid mode token {operator_mode_fallback_token(config)!r}",)
+                if operator_mode_fallback_token(config)
                 else ()
             ),
         ).to_dict(),
@@ -3412,7 +3406,7 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
                     [
                         {
                             "code": "EVAL_CONFIG_ERROR",
-                            "message": f"invalid mode token {mode_fallback_token(config)!r}",
+                            "message": f"invalid mode token {operator_mode_fallback_token(config)!r}",
                         }
                     ]
                     if exit_code == 2
@@ -3440,7 +3434,7 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
             emit_human_line(f"  api_key={masked['api_key']}")
         emit_human_line(f"  redaction_profile={redaction if redaction not in (None, '') else '-'}")
         emit_human_line("  product_accept_blocked=false")
-        fallback = mode_fallback_token(config)
+        fallback = operator_mode_fallback_token(config)
         if fallback:
             emit_human_line(f"  mode_fallback={fallback}")
     raise typer.Exit(code=exit_code)
@@ -3658,7 +3652,6 @@ def config_cmd(
 # --------------------------------------------------------------------------
 # Nested export (landed S4) + temporary dashed aliases
 # --------------------------------------------------------------------------
-
 
 # export_app registered near module top for help-panel order.
 
@@ -3922,7 +3915,7 @@ def export_status_cmd(
     and bad_mode fields. Exit codes: 0 when healthy, 1 if the repo root cannot
     be resolved, 2 on invalid mode configuration.
     """
-    from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
+    from git_cg.eval.mirror.config import operator_config_health, operator_mode_fallback_token, resolve_opik_config
 
     warnings: list[dict[str, str]] = []
     if _deprecated_from:
@@ -3933,7 +3926,7 @@ def export_status_cmd(
     except Exception:
         cfg = None
     health_hint = operator_config_health(cfg) if cfg is not None else None
-    bad_mode = mode_fallback_token(cfg) if cfg is not None else None
+    bad_mode = operator_mode_fallback_token(cfg) if cfg is not None else None
 
     try:
         repo = _resolve_repo(root)
@@ -4206,8 +4199,8 @@ def export_drain_cmd(
 
     from git_cg.eval.mirror.config import (
         OpikConfigError,
-        mode_fallback_token,
         operator_config_health,
+        operator_mode_fallback_token,
         resolve_opik_config,
     )
     from git_cg.eval.mirror.exporter import drain_queue, list_pending_items
@@ -4236,7 +4229,7 @@ def export_drain_cmd(
             typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
         raise typer.Exit(code=2) from None
 
-    bad_mode = mode_fallback_token(config)
+    bad_mode = operator_mode_fallback_token(config)
     if bad_mode is not None:
         result = build_mirror_result(
             mode=str(config.get("mode") or "off"),

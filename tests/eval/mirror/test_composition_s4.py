@@ -290,6 +290,8 @@ def test_e12_invalid_mode_fallback_is_config_error_on_composition(tmp_path: Path
     assert plan.product_accept_blocked is False
     assert "export_validation" in plan.error_classes
     assert any("config_error" in n for n in plan.notes)
+    assert all("not-a-mode" not in n for n in plan.notes)
+    assert any("<redacted-mode-token>" in n for n in plan.notes)
     mirror = plan.as_mirror_result()
     assert mirror.health is ExportHealth.CONFIG_ERROR
     assert mirror.product_accept_blocked is False

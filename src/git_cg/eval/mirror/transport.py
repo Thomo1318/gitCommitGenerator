@@ -222,6 +222,9 @@ class OpikSdkTransport:
             ) from exc
 
         try:
+            from git_cg.eval.mirror.secrets import ensure_secure_opik_endpoint
+
+            ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
             # opik is an optional runtime dep; the attribute exists at runtime
             # but pyright cannot resolve it through the lazy import guard.
             client = opik.Opik(  # type: ignore[attr-defined]

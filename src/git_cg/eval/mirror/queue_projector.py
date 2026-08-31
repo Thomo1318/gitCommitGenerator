@@ -39,7 +39,6 @@ class LiveQueueProjector(Protocol):
 
 
 def _resolve_mode(config: Mapping[str, Any] | None) -> str:
-    """Return canonical mode token; default off when absent/invalid."""
     if not isinstance(config, Mapping):
         return "off"
     mode = str(config.get("mode", "off") or "off").strip().lower()
@@ -49,7 +48,6 @@ def _resolve_mode(config: Mapping[str, Any] | None) -> str:
 
 
 def _has_project_lane(config: Mapping[str, Any]) -> bool:
-    """True when any four-lane pin or legacy project_name is non-empty."""
     projects = config.get("projects")
     if isinstance(projects, Mapping):
         for key in ("eval", "live", "ci", "import"):
@@ -61,7 +59,6 @@ def _has_project_lane(config: Mapping[str, Any]) -> bool:
 
 
 def _offline_status(config: Mapping[str, Any] | None) -> QueueMirrorStatus:
-    """Classify offline/no-op status for the S7-E close bar."""
     mode = _resolve_mode(config)
     if mode in {"off", "local_only"}:
         return "skipped_off"
@@ -71,7 +68,6 @@ def _offline_status(config: Mapping[str, Any] | None) -> QueueMirrorStatus:
 
 
 def _eval_project(config: Mapping[str, Any]) -> str | None:
-    """Return first available project lane pin or legacy name."""
     projects = config.get("projects")
     if isinstance(projects, Mapping):
         for key in ("eval", "live", "ci", "import"):
@@ -85,7 +81,6 @@ def _eval_project(config: Mapping[str, Any]) -> str | None:
 
 
 def _live_enabled(config: Mapping[str, Any] | None, *, enable_live: bool) -> bool:
-    """True when live projection is enabled via flag or config key."""
     if enable_live:
         return True
     if not isinstance(config, Mapping):
@@ -109,7 +104,6 @@ def _review_item(row: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def _load_local_items(repo: Path | None, *, review_ids: list[str] | None) -> list[dict[str, Any]]:
-    """Load up to max_items local review rows for projection (best-effort)."""
     if repo is None:
         return []
     from git_cg.eval.review_queue import ReviewQueueError, list_reviews, show_review
@@ -202,18 +196,11 @@ def _projection_payload(item: Mapping[str, Any]) -> dict[str, Any]:
 
 def _default_live_projector_factory() -> LiveQueueProjector:
     """Lazy Opik-backed projector (SDK import only inside factory/call)."""
-    from git_cg.eval.mirror.secrets import resolve_opik_secrets
+    from git_cg.eval.mirror.secrets import ensure_secure_opik_endpoint, resolve_opik_secrets
 
     secrets = resolve_opik_secrets(require_key=True)
-    base = (secrets.base_url or "").strip()
-    # Refuse cleartext transport when an API key is configured (CWE-319).
-    if secrets.api_key and base:
-        lowered = base.lower()
-        if lowered.startswith("http://") and "localhost" not in lowered and "127.0.0.1" not in lowered:
-            raise RuntimeError(
-                "refusing non-HTTPS Opik endpoint while API key is configured "
-                f"(base_url={base!r}); use HTTPS or a local http://localhost endpoint"
-            )
+    # Re-check after resolve so injectable/monkeypatched secrets stay fail-closed.
+    ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
 
     import opik  # lazy; allowlisted import site
 

@@ -76,7 +76,6 @@ class OpikVerifyRow:
 
 
 def _scrub_notes(notes: Sequence[str] | None) -> tuple[str, ...]:
-    """Scrub and bound operator-facing notes (max length, max count)."""
     if not notes:
         return ()
     out: list[str] = []
@@ -126,7 +125,6 @@ class OpikVerifyReport:
 
 
 def _lane_projects(config: Mapping[str, Any] | None) -> dict[str, str]:
-    """Extract four-lane project pins from resolved config (EVAL bootstrap aware)."""
     out: dict[str, str] = {}
     if not isinstance(config, Mapping):
         return out
@@ -163,7 +161,6 @@ def _compare_feedback_definitions(
     local: Mapping[str, Any],
     remote: Mapping[str, Mapping[str, Any]],
 ) -> list[OpikVerifyRow]:
-    """Compare local Tier-1 FD vocabulary against remote workspace definitions."""
     rows: list[OpikVerifyRow] = []
     local_defs = local.get("definitions") if isinstance(local.get("definitions"), dict) else {}
     local_names = set(local_defs) if isinstance(local_defs, dict) else set()
@@ -218,11 +215,44 @@ def _compare_feedback_definitions(
     return rows
 
 
+def _page_content(page: object) -> list[object]:
+    """Normalise an SDK page object or bare sequence to a list of items."""
+    if isinstance(page, (list, tuple)):
+        return list(page)
+    content = getattr(page, "content", None)
+    if content is None:
+        content = getattr(page, "data", None)
+    if content is None:
+        return []
+    if isinstance(content, (list, tuple)):
+        return list(content)
+    return list(content) if content else []
+
+
+def _paginate_sdk_collection(fetch_page, *, size: int = 100, max_pages: int = 50) -> list[object]:
+    """Collect SDK page contents until empty, short, or page cap.
+
+    ``fetch_page`` receives ``page`` (1-based) and ``size`` and returns a page
+    object with ``content``/``data`` or a bare sequence. Stops on empty pages,
+    pages shorter than ``size``, or ``max_pages``.
+    """
+    items: list[object] = []
+    for page_no in range(1, max_pages + 1):
+        content = _page_content(fetch_page(page=page_no, size=size))
+        if not content:
+            break
+        items.extend(content)
+        if len(content) < size:
+            break
+    return items
+
+
 def _default_client_factory() -> OpikVerifyClient:
     """Build a real Opik-backed client (lazy SDK import; secrets ephemeral)."""
-    from git_cg.eval.mirror.secrets import resolve_opik_secrets
+    from git_cg.eval.mirror.secrets import ensure_secure_opik_endpoint, resolve_opik_secrets
 
     secrets = resolve_opik_secrets(require_key=True)
+    ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
 
     import opik  # lazy; allowlisted import site
 
@@ -239,8 +269,7 @@ def _default_client_factory() -> OpikVerifyClient:
             rest = getattr(client, "rest_client", None)
             projects_api = getattr(rest, "projects", None) if rest is not None else None
             if projects_api is not None and hasattr(projects_api, "find_projects"):
-                page = projects_api.find_projects(page=1, size=100)
-                content = getattr(page, "content", None) or getattr(page, "data", None) or []
+                content = _paginate_sdk_collection(lambda page, size: projects_api.find_projects(page=page, size=size))
                 for item in content:
                     name = getattr(item, "name", None) or (item.get("name") if isinstance(item, dict) else None)
                     if isinstance(name, str) and name.strip():
@@ -261,8 +290,9 @@ def _default_client_factory() -> OpikVerifyClient:
             fd_api = getattr(rest, "feedback_definitions", None) if rest is not None else None
             if fd_api is None or not hasattr(fd_api, "find_feedback_definitions"):
                 raise RuntimeError("opik SDK feedback-definition listing surface unavailable")
-            page = fd_api.find_feedback_definitions(page=1, size=100)
-            content = getattr(page, "content", None) or getattr(page, "data", None) or []
+            content = _paginate_sdk_collection(
+                lambda page, size: fd_api.find_feedback_definitions(page=page, size=size)
+            )
             out: dict[str, dict[str, Any]] = {}
             for item in content:
                 if isinstance(item, dict):

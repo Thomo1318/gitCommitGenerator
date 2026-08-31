@@ -25,7 +25,7 @@ from typing import Any, Final
 
 from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.batch import ExportSizeError, build_export_batches
-from git_cg.eval.mirror.config import mode_fallback_token
+from git_cg.eval.mirror.config import operator_mode_fallback_token
 from git_cg.eval.mirror.experiments import build_experiment
 from git_cg.eval.mirror.health import ExportHealth
 from git_cg.eval.mirror.projections import (
@@ -247,7 +247,7 @@ def build_export_plan(
 
     # E12: invalid mode tokens fail closed to off for capture safety, but the
     # composition join must surface config_error (not silent skipped_off only).
-    bad_mode = mode_fallback_token(cfg)
+    bad_mode = operator_mode_fallback_token(cfg)
     if bad_mode is not None:
         n_objects = len(objects.bundles) + len(objects.session_threads)
         return ExportPlanResult(

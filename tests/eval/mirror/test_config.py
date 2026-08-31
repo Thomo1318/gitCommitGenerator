@@ -18,6 +18,7 @@ from git_cg.eval.mirror.config import (
     mask_secret,
     mode_fallback_token,
     operator_config_health,
+    operator_mode_fallback_token,
     public_config_view,
     resolve_lane_provenance,
     resolve_opik_config,
@@ -62,6 +63,10 @@ def test_e12_invalid_mode_surfaces_config_error_health() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "bogus"})
     assert cfg["mode"] == "off"
     assert mode_fallback_token(cfg) == "bogus"
+    assert operator_mode_fallback_token(cfg) == "<redacted-mode-token>"
+    view = public_config_view(cfg)
+    assert view.get("meta", {}).get("mode_fallback") == "<redacted-mode-token>"
+    assert "bogus" not in str(view)
     assert operator_config_health(cfg) == ExportHealth.CONFIG_ERROR.value
     # Legitimate off (unset) stays skipped_off — not config_error.
     off = resolve_opik_config(env={})

@@ -71,6 +71,7 @@ __all__ = [
     "mask_secret",
     "mode_fallback_token",
     "operator_config_health",
+    "operator_mode_fallback_token",
     "public_config_view",
     "resolve_lane_provenance",
     "resolve_opik_config",
@@ -109,7 +110,6 @@ OWNER_ONLY_REDACTION_PROFILES: Final[frozenset[RedactionProfile]] = frozenset(
         RedactionProfile.ANTIPATTERN_VAULT,
     }
 )
-
 
 # Legacy parse aliases → canonical plan vocabulary (P0-1).
 _MODE_ALIASES: Final[Mapping[str, str]] = {
@@ -453,6 +453,8 @@ def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
     tokens still fail closed to ``off`` for capture safety, but leave the bad
     token in ``meta.mode_fallback`` so operator surfaces can surface
     ``config_error`` instead of a silent disable.
+
+    Prefer :func:`operator_mode_fallback_token` for any operator-facing output.
     """
     if not isinstance(record, Mapping):
         return None
@@ -464,6 +466,18 @@ def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
         return None
     text_token = str(token).strip()
     return text_token or None
+
+
+def operator_mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
+    """Return a secret-safe display form of ``meta.mode_fallback`` for operators.
+
+    Valid mode vocabulary is a closed enum. Any recorded fallback is already
+    invalid; operator output therefore never echoes the raw env token. Returns
+    ``"<redacted-mode-token>"`` when a fallback exists, else ``None``.
+    """
+    if mode_fallback_token(record) is None:
+        return None
+    return "<redacted-mode-token>"
 
 
 def operator_config_health(record: Mapping[str, Any] | None) -> str:
@@ -521,7 +535,15 @@ def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:
             continue
         value = record[key]
         if key == "meta" and isinstance(value, Mapping):
-            out[key] = {k: v for k, v in value.items() if not _looks_like_secret_key(str(k))}
+            safe_meta: dict[str, Any] = {}
+            for k, v in value.items():
+                if _looks_like_secret_key(str(k)):
+                    continue
+                if str(k) == "mode_fallback" and v not in (None, ""):
+                    safe_meta[str(k)] = "<redacted-mode-token>"
+                else:
+                    safe_meta[str(k)] = v
+            out[key] = safe_meta
         else:
             out[key] = value
     return out
