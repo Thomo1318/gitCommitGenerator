@@ -76,6 +76,7 @@ class OpikVerifyRow:
 
 
 def _scrub_notes(notes: Sequence[str] | None) -> tuple[str, ...]:
+    """Scrub and bound operator-facing notes (max length, max count)."""
     if not notes:
         return ()
     out: list[str] = []
@@ -125,6 +126,7 @@ class OpikVerifyReport:
 
 
 def _lane_projects(config: Mapping[str, Any] | None) -> dict[str, str]:
+    """Extract four-lane project pins from resolved config (EVAL bootstrap aware)."""
     out: dict[str, str] = {}
     if not isinstance(config, Mapping):
         return out
@@ -161,6 +163,7 @@ def _compare_feedback_definitions(
     local: Mapping[str, Any],
     remote: Mapping[str, Mapping[str, Any]],
 ) -> list[OpikVerifyRow]:
+    """Compare local Tier-1 FD vocabulary against remote workspace definitions."""
     rows: list[OpikVerifyRow] = []
     local_defs = local.get("definitions") if isinstance(local.get("definitions"), dict) else {}
     local_names = set(local_defs) if isinstance(local_defs, dict) else set()

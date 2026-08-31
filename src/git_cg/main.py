@@ -28,6 +28,7 @@ if os.environ.get("GIT_CG_DISABLE_SENTRY", "0") != "1":
 # Product path must not import Opik at module load. Mode check stays local
 # (no eval.mirror.config import) so ordinary CLI startup remains offline-safe.
 def _opik_mode_enabled() -> bool:
+    """True when GIT_CG_OPIK_MODE is non-empty and not 'off'."""
     raw = os.environ.get("GIT_CG_OPIK_MODE", "").strip().lower()
     return raw not in {"", "off"}
 
@@ -86,6 +87,7 @@ def _lazy_opik_track(*args: Any, **kwargs: Any):
 
 
 def _lazy_opik_flush(*args: Any, **kwargs: Any) -> None:
+    """Flush Opik tracker when mode is active; no-op when off."""
     if _ensure_opik() and _opik_module is not None:
         _opik_module.flush_tracker(*args, **kwargs)
 
@@ -102,6 +104,7 @@ class _LazyOpik:
 
 
 def _lazy_track_openai(client: Any) -> Any:
+    """Wrap OpenAI client with Opik tracking when mode is active."""
     if _ensure_opik() and _track_openai_function is not None:
         return _track_openai_function(client)
     return client

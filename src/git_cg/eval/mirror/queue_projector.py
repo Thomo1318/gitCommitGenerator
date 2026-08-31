@@ -39,6 +39,7 @@ class LiveQueueProjector(Protocol):
 
 
 def _resolve_mode(config: Mapping[str, Any] | None) -> str:
+    """Return canonical mode token; default off when absent/invalid."""
     if not isinstance(config, Mapping):
         return "off"
     mode = str(config.get("mode", "off") or "off").strip().lower()
@@ -48,6 +49,7 @@ def _resolve_mode(config: Mapping[str, Any] | None) -> str:
 
 
 def _has_project_lane(config: Mapping[str, Any]) -> bool:
+    """True when any four-lane pin or legacy project_name is non-empty."""
     projects = config.get("projects")
     if isinstance(projects, Mapping):
         for key in ("eval", "live", "ci", "import"):
@@ -59,6 +61,7 @@ def _has_project_lane(config: Mapping[str, Any]) -> bool:
 
 
 def _offline_status(config: Mapping[str, Any] | None) -> QueueMirrorStatus:
+    """Classify offline/no-op status for the S7-E close bar."""
     mode = _resolve_mode(config)
     if mode in {"off", "local_only"}:
         return "skipped_off"
@@ -68,6 +71,7 @@ def _offline_status(config: Mapping[str, Any] | None) -> QueueMirrorStatus:
 
 
 def _eval_project(config: Mapping[str, Any]) -> str | None:
+    """Return first available project lane pin or legacy name."""
     projects = config.get("projects")
     if isinstance(projects, Mapping):
         for key in ("eval", "live", "ci", "import"):
@@ -81,6 +85,7 @@ def _eval_project(config: Mapping[str, Any]) -> str | None:
 
 
 def _live_enabled(config: Mapping[str, Any] | None, *, enable_live: bool) -> bool:
+    """True when live projection is enabled via flag or config key."""
     if enable_live:
         return True
     if not isinstance(config, Mapping):
@@ -104,6 +109,7 @@ def _review_item(row: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def _load_local_items(repo: Path | None, *, review_ids: list[str] | None) -> list[dict[str, Any]]:
+    """Load up to max_items local review rows for projection (best-effort)."""
     if repo is None:
         return []
     from git_cg.eval.review_queue import ReviewQueueError, list_reviews, show_review
