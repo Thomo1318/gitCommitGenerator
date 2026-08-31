@@ -158,7 +158,7 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
         }
     }
     cmd checkpoint help="Local evaluation checkpoint inventory (read-only)." {
-        cmd list help="List local evaluation checkpoints (read-only). Offline inventory of .eval/checkpoints for resume/GC planning." {
+        cmd list help="List local .eval/checkpoints for resume/GC planning (read-only)." {
             flag --suite help="Optional suite_id filter." {
                 arg <SUITE>
             }
@@ -168,7 +168,7 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
             flag --json help="Print machine-readable JSON instead of plain text."
         }
     }
-    cmd review help="Local human review queue (advisory only). Never writes gold or changes product commit ranking." {
+    cmd review help="Local human review queue (advisory). Never writes gold or changes product commit ranking." {
         cmd enqueue help="Enqueue an advisory human-review item." {
             flag --case help="Case id under review." {
                 arg <ID>
@@ -233,7 +233,7 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
             }
             flag --json help="Print machine-readable JSON instead of plain text."
         }
-        cmd rollup help="Multi-rater advisory rollup over human_review_v1 rows (never sole-promotes gold)." {
+        cmd rollup help="Multi-rater rollup over human_review_v1 rows (advisory; never sole-promotes gold)." {
             flag --case help="Optional case id filter." {
                 arg <ID>
             }
@@ -312,7 +312,7 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
         cmd doctor help="Check Opik/export health without exposing secrets. Local only: no transport and no network." {
             flag --json help="Print machine-readable JSON instead of plain text."
         }
-        cmd verify help="Optional online Opik project/FD verification (advisory). Disabled by default. Never a CI/product-accept gate." {
+        cmd verify help="Optional online Opik project/FD verification (advisory, default off). Never a CI or product-accept gate." {
             flag --remote help="Enable online verification (default: offline skip)."
             flag --create-missing help="Also attempt to create missing remote projects (requires --remote)."
             flag --json help="Print machine-readable JSON instead of plain text."

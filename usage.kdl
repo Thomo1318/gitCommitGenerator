@@ -302,7 +302,7 @@ cmd "eval" {
     cmd "checkpoint" {
         help "Local evaluation checkpoint inventory (read-only)."
         cmd "list" {
-            help "List local evaluation checkpoints (read-only). Offline inventory of .eval/checkpoints for resume/GC planning."
+            help "List local .eval/checkpoints for resume/GC planning (read-only)."
             flag "--suite" {
                 help "Optional suite_id filter."
                 arg "<SUITE>"
@@ -319,7 +319,7 @@ cmd "eval" {
 
     // Review & sessions
     cmd "review" {
-        help "Local human review queue (advisory only). Never writes gold or changes product commit ranking."
+        help "Local human review queue (advisory). Never writes gold or changes product commit ranking."
         cmd "enqueue" {
             help "Enqueue an advisory human-review item."
             flag "--case" {
@@ -422,7 +422,7 @@ cmd "eval" {
             }
         }
         cmd "rollup" {
-            help "Multi-rater advisory rollup over human_review_v1 rows (never sole-promotes gold)."
+            help "Multi-rater rollup over human_review_v1 rows (advisory; never sole-promotes gold)."
             flag "--case" {
                 help "Optional case id filter."
                 arg "<ID>"
@@ -555,7 +555,7 @@ cmd "eval" {
             }
         }
         cmd "verify" {
-            help "Optional online Opik project/FD verification (advisory). Disabled by default. Never a CI/product-accept gate."
+            help "Optional online Opik project/FD verification (advisory, default off). Never a CI or product-accept gate."
             flag "--remote" {
                 help "Enable online verification (default: offline skip)."
             }

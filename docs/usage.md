@@ -420,7 +420,7 @@ Local evaluation checkpoint inventory (read-only).
 
 - **Usage**: `git-cg eval checkpoint list [FLAGS]`
 
-List local evaluation checkpoints (read-only). Offline inventory of .eval/checkpoints for resume/GC planning.
+List local .eval/checkpoints for resume/GC planning (read-only).
 
 ### Flags
 
@@ -440,7 +440,7 @@ Print machine-readable JSON instead of plain text.
 
 - **Usage**: `git-cg eval review <SUBCOMMAND>`
 
-Local human review queue (advisory only). Never writes gold or changes product commit ranking.
+Local human review queue (advisory). Never writes gold or changes product commit ranking.
 
 ## `git-cg eval review enqueue`
 
@@ -584,7 +584,7 @@ Print machine-readable JSON instead of plain text.
 
 - **Usage**: `git-cg eval review rollup [--case <ID>] [--json]`
 
-Multi-rater advisory rollup over human_review_v1 rows (never sole-promotes gold).
+Multi-rater rollup over human_review_v1 rows (advisory; never sole-promotes gold).
 
 ### Flags
 
@@ -802,7 +802,7 @@ Print machine-readable JSON instead of plain text.
 
 - **Usage**: `git-cg eval opik verify [FLAGS]`
 
-Optional online Opik project/FD verification (advisory). Disabled by default. Never a CI/product-accept gate.
+Optional online Opik project/FD verification (advisory, default off). Never a CI or product-accept gate.
 
 ### Flags
 
