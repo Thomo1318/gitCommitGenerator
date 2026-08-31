@@ -288,7 +288,7 @@ eval_app = typer.Typer(
         "\n"
         "- Corpus: rebuild checked-in reference fixtures and identity hashes\n"
         "- Run: offline suite run, resume from checkpoint, re-score prior evidence\n"
-        "- Inspect: doctor, triage, failures, explain, compare, diagnose\n"
+        "- Inspect: doctor, triage, failures, explain, compare, diagnose, checkpoint list\n"
         "- Review & sessions: advisory human review, local sessions/threads, diagnostic issues\n"
         "- Export & train: amend briefs, train export, Opik health/config, export queue\n"
         "- Advanced: replay generation and governed promote\n"
@@ -494,6 +494,31 @@ opik_config_app = typer.Typer(
     short_help="Inspect Opik/mirror config without exposing secrets.",
     no_args_is_help=True,
 )
+checkpoint_app = typer.Typer(
+    cls=BriefFullHelpGroup,
+    add_completion=False,
+    help=(
+        "Local evaluation checkpoint inventory (read-only).\n"
+        "\n"
+        "Inspect stored evaluation checkpoints under .eval/checkpoints/.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Offline inventory for resume/GC planning. Does not mutate checkpoint\n"
+        "files, contact Opik, or change product ranking.\n"
+        "\n"
+        "Guarantees:\n"
+        "- list is offline and non-mutating\n"
+        "- unreadable/corrupt checkpoints are skipped\n"
+        "- live_match compares stored compat_hash to the live preimage\n"
+        "\n"
+        "Subcommands:\n"
+        "- list: inventory id/mtime/suite/compat/pin/live_match/counts"
+    ),
+    short_help="Local evaluation checkpoint inventory (read-only).",
+    no_args_is_help=True,
+)
+
 export_app = typer.Typer(
     cls=BriefFullHelpGroup,
     add_completion=False,
@@ -536,6 +561,7 @@ eval_app.add_typer(review_app, name="review", rich_help_panel="Review & sessions
 eval_app.add_typer(session_app, name="session", rich_help_panel="Review & sessions")
 eval_app.add_typer(thread_app, name="thread", rich_help_panel="Review & sessions")
 eval_app.add_typer(issue_app, name="issue", rich_help_panel="Review & sessions")
+eval_app.add_typer(checkpoint_app, name="checkpoint", rich_help_panel="Inspect")
 eval_app.add_typer(opik_app, name="opik", rich_help_panel="Export & train")
 opik_app.add_typer(opik_config_app, name="config")
 eval_app.add_typer(export_app, name="export", rich_help_panel="Export & train")
@@ -3546,6 +3572,86 @@ def config_cmd(
 
 
 # export_app registered near module top for help-panel order.
+
+
+@checkpoint_app.command(
+    "list",
+    cls=BriefFullHelpCommand,
+    short_help="List local evaluation checkpoints (read-only).",
+)
+def checkpoint_list_cmd(
+    suite_id: str | None = typer.Option(
+        None,
+        "--suite",
+        help="Optional suite_id filter.",
+    ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """List local evaluation checkpoints (read-only).
+
+    Offline inventory of ``.eval/checkpoints`` for resume/GC planning. Does not
+    mutate checkpoint files, contact Opik, or change product ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Each row includes id, mtime, suite, short compat hash, short pin, live_match
+    against the live compat preimage, and pending/completed counts. Unreadable
+    or schema-invalid checkpoints are skipped. Optional ``--suite`` filters by
+    suite_id. ``--json`` emits the standard CLI envelope.
+    """
+    from git_cg.eval.checkpoint_store import list_checkpoint_inventory
+    from git_cg.eval.cli_output import emit_human_line
+
+    try:
+        repo = _resolve_repo(root)
+    except Exception as exc:
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval checkpoint list",
+                    ok=False,
+                    data={},
+                    errors=[{"code": "EVAL_REPO_UNRESOLVABLE", "message": str(exc)}],
+                )
+            )
+        else:
+            emit_human_line(f"eval checkpoint list: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+
+    rows = list_checkpoint_inventory(repo, suite_id=suite_id)
+    payload = {
+        "checkpoints": [row.to_dict() for row in rows],
+        "checkpoint_count": len(rows),
+        "suite_id": suite_id,
+    }
+    if as_json:
+        emit_json_envelope(build_envelope("eval checkpoint list", ok=True, data=payload))
+    else:
+        emit_human_line(f"eval checkpoint list: {payload['checkpoint_count']} checkpoint(s)")
+        for row in rows:
+            emit_human_line(
+                f"  {row.checkpoint_id}: suite={row.suite_id or '-'} "
+                f"mtime={row.mtime or '-'} "
+                f"compat={row.compat_hash_short or '-'} "
+                f"pin={row.pin_short or '-'} "
+                f"live_match={str(row.live_match).lower()} "
+                f"completed={row.completed_count} pending={row.pending_count}"
+            )
+    raise typer.Exit(code=0)
 
 
 def _resolve_repo(root: Path | None) -> Path:

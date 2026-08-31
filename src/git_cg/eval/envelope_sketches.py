@@ -61,6 +61,7 @@ MINIMUM_SKETCH_COMMANDS: Final[frozenset[str]] = frozenset(
         "eval diagnose",
         "eval issue list",
         "eval issue show",
+        "eval checkpoint list",
         "eval replay",
         "eval promote",
         "eval amend-brief",
@@ -267,6 +268,19 @@ def _build_registry() -> dict[str, DataSketch]:
             required_keys=("issues", "issue_count"),
             nested=("issues[]: diag_issue_v1 rows",),
             notes="Newest last_seen_at first. Optional --status filter applied before emit.",
+        ),
+        "eval checkpoint list": _sketch(
+            "eval checkpoint list",
+            required_keys=("checkpoints", "checkpoint_count", "suite_id"),
+            nested=(
+                "checkpoints[]: {checkpoint_id, mtime, suite_id, experiment_id, status, mode, "
+                "compat_hash_short, pin_short, live_match, completed_count, pending_count, path}",
+            ),
+            notes=(
+                "Read-only .eval/checkpoints inventory (newest mtime first). "
+                "Optional --suite filter. live_match compares stored compat_hash to live preimage. "
+                "Unreadable checkpoints are skipped. suite_id is null when no filter is set."
+            ),
         ),
         "eval issue show": _sketch(
             "eval issue show",

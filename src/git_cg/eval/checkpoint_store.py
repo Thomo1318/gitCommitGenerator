@@ -32,13 +32,16 @@ from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
 __all__ = [
     "CheckpointIndexRow",
+    "CheckpointInventoryRow",
     "CheckpointStoreError",
     "build_checkpoint_record",
     "delete_checkpoint",
     "list_checkpoint_ids",
+    "list_checkpoint_inventory",
     "list_index_rows",
     "load_checkpoint",
     "prune_checkpoints",
+    "short_pin",
     "utc_now_iso",
     "write_checkpoint",
 ]
@@ -307,6 +310,144 @@ def list_index_rows(repo_root: Path, *, suite_id: str | None = None) -> list[Che
                 path=str(checkpoint_file(repo_root, cid)),
             )
         )
+    return rows
+
+
+def short_pin(value: str | None, *, width: int = 12) -> str:
+    """Return a short operator-facing pin/hash fragment (empty when absent)."""
+    text_value = str(value or "").strip()
+    if not text_value:
+        return ""
+    if "@" in text_value:
+        # schema_pack_v0@<hex> → digest side
+        text_value = text_value.rsplit("@", 1)[-1]
+    text_value = text_value.lower()
+    if len(text_value) <= width:
+        return text_value
+    return text_value[:width]
+
+
+def _file_mtime_iso(path: Path) -> str:
+    """UTC second-precision mtime for a checkpoint file (empty when unavailable)."""
+    try:
+        ts = path.stat().st_mtime
+    except OSError:
+        return ""
+    return datetime.fromtimestamp(ts, UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+@dataclass(frozen=True, slots=True)
+class CheckpointInventoryRow:
+    """Read-only operator inventory row for ``eval checkpoint list``."""
+
+    checkpoint_id: str
+    mtime: str
+    suite_id: str
+    experiment_id: str
+    status: str
+    mode: str
+    compat_hash_short: str
+    pin_short: str
+    live_match: bool
+    completed_count: int
+    pending_count: int
+    path: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize one inventory row for JSON envelopes."""
+        return {
+            "checkpoint_id": self.checkpoint_id,
+            "mtime": self.mtime,
+            "suite_id": self.suite_id,
+            "experiment_id": self.experiment_id,
+            "status": self.status,
+            "mode": self.mode,
+            "compat_hash_short": self.compat_hash_short,
+            "pin_short": self.pin_short,
+            "live_match": self.live_match,
+            "completed_count": self.completed_count,
+            "pending_count": self.pending_count,
+            "path": self.path,
+        }
+
+
+def _live_match_for_checkpoint(record: Mapping[str, Any]) -> bool:
+    """True when stored compat_hash matches live schema/metric pins + suite/snapshot.
+
+    Missing fields or compute failures are non-matching (False).
+    """
+    stored = str(record.get("compat_hash") or "").strip().lower()
+    suite_id = str(record.get("suite_id") or "").strip()
+    snapshot_id = str(record.get("snapshot_id") or "").strip()
+    if not stored or not suite_id or not snapshot_id:
+        return False
+    try:
+        from git_cg.eval.compat import compute_compat_hash
+        from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
+
+        live = compute_compat_hash(
+            schema_pack_pin=schema_pack_pin(),
+            metric_catalog_pin=metric_catalog_pin(),
+            suite_id=suite_id,
+            snapshot_hash=snapshot_id,
+        )
+    except Exception:
+        return False
+    return stored == live
+
+
+def list_checkpoint_inventory(
+    repo_root: Path,
+    *,
+    suite_id: str | None = None,
+) -> list[CheckpointInventoryRow]:
+    """Build a read-only checkpoint inventory (no mutation).
+
+    Newest ``mtime`` first, then checkpoint_id. Unreadable or schema-invalid
+    files are skipped.
+    """
+    index_by_id = {row.checkpoint_id: row for row in list_index_rows(repo_root, suite_id=suite_id)}
+    rows: list[CheckpointInventoryRow] = []
+    for cid in list_checkpoint_ids(repo_root):
+        path = checkpoint_file(repo_root, cid)
+        try:
+            record = load_checkpoint(repo_root, cid)
+        except CheckpointStoreError:
+            continue
+        sid = str(record.get("suite_id") or "")
+        if suite_id is not None and sid != suite_id:
+            continue
+        idx = index_by_id.get(cid)
+        status = str(idx.status if idx is not None else "running")
+        mode = str(record.get("mode") or (idx.mode if idx is not None else "") or "")
+        experiment_id = str(record.get("experiment_id") or (idx.experiment_id if idx is not None else "") or "")
+        pin_source = (
+            str(record.get("schema_pack") or "").strip()
+            or str(record.get("snapshot_id") or "").strip()
+            or str(record.get("metric_catalog") or "").strip()
+        )
+        completed = record.get("completed_case_ids") or []
+        pending = record.get("pending_case_ids") or []
+        completed_count = len(completed) if isinstance(completed, list) else 0
+        pending_count = len(pending) if isinstance(pending, list) else 0
+        mtime = _file_mtime_iso(path) or str(record.get("last_progress_at") or "")
+        rows.append(
+            CheckpointInventoryRow(
+                checkpoint_id=cid,
+                mtime=mtime,
+                suite_id=sid,
+                experiment_id=experiment_id,
+                status=status,
+                mode=mode,
+                compat_hash_short=short_pin(str(record.get("compat_hash") or "")),
+                pin_short=short_pin(pin_source),
+                live_match=_live_match_for_checkpoint(record),
+                completed_count=completed_count,
+                pending_count=pending_count,
+                path=str(path),
+            )
+        )
+    rows.sort(key=lambda r: (r.mtime, r.checkpoint_id), reverse=True)
     return rows
 
 
