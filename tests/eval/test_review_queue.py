@@ -297,26 +297,16 @@ def test_atomic_queue_row_write_is_replace_based(repo: Path, monkeypatch: pytest
     validate_instance("human_review_v1", on_disk["review"])
 
 
-# --- H65: secret-mask fallback law (mask_secrets_in_text(...) or raw) ---------
+# --- H65: mask-before-persist law (never restore raw after masking) -----------
 
 
-def test_enqueue_notes_never_store_raw_when_mask_returns_nonempty(repo: Path) -> None:
-    """H65: mask_secrets_in_text fallback must never store raw for known secret shapes.
-
-    The ``or notes.strip()`` fallback in enqueue/adjudicate fires only when the
-    mask returns a falsy value. For every probed secret shape the mask returns
-    ``•••[len=N]`` (non-empty), so the fallback never stores raw. This test
-    pins that contract against regression.
-
-    NOTE: Bearer JWT uses a long-segment payload (>=10 chars) to match the
-    current ``_SECRET_VALUE_PATTERNS`` regex. Short-segment JWTs (e.g.
-    ``eyJ…h65probe.signature`` with a 4-char middle) are NOT masked — see
-    ``test_bearer_jwt_short_segment_gap_finding`` below.
-    """
+def test_enqueue_notes_never_store_raw_secret_shapes(repo: Path) -> None:
+    """H65: enqueue notes mask known secret shapes before persist."""
     tokens = [
         "sk-live-H65probeTokenABCDEFGHIJKLMNOP",
         "ghp_H65probeTokenABCDEFGHIJKLMNOPQRSTUVWXYZ12",
         "Bearer eyJhbGciOiJIUzI1NiJ9.aGVsbG93b3JsZA.signature1234",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature",
         "api_key=h65secretvalue",
     ]
     for i, token in enumerate(tokens):
@@ -324,7 +314,6 @@ def test_enqueue_notes_never_store_raw_when_mask_returns_nonempty(repo: Path) ->
         notes = result["item"]["review"]["notes"]
         assert "•••" in notes, f"expected masked sentinel in notes for token shape {i}"
         assert token not in notes, f"raw token must not appear in persisted notes (shape {i})"
-        # persisted on disk must also be masked
         on_disk = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
         assert token not in json.dumps(on_disk), f"raw token must not appear anywhere in persisted JSON (shape {i})"
 
@@ -350,21 +339,25 @@ def test_adjudicate_notes_and_destination_hint_masked(repo: Path) -> None:
     assert "•••" in adj["destination_hint"]
 
 
+def test_mask_optional_operator_text_never_restores_raw_on_falsy_mask(monkeypatch) -> None:
+    """H65: if masking returns falsy, persist redacted empty — never raw input."""
+    from git_cg.eval import evidence_scrub
+
+    monkeypatch.setattr(evidence_scrub, "mask_secrets_in_text", lambda _value: "")
+    raw = "sk-live-H65probeTokenABCDEFGHIJKLMNOP"
+    masked = evidence_scrub.mask_optional_operator_text(raw)
+    assert masked == ""
+
+
 def test_mask_secrets_in_text_returns_nonempty_for_nonempty_secret_input() -> None:
-    """H65: mask_secrets_in_text must never return a falsy value for non-empty secret input.
-
-    If it ever does, the ``or notes.strip()`` fallback in review_queue would
-    store the raw secret. Pin the non-empty contract directly.
-
-    NOTE: Bearer JWT uses long-segment payload (>=10 chars per segment) to
-    match the current regex. See short-segment gap test below.
-    """
+    """H65: mask_secrets_in_text returns a non-empty projection for secret input."""
     from git_cg.eval.evidence_scrub import mask_secrets_in_text
 
     secret_inputs = [
         "sk-live-H65probeTokenABCDEFGHIJKLMNOP",
         "ghp_H65probeTokenABCDEFGHIJKLMNOPQRSTUVWXYZ12",
         "Bearer eyJhbGciOiJIUzI1NiJ9.aGVsbG93b3JsZA.signature1234",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature",
         "api_key=h65secretvalue",
         "password=supersecretpassword123",
         "token: abcdefgh12345678",
@@ -375,24 +368,23 @@ def test_mask_secrets_in_text_returns_nonempty_for_nonempty_secret_input() -> No
         assert value not in masked, f"raw secret must not survive masking: {value!r}"
 
 
-def test_bearer_jwt_short_segment_gap_finding(repo: Path) -> None:
-    """H65 FIND: Bearer JWT with short middle segment (<10 chars) is NOT masked.
-
-    The JWT pattern ``eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}``
-    requires >=10 chars per segment. Real-world JWTs (e.g. Firebase custom tokens,
-    some OIDC id_tokens) can have payload segments shorter than 10 chars. These
-    pass through ``mask_secrets_in_text`` unmasked and are stored raw in review
-    notes — a secret-safety gap in the evidence scrub layer.
-
-    This test documents the gap as a known FIND. It should be converted to a
-    PASS assertion once the pattern is widened (e.g. ``{1,}`` on middle segment).
-    """
+def test_bearer_jwt_short_segment_is_masked(repo: Path) -> None:
+    """H65: short-segment Bearer JWTs are masked before persist."""
     from git_cg.eval.evidence_scrub import mask_secrets_in_text
 
     short_jwt = "Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature"
     masked = mask_secrets_in_text(short_jwt)
-    # Document current (gap) behaviour: raw survives
-    assert short_jwt in (masked or ""), (
-        "H65 FIND: short-segment Bearer JWT should be masked but is not. "
-        "If this assertion fails, the gap has been fixed — update this test."
+    assert short_jwt not in (masked or "")
+    assert "•••" in (masked or "")
+
+    result = enqueue(
+        repo,
+        case_id="case-short-jwt",
+        reviewer="rev-1",
+        notes=f"token={short_jwt}",
     )
+    notes = result["item"]["review"]["notes"]
+    assert short_jwt not in notes
+    assert "•••" in notes
+    on_disk = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+    assert short_jwt not in json.dumps(on_disk)
