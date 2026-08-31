@@ -1,5 +1,6 @@
 import contextlib
 import enum
+import functools
 import json
 import os
 import re
@@ -24,10 +25,92 @@ if os.environ.get("GIT_CG_DISABLE_SENTRY", "0") != "1":
     init_sentry()
 
 
-# Set opik logging level before importing it
-os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = "INFO"
-# Increase logging level to reduce console spam from Opik
-os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = os.environ.get("OPIK_CONSOLE_LOGGING_LEVEL", "error")
+# Product path must not import Opik at module load. Mode check stays local
+# (no eval.mirror.config import) so ordinary CLI startup remains offline-safe.
+def _opik_mode_enabled() -> bool:
+    raw = os.environ.get("GIT_CG_OPIK_MODE", "").strip().lower()
+    return raw not in {"", "off"}
+
+
+_opik_module: Any | None = None
+_opik_context_module: Any | None = None
+_track_openai_function: Any | None = None
+_opik_init_attempted = False
+
+
+def _ensure_opik() -> bool:
+    """Import Opik once when GIT_CG_OPIK_MODE is active; never on mode=off."""
+    global _opik_module, _opik_context_module, _track_openai_function, _opik_init_attempted
+    if _opik_module is not None:
+        return True
+    if _opik_init_attempted or not _opik_mode_enabled():
+        return False
+    _opik_init_attempted = True
+    try:
+        import opik as opik_module
+        from opik import opik_context as opik_context_module
+        from opik.integrations.openai import track_openai as track_openai_function
+    except ImportError:
+        return False
+    os.environ["OPIK_CONSOLE_LOGGING_LEVEL"] = os.environ.get("OPIK_CONSOLE_LOGGING_LEVEL", "error")
+    _opik_module = opik_module
+    _opik_context_module = opik_context_module
+    _track_openai_function = track_openai_function
+    return True
+
+
+class _LazyOpikContext:
+    def __getattr__(self, name: str) -> Any:
+        if _ensure_opik() and _opik_context_module is not None:
+            return getattr(_opik_context_module, name)
+        return lambda *args, **kwargs: None
+
+
+def _lazy_opik_track(*args: Any, **kwargs: Any):
+    """Apply @opik.track at first call so decoration never imports Opik."""
+
+    def decorator(function):
+        tracked = None
+
+        @functools.wraps(function)
+        def wrapped(*fargs, **fkwargs):
+            nonlocal tracked
+            if tracked is None and _ensure_opik() and _opik_module is not None:
+                tracked = _opik_module.track(*args, **kwargs)(function)
+            target = tracked if tracked is not None else function
+            return target(*fargs, **fkwargs)
+
+        return wrapped
+
+    return decorator
+
+
+def _lazy_opik_flush(*args: Any, **kwargs: Any) -> None:
+    if _ensure_opik() and _opik_module is not None:
+        _opik_module.flush_tracker(*args, **kwargs)
+
+
+class _LazyOpik:
+    def __getattr__(self, name: str) -> Any:
+        if name == "track":
+            return _lazy_opik_track
+        if name == "flush_tracker":
+            return _lazy_opik_flush
+        if _ensure_opik() and _opik_module is not None:
+            return getattr(_opik_module, name)
+        return lambda *args, **kwargs: None
+
+
+def _lazy_track_openai(client: Any) -> Any:
+    if _ensure_opik() and _track_openai_function is not None:
+        return _track_openai_function(client)
+    return client
+
+
+# Preserve call-site names without importing Opik at module load.
+opik = _LazyOpik()
+opik_context = _LazyOpikContext()
+track_openai = _lazy_track_openai
 
 # Pre-populate 1Password secrets so they are available in os.environ for Opik and OpenAI
 try:
@@ -42,11 +125,8 @@ except Exception as e:
 import httpx  # noqa: E402
 import instructor  # noqa: E402
 import openai  # noqa: E402
-import opik  # noqa: E402
 import typer  # noqa: E402
 from openai import OpenAI  # noqa: E402
-from opik import opik_context  # noqa: E402
-from opik.integrations.openai import track_openai  # noqa: E402
 from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
