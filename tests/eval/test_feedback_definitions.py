@@ -113,3 +113,25 @@ def test_data_path_is_config_root() -> None:
     """The data map lives at the config/ root, not a config/eval/ subdir."""
     assert DATA_PATH.name == "feedback_definitions.json"
     assert DATA_PATH.parent.name == "config"
+
+
+def test_unknown_schema_version_fails_closed(tmp_path) -> None:
+    """Future/unknown schema_version must fail closed (no silent reinterpret)."""
+    from git_cg.eval.feedback_definitions import MIGRATION_POLICY, assert_supported_schema_version
+
+    bad = tmp_path / "v2.json"
+    bad.write_text(
+        '{"schema_version": "feedback_definition_v2", "definitions": {}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(FeedbackDefinitionError, match="unsupported feedback definition schema_version"):
+        load_feedback_definitions(path=bad)
+    with pytest.raises(FeedbackDefinitionError):
+        assert_supported_schema_version("feedback_definition_v2")
+    assert "additive_only_v1" in MIGRATION_POLICY
+
+
+def test_supported_schema_version_accepts_v1() -> None:
+    from git_cg.eval.feedback_definitions import assert_supported_schema_version
+
+    assert_supported_schema_version("feedback_definition_v1")

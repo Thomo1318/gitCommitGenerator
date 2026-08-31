@@ -30,6 +30,15 @@ Boundary pins (normative):
     * ``final_accept`` is an ``artifact_class``/``provenance_label``
       binding-identity enum value (a provenance tag), not a review-outcome
       score, and is excluded from the Tier-1 FD vocabulary.
+
+Versioning / migration policy (additive-only for ``feedback_definition_v1``):
+    * Preserve existing definition IDs; do not silently rename or remove them.
+    * Additive new IDs are compatible within the same schema_version only after
+      the schema pack and drift-guard registry are updated together.
+    * Renames/removals require a new schema/map version (e.g. v2) plus an
+      explicit migration note — never reinterpret historical annotations.
+    * Unknown future ``schema_version`` values fail closed at load time.
+    * Remote Opik FD drift is advisory only; local map remains vocabulary SoT.
 """
 
 from __future__ import annotations
@@ -59,6 +68,26 @@ class FeedbackDefinitionError(ValueError):
     """Feedback Definition map load/validation failure."""
 
 
+#: Supported local map schema versions (unknown versions fail closed).
+SUPPORTED_SCHEMA_VERSIONS: Final = frozenset({SCHEMA_NAME})
+
+#: Human-readable additive-only migration policy for operators/docs/tests.
+MIGRATION_POLICY: Final = (
+    "additive_only_v1: preserve IDs; additions require schema+registry update; "
+    "renames/removals need new schema_version + explicit migration; "
+    "unknown versions fail closed; no silent historical reinterpretation"
+)
+
+
+def assert_supported_schema_version(schema_version: str) -> None:
+    """Fail closed when ``schema_version`` is not in the supported set."""
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
+        raise FeedbackDefinitionError(
+            f"unsupported feedback definition schema_version: {schema_version!r} "
+            f"(supported: {sorted(SUPPORTED_SCHEMA_VERSIONS)}; policy={MIGRATION_POLICY})"
+        )
+
+
 def load_feedback_definitions(path: Path | None = None) -> dict[str, Any]:
     """Load and validate the Tier-1 Feedback Definition map.
 
@@ -76,6 +105,10 @@ def load_feedback_definitions(path: Path | None = None) -> dict[str, Any]:
         raise FeedbackDefinitionError(f"unreadable feedback definitions: {target}") from exc
     if not isinstance(data, dict):
         raise FeedbackDefinitionError(f"feedback definitions must be an object: {target}")
+    schema_version = data.get("schema_version")
+    if not isinstance(schema_version, str) or not schema_version.strip():
+        raise FeedbackDefinitionError(f"feedback definitions missing schema_version: {target}")
+    assert_supported_schema_version(schema_version.strip())
     try:
         validate_instance(SCHEMA_NAME, data)
     except Exception as exc:  # schema_pack raises SchemaPackError (ValueError)
@@ -94,9 +127,12 @@ __all__ = [
     "DATA_PATH",
     "FEEDBACK_DEFINITION_REGISTRY",
     "HUMAN_SCORES",
+    "MIGRATION_POLICY",
     "PRODUCT_SCORES",
     "SCHEMA_NAME",
+    "SUPPORTED_SCHEMA_VERSIONS",
     "FeedbackDefinitionError",
+    "assert_supported_schema_version",
     "defined_score_names",
     "load_feedback_definitions",
 ]
