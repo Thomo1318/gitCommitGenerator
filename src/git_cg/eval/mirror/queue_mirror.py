@@ -144,6 +144,9 @@ def mirror_review_queue(
     *,
     config: Mapping[str, Any] | None = None,
     review_ids: list[str] | None = None,
+    enable_live: bool = False,
+    projector: Any | None = None,
+    projector_factory: Any | None = None,
 ) -> QueueMirrorResult:
     """Optionally project local HITL review rows to Opik (write-only).
 
@@ -151,10 +154,31 @@ def mirror_review_queue(
     Never raises for transport or configuration reasons.
     Never reads cloud state back into local gates.
 
-    ``repo`` is accepted for call-site symmetry with other eval surfaces; the
-    offline no-op path does not touch the filesystem. ``review_ids`` is ignored
-    on the offline path (no cloud write is attempted).
+    Live projection is opt-in via ``enable_live=True`` or config key
+    ``queue_mirror_live``. The live path lives in
+    :mod:`git_cg.eval.mirror.queue_projector` so this module stays free of
+    Opik SDK imports (structural offline guarantee).
     """
+    live_flag = bool(enable_live)
+    if not live_flag and isinstance(config, Mapping):
+        raw = config.get("queue_mirror_live")
+        if isinstance(raw, bool):
+            live_flag = raw
+        elif isinstance(raw, str):
+            live_flag = raw.strip().lower() in {"1", "true", "yes", "on"}
+
+    if live_flag:
+        from git_cg.eval.mirror.queue_projector import project_review_queue_live
+
+        return project_review_queue_live(
+            repo,
+            config=config,
+            review_ids=review_ids,
+            enable_live=True,
+            projector=projector,
+            projector_factory=projector_factory,
+        )
+
     del repo  # API symmetry only; offline path is filesystem-free
     attempted = len(review_ids) if review_ids else 0
     status = _offline_status(config)

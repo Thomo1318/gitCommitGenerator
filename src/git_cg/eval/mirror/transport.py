@@ -53,6 +53,7 @@ LAZY_OPIK_IMPORT_ALLOWLIST: Final[frozenset[str]] = frozenset(
     {
         "src/git_cg/eval/mirror/transport.py:OpikSdkTransport.upload",
         "src/git_cg/eval/mirror/opik_verify.py:_default_client_factory",
+        "src/git_cg/eval/mirror/queue_projector.py:_default_live_projector_factory",
     }
 )
 
