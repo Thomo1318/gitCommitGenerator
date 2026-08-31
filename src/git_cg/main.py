@@ -29,9 +29,6 @@ if os.environ.get("GIT_CG_DISABLE_SENTRY", "0") != "1":
 # (no eval.mirror.config import) so ordinary CLI startup remains offline-safe.
 def _opik_mode_enabled() -> bool:
     """True only for recognized active Opik mode tokens; unknown values fail closed."""
-    # Keep this local (no eval.mirror.config import) so ordinary CLI startup
-    # stays offline-safe. Mirror the canonical active tokens + documented
-    # aliases; unknown values fail closed to disabled.
     raw = os.environ.get("GIT_CG_OPIK_MODE", "").strip().lower()
     return raw in {"local", "local_only", "mirror", "strict_mirror", "dogfood"}
 

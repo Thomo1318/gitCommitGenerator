@@ -171,10 +171,8 @@ def _scalar_meta(value: Any, *, max_len: int = 128) -> str | None:
 def _projection_payload(item: Mapping[str, Any]) -> dict[str, Any]:
     """Metadata-only projection (no raw diffs or free-text dumps).
 
-    Accepts either a raw review-queue row or an already-normalised projection
-    dict. Nested ``review`` / ``adjudication`` objects are preferred when
-    present; otherwise top-level keys are reused so callers can pass the
-    payload through once without double-normalising away fields.
+    Accepts a raw review-queue row or an already-normalised projection dict.
+    Prefers nested ``review`` / ``adjudication`` fields; falls back to top-level keys.
     """
     review = item.get("review") if isinstance(item.get("review"), dict) else {}
     adjudication = item.get("adjudication") if isinstance(item.get("adjudication"), dict) else {}
@@ -229,15 +227,14 @@ def _default_live_projector_factory() -> LiveQueueProjector:
             )
             projected = 0
             for item in items:
-                # Callers already pass normalised payloads; copy through as-is.
-                # Re-run _projection_payload only for raw review rows.
+                # Normalised payloads pass through; raw review rows are projected once.
                 if isinstance(item, Mapping) and (
                     "mirror_authority" in item or ("review" not in item and "review_id" in item)
                 ):
                     payload = dict(item)
                 else:
                     payload = _projection_payload(item)
-                # Final sink-side bound/sanitize regardless of path.
+                # Sink-side bound/sanitize on every path.
                 payload = {
                     k: (_scalar_meta(v) if k != "read_back" else bool(v))
                     for k, v in payload.items()

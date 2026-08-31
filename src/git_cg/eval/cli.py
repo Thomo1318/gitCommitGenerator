@@ -4095,12 +4095,8 @@ def export_retry_cmd(
             item = load_queue_item(qid, repo_root=repo)
         except ExportQueueError as exc:
             # load_queue_item raises for both absent and corrupt rows; keep them distinct.
-            msg = str(exc)
-            if msg.startswith("no export queue item:"):
-                if queue_id and qid == queue_id:
-                    not_found.append(qid)
-                else:
-                    unreadable += 1
+            if str(exc).startswith("no export queue item:") and queue_id and qid == queue_id:
+                not_found.append(qid)
             else:
                 unreadable += 1
             continue
