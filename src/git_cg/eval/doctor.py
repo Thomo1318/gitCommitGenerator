@@ -15,6 +15,16 @@ Doctor is observability-only. It never mutates product accept, ranking, golden
 promotion, or Families A-I authority. ``h.doctor_green`` aggregates
 **block-severity** checks only; warn-severity failures never flip green to red.
 
+Opik doctor exit-code x credential matrix (S7 NTH; offline authority only):
+
+* ``mode=off`` / ``local_only`` → exit ``0``; missing pins at most WARN.
+* local config shape invalid (bad mode token / active mode missing pins) → exit ``2``.
+* active mode + complete pins + no API key → exit ``0`` (api_key absence is WARN).
+* active mode + partial/missing pins → exit ``2`` (config BLOCK).
+* remote/network failure → **not observed here** (doctor never opens network);
+  optional ``eval opik verify --remote`` is warning-only and never authoritative.
+* optional remote verification never changes doctor exit codes or green rollup.
+
 Import law: this module is import-light. Heavy helpers (scoring, mirror,
 prompt-pack, checkpoint store) are imported lazily inside functions so the CLI
 import graph stays clean and offline tests never touch the network or Opik SDK.
@@ -832,9 +842,83 @@ def _opik_scores(*, resolved: bool, health: str) -> tuple[Any, ...]:
     return (export_score, green_score)
 
 
+# Machine-readable Opik doctor exit matrix (tests + operator docs).
+# severity: block flips exit/green; warn never flips green; remote is N/A offline.
+OPIK_DOCTOR_EXIT_MATRIX: Final[tuple[dict[str, object], ...]] = (
+    {
+        "case": "mode_off_missing_pins",
+        "mode": "off",
+        "pins": "missing",
+        "api_key": "absent",
+        "network": "n/a",
+        "exit_code": 0,
+        "green": True,
+        "pin_severity": "warn",
+    },
+    {
+        "case": "local_config_shape_invalid",
+        "mode": "not-a-real-mode",
+        "pins": "any",
+        "api_key": "any",
+        "network": "n/a",
+        "exit_code": 2,
+        "green": False,
+        "pin_severity": "block",
+    },
+    {
+        "case": "active_complete_pins_no_key",
+        "mode": "mirror",
+        "pins": "complete",
+        "api_key": "absent",
+        "network": "n/a",
+        "exit_code": 0,
+        "green": True,
+        "pin_severity": "pass",
+        "api_key_severity": "warn",
+    },
+    {
+        "case": "active_partial_pins",
+        "mode": "mirror",
+        "pins": "partial",
+        "api_key": "any",
+        "network": "n/a",
+        "exit_code": 2,
+        "green": False,
+        "pin_severity": "block",
+    },
+    {
+        "case": "remote_network_failure",
+        "mode": "any",
+        "pins": "any",
+        "api_key": "any",
+        "network": "failure",
+        "exit_code": 0,
+        "green": "unchanged",
+        "notes": "doctor never opens network; optional verify is warning-only",
+    },
+    {
+        "case": "optional_remote_verification",
+        "mode": "any",
+        "pins": "any",
+        "api_key": "any",
+        "network": "optional",
+        "exit_code": 0,
+        "green": "unchanged",
+        "notes": "eval opik verify --remote is advisory_non_sot",
+    },
+)
+
+
+def opik_doctor_exit_matrix() -> tuple[dict[str, object], ...]:
+    """Return the documented Opik doctor exit-code x credential matrix."""
+    return OPIK_DOCTOR_EXIT_MATRIX
+
+
 __all__ = [
+    "OPIK_DOCTOR_EXIT_MATRIX",
     "DoctorCheck",
     "DoctorReport",
+    "opik_doctor_exit_matrix",
     "run_local_doctor",
     "run_opik_doctor",
 ]
