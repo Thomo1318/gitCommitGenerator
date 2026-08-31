@@ -724,3 +724,35 @@ def test_promote_notes_mask_to_empty_never_restores_raw(repo: Path, monkeypatch)
     on_disk = json.loads(Path(result["decision_path"]).read_text(encoding="utf-8"))
     assert on_disk["notes"] == ""
     assert raw not in json.dumps(on_disk)
+
+
+def test_promote_notes_masked_on_dry_run_stdout_path(repo: Path) -> None:
+    """Dry-run promote decisions mask notes before emit (no persist required)."""
+    _seed(repo)
+    token = "sk-live-H65probeTokenABCDEFGHIJKLMNOP"
+    short_jwt = "Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature"
+    result = promote(
+        repo,
+        **_ok_kwargs(
+            notes=f"operator note with {token} and {short_jwt}",
+            dry_run=True,
+        ),
+    )
+    assert result["dry_run"] is True
+    notes = result["decision"]["notes"]
+    assert token not in notes
+    assert short_jwt not in notes
+    assert "•••" in notes
+    dumped = json.dumps(result["decision"])
+    assert token not in dumped
+    assert short_jwt not in dumped
+
+
+def test_notes_masked_no_raw_fallback(repo: Path, monkeypatch) -> None:
+    """Mask-to-empty promote notes never restore raw operator text."""
+    test_promote_notes_mask_to_empty_never_restores_raw(repo, monkeypatch)
+
+
+def test_hitl_enqueue_claim_adjudicate_rollup_promote_denied(repo: Path) -> None:
+    """HITL composition: enqueue→claim→adjudicate→rollup cannot sole-promote gold."""
+    test_majority_approve_promote_rollup_cannot_sole_promote_gold(repo)

@@ -106,3 +106,8 @@ def test_branch_diff_excludes_docs_platform_surface() -> None:
 
     hits = [path for path in _changed_paths(base_ref) if _is_forbidden(path)]
     assert not hits, f"docs-platform / autodoc / REST surface present in branch diff: {hits}"
+
+
+def test_no_s8_docs_scope() -> None:
+    """No S8 docs-platform / autodoc / REST surface under the S7 branch."""
+    test_branch_diff_excludes_docs_platform_surface()
