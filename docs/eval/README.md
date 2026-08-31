@@ -923,6 +923,46 @@ Legacy `scripts/opik_trace_triage.py` and related setup helpers remain **refusal
 
 Supported maintainer entrypoints beyond `__all__` are **named in the operator API map**, not implied by import star.
 
+## S7 — user interaction close-out (S7-8 / #254)
+
+> **Issue:** [#254](https://github.com/Thomo1318/gitCommitGenerator/issues/254) · **Parent:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
+>
+> **Claim → test matrix:** [`s7-claim-evidence.md`](./s7-claim-evidence.md)
+>
+> **Plan SSOT (raw dogfood evidence):** `docs/plans/opik-evaluation-harness.md` @ `0.9.8-s7-dogfood-findings-board` §8.7.2
+>
+> **Docs deferral:** [#235](https://github.com/Thomo1318/gitCommitGenerator/issues/235) (**S8**)
+
+S7 adds the human/interaction loop on the S6 operator spine:
+
+* four-lane Opik project pins (offline doctor layers)
+* Tier-1 Feedback Definition vocabulary map + drift guard
+* HITL review lifecycle (`enqueue → claim → adjudicate → rollup`) as the advisory human leg
+* optional write-only queue mirror (offline no-op; never read back)
+* secret-safety fixes (FIND-069/073) and product-path lazy Opik init (FIND-068)
+
+**Authority locks (unchanged):** local `.eval/review_queue` is SoT; human scores are advisory and cannot sole-promote golden; Lane A remains the sole required CI/golden/product-accept SoT; Opik Cloud is never a required merge gate.
+
+### Proof recipe (AC-13)
+
+```bash
+just eval-s7-proof
+just docstrings-patch
+```
+
+`just eval-s7-proof` clears global cov addopts and enforces package-scoped `--cov=src/git_cg/eval --cov-fail-under=80` over full `tests/eval`.
+
+### S7 vs S8 boundary
+
+| In S7 | Not in S7 (→ **S8 / #235**) |
+|:---|:---|
+| Interaction UX, FD map, HITL bind, pin doctor, scrub fixes, claim matrix | ADR-0011 full rewrite prose |
+| Thin `docs/eval/**` operator/claim notes | Durable Zensical API pages / allowlist mkdocstrings |
+| Offline-first composition proof | REST/OpenAPI operator SDK |
+| | Live Opik Cloud as required CI merge gate (S8-LAW-01) |
+
+Structural guard: `tests/eval/test_no_docs_platform_surface.py::test_no_s8_docs_scope`.
+
 ### Explicit deferred after #246
 
 * S7 durable ADR-0011 / Zensical API documentation
