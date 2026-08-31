@@ -805,7 +805,7 @@ Full live tree: [`operator_api_map.md`](./operator_api_map.md). Highlights:
 | Kind | Commands |
 |:---|:---|
 | Suite ops | `eval run` · `eval resume` · `eval recompute-scores` · `eval encode-fixture` · `eval materialize-core-goldens` |
-| Health | `eval doctor` · `eval opik doctor` · `eval opik config show` · `eval triage` |
+| Health | `eval doctor` · `eval opik doctor` · `eval opik verify` (optional/advisory) · `eval opik config show` · `eval triage` |
 | Debug / diag | `eval failures` · `eval explain` · `eval compare` · `eval diagnose` · `eval issue list\|show\|resolve\|reopen\|suppress` |
 | Replay / review / promote | `eval replay` · `eval review *` (incl. `rollup`) · `eval promote` |
 | Sessions / brief | `eval session show` · `eval thread show` · `eval amend-brief` |

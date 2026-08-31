@@ -1,9 +1,9 @@
-# git-cg eval opik
+# git-cg eval opik config
 
-> **Usage:** `git-cg eval opik …`  
+> **Usage:** `git-cg eval opik config …`  
 > **Kind:** `group` · **Status:** group
 
-Opik health checks and secret-safe config.
+Inspect Opik/mirror config without exposing secrets.
 
 ## Authority boundary
 
@@ -14,31 +14,27 @@ Opik health checks and secret-safe config.
 ## Help
 
 ```text
-Usage: git-cg eval opik [OPTIONS] COMMAND [ARGS]...
+Usage: git-cg eval opik config [OPTIONS] COMMAND [ARGS]...
 
- Opik health checks and secret-safe config.
+ Inspect Opik/mirror config without exposing secrets.
 
- Inspect Opik/export health and resolved config offline. Never prints raw secrets or reaches the network.
+ Show the resolved public Opik/mirror view. Never prints raw API keys.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --detail          Show detailed help text and exit.                                                                  │
 │ --help            Show this message and exit.                                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ doctor  Check Opik/export health without exposing secrets.                                                           │
-│ verify  Optional online Opik project/FD verification (advisory).                                                     │
-│ config  Inspect Opik/mirror config without exposing secrets.                                                         │
+│ show  Show resolved Opik/mirror config without secrets.                                                              │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Children
 
-* [`git-cg eval opik config`](opik/config.md) — Inspect Opik/mirror config without exposing secrets.
-* [`git-cg eval opik doctor`](opik/doctor.md) — Check Opik/export health without exposing secrets.
-* [`git-cg eval opik verify`](opik/verify.md) — Optional online Opik project/FD verification (advisory).
+* [`git-cg eval opik config show`](config/show.md) — Show resolved Opik/mirror config without secrets.
 
 ## See also
 
-* [CLI overview](../index.md)
-* [Operator API map](../../eval/operator_api_map.md)
-* [Eval operator guide](../../eval/README.md)
+* [CLI overview](../../index.md)
+* [Operator API map](../../../eval/operator_api_map.md)
+* [Eval operator guide](../../../eval/README.md)

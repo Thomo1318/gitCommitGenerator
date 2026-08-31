@@ -122,6 +122,19 @@ four-lane pin doctor (offline)
 | **FIND-060/061** | export-queue honesty | stable zero counts + retry not-found plain copy (S7-7) | landed |
 | **FIND-062/064** | operator UX | config-show plain summary + checkpoint list (S7-6) | landed |
 
+## S7 optional / NTH close-out
+
+| ID | Summary | Primary evidence | Status |
+|:---|:---|:---|:---|
+| **S7-1b** | Online project existence/create is a separate `--remote` verify surface; doctor stays network-free | `tests/eval/test_opik_verify.py`; `src/git_cg/eval/mirror/opik_verify.py`; CLI `eval opik verify` | landed (optional) |
+| **S7-2b** | Online FD verification compares remote defs to local map; warning-only | `tests/eval/test_opik_verify.py::test_verify_remote_projects_and_fd_alignment` | landed (optional) |
+| **S7-5 live** | Live queue projection is opt-in, write-only, fail-open; never read back | `tests/eval/mirror/test_queue_projector.py`; `src/git_cg/eval/mirror/queue_projector.py` | landed (optional) |
+| **Doctor matrix** | Exit-code x credential matrix documented + tested (offline authority unchanged) | `tests/eval/test_opik_doctor_exit_matrix.py`; `OPIK_DOCTOR_EXIT_MATRIX` | landed (optional) |
+| **FD migration** | Additive-only v1 policy; unknown schema_version fails closed | `tests/eval/test_feedback_definitions.py::test_unknown_schema_version_fails_closed`; `MIGRATION_POLICY` | landed (optional) |
+| **Per-file coverage** | Report-only `just eval-s7-coverage-files` (not a gate) | `justfile` recipe `eval-s7-coverage-files` | landed (optional) |
+| **R-13 syntax** | `except (TypeError, ValueError)` cosmetic fix under pinned 3.14 | `src/git_cg/eval/mirror/config.py` | landed (optional) |
+| **Lab issue** | `.eval` issue `issue-2f5a73be6a0f81dd` restored to `suppressed` | local diagnose transition | landed (optional) |
+
 ## S8 boundary (hard non-goal)
 
 S7 covers interaction and claim packaging only. The following stay under **#235 (S8)** and must not appear as implementation in the S7 branch diff:

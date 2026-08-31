@@ -100,6 +100,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval opik config` | group | public (group) | group | Inspect Opik/mirror config without exposing secrets. — Nested Typer group (not invoked alone). |
 | `eval opik config show` | command | public | canonical | Show resolved Opik/mirror config without secrets. — Public CLI operator surface. |
 | `eval opik doctor` | command | public | canonical | Check Opik/export health without exposing secrets. — Public CLI operator surface. |
+| `eval opik verify` | command | public | canonical | Optional online Opik project/FD verification (advisory). — Public CLI operator surface. |
 | `eval promote` | command | public | canonical | Promote a scrubbed candidate with contamination checks. — Public CLI operator surface. |
 | `eval recompute-scores` | command | public | canonical | Re-score evidence already written by a prior run. — Public CLI operator surface. |
 | `eval replay` | command | public | canonical | Replay generation into a new bundle (source unchanged). — Public CLI operator surface. |
@@ -141,6 +142,7 @@ git-cg eval issue show …
 git-cg eval issue suppress …
 git-cg eval opik config show …
 git-cg eval opik doctor …
+git-cg eval opik verify …
 git-cg eval promote …
 git-cg eval recompute-scores …
 git-cg eval replay …
@@ -233,6 +235,7 @@ documents — sketches name the envelope wrapper keys only.
 * `eval issue show`
 * `eval opik config show`
 * `eval opik doctor`
+* `eval opik verify`
 * `eval promote`
 * `eval recompute-scores`
 * `eval replay`
@@ -379,6 +382,14 @@ documents — sketches name the envelope wrapper keys only.
   * checks[]: {check_id, status: pass|warn|fail, severity, message, metric_id?, hint?}
   * scores[]: ScoreResultV1 rows (catalog-aligned phantom metrics)
 * **Notes:** Secret-safe Opik/export/queue doctor. Same checks[]/scores[] contract as eval doctor; suite_id may be null.
+
+#### `eval opik verify`
+
+* **Required keys:** `authority`, `create_missing`, `doctor_authority`, `exit_code`, `notes`, `ok`, `product_accept_blocked`, `remote`, `rows`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * rows[]: {check_id, status: pass|warn|fail|skip, message, hint?}
+* **Notes:** Optional online project/FD verification. Default offline skip. `--remote` enables advisory checks; `--create-missing` requires `--remote`. Never doctor/CI/product-accept authority. Network failure is warning-only (exit 0).
 
 #### `eval promote`
 

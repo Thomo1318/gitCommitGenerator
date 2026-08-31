@@ -1,0 +1,39 @@
+# git-cg eval opik verify
+
+> **Usage:** `git-cg eval opik verify [OPTIONS]`  
+> **Kind:** `command` · **Status:** optional / advisory
+
+Optional online Opik project and Feedback Definition verification.
+
+## Authority boundary
+
+* Advisory only (`authority=advisory_non_sot`).
+* Does not change `eval opik doctor` exit codes or green rollup.
+* Does not feed promote, gates, CI merge, or product accept.
+* Network and auth failure are warning-only (exit 0).
+* Project creation requires `--remote --create-missing`.
+* Local project pins and `config/feedback_definitions.json` remain vocabulary/source of truth.
+
+## Help
+
+```text
+Usage: git-cg eval opik verify [OPTIONS]
+
+ Optional online Opik project/FD verification (advisory).
+
+ Disabled by default. Never a CI/product-accept gate. Network failure is
+ warning-only. Doctor remains the offline authority surface.
+
+╭─ Options ──────────────────────────────────────────────────────────╮
+│ --remote            Enable online verification (default: skip).   │
+│ --create-missing    Create missing remote projects (needs --remote)│
+│ --json              Machine-readable JSON envelope.               │
+│ --detail            Show detailed help text and exit.             │
+│ --help              Show this message and exit.                   │
+╰────────────────────────────────────────────────────────────────────╯
+```
+
+## See also
+
+* [`git-cg eval opik doctor`](doctor.md) — offline authority surface
+* [Operator API map](../../../eval/operator_api_map.md)

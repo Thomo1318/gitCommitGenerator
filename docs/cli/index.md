@@ -89,6 +89,7 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 * [`git-cg eval materialize-core-goldens`](eval/materialize-core-goldens.md)
 * [`git-cg eval opik config show`](eval/opik/config/show.md)
 * [`git-cg eval opik doctor`](eval/opik/doctor.md)
+* [`git-cg eval opik verify`](eval/opik/verify.md)
 * [`git-cg eval promote`](eval/promote.md)
 * [`git-cg eval recompute-scores`](eval/recompute-scores.md)
 * [`git-cg eval replay`](eval/replay.md)
@@ -147,6 +148,7 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
   * [`git-cg eval opik config`](eval/opik/config.md) — Inspect Opik/mirror config without exposing secrets.
   * [`git-cg eval opik config show`](eval/opik/config/show.md) — Show resolved Opik/mirror config without secrets.
   * [`git-cg eval opik doctor`](eval/opik/doctor.md) — Check Opik/export health without exposing secrets.
+  * [`git-cg eval opik verify`](eval/opik/verify.md) — Optional online Opik project/FD verification (advisory).
 * **`git-cg eval promote`**
   * [`git-cg eval promote`](eval/promote.md) — Promote a scrubbed candidate with contamination checks.
 * **`git-cg eval recompute-scores`**
