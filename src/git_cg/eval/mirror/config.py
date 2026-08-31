@@ -263,7 +263,7 @@ def _parse_flush_timeout(raw: str | None) -> int:
         return DEFAULT_FLUSH_TIMEOUT_MS
     try:
         value = int(str(raw).strip())
-    except TypeError, ValueError:
+    except (TypeError, ValueError):  # fmt: skip
         return DEFAULT_FLUSH_TIMEOUT_MS
     if value < 1:
         return DEFAULT_FLUSH_TIMEOUT_MS

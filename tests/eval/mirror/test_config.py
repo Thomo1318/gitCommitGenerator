@@ -240,6 +240,29 @@ def test_flush_timeout_invalid_fails_closed() -> None:
     )
 
 
+def test_flush_timeout_except_clause_is_parenthesized() -> None:
+    """R-13: lock parenthesized except text; ruff py314 otherwise emits PEP 758 bare form."""
+    import ast
+    import re
+    from pathlib import Path
+
+    src_path = Path(__file__).resolve().parents[3] / "src/git_cg/eval/mirror/config.py"
+    source = src_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_parse_flush_timeout")
+    handlers = [n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler)]
+    assert handlers, "_parse_flush_timeout must have an except handler"
+    handler = handlers[0]
+    # Both PEP 758 bare and parenthesized forms compile to ast.Tuple; lock source text.
+    assert isinstance(handler.type, ast.Tuple), "expected multi-exception handler"
+    names = {elt.id for elt in handler.type.elts if isinstance(elt, ast.Name)}
+    assert names == {"TypeError", "ValueError"}
+    assert re.search(
+        r"except\s*\(\s*TypeError\s*,\s*ValueError\s*\)\s*:",
+        source,
+    ), "expected parenthesized except (TypeError, ValueError): in source (use # fmt: skip under ruff py314)"
+
+
 def test_record_validates_against_schema() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "strict_mirror", "GIT_CG_OPIK_PROJECT_EVAL": "p"})
     assert cfg["schema_version"] == "git_cg_opik_config_v1"
