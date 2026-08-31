@@ -946,11 +946,11 @@ S7 adds the human/interaction loop on the S6 operator spine:
 ### Proof recipe (AC-13)
 
 ```bash
-just eval-s7-proof
+just eval-package-coverage
 just docstrings-patch
 ```
 
-`just eval-s7-proof` clears global cov addopts and enforces package-scoped `--cov=src/git_cg/eval --cov-fail-under=80` over full `tests/eval`.
+`just eval-package-coverage` clears global cov addopts and enforces package-scoped `--cov=src/git_cg/eval --cov-fail-under=80` over full `tests/eval`.
 
 ### S7 vs S8 boundary
 

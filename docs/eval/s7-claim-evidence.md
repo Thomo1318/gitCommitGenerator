@@ -12,7 +12,7 @@
 > **Proof spine (offline):**
 >
 > ```bash
-> just eval-s7-proof
+> just eval-package-coverage
 > # equivalent:
 > uv run pytest tests/eval -o addopts="" \
 >   --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
@@ -36,7 +36,7 @@ Each claim names at least one primary offline evidence anchor. Secondary nodes a
 | Deliverable | Owner | Status |
 |:---|:---|:---|
 | Every S7-A…G row names ≥1 real test module/node | S7-0…S7-7 + S7-8 packaging | **Yes** (tables below) |
-| `just eval-s7-proof` package-scoped cov floor (AC-13) | `justfile` `eval-s7-proof` | **landed** |
+| `just eval-package-coverage` package-scoped cov floor (AC-13) | `justfile` `eval-package-coverage` | **landed** |
 | Docstring patch gate | `just docstrings-patch` | **landed** |
 | FIND-069/070/071/073 regression nodes | S7-7 | **landed** |
 | FIND-072 label-only decision recorded (not coded fail-closed) | `promote.py` `REDACTION_PROFILES` comment | **landed** |
@@ -131,7 +131,7 @@ four-lane pin doctor (offline)
 | **S7-5 live** | Live queue projection is opt-in, write-only, fail-open; never read back | `tests/eval/mirror/test_queue_projector.py`; `src/git_cg/eval/mirror/queue_projector.py` | landed (optional) |
 | **Doctor matrix** | Exit-code x credential matrix documented + tested (offline authority unchanged) | `tests/eval/test_opik_doctor_exit_matrix.py`; `OPIK_DOCTOR_EXIT_MATRIX` | landed (optional) |
 | **FD migration** | Additive-only v1 policy; unknown schema_version fails closed | `tests/eval/test_feedback_definitions.py::test_unknown_schema_version_fails_closed`; `MIGRATION_POLICY` | landed (optional) |
-| **Per-file coverage** | Per-file ≥80% gate via `just eval-s7-coverage-files` (JSON + `tools/check_per_file_coverage.py`) | `justfile` recipe `eval-s7-coverage-files`; `tools/check_per_file_coverage.py` | landed (optional) |
+| **Per-file coverage** | Per-file ≥80% gate via `just eval-per-file-coverage` (JSON + `tools/check_per_file_coverage.py`) | `justfile` recipe `eval-per-file-coverage`; `tools/check_per_file_coverage.py` | landed (optional) |
 | **R-13 syntax** | `except (TypeError, ValueError)` normalised under pinned 3.14 + AST lock test | `src/git_cg/eval/mirror/config.py`; `tests/eval/mirror/test_config.py` | landed (optional) |
 | **Lab issue** | `.eval` issue `issue-2f5a73be6a0f81dd` restored to `suppressed` | local diagnose transition | landed (optional) |
 
@@ -151,7 +151,7 @@ Structural guard: `tests/eval/test_no_docs_platform_surface.py::test_no_s8_docs_
 
 ```text
 S7 close evidence: docs/eval/s7-claim-evidence.md
-Proof: just eval-s7-proof && just docstrings-patch
+Proof: just eval-package-coverage && just docstrings-patch
 Claims: S7-A…G each name offline test nodes (composition-aware)
 Authority: local review_queue SoT; human advisory; Lane A sole accept/CI/golden SoT
 Secrets: FIND-069/073 scrub + mask-to-empty; FIND-072 label-only recorded

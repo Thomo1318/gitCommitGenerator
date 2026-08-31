@@ -150,22 +150,22 @@ eval-s6-proof:
       tests/eval/mirror/test_train.py \
       -q --no-cov
 
-# S7 (AC-13/R-11): package-scoped eval coverage floor. `-o addopts=""` clears the
-# global `--cov=src/git_cg --cov=scripts` union from pyproject.toml:89 so the floor
-# measures only src/git_cg/eval. Floor 80 anchored to the measured S7-0 baseline
-# (90.68%, census comment on #254). Local/maintainer proof — not wired into CI here.
-eval-s7-proof:
+# Package-scoped eval coverage floor (S7 AC-13). `-o addopts=""` clears the
+# global `--cov=src/git_cg --cov=scripts` union from pyproject.toml so the floor
+# measures only src/git_cg/eval. Floor 80 matches the measured baseline on #254.
+# Maintainer gate — not wired into CI here.
+eval-package-coverage:
     uv run pytest tests/eval -o addopts="" \
       --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
       --cov-fail-under=80 -q
 
-# S7 NTH: per-file coverage gate for interaction-owned modules (≥80% each).
-# pytest-cov --cov-fail-under is aggregate-only, so JSON + tools/check_per_file_coverage.py
-# enforce the threshold per file. Package-scoped eval-s7-proof remains the primary floor.
-eval-s7-coverage-files:
-    @echo "📊 S7 per-file coverage gate (≥80% each owned file)"
+# Per-file coverage gate for interaction-owned eval modules (≥80% each).
+# pytest-cov --cov-fail-under is aggregate-only; JSON + tools/check_per_file_coverage.py
+# enforce the threshold per file. eval-package-coverage remains the primary floor.
+eval-per-file-coverage:
+    @echo "📊 per-file coverage gate (≥80% each owned eval module)"
     @mkdir -p .eval
-    @rm -f .eval/s7_per_file_coverage.json
+    @rm -f .eval/per_file_coverage.json
     uv run pytest tests/eval -o addopts="" \
       --cov=git_cg.eval.review_queue \
       --cov=git_cg.eval.promote \
@@ -173,10 +173,10 @@ eval-s7-coverage-files:
       --cov=git_cg.eval.feedback_definitions \
       --cov-branch \
       --cov-report=term-missing \
-      --cov-report=json:.eval/s7_per_file_coverage.json \
+      --cov-report=json:.eval/per_file_coverage.json \
       -q
     uv run python tools/check_per_file_coverage.py \
-      --json .eval/s7_per_file_coverage.json \
+      --json .eval/per_file_coverage.json \
       --fail-under 80 \
       --file src/git_cg/eval/review_queue.py \
       --file src/git_cg/eval/promote.py \
