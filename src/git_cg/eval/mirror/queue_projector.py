@@ -149,18 +149,54 @@ def _load_local_items(repo: Path | None, *, review_ids: list[str] | None) -> lis
     return items
 
 
+def _scalar_meta(value: Any, *, max_len: int = 128) -> str | None:
+    """Coerce projection metadata to a bounded scalar string (or None)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        text = "true" if value else "false"
+    elif isinstance(value, (int, float)):
+        text = str(value)
+    elif isinstance(value, str):
+        text = value.strip()
+    else:
+        return None
+    if not text:
+        return None
+    if len(text) > max_len:
+        text = text[:max_len]
+    return text
+
+
 def _projection_payload(item: Mapping[str, Any]) -> dict[str, Any]:
-    """Metadata-only projection (no raw diffs or free-text dumps)."""
+    """Metadata-only projection (no raw diffs or free-text dumps).
+
+    Accepts either a raw review-queue row or an already-normalised projection
+    dict. Nested ``review`` / ``adjudication`` objects are preferred when
+    present; otherwise top-level keys are reused so callers can pass the
+    payload through once without double-normalising away fields.
+    """
     review = item.get("review") if isinstance(item.get("review"), dict) else {}
     adjudication = item.get("adjudication") if isinstance(item.get("adjudication"), dict) else {}
+
+    def _pick(*keys: str) -> Any:
+        for key in keys:
+            if key in review and review.get(key) is not None:
+                return review.get(key)
+            if key in adjudication and adjudication.get(key) is not None:
+                return adjudication.get(key)
+            if key in item and item.get(key) is not None:
+                return item.get(key)
+        return None
+
     return {
-        "review_id": item.get("review_id") or item.get("id"),
-        "status": item.get("status"),
-        "case_id": review.get("case_id"),
-        "bundle_id": review.get("bundle_id"),
-        "authority": review.get("authority", "advisory"),
-        "outcome": adjudication.get("outcome"),
-        "updated_at": item.get("updated_at") or item.get("created_at"),
+        "review_id": _scalar_meta(_pick("review_id", "id"), max_len=128),
+        "status": _scalar_meta(_pick("status"), max_len=64),
+        "case_id": _scalar_meta(_pick("case_id"), max_len=128),
+        "bundle_id": _scalar_meta(_pick("bundle_id"), max_len=128),
+        "authority": _scalar_meta(_pick("authority"), max_len=64) or "advisory",
+        "outcome": _scalar_meta(_pick("outcome"), max_len=64),
+        "updated_at": _scalar_meta(_pick("updated_at", "created_at"), max_len=64),
         "mirror_authority": QUEUE_MIRROR_AUTHORITY,
         "read_back": False,
     }
@@ -171,6 +207,15 @@ def _default_live_projector_factory() -> LiveQueueProjector:
     from git_cg.eval.mirror.secrets import resolve_opik_secrets
 
     secrets = resolve_opik_secrets(require_key=True)
+    base = (secrets.base_url or "").strip()
+    # Refuse cleartext transport when an API key is configured (CWE-319).
+    if secrets.api_key and base:
+        lowered = base.lower()
+        if lowered.startswith("http://") and "localhost" not in lowered and "127.0.0.1" not in lowered:
+            raise RuntimeError(
+                "refusing non-HTTPS Opik endpoint while API key is configured "
+                f"(base_url={base!r}); use HTTPS or a local http://localhost endpoint"
+            )
 
     import opik  # lazy; allowlisted import site
 
@@ -184,7 +229,33 @@ def _default_live_projector_factory() -> LiveQueueProjector:
             )
             projected = 0
             for item in items:
-                payload = _projection_payload(item)
+                # Callers already pass normalised payloads; copy through as-is.
+                # Re-run _projection_payload only for raw review rows.
+                if isinstance(item, Mapping) and (
+                    "mirror_authority" in item or ("review" not in item and "review_id" in item)
+                ):
+                    payload = dict(item)
+                else:
+                    payload = _projection_payload(item)
+                # Final sink-side bound/sanitize regardless of path.
+                payload = {
+                    k: (_scalar_meta(v) if k != "read_back" else bool(v))
+                    for k, v in payload.items()
+                    if k
+                    in {
+                        "review_id",
+                        "status",
+                        "case_id",
+                        "bundle_id",
+                        "authority",
+                        "outcome",
+                        "updated_at",
+                        "mirror_authority",
+                        "read_back",
+                    }
+                }
+                payload["mirror_authority"] = QUEUE_MIRROR_AUTHORITY
+                payload["read_back"] = False
                 try:
                     client.trace(
                         name=f"review-queue:{payload.get('review_id')}",

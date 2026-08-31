@@ -281,7 +281,7 @@ def test_export_retry_missing_id_reports_not_found(tmp_path: Path, monkeypatch: 
     result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_missing"])
     assert result.exit_code == 0, result.output
     assert "id not found: q_missing" in result.output
-    assert "unreadable 1" in result.output
+    assert "unreadable 0" in result.output
 
 
 def test_export_retry_missing_id_json_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -295,9 +295,32 @@ def test_export_retry_missing_id_json_warning(tmp_path: Path, monkeypatch: pytes
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["data"]["not_found"] == ["q_missing"]
-    assert payload["data"]["unreadable"] == 1
+    assert payload["data"]["unreadable"] == 0
     codes = {w.get("code") for w in payload.get("warnings", [])}
     assert "EVAL_EXPORT_ID_NOT_FOUND" in codes
+
+
+def test_export_retry_corrupt_id_is_unreadable_not_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Existing corrupt queue rows must not be reported as not_found."""
+    import json
+
+    from git_cg.eval.mirror.queue import export_queue_dir
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    qdir = export_queue_dir(tmp_path)
+    qdir.mkdir(parents=True, exist_ok=True)
+    (qdir / "q_corrupt.json").write_text("{", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_corrupt", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["data"].get("not_found") in (None, [])
+    assert payload["data"]["unreadable"] == 1
 
 
 def test_export_retry_failed_rows(tmp_path: Path) -> None:

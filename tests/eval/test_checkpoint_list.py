@@ -155,3 +155,36 @@ def test_checkpoint_list_skips_corrupt(tmp_path: Path) -> None:
     env = json.loads(result.output)
     assert env["data"]["checkpoint_count"] == 1
     assert env["data"]["checkpoints"][0]["checkpoint_id"] == "ckpt-good"
+
+
+def test_inventory_skips_invalid_checkpoint_filenames(tmp_path: Path) -> None:
+    """Corrupt/path-unsafe checkpoint filenames must be skipped, not abort inventory."""
+    from git_cg.eval.checkpoint_store import checkpoints_dir
+
+    (tmp_path / ".git").mkdir()
+    suite = "suite-bad"
+    snapshot = "snap-bad"
+    live = compute_compat_hash(
+        schema_pack_pin=schema_pack_pin(),
+        metric_catalog_pin=metric_catalog_pin(),
+        suite_id=suite,
+        snapshot_hash=snapshot,
+    )
+    good = build_checkpoint_record(
+        checkpoint_id="ckpt-good",
+        experiment_id="exp-good",
+        compat_hash=live,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id=snapshot,
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+    )
+    write_checkpoint(tmp_path, good)
+    # Path.glob("*.json") can surface stems that fail _require_safe_id.
+    bad = checkpoints_dir(tmp_path) / "bad name.json"
+    bad.write_text("{}", encoding="utf-8")
+    rows = list_checkpoint_inventory(tmp_path)
+    assert [r.checkpoint_id for r in rows] == ["ckpt-good"]

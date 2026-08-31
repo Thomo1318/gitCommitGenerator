@@ -515,9 +515,29 @@ cmd "eval" {
     // Export & train
     cmd "amend-brief" {
         help "Build an amend brief from landed evaluation data."
+        arg "<SCORE_RUN_ID>" {
+            help "Score-run id (rs_) to build the brief from."
+        }
+        flag "--session-thread-id" {
+            help "Optional session id (sess_) to attach to the brief."
+            arg "<ID>"
+        }
         flag "--case" {
             help "Optional case id scope."
             arg "<ID>"
+        }
+        flag "--last" {
+            help "How many recent dogfood/Lane C attachments to include (default 3)."
+            arg "<N>"
+        }
+        flag "--doctor" {
+            help "Include a doctor summary section in the brief."
+        }
+        flag "--write" {
+            help "Write the brief under .eval/amend_briefs/ (default: write)."
+        }
+        flag "--no-write" {
+            help "Skip writing the brief under .eval/amend_briefs/."
         }
         flag "--json" {
             help "Print machine-readable JSON instead of plain text."

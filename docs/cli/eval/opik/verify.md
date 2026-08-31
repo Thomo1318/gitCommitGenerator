@@ -7,6 +7,9 @@ Optional online Opik project/FD verification (advisory).
 
 ## Authority boundary
 
+* Does **not** re-rank product intents or rewrite SOP authority.
+* Does **not** sole-promote gold as CI authority.
+* Offline-first by default; transport-bearing surfaces document their fail-open/fail-closed law in help.
 * Advisory only (`authority=advisory_non_sot`).
 * Does not change `eval opik doctor` exit codes or green rollup.
 * Does not feed promote, gates, CI merge, or product accept.

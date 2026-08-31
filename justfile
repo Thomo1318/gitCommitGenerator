@@ -109,7 +109,7 @@ uninstall:
 
 # Print reproducible S0 schema pack + metric catalog pins (offline)
 eval-schema-hash:
-    uv run python -c "from git_cg.eval import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
+    uv run python -c "from git_cg.eval.pins import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
 
 # Materialize checked-in eval golden bundles + snapshots (offline)
 eval-materialize:
@@ -164,6 +164,7 @@ eval-s7-proof:
 # enforce the threshold per file. Package-scoped eval-s7-proof remains the primary floor.
 eval-s7-coverage-files:
     @echo "📊 S7 per-file coverage gate (≥80% each owned file)"
+    @mkdir -p .eval
     @rm -f .eval/s7_per_file_coverage.json
     uv run pytest tests/eval -o addopts="" \
       --cov=git_cg.eval.review_queue \

@@ -392,22 +392,37 @@ def run_opik_verify(
                 exit_code=0,
             )
 
+    list_ok = True
     try:
         remote_projects = {str(p).strip() for p in active_client.list_projects() if str(p).strip()}
     except Exception as exc:
+        list_ok = False
         msg = scrub_export_note(f"project list failed: {exc}")
         rows.append(
             OpikVerifyRow(
                 "opik.verify.projects.list",
                 "warn",
                 msg,
-                hint="Remote listing failed; local pins remain authoritative.",
+                hint=(
+                    "Remote listing failed; local pins remain authoritative. "
+                    "Creation skipped because absence was not established."
+                ),
             )
         )
         remote_projects = set()
         notes.append(msg)
 
     for lane, name in lanes.items():
+        if not list_ok:
+            rows.append(
+                OpikVerifyRow(
+                    f"opik.verify.project.{lane}",
+                    "warn",
+                    f"lane {lane} project unverified (list failed): {name}",
+                    hint="Re-run when Opik listing is reachable; --create-missing is ignored after list failure.",
+                )
+            )
+            continue
         if name in remote_projects:
             rows.append(
                 OpikVerifyRow(

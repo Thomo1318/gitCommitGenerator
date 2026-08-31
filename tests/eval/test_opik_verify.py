@@ -106,6 +106,21 @@ def test_verify_create_missing_opt_in() -> None:
     assert any(r.check_id == "opik.verify.project.live" and r.status == "pass" for r in report.rows)
 
 
+def test_verify_list_failure_skips_create_missing() -> None:
+    client = _FakeClient(fail_list_projects=RuntimeError("dns boom"))
+    report = run_opik_verify(
+        remote=True,
+        create_missing=True,
+        config={"mode": "mirror", "projects": {"eval": "git-cg-eval", "live": "gitCommitGenerator"}},
+        client=client,
+        local_feedback_definitions={"schema_version": "feedback_definition_v1", "definitions": {}},
+    )
+    assert client.created == []
+    assert report.ok is True
+    assert report.exit_code == 0
+    assert any("unverified (list failed)" in r.message for r in report.rows)
+
+
 def test_verify_network_failure_is_warning_only() -> None:
     client = _FakeClient(fail_list_projects=RuntimeError("dns boom super-secret-token"))
     report = run_opik_verify(

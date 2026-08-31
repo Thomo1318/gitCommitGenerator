@@ -310,16 +310,15 @@ def generate() -> None:
             "## Authority boundary",
             "",
         ]
+        body.extend(
+            [
+                "* Does **not** re-rank product intents or rewrite SOP authority.",
+                "* Does **not** sole-promote gold as CI authority.",
+                "* Offline-first by default; transport-bearing surfaces document their fail-open/fail-closed law in help.",
+            ]
+        )
         if node.path in AUTHORITY_BOUNDARY_EXTRA:
             body.extend(AUTHORITY_BOUNDARY_EXTRA[node.path])
-        else:
-            body.extend(
-                [
-                    "* Does **not** re-rank product intents or rewrite SOP authority.",
-                    "* Does **not** sole-promote gold as CI authority.",
-                    "* Offline-first by default; transport-bearing surfaces document their fail-open/fail-closed law in help.",
-                ]
-            )
         body += [
             "",
             "## Help",

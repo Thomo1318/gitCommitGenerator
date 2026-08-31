@@ -409,8 +409,8 @@ def list_checkpoint_inventory(
     index_by_id = {row.checkpoint_id: row for row in list_index_rows(repo_root, suite_id=suite_id)}
     rows: list[CheckpointInventoryRow] = []
     for cid in list_checkpoint_ids(repo_root):
-        path = checkpoint_file(repo_root, cid)
         try:
+            path = checkpoint_file(repo_root, cid)
             record = load_checkpoint(repo_root, cid)
         except CheckpointStoreError:
             continue

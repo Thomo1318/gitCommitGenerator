@@ -728,15 +728,41 @@ Print machine-readable JSON instead of plain text.
 
 ## `git-cg eval amend-brief`
 
-- **Usage**: `git-cg eval amend-brief [FLAGS]`
+- **Usage**: `git-cg eval amend-brief [FLAGS] <SCORE_RUN_ID>`
 
 Build an amend brief from landed evaluation data.
 
+### Arguments
+
+#### `<SCORE_RUN_ID>`
+
+Score-run id (rs_) to build the brief from.
+
 ### Flags
+
+#### `--session-thread-id <ID>`
+
+Optional session id (sess_) to attach to the brief.
 
 #### `--case <ID>`
 
 Optional case id scope.
+
+#### `--last <N>`
+
+How many recent dogfood/Lane C attachments to include (default 3).
+
+#### `--doctor`
+
+Include a doctor summary section in the brief.
+
+#### `--write`
+
+Write the brief under .eval/amend_briefs/ (default: write).
+
+#### `--no-write`
+
+Skip writing the brief under .eval/amend_briefs/.
 
 #### `--json`
 

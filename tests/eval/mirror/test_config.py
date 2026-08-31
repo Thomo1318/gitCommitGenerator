@@ -558,6 +558,16 @@ class TestLaneProvenance:
         assert pins["eval"].origin_env_var == "OPIK_PROJECT_NAME"
         assert pins["ci"].source is LaneSource.MISSING
 
+    def test_whitespace_eval_does_not_fall_through_to_legacy(self, monkeypatch) -> None:
+        """Whitespace-only EVAL matches _resolve_projects or-before-strip fail-closed."""
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "   ")
+        monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+        pins = resolve_lane_provenance()
+        assert pins["eval"].source is LaneSource.MISSING
+        assert pins["eval"].value is None
+        assert all(p.source is LaneSource.MISSING for p in pins.values())
+
     def test_explicit_mapping_does_not_touch_os_environ(self, monkeypatch) -> None:
         """Explicit source mapping is used verbatim (pure, testable)."""
         _cq.scrub_opik_project_lanes(monkeypatch)

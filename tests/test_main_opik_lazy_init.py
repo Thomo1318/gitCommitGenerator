@@ -108,3 +108,24 @@ def test_track_openai_returns_bare_client_when_mode_off(monkeypatch: pytest.Monk
     sentinel = object()
     assert main.track_openai(sentinel) is sentinel
     assert main._ensure_opik() is False
+
+
+def test_unknown_mode_token_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    import git_cg.main as main
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "not-a-real-mode")
+    monkeypatch.setattr(main, "_opik_module", None)
+    monkeypatch.setattr(main, "_opik_context_module", None)
+    monkeypatch.setattr(main, "_track_openai_function", None)
+    monkeypatch.setattr(main, "_opik_init_attempted", False)
+
+    assert main._opik_mode_enabled() is False
+    assert main._ensure_opik() is False
+
+
+def test_recognised_active_modes_enable(monkeypatch: pytest.MonkeyPatch) -> None:
+    import git_cg.main as main
+
+    for token in ("local", "local_only", "mirror", "strict_mirror", "dogfood"):
+        monkeypatch.setenv("GIT_CG_OPIK_MODE", token)
+        assert main._opik_mode_enabled() is True

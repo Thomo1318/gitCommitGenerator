@@ -35,7 +35,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe`
+  * `schema_pack_v0@db5bdcf23b36934f84c25b82248186415c25c41662aa48c92f7b34e0aafaef15`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -735,7 +735,7 @@ git-cg eval explain
 > **Claim → test matrix:** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
 > **Live CLI map:** [`operator_api_map.md`](./operator_api_map.md) (generate/check via `just eval-api-map-check`)  
 > **Plan SSOT:** `docs/plans/opik-evaluation-harness.md` @ `0.9.6-s6-slice0-reconciliation`  
-> **Pins (local SoT):** `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
+> **Pins (local SoT):** `schema_pack_v0@db5bdcf23b36934f84c25b82248186415c25c41662aa48c92f7b34e0aafaef15` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
 
 Slice 9 is **documentation / CI recipe / claim-evidence packaging** for the S6 operator surface already landed in Slices 0–8. It does **not** add score authority, REST/OpenAPI, ADR-0011 rewrite, or Zensical durable API pages (those stay S7 / deferred).
 
@@ -908,7 +908,7 @@ Maintainer-only async dogfood latency evidence: `docs/eval/evidence/s6-g02b-*` v
 | **S4** mirror + export queue + train projection | Nested export ops; train-export scrub; secret-safe config/doctor | Block product accept on export; invent second score SoT |
 | **S5** Lane C′ advisory | Dogfood shadow sidecar; eligibility≠credentials; FIND-007 narrow ban | Elevate GEval to CI/product gate; gold-vision default |
 | **S6** operator UX | CLI-first doctor/debug/review/train/dogfood/sessions surface | General SDK claim; silent `__all__` expansion |
-| **S7** (deferred) | — | ADR-0011 full rewrite, Zensical API site, REST/OpenAPI/autodoc scope |
+| **S7** (implemented on #254) | Interaction UX, FD map, HITL bind, pin doctor, scrub fixes | ADR-0011 full rewrite, Zensical API site, REST/OpenAPI/autodoc scope (those remain **S8**) |
 | **S8 / #235** (deferred) | — | Unallocated hygiene unless explicitly reopened with IDs |
 
 ### Script absorption (reminder)

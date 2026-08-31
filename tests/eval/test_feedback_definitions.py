@@ -135,3 +135,15 @@ def test_supported_schema_version_accepts_v1() -> None:
     from git_cg.eval.feedback_definitions import assert_supported_schema_version
 
     assert_supported_schema_version("feedback_definition_v1")
+
+
+def test_partial_present_map_fails_closed(tmp_path) -> None:
+    """A present map must include all six Tier-1 definition IDs."""
+    bad = tmp_path / "partial.json"
+    bad.write_text(
+        '{"schema_version": "feedback_definition_v1",'
+        ' "definitions": {"user_acceptance": {"type": "numerical", "emitter": "main"}}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(FeedbackDefinitionError):
+        load_feedback_definitions(path=bad)

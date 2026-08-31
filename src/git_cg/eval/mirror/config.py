@@ -293,16 +293,29 @@ def resolve_lane_provenance(source: Mapping[str, str] | None = None) -> dict[str
         "import": ENV_PROJECT_IMPORT,
     }
     live = _pin(ENV_PROJECT_LIVE)
-    eval_explicit = _pin(ENV_PROJECT_EVAL)
-    legacy = _pin(OPIK_ENV_PROJECT_NAME)
-    eval_p = eval_explicit or legacy
     ci = _pin(ENV_PROJECT_CI)
     import_p = _pin(ENV_PROJECT_IMPORT)
+
+    # Match ``_resolve_projects`` or-chain *before* strip so whitespace-only
+    # GIT_CG_OPIK_PROJECT_EVAL does not silently fall through to OPIK_PROJECT_NAME.
+    raw_eval = env.get(ENV_PROJECT_EVAL)
+    raw_legacy = env.get(OPIK_ENV_PROJECT_NAME)
+    eval_var_present = bool(raw_eval)  # truthy raw, including whitespace-only
+    if eval_var_present:
+        eval_p = str(raw_eval).strip() or None
+        eval_from_legacy = False
+    elif raw_legacy:
+        eval_p = str(raw_legacy).strip() or None
+        eval_from_legacy = bool(eval_p)
+    else:
+        eval_p = None
+        eval_from_legacy = False
+
     resolved = {"live": live, "eval": eval_p, "ci": ci, "import": import_p}
 
     # EVAL bootstrap: only EVAL (explicit or legacy fallback) populated.
     if eval_p and not any((live, ci, import_p)):
-        if eval_explicit:
+        if eval_var_present:
             kind, origin = LaneSource.BOOTSTRAP_EVAL, ENV_PROJECT_EVAL
         else:
             kind, origin = LaneSource.BOOTSTRAP_LEGACY, OPIK_ENV_PROJECT_NAME
@@ -315,7 +328,7 @@ def resolve_lane_provenance(source: Mapping[str, str] | None = None) -> dict[str
         value = resolved[lane]
         if value is None:
             pins[lane] = LanePin(lane, None, LaneSource.MISSING, env_var, None)
-        elif lane == "eval" and not eval_explicit and legacy:
+        elif lane == "eval" and eval_from_legacy:
             pins[lane] = LanePin(lane, value, LaneSource.LEGACY, env_var, OPIK_ENV_PROJECT_NAME)
         else:
             pins[lane] = LanePin(lane, value, LaneSource.EXPLICIT, env_var, env_var)

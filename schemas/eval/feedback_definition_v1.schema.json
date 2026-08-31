@@ -129,6 +129,14 @@
           "type": "object"
         }
       },
+      "required": [
+        "user_acceptance",
+        "ranking_override",
+        "contract_consistent",
+        "human.craft_rating",
+        "human.gold_dispute",
+        "human.regime_label"
+      ],
       "type": "object"
     },
     "notes": {
