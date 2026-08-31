@@ -150,7 +150,7 @@ agents.lock
 .agents/.gitignore
 promptfoo_*.json
 docs/phase_artifacts/
-opik/
+/opik/
 
 # !.vscode/
 # Added by code-review-graph
