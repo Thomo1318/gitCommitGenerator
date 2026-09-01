@@ -35,7 +35,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@db5bdcf23b36934f84c25b82248186415c25c41662aa48c92f7b34e0aafaef15`
+  * `schema_pack_v0@0ca21168ac97568d6ef3623303f19f24ed755622d67536ace0ba45a9112872f0`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -729,13 +729,84 @@ git-cg eval explain
 `eval triage` composes doctor + failures + explain library engines. It is **not** score law and does not revive Opik `user_acceptance` threshold triage.
 
 
+## Checkpoint GC durability
+
+Layer-A checkpoints under `.eval/checkpoints/` are **authoritative**. The rebuildable
+index under `.eval/index/checkpoints/` is cache-only and never sole authority.
+
+Refs: #256.
+
+### Durable fields
+
+New writes persist optional durable fields on the **authoritative** payload:
+
+| Field | Law |
+|:---|:---|
+| `status` | Closed set: `running` · `failed` · `completed` (same vocabulary as the runtime `CheckpointStatus` literal) |
+| `started_at` | Canonical UTC second-precision timestamp with `Z` suffix (matches `utc_now_iso()`). Strict schema def `$defs/iso8601_utc_second`; the shared loose `$defs/iso8601` used by `last_progress_at` is **not** tightened |
+
+Builder (`build_checkpoint_record`) and writer (`write_checkpoint`) share one precedence rule:
+
+```text
+explicit keyword → existing record/payload value → default
+  status default: "running"
+  started_at default: utc_now_iso() (after trying last_progress_at normalization)
+```
+
+`write_checkpoint(..., status=None)` therefore **preserves** a loaded terminal
+status (for example `completed`) instead of silently downgrading to `running`.
+
+Explicit noncanonical `started_at` fails closed with `EVAL_CHECKPOINT_IO`.
+Fallback candidates (existing record / `last_progress_at`) normalize to the
+canonical form or are skipped; legacy reads/writes never break.
+
+### Authority-first list / inventory / prune
+
+`list_index_rows`, `list_checkpoint_inventory`, and `prune_checkpoints` share one
+single-pass resolution path:
+
+* readable authoritative payload wins for `status`, `started_at`, and `suite_id`
+  over missing **and** stale index metadata
+* missing index rows are reconstructed from the authoritative file
+* legacy payloads missing the new fields normalize **in memory only**
+  (`status` → `running`, `started_at` → canonicalized `last_progress_at`)
+* reads never rewrite authoritative legacy files or the index
+* corrupt authoritative + present index → index is last-known-good fallback
+* corrupt authoritative + no index → excluded from listing and **never pruned**
+* unknown durable `status` is corruption (diagnostic), not a silent skip
+
+Terminal (`completed` / `failed`) checkpoints whose index row was lost re-enter
+the normal `keep_last` candidate set after reconstruction. Unbounded
+`running` retention is unchanged here; bounded stale-running reclamation remains
+a separate opt-in path.
+
+Index-write failure after a successful authoritative write still raises
+`EVAL_CHECKPOINT_IO`, but the durable payload remains on disk and a later
+write/list repairs the index.
+
+### Migration note (schema-pack rotation / resume invalidation)
+
+Extending `evaluation_checkpoint_v1` rotates `schema_pack_pin`, which participates
+in the `compat_hash` preimage. **Every checkpoint written before this schema-pack
+rotation fails closed on resume** with `EVAL_COMPAT_HASH_MISMATCH`.
+
+* Do **not** migrate, backfill, or rewrite checkpoint `compat_hash` values.
+* Checkpoint bytes are preserved read-only.
+* Recover with the existing operator path from `recovery_hint()`:
+  * fresh `git-cg eval run` (`fresh_suite_run`), or
+  * `git-cg eval recompute-scores` over the retained evidence bundle.
+
+Historical archive pins (for example `schema_pack_v0@8616781f…` under
+`tests/fixtures/eval/bundles/204-archive/**`) and dated census artifacts are
+frozen snapshots and must not be rewritten.
+
 ## S6 — operator UX close-out (Slice 9 / #246)
 
 > **Issue:** [#246](https://github.com/Thomo1318/gitCommitGenerator/issues/246) · **Parent:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)  
 > **Claim → test matrix:** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
 > **Live CLI map:** [`operator_api_map.md`](./operator_api_map.md) (generate/check via `just eval-api-map-check`)  
 > **Plan SSOT:** `docs/plans/opik-evaluation-harness.md` @ `0.9.6-s6-slice0-reconciliation`  
-> **Pins (local SoT):** `schema_pack_v0@db5bdcf23b36934f84c25b82248186415c25c41662aa48c92f7b34e0aafaef15` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
+> **Pins (local SoT):** `schema_pack_v0@0ca21168ac97568d6ef3623303f19f24ed755622d67536ace0ba45a9112872f0` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
 
 Slice 9 is **documentation / CI recipe / claim-evidence packaging** for the S6 operator surface already landed in Slices 0–8. It does **not** add score authority, REST/OpenAPI, ADR-0011 rewrite, or Zensical durable API pages (those stay S7 / deferred).
 
