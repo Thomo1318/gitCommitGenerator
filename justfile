@@ -107,7 +107,8 @@ uninstall:
     @rm -f ~/.zfunc/_git-cg
     @echo "✅ git-cg uninstalled."
 
-# Print reproducible S0 schema pack + metric catalog pins (offline)
+# Print reproducible eval schema-pack + metric-catalog pins (offline).
+# Historical: S0 pin surface. Refs: eval pins module.
 eval-schema-hash:
     uv run python -c "from git_cg.eval.pins import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
 
@@ -119,7 +120,8 @@ eval-materialize:
 eval-fixture-index:
     uv run python -m git_cg.eval.corpus.index --write
 
-# Check docs/eval/operator_api_map.md matches live Typer tree (S6 Slice 2)
+# Check docs/eval/operator_api_map.md matches the live Typer command tree.
+# Refs: #246 (operator API map gate).
 eval-api-map-check:
     uv run python -m git_cg.eval.api_map --check
 
@@ -127,8 +129,10 @@ eval-api-map-check:
 gen-cli-docs:
     uv run python tools/gen_cli_docs.py
 
-# S6 offline proof spine (claim-matrix subset; no cov). Does not replace full CI pytest.
-eval-s6-proof:
+# Offline eval claim-matrix spine (subset of eval tests; no coverage gate).
+# Does not replace full CI pytest.
+# Refs: #246 claim matrix.
+eval-claim-matrix-spine:
     uv run pytest \
       tests/eval/test_api_map_help.py \
       tests/eval/test_checkpoint_store.py \
@@ -150,10 +154,11 @@ eval-s6-proof:
       tests/eval/mirror/test_train.py \
       -q --no-cov
 
-# Package-scoped eval coverage floor (S7 AC-13). `-o addopts=""` clears the
-# global `--cov=src/git_cg --cov=scripts` union from pyproject.toml so the floor
-# measures only src/git_cg/eval. Floor 80 matches the measured baseline on #254.
-# Maintainer gate — not wired into CI here.
+# Package-scoped coverage floor for src/git_cg/eval only.
+# `-o addopts=""` clears the global `--cov=src/git_cg --cov=scripts` union from
+# pyproject.toml so the floor is not diluted by non-eval packages.
+# Floor 80 matches the measured baseline on #254. Maintainer gate — not CI.
+# Refs: #254 (coverage acceptance).
 eval-package-coverage:
     uv run pytest tests/eval -o addopts="" \
       --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
@@ -183,8 +188,9 @@ eval-per-file-coverage:
       --file src/git_cg/eval/evidence_scrub.py \
       --file src/git_cg/eval/feedback_definitions.py
 
-# S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
+# Hyperfine bench of the real commit path with dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
+# Refs: #246 (dogfood async lane).
 dogfood-bench runs="20":
     @echo "🔬 dogfood-bench: hyperfine {{runs}} runs ×2 (async on/off) on real commit path"
     @command -v hyperfine >/dev/null || { echo "hyperfine not installed" >&2; exit 1; }

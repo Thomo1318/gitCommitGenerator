@@ -32,7 +32,7 @@ Dependencies: 21 runtime, 1 dev
 | eval-fixture-index | `just eval-fixture-index` |
 | eval-api-map-check | `just eval-api-map-check` |
 | gen-cli-docs | `just gen-cli-docs` |
-| eval-s6-proof | `just eval-s6-proof` |
+| eval-claim-matrix-spine | `just eval-claim-matrix-spine` |
 
 ## Scripts (package.json)
 
