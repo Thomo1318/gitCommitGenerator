@@ -89,6 +89,10 @@ from git_cg.eval.cli_output import (
 #   git-cg eval replay --detail
 #   git-cg eval promote --detail
 #   git-cg eval dogfood --detail
+#   git-cg eval lab --detail
+#   git-cg eval lab status --detail
+#   git-cg eval lab pins --detail
+#   git-cg eval lab run --detail
 #   git-cg eval config --detail
 #   git-cg eval export-status --detail
 #   git-cg eval export-retry --detail
@@ -290,7 +294,7 @@ eval_app = typer.Typer(
         "- Inspect: doctor, triage, failures, explain, compare, diagnose, checkpoint list\n"
         "- Review & sessions: advisory human review, local sessions/threads, diagnostic issues\n"
         "- Export & train: amend briefs, train export, Opik health/config, export queue\n"
-        "- Advanced: replay generation and governed promote\n"
+        "- Advanced: lab/Lane C advisory, replay generation, and governed promote\n"
         "- Deprecated: temporary aliases for nested Opik config and export paths\n"
         "\n"
         "Guarantees:\n"
@@ -556,6 +560,43 @@ export_app = typer.Typer(
     no_args_is_help=True,
 )
 
+lab_app = typer.Typer(
+    cls=BriefFullHelpGroup,
+    add_completion=False,
+    help=(
+        "Lab / Lane C advisory commands (offline, secret-safe).\n"
+        "\n"
+        "Surfaces eligibility, pin presentation, and gated Lane C runs without "
+        "product-accept or CI authority.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Nested under ``git-cg eval lab`` only — never a top-level ``git-cg lab``.\n"
+        "\n"
+        "Subcommands:\n"
+        "- status: eligibility + judge availability (no network)\n"
+        "- pins: schema_pack + metric_catalog pin presentation\n"
+        "- run: advisory Lane C runner (no product gate)\n"
+        "\n"
+        "Guarantees:\n"
+        "- advisory only; never CI / golden / product-accept authority\n"
+        "- status and pins stay offline and secret-safe\n"
+        "- no doctor / amend-brief / review-queue verbs on this group\n"
+        "- run delegates to existing lane_c.runner (no re-implementation)"
+    ),
+    short_help="Lab / Lane C advisory status, pins, and run.",
+    no_args_is_help=True,
+)
+
+
+@lab_app.callback()
+def lab_group_callback(
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Own the group ``--detail`` option; Typer group callback body is a no-op."""
+    return
+
+
 # Register groups before leaf Export/Advanced commands so panel order matches workflow.
 eval_app.add_typer(review_app, name="review", rich_help_panel="Review & sessions")
 eval_app.add_typer(session_app, name="session", rich_help_panel="Review & sessions")
@@ -565,6 +606,7 @@ eval_app.add_typer(checkpoint_app, name="checkpoint", rich_help_panel="Inspect")
 eval_app.add_typer(opik_app, name="opik", rich_help_panel="Export & train")
 opik_app.add_typer(opik_config_app, name="config")
 eval_app.add_typer(export_app, name="export", rich_help_panel="Export & train")
+eval_app.add_typer(lab_app, name="lab", rich_help_panel="Advanced")
 
 # --------------------------------------------------------------------------
 # Shared helpers
@@ -4511,3 +4553,187 @@ eval_app.command(
     deprecated=True,
     short_help="Alias of eval export drain.",
 )(_export_drain_alias)
+
+
+# --------------------------------------------------------------------------
+# Lab / Lane C advisory — nested under Advanced
+# --------------------------------------------------------------------------
+
+
+@lab_app.command(
+    "status",
+    cls=BriefFullHelpCommand,
+    short_help="Show lab eligibility and judge availability (offline).",
+)
+def lab_status_cmd(
+    deterministic_pass: bool = typer.Option(
+        True,
+        "--deterministic-pass/--no-deterministic-pass",
+        help="Whether the deterministic gate is considered passing for this probe.",
+    ),
+    allows_lane_c: bool = typer.Option(
+        True,
+        "--allows-lane-c/--no-allows-lane-c",
+        help="Suite opt-in for Lane C (default true for lab probes).",
+    ),
+    lab_override: bool = typer.Option(
+        False,
+        "--lab-override/--no-lab-override",
+        help="Diagnostic lab override when deterministic gate failed.",
+    ),
+    judge_model: str | None = typer.Option(
+        None,
+        "--judge-model",
+        help="Optional dated judge model pin (defaults to env when unset).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Show lab eligibility and judge availability without network I/O.
+
+    Advisory only. Never becomes product-accept or CI authority.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Probes authorization-only eligibility and credential-present availability.
+    Credential presence is boolean-only; raw keys are never echoed. Exit 0 on
+    successful probe (eligible or not). ``--json`` emits ``cli_output_envelope_v1``.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.lab import build_lab_status
+
+    data = build_lab_status(
+        deterministic_pass=deterministic_pass,
+        allows_lane_c=allows_lane_c,
+        lab_override=lab_override,
+        judge_model=judge_model,
+    )
+    if as_json:
+        emit_json_envelope(build_envelope("eval lab status", ok=True, data=data))
+    else:
+        elig = data["eligibility"]
+        avail = data["availability"]
+        emit_human_line(
+            "lab status: authority=advisory product_gate=false "
+            f"eligible={elig['eligible']} available={avail['available']} "
+            f"creds_present={avail['credentials_present']} "
+            f"reason={elig['reason']}"
+        )
+    raise typer.Exit(code=0)
+
+
+@lab_app.command(
+    "pins",
+    cls=BriefFullHelpCommand,
+    short_help="Show schema_pack and metric_catalog pins (offline).",
+)
+def lab_pins_cmd(
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Show frozen schema_pack and metric_catalog pins.
+
+    Offline and secret-safe.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Reuses ``pins.schema_pack_pin`` / ``pins.metric_catalog_pin``. Never contacts
+    the network and never prints secrets. ``--json`` emits the standard envelope.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.lab import build_lab_pins
+
+    data = build_lab_pins()
+    if as_json:
+        emit_json_envelope(build_envelope("eval lab pins", ok=True, data=data))
+    else:
+        emit_human_line(f"schema_pack_pin={data['schema_pack_pin']}")
+        emit_human_line(f"metric_catalog_pin={data['metric_catalog_pin']}")
+    raise typer.Exit(code=0)
+
+
+@lab_app.command(
+    "run",
+    cls=BriefFullHelpCommand,
+    short_help="Run advisory Lane C cohort (no product gate).",
+)
+def lab_run_cmd(
+    metric_id: list[str] | None = typer.Option(
+        None,
+        "--metric-id",
+        help="Metric id to include (repeatable). Empty list emits zero rows.",
+    ),
+    use_default_metrics: bool = typer.Option(
+        False,
+        "--use-default-metrics",
+        help="When no --metric-id is given, expand to default Lane C metrics.",
+    ),
+    deterministic_pass: bool = typer.Option(
+        True,
+        "--deterministic-pass/--no-deterministic-pass",
+        help="Whether the deterministic gate is considered passing for this run.",
+    ),
+    allows_lane_c: bool = typer.Option(
+        True,
+        "--allows-lane-c/--no-allows-lane-c",
+        help="Suite opt-in for Lane C (default true for lab runs).",
+    ),
+    lab_override: bool = typer.Option(
+        False,
+        "--lab-override/--no-lab-override",
+        help="Diagnostic lab override when deterministic gate failed.",
+    ),
+    judge_model: str | None = typer.Option(
+        None,
+        "--judge-model",
+        help="Optional dated judge model pin (defaults to env when unset).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Run the gated Lane C cohort in advisory-only mode.
+
+    Never product-accept, CI, golden, or promotion authority.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Delegates to ``run_lane_c``. Without an injectable live judge transport this
+    command stays honest (skip / not-invoked rows) and does not open network
+    sessions. Explicit empty ``--metric-id`` lists emit zero rows. Exit 0 on
+    completed advisory probe; envelope always stamps ``advisory_only=true`` and
+    ``product_gate=false``.
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.lab import run_lab_advisory
+
+    ids = None if metric_id is None else list(metric_id)
+
+    _result, data = run_lab_advisory(
+        ids,
+        deterministic_pass=deterministic_pass,
+        allows_lane_c=allows_lane_c,
+        lab_override=lab_override,
+        judge_model=judge_model,
+        use_default_metrics=use_default_metrics,
+    )
+    if as_json:
+        emit_json_envelope(build_envelope("eval lab run", ok=True, data=data))
+    else:
+        emit_human_line(
+            "lab run: authority=advisory product_gate=false "
+            f"invoked={data['invoked']} scored={data['scored_count']} "
+            f"rows={len(data['rows'])} eligible={data['eligibility']['eligible']}"
+        )
+    raise typer.Exit(code=0)

@@ -62,6 +62,10 @@ CANONICAL_COMMANDS: frozenset[str] = frozenset(
         # Landed corpus helpers remain public CLI.
         "eval materialize-core-goldens",
         "eval encode-fixture",
+        # Lab / Lane C advisory (nested under Advanced).
+        "eval lab status",
+        "eval lab pins",
+        "eval lab run",
     }
 )
 
@@ -201,6 +205,7 @@ def _status_for(path: str) -> tuple[str, str]:
         "eval checkpoint",
         "eval export",
         "eval issue",
+        "eval lab",
         "eval opik",
         "eval opik config",
         "eval review",
