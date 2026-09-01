@@ -62,6 +62,7 @@ __all__ = [
     "LayerAPathError",
     "RepoRootUnresolvedError",
     "acceptpath_bundles_dir",
+    "acceptpath_index_file",
     "amend_briefs_dir",
     "antipattern_vault_dir",
     "atomic_write_json",
@@ -224,6 +225,16 @@ def _contained(repo_root: Path, target: Path) -> Path:
 def acceptpath_bundles_dir(repo_root: Path) -> Path:
     """Return ``.eval/bundles/acceptpath/`` (contained; not created here)."""
     return _contained(repo_root, Path(*ACCEPTPATH_BUNDLES_DIRNAME))
+
+
+def acceptpath_index_file(repo_root: Path) -> Path:
+    """Return ``.eval/bundles/acceptpath/index.json`` (cache-only; contained).
+
+    The index is a rebuildable reuse-scan cache and is **never** sole authority.
+    Bundle JSON files under :func:`acceptpath_bundles_dir` remain the source of
+    truth (N19.3).
+    """
+    return _contained(repo_root, Path(*ACCEPTPATH_BUNDLES_DIRNAME) / "index.json")
 
 
 def sessions_dir(repo_root: Path) -> Path:

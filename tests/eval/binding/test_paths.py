@@ -499,3 +499,14 @@ def test_binding_package_lazy_public_api_still_resolves() -> None:
     assert callable(pkg.bind_unbound)
     assert callable(pkg.message_sha256_bytes)
     assert "BindInput" in dir(pkg)
+
+
+def test_acceptpath_index_file_is_contained(tmp_path: Path) -> None:
+    """acceptpath index.json is contained under the acceptpath bundles dir."""
+    index = binding_paths.acceptpath_index_file(tmp_path)
+    bundles = binding_paths.acceptpath_bundles_dir(tmp_path)
+    assert index == bundles / "index.json"
+    assert index.name == "index.json"
+    # Escape attempts still fail closed via _contained.
+    with pytest.raises(binding_paths.LayerAPathError):
+        binding_paths._contained(tmp_path, Path("..") / "index.json")
