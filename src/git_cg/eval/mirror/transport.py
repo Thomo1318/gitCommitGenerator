@@ -15,12 +15,18 @@ Every failure is classified into the closed ``export_*`` vocabulary
 HTTP status codes (P1-3), then exception shape, and never leaks secret
 material, URLs, headers, or bodies into the message.
 
-Bounded flush (P0-4 / FIND-022):
+Bounded flush (P0-4 / FIND-022; cooperative timeout only):
   * Config is always ``flush_timeout_ms``.
   * Installed ``opik==2.0.52`` accepts ``flush(timeout: Optional[int])`` in
     **seconds** and returns ``bool``.
   * Adapter converts with ``math.ceil(ms / 1000)`` and wraps an outer
-    monotonic deadline so short-lived hook processes cannot hang on exit.
+    monotonic deadline check around the blocking ``flush()`` call.
+  * Behaviour is **cooperative timeout only** — this is not hard preemption
+    and does not guarantee killing a hung SDK worker/thread.
+  * Post-call overrun (deadline exceeded) or ``flush() is False`` is classified
+    as ``export_network``; transport success is never claimed after overrun.
+  * F4 fail-open is preserved: mirror/export failures never set
+    ``product_accept_blocked=True``.
 """
 
 from __future__ import annotations
@@ -190,12 +196,16 @@ _classify = classify_export_error
 
 
 class OpikSdkTransport:
-    """Real transport via the Opik SDK (lazy import, bounded flush).
+    """Real transport via the Opik SDK (lazy import, cooperative bounded flush).
 
     The ``opik`` import happens inside :meth:`upload` so importing this module
     never pulls Opik into the offline/product path. The client is constructed
-    per-upload with an explicit flush timeout so a short-lived hook process
-    cannot hang on exit (FIND-022 / P0-4).
+    per-upload with an explicit flush timeout budget (FIND-022 / P0-4).
+
+    Timeout semantics are cooperative only: ``flush()`` remains a blocking SDK
+    call. An outer monotonic deadline classifies overrun as ``export_network``
+    after the call returns; this path does **not** hard-preempt or guarantee
+    hang kill. F4 fail-open is unchanged.
     """
 
     def upload(
@@ -207,10 +217,14 @@ class OpikSdkTransport:
         secrets: OpikRuntimeSecrets,
         timeout_ms: int,
     ) -> None:
-        """Send one batch via the Opik SDK and bounded-flush to ``timeout_ms``.
+        """Send one batch via the Opik SDK and cooperatively bound flush to ``timeout_ms``.
 
         Classifies SDK failures into closed export error classes. Missing
         ``opik`` package becomes ``export_validation`` (offline core unaffected).
+
+        Flush is a blocking SDK call with a seconds timeout plus a post-call
+        monotonic deadline check. Overrun is ``export_network``; this is not
+        hard preemption.
         """
         deadline = time.monotonic() + max(0.001, float(timeout_ms) / 1000.0)
         try:
@@ -383,11 +397,17 @@ class OpikSdkTransport:
 
     @staticmethod
     def _bounded_flush(client: Any, *, timeout_ms: int, deadline: float) -> None:
-        """Adapter for ``opik.Opik.flush(timeout=seconds) -> bool`` (P0-4).
+        """Cooperative adapter for ``opik.Opik.flush(timeout=seconds) -> bool`` (P0-4).
 
         * Converts ms → seconds via :func:`flush_timeout_seconds`.
-        * Honours an outer monotonic deadline (remaining seconds, ≥1 when work remains).
-        * ``flush() is False`` or hang past deadline ⇒ ``export_network`` (timeout class).
+        * Passes a seconds timeout into the blocking SDK ``flush()`` call.
+        * Honours an outer monotonic deadline for the remaining budget
+          (remaining seconds, ≥1 when work remains).
+        * After ``flush()`` returns, a post-call monotonic check classifies
+          overrun as ``export_network``.
+        * ``flush() is False`` also classifies as ``export_network``.
+        * This is **not** hard preemption / guaranteed hang kill.
+        * Never treats deadline overrun as transport success.
         """
         flush = getattr(client, "flush", None)
         if not callable(flush):

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
 from git_cg.eval.mirror.secrets import OpikRuntimeSecrets
 from git_cg.eval.mirror.transport import (
     EXPORT_ERROR_CLASSES,
@@ -548,3 +549,65 @@ class TestE5ImportIsolation:
 
         assert mirror is not None
         assert hasattr(mirror, "OpikSdkTransport")
+
+
+def test_no_false_transport_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deadline overrun must raise export_network, never soft-success."""
+    transport = OpikSdkTransport()
+
+    class FakeOpik:
+        def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+            pass
+
+        def trace(self, **kwargs):  # type: ignore[no-untyped-def]
+            return None
+
+        def flush(self, timeout: int | None = None) -> bool:
+            return True
+
+    fake_mod = type(sys)("opik")
+    fake_mod.Opik = FakeOpik
+    monkeypatch.setitem(sys.modules, "opik", fake_mod)
+
+    clock = {"t": 1000.0}
+
+    def fake_monotonic() -> float:
+        return clock["t"]
+
+    monkeypatch.setattr(time, "monotonic", fake_monotonic)
+
+    def slow_flush(self: object, timeout: int | None = None) -> bool:
+        clock["t"] += 10.0  # blow past outer deadline
+        return True
+
+    monkeypatch.setattr(FakeOpik, "flush", slow_flush)
+
+    secrets = OpikRuntimeSecrets(api_key="k", workspace="w", base_url="https://example.test")
+    with pytest.raises(ExportTransportError) as ei:
+        transport.upload(
+            project="p",
+            experiment_name="e",
+            payload={"items": [{"item_ref": "i", "payload": {"trace": {"input": {}, "output": {}}}}]},
+            secrets=secrets,
+            timeout_ms=1,
+        )
+    assert ei.value.error_class == "export_network"
+
+
+def test_product_accept_blocked_stays_false() -> None:
+    result = build_mirror_result(mode="mirror", attempted=1, failed=1, error_classes=["export_network"])
+    assert result.product_accept_blocked is False
+    assert result.to_dict()["product_accept_blocked"] is False
+    frozen = MirrorResult(mode="mirror", health=result.health, attempted=1, failed=1)
+    assert frozen.product_accept_blocked is False
+
+
+def test_lazy_import_isolation() -> None:
+    import inspect
+
+    import git_cg.eval.mirror.transport as transport_mod
+
+    src = inspect.getsource(transport_mod)
+    assert "import opik" in inspect.getsource(transport_mod.OpikSdkTransport.upload)
+    header = src.split("class OpikSdkTransport", 1)[0]
+    assert "import opik" not in header
