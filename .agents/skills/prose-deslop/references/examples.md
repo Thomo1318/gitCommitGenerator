@@ -264,3 +264,31 @@
 
 **Changes:** Replaced rotating synonym terms ("client", "consumer", "caller", "subscriber" all referring to workers) with the exact component name ("worker"). Replaced inflated verbs ("spearheading", "orchestrate", "boasts", "supercharge") with concrete operations and throughput figures.
 
+## Stage-labelled recipe in maintainer docs
+
+Pattern family **A+D** (stage segment + ceremony). The same rewrite applies for any `s<N>` / `slice<N>` / `phase<N>`, not only one slice.
+
+Before:
+
+> Run `just eval-s7-proof` for the AC-13 floor, then `just eval-s7-coverage-files` and open `.eval/s7_per_file_coverage.json`.
+
+After:
+
+> Run `just eval-package-coverage` for the eval package coverage floor, then `just eval-per-file-coverage` and open `.eval/per_file_coverage.json`.
+
+**Changes:** Replaced delivery-cycle/ceremony recipe and artifact names with domain-first operator names (scope + measurement). Equivalent bad shapes: `eval-s15-proof`, `eval-slice12-coverage-files`, `.eval/phase2_per_file_coverage.json`.
+
+## Governance ID as module identity
+
+Pattern family **C** (citation vs identity). Matrix cells stay; runnable names do not.
+
+Before:
+
+> Run `python tools/d31_nth03_gate.py` to clear P0 item FIND-003 (see S6-A04).
+
+After:
+
+> Run `python tools/check_eval_measurement_contract.py` to enforce the eval measurement contract (P0; cites FIND-003, S6-A04, decision D31, NTH-03 in the issue matrix).
+
+**Changes:** Operator path is domain-first. Taxonomy ids remain citations, not the tool’s identity. Same rule for `I6`, `F-S6-04`, `RK-A5`, `R4`, `INT-05`, any generation.
+

@@ -192,10 +192,15 @@ Remove self-referential asides. The text should move, not announce its own struc
 - "In conclusion" / "To sum up" / "In summary"
 - "As we've seen in this section..."
 - "And so we return to where we began."
-- "Per finding [X]..." (name the concrete invariant or bug)
-- "Addressing item [X] from review..." (name the concrete fix)
-- "As discussed in step [X]..." (name the architecture step)
+- "Per finding [N]..." / "FINDING_[N]" (any N — name the concrete invariant or bug)
+- "Addressing item [N] from review..." (any N — name the concrete fix)
+- "As discussed in step [N]..." (any N — name the architecture step)
 - "Per the implementation plan..." (name the specific requirement)
+- Stage-segment recipes/paths/CLI: `s<N>`, `slice<N>`, `phase<N>` inside operator names (any N) → domain-first scope + measurement
+- Ceremony-primary instructions ("run the proof recipe") → name the gate/job
+- Requirement-as-tool-name (`ac<N>-gate` as a command) → name the invariant/recipe job
+- Governance-as-tool-name (`D<N>` / `FIND-<N>` / `S<N>-A<N>` / `NTH-<N>` / `RK-…` / `P0` as recipe or module identity) → domain job name; keep ids in matrices
+- "Addresses D<N>" / "Fixes F-S<N>-…" as the only description → name the change; id may remain as citation
 
 ## Performative Emphasis
 

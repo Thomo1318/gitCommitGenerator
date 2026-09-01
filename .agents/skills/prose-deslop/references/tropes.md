@@ -249,11 +249,20 @@ AI clusters invented compound labels that sound analytical without being grounde
 
 ### Plan & Review Meta-Artifact Shorthand
 
-Treating ephemeral task numbers, review checklist markers, or prompt-level meta-labels ("finding 6", "step 3", "item 4", "task 2.1") as self-standing concepts in technical writing, ADRs, PR summaries, or documentation. Once the plan or review session ends, these numbers convey zero meaning to other developers or future maintainers.
+Treating ephemeral task numbers, review checklist markers, or prompt-level meta-labels ("finding <N>", "FINDING_<N>", "step <N>", "item <N>", "task <N>" — any N) as self-standing concepts in technical writing, ADRs, PR summaries, or documentation. Once the plan or review session ends, these numbers convey zero meaning to other developers or future maintainers.
+
+### Stage-label and governance-id operator names in docs
+
+Teaching maintainers to run delivery-cycle-named or taxonomy-named tools locks issue vocabulary into durable docs. Prefer domain-first names (scope + measurement + entity).
+
+Flag as **identity** in operator instructions (any N): `s<N>` / `slice<N>` / `phase<N>` in recipes/paths/CLI; `finding <N>` / `FIND-<N>` / `INT-<N>`; `D<N>`, `I<N>`, `F-S<N>-…`, `S<N>-A<N>`, `RK-…`, `NTH-<N>`, `P0|P1|P2`, `AC-<N>` as the name of something to run or import.
+
+**Keep as citation:** decision/invariant/failure/risk/NTH/priority matrices, ADR tables, issue links, “see D31” pointers. Historical mention of a slice is fine; operator instructions must name the job.
+
 
 **Avoid patterns like:**
 
-- "Addresses finding 6 from the security review."
+- "Addresses finding <N> from the security review." (any N)
 - "Implemented step 3 of the refactor plan."
 - "Per item 4 above, we updated the schema validator."
 - "Resolves the issue raised in review note 2."
