@@ -256,13 +256,23 @@ def _paginate_sdk_collection(fetch_page, *, size: int = 100, max_pages: int = 50
     )
 
 
-def _default_client_factory() -> OpikVerifyClient:
-    """Build a real Opik-backed client (lazy SDK import; secrets ephemeral)."""
-    # Module import so monkeypatches on git_cg.eval.mirror.secrets bind here.
+def _load_runtime_secrets(*, require_key: bool = True):
+    """Resolve Opik runtime secrets for the default verify client.
+
+    Module-level seam so tests patch ``opik_verify._load_runtime_secrets``
+    directly. Production still resolves via ``git_cg.eval.mirror.secrets``
+    (lazy import; never at product import time).
+    """
     from git_cg.eval.mirror import secrets as mirror_secrets
 
-    secrets = mirror_secrets.resolve_opik_secrets(require_key=True)
+    secrets = mirror_secrets.resolve_opik_secrets(require_key=require_key)
     mirror_secrets.ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
+    return secrets
+
+
+def _default_client_factory() -> OpikVerifyClient:
+    """Build a real Opik-backed client (lazy SDK import; secrets ephemeral)."""
+    secrets = _load_runtime_secrets(require_key=True)
 
     import opik  # lazy; allowlisted import site
 

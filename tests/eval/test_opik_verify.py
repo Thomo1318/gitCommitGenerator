@@ -453,8 +453,11 @@ def test_default_client_factory_sdk_surfaces(monkeypatch) -> None:
     fake_opik = types.ModuleType("opik")
     fake_opik.Opik = _Opik
     monkeypatch.setitem(sys.modules, "opik", fake_opik)
+    # Patch the factory module seam (not mirror.secrets): dotted secret patches
+    # are not reliable under CI collection/coverage import order.
     monkeypatch.setattr(
-        "git_cg.eval.mirror.secrets.resolve_opik_secrets",
+        verify_mod,
+        "_load_runtime_secrets",
         lambda require_key=True: OpikRuntimeSecrets(
             api_key="k",
             workspace="ws",
@@ -491,7 +494,8 @@ def test_default_client_factory_missing_surfaces(monkeypatch) -> None:
     fake_opik.Opik = _OpikBare
     monkeypatch.setitem(sys.modules, "opik", fake_opik)
     monkeypatch.setattr(
-        "git_cg.eval.mirror.secrets.resolve_opik_secrets",
+        verify_mod,
+        "_load_runtime_secrets",
         lambda require_key=True: OpikRuntimeSecrets(api_key="k", workspace=None, base_url=None),
     )
 
@@ -543,7 +547,8 @@ def test_default_client_factory_page_data_attr(monkeypatch) -> None:
     fake_opik.Opik = _Opik
     monkeypatch.setitem(sys.modules, "opik", fake_opik)
     monkeypatch.setattr(
-        "git_cg.eval.mirror.secrets.resolve_opik_secrets",
+        verify_mod,
+        "_load_runtime_secrets",
         lambda require_key=True: OpikRuntimeSecrets(api_key="k", workspace="ws", base_url="https://x"),
     )
     client = verify_mod._default_client_factory()
@@ -597,7 +602,8 @@ def test_default_client_factory_paginates_projects_and_fds(monkeypatch) -> None:
     fake_opik.Opik = _Opik
     monkeypatch.setitem(sys.modules, "opik", fake_opik)
     monkeypatch.setattr(
-        "git_cg.eval.mirror.secrets.resolve_opik_secrets",
+        verify_mod,
+        "_load_runtime_secrets",
         lambda require_key=True: OpikRuntimeSecrets(api_key="k", workspace="ws", base_url="https://example.test"),
     )
 
