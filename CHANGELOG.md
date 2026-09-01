@@ -29,6 +29,149 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.23.0
+
+### Miscellaneous
+
+- 👷 ci(llms-txt): lock gold Hybrid bot-commit template (#254)
+- 🔧 chore(sop): register CodeRabbit review-bot intent (#254)
+- ✅ test(deslop-naming): add fail-closed identity residue scanner (#254)
+- 🔨 chore(eval): rename coverage recipes to domain-first names (#254)
+- 🔨 chore(eval): gate S7 owned files at 80% coverage each (#254)
+- 🔨 chore(eval): add report-only S7 per-file coverage recipe (#254)
+- 🔧 chore(eval): add eval-s7-proof coverage recipe (#254)
+- ✅ test(eval): cover lane provenance and doctor diagnostics (#254)
+- 🔧 chore(mise): wire betterleaks config path (#254)
+- 🔧 chore(betterleaks): allowlist H65probeToken probe string (#254)
+- ✅ test(eval): cover H65 masking, intent signals, and train-export (#254)
+- 🙈 chore(repo): scope Opik ignore rule to repository root (#254)
+- 🙈 chore(gitignore): ignore src/evals directory (#254)
+- 📝 docs(just): domain-first claim-matrix spine recipe name (#254)
+- 📝 docs(docs): document code and prose deslop skill checklists (#254)
+- 📝 docs(adr): deslop ADR-0011 S7/S8 refinement prose (#254)
+- 📝 docs(cli): tighten eval help strings in usage.kdl (#254)
+- 📝 docs(cli): keep opik verify advisory across doc regen (#254)
+- 📝 docs(deslop): expand code and prose residue rules (#254)
+- 📝 docs(eval): expand S7 plan board and ADR S0-S8 scope (#254)
+- 📝 docs(llms): auto-update llms.txt
+- ✏️ docs(deslop): correct skill table pipes and guidance (#254)
+- Merge pull request #255 from Thomo1318/eval/254-s7-user-interaction-opik-pins-feedback-definitions-hitl-annotation
+- fix: apply CodeRabbit auto-fixes
+
+### Tests
+
+- 🔒️ fix(mirror): redact public config fallback tokens (#254)
+- 🔒️ fix(mirror): redact mode token; enforce HTTPS endpoint (#254)
+- 🔒️ fix(eval-scrub): pin short-segment JWT lookarounds (#254)
+- 🔒️ fix(eval-promote): mask decision notes before audit persist (#254)
+- 🔒️ fix(eval-review): mask free-text before persist; widen JWT detection (#254)
+- 🐛 fix(opik-verify): route factory secrets through a module seam (#254)
+- ✨ feat(eval-cli): add --case scope to amend-brief (#254)
+- ✨ feat(eval-cli): add read-only checkpoint inventory command (#254)
+- ✨ feat(eval-schemas): add feedback_definition_v1 schema (#254)
+- 🦺 fix(deslop): fail closed when Git diff collection fails (#254)
+- 🦺 fix(opik-verify): fail closed on truncated SDK listings (#254)
+- 🦺 fix(eval): address CodeRabbit PR #255 review findings (#254)
+- 🦺 fix(eval): lock additive-only feedback-definition migration (#254)
+- 🦺 fix(eval-promote): wire advisory review rollup into promotion (#254)
+- 🦺 fix(eval-promote): bind advisory approve_promote as the human leg (#254)
+- 🦺 fix(eval-review): harden score vocabulary, annotations, claim locks (#254)
+- 🚸 feat(eval-cli): render Opik config show as an operator summary (#254)
+- 🩺 feat(eval-doctor): publish Opik exit-code credential matrix (#254)
+- 🩹 fix(eval-cli): stabilize empty-queue status and retry id misses (#254)
+- ✅ test(opik): assert project creation side effect (#254)
+- ✅ test(intent): refresh goldens for expanded SOP matrix (#254)
+- 🔧 chore(sop): register CodeRabbit review-bot intent (#254)
+- ✅ test(deslop-naming): add fail-closed identity residue scanner (#254)
+- ✅ test(eval): lock promote claim aliases and S8 docs guard (#254)
+- ✅ test(main): lock mode-off Opik import isolation (#254)
+- ✅ test(eval): guard interaction work from docs-platform surfaces (#254)
+- ✅ test(eval): re-pin schema_pack_v0 content hash (#254)
+- ✅ test(eval): cover feedback_definitions map drift (#254)
+- 🎨 style(eval-mirror): parenthesize flush-timeout except clause (#254)
+- 🌑 chore(eval-mirror): add opt-in live queue projector (#254)
+- 🌑 chore(eval-opik): add advisory online verify surface (#254)
+- 🌑 chore(eval-mirror): add offline queue_mirror non-SoT seam (#254)
+
+### Changed
+
+- 🔒️ fix(mirror): redact mode token; enforce HTTPS endpoint (#254)
+- 🦺 fix(deslop): fail closed when Git diff collection fails (#254)
+- 🦺 fix(opik-verify): fail closed on truncated SDK listings (#254)
+- 🦺 fix(eval): address CodeRabbit PR #255 review findings (#254)
+- 🦺 fix(eval): lock additive-only feedback-definition migration (#254)
+- ♻️ refactor(eval): consolidate lane-pin env scrubbing in conftest (#254)
+- ➕ build(dev): Add harbor and matplotlib to dev deps (#254)
+- 🚸 feat(eval-cli): render Opik config show as an operator summary (#254)
+- ➕ build(dev-deps): add harbor and matplotlib (#254)
+- 💬 style(eval-promote): clarify ape_bundle_v1 spine and denial hints (#254)
+- 🎨 style(eval): collapse export-retry branches and trim comment residue (#254)
+- 🎨 style(eval-mirror): parenthesize flush-timeout except clause (#254)
+- 🌑 chore(eval-mirror): add opt-in live queue projector (#254)
+- 🌑 chore(eval-opik): add advisory online verify surface (#254)
+- 🌑 chore(eval-mirror): add offline queue_mirror non-SoT seam (#254)
+
+### Fixed
+
+- 🔒️ fix(mirror): redact mode token; enforce HTTPS endpoint (#254)
+- 🐛 fix(opik-verify): route factory secrets through a module seam (#254)
+- 🐛 fix(deslop-naming): use single effective worktree diff (#254)
+- 🐛 fix(main): defer Opik import until active mode (#254)
+- ✨ feat(eval-cli): add read-only checkpoint inventory command (#254)
+- 🦺 fix(opik-verify): fail closed on truncated SDK listings (#254)
+- 🦺 fix(eval): address CodeRabbit PR #255 review findings (#254)
+- 🦺 fix(eval-promote): wire advisory review rollup into promotion (#254)
+- 🦺 fix(eval-promote): bind advisory approve_promote as the human leg (#254)
+- 🦺 fix(eval-review): harden score vocabulary, annotations, claim locks (#254)
+- 🦺 fix(eval): add feedback-definition map and validated loader (#254)
+- 🦺 fix(intent): harden hook-path and secrets-term matching (#254)
+- 🚸 feat(eval-cli): render Opik config show as an operator summary (#254)
+- 🩹 fix(eval-mirror): parenthesize flush-timeout except clause (#254)
+- 🩹 fix(eval-cli): stabilize empty-queue status and retry id misses (#254)
+- 🌑 chore(eval-mirror): add opt-in live queue projector (#254)
+- 🌑 chore(eval-mirror): add offline queue_mirror non-SoT seam (#254)
+
+### Security
+
+- 🔒️ fix(just): quote deslop-naming-scan recipe params (#254)
+- 🔒️ fix(mirror): redact public config fallback tokens (#254)
+- 🔒️ fix(mirror): redact mode token; enforce HTTPS endpoint (#254)
+- 🔒️ fix(eval-scrub): pin short-segment JWT lookarounds (#254)
+- 🔒️ fix(eval-promote): mask decision notes before audit persist (#254)
+- 🔒️ fix(eval-review): mask free-text before persist; widen JWT detection (#254)
+
+### Documentation
+
+- 🦺 fix(eval): address CodeRabbit PR #255 review findings (#254)
+- 🔨 chore(eval): rename coverage recipes to domain-first names (#254)
+- 💬 style(eval-promote): clarify ape_bundle_v1 spine and denial hints (#254)
+- 📝 docs(badges): refresh interrogate coverage badge (#254)
+- 📝 docs(adr): correct S7 board grammar and PR #255 pointer (#254)
+- 📝 docs(just): domain-first claim-matrix spine recipe name (#254)
+- 📝 docs(deslop): require pattern Naming Audit in agent skills (#254)
+- 📝 docs(docs): document code and prose deslop skill checklists (#254)
+- 📝 docs(cli): tighten eval help strings in usage.kdl (#254)
+- 📝 docs(eval): tighten S6/S7 status pointers (#254)
+- 📝 docs(eval): align S7 status, plans, and usage.kdl surfaces (#254)
+- 📝 docs(cli): keep opik verify advisory across doc regen (#254)
+- 📝 docs(cli): refresh generated amend-brief help (#254)
+- 📝 docs(eval): close S7 optional NTH operator surfaces (#254)
+- 📝 docs(eval): add S7 claim matrix and interaction close-out (#254)
+- 📝 docs(eval): document checkpoint inventory and config summary output (#254)
+- 💡 docs(comments): drop tautological helper docstrings (#254)
+- 🌑 chore(eval-opik): add advisory online verify surface (#254)
+
+### Added
+
+- 🔒️ fix(mirror): redact mode token; enforce HTTPS endpoint (#254)
+- ✨ feat(eval-cli): add --case scope to amend-brief (#254)
+- ✨ feat(eval-cli): add read-only checkpoint inventory command (#254)
+- ✨ feat(eval-schemas): add feedback_definition_v1 schema (#254)
+- ✨ feat(eval-doctor): add Opik lane-pin diagnostics (#254)
+- ✨ feat(eval-mirror): add lane provenance for doctor diagnostics (#254)
+- ✨ feat(eval): add train-export --root isolation override (#254)
+- 🩺 feat(eval-doctor): publish Opik exit-code credential matrix (#254)
+
 ## v0.22.0
 
 ### Miscellaneous
