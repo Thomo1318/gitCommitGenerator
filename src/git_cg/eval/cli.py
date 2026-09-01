@@ -3379,6 +3379,8 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
         "api_key_present": bool(ambient_key),
     }
     health_hint = operator_config_health(config)
+    # Resolve once; reuse across payload notes, JSON errors, and human output.
+    fallback = operator_mode_fallback_token(config)
     payload = {
         "config": view,
         "secrets": masked,
@@ -3386,11 +3388,7 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
         "mirror_result": build_mirror_result(
             mode=str(view.get("mode") or "off"),
             health=ExportHealth(health_hint),
-            notes=(
-                (f"config_error: invalid mode token {operator_mode_fallback_token(config)!r}",)
-                if operator_mode_fallback_token(config)
-                else ()
-            ),
+            notes=((f"config_error: invalid mode token {fallback!r}",) if fallback else ()),
         ).to_dict(),
     }
 
@@ -3406,7 +3404,7 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
                     [
                         {
                             "code": "EVAL_CONFIG_ERROR",
-                            "message": f"invalid mode token {operator_mode_fallback_token(config)!r}",
+                            "message": f"invalid mode token {fallback!r}",
                         }
                     ]
                     if exit_code == 2
@@ -3434,7 +3432,6 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
             emit_human_line(f"  api_key={masked['api_key']}")
         emit_human_line(f"  redaction_profile={redaction if redaction not in (None, '') else '-'}")
         emit_human_line("  product_accept_blocked=false")
-        fallback = operator_mode_fallback_token(config)
         if fallback:
             emit_human_line(f"  mode_fallback={fallback}")
     raise typer.Exit(code=exit_code)
