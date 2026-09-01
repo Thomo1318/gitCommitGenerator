@@ -33,6 +33,9 @@ Dependencies: 21 runtime, 1 dev
 | eval-api-map-check | `just eval-api-map-check` |
 | gen-cli-docs | `just gen-cli-docs` |
 | eval-claim-matrix-spine | `just eval-claim-matrix-spine` |
+| eval-package-coverage | `just eval-package-coverage` |
+| eval-per-file-coverage | `just eval-per-file-coverage` |
+| --cov-report=json | `just --cov-report=json` |
 
 ## Scripts (package.json)
 
@@ -104,6 +107,10 @@ PYTHONPATH = "src"
 HK_LOG = "trace"
 HK_MISE = "1"
 HK_LOG_FILE = "logs/hk.log"
+# Wire the project betterleaks config so pre-commit secret scanning uses the
+# curated allowlist (e.g. H65 synthetic probe tokens in tests) instead of the
+# tool's default rule set. Path is relative to the mise project root.
+BETTERLEAKS_CONFIG = "{{ config_root }}/config/betterleaks.toml"
 
 # ============================================================================ #
 # TOOLS                                                                        #
@@ -274,4 +281,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-70.5ms | 738 files checked | 21/539 tools matched
+74.5ms | 738 files checked | 21/539 tools matched
