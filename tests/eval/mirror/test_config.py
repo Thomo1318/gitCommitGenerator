@@ -580,3 +580,22 @@ class TestLaneProvenance:
         pins = resolve_lane_provenance({"GIT_CG_OPIK_PROJECT_EVAL": "mapped"})
         assert all(p.value == "mapped" for p in pins.values())
         assert all(p.source is LaneSource.BOOTSTRAP_EVAL for p in pins.values())
+
+
+def test_public_config_view_redacts_fallback_tokens() -> None:
+    cfg = resolve_opik_config(
+        env={
+            "GIT_CG_OPIK_MODE": "not-a-mode",
+            "GIT_CG_OPIK_ENVIRONMENT": "lab",
+            "GIT_CG_OPIK_REDACTION_PROFILE": "yolo",
+        }
+    )
+    view = public_config_view(cfg)
+    meta = view.get("meta", {})
+    assert meta.get("mode_fallback") == "<redacted-mode-token>"
+    assert meta.get("environment_fallback") == "<redacted-environment-token>"
+    assert meta.get("redaction_profile_fallback") == "unknown_profile"
+    # Internal meta keeps raw diagnostics; public view must not.
+    assert "not-a-mode" in str(cfg["meta"].get("mode_fallback"))
+    assert cfg["meta"].get("environment_fallback") == "lab"
+    assert str(cfg["meta"].get("redaction_profile_fallback", "")).startswith("unknown_profile:")

@@ -539,10 +539,21 @@ def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:
             for k, v in value.items():
                 if _looks_like_secret_key(str(k)):
                     continue
-                if str(k) == "mode_fallback" and v not in (None, ""):
-                    safe_meta[str(k)] = "<redacted-mode-token>"
+                key_name = str(k)
+                # Operator JSON must never echo raw env/profile tokens from fallbacks.
+                if key_name == "mode_fallback" and v not in (None, ""):
+                    safe_meta[key_name] = "<redacted-mode-token>"
+                elif key_name == "environment_fallback" and v not in (None, ""):
+                    safe_meta[key_name] = "<redacted-environment-token>"
+                elif key_name == "redaction_profile_fallback" and v not in (None, ""):
+                    # Keep closed diagnostic taxonomy; strip any unknown suffix payload.
+                    reason = str(v)
+                    if reason.startswith("unknown_profile:"):
+                        safe_meta[key_name] = "unknown_profile"
+                    else:
+                        safe_meta[key_name] = reason
                 else:
-                    safe_meta[str(k)] = v
+                    safe_meta[key_name] = v
             out[key] = safe_meta
         else:
             out[key] = value
