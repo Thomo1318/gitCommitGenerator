@@ -327,26 +327,29 @@ def _parse_unified_added_lines(diff_text: str) -> list[tuple[int, str]]:
 
 
 def _added_lines_from_git(cwd: Path, path: str, base: str, include_working_tree: bool) -> list[tuple[int, str]]:
-    chunks: list[str] = []
-    proc = _run_git(["diff", "-U0", f"{base}...HEAD", "--", path], cwd)
-    if proc.returncode == 0 and proc.stdout:
-        chunks.append(proc.stdout)
+    """Return added lines for ``path`` relative to ``base``.
 
+    When ``include_working_tree`` is true, build one effective diff from ``base``
+    to the current worktree (index + unstaged + untracked) so replacements that
+    remove a previously added residue line are not retained as findings.
+    """
     if include_working_tree:
-        for args in (
-            ["diff", "-U0", "HEAD", "--", path],
-            ["diff", "-U0", "--cached", "--", path],
-        ):
-            proc = _run_git(args, cwd)
-            if proc.returncode == 0 and proc.stdout:
-                chunks.append(proc.stdout)
-
         proc = _run_git(["ls-files", "--others", "--exclude-standard", "--", path], cwd)
         if proc.returncode == 0 and proc.stdout.strip():
+            # Untracked file: entire content is an addition vs base.
             text = (cwd / path).read_text(encoding="utf-8", errors="replace")
             return list(enumerate(text.splitlines(), start=1))
 
-    return _parse_unified_added_lines("\n".join(chunks))
+        # ``base`` .. worktree (includes staged + unstaged tracked edits).
+        proc = _run_git(["diff", "-U0", base, "--", path], cwd)
+        if proc.returncode == 0 and proc.stdout:
+            return _parse_unified_added_lines(proc.stdout)
+        return []
+
+    proc = _run_git(["diff", "-U0", f"{base}...HEAD", "--", path], cwd)
+    if proc.returncode == 0 and proc.stdout:
+        return _parse_unified_added_lines(proc.stdout)
+    return []
 
 
 def _classify_token(token: str) -> list[str]:
