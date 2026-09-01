@@ -87,7 +87,6 @@ def _lazy_opik_track(*args: Any, **kwargs: Any):
 
 
 def _lazy_opik_flush(*args: Any, **kwargs: Any) -> None:
-    """Flush Opik tracker when mode is active; no-op when off."""
     if _ensure_opik() and _opik_module is not None:
         _opik_module.flush_tracker(*args, **kwargs)
 
@@ -104,7 +103,6 @@ class _LazyOpik:
 
 
 def _lazy_track_openai(client: Any) -> Any:
-    """Wrap OpenAI client with Opik tracking when mode is active."""
     if _ensure_opik() and _track_openai_function is not None:
         return _track_openai_function(client)
     return client

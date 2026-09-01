@@ -20,7 +20,6 @@ from pathlib import Path
 
 
 def _pct(covered: float, total: float) -> float:
-    """Compute coverage percentage; return 100.0 when total is zero."""
     if total <= 0:
         return 100.0
     return (100.0 * covered) / total
