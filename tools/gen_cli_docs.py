@@ -21,6 +21,23 @@ import click
 from click.testing import CliRunner
 from typer.main import get_command
 
+# Per-path doc framing beyond the generic S6 authority blurb.
+# Keep these short; live help text remains the option/behaviour SoT.
+STATUS_OVERRIDE: dict[str, str] = {
+    "eval opik verify": "optional / advisory",
+}
+
+AUTHORITY_BOUNDARY_EXTRA: dict[str, list[str]] = {
+    "eval opik verify": [
+        "* Advisory only (`authority=advisory_non_sot`).",
+        "* Does not change `eval opik doctor` exit codes or green rollup.",
+        "* Does not feed promote, gates, CI merge, or product accept.",
+        "* Network and auth failure are warning-only (exit 0).",
+        "* Project creation requires `--remote --create-missing`.",
+        "* Local project pins and `config/feedback_definitions.json` remain vocabulary/source of truth.",
+    ],
+}
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
@@ -271,14 +288,17 @@ def generate() -> None:
                 break
             cmd = nxt
         help_text = help_for_click(cmd, full) if ok and cmd is not None else node.help
-        status_bits: list[str] = []
-        if node.path in DEPRECATED_ALIASES:
-            status_bits.append(f"deprecated alias → `{DEPRECATED_ALIASES[node.path]}`")
-        if node.path in DARK_LAUNCH_HIDDEN_COMMANDS:
-            status_bits.append("dark-launch (hidden from regular help)")
-        if node.path in CANONICAL_COMMANDS:
-            status_bits.append("canonical S6 surface")
-        status = ", ".join(status_bits) if status_bits else node.kind
+        if node.path in STATUS_OVERRIDE:
+            status = STATUS_OVERRIDE[node.path]
+        else:
+            status_bits: list[str] = []
+            if node.path in DEPRECATED_ALIASES:
+                status_bits.append(f"deprecated alias → `{DEPRECATED_ALIASES[node.path]}`")
+            if node.path in DARK_LAUNCH_HIDDEN_COMMANDS:
+                status_bits.append("dark-launch (hidden from regular help)")
+            if node.path in CANONICAL_COMMANDS:
+                status_bits.append("canonical S6 surface")
+            status = ", ".join(status_bits) if status_bits else node.kind
 
         this_file = eval_page_path(node.path)
         body: list[str] = [
@@ -289,9 +309,17 @@ def generate() -> None:
             "",
             "## Authority boundary",
             "",
-            "* Does **not** re-rank product intents or rewrite SOP authority.",
-            "* Does **not** sole-promote gold as CI authority.",
-            "* Offline-first by default; transport-bearing surfaces document their fail-open/fail-closed law in help.",
+        ]
+        body.extend(
+            [
+                "* Does **not** re-rank product intents or rewrite SOP authority.",
+                "* Does **not** sole-promote gold as CI authority.",
+                "* Offline-first by default; transport-bearing surfaces document their fail-open/fail-closed law in help.",
+            ]
+        )
+        if node.path in AUTHORITY_BOUNDARY_EXTRA:
+            body.extend(AUTHORITY_BOUNDARY_EXTRA[node.path])
+        body += [
             "",
             "## Help",
             "",

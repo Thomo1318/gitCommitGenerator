@@ -226,6 +226,130 @@ def test_cli_review_lifecycle(repo: Path) -> None:
     }
 
 
+def test_cli_human_leg_approve_promote_composition(repo: Path) -> None:
+    """enqueue→claim→adjudicate(approve_promote)→promote binds human_leg."""
+    res = runner.invoke(
+        cli_app,
+        [
+            "eval",
+            "review",
+            "enqueue",
+            "--case",
+            "case-src-1",
+            "--reviewer",
+            "rev-1",
+            "--craft-rating",
+            "4",
+            "--regime-label",
+            "A",
+            "--json",
+        ],
+    )
+    env = _env(res)
+    assert res.exit_code == 0
+    rid = env["data"]["item"]["review_id"]
+
+    res = runner.invoke(cli_app, ["eval", "review", "claim", rid, "--reviewer", "rev-1", "--json"])
+    assert res.exit_code == 0
+
+    res = runner.invoke(
+        cli_app,
+        [
+            "eval",
+            "review",
+            "adjudicate",
+            rid,
+            "--outcome",
+            "approve_promote",
+            "--destination-hint",
+            "observability_fixture",
+            "--json",
+        ],
+    )
+    env = _env(res)
+    assert res.exit_code == 0
+    outcome_ref = env["data"]["outcome_ref"]
+    assert outcome_ref.startswith(f"review_outcome:{rid}:")
+
+    res = runner.invoke(
+        cli_app,
+        [
+            "eval",
+            "promote",
+            "--bundle",
+            "thread-src-1",
+            "--destination",
+            "observability_fixture",
+            "--owner",
+            "owner-1",
+            "--label",
+            "observability_candidate",
+            "--provenance",
+            "diag_issue",
+            "--redaction-profile",
+            "default_scrub",
+            "--review-id",
+            rid,
+            "--json",
+        ],
+    )
+    env = _env(res)
+    assert res.exit_code == 0, env
+    assert env["data"]["accepted"] is True
+    decision = env["data"]["decision"]
+    leg = decision["human_leg"]
+    assert leg["satisfied"] is True
+    assert leg["outcome"] == "approve_promote"
+    assert leg["outcome_ref"] == outcome_ref
+    assert leg["authority"] == "advisory"
+    assert leg["can_sole_promote_gold"] is False
+    assert "human.craft_rating" in leg["score_names"]
+
+
+def test_cli_human_leg_reject_denied(repo: Path) -> None:
+    """reject adjudication cannot satisfy the human leg on non-park promote."""
+    res = runner.invoke(
+        cli_app,
+        ["eval", "review", "enqueue", "--case", "case-src-1", "--reviewer", "rev-1", "--json"],
+    )
+    rid = _env(res)["data"]["item"]["review_id"]
+    assert runner.invoke(cli_app, ["eval", "review", "claim", rid, "--reviewer", "rev-1", "--json"]).exit_code == 0
+    assert (
+        runner.invoke(
+            cli_app,
+            ["eval", "review", "adjudicate", rid, "--outcome", "reject", "--json"],
+        ).exit_code
+        == 0
+    )
+    res = runner.invoke(
+        cli_app,
+        [
+            "eval",
+            "promote",
+            "--bundle",
+            "thread-src-1",
+            "--destination",
+            "observability_fixture",
+            "--owner",
+            "owner-1",
+            "--label",
+            "observability_candidate",
+            "--provenance",
+            "diag_issue",
+            "--redaction-profile",
+            "default_scrub",
+            "--review-id",
+            rid,
+            "--json",
+        ],
+    )
+    env = _env(res)
+    assert res.exit_code == 2
+    assert env["data"]["denial_reason"] == "human_leg_not_satisfied"
+    assert env["data"]["decision"]["human_leg"]["satisfied"] is False
+    assert env["data"]["decision"]["human_leg"]["outcome"] == "reject"
+
+
 def test_cli_review_dismiss(repo: Path) -> None:
     res = runner.invoke(
         cli_app,

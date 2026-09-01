@@ -1379,6 +1379,16 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - `opik-implementation-plan-working-2026-06-16.md`
 - `ADR_GENERATION_ECOSYSTEM_EXPLAINER.md`
 
+## Refinement: S7/S8 harness scope clarification (v3.2.1)
+
+Issue #254 / PR #255. Related Plans above keep the historical S0–S7 framing.
+
+**Current harness board:**
+- **S7** = user interaction (pins, Feedback Definitions, HITL annotation) — implemented in PR #255.
+- **S8 / #235** = deferred docs-platform work (ADR-0011 durable rewrite prose, Zensical API site, REST/OpenAPI/autodoc scope). Live Opik Cloud remains a non-required merge gate (S8-LAW-01).
+
+Does not supersede ADR-0011. Names the living plan board’s S7/S8 split so S7 is not read as still deferred.
+
 ## CHANGELOG
 
 - v1.0.0 (2026-06-17): Initial Draft
@@ -1388,6 +1398,7 @@ Move all deep-dive context, Sentry setup, and Opik pipelines into `DEVELOPMENT.m
 - v3.1.0 (2026-06-26): Marked status as Implemented following successful integration of Sentry and Opik telemetry across git hooks.
 - v3.1.1 (2026-06-27): Refinement - Verified that deferred tasks from Phase 4 (`sync_prompts_to_opik.py` and global trace tagging) were successfully implemented post-deferral. Phase 10 documentation refactoring tasks were also completed in a separate PR. Note: The historical implementation status in the Run Sheet and Deviations sections has been left untouched to preserve the historical record of the original sprint.
 - v3.2.0 (2026-08-01): Added Phase 8.5 Promptfoo evaluation & metrics boundary; formalised offline eval/red-team vs live GenerationTelemetry separation; recorded deferred optional Promptfoo→Opik enrichments (no standalone chore issue).
+- v3.2.1 (2026-08-31): Append-only S7/S8 harness scope clarification for #254 (Related Plans historical S0–S7 text preserved; S8 docs deferral named explicitly).
 
 <!-- ## Supporting Visual Aids
 

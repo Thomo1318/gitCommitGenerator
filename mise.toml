@@ -36,6 +36,10 @@ PYTHONPATH = "src"
 HK_LOG = "trace"
 HK_MISE = "1"
 HK_LOG_FILE = "logs/hk.log"
+# Wire the project betterleaks config so pre-commit secret scanning uses the
+# curated allowlist (e.g. H65 synthetic probe tokens in tests) instead of the
+# tool's default rule set. Path is relative to the mise project root.
+BETTERLEAKS_CONFIG = "{{ config_root }}/config/betterleaks.toml"
 
 # ============================================================================ #
 # TOOLS                                                                        #

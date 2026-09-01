@@ -39,6 +39,7 @@ REQUIRED_SCHEMAS = {
     "commit_session_thread_v1",
     "train_row_v1",
     "train_export_v1",
+    "feedback_definition_v1",
 }
 
 

@@ -219,9 +219,7 @@ def test_materialize_skips_archive_snapshot_when_absent(monkeypatch: pytest.Monk
     assert "archive_bundles 0" in result.output
 
 
-# ---------------------------------------------------------------------------
 # S4 / P1-4 export CLI surface (nested + dashed aliases)
-# ---------------------------------------------------------------------------
 
 
 def test_export_nested_and_dashed_help_registered() -> None:
@@ -247,6 +245,80 @@ def test_export_status_dashed_alias(tmp_path: Path) -> None:
     result = runner.invoke(app, ["eval", "export-status", "--root", str(tmp_path)])
     # root may be unresolvable without .git — either empty/status or fail code 1
     assert result.exit_code in {0, 1}
+
+
+def test_export_status_empty_queue_zeroed_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty/absent queue emits a stable zeroed counts object (JSON)."""
+    import json
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path), "--json"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    counts = payload["data"]["counts"]
+    assert counts == {
+        "pending": 0,
+        "sending": 0,
+        "sent": 0,
+        "failed": 0,
+        "dropped": 0,
+        "unreadable": 0,
+    }
+    # no queue dir invented by status
+    assert not (tmp_path / ".eval" / "export_queue").exists()
+
+
+def test_export_retry_missing_id_reports_not_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`export retry --id <missing>` prints a plain id-not-found line."""
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_missing"])
+    assert result.exit_code == 0, result.output
+    assert "id not found: q_missing" in result.output
+    assert "unreadable 0" in result.output
+
+
+def test_export_retry_missing_id_json_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """JSON mode surfaces a not-found warning code + not_found list."""
+    import json
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    result = runner.invoke(app, ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_missing", "--json"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["data"]["not_found"] == ["q_missing"]
+    assert payload["data"]["unreadable"] == 0
+    codes = {w.get("code") for w in payload.get("warnings", [])}
+    assert "EVAL_EXPORT_ID_NOT_FOUND" in codes
+
+
+def test_export_retry_corrupt_id_is_unreadable_not_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Existing corrupt queue rows must not be reported as not_found."""
+    import json
+
+    from git_cg.eval.mirror.queue import export_queue_dir
+
+    monkeypatch.setenv("GIT_CG_OPIK_MODE", "off")
+    _clear_project_envs(monkeypatch)
+    (tmp_path / ".git").mkdir()
+    qdir = export_queue_dir(tmp_path)
+    qdir.mkdir(parents=True, exist_ok=True)
+    (qdir / "q_corrupt.json").write_text("{", encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["eval", "export", "retry", "--root", str(tmp_path), "--id", "q_corrupt", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["data"].get("not_found") in (None, [])
+    assert payload["data"]["unreadable"] == 1
 
 
 def test_export_retry_failed_rows(tmp_path: Path) -> None:
@@ -347,7 +419,8 @@ def test_export_drain_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPat
     result = runner.invoke(app, ["eval", "export", "drain", "--root", str(tmp_path)])
     assert result.exit_code == 2, result.output
     assert "config_error" in result.output
-    assert "bogus" in result.output
+    assert "bogus" not in result.output
+    assert "<redacted-mode-token>" in result.output
     assert '"health": "config_error"' in result.output or '"health":"config_error"' in result.output.replace(" ", "")
 
 
@@ -357,7 +430,8 @@ def test_export_status_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPa
     result = runner.invoke(app, ["eval", "export", "status", "--root", str(tmp_path)])
     assert result.exit_code == 2, result.output
     assert "health config_error" in result.output
-    assert "bogus" in result.output
+    assert "bogus" not in result.output
+    assert "<redacted-mode-token>" in result.output
 
 
 def test_config_show_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -369,11 +443,8 @@ def test_config_show_invalid_mode_is_config_error(monkeypatch: pytest.MonkeyPatc
         result = runner.invoke(app, ["eval", "opik-config-show"])
     assert result.exit_code == 2, result.output
     assert "config_error" in result.output
-
-
-# ---------------------------------------------------------------------------
-# Coverage pack: config/export status/retry/drain branches (PR #236 patch ≥80%)
-# ---------------------------------------------------------------------------
+    assert "bogus" not in result.output
+    assert "<redacted-mode-token>" in result.output
 
 
 def test_config_unknown_action_exits_2() -> None:
@@ -389,7 +460,11 @@ def test_config_show_ok_exit_0(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
     result = runner.invoke(app, ["eval", "config", "show"])
     assert result.exit_code == 0, result.output
-    assert "config" in result.output
+    out = result.output
+    assert "mode=off" in out
+    assert "health=" in out
+    assert "api_key_present=false" in out
+    assert "product_accept_blocked=false" in out
 
 
 def test_config_show_opik_config_error(monkeypatch: pytest.MonkeyPatch) -> None:

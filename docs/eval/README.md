@@ -35,7 +35,7 @@ just eval-schema-hash
 Pins are content hashes (`name@sha256`):
 
 * Current frozen S0 identities (asserted in `tests/eval/test_catalog_pins.py`):
-  * `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe`
+  * `schema_pack_v0@db5bdcf23b36934f84c25b82248186415c25c41662aa48c92f7b34e0aafaef15`
   * `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75`
 * Recipe: SHA-256 over canonical JSON (sorted keys, compact separators). Schema pack concatenates `filename\0canonical_bytes\0` for every non-underscore `*.schema.json`.
 * Fixture examples may use any well-formed 64-hex pin; only the generator/`just eval-schema-hash` output and the pin lock test bind the live content identity.
@@ -735,7 +735,7 @@ git-cg eval explain
 > **Claim → test matrix:** [`s6-claim-evidence.md`](./s6-claim-evidence.md)  
 > **Live CLI map:** [`operator_api_map.md`](./operator_api_map.md) (generate/check via `just eval-api-map-check`)  
 > **Plan SSOT:** `docs/plans/opik-evaluation-harness.md` @ `0.9.6-s6-slice0-reconciliation`  
-> **Pins (local SoT):** `schema_pack_v0@cf17beafdc0f50db9db7dce81fc02f38c4b1b3c6cd8d9364f083148c4ea2d7fe` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
+> **Pins (local SoT):** `schema_pack_v0@db5bdcf23b36934f84c25b82248186415c25c41662aa48c92f7b34e0aafaef15` · `metric_catalog_v0@430a62c1d7971e1145cfffd41e608a5f6bd39d284a3d050f991b8537f817eb75` — refresh with `just eval-schema-hash`
 
 Slice 9 is **documentation / CI recipe / claim-evidence packaging** for the S6 operator surface already landed in Slices 0–8. It does **not** add score authority, REST/OpenAPI, ADR-0011 rewrite, or Zensical durable API pages (those stay S7 / deferred).
 
@@ -805,7 +805,7 @@ Full live tree: [`operator_api_map.md`](./operator_api_map.md). Highlights:
 | Kind | Commands |
 |:---|:---|
 | Suite ops | `eval run` · `eval resume` · `eval recompute-scores` · `eval encode-fixture` · `eval materialize-core-goldens` |
-| Health | `eval doctor` · `eval opik doctor` · `eval opik config show` · `eval triage` |
+| Health | `eval doctor` · `eval opik doctor` · `eval opik verify` (optional/advisory) · `eval opik config show` · `eval triage` |
 | Debug / diag | `eval failures` · `eval explain` · `eval compare` · `eval diagnose` · `eval issue list\|show\|resolve\|reopen\|suppress` |
 | Replay / review / promote | `eval replay` · `eval review *` (incl. `rollup`) · `eval promote` |
 | Sessions / brief | `eval session show` · `eval thread show` · `eval amend-brief` |
@@ -908,7 +908,7 @@ Maintainer-only async dogfood latency evidence: `docs/eval/evidence/s6-g02b-*` v
 | **S4** mirror + export queue + train projection | Nested export ops; train-export scrub; secret-safe config/doctor | Block product accept on export; invent second score SoT |
 | **S5** Lane C′ advisory | Dogfood shadow sidecar; eligibility≠credentials; FIND-007 narrow ban | Elevate GEval to CI/product gate; gold-vision default |
 | **S6** operator UX | CLI-first doctor/debug/review/train/dogfood/sessions surface | General SDK claim; silent `__all__` expansion |
-| **S7** (deferred) | — | ADR-0011 full rewrite, Zensical API site, REST/OpenAPI/autodoc scope |
+| **S7** (implemented on #254) | Interaction UX, FD map, HITL bind, pin doctor, scrub fixes | ADR-0011 full rewrite, Zensical API site, REST/OpenAPI/autodoc scope (those remain **S8**) |
 | **S8 / #235** (deferred) | — | Unallocated hygiene unless explicitly reopened with IDs |
 
 ### Script absorption (reminder)
@@ -922,6 +922,46 @@ Legacy `scripts/opik_trace_triage.py` and related setup helpers remain **refusal
 `ARTIFACT_CLASS`, `AUTHORITY`, `FAMILY`, `POLARITY`, `REDACTION_PROFILE`, `SOURCE`, `ScoreResultV1`, `load_metric_catalog`, `metric_catalog_pin`, `schema_pack_pin`.
 
 Supported maintainer entrypoints beyond `__all__` are **named in the operator API map**, not implied by import star.
+
+## S7 — user interaction close-out (S7-8 / #254)
+
+> **Issue:** [#254](https://github.com/Thomo1318/gitCommitGenerator/issues/254) · **Parent:** [#217](https://github.com/Thomo1318/gitCommitGenerator/issues/217)
+>
+> **Claim → test matrix:** [`s7-claim-evidence.md`](./s7-claim-evidence.md)
+>
+> **Plan SSOT (raw dogfood evidence):** `docs/plans/opik-evaluation-harness.md` @ `0.9.8-s7-dogfood-findings-board` §8.7.2
+>
+> **Docs deferral:** [#235](https://github.com/Thomo1318/gitCommitGenerator/issues/235) (**S8**)
+
+S7 adds the human/interaction loop on the S6 operator spine:
+
+* four-lane Opik project pins (offline doctor layers)
+* Tier-1 Feedback Definition vocabulary map + drift guard
+* HITL review lifecycle (`enqueue → claim → adjudicate → rollup`) as the advisory human leg
+* optional write-only queue mirror (offline no-op; never read back)
+* secret-safety fixes (FIND-069/073) and product-path lazy Opik init (FIND-068)
+
+**Authority locks (unchanged):** local `.eval/review_queue` is SoT; human scores are advisory and cannot sole-promote golden; Lane A remains the sole required CI/golden/product-accept SoT; Opik Cloud is never a required merge gate.
+
+### Proof recipe (AC-13)
+
+```bash
+just eval-package-coverage
+just docstrings-patch
+```
+
+`just eval-package-coverage` clears global cov addopts and enforces package-scoped `--cov=src/git_cg/eval --cov-fail-under=80` over full `tests/eval`.
+
+### S7 vs S8 boundary
+
+| In S7 | Not in S7 (→ **S8 / #235**) |
+|:---|:---|
+| Interaction UX, FD map, HITL bind, pin doctor, scrub fixes, claim matrix | ADR-0011 full rewrite prose |
+| Thin `docs/eval/**` operator/claim notes | Durable Zensical API pages / allowlist mkdocstrings |
+| Offline-first composition proof | REST/OpenAPI operator SDK |
+| | Live Opik Cloud as required CI merge gate (S8-LAW-01) |
+
+Structural guard: `tests/eval/test_no_docs_platform_surface.py::test_no_s8_docs_scope`.
 
 ### Explicit deferred after #246
 

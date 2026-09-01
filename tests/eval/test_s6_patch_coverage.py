@@ -1223,6 +1223,7 @@ def test_cli_replay_train_export_amend_brief_wrappers(tmp_path: Path, monkeypatc
         cli_mod.amend_brief_cmd(
             score_run_id="rs_1",
             session_thread_id=None,
+            case_id=None,
             last_dogfood=0,
             doctor=False,
             write=False,
@@ -1242,6 +1243,7 @@ def test_cli_replay_train_export_amend_brief_wrappers(tmp_path: Path, monkeypatc
         cli_mod.amend_brief_cmd(
             score_run_id="e1",
             session_thread_id=None,
+            case_id=None,
             last_dogfood=0,
             doctor=False,
             write=False,
@@ -1249,6 +1251,34 @@ def test_cli_replay_train_export_amend_brief_wrappers(tmp_path: Path, monkeypatc
             as_json=False,
         )
     assert ei.value.exit_code == 0
+
+
+def test_cli_amend_brief_case_option_threads_case_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`eval amend-brief --case <id>` is accepted and passed to amend_brief."""
+    from git_cg.eval import cli as cli_mod
+
+    captured: dict[str, object] = {}
+
+    def fake_amend_brief(_repo, **_kwargs):
+        captured.update(_kwargs)
+        return {"brief": {"id": "b1"}, "experiment_id": "e1", "written": False}
+
+    monkeypatch.setattr(cli_mod, "_resolve_repo", lambda _root=None: tmp_path)
+    monkeypatch.setattr("git_cg.eval.brief.amend_brief", fake_amend_brief)
+
+    with pytest.raises(typer.Exit) as ei:
+        cli_mod.amend_brief_cmd(
+            score_run_id="e1",
+            session_thread_id=None,
+            case_id="case-A1",
+            last_dogfood=0,
+            doctor=False,
+            write=False,
+            root=None,
+            as_json=True,
+        )
+    assert ei.value.exit_code == 0
+    assert captured.get("case_id") == "case-A1"
 
 
 def test_cli_review_enqueue_list_rollup_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

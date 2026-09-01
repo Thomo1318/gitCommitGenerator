@@ -39,6 +39,7 @@ Usage: git-cg eval [OPTIONS] COMMAND [ARGS]...
 │ explain                   Show a deterministic explanation for a failing case.                                       │
 │ compare                   Diff two cases (structure and metrics).                                                    │
 │ diagnose                  Create or update a diagnostic issue from a failure.                                        │
+│ checkpoint                Local evaluation checkpoint inventory (read-only).                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Review & sessions ──────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ review                    Local human review queue (advisory only).                                                  │
@@ -67,6 +68,7 @@ Usage: git-cg eval [OPTIONS] COMMAND [ARGS]...
 ## Children
 
 * [`git-cg eval amend-brief`](amend-brief.md) — Build an amend brief from landed evaluation data.
+* [`git-cg eval checkpoint`](checkpoint.md) — Local evaluation checkpoint inventory (read-only).
 * [`git-cg eval compare`](compare.md) — Diff two cases (structure and metrics).
 * [`git-cg eval config`](config.md) — Alias of eval opik config show.
 * [`git-cg eval diagnose`](diagnose.md) — Create or update a diagnostic issue from a failure.

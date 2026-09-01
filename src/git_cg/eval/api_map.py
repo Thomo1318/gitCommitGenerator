@@ -52,7 +52,9 @@ CANONICAL_COMMANDS: frozenset[str] = frozenset(
         "eval issue resolve",
         "eval issue reopen",
         "eval issue suppress",
+        "eval checkpoint list",
         "eval opik doctor",
+        "eval opik verify",
         "eval opik config show",
         "eval export status",
         "eval export retry",
@@ -196,6 +198,7 @@ def _status_for(path: str) -> tuple[str, str]:
                 f"Canonical nested form preferred. Removal: {REMOVAL_TARGET}.",
             )
     if path in {
+        "eval checkpoint",
         "eval export",
         "eval issue",
         "eval opik",

@@ -72,6 +72,7 @@ CANONICAL_HELP_NAMES = sorted(
         "session",
         "thread",
         "issue",
+        "checkpoint",
         "opik",
         "export",
         # corpus
@@ -139,6 +140,7 @@ def test_eval_dogfood_dark_launched_hidden_but_callable() -> None:
     [
         (["eval", "export", "--help"], ["status", "retry", "drain"]),
         (["eval", "issue", "--help"], ["list", "show", "resolve", "reopen", "suppress"]),
+        (["eval", "checkpoint", "--help"], ["list"]),
         (["eval", "opik", "--help"], ["doctor", "config"]),
         (["eval", "opik", "config", "--help"], ["show"]),
         (["eval", "session", "--help"], ["show"]),

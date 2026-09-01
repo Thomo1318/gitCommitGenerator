@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Final
 
@@ -62,13 +63,17 @@ __all__ = [
     "OPIK_ENV_PROJECT_NAME",
     "OWNER_ONLY_REDACTION_PROFILES",
     "PROJECT_LANES",
+    "LanePin",
+    "LaneSource",
     "OpikConfigError",
     "OpikEnvironment",
     "OpikMode",
     "mask_secret",
     "mode_fallback_token",
     "operator_config_health",
+    "operator_mode_fallback_token",
     "public_config_view",
+    "resolve_lane_provenance",
     "resolve_opik_config",
 ]
 
@@ -106,7 +111,6 @@ OWNER_ONLY_REDACTION_PROFILES: Final[frozenset[RedactionProfile]] = frozenset(
     }
 )
 
-
 # Legacy parse aliases → canonical plan vocabulary (P0-1).
 _MODE_ALIASES: Final[Mapping[str, str]] = {
     "off": "off",
@@ -136,6 +140,33 @@ class OpikEnvironment(StrEnum):
     EVAL = "eval"
     STAGING = "staging"
     PRODUCTION = "production"
+
+
+class LaneSource(StrEnum):
+    """Provenance of one project-lane pin value (diagnostic-only, S7-1a)."""
+
+    EXPLICIT = "explicit"
+    BOOTSTRAP_EVAL = "bootstrap-eval"
+    BOOTSTRAP_LEGACY = "bootstrap-legacy"
+    LEGACY = "legacy"
+    MISSING = "missing"
+
+
+@dataclass(frozen=True, slots=True)
+class LanePin:
+    """One canonical project lane's resolved value and provenance.
+
+    Diagnostic-only metadata: it explains where ``resolve_opik_config``'s
+    fail-closed pins came from without changing that resolution. ``value``
+    is a project *name* (non-secret; already shown by config views) — never
+    an API key or token.
+    """
+
+    lane: str
+    value: str | None
+    source: LaneSource
+    env_var: str
+    origin_env_var: str | None
 
 
 class OpikConfigError(ValueError):
@@ -232,11 +263,76 @@ def _parse_flush_timeout(raw: str | None) -> int:
         return DEFAULT_FLUSH_TIMEOUT_MS
     try:
         value = int(str(raw).strip())
-    except TypeError, ValueError:
+    except (TypeError, ValueError):  # fmt: skip
         return DEFAULT_FLUSH_TIMEOUT_MS
     if value < 1:
         return DEFAULT_FLUSH_TIMEOUT_MS
     return value
+
+
+def resolve_lane_provenance(source: Mapping[str, str] | None = None) -> dict[str, LanePin]:
+    """Per-lane pin provenance for doctor diagnostics (S7-1a).
+
+    Pure, diagnostic-only, and never raises: mirrors the canonical lane
+    resolution of ``_resolve_projects`` (EVAL bootstrap when only EVAL —
+    including its legacy ``OPIK_PROJECT_NAME`` fallback — is set; otherwise
+    an explicit per-lane mix) so ``run_opik_doctor`` can name each lane's
+    state and origin env var without re-deriving or altering the fail-closed
+    resolution. Whitespace stripping matches ``_resolve_projects``.
+    """
+    env = os.environ if source is None else source
+
+    def _pin(var: str) -> str | None:
+        value = (env.get(var) or "").strip()
+        return value or None
+
+    lane_vars = {
+        "live": ENV_PROJECT_LIVE,
+        "eval": ENV_PROJECT_EVAL,
+        "ci": ENV_PROJECT_CI,
+        "import": ENV_PROJECT_IMPORT,
+    }
+    live = _pin(ENV_PROJECT_LIVE)
+    ci = _pin(ENV_PROJECT_CI)
+    import_p = _pin(ENV_PROJECT_IMPORT)
+
+    # Match ``_resolve_projects`` or-chain *before* strip so whitespace-only
+    # GIT_CG_OPIK_PROJECT_EVAL does not silently fall through to OPIK_PROJECT_NAME.
+    raw_eval = env.get(ENV_PROJECT_EVAL)
+    raw_legacy = env.get(OPIK_ENV_PROJECT_NAME)
+    eval_var_present = bool(raw_eval)  # truthy raw, including whitespace-only
+    if eval_var_present:
+        eval_p = str(raw_eval).strip() or None
+        eval_from_legacy = False
+    elif raw_legacy:
+        eval_p = str(raw_legacy).strip() or None
+        eval_from_legacy = bool(eval_p)
+    else:
+        eval_p = None
+        eval_from_legacy = False
+
+    resolved = {"live": live, "eval": eval_p, "ci": ci, "import": import_p}
+
+    # EVAL bootstrap: only EVAL (explicit or legacy fallback) populated.
+    if eval_p and not any((live, ci, import_p)):
+        if eval_var_present:
+            kind, origin = LaneSource.BOOTSTRAP_EVAL, ENV_PROJECT_EVAL
+        else:
+            kind, origin = LaneSource.BOOTSTRAP_LEGACY, OPIK_ENV_PROJECT_NAME
+        return {lane: LanePin(lane, eval_p, kind, var, origin) for lane, var in lane_vars.items()}
+
+    # Explicit/partial mix: EVAL may still fall back to the legacy pin.
+    pins: dict[str, LanePin] = {}
+    for lane in PROJECT_LANES:
+        env_var = lane_vars[lane]
+        value = resolved[lane]
+        if value is None:
+            pins[lane] = LanePin(lane, None, LaneSource.MISSING, env_var, None)
+        elif lane == "eval" and eval_from_legacy:
+            pins[lane] = LanePin(lane, value, LaneSource.LEGACY, env_var, OPIK_ENV_PROJECT_NAME)
+        else:
+            pins[lane] = LanePin(lane, value, LaneSource.EXPLICIT, env_var, env_var)
+    return pins
 
 
 def _resolve_projects(source: Mapping[str, str]) -> dict[str, str] | None:
@@ -357,6 +453,8 @@ def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
     tokens still fail closed to ``off`` for capture safety, but leave the bad
     token in ``meta.mode_fallback`` so operator surfaces can surface
     ``config_error`` instead of a silent disable.
+
+    Prefer :func:`operator_mode_fallback_token` for any operator-facing output.
     """
     if not isinstance(record, Mapping):
         return None
@@ -368,6 +466,18 @@ def mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
         return None
     text_token = str(token).strip()
     return text_token or None
+
+
+def operator_mode_fallback_token(record: Mapping[str, Any] | None) -> str | None:
+    """Return a secret-safe display form of ``meta.mode_fallback`` for operators.
+
+    Valid mode vocabulary is a closed enum. Any recorded fallback is already
+    invalid; operator output therefore never echoes the raw env token. Returns
+    ``"<redacted-mode-token>"`` when a fallback exists, else ``None``.
+    """
+    if mode_fallback_token(record) is None:
+        return None
+    return "<redacted-mode-token>"
 
 
 def operator_config_health(record: Mapping[str, Any] | None) -> str:
@@ -425,7 +535,26 @@ def public_config_view(record: Mapping[str, Any]) -> dict[str, Any]:
             continue
         value = record[key]
         if key == "meta" and isinstance(value, Mapping):
-            out[key] = {k: v for k, v in value.items() if not _looks_like_secret_key(str(k))}
+            safe_meta: dict[str, Any] = {}
+            for k, v in value.items():
+                if _looks_like_secret_key(str(k)):
+                    continue
+                key_name = str(k)
+                # Operator JSON must never echo raw env/profile tokens from fallbacks.
+                if key_name == "mode_fallback" and v not in (None, ""):
+                    safe_meta[key_name] = "<redacted-mode-token>"
+                elif key_name == "environment_fallback" and v not in (None, ""):
+                    safe_meta[key_name] = "<redacted-environment-token>"
+                elif key_name == "redaction_profile_fallback" and v not in (None, ""):
+                    # Keep closed diagnostic taxonomy; strip any unknown suffix payload.
+                    reason = str(v)
+                    if reason.startswith("unknown_profile:"):
+                        safe_meta[key_name] = "unknown_profile"
+                    else:
+                        safe_meta[key_name] = reason
+                else:
+                    safe_meta[key_name] = v
+            out[key] = safe_meta
         else:
             out[key] = value
     return out

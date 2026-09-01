@@ -54,6 +54,7 @@ MINIMUM_SKETCH_COMMANDS: Final[frozenset[str]] = frozenset(
         "eval recompute-scores",
         "eval doctor",
         "eval opik doctor",
+        "eval opik verify",
         "eval opik config show",
         "eval failures",
         "eval explain",
@@ -61,6 +62,7 @@ MINIMUM_SKETCH_COMMANDS: Final[frozenset[str]] = frozenset(
         "eval diagnose",
         "eval issue list",
         "eval issue show",
+        "eval checkpoint list",
         "eval replay",
         "eval promote",
         "eval amend-brief",
@@ -196,6 +198,27 @@ def _build_registry() -> dict[str, DataSketch]:
                 "contract as eval doctor; suite_id may be null."
             ),
         ),
+        "eval opik verify": _sketch(
+            "eval opik verify",
+            required_keys=(
+                "authority",
+                "create_missing",
+                "doctor_authority",
+                "exit_code",
+                "notes",
+                "ok",
+                "product_accept_blocked",
+                "remote",
+                "rows",
+            ),
+            nested=("rows[]: {check_id, status: pass|warn|fail|skip, message, hint?}",),
+            notes=(
+                "Optional online project/FD verification. Default offline skip. "
+                "`--remote` enables advisory checks; `--create-missing` requires "
+                "`--remote`. Never doctor/CI/product-accept authority. Network "
+                "failure is warning-only (exit 0)."
+            ),
+        ),
         "eval opik config show": _sketch(
             "eval opik config show",
             required_keys=("config", "secrets", "health_hint", "mirror_result"),
@@ -267,6 +290,19 @@ def _build_registry() -> dict[str, DataSketch]:
             required_keys=("issues", "issue_count"),
             nested=("issues[]: diag_issue_v1 rows",),
             notes="Newest last_seen_at first. Optional --status filter applied before emit.",
+        ),
+        "eval checkpoint list": _sketch(
+            "eval checkpoint list",
+            required_keys=("checkpoints", "checkpoint_count", "suite_id"),
+            nested=(
+                "checkpoints[]: {checkpoint_id, mtime, suite_id, experiment_id, status, mode, "
+                "compat_hash_short, pin_short, live_match, completed_count, pending_count, path}",
+            ),
+            notes=(
+                "Read-only .eval/checkpoints inventory (newest mtime first). "
+                "Optional --suite filter. live_match compares stored compat_hash to live preimage. "
+                "Unreadable checkpoints are skipped. suite_id is null when no filter is set."
+            ),
         ),
         "eval issue show": _sketch(
             "eval issue show",

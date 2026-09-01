@@ -25,7 +25,11 @@ _SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bghp_[A-Za-z0-9]{36,}\b"),
     re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
-    re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+    re.compile(
+        r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\."
+        r"[A-Za-z0-9_-]{1,}\."
+        r"[A-Za-z0-9_-]{5,}(?![A-Za-z0-9_-])"
+    ),
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     re.compile(r"(?i)\b(?:api[_-]?key|secret|password|token|authorization)\s*[:=]\s*['\"]?([^\s'\"]{8,})['\"]?"),
 )
@@ -103,6 +107,25 @@ def mask_secrets_in_text(value: str | None) -> str | None:
     return out
 
 
+def mask_optional_operator_text(value: str | None) -> str | None:
+    """Mask free-text before persist/export; never restore raw after masking.
+
+    H65 law:
+    * ``None`` / blank → ``None``
+    * otherwise run ``mask_secrets_in_text`` on the stripped value
+    * if masking returns falsy, persist ``""`` (redacted empty) — never the raw input
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    masked = mask_secrets_in_text(stripped)
+    if not masked:
+        return ""
+    return masked
+
+
 def project_secret_safe(value: Any) -> Any:
     """Recursively project operator payloads so secrets never leave cleartext.
 
@@ -127,6 +150,7 @@ def project_secret_safe(value: Any) -> Any:
 
 
 __all__ = [
+    "mask_optional_operator_text",
     "mask_secrets_in_text",
     "project_secret_safe",
     "scrub_evidence_mapping",

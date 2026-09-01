@@ -185,3 +185,30 @@ def make_trailer_priors(
     if construct:
         return TrailerPriors.model_construct(**payload)
     return TrailerPriors(**payload)
+
+
+# ---------------------------------------------------------------------------
+# Opik four-lane project-pin env scrubbing (S7-1a)
+# ---------------------------------------------------------------------------
+
+#: The canonical four-lane Opik project pins plus the legacy fallback. Scrubbed
+#: together so lane-provenance / doctor tests are hermetic regardless of the
+#: developer's ambient shell environment.
+OPIK_PROJECT_LANE_ENV_VARS: tuple[str, ...] = (
+    "GIT_CG_OPIK_PROJECT_LIVE",
+    "GIT_CG_OPIK_PROJECT_EVAL",
+    "GIT_CG_OPIK_PROJECT_CI",
+    "GIT_CG_OPIK_PROJECT_IMPORT",
+    "OPIK_PROJECT_NAME",
+)
+
+
+def scrub_opik_project_lanes(monkeypatch: Any) -> None:
+    """Delete every Opik project-lane pin and the legacy fallback from the env.
+
+    Shared by S7-1a lane tests in ``test_config.py`` / ``test_eval_opik_doctor.py``
+    so both scrub the identical var set. Deliberately narrow: it does not touch
+    the broader Opik config/secret vars those files manage per-test.
+    """
+    for var in OPIK_PROJECT_LANE_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)

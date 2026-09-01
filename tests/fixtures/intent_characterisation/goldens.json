@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "sop_matrix_sha256": "c494cee6381b8abb773be0885212aa1526ed8e5366602fde8ff5aba72740a436",
-  "sop_matrix_row_count": 76,
+  "sop_matrix_sha256": "8002f8e362107409bf23bc77b5c74ad6d4c91eb995cda005aa46b39a4f92a07a",
+  "sop_matrix_row_count": 77,
   "cases": {
     "empty_baseline": {
       "markers": [],
@@ -653,6 +653,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -1383,6 +1392,15 @@
           "cc_type": "chore"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": -111.6,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": -113.0,
           "priority": 20,
@@ -1474,7 +1492,8 @@
           "validation_update",
           "offline_support",
           "backwards_compatibility",
-          "dark_launch"
+          "dark_launch",
+          "review_bot_apply"
         ]
       }
     },
@@ -2171,6 +2190,15 @@
           "semver_impact": "PATCH",
           "intent_group": "config_chore",
           "cc_type": "chore"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": -111.6,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         }
       ],
       "constraints": {
@@ -2255,7 +2283,8 @@
           "validation_update",
           "offline_support",
           "backwards_compatibility",
-          "dark_launch"
+          "dark_launch",
+          "review_bot_apply"
         ]
       }
     },
@@ -2918,6 +2947,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": -81.6,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": -83.0,
           "priority": 20,
@@ -3036,7 +3074,8 @@
           "validation_update",
           "offline_support",
           "backwards_compatibility",
-          "dark_launch"
+          "dark_launch",
+          "review_bot_apply"
         ]
       }
     },
@@ -3693,6 +3732,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -4387,6 +4435,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": 17.0,
           "priority": 20,
@@ -5077,6 +5134,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -5783,6 +5849,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": 17.0,
           "priority": 20,
@@ -6451,6 +6526,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -7197,6 +7281,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": 17.0,
           "priority": 20,
@@ -7898,6 +7991,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": 17.0,
           "priority": 20,
@@ -8593,6 +8695,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -9295,6 +9406,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": 17.0,
           "priority": 20,
@@ -9990,6 +10110,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -10699,6 +10828,15 @@
           "cc_type": "docs"
         },
         {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
+        },
+        {
           "intent_id": "merge_branch",
           "score": 17.0,
           "priority": 20,
@@ -11389,6 +11527,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",
@@ -12099,6 +12246,15 @@
           "semver_impact": "NONE",
           "intent_group": "docs",
           "cc_type": "docs"
+        },
+        {
+          "intent_id": "review_bot_apply",
+          "score": 18.400000000000002,
+          "priority": 22,
+          "specificity": 96,
+          "semver_impact": "NONE",
+          "intent_group": "config_chore",
+          "cc_type": "chore"
         },
         {
           "intent_id": "merge_branch",

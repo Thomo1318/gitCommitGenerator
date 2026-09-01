@@ -2253,6 +2253,39 @@
         "experiment_spike_primary"
       ],
       "selection_rule": "Use when the primary change ships a dark-launched surface: default-off flag, opt-in CLI/env gate, advisory/non-blocking sidecar, or help-hidden maintainer command. Prefer 🚩 for authoring/updating feature-flag machinery, ✨ for GA user-facing features, ⚗️ for throwaway experiments/spikes, and 🚧 for unfinished WIP. Matrix SemVer is PATCH (presentation may still ceiling via DARK_LAUNCH_TAGS)."
+    },
+    {
+      "emoji": "🐰",
+      "code": ":rabbit:",
+      "intent_id": "review_bot_apply",
+      "intent_group": "config_chore",
+      "description": "Apply automated review-bot residue (CodeRabbit autofix/generated apply; provenance-primary)",
+      "cc_type": "chore",
+      "semver_impact": "NONE",
+      "changelog_group": "Miscellaneous",
+      "priority": 22,
+      "specificity": 96,
+      "split_weight": 15,
+      "positive_signals": [
+        "coderabbit_autofix_applied",
+        "review_bot_generated_apply",
+        "coderabbit_chat_generated_commit",
+        "bot_applied_review_residue",
+        "automated_review_apply_primary"
+      ],
+      "negative_signals": [
+        "human_review_response_primary",
+        "product_bugfix_primary",
+        "security_fix_primary",
+        "validation_hardening_primary",
+        "tests_authored_as_product_locks",
+        "docs_or_adr_primary",
+        "feature_addition",
+        "ordinary_fix_mentions_reviewer_only",
+        "docs_only",
+        "test_only"
+      ],
+      "selection_rule": "Use only when the primary story is bot-applied or bot-generated review residue (CodeRabbit autofix, generated apply commits, or equivalent review-bot apply). Prefer 🐛/🔒️/🦺/✅/📝 (or other product intents) when the diff corrects product behaviour, security, validation, tests, or docs — keep CodeRabbit as body/provenance prose, not the subject gitmoji. Never select for ordinary human commits that merely mention CodeRabbit. Matrix SemVer is NONE so autofix storms do not bump release."
     }
   ]
 }

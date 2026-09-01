@@ -1,0 +1,153 @@
+{
+  "$defs": {
+    "fd_type": {
+      "description": "Opik Feedback Definition value kinds supported by the Tier-1 harness vocabulary.",
+      "enum": [
+        "numerical",
+        "boolean",
+        "categorical"
+      ],
+      "type": "string"
+    },
+    "iso8601": {
+      "description": "ISO-8601 UTC timestamp.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Tier-1 Feedback Definition vocabulary map (S7-2). Data-only alignment of emitted product/human score names to their harness-pinned Opik definition metadata. The scale_min/scale_max/categories recorded per entry are harness vocabulary CONVENTIONS enforced by the drift-guard test and the Opik workspace Feedback Definitions — they are NOT claims about what human_review_v1 or the emitters validate (human.craft_rating is an unconstrained number, human.gold_dispute a plain boolean, only human.regime_label pins an enum). 'final_accept' is an artifact_class/provenance_label binding-identity enum value (a provenance tag), never a review-outcome score, and is excluded from the Tier-1 FD vocabulary. 'human.notes_present' is derived/read-only metadata and is never minted as a Feedback Definition.",
+  "properties": {
+    "schema_version": {
+      "const": "feedback_definition_v1",
+      "type": "string"
+    },
+    "definitions": {
+      "additionalProperties": false,
+      "description": "Tier-1 Feedback Definitions, one entry per emitted/human score name.",
+      "properties": {
+        "user_acceptance": {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "$ref": "#/$defs/fd_type" },
+            "scale_min": { "type": "number" },
+            "scale_max": { "type": "number" },
+            "categories": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "emitter": {
+              "description": "Code locus that emits this score (e.g. main.py:4543 or review_queue._build_scores).",
+              "type": "string"
+            },
+            "value_boundary": {
+              "description": "Optional note on any type conversion applied at the score boundary (e.g. ranking_override metadata bool -> 1.0/0.0 float).",
+              "type": "string"
+            }
+          },
+          "required": [ "type", "emitter" ],
+          "type": "object"
+        },
+        "ranking_override": {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "$ref": "#/$defs/fd_type" },
+            "scale_min": { "type": "number" },
+            "scale_max": { "type": "number" },
+            "categories": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "emitter": { "type": "string" },
+            "value_boundary": { "type": "string" }
+          },
+          "required": [ "type", "emitter" ],
+          "type": "object"
+        },
+        "contract_consistent": {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "$ref": "#/$defs/fd_type" },
+            "scale_min": { "type": "number" },
+            "scale_max": { "type": "number" },
+            "categories": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "emitter": { "type": "string" },
+            "value_boundary": { "type": "string" }
+          },
+          "required": [ "type", "emitter" ],
+          "type": "object"
+        },
+        "human.craft_rating": {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "$ref": "#/$defs/fd_type" },
+            "scale_min": { "type": "number" },
+            "scale_max": { "type": "number" },
+            "categories": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "emitter": { "type": "string" },
+            "value_boundary": { "type": "string" }
+          },
+          "required": [ "type", "emitter" ],
+          "type": "object"
+        },
+        "human.gold_dispute": {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "$ref": "#/$defs/fd_type" },
+            "scale_min": { "type": "number" },
+            "scale_max": { "type": "number" },
+            "categories": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "emitter": { "type": "string" },
+            "value_boundary": { "type": "string" }
+          },
+          "required": [ "type", "emitter" ],
+          "type": "object"
+        },
+        "human.regime_label": {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "$ref": "#/$defs/fd_type" },
+            "scale_min": { "type": "number" },
+            "scale_max": { "type": "number" },
+            "categories": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "emitter": { "type": "string" },
+            "value_boundary": { "type": "string" }
+          },
+          "required": [ "type", "emitter" ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "user_acceptance",
+        "ranking_override",
+        "contract_consistent",
+        "human.craft_rating",
+        "human.gold_dispute",
+        "human.regime_label"
+      ],
+      "type": "object"
+    },
+    "notes": {
+      "description": "Free-text provenance/rationale for the map (e.g. notes_present exclusion, final_accept provenance distinction). Not a score.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "definitions"
+  ],
+  "title": "feedback_definition_v1",
+  "type": "object"
+}

@@ -32,6 +32,8 @@ git-cg = "git_cg.main:app"
 
 [dependency-groups]
 dev = [
+  "harbor>=0.22.0",
+  "matplotlib>=3.11.1",
   "pytest>=9",
   "pytest-cov>=7",
   "ruff>=0.15.15",

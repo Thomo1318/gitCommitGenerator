@@ -52,6 +52,8 @@ EXPORT_ERROR_CLASSES = frozenset({"export_network", "export_auth", "export_valid
 LAZY_OPIK_IMPORT_ALLOWLIST: Final[frozenset[str]] = frozenset(
     {
         "src/git_cg/eval/mirror/transport.py:OpikSdkTransport.upload",
+        "src/git_cg/eval/mirror/opik_verify.py:_default_client_factory",
+        "src/git_cg/eval/mirror/queue_projector.py:_default_live_projector_factory",
     }
 )
 
@@ -220,6 +222,9 @@ class OpikSdkTransport:
             ) from exc
 
         try:
+            from git_cg.eval.mirror.secrets import ensure_secure_opik_endpoint
+
+            ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
             # opik is an optional runtime dep; the attribute exists at runtime
             # but pyright cannot resolve it through the lazy import guard.
             client = opik.Opik(  # type: ignore[attr-defined]

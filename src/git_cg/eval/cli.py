@@ -107,7 +107,6 @@ from git_cg.eval.cli_output import (
 #   leaf commands use ``BriefFullHelpCommand``.
 # * Scoped to selected eval surfaces so terminal UX can be judged before wider rollout.
 
-
 _HELP_DETAIL_MARKER = "<<GIT_CG_HELP_DETAIL>>"
 _FULL_HELP_ENV = "GIT_CG_HELP"
 _FULL_HELP_ENV_VALUE = "full"
@@ -288,7 +287,7 @@ eval_app = typer.Typer(
         "\n"
         "- Corpus: rebuild checked-in reference fixtures and identity hashes\n"
         "- Run: offline suite run, resume from checkpoint, re-score prior evidence\n"
-        "- Inspect: doctor, triage, failures, explain, compare, diagnose\n"
+        "- Inspect: doctor, triage, failures, explain, compare, diagnose, checkpoint list\n"
         "- Review & sessions: advisory human review, local sessions/threads, diagnostic issues\n"
         "- Export & train: amend briefs, train export, Opik health/config, export queue\n"
         "- Advanced: replay generation and governed promote\n"
@@ -462,6 +461,7 @@ opik_app = typer.Typer(
         "\n"
         "Subcommands:\n"
         "- doctor: Opik/export/queue health checks (local only)\n"
+        "- verify: optional online project/FD verification (advisory)\n"
         "- config: nested secret-safe config inspection (show)"
     ),
     short_help="Opik health checks and secret-safe config.",
@@ -489,11 +489,36 @@ opik_config_app = typer.Typer(
         "- temporary flat alias remains: git-cg eval config show\n"
         "\n"
         "Subcommands:\n"
-        "- show: emit secret-safe resolved config (plain JSON or --json envelope)"
+        "- show: emit secret-safe resolved config (plain summary or --json envelope)"
     ),
     short_help="Inspect Opik/mirror config without exposing secrets.",
     no_args_is_help=True,
 )
+checkpoint_app = typer.Typer(
+    cls=BriefFullHelpGroup,
+    add_completion=False,
+    help=(
+        "Local evaluation checkpoint inventory (read-only).\n"
+        "\n"
+        "Inspect stored evaluation checkpoints under .eval/checkpoints/.\n"
+        "\n"
+        "<<GIT_CG_HELP_DETAIL>>\n"
+        "\n"
+        "Offline inventory for resume/GC planning. Does not mutate checkpoint\n"
+        "files, contact Opik, or change product ranking.\n"
+        "\n"
+        "Guarantees:\n"
+        "- list is offline and non-mutating\n"
+        "- unreadable/corrupt checkpoints are skipped\n"
+        "- live_match compares stored compat_hash to the live preimage\n"
+        "\n"
+        "Subcommands:\n"
+        "- list: inventory id/mtime/suite/compat/pin/live_match/counts"
+    ),
+    short_help="Local evaluation checkpoint inventory (read-only).",
+    no_args_is_help=True,
+)
+
 export_app = typer.Typer(
     cls=BriefFullHelpGroup,
     add_completion=False,
@@ -536,10 +561,10 @@ eval_app.add_typer(review_app, name="review", rich_help_panel="Review & sessions
 eval_app.add_typer(session_app, name="session", rich_help_panel="Review & sessions")
 eval_app.add_typer(thread_app, name="thread", rich_help_panel="Review & sessions")
 eval_app.add_typer(issue_app, name="issue", rich_help_panel="Review & sessions")
+eval_app.add_typer(checkpoint_app, name="checkpoint", rich_help_panel="Inspect")
 eval_app.add_typer(opik_app, name="opik", rich_help_panel="Export & train")
 opik_app.add_typer(opik_config_app, name="config")
 eval_app.add_typer(export_app, name="export", rich_help_panel="Export & train")
-
 
 # --------------------------------------------------------------------------
 # Shared helpers
@@ -1213,6 +1238,11 @@ def amend_brief_cmd(
         "--session-thread-id",
         help="Optional session id (sess_) to attach to the brief.",
     ),
+    case_id: str | None = typer.Option(
+        None,
+        "--case",
+        help="Scope the brief to a single case id (default: experiment aggregate).",
+    ),
     last_dogfood: int = typer.Option(
         3,
         "--last",
@@ -1258,6 +1288,7 @@ def amend_brief_cmd(
 
     Options:
     - --session-thread-id attaches a sess_ twin when available
+    - --case ID scopes the brief to one case (default: experiment aggregate)
     - --last N includes the newest N dogfood/Lane C attachments (default 3)
     - --doctor adds a doctor projection section
     - --write/--no-write controls persistence under .eval/amend_briefs/
@@ -1280,6 +1311,7 @@ def amend_brief_cmd(
         data = amend_brief(
             repo,
             experiment_id=score_run_id,
+            case_id=case_id,
             session_thread_id=session_thread_id,
             include_doctor=doctor,
             lane_c_last_n=last_dogfood,
@@ -1488,6 +1520,15 @@ def train_export_cmd(
         "--dry-run",
         help="Validate and preview paths without writing (same as --no-write).",
     ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
     as_json: bool = typer.Option(
         False,
         "--json",
@@ -1511,6 +1552,8 @@ def train_export_cmd(
     - all landed bundles when --bundle-id is omitted
     - write enabled
 
+    Optional ``--root`` overrides repo discovery (test isolation / multi-worktree).
+
     Scrub-failure policy (locked):
     - row that cannot be made secret-safe is dropped
     - failure is recorded in scrub_report
@@ -1530,7 +1573,7 @@ def train_export_cmd(
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.train_export import TrainExportError, train_export
 
-    repo = _resolve_repo(None)
+    repo = _resolve_repo(root)
     try:
         data = train_export(
             repo,
@@ -2171,6 +2214,17 @@ def promote_cmd(
     --redaction-profile. split_group_id is required for contamination control
     (explicit or derived from the source bundle/session).
 
+    Promote-ready bundle spine (ape_bundle_v1):
+    - meta.binding.trace_id is REQUIRED on promote. Precedence when resolving
+      the source trace id (first non-empty wins):
+          meta.binding.trace_id  >  meta.trace_id  >  bundle.trace_id
+      A stale top-level bundle.trace_id never shadows a present
+      meta.binding.trace_id.
+    - The bundle must NOT carry a top-level "id" field: ape_bundle_v1 uses
+      additionalProperties=false, so a top-level "id" fails schema validation
+      even though adjacent identity/export vocabulary speaks in IDs. Omit "id"
+      from the bundle body.
+
     Forbidden (named denials, never silent):
     - silent gold mint from production accept / popularity
     - human-review-alone golden promotion
@@ -2392,7 +2446,6 @@ def diagnose_cmd(
 # --------------------------------------------------------------------------
 # Nested: review queue (HITL / human_review_v1)
 # --------------------------------------------------------------------------
-
 
 # review_app registered near module top for help-panel order.
 
@@ -2836,7 +2889,6 @@ def review_dismiss_cmd(
 # Nested: session / thread
 # --------------------------------------------------------------------------
 
-
 # session_app registered near module top for help-panel order.
 
 
@@ -2992,7 +3044,6 @@ def thread_show_cmd(
 # --------------------------------------------------------------------------
 # Nested: issue
 # --------------------------------------------------------------------------
-
 
 # issue_app registered near module top for help-panel order.
 
@@ -3231,7 +3282,6 @@ def issue_suppress_cmd(
 # Nested: opik (canonical config + doctor)
 # --------------------------------------------------------------------------
 
-
 # opik_app / opik_config_app registered near module top for help-panel order.
 
 
@@ -3255,14 +3305,15 @@ def opik_config_group_callback(
 
 def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = None) -> None:
     """Shared secret-safe config show implementation (canonical + alias)."""
-    import json
     import os
 
+    from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.mirror.config import (
+        PROJECT_LANES,
         OpikConfigError,
         mask_secret,
-        mode_fallback_token,
         operator_config_health,
+        operator_mode_fallback_token,
         public_config_view,
         resolve_opik_config,
     )
@@ -3314,8 +3365,11 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
                 )
             )
         else:
-            typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=True))
-            typer.echo(f"config show: invalid (fail-closed): {exc}", err=True)
+            emit_human_line("eval opik config show: invalid (fail-closed)", err=True)
+            emit_human_line(f"  health={ExportHealth.CONFIG_ERROR.value}", err=True)
+            emit_human_line(f"  error={exc}", err=True)
+            emit_human_line("  api_key_present=false", err=True)
+            emit_human_line("  product_accept_blocked=false", err=True)
         raise typer.Exit(code=2) from None
 
     view = public_config_view(config)
@@ -3333,8 +3387,8 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
             mode=str(view.get("mode") or "off"),
             health=ExportHealth(health_hint),
             notes=(
-                (f"config_error: invalid mode token {mode_fallback_token(config)!r}",)
-                if mode_fallback_token(config)
+                (f"config_error: invalid mode token {operator_mode_fallback_token(config)!r}",)
+                if operator_mode_fallback_token(config)
                 else ()
             ),
         ).to_dict(),
@@ -3352,7 +3406,7 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
                     [
                         {
                             "code": "EVAL_CONFIG_ERROR",
-                            "message": f"invalid mode token {mode_fallback_token(config)!r}",
+                            "message": f"invalid mode token {operator_mode_fallback_token(config)!r}",
                         }
                     ]
                     if exit_code == 2
@@ -3361,7 +3415,28 @@ def _config_show_impl(*, as_json: bool = False, deprecated_from: str | None = No
             )
         )
     else:
-        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
+        mode = str(view.get("mode") or "off")
+        workspace = view.get("workspace")
+        redaction = view.get("redaction_profile")
+        projects = view.get("projects") if isinstance(view.get("projects"), dict) else {}
+        emit_human_line("eval opik config show:")
+        emit_human_line(f"  mode={mode}")
+        emit_human_line(f"  health={health_hint}")
+        emit_human_line(f"  workspace={workspace if workspace not in (None, '') else '-'}")
+        if projects:
+            for lane in PROJECT_LANES:
+                pin = projects.get(lane)
+                emit_human_line(f"  project.{lane}={pin if pin not in (None, '') else '-'}")
+        else:
+            emit_human_line("  projects=-")
+        emit_human_line(f"  api_key_present={str(bool(masked.get('api_key_present'))).lower()}")
+        if masked.get("api_key"):
+            emit_human_line(f"  api_key={masked['api_key']}")
+        emit_human_line(f"  redaction_profile={redaction if redaction not in (None, '') else '-'}")
+        emit_human_line("  product_accept_blocked=false")
+        fallback = operator_mode_fallback_token(config)
+        if fallback:
+            emit_human_line(f"  mode_fallback={fallback}")
     raise typer.Exit(code=exit_code)
 
 
@@ -3391,9 +3466,11 @@ def opik_config_show_cmd(
     Health hint values include skipped_off / deferred / pending / config_error.
     Invalid mode tokens fail closed (exit 2). Successful show exits 0.
 
-    Plain text emits indented JSON of the secret-safe payload. ``--json`` wraps
-    the same payload in the standard CLI envelope (with deprecation warnings when
-    invoked via the temporary flat alias ``git-cg eval config show``).
+    Plain text is a multi-line summary (mode, health, workspace, four-lane
+    project pins, ``api_key_present``, redaction profile,
+    ``product_accept_blocked``). ``--json`` wraps the full secret-safe payload in
+    the standard CLI envelope (deprecation warnings apply on the temporary flat
+    alias ``git-cg eval config show``).
 
     No transport, no queue drain, and no accept/ranking side effects.
     """
@@ -3457,6 +3534,76 @@ def opik_doctor_cmd(
     raise typer.Exit(code=report.exit_code)
 
 
+@opik_app.command(
+    "verify",
+    cls=BriefFullHelpCommand,
+    short_help="Optional online Opik project/FD verification (advisory).",
+)
+def opik_verify_cmd(
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Enable online verification (default: offline skip).",
+    ),
+    create_missing: bool = typer.Option(
+        False,
+        "--create-missing",
+        help="Also attempt to create missing remote projects (requires --remote).",
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Optional online Opik project/FD verification (advisory).
+
+    Disabled by default. Never a CI/product-accept gate. Network failure is
+    warning-only. Doctor remains the offline authority surface.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    With default flags this command skips online work and exits 0. Pass
+    ``--remote`` to compare local four-lane project pins and the Tier-1
+    Feedback Definition map against the Opik workspace. Pass
+    ``--create-missing`` together with ``--remote`` to attempt optional
+    project creation for missing lane pins.
+
+    Guarantees:
+    - authority is always advisory_non_sot
+    - never feeds promote/doctor/gates
+    - never prints raw secrets
+    - remote/network/auth failures stay warning-class (exit 0)
+    """
+    from git_cg.eval.cli_output import emit_human_line
+    from git_cg.eval.mirror.opik_verify import run_opik_verify
+
+    if create_missing and not remote:
+        emit_human_line(
+            "eval opik verify: --create-missing requires --remote",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    report = run_opik_verify(remote=remote, create_missing=create_missing)
+    if as_json:
+        emit_json_envelope(build_envelope("eval opik verify", ok=report.ok, data=report.to_data()))
+    else:
+        emit_human_line(
+            f"eval opik verify: remote={report.remote} rows={len(report.rows)} authority={report.authority}",
+            err=False,
+        )
+        for row in report.rows:
+            line = f"  [{row.status}] {row.check_id}: {row.message}"
+            if row.hint:
+                line = f"{line} (hint: {row.hint})"
+            emit_human_line(line, err=True)
+        for note in report.notes:
+            emit_human_line(f"  note: {note}", err=True)
+    raise typer.Exit(code=report.exit_code)
+
+
 # --------------------------------------------------------------------------
 # Temporary flat config alias (deprecated → eval opik config show)
 # --------------------------------------------------------------------------
@@ -3506,8 +3653,87 @@ def config_cmd(
 # Nested export (landed S4) + temporary dashed aliases
 # --------------------------------------------------------------------------
 
-
 # export_app registered near module top for help-panel order.
+
+
+@checkpoint_app.command(
+    "list",
+    cls=BriefFullHelpCommand,
+    short_help="List local evaluation checkpoints (read-only).",
+)
+def checkpoint_list_cmd(
+    suite_id: str | None = typer.Option(
+        None,
+        "--suite",
+        help="Optional suite_id filter.",
+    ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """List local evaluation checkpoints (read-only).
+
+    Offline inventory of ``.eval/checkpoints`` for resume/GC planning. Does not
+    mutate checkpoint files, contact Opik, or change product ranking.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Each row includes id, mtime, suite, short compat hash, short pin, live_match
+    against the live compat preimage, and pending/completed counts. Unreadable
+    or schema-invalid checkpoints are skipped. Optional ``--suite`` filters by
+    suite_id. ``--json`` emits the standard CLI envelope.
+    """
+    from git_cg.eval.checkpoint_store import list_checkpoint_inventory
+    from git_cg.eval.cli_output import emit_human_line
+
+    try:
+        repo = _resolve_repo(root)
+    except Exception as exc:
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval checkpoint list",
+                    ok=False,
+                    data={},
+                    errors=[{"code": "EVAL_REPO_UNRESOLVABLE", "message": str(exc)}],
+                )
+            )
+        else:
+            emit_human_line(f"eval checkpoint list: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+
+    rows = list_checkpoint_inventory(repo, suite_id=suite_id)
+    payload = {
+        "checkpoints": [row.to_dict() for row in rows],
+        "checkpoint_count": len(rows),
+        "suite_id": suite_id,
+    }
+    if as_json:
+        emit_json_envelope(build_envelope("eval checkpoint list", ok=True, data=payload))
+    else:
+        emit_human_line(f"eval checkpoint list: {payload['checkpoint_count']} checkpoint(s)")
+        for row in rows:
+            emit_human_line(
+                f"  {row.checkpoint_id}: suite={row.suite_id or '-'} "
+                f"mtime={row.mtime or '-'} "
+                f"compat={row.compat_hash_short or '-'} "
+                f"pin={row.pin_short or '-'} "
+                f"live_match={str(row.live_match).lower()} "
+                f"completed={row.completed_count} pending={row.pending_count}"
+            )
+    raise typer.Exit(code=0)
 
 
 def _resolve_repo(root: Path | None) -> Path:
@@ -3586,13 +3812,22 @@ def _queue_status_counts(repo: Path) -> dict[str, int]:
     from git_cg.eval.mirror.queue import export_queue_dir, load_queue_item
 
     qdir = export_queue_dir(repo)
-    counts: dict[str, int] = {}
+    # Always emit a stable zeroed shape so machine consumers see a consistent
+    # key set on an empty/absent queue (healthy, not a defect).
+    counts: dict[str, int] = {
+        "pending": 0,
+        "sending": 0,
+        "sent": 0,
+        "failed": 0,
+        "dropped": 0,
+        "unreadable": 0,
+    }
     if qdir.is_dir():
         for path in sorted(qdir.glob("*.json")):
             try:
                 item = load_queue_item(path.stem, repo_root=repo)
             except Exception:
-                counts["unreadable"] = counts.get("unreadable", 0) + 1
+                counts["unreadable"] += 1
                 continue
             status = str(item.get("status", "unknown"))
             counts[status] = counts.get(status, 0) + 1
@@ -3606,11 +3841,13 @@ def _emit_status(repo: Path) -> None:
     qdir = export_queue_dir(repo)
     counts = _queue_status_counts(repo)
     typer.echo(f"queue_dir {qdir}")
-    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
-        if status in counts:
-            typer.echo(f"{status} {counts[status]}")
-    if not counts:
+    if not any(counts.values()):
+        # Empty/absent queue is healthy; report it without inventing rows.
         typer.echo("queue empty")
+        return
+    for status in ("pending", "sending", "sent", "failed", "dropped", "unreadable"):
+        if counts.get(status):
+            typer.echo(f"{status} {counts[status]}")
 
 
 def _maybe_export_alias_deprecation(deprecated: str, *, as_json: bool) -> list[dict[str, str]]:
@@ -3678,7 +3915,7 @@ def export_status_cmd(
     and bad_mode fields. Exit codes: 0 when healthy, 1 if the repo root cannot
     be resolved, 2 on invalid mode configuration.
     """
-    from git_cg.eval.mirror.config import mode_fallback_token, operator_config_health, resolve_opik_config
+    from git_cg.eval.mirror.config import operator_config_health, operator_mode_fallback_token, resolve_opik_config
 
     warnings: list[dict[str, str]] = []
     if _deprecated_from:
@@ -3689,7 +3926,7 @@ def export_status_cmd(
     except Exception:
         cfg = None
     health_hint = operator_config_health(cfg) if cfg is not None else None
-    bad_mode = mode_fallback_token(cfg) if cfg is not None else None
+    bad_mode = operator_mode_fallback_token(cfg) if cfg is not None else None
 
     try:
         repo = _resolve_repo(root)
@@ -3843,13 +4080,18 @@ def export_retry_cmd(
     retried = 0
     skipped = 0
     unreadable = 0
+    not_found: list[str] = []
     for qid in targets:
         if max_items is not None and retried >= max_items:
             break
         try:
             item = load_queue_item(qid, repo_root=repo)
-        except ExportQueueError:
-            unreadable += 1
+        except ExportQueueError as exc:
+            # load_queue_item raises for both absent and corrupt rows; keep them distinct.
+            if str(exc).startswith("no export queue item:") and queue_id and qid == queue_id:
+                not_found.append(qid)
+            else:
+                unreadable += 1
             continue
         except Exception:
             unreadable += 1
@@ -3876,15 +4118,28 @@ def export_retry_cmd(
             skipped += 1
 
     if as_json:
+        data: dict[str, object] = {"retried": retried, "skipped": skipped, "unreadable": unreadable}
+        if not_found:
+            # Surface not-found ids alongside the counts for machine consumers.
+            data["not_found"] = not_found
+            warnings = [
+                *warnings,
+                {
+                    "code": "EVAL_EXPORT_ID_NOT_FOUND",
+                    "message": f"queue id not found: {', '.join(not_found)}",
+                },
+            ]
         emit_json_envelope(
             build_envelope(
                 "eval export retry",
                 ok=True,
-                data={"retried": retried, "skipped": skipped, "unreadable": unreadable},
+                data=data,
                 warnings=warnings,
             )
         )
     else:
+        for qid in not_found:
+            typer.echo(f"id not found: {qid}")
         typer.echo(f"retried {retried} skipped {skipped} unreadable {unreadable}")
     raise typer.Exit(code=0)
 
@@ -3944,8 +4199,8 @@ def export_drain_cmd(
 
     from git_cg.eval.mirror.config import (
         OpikConfigError,
-        mode_fallback_token,
         operator_config_health,
+        operator_mode_fallback_token,
         resolve_opik_config,
     )
     from git_cg.eval.mirror.exporter import drain_queue, list_pending_items
@@ -3974,7 +4229,7 @@ def export_drain_cmd(
             typer.echo(f"export drain: config invalid (fail-closed): {exc}", err=True)
         raise typer.Exit(code=2) from None
 
-    bad_mode = mode_fallback_token(config)
+    bad_mode = operator_mode_fallback_token(config)
     if bad_mode is not None:
         result = build_mirror_result(
             mode=str(config.get("mode") or "off"),

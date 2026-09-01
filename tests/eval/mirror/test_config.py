@@ -5,18 +5,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import conftest as _cq
 import pytest
 
 from git_cg.eval.mirror.config import (
     DEFAULT_ENVIRONMENT,
     DEFAULT_FLUSH_TIMEOUT_MS,
+    LaneSource,
     OpikConfigError,
     OpikEnvironment,
     OpikMode,
     mask_secret,
     mode_fallback_token,
     operator_config_health,
+    operator_mode_fallback_token,
     public_config_view,
+    resolve_lane_provenance,
     resolve_opik_config,
 )
 from git_cg.eval.mirror.health import EXPORT_HEALTH, ExportHealth
@@ -59,6 +63,10 @@ def test_e12_invalid_mode_surfaces_config_error_health() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_MODE": "bogus"})
     assert cfg["mode"] == "off"
     assert mode_fallback_token(cfg) == "bogus"
+    assert operator_mode_fallback_token(cfg) == "<redacted-mode-token>"
+    view = public_config_view(cfg)
+    assert view.get("meta", {}).get("mode_fallback") == "<redacted-mode-token>"
+    assert "bogus" not in str(view)
     assert operator_config_health(cfg) == ExportHealth.CONFIG_ERROR.value
     # Legitimate off (unset) stays skipped_off — not config_error.
     off = resolve_opik_config(env={})
@@ -235,6 +243,29 @@ def test_flush_timeout_invalid_fails_closed() -> None:
     assert (
         resolve_opik_config(env={"GIT_CG_OPIK_FLUSH_TIMEOUT_MS": "0"})["flush_timeout_ms"] == DEFAULT_FLUSH_TIMEOUT_MS
     )
+
+
+def test_flush_timeout_except_clause_is_parenthesized() -> None:
+    """R-13: lock parenthesized except text; ruff py314 otherwise emits PEP 758 bare form."""
+    import ast
+    import re
+    from pathlib import Path
+
+    src_path = Path(__file__).resolve().parents[3] / "src/git_cg/eval/mirror/config.py"
+    source = src_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_parse_flush_timeout")
+    handlers = [n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler)]
+    assert handlers, "_parse_flush_timeout must have an except handler"
+    handler = handlers[0]
+    # Both PEP 758 bare and parenthesized forms compile to ast.Tuple; lock source text.
+    assert isinstance(handler.type, ast.Tuple), "expected multi-exception handler"
+    names = {elt.id for elt in handler.type.elts if isinstance(elt, ast.Name)}
+    assert names == {"TypeError", "ValueError"}
+    assert re.search(
+        r"except\s*\(\s*TypeError\s*,\s*ValueError\s*\)\s*:",
+        source,
+    ), "expected parenthesized except (TypeError, ValueError): in source (use # fmt: skip under ruff py314)"
 
 
 def test_record_validates_against_schema() -> None:
@@ -462,3 +493,109 @@ def test_truthy_explicit_true_tokens() -> None:
 def test_truthy_empty_keeps_default() -> None:
     cfg = resolve_opik_config(env={"GIT_CG_OPIK_CHECK_TLS": ""})
     assert cfg["check_tls_certificate"] is True
+
+
+# --- S7-1a: per-lane project-pin provenance (diagnostic-only) -------------
+
+# Lane-pin env scrubbing is shared via tests/conftest.py (scrub_opik_project_lanes).
+
+
+class TestLaneProvenance:
+    """resolve_lane_provenance mirrors _resolve_projects precedence."""
+
+    def test_empty_env_all_missing(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        pins = resolve_lane_provenance()
+        assert set(pins) == {"live", "eval", "ci", "import"}
+        for lane, pin in pins.items():
+            assert pin.lane == lane
+            assert pin.source is LaneSource.MISSING
+            assert pin.value is None
+            assert pin.origin_env_var is None
+            assert pin.env_var == f"GIT_CG_OPIK_PROJECT_{lane.upper()}"
+
+    def test_eval_only_bootstraps_all_lanes(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "  proj-x  ")
+        pins = resolve_lane_provenance()
+        assert all(p.source is LaneSource.BOOTSTRAP_EVAL for p in pins.values())
+        assert all(p.value == "proj-x" for p in pins.values())  # stripped
+        assert all(p.origin_env_var == "GIT_CG_OPIK_PROJECT_EVAL" for p in pins.values())
+
+    def test_legacy_only_bootstraps_all_lanes(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+        pins = resolve_lane_provenance()
+        assert all(p.source is LaneSource.BOOTSTRAP_LEGACY for p in pins.values())
+        assert all(p.value == "legacy-proj" for p in pins.values())
+        assert all(p.origin_env_var == "OPIK_PROJECT_NAME" for p in pins.values())
+
+    def test_full_explicit_lanes(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "e")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_CI", "c")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_IMPORT", "i")
+        pins = resolve_lane_provenance()
+        for lane, pin in pins.items():
+            assert pin.source is LaneSource.EXPLICIT
+            assert pin.value == lane[0]  # l/e/c/i
+            assert pin.origin_env_var == pin.env_var
+
+    def test_partial_marks_unset_lanes_missing(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "e")
+        pins = resolve_lane_provenance()
+        assert pins["live"].source is LaneSource.EXPLICIT
+        assert pins["eval"].source is LaneSource.EXPLICIT
+        assert pins["ci"].source is LaneSource.MISSING
+        assert pins["import"].source is LaneSource.MISSING
+
+    def test_legacy_fills_eval_lane_in_partial_mix(self, monkeypatch) -> None:
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "l")
+        monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+        pins = resolve_lane_provenance()
+        assert pins["live"].source is LaneSource.EXPLICIT
+        assert pins["eval"].source is LaneSource.LEGACY
+        assert pins["eval"].value == "legacy-proj"
+        assert pins["eval"].origin_env_var == "OPIK_PROJECT_NAME"
+        assert pins["ci"].source is LaneSource.MISSING
+
+    def test_whitespace_eval_does_not_fall_through_to_legacy(self, monkeypatch) -> None:
+        """Whitespace-only EVAL matches _resolve_projects or-before-strip fail-closed."""
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_EVAL", "   ")
+        monkeypatch.setenv("OPIK_PROJECT_NAME", "legacy-proj")
+        pins = resolve_lane_provenance()
+        assert pins["eval"].source is LaneSource.MISSING
+        assert pins["eval"].value is None
+        assert all(p.source is LaneSource.MISSING for p in pins.values())
+
+    def test_explicit_mapping_does_not_touch_os_environ(self, monkeypatch) -> None:
+        """Explicit source mapping is used verbatim (pure, testable)."""
+        _cq.scrub_opik_project_lanes(monkeypatch)
+        monkeypatch.setenv("GIT_CG_OPIK_PROJECT_LIVE", "from-os-environ")
+        pins = resolve_lane_provenance({"GIT_CG_OPIK_PROJECT_EVAL": "mapped"})
+        assert all(p.value == "mapped" for p in pins.values())
+        assert all(p.source is LaneSource.BOOTSTRAP_EVAL for p in pins.values())
+
+
+def test_public_config_view_redacts_fallback_tokens() -> None:
+    cfg = resolve_opik_config(
+        env={
+            "GIT_CG_OPIK_MODE": "not-a-mode",
+            "GIT_CG_OPIK_ENVIRONMENT": "lab",
+            "GIT_CG_OPIK_REDACTION_PROFILE": "yolo",
+        }
+    )
+    view = public_config_view(cfg)
+    meta = view.get("meta", {})
+    assert meta.get("mode_fallback") == "<redacted-mode-token>"
+    assert meta.get("environment_fallback") == "<redacted-environment-token>"
+    assert meta.get("redaction_profile_fallback") == "unknown_profile"
+    # Internal meta keeps raw diagnostics; public view must not.
+    assert "not-a-mode" in str(cfg["meta"].get("mode_fallback"))
+    assert cfg["meta"].get("environment_fallback") == "lab"
+    assert str(cfg["meta"].get("redaction_profile_fallback", "")).startswith("unknown_profile:")

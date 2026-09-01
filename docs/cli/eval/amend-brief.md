@@ -25,6 +25,8 @@ Usage: git-cg eval amend-brief [OPTIONS] SCORE_RUN_ID
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --session-thread-id                  TEXT                  Optional session id (sess_) to attach to the brief.       │
+│ --case                               TEXT                  Scope the brief to a single case id (default: experiment  │
+│                                                            aggregate).                                               │
 │ --last                               INTEGER RANGE [x>=0]  How many recent dogfood/Lane C attachments to include     │
 │                                                            (default 3).                                              │
 │                                                            [default: 3]                                              │

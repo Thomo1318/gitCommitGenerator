@@ -26,6 +26,7 @@ Usage: git-cg eval opik [OPTIONS] COMMAND [ARGS]...
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ doctor  Check Opik/export health without exposing secrets.                                                           │
+│ verify  Optional online Opik project/FD verification (advisory).                                                     │
 │ config  Inspect Opik/mirror config without exposing secrets.                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -34,6 +35,7 @@ Usage: git-cg eval opik [OPTIONS] COMMAND [ARGS]...
 
 * [`git-cg eval opik config`](opik/config.md) — Inspect Opik/mirror config without exposing secrets.
 * [`git-cg eval opik doctor`](opik/doctor.md) — Check Opik/export health without exposing secrets.
+* [`git-cg eval opik verify`](opik/verify.md) — Optional online Opik project/FD verification (advisory).
 
 ## See also
 

@@ -107,9 +107,10 @@ uninstall:
     @rm -f ~/.zfunc/_git-cg
     @echo "✅ git-cg uninstalled."
 
-# Print reproducible S0 schema pack + metric catalog pins (offline)
+# Print reproducible eval schema-pack + metric-catalog pins (offline).
+# Historical: S0 pin surface. Refs: eval pins module.
 eval-schema-hash:
-    uv run python -c "from git_cg.eval import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
+    uv run python -c "from git_cg.eval.pins import schema_pack_pin, metric_catalog_pin; print(schema_pack_pin()); print(metric_catalog_pin())"
 
 # Materialize checked-in eval golden bundles + snapshots (offline)
 eval-materialize:
@@ -119,7 +120,8 @@ eval-materialize:
 eval-fixture-index:
     uv run python -m git_cg.eval.corpus.index --write
 
-# Check docs/eval/operator_api_map.md matches live Typer tree (S6 Slice 2)
+# Check docs/eval/operator_api_map.md matches the live Typer command tree.
+# Refs: #246 (operator API map gate).
 eval-api-map-check:
     uv run python -m git_cg.eval.api_map --check
 
@@ -127,8 +129,10 @@ eval-api-map-check:
 gen-cli-docs:
     uv run python tools/gen_cli_docs.py
 
-# S6 offline proof spine (claim-matrix subset; no cov). Does not replace full CI pytest.
-eval-s6-proof:
+# Offline eval claim-matrix spine (subset of eval tests; no coverage gate).
+# Does not replace full CI pytest.
+# Refs: #246 claim matrix.
+eval-claim-matrix-spine:
     uv run pytest \
       tests/eval/test_api_map_help.py \
       tests/eval/test_checkpoint_store.py \
@@ -150,8 +154,43 @@ eval-s6-proof:
       tests/eval/mirror/test_train.py \
       -q --no-cov
 
-# S6 Slice 7: hyperfine bench of the commit path with Lane C dogfood async on vs off.
+# Package-scoped coverage floor for src/git_cg/eval only.
+# `-o addopts=""` clears the global `--cov=src/git_cg --cov=scripts` union from
+# pyproject.toml so the floor is not diluted by non-eval packages.
+# Floor 80 matches the measured baseline on #254. Maintainer gate — not CI.
+# Refs: #254 (coverage acceptance).
+eval-package-coverage:
+    uv run pytest tests/eval -o addopts="" \
+      --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
+      --cov-fail-under=80 -q
+
+# Per-file coverage gate for interaction-owned eval modules (≥80% each).
+# pytest-cov --cov-fail-under is aggregate-only; JSON + tools/check_per_file_coverage.py
+# enforce the threshold per file. eval-package-coverage remains the primary floor.
+eval-per-file-coverage:
+    @echo "📊 per-file coverage gate (≥80% each owned eval module)"
+    @mkdir -p .eval
+    @rm -f .eval/per_file_coverage.json
+    uv run pytest tests/eval -o addopts="" \
+      --cov=git_cg.eval.review_queue \
+      --cov=git_cg.eval.promote \
+      --cov=git_cg.eval.evidence_scrub \
+      --cov=git_cg.eval.feedback_definitions \
+      --cov-branch \
+      --cov-report=term-missing \
+      --cov-report=json:.eval/per_file_coverage.json \
+      -q
+    uv run python tools/check_per_file_coverage.py \
+      --json .eval/per_file_coverage.json \
+      --fail-under 80 \
+      --file src/git_cg/eval/review_queue.py \
+      --file src/git_cg/eval/promote.py \
+      --file src/git_cg/eval/evidence_scrub.py \
+      --file src/git_cg/eval/feedback_definitions.py
+
+# Hyperfine bench of the real commit path with dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
+# Refs: #246 (dogfood async lane).
 dogfood-bench runs="20":
     @echo "🔬 dogfood-bench: hyperfine {{runs}} runs ×2 (async on/off) on real commit path"
     @command -v hyperfine >/dev/null || { echo "hyperfine not installed" >&2; exit 1; }
@@ -166,3 +205,20 @@ dogfood-bench runs="20":
         "GIT_CG_EVAL_DOGFOOD_MODE=off ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
     @uv run python -m git_cg.eval.dogfood.bench \
         .eval/dogfood/bench_async_off.json .eval/dogfood/bench_async_on.json
+
+# Mechanical deslop Naming Audit (families A–D identity shapes on branch diff).
+# Fails closed (exit 2) when stage/plan/governance/ceremony residue is introduced
+# as durable operator/code identity. Any generation — not a per-slice denylist.
+# Override base: just deslop-naming-scan origin/main
+# HEAD-only: just deslop-naming-scan origin/main 1
+deslop-naming-scan base="origin/main" committed_only="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # quote() keeps parameters as data, not Bash source (CWE-78).
+    args=(--base {{quote(base)}})
+    if [ -n {{quote(committed_only)}} ]; then
+      args+=(--no-working-tree)
+    fi
+    printf '🔎 deslop naming scan vs %s…\n' {{quote(base)}}
+    uv run python tools/deslop_naming_scan.py "${args[@]}"
+

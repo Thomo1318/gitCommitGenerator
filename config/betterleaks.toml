@@ -16,6 +16,7 @@ filter = '''
 filter.containsAny(finding["secret"], [
   "EXAMPLE",
   "CHANGEME",
-  "YOUR_API_KEY_HERE"
+  "YOUR_API_KEY_HERE",
+  "H65probeToken"
 ])
 '''
