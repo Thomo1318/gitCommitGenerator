@@ -440,9 +440,11 @@ def test_default_client_factory_sdk_surfaces(monkeypatch) -> None:
                 ]
             )
 
+    projects_api = _ProjectsApi()
+
     class _Rest:
         def __init__(self):
-            self.projects = _ProjectsApi()
+            self.projects = projects_api
             self.feedback_definitions = _FdApi()
 
     class _Opik:
@@ -469,7 +471,8 @@ def test_default_client_factory_sdk_surfaces(monkeypatch) -> None:
     names = client.list_projects()
     assert "proj-a" in names and "proj-b" in names
     client.create_project("new-proj")
-    assert "new-proj" in client.list_projects() or True  # create path exercised
+    # create_project is side-effecting; list_projects still reflects find_projects only.
+    assert projects_api.created == ["new-proj"]
     fds = client.list_feedback_definitions()
     assert fds["num_fd"]["type"] == "numerical"
     assert fds["num_fd"]["scale_min"] == 0
