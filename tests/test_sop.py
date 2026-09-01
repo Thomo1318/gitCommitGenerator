@@ -384,3 +384,107 @@ def test_validate_commit_rejects_dark_launch_emoji_type_mismatch(tmp_path) -> No
     assert proc.returncode != 0
     combined = f"{proc.stdout}\n{proc.stderr}"
     assert "mismatch" in combined.lower() or "MUST be paired" in combined
+
+
+# Review-bot apply matrix row (🐰 / :rabbit: / review_bot_apply)
+# ---------------------------------------------------------------------------
+
+
+def test_review_bot_apply_matrix_row_present_and_unique() -> None:
+    """🐰 review_bot_apply must exist exactly once with unique emoji/code/intent_id."""
+    import git_cg.sop as sop_module
+
+    sop_module.load_sop.cache_clear()
+    matrix = _matrix_rows()
+    rows = [r for r in matrix if r.get("intent_id") == "review_bot_apply"]
+    assert len(rows) == 1, f"expected exactly one review_bot_apply row, found {len(rows)}"
+    row = rows[0]
+
+    assert row.get("emoji") == "🐰"
+    assert row.get("code") == ":rabbit:"
+    assert row.get("cc_type") == "chore"
+    assert row.get("semver_impact") == "NONE"
+    assert row.get("changelog_group") == "Miscellaneous"
+    assert row.get("intent_group") == "config_chore"
+    assert int(row.get("priority", 100)) <= 40
+    assert int(row.get("specificity", 0)) >= 90
+    assert int(row.get("split_weight", 100)) <= 30
+
+    assert sum(1 for r in matrix if r.get("emoji") == "🐰") == 1
+    assert sum(1 for r in matrix if r.get("code") == ":rabbit:") == 1
+    assert sum(1 for r in matrix if r.get("intent_id") == "review_bot_apply") == 1
+
+
+def test_review_bot_apply_selection_rule_defers_to_technical_intents() -> None:
+    """review_bot_apply selection_rule must defer to product/security/test/docs intents."""
+    row = next(r for r in _matrix_rows() if r.get("intent_id") == "review_bot_apply")
+    rule = str(row["selection_rule"]).lower()
+    assert "prefer" in rule
+    assert "coderabbit" in rule or "review-bot" in rule or "review bot" in rule
+    assert any(token in row["selection_rule"] for token in ("🐛", "🔒️", "🔒", "🦺", "✅", "📝"))
+    negatives = {str(x).lower() for x in (row.get("negative_signals") or [])}
+    assert any("bug" in n or "security" in n or "validation" in n for n in negatives)
+    assert any("human" in n or "mention" in n or "ordinary" in n for n in negatives)
+
+
+def test_validate_commit_accepts_review_bot_apply_hybrid_subject(tmp_path) -> None:
+    """scripts/validate_commit.mjs must accept 🐰 chore(...) Hybrid subjects."""
+    import os
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is required to exercise validate_commit.mjs")
+
+    script = _REPO_ROOT / "scripts" / "validate_commit.mjs"
+    assert script.is_file(), f"missing {script}"
+
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "🐰 chore(review): apply CodeRabbit autofix residue\n",
+        encoding="utf-8",
+    )
+
+    proc = subprocess.run(
+        [node, str(script), "COMMIT_EDITMSG"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    assert proc.returncode == 0, (
+        f"validate_commit.mjs rejected review_bot_apply subject\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+    )
+    assert "NONE" in proc.stdout or "Commit Validated" in proc.stdout
+
+
+def test_validate_commit_rejects_review_bot_apply_emoji_type_mismatch(tmp_path) -> None:
+    """🐰 must stay paired with matrix cc_type=chore (not fix)."""
+    import os
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is required to exercise validate_commit.mjs")
+
+    script = _REPO_ROOT / "scripts" / "validate_commit.mjs"
+    msg = tmp_path / "COMMIT_EDITMSG"
+    msg.write_text(
+        "🐰 fix(review): apply CodeRabbit autofix residue\n",
+        encoding="utf-8",
+    )
+
+    proc = subprocess.run(
+        [node, str(script), "COMMIT_EDITMSG"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=os.environ.copy(),
+    )
+    assert proc.returncode != 0
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    assert "mismatch" in combined.lower() or "MUST be paired" in combined
