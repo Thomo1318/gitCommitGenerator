@@ -214,10 +214,11 @@ dogfood-bench runs="20":
 deslop-naming-scan base="origin/main" committed_only="":
     #!/usr/bin/env bash
     set -euo pipefail
-    args=(--base "{{base}}")
-    if [ -n "{{committed_only}}" ]; then
+    # quote() keeps parameters as data, not Bash source (CWE-78).
+    args=(--base {{quote(base)}})
+    if [ -n {{quote(committed_only)}} ]; then
       args+=(--no-working-tree)
     fi
-    echo "🔎 deslop naming scan vs {{base}}…"
+    printf '🔎 deslop naming scan vs %s…\n' {{quote(base)}}
     uv run python tools/deslop_naming_scan.py "${args[@]}"
 
