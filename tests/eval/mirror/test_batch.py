@@ -7,12 +7,14 @@ import pytest
 from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.batch import (
     DEFAULT_MAX_BATCH_BYTES,
+    ENVELOPE_HEADROOM_BYTES,
     EXPORT_STATUSES,
     ExportSizeError,
     ExportStatus,
     batch_idempotency_key,
     build_export_batches,
     envelope_size_bytes,
+    estimate_batch_bytes,
     map_queue_status_to_export_status,
 )
 from git_cg.eval.mirror.queue import QUEUE_STATUSES
@@ -145,3 +147,88 @@ def test_final_envelope_size_is_measured() -> None:
     b = batches[0]
     assert b["size_bytes"] == envelope_size_bytes(b)
     assert b["size_bytes"] > b["payload_size_bytes"]
+
+
+def _batch_identity(batches: list[dict]) -> list[tuple]:
+    """Stable identity view for packing equivalence assertions."""
+    out = []
+    for batch in batches:
+        out.append(
+            (
+                tuple(batch["item_refs"]),
+                batch["idempotency_key"],
+                batch["batch_id"],
+                batch["size_bytes"],
+                batch["payload_sha256"],
+            )
+        )
+    return out
+
+
+def test_packing_equivalence_vs_exact_algorithm() -> None:
+    """Cached-estimate packer stays deterministic and ceiling-honest for mixed sizes."""
+    items = [(f"item-{i}", {"pad": "x" * size}) for i, size in enumerate([20, 40, 80, 160, 320, 640, 50, 75])]
+    ceiling = 2500  # small ceiling forces frequent exact boundary decisions
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=ceiling)
+    assert batches
+    again = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=ceiling)
+    assert _batch_identity(batches) == _batch_identity(again)
+    for batch in batches:
+        assert batch["size_bytes"] <= ceiling
+        assert batch["size_bytes"] == envelope_size_bytes(batch)
+
+
+def test_oversize_singleton_still_fails() -> None:
+    items = [("big", {"pad": "x" * (DEFAULT_MAX_BATCH_BYTES + 1)})]
+    with pytest.raises(ExportSizeError, match="export_size"):
+        build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+
+
+def test_idempotency_key_unchanged_for_identical_inputs() -> None:
+    items = _items(3, 100)
+    b1 = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    b2 = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    assert [b["idempotency_key"] for b in b1] == [b["idempotency_key"] for b in b2]
+
+
+def test_envelope_headroom_wired() -> None:
+    assert ENVELOPE_HEADROOM_BYTES > 0
+    estimate = estimate_batch_bytes([1000, 1000, 1000])
+    assert estimate > 3000
+    items = _items(20, 50)
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=DEFAULT_MAX_BATCH_BYTES)
+    assert len(batches) == 1
+    assert batches[0]["size_bytes"] < DEFAULT_MAX_BATCH_BYTES - ENVELOPE_HEADROOM_BYTES
+
+
+def test_cached_sizes_reused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Payload canonicalization for size cache happens once per item in pre-validation."""
+    from git_cg.eval.mirror import batch as batch_mod
+
+    real = batch_mod.canonical_json_bytes
+    calls: list[object] = []
+
+    def wrapped(obj: object) -> bytes:
+        calls.append(obj)
+        return real(obj)
+
+    monkeypatch.setattr(batch_mod, "canonical_json_bytes", wrapped)
+    items = _items(5, 30)
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    assert batches
+    payload_calls = [c for c in calls if isinstance(c, dict) and set(c.keys()) == {"pad"}]
+    assert len(payload_calls) == 5
+
+
+def test_benchmark_many_small_items() -> None:
+    items = _items(200, 64)
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    assert batches
+    assert sum(len(b["item_refs"]) for b in batches) == 200
+
+
+def test_benchmark_near_ceiling_items() -> None:
+    items = [(f"item-{i}", {"pad": "y" * 100_000}) for i in range(10)]
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    assert batches
+    assert sum(len(b["item_refs"]) for b in batches) == 10

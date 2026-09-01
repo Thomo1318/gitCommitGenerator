@@ -13,6 +13,10 @@ Law:
   per-item sizes. Default 4 MB; configurable downward.
 * ``ExportStatus`` (envelope) is distinct from ``QueueStatus`` (ops) — E7.
 * No network, no Opik, no scoring — pure offline builder.
+* Packing caches per-item payload sizes, uses a conservative running estimate,
+  and calls exact ``_build_batch()`` only near ``ENVELOPE_HEADROOM_BYTES`` or on flush.
+* ``_build_batch()`` is the sole exact measurement + schema-validation step.
+* ``size_bytes`` is written via a bounded fixed-point loop before validate.
 """
 
 from __future__ import annotations
@@ -29,11 +33,13 @@ __all__ = [
     "DEFAULT_MAX_BATCH_BYTES",
     "ENVELOPE_HEADROOM_BYTES",
     "EXPORT_STATUSES",
+    "MAX_SIZE_BYTES_CONVERGENCE_ITERS",
     "ExportSizeError",
     "ExportStatus",
     "batch_idempotency_key",
     "build_export_batches",
     "envelope_size_bytes",
+    "estimate_batch_bytes",
     "map_queue_status_to_export_status",
 ]
 
@@ -42,6 +48,15 @@ DEFAULT_MAX_BATCH_BYTES = 4 * 1024 * 1024
 
 #: Reserved headroom when packing items so post-envelope framing fits under ceiling.
 ENVELOPE_HEADROOM_BYTES = 256 * 1024
+
+#: Bounded fixed-point attempts for ``size_bytes`` digit-width honesty.
+MAX_SIZE_BYTES_CONVERGENCE_ITERS = 3
+
+#: Conservative base JSON wrapper overhead used only for packing *estimates*.
+_ENVELOPE_BASE_OVERHEAD_ESTIMATE = 2 * 1024
+
+#: Conservative per-item framing overhead used only for packing *estimates*.
+_PER_ITEM_FRAMING_ESTIMATE = 1024
 
 
 class ExportStatus(StrEnum):
@@ -109,6 +124,33 @@ def batch_idempotency_key(
 def envelope_size_bytes(batch: dict[str, Any]) -> int:
     """Canonical uncompressed size of the envelope body (E10 / P1-13)."""
     return len(canonical_json_bytes(batch))
+
+
+def estimate_batch_bytes(payload_sizes: list[int]) -> int:
+    """Conservative packing estimate from cached payload sizes (not exact authority).
+
+    Over-estimates on purpose so the fast path never emits a batch that would
+    fail the exact ``_build_batch()`` ceiling check. Exact measurement remains
+    mandatory near headroom and on every flush/emit path.
+    """
+    if not payload_sizes:
+        return 0
+    n = len(payload_sizes)
+    return (
+        _ENVELOPE_BASE_OVERHEAD_ESTIMATE + sum(int(size) for size in payload_sizes) + (_PER_ITEM_FRAMING_ESTIMATE * n)
+    )
+
+
+def _converge_size_bytes(batch: dict[str, Any]) -> int:
+    """Write ``size_bytes`` and re-measure until fixed point or bound exceeded."""
+    for _ in range(MAX_SIZE_BYTES_CONVERGENCE_ITERS):
+        size = envelope_size_bytes(batch)
+        batch["size_bytes"] = size
+        if envelope_size_bytes(batch) == size:
+            return size
+    raise ExportSizeError(
+        f"size_bytes failed to converge within {MAX_SIZE_BYTES_CONVERGENCE_ITERS} iterations (export_size)"
+    )
 
 
 def _build_batch(
@@ -180,12 +222,7 @@ def _build_batch(
             "transport_body": transport_body,
         },
     }
-    size = envelope_size_bytes(batch)
-    batch["size_bytes"] = size
-    # Re-measure after writing size_bytes (stable once set if digit width stable;
-    # recompute once more for honesty around digit-length edge cases).
-    size = envelope_size_bytes(batch)
-    batch["size_bytes"] = size
+    size = _converge_size_bytes(batch)
     if size > max_bytes:
         raise ExportSizeError(f"batch envelope {size} bytes exceeds ceiling {max_bytes} bytes (export_size)")
     validate_instance("export_batch_v1", batch)
@@ -213,6 +250,12 @@ def build_export_batches(
         project / experiment_id / environment / dataset_id / project_lane:
             D10 identity inputs bound into the idempotency key and envelope.
         status: initial ``ExportStatus`` (default ``pending``).
+
+    Notes:
+        Packing uses cached per-item payload sizes and a conservative running
+        estimate so typical under-ceiling appends avoid repeated exact
+        re-serialization. ``_build_batch()`` remains the sole exact authority
+        for measurement + schema validation at headroom boundaries and flush.
 
     Raises:
         ExportSizeError: a single item (plus minimum envelope framing) exceeds
@@ -248,40 +291,59 @@ def build_export_batches(
             status=st,
         )
 
-    # Pre-validate every singleton against the *final* envelope ceiling. Item
-    # payload size alone is insufficient because transport_body + envelope
-    # framing can dominate (P1-13 / E10).
-    validated: list[tuple[str, dict[str, Any]]] = []
+    # Pre-validate every singleton against the final envelope ceiling and cache
+    # payload sizes once. Item payload size alone is insufficient because
+    # transport_body + envelope framing can dominate.
+    validated: list[tuple[str, dict[str, Any], int]] = []
     for item_ref, payload in items:
         if not isinstance(payload, dict):
             raise TypeError(f"item payload must be a dict, got {type(payload).__name__}")
         ref = str(item_ref)
+        payload_size = len(canonical_json_bytes(payload))
         try:
             try_batch([ref], [payload])
         except ExportSizeError as exc:
             raise ExportSizeError(
                 f"item {ref!r} alone exceeds final envelope ceiling {max_bytes} bytes (export_size)"
             ) from exc
-        validated.append((ref, payload))
+        validated.append((ref, payload, payload_size))
 
     batches: list[dict[str, Any]] = []
     current_refs: list[str] = []
     current_payloads: list[dict[str, Any]] = []
+    current_sizes: list[int] = []
+    # Estimates strictly below this may skip exact measure. When
+    # max_bytes <= headroom, safe_limit <= 0 and every multi-item decision uses
+    # exact ``_build_batch()`` (preserves small-ceiling packing behaviour).
+    safe_limit = max_bytes - ENVELOPE_HEADROOM_BYTES
 
     def flush() -> None:
-        """Flush buffered work through the governed write path."""
-        nonlocal current_refs, current_payloads
+        """Flush buffered work through the exact governed write path."""
+        nonlocal current_refs, current_payloads, current_sizes
         if not current_refs:
             return
         batches.append(try_batch(current_refs, current_payloads))
         current_refs = []
         current_payloads = []
+        current_sizes = []
 
-    for item_ref, payload in validated:
+    for item_ref, payload, payload_size in validated:
         if not current_refs:
             current_refs = [item_ref]
             current_payloads = [payload]
+            current_sizes = [payload_size]
             continue
+
+        candidate_sizes = [*current_sizes, payload_size]
+        estimate = estimate_batch_bytes(candidate_sizes)
+        if safe_limit > 0 and estimate < safe_limit:
+            # Under headroom: append without exact re-measure. Flush still uses
+            # exact ``_build_batch()``.
+            current_refs.append(item_ref)
+            current_payloads.append(payload)
+            current_sizes.append(payload_size)
+            continue
+
         candidate_refs = [*current_refs, item_ref]
         candidate_payloads = [*current_payloads, payload]
         try:
@@ -290,8 +352,10 @@ def build_export_batches(
             flush()
             current_refs = [item_ref]
             current_payloads = [payload]
+            current_sizes = [payload_size]
         else:
             current_refs = candidate_refs
             current_payloads = candidate_payloads
+            current_sizes = candidate_sizes
     flush()
     return batches
