@@ -332,23 +332,29 @@ def _added_lines_from_git(cwd: Path, path: str, base: str, include_working_tree:
     When ``include_working_tree`` is true, build one effective diff from ``base``
     to the current worktree (index + unstaged + untracked) so replacements that
     remove a previously added residue line are not retained as findings.
+
+    Uses ``_git_out`` so a failed per-file git command raises instead of looking
+    like an empty addition set.
     """
     if include_working_tree:
-        proc = _run_git(["ls-files", "--others", "--exclude-standard", "--", path], cwd)
-        if proc.returncode == 0 and proc.stdout.strip():
+        untracked = _git_out(
+            ["ls-files", "--others", "--exclude-standard", "--", path],
+            cwd,
+        )
+        if untracked.strip():
             # Untracked file: entire content is an addition vs base.
             text = (cwd / path).read_text(encoding="utf-8", errors="replace")
             return list(enumerate(text.splitlines(), start=1))
 
         # ``base`` .. worktree (includes staged + unstaged tracked edits).
-        proc = _run_git(["diff", "-U0", base, "--", path], cwd)
-        if proc.returncode == 0 and proc.stdout:
-            return _parse_unified_added_lines(proc.stdout)
+        diff_text = _git_out(["diff", "-U0", base, "--", path], cwd)
+        if diff_text:
+            return _parse_unified_added_lines(diff_text)
         return []
 
-    proc = _run_git(["diff", "-U0", f"{base}...HEAD", "--", path], cwd)
-    if proc.returncode == 0 and proc.stdout:
-        return _parse_unified_added_lines(proc.stdout)
+    diff_text = _git_out(["diff", "-U0", f"{base}...HEAD", "--", path], cwd)
+    if diff_text:
+        return _parse_unified_added_lines(diff_text)
     return []
 
 

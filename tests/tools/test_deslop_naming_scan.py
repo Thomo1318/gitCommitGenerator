@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 TOOL = REPO / "tools" / "deslop_naming_scan.py"
 
@@ -287,3 +289,33 @@ def test_scan_lines_error_and_claim_families():
     tokens = {f.token for f in findings}
     assert any(x.startswith("C.E") for x in families) or "handle_e07" in tokens
     assert "s6_g02_bench" in tokens or any(x.startswith("C.S") for x in families)
+
+
+def test_added_lines_from_git_fail_closed_on_git_error(tmp_path, monkeypatch):
+    """Failed per-file git diffs must raise RuntimeError, not look empty."""
+    mod = _load()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    target = repo / "tools" / "x.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("x = 1\n", encoding="utf-8")
+
+    class FakeProc:
+        def __init__(self, returncode: int, stdout: str = "", stderr: str = ""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_run_git(args, cwd):
+        if args and args[0] == "ls-files":
+            return FakeProc(0, "")
+        if args and args[0] == "diff":
+            return FakeProc(128, "", "fatal: bad revision 'origin/main'")
+        return FakeProc(0, "")
+
+    monkeypatch.setattr(mod, "_run_git", fake_run_git)
+
+    with pytest.raises(RuntimeError, match=r"(?i)bad revision|failed"):
+        mod._added_lines_from_git(repo, "tools/x.py", "origin/main", include_working_tree=True)
+    with pytest.raises(RuntimeError):
+        mod._added_lines_from_git(repo, "tools/x.py", "origin/main", include_working_tree=False)
