@@ -199,3 +199,19 @@ dogfood-bench runs="20":
         "GIT_CG_EVAL_DOGFOOD_MODE=off ./bin/git-cg commit --dry-run .git/COMMIT_EDITMSG template"
     @uv run python -m git_cg.eval.dogfood.bench \
         .eval/dogfood/bench_async_off.json .eval/dogfood/bench_async_on.json
+
+# Mechanical deslop Naming Audit (families A–D identity shapes on branch diff).
+# Fails closed (exit 2) when stage/plan/governance/ceremony residue is introduced
+# as durable operator/code identity. Any generation — not a per-slice denylist.
+# Override base: just deslop-naming-scan origin/main
+# HEAD-only: just deslop-naming-scan origin/main 1
+deslop-naming-scan base="origin/main" committed_only="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(--base "{{base}}")
+    if [ -n "{{committed_only}}" ]; then
+      args+=(--no-working-tree)
+    fi
+    echo "🔎 deslop naming scan vs {{base}}…"
+    uv run python tools/deslop_naming_scan.py "${args[@]}"
+
