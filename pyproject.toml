@@ -148,9 +148,6 @@ verbose = 1
 quiet = false
 color = true
 omit-covered-files = false
-generate-badge = "docs/assets/badges"
-badge-format = "svg"
-badge-style = "flat"
 
 
 [tool.uv]

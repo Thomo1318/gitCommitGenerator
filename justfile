@@ -161,7 +161,10 @@ eval-claim-matrix-spine:
 # Refs: #254 (coverage acceptance).
 eval-package-coverage:
     uv run pytest tests/eval -o addopts="" \
-      --cov=src/git_cg/eval --cov-branch --cov-report=term-missing \
+      --cov=src/git_cg/eval \
+      --cov=src/git_cg/eval/checkpoint_store.py \
+      --cov=src/git_cg/eval/run_orchestrator.py \
+      --cov-branch --cov-report=term-missing \
       --cov-fail-under=80 -q
 
 # Per-file coverage gate for interaction-owned eval modules (≥80% each).
@@ -176,6 +179,8 @@ eval-per-file-coverage:
       --cov=git_cg.eval.promote \
       --cov=git_cg.eval.evidence_scrub \
       --cov=git_cg.eval.feedback_definitions \
+      --cov=git_cg.eval.checkpoint_store \
+      --cov=git_cg.eval.run_orchestrator \
       --cov-branch \
       --cov-report=term-missing \
       --cov-report=json:.eval/per_file_coverage.json \
@@ -186,7 +191,9 @@ eval-per-file-coverage:
       --file src/git_cg/eval/review_queue.py \
       --file src/git_cg/eval/promote.py \
       --file src/git_cg/eval/evidence_scrub.py \
-      --file src/git_cg/eval/feedback_definitions.py
+      --file src/git_cg/eval/feedback_definitions.py \
+      --file src/git_cg/eval/checkpoint_store.py \
+      --file src/git_cg/eval/run_orchestrator.py
 
 # Hyperfine bench of the real commit path with dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
