@@ -49,7 +49,7 @@ Before dispatch returns “done”, ensure the child skill output includes:
 4. No unexplained **identity** leftovers matching (any digit width, any separator/`CASE`):
    - **A** stage/slice/phase/wave/milestone: `s<N>`, `slice<N>`, `phase<N>`, …
    - **B** plan/review/session: `finding_<N>`, `FIND[-_]<N>`, `INT[-_]<N>`, `item_<N>`, `step_<N>`, …
-   - **C** governance-as-identity: `D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `AC[-_]<N>`, `RK-…`, `NTH[-_]<N>`, `P0|P1|P2`, `DoD[-_]<N>`, …
+   - **C** governance-as-identity: `D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `AC[-_]<N>`, `RK-…`, `NTH[-_]<N>`, `P0` / `P1` / `P2`, `DoD[-_]<N>`, …
    - **D** ceremony/scratch primary: `proof` as ticket proof, `wip`, `tmp`, `final2`, …
    - **E** synonym cycles for one entity
 
@@ -79,7 +79,7 @@ Forbidden: gitmoji/type authority changes, trailer key edits, issue-id invention
 
 1. Classify the target surface using the table above.
 2. If refuse: state the reason in one short paragraph; stop.
-3. If code: apply `.agents/skills/code-deslop/SKILL.md` fully (including Mandatory Naming Audit + deny-list).
+3. If code: apply `.agents/skills/code-deslop/SKILL.md` fully (including Mandatory Naming Audit + pattern catalog (families A–E)).
 4. If prose: apply `.agents/skills/prose-deslop/SKILL.md` fully (including naming + identifier preservation).
 5. If commit-draft opt-in: apply the child **Commit draft deslop** section only; return cleaned text; no git.
 6. Verify Naming Audit present when durable surfaces were in scope.

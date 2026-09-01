@@ -32,7 +32,7 @@ Project-owned fork of the brianlovin `deslop` code checklist, with hard guards f
 2. Inspect only changes introduced on this branch vs that base.
 3. **Run Mandatory Naming Audit first** (below). Do not finish the pass without it.
 4. Remove AI code residue that a careful human would not leave, including:
-   - **Identifier residue (families A–E):** stage/slice/phase segments (`s<N>`, `slice<N>`, …); plan/review indices (`finding_<N>`, `FIND[-_]<N>`, `INT[-_]<N>`, `item_<N>`, …); **governance IDs as identity** (`D<N>`, `I<N>`, `R<N>`, `F-S<N>-<N>`, `S<N>-A<N>`, `RK-…`, `NTH-<N>`, `P0|P1|P2`, `AC-<N>`, …); ceremony/scratch primary tokens; synonym cycles. Replace identity with domain-first scope + behavior + entity. **Citations** in comments/matrices stay. See Mandatory Naming Audit — never a per-issue denylist.
+   - **Identifier residue (families A–E):** stage/slice/phase segments (`s<N>`, `slice<N>`, …); plan/review indices (`finding_<N>`, `FIND[-_]<N>`, `INT[-_]<N>`, `item_<N>`, …); **governance IDs as identity** (`D<N>`, `I<N>`, `R<N>`, `F-S<N>-<N>`, `S<N>-A<N>`, `RK-…`, `NTH-<N>`, `P0` / `P1` / `P2`, `AC-<N>`, …); ceremony/scratch primary tokens; synonym cycles. Replace identity with domain-first scope + behavior + entity. **Citations** in comments/matrices stay. See Mandatory Naming Audit — never a per-issue denylist.
    - Domain-term consistency (anti-synonym cycling): multiple names for the same entity across adjacent functions; standardize on the repository's canonical domain term.
    - Semantic duplication (shadow utilities): new helpers that duplicate existing repository utilities; replace with imports.
    - Process residue and tautological comments: prompt history or obvious restatement. Keep comments that explain *why*, non-obvious algorithms, security invariants, or contract rules.
@@ -76,7 +76,7 @@ Flag an introduced or branch-touched **identifier in the identity role** if it m
 | --- | --- | --- |
 | **A. Stage segment** | `s<N>`, `slice<N>`, `phase<N>`, `wave<N>`, `milestone<N>`, `sprint<N>` as name segment | `eval-s7-proof`, `s15_gate`, `slice_1_handler` |
 | **B. Plan/review/session index** | `finding`/`FIND[-_]`/`find`/`item`/`step`/`task`/`INT[-_]` + N | `finding_6`, `FIND-003`, `INT-05`, `item_4`, `step_3` |
-| **C. Governance taxonomy as identity** | Issue/ADR grammar used as the *name* of code/recipe/path (not as citation): `D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-<N>`, `F<N>`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `AC[-_]<N>`, `A<N>`, `RK-…`, `NTH[-_]<N>`, `P0`/`P1`/`P2`, `DoD[-_]<N>` | `apply_d31()`, `handle_e07()`, `e07_gate`, `enforce_i6()`, `handle_f_s6_04()`, `s6_a04_metric`, `s6_g02_bench`, `nth03_export()`, `p0_gate`, `ac13_floor` API |
+| **C. Governance taxonomy as identity** | Issue/ADR grammar used as the *name* of code/recipe/path (not as citation): `D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-<N>`, `F<N>`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `AC[-_]<N>`, `A<N>`, `RK-…`, `NTH[-_]<N>`, `P0` / `P1` / `P2`, `DoD[-_]<N>` | `apply_d31()`, `handle_e07()`, `e07_gate`, `enforce_i6()`, `handle_f_s6_04()`, `s6_a04_metric`, `s6_g02_bench`, `nth03_export()`, `p0_gate`, `ac13_floor` API |
 | **D. Ceremony/scratch primary** | primary noun is process theater or temp hygiene | `proof` (ticket proof), `wip`, `tmp`, `final2`, bare `helper` |
 | **E. Synonym cycle** | two+ live names for one entity in the same patch | `payload` / `data_dict` / `raw_event` |
 
@@ -91,7 +91,7 @@ Do **not** maintain a list of closed issues’ IDs. Family **C** is the whole gr
 - Stable public APIs the branch did not introduce (product decision) — **do** rename when the branch introduced the bad name or the user asked to deslop naming on that surface
 - Issue/PR numbers (`#254`)
 - SOP gitmoji / Hybrid trailer keys
-- **Governance citations** in issues, ADR decision tables, claim/failure/risk matrices, and short comment pointers: `D<N>`, `I<N>`, `E<N>`, `F-S<N>-…`, `R<N>`, `FIND-…`, `INT-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-…`, `RK-…`, `NTH-…`, `P0|P1|P2`, `AC-…` — keep as citations; still forbid minting them as durable API/recipe/path **identity**
+- **Governance citations** in issues, ADR decision tables, claim/failure/risk matrices, and short comment pointers: `D<N>`, `I<N>`, `E<N>`, `F-S<N>-…`, `R<N>`, `FIND-…`, `INT-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-…`, `RK-…`, `NTH-…`, `P0` / `P1` / `P2`, `AC-…` — keep as citations; still forbid minting them as durable API/recipe/path **identity**
 
 ### Operator-facing comments (justfile / task headers) — not free citation space
 
@@ -219,7 +219,7 @@ Return the full cleaned draft in one fenced `text` block, plus a mini Naming Aud
 - [ ] Naming Audit table completed (families A–E; not a hard-coded slice/decision/finding list).
 - [ ] Stage segment (`s<N>`, `slice<N>`, `phase<N>`, …) in **new** recipes/paths/symbols? Rename or justify **without** “matches existing sN files”.
 - [ ] Plan/review index (`finding_<N>`, `FIND[-_]<N>`, `INT[-_]<N>`, `step_<N>`, …) as identity? Rename.
-- [ ] Governance ID as identity (`D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-<N>`, `P0|P1|P2`, `AC-<N>` as API/recipe/path)? Rename; keep matrix/comment citations.
+- [ ] Governance ID as identity (`D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-<N>`, `P0` / `P1` / `P2`, `AC-<N>` as API/recipe/path)? Rename; keep matrix/comment citations.
 - [ ] Ceremony/scratch primary tokens (`proof` as ticket proof, `wip`, `tmp`, `final2`)? Rename.
 - [ ] No new identity “rhyming” with legacy residue (`S7_tests.py` present ⇏ `S7_Rename.py` OK)?
 - [ ] Novel identity shapes not in A–E text → Catalog gaps row + user prompt (shape-level), not silent ignore and not auto-edit skill?

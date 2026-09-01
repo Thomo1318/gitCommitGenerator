@@ -255,7 +255,7 @@ Treating ephemeral task numbers, review checklist markers, or prompt-level meta-
 
 Teaching maintainers to run delivery-cycle-named or taxonomy-named tools locks issue vocabulary into durable docs. Prefer domain-first names (scope + measurement + entity).
 
-Flag as **identity** in operator instructions (any N): `s<N>` / `slice<N>` / `phase<N>` in recipes/paths/CLI; `finding <N>` / `FIND-<N>` / `INT-<N>`; `D<N>`, `I<N>`, `F-S<N>-…`, `S<N>-A<N>`, `RK-…`, `NTH-<N>`, `P0|P1|P2`, `AC-<N>` as the name of something to run or import.
+Flag as **identity** in operator instructions (any N): `s<N>` / `slice<N>` / `phase<N>` in recipes/paths/CLI; `finding <N>` / `FIND-<N>` / `INT-<N>`; `D<N>`, `I<N>`, `F-S<N>-…`, `S<N>-A<N>`, `RK-…`, `NTH-<N>`, `P0` / `P1` / `P2`, `AC-<N>` as the name of something to run or import.
 
 **Keep as citation:** decision/invariant/failure/risk/NTH/priority matrices, ADR tables, issue links, “see D31” pointers. Historical mention of a slice is fine; operator instructions must name the job.
 

@@ -87,7 +87,7 @@ Never treat process indices or delivery-cycle labels as self-standing domain con
 | --- | --- | --- |
 | Plan/review index | `finding <N>`, `FIND-<N>`, `INT-<N>`, `item <N>`, `step <N>` (any N) | Name the concrete invariant/bug/change; cite id only as reference |
 | Stage segment in **operator** names | `s<N>`, `slice<N>`, `phase<N>` inside recipe/path/CLI (any N) | Domain-first scope + measurement |
-| Governance taxonomy as **tool/path name** | `D<N>`, `I<N>`, `E<N>`, `F-S<N>-…`, `R<N>`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-<N>`, `P0|P1|P2`, `AC-<N>` taught as something to run or as a module name | Name the job/invariant; keep ids in matrices/tables |
+| Governance taxonomy as **tool/path name** | `D<N>`, `I<N>`, `E<N>`, `F-S<N>-…`, `R<N>`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-<N>`, `P0` / `P1` / `P2`, `AC-<N>` taught as something to run or as a module name | Name the job/invariant; keep ids in matrices/tables |
 | Ceremony-primary instructions | “run the proof recipe” with no scope/measurement | Name the gate or tool job |
 
 **Keep:** historical narrative; claim/decision/failure/risk/NTH/priority **matrices**; issue links; short “see D31” pointers.  
@@ -116,7 +116,7 @@ Before finishing a prose deslop pass on docs/ADR/PR/plan text, scan for **durabl
 - CLI commands/flags
 - module or script names presented as operator instructions
 
-Apply families **A–E** (any N). Include governance shapes: `D<N>`, `I<N>`, `E<N>`, `FIND-…`, `INT-…`, `F-S…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-…`, `P0|P1|P2` when used as **identity** of something to run — not when they are matrix citations.
+Apply families **A–E** (any N). Include governance shapes: `D<N>`, `I<N>`, `E<N>`, `FIND-…`, `INT-…`, `F-S…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-…`, `P0` / `P1` / `P2` when used as **identity** of something to run — not when they are matrix citations.
 
 Emit:
 

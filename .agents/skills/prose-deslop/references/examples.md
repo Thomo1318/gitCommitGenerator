@@ -246,7 +246,7 @@
 
 **After:**
 
-> "JSON serialization accounts for 34% of message dispatch latency under 10k QPS benchmarks. Migrating payload transport to Protocol Buffers with `protoc`-generated dataclasses eliminates 12ms per request serialization overhead and guarantees backward compatibility across schema versions."
+> "JSON serialization accounts for 34% of message dispatch latency under 10k QPS benchmarks. Migrating payload transport to Protocol Buffers with `protoc`-generated dataclasses eliminates 12ms per request serialization overhead when field numbers stay stable and removed identifiers are reserved."
 
 **Changes:** Removed false concessions ("To be fair", "Admittedly"). Replaced tech puffery adjectives ("blazing-fast", "rock-solid", "battle-tested", "cutting-edge", "effortless") with benchmark numbers, CPU profiles, and concrete compatibility guarantees.
 

@@ -314,7 +314,7 @@ Using colons or parentheticals as mid-sentence drama pivots.
 | "When configuring the queue: instead of polling, you provide a callback" | Colon used as an artificial comparison hook |
 | "The service uses Redis (which is fast) to store session keys (TTL 60s)" | Parenthetical stacking to smuggle asides    |
 
-**Fix:** Write direct, unpunctuated sentences. "Configure the queue by providing a callback instead of polling."
+**Fix:** Prefer direct sentences. Avoid mid-sentence colons and stacked parentheticals. "Configure the queue by providing a callback instead of polling."
 
 ## Word Patterns
 
