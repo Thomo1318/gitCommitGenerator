@@ -354,3 +354,40 @@ class TestCompositionAuthorityAndSessionFallback:
         body = load_queue_payload(plan.queue_row_refs[0], repo_root=tmp_path)
         item_payloads = [entry.get("payload") for entry in body.get("items", []) if isinstance(entry, dict)]
         assert any(isinstance(p, dict) and "thread" in p for p in item_payloads)
+
+
+def test_profile_stamped_before_train_projection(tmp_path, monkeypatch) -> None:
+    """build_export_plan redacts (stamps profile) before train projection."""
+    import git_cg.eval.mirror.composition as composition_mod
+
+    order: list[str] = []
+    real_redact = composition_mod.redact_bundle_for_export
+    real_train = composition_mod.build_train_projection
+
+    def tracked_redact(bundle, profile):  # type: ignore[no-untyped-def]
+        order.append("redact")
+        out = real_redact(bundle, profile)
+        assert out.get("redaction_profile")
+        return out
+
+    def tracked_train(bundles):  # type: ignore[no-untyped-def]
+        order.append("train")
+        for b in bundles:
+            assert b.get("redaction_profile"), "profile must be stamped before train projection"
+        return real_train(bundles)
+
+    monkeypatch.setattr(composition_mod, "redact_bundle_for_export", tracked_redact)
+    monkeypatch.setattr(composition_mod, "build_train_projection", tracked_train)
+
+    plan = composition_mod.build_export_plan(
+        {
+            "bundles": [_bundle()],
+            "session_threads": [],
+            "include_train": True,
+        },
+        CONFIG,
+        repo_root=tmp_path,
+    )
+    assert "redact" in order and "train" in order
+    assert order.index("redact") < order.index("train")
+    assert plan.train is not None

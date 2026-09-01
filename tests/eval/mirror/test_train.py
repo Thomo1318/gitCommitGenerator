@@ -13,6 +13,7 @@ from git_cg.eval.mirror.train import (
     filter_positive_gold,
     normalize_train_label,
     project_train_row,
+    resolve_train_redaction_profile,
 )
 
 
@@ -22,15 +23,19 @@ def _bundle(
     label: str | None,
     split: str = "train",
     regime: str | None = None,
-    profile: str = "train_rich",
+    profile: str | None = "train_rich",
+    top_profile: str | None = None,
+    include_meta_profile: bool = True,
 ) -> dict:
-    """Build a train-projection bundle fixture with optional label/regime."""
-    meta: dict = {"redaction_profile": profile, "split_group_id": f"sg-{bid}"}
+    """Build a train-projection bundle fixture with optional label/regime/profile."""
+    meta: dict = {"split_group_id": f"sg-{bid}"}
+    if include_meta_profile and profile is not None:
+        meta["redaction_profile"] = profile
     if label is not None:
         meta["train_label"] = label
     if regime is not None:
         meta["regime"] = regime
-    return {
+    out = {
         "id": bid,
         "artifact_class": "final_accept",
         "gate": {"deterministic_pass": True},
@@ -38,6 +43,9 @@ def _bundle(
         "meta": meta,
         "split": split,
     }
+    if top_profile is not None:
+        out["redaction_profile"] = top_profile
+    return out
 
 
 class TestNormalizeTrainLabel:
@@ -161,3 +169,74 @@ class TestBuildTrainProjection:
             "authority",
         ):
             assert key in row and row[key] not in (None, ""), key
+
+
+class TestRedactionProfileFailClosed:
+    def test_missing_profile_never_retained_train_gold(self) -> None:
+        row = project_train_row(_bundle(bid="m1", label="positive", profile=None, include_meta_profile=False))
+        assert row is None
+        proj = build_train_projection([_bundle(bid="m1", label="positive", profile=None, include_meta_profile=False)])
+        assert proj["rows"] == []
+        assert proj["positive_gold"] == []
+        assert proj["excluded_missing_profile"] == 1
+
+    def test_conflicting_profile_never_retained_train_gold(self) -> None:
+        bundle = _bundle(bid="c1", label="positive", profile="train_rich", top_profile="default_scrub")
+        assert resolve_train_redaction_profile(bundle) is None
+        assert project_train_row(bundle) is None
+        proj = build_train_projection([bundle])
+        assert proj["rows"] == []
+        assert proj["positive_gold"] == []
+        assert proj["excluded_conflicting_profile"] == 1
+
+    def test_fresh_top_level_profile_preferred(self) -> None:
+        matching = {
+            "id": "t1",
+            "artifact_class": "final_accept",
+            "gate": {},
+            "score_card": {},
+            "split": "train",
+            "redaction_profile": "default_scrub",
+            "meta": {"train_label": "positive", "redaction_profile": "default_scrub", "split_group_id": "sg-t1"},
+        }
+        row = project_train_row(matching)
+        assert row is not None
+        assert row["redaction_profile"] == "default_scrub"
+
+        top_only = {
+            "id": "t2",
+            "split": "train",
+            "redaction_profile": "public_ci",
+            "meta": {"train_label": "positive", "split_group_id": "sg-t2"},
+            "gate": {},
+            "score_card": {},
+        }
+        row2 = project_train_row(top_only)
+        assert row2 is not None
+        assert row2["redaction_profile"] == "public_ci"
+        assert resolve_train_redaction_profile(top_only) == "public_ci"
+
+    def test_no_invented_profile(self) -> None:
+        bundle = {
+            "id": "n1",
+            "meta": {"train_label": "positive"},
+            "gate": {},
+            "score_card": {},
+        }
+        assert resolve_train_redaction_profile(bundle) is None
+        assert project_train_row(bundle) is None
+
+    def test_diagnostics_count_missing_profile(self) -> None:
+        proj = build_train_projection(
+            [
+                _bundle(bid="ok", label="positive"),
+                _bundle(bid="miss", label="positive", profile=None, include_meta_profile=False),
+                _bundle(bid="conflict", label="positive", profile="train_rich", top_profile="public_ci"),
+                _bundle(bid="unlab", label=None),
+            ]
+        )
+        assert proj["excluded_missing_profile"] == 1
+        assert proj["excluded_conflicting_profile"] == 1
+        assert proj["excluded_unlabeled"] == 1
+        assert proj["excluded_total"] == 3
+        assert {r["bundle_id"] for r in proj["rows"]} == {"ok"}

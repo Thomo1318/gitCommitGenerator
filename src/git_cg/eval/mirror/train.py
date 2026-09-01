@@ -8,8 +8,10 @@ Safeguards (must hold for every train projection):
 * ``label`` is mandatory and closed: ``positive`` | ``negative``.
 * Unlabeled / unknown rows are **excluded** from ``positive_gold``.
 * Negative / antipattern rows **never** join ``positive_gold``.
-* Each row carries ``split`` (or ``split_group_id``), ``redaction_profile``,
-  and provenance/source markers.
+* Each row carries ``split`` (or ``split_group_id``), a resolved
+  ``redaction_profile``, and provenance/source markers.
+* Missing or conflicting ``redaction_profile`` values fail closed (row skipped);
+  profiles are never invented.
 * Train lake is dual-axis corpus retention only — **never** CI sole green /
   product accept authority.
 
@@ -18,8 +20,11 @@ Pure offline builders — no network, no Opik import.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Mapping
 from typing import Any, Final
+
+_LOG = logging.getLogger(__name__)
 
 __all__ = [
     "POSITIVE_GOLD",
@@ -30,6 +35,7 @@ __all__ = [
     "filter_positive_gold",
     "normalize_train_label",
     "project_train_row",
+    "resolve_train_redaction_profile",
 ]
 
 #: Single owner train dataset id (Q18 — metadata filter, not two datasets).
@@ -73,22 +79,83 @@ def normalize_train_label(raw: object) -> str | None:
     return None
 
 
+def _profile_sides(bundle: Mapping[str, Any]) -> tuple[str | None, str | None]:
+    """Return ``(top_level, meta)`` redaction profile strings, or ``None`` sides."""
+    meta = bundle.get("meta") if isinstance(bundle.get("meta"), Mapping) else {}
+    top = bundle.get("redaction_profile")
+    nested = meta.get("redaction_profile") if isinstance(meta, Mapping) else None
+    top_s = str(top).strip() if top is not None and str(top).strip() else None
+    nested_s = str(nested).strip() if nested is not None and str(nested).strip() else None
+    return top_s, nested_s
+
+
+def resolve_train_redaction_profile(bundle: Mapping[str, Any]) -> str | None:
+    """Resolve a train-row redaction profile with fail-closed precedence.
+
+    Precedence:
+
+    1. Prefer top-level ``bundle["redaction_profile"]`` stamped by
+       :func:`git_cg.eval.mirror.redaction.redact_bundle_for_export`.
+    2. Fall back to ``meta.redaction_profile`` only when top-level is absent.
+    3. If both exist and differ, fail closed (return ``None``).
+    4. Never invent a default profile.
+
+    Returns:
+        Canonical profile string, or ``None`` when missing/conflicting.
+    """
+    top_s, nested_s = _profile_sides(bundle)
+    if top_s is not None and nested_s is not None and top_s != nested_s:
+        _LOG.warning(
+            "redaction_profile conflict: top-level=%s, meta=%s",
+            top_s,
+            nested_s,
+        )
+        return None
+    if top_s is not None:
+        return top_s
+    if nested_s is not None:
+        return nested_s
+    return None
+
+
+def train_profile_skip_reason(bundle: Mapping[str, Any]) -> str | None:
+    """Return ``conflict``, ``missing``, or ``None`` when a profile resolves."""
+    top_s, nested_s = _profile_sides(bundle)
+    if top_s is not None and nested_s is not None and top_s != nested_s:
+        # Keep warning behaviour centralized in the resolver.
+        resolve_train_redaction_profile(bundle)
+        return "conflict"
+    if top_s is None and nested_s is None:
+        return "missing"
+    return None
+
+
 def project_train_row(
     bundle: Mapping[str, Any],
     *,
     dataset_id: str = TRAIN_DATASET_ID,
     default_split: str = "train",
 ) -> dict[str, Any] | None:
-    """Project one redacted bundle into a train-lake row, or ``None`` if unlabeled.
+    """Project one redacted bundle into a train-lake row, or ``None`` if skipped.
 
     Expects R14 redaction to have already run. Does **not** invent labels
     from telemetry or user-acceptance popularity signals.
+
+    Fail-closed skips (return ``None``):
+
+    * missing / unknown train label
+    * missing ``redaction_profile``
+    * conflicting top-level vs ``meta.redaction_profile``
     """
     meta = dict(bundle.get("meta") or {})
     label = normalize_train_label(
         bundle.get("train_label") or meta.get("train_label") or meta.get("label") or bundle.get("label")
     )
     if label is None:
+        return None
+
+    profile = resolve_train_redaction_profile(bundle)
+    if profile is None:
         return None
 
     split = (
@@ -99,7 +166,6 @@ def project_train_row(
         or default_split
     )
     split_s = str(split).strip() or default_split
-    profile = meta.get("redaction_profile") or bundle.get("redaction_profile")
     provenance = (
         meta.get("provenance_label") or bundle.get("provenance_label") or meta.get("provenance") or "owner_train"
     )
@@ -111,7 +177,7 @@ def project_train_row(
         "label": label,
         "split": split_s,
         "split_group_id": str(meta.get("split_group_id") or bundle.get("split_group_id") or split_s),
-        "redaction_profile": str(profile) if profile is not None else None,
+        "redaction_profile": profile,
         "provenance_label": str(provenance),
         "source": "local_precompute",
         "bundle_id": bundle.get("id"),
@@ -156,15 +222,35 @@ def build_train_projection(
 ) -> dict[str, Any]:
     """Build Q18 single-dataset train projection with dual-axis safeguards.
 
-    Returns labeled ``rows``, ``positive_gold``, ``negatives``, and
-    ``excluded_unlabeled``. Fails closed on positive/negative bundle_id overlap.
+    Returns labeled ``rows``, ``positive_gold``, ``negatives``, and exclusion
+    diagnostics. Fails closed on positive/negative bundle_id overlap and on
+    missing/conflicting ``redaction_profile`` (rows skipped, never invented).
     """
     rows: list[dict[str, Any]] = []
-    excluded = 0
+    excluded_unlabeled = 0
+    excluded_missing_profile = 0
+    excluded_conflicting_profile = 0
     for bundle in bundles:
+        meta = dict(bundle.get("meta") or {})
+        label = normalize_train_label(
+            bundle.get("train_label") or meta.get("train_label") or meta.get("label") or bundle.get("label")
+        )
+        if label is None:
+            excluded_unlabeled += 1
+            continue
+
+        skip = train_profile_skip_reason(bundle)
+        if skip == "conflict":
+            excluded_conflicting_profile += 1
+            continue
+        if skip == "missing":
+            excluded_missing_profile += 1
+            continue
+
         row = project_train_row(bundle, dataset_id=dataset_id, default_split=default_split)
         if row is None:
-            excluded += 1
+            # Label/profile already checked; residual skip is unlabeled-equivalent.
+            excluded_unlabeled += 1
             continue
         rows.append(row)
 
@@ -178,13 +264,17 @@ def build_train_projection(
     if pos_ids & neg_ids:
         raise TrainProjectionError("positive_gold/negative bundle_id overlap")
 
+    excluded_total = excluded_unlabeled + excluded_missing_profile + excluded_conflicting_profile
     return {
         "dataset_id": str(dataset_id or TRAIN_DATASET_ID),
         "q18": "single_dataset_label_split_metadata",
         "rows": rows,
         "positive_gold": positives,
         "negatives": negatives,
-        "excluded_unlabeled": excluded,
+        "excluded_unlabeled": excluded_unlabeled,
+        "excluded_missing_profile": excluded_missing_profile,
+        "excluded_conflicting_profile": excluded_conflicting_profile,
+        "excluded_total": excluded_total,
         "ci_sole_green": False,
         "product_accept_authority": False,
         "authority": "corpus_retention",
