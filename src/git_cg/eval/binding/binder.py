@@ -37,6 +37,8 @@ never raises for product-accept reasons — it reports outcomes via
 
 from __future__ import annotations
 
+import base64
+import contextlib
 import hashlib
 import json
 import secrets
@@ -45,9 +47,11 @@ from pathlib import Path
 from typing import Any
 
 from git_cg.eval.binding import paths
+from git_cg.eval.binding.lock import acquire_bind_lock
 from git_cg.eval.binding.profiles import capture_enabled
 from git_cg.eval.corpus.canonical import message_sha256
 from git_cg.eval.enums import ArtifactClass, ProvenanceLabel, RedactionProfile
+from git_cg.eval.evidence_scrub import mask_secrets_in_text, project_secret_safe
 from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
 __all__ = [
@@ -92,7 +96,10 @@ def _project_final_text(data: bytes | str) -> tuple[str, dict[str, Any]]:
 
     Returns ``(text, meta_extra)``. Valid UTF-8 decodes cleanly; invalid UTF-8
     decodes with ``errors="replace"`` and records the encoding + original byte
-    length under ``meta`` (N20.3). Never raises on decode failure.
+    length under ``meta`` (N20.3). When bytes are not valid UTF-8, also records
+    ancillary ``meta.final_message_b64`` for lossless round-trip of the original
+    accepted bytes — never a scored primary field.
+    Never raises on decode failure.
     """
     if isinstance(data, str):
         return data, {}
@@ -102,6 +109,7 @@ def _project_final_text(data: bytes | str) -> tuple[str, dict[str, Any]]:
         return data.decode("utf-8", errors="replace"), {
             "final_message_encoding": "utf-8-replace",
             "final_message_byte_length": len(data),
+            "final_message_b64": base64.b64encode(data).decode("ascii"),
         }
 
 
@@ -155,6 +163,102 @@ def _mint_session_id() -> str:
     return f"sess_{secrets.token_hex(16)}"
 
 
+#: Acceptpath reuse-scan cache schema version (rebuildable; never sole authority).
+_INDEX_VERSION = 1
+
+#: Cache key field separator for scoped reuse triples.
+_INDEX_KEY_SEP = "::"
+
+
+def _index_entry_key(key: tuple[str, str, str]) -> str:
+    """Serialize a scoped reuse triple into a stable cache key string."""
+    repo_root, token, final_sha = key
+    return f"{repo_root}{_INDEX_KEY_SEP}{token}{_INDEX_KEY_SEP}{final_sha}"
+
+
+def _load_index(index_path: Path) -> dict[str, str] | None:
+    """Load the acceptpath reuse-scan cache, or ``None`` when unusable.
+
+    Returns ``None`` for missing, corrupt, wrong-version, or schema-invalid
+    indexes. Cache absence must never alter binding behaviour.
+    """
+    try:
+        if not index_path.is_file():
+            return None
+        raw = index_path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if data.get("version") != _INDEX_VERSION:
+        return None
+    entries = data.get("entries")
+    if not isinstance(entries, dict):
+        return None
+    out: dict[str, str] = {}
+    for key, value in entries.items():
+        if isinstance(key, str) and isinstance(value, str) and key and value.strip():
+            out[key] = value
+    return out
+
+
+def _write_index(index_path: Path, entries: dict[str, str]) -> None:
+    """Best-effort atomic write of the reuse-scan cache. Never raises."""
+    payload = {"version": _INDEX_VERSION, "entries": dict(entries)}
+    with contextlib.suppress(OSError, paths.LayerAPathError, TypeError, ValueError):
+        paths.atomic_write_json(index_path, payload)
+
+
+def _cache_lookup_session(index_path: Path, key: tuple[str, str, str]) -> str | None:
+    """Return cached ``session_thread_id`` for ``key``, or ``None`` on miss."""
+    entries = _load_index(index_path)
+    if not entries:
+        return None
+    value = entries.get(_index_entry_key(key))
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+def _cache_write_through(index_path: Path, key: tuple[str, str, str], session_id: str) -> None:
+    """Merge ``session_id`` into the cache for ``key`` (best-effort)."""
+    if not session_id or not session_id.strip():
+        return
+    entries = _load_index(index_path) or {}
+    entries[_index_entry_key(key)] = session_id
+    _write_index(index_path, entries)
+
+
+def _load_bundle_for_session(bundles_dir: Path, session_id: str) -> dict[str, Any] | None:
+    """Load an authoritative bundle by session id when present and well-formed."""
+    if not session_id or not session_id.strip():
+        return None
+    path = bundles_dir / f"{session_id}.json"
+    try:
+        if not path.is_file():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except OSError, json.JSONDecodeError, UnicodeDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _bundle_matches_key(data: dict[str, Any], key: tuple[str, str, str]) -> bool:
+    """True when authoritative bundle ``data`` matches scoped reuse ``key``."""
+    repo_root, token, final_sha = key
+    if data.get("final_message_sha256") != final_sha:
+        return False
+    meta = data.get("meta")
+    accept_event = meta.get("accept_event") if isinstance(meta, dict) else None
+    if not isinstance(accept_event, dict):
+        return False
+    if accept_event.get("token") != token:
+        return False
+    stored_root = accept_event.get("repo_root")
+    return (not stored_root) or stored_root == repo_root
+
+
 def _reuse_key(repo_root: Path, accept_event_token: str | None, final_sha: str) -> tuple[str, str, str] | None:
     """Return the scoped reuse key, or ``None`` when no reliable token (N19.2)."""
     if not accept_event_token or not accept_event_token.strip():
@@ -165,13 +269,23 @@ def _reuse_key(repo_root: Path, accept_event_token: str | None, final_sha: str) 
 def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, Any] | None:
     """Find an existing authoritative acceptpath bundle matching ``key``.
 
-    Scans authoritative bundle JSON files (index caches are ignored — bundle
-    files are the sole authority, N19.2/N19.3). Matches on the scoped reuse
-    triple persisted under ``meta.accept_event`` + top-level hash field.
+    Consults the optional rebuildable ``index.json`` cache first. On cache hit,
+    still verifies the authoritative bundle file before reuse. On miss,
+    corrupt, or stale cache, falls through to a linear directory scan of bundle
+    JSON files (index caches are never sole authority; N19.2/N19.3). Linear-scan
+    hits write through to the cache best-effort.
     """
     if not bundles_dir.is_dir():
         return None
-    repo_root, token, final_sha = key
+
+    index_path = bundles_dir / "index.json"
+    cached_session = _cache_lookup_session(index_path, key)
+    if cached_session is not None:
+        cached_bundle = _load_bundle_for_session(bundles_dir, cached_session)
+        if cached_bundle is not None and _bundle_matches_key(cached_bundle, key):
+            return cached_bundle
+        # Stale/wrong cache entry — ignore and fall through to linear scan.
+
     for path in sorted(bundles_dir.glob("*.json")):
         if path.name == "index.json":
             continue
@@ -181,16 +295,12 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
             continue  # corrupt file is not authority; skip
         if not isinstance(data, dict):
             continue
-        if data.get("final_message_sha256") != final_sha:
+        if not _bundle_matches_key(data, key):
             continue
-        meta = data.get("meta")
-        accept_event = meta.get("accept_event") if isinstance(meta, dict) else None
-        if not isinstance(accept_event, dict):
-            continue
-        if accept_event.get("token") != token:
-            continue
-        if accept_event.get("repo_root") and accept_event.get("repo_root") != repo_root:
-            continue
+        # Write-through after authoritative scan hit (best-effort).
+        session_id = data.get("session_thread_id")
+        if isinstance(session_id, str) and session_id.strip():
+            _cache_write_through(index_path, key, session_id)
         return data
     return None
 
@@ -238,83 +348,105 @@ def bind_final_accept(
             return BindResult(bound=False, unbound_reason="repo_root_unresolved")
 
     # Scoped idempotent reuse (N19.2): same event + same bytes ⇒ reuse identity.
+    # Short-lived lock around reuse-scan-plus-write; lock failure falls back to
+    # unlocked atomic-replace and never blocks product accept.
     session_id = inp.session_thread_id
     case_id: str | None = None
     key = _reuse_key(root, inp.accept_event_token, final_sha) if root is not None else None
-    if key is not None:
-        existing = _scan_reuse_key(paths.acceptpath_bundles_dir(root), key)
-        if existing is not None:
-            existing_session = existing.get("session_thread_id")
-            existing_case = existing.get("case_id")
-            if isinstance(existing_session, str) and existing_session.strip():
-                session_id = existing_session
-            if isinstance(existing_case, str) and existing_case.strip():
-                case_id = existing_case
+    bundles_dir: Path | None = paths.acceptpath_bundles_dir(root) if root is not None else None
+    bind_lock = acquire_bind_lock(bundles_dir) if (write and bundles_dir is not None) else None
+    try:
+        if key is not None and bundles_dir is not None:
+            existing = _scan_reuse_key(bundles_dir, key)
+            if existing is not None:
+                existing_session = existing.get("session_thread_id")
+                existing_case = existing.get("case_id")
+                if isinstance(existing_session, str) and existing_session.strip():
+                    session_id = existing_session
+                if isinstance(existing_case, str) and existing_case.strip():
+                    case_id = existing_case
 
-    if session_id is None or not session_id.strip():
-        session_id = _mint_session_id()
-    if case_id is None:
-        case_id = f"acceptpath:{session_id}"
+        if session_id is None or not session_id.strip():
+            session_id = _mint_session_id()
+        if case_id is None:
+            case_id = f"acceptpath:{session_id}"
 
-    redaction = inp.redaction_profile or _DEFAULT_REDACTION
+        redaction = inp.redaction_profile or _DEFAULT_REDACTION
 
-    meta: dict[str, Any] = {"producer": _PRODUCER}
-    meta.update(encoding_meta)
-    if inp.meta:
-        # Additive non-authoritative fields only; never override binder authority.
-        for key, value in inp.meta.items():
-            meta.setdefault(key, value)
-    if inp.score_card:
-        meta["score_card"] = dict(inp.score_card)
-    binding_meta: dict[str, Any] = {"state": "bound"}
-    if inp.trace_id:
-        binding_meta["trace_id"] = inp.trace_id
-    if inp.thread_id:
-        binding_meta["thread_id"] = inp.thread_id  # correlation only (D9)
-    meta["binding"] = binding_meta
-    if inp.accept_event_token:
-        meta["accept_event"] = {
-            "token": inp.accept_event_token,
-            "repo_root": str(root) if root is not None else None,
+        meta: dict[str, Any] = {"producer": _PRODUCER}
+        meta.update(encoding_meta)
+        if inp.meta:
+            # Additive non-authoritative fields only; never override binder authority.
+            # Project secret-safe so evidence surfaces never persist raw secrets.
+            safe_meta = project_secret_safe(dict(inp.meta))
+            if isinstance(safe_meta, dict):
+                for meta_key, value in safe_meta.items():
+                    meta.setdefault(meta_key, value)
+        if inp.generated_message is not None and str(inp.generated_message).strip():
+            # Draft evidence only — redact secret shapes; never the scored final.
+            masked_draft = mask_secrets_in_text(str(inp.generated_message))
+            if masked_draft is not None and str(masked_draft).strip():
+                meta["generated_message"] = masked_draft
+        if inp.score_card:
+            # Score card is evidence under meta; project secret-safe.
+            safe_card = project_secret_safe(dict(inp.score_card))
+            if isinstance(safe_card, dict):
+                meta["score_card"] = safe_card
+        binding_meta: dict[str, Any] = {"state": "bound"}
+        if inp.trace_id:
+            binding_meta["trace_id"] = inp.trace_id
+        if inp.thread_id:
+            binding_meta["thread_id"] = inp.thread_id  # correlation only (D9)
+        meta["binding"] = binding_meta
+        if inp.accept_event_token:
+            meta["accept_event"] = {
+                "token": inp.accept_event_token,
+                "repo_root": str(root) if root is not None else None,
+            }
+
+        bundle: dict[str, Any] = {
+            "schema_version": "ape_bundle_v1",
+            "case_id": case_id,
+            "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
+            "bound": True,
+            "final_message": text,
+            "final_message_sha256": final_sha,
+            "session_thread_id": session_id,
+            "redaction_profile": redaction,
+            "provenance_label": ProvenanceLabel.FINAL_ACCEPT.value,
+            "meta": meta,
         }
 
-    bundle: dict[str, Any] = {
-        "schema_version": "ape_bundle_v1",
-        "case_id": case_id,
-        "artifact_class": ArtifactClass.FINAL_ACCEPT.value,
-        "bound": True,
-        "final_message": text,
-        "final_message_sha256": final_sha,
-        "session_thread_id": session_id,
-        "redaction_profile": redaction,
-        "provenance_label": ProvenanceLabel.FINAL_ACCEPT.value,
-        "meta": meta,
-    }
-
-    # Fail closed: the bundle we claim must validate against the frozen schema.
-    # Schema drift / rejected caller meta must not escape the non-blocking path.
-    try:
-        validate_instance("ape_bundle_v1", bundle)
-    except SchemaPackError as exc:
-        return BindResult(bound=False, unbound_reason="schema_invalid", errors=(str(exc),))
-
-    paths_written: tuple[str, ...] = ()
-    errors: tuple[str, ...] = ()
-    if write and root is not None:
+        # Fail closed: the bundle we claim must validate against the frozen schema.
+        # Schema drift / rejected caller meta must not escape the non-blocking path.
         try:
-            out = paths.acceptpath_bundles_dir(root) / f"{session_id}.json"
-            paths.atomic_write_json(out, bundle)
-            paths_written = (out.relative_to(root).as_posix(),)
-        except (OSError, paths.LayerAPathError) as exc:
-            # Persistence failure must not block product accept; report honestly.
-            errors = (f"bind_write_error: {exc}",)
+            validate_instance("ape_bundle_v1", bundle)
+        except SchemaPackError as exc:
+            return BindResult(bound=False, unbound_reason="schema_invalid", errors=(str(exc),))
 
-    return BindResult(
-        bound=True,
-        bundle=bundle,
-        paths_written=paths_written,
-        errors=errors,
-    )
+        paths_written: tuple[str, ...] = ()
+        errors: tuple[str, ...] = ()
+        if write and root is not None and bundles_dir is not None:
+            try:
+                out = bundles_dir / f"{session_id}.json"
+                paths.atomic_write_json(out, bundle)
+                paths_written = (out.relative_to(root).as_posix(),)
+                # Best-effort reuse-scan cache write-through after successful bind.
+                if key is not None:
+                    _cache_write_through(bundles_dir / "index.json", key, session_id)
+            except (OSError, paths.LayerAPathError) as exc:
+                # Persistence failure must not block product accept; report honestly.
+                errors = (f"bind_write_error: {exc}",)
+
+        return BindResult(
+            bound=True,
+            bundle=bundle,
+            paths_written=paths_written,
+            errors=errors,
+        )
+    finally:
+        if bind_lock is not None:
+            bind_lock.release()
 
 
 def bind_unbound(
