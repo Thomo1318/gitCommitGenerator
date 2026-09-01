@@ -613,3 +613,32 @@ def test_default_client_factory_paginates_projects_and_fds(monkeypatch) -> None:
     assert "fd0" in fds
     assert fd_api.calls[0][0] == 1
     assert fd_api.calls[1][0] == 2
+
+
+def test_paginate_sdk_collection_raises_when_page_cap_full() -> None:
+    import git_cg.eval.mirror.opik_verify as verify_mod
+
+    def fetch_page(*, page: int, size: int):
+        return [{"name": f"p{page}-{i}"} for i in range(size)]
+
+    try:
+        verify_mod._paginate_sdk_collection(fetch_page, size=10, max_pages=3)
+        raise AssertionError("expected OpikListingTruncatedError")
+    except verify_mod.OpikListingTruncatedError as exc:
+        assert "truncated" in str(exc).lower()
+        assert "3" in str(exc)
+
+
+def test_paginate_sdk_collection_completes_on_short_final_page() -> None:
+    import git_cg.eval.mirror.opik_verify as verify_mod
+
+    def fetch_page(*, page: int, size: int):
+        if page == 1:
+            return [{"name": f"p1-{i}"} for i in range(size)]
+        if page == 2:
+            return [{"name": "tail"}]
+        return []
+
+    items = verify_mod._paginate_sdk_collection(fetch_page, size=10, max_pages=3)
+    assert len(items) == 11
+    assert items[-1]["name"] == "tail"

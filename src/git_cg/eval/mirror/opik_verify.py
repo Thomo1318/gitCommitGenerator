@@ -229,30 +229,40 @@ def _page_content(page: object) -> list[object]:
     return list(content) if content else []
 
 
+class OpikListingTruncatedError(RuntimeError):
+    """SDK listing hit the page cap without an end-of-list signal."""
+
+
 def _paginate_sdk_collection(fetch_page, *, size: int = 100, max_pages: int = 50) -> list[object]:
     """Collect SDK page contents until empty, short, or page cap.
 
     ``fetch_page`` receives ``page`` (1-based) and ``size`` and returns a page
-    object with ``content``/``data`` or a bare sequence. Stops on empty pages,
-    pages shorter than ``size``, or ``max_pages``.
+    object with ``content``/``data`` or a bare sequence. Stops on empty pages
+    or pages shorter than ``size``. If every page through ``max_pages`` is full,
+    raises :class:`OpikListingTruncatedError` so callers do not treat the partial
+    listing as complete (avoids false missing-project / create-missing races).
     """
     items: list[object] = []
     for page_no in range(1, max_pages + 1):
         content = _page_content(fetch_page(page=page_no, size=size))
         if not content:
-            break
+            return items
         items.extend(content)
         if len(content) < size:
-            break
-    return items
+            return items
+    raise OpikListingTruncatedError(
+        f"Opik listing truncated after {max_pages} full pages "
+        f"(size={size}, collected={len(items)}); refuse incomplete inventory"
+    )
 
 
 def _default_client_factory() -> OpikVerifyClient:
     """Build a real Opik-backed client (lazy SDK import; secrets ephemeral)."""
-    from git_cg.eval.mirror.secrets import ensure_secure_opik_endpoint, resolve_opik_secrets
+    # Module import so monkeypatches on git_cg.eval.mirror.secrets bind here.
+    from git_cg.eval.mirror import secrets as mirror_secrets
 
-    secrets = resolve_opik_secrets(require_key=True)
-    ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
+    secrets = mirror_secrets.resolve_opik_secrets(require_key=True)
+    mirror_secrets.ensure_secure_opik_endpoint(base_url=secrets.base_url, api_key=secrets.api_key)
 
     import opik  # lazy; allowlisted import site
 
