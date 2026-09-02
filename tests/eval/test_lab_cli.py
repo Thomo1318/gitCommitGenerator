@@ -127,7 +127,7 @@ def test_lab_run_advisory_only(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_lab_pins_thin_surface() -> None:
-    """pins leaf reuses frozen pin helpers without expanding pack detail."""
+    """pins leaf reuses frozen pin helpers and exposes offline identities."""
     result = runner.invoke(app, ["eval", "lab", "pins", "--json"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -135,8 +135,11 @@ def test_lab_pins_thin_surface() -> None:
     data = payload["data"]
     assert data["schema_pack_pin"] == schema_pack_pin()
     assert data["metric_catalog_pin"] == metric_catalog_pin()
+    assert data["prompt_pack_pin"]
+    assert data["sampling_pin"]
     assert data["product_gate"] is False
     assert data["offline"] is True
+    assert data["secrets_consulted"] is False
 
 
 def test_no_doctor_verbs() -> None:
