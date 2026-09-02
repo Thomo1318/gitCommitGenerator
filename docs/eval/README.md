@@ -776,13 +776,39 @@ single-pass resolution path:
 * unknown durable `status` is corruption (diagnostic), not a silent skip
 
 Terminal (`completed` / `failed`) checkpoints whose index row was lost re-enter
-the normal `keep_last` candidate set after reconstruction. Unbounded
-`running` retention is unchanged here; bounded stale-running reclamation remains
-a separate opt-in path.
+the normal `keep_last` candidate set after reconstruction. Unbounded `running`
+retention remains the default. Age-bounded reclaim is a separate opt-in path
+(below).
 
 Index-write failure after a successful authoritative write still raises
 `EVAL_CHECKPOINT_IO`, but the durable payload remains on disk and a later
 write/list repairs the index.
+
+### Bounded stale-running reclamation (opt-in)
+
+`--keep-last` never prunes `running` checkpoints by itself. Operators can enable
+age-bounded reclaim:
+
+```bash
+git-cg eval run --reclaim-stale-running <seconds>
+git-cg eval resume --checkpoint <id> --reclaim-stale-running <seconds>
+```
+
+Rules:
+
+* Off by default. Omitting the flag keeps every `running` row (prior unbounded
+  retention).
+* A `running` row is reclaimed only when all of the following hold:
+  1. resolved age from authoritative `started_at` (fallback `last_progress_at`)
+     exceeds `<seconds>`
+  2. the checkpoint id is not in `protect_ids`
+  3. the authoritative payload was readable (excluded/corrupt-without-index rows
+     are never pruned; index last-known-good fallbacks are not reclaimed)
+* Reclaimed rows do not consume the completed-history `keep_last` budget.
+* Non-positive bounds fail closed with `EVAL_USAGE`.
+* `_finalize_gc` always protects the current checkpoint when
+  `status != "completed"` (and when `--keep-checkpoint` is set).
+* GC does not block product accept, ranking, or the Hybrid gate.
 
 ### Migration note (schema-pack rotation / resume invalidation)
 
