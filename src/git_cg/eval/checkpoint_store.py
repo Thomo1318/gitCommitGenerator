@@ -8,6 +8,9 @@ GC law:
 * retention unit = checkpoint files keyed by monotonic ``(started_at, checkpoint_id)``
 * default ``--keep-last 10`` applies per ``suite_id`` family
 * failed runs retain their last checkpoint until a later completed run supersedes
+* ``running`` rows are retained by keep-last alone; age-bounded reclaim is opt-in
+  (``stale_running_after_seconds`` / ``--reclaim-stale-running``)
+* reclaim never touches ``protect_ids``, excluded/corrupt rows, or non-authoritative fallbacks
 * pruning deletes matching index rows with the file (no dangling index entries)
 * ``export_only`` must not create checkpoints (enforced by orchestrator)
 
@@ -775,6 +778,20 @@ def delete_checkpoint(repo_root: Path, checkpoint_id: str) -> None:
         raise CheckpointStoreError(f"failed to delete checkpoint index {cid}: {exc}") from exc
 
 
+def _running_age_seconds(row: CheckpointIndexRow, *, now: datetime) -> float | None:
+    """Age of a running checkpoint in seconds, or None when unparseable.
+
+    Prefer canonical/normalized ``started_at``; fall back to ``last_progress_at``.
+    """
+    for candidate in (row.started_at, row.last_progress_at):
+        normalized = _normalize_timestamp_candidate(candidate)
+        if normalized is None:
+            continue
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        return max(0.0, (now - parsed).total_seconds())
+    return None
+
+
 def _sort_key(row: CheckpointIndexRow) -> tuple[str, str]:
     """Sort key for deterministic checkpoint/index ordering."""
     return (row.started_at or row.last_progress_at or "", row.checkpoint_id)
@@ -786,6 +803,8 @@ def prune_checkpoints(
     suite_id: str,
     keep_last: int = 10,
     protect_ids: Iterable[str] | None = None,
+    stale_running_after_seconds: int | None = None,
+    now: datetime | None = None,
 ) -> list[str]:
     """Prune oldest checkpoints for ``suite_id`` down to ``keep_last``.
 
@@ -796,18 +815,41 @@ def prune_checkpoints(
     Authority-first reconstructed terminal statuses re-enter the keep-last
     candidate set after index loss. Excluded/corrupt-without-index rows are
     never pruned.
+
+    Age-bounded reclaim of ``running`` rows is off by default. When
+    ``stale_running_after_seconds`` is a positive integer, a ``running`` row is
+    pruned only when all of the following hold:
+
+    * resolved age from ``started_at`` (fallback ``last_progress_at``) exceeds
+      the bound
+    * ``checkpoint_id`` is not in ``protect_ids``
+    * the authoritative payload was readable (index-only fallback and
+      excluded/corrupt-without-index rows are never reclaimed)
+
+    Reclaimed running rows do not consume the completed-history ``keep_last``
+    budget. ``None`` preserves unbounded running retention.
     """
     if keep_last < 0:
         raise CheckpointStoreError("keep_last must be >= 0", code="EVAL_USAGE")
+    if stale_running_after_seconds is not None and stale_running_after_seconds <= 0:
+        raise CheckpointStoreError(
+            "stale_running_after_seconds must be > 0 when set",
+            code="EVAL_USAGE",
+        )
     protected = {str(x) for x in (protect_ids or ())}
     resolved = _resolve_checkpoints(repo_root, suite_id=suite_id)
     # Excluded corrupt rows are retained by omission (never enter candidates).
-    rows = [item.row for item in resolved if item.row is not None and not item.excluded]
-    rows_sorted = sorted(rows, key=_sort_key)
+    entries: list[tuple[CheckpointIndexRow, bool]] = [
+        (item.row, item.record is not None) for item in resolved if item.row is not None and not item.excluded
+    ]
+    rows_sorted = sorted((row for row, _ in entries), key=_sort_key)
+    authoritative_readable = {row.checkpoint_id: auth for row, auth in entries}
     has_completed = any(r.status == "completed" for r in rows_sorted)
+    clock = now or datetime.now(UTC)
 
     retain: list[CheckpointIndexRow] = []
     candidates: list[CheckpointIndexRow] = []
+    stale_doomed: list[CheckpointIndexRow] = []
     for row in rows_sorted:
         if row.checkpoint_id in protected:
             retain.append(row)
@@ -816,8 +858,19 @@ def prune_checkpoints(
             retain.append(row)
             continue
         if row.status == "running":
-            # Active/incomplete runs are not GC'd by keep-last alone.
-            # Bounded stale-running reclamation remains a separate opt-in path.
+            # keep-last never prunes running; optional age bound may reclaim.
+            if stale_running_after_seconds is None:
+                retain.append(row)
+                continue
+            if not authoritative_readable.get(row.checkpoint_id, False):
+                # Index fallback / non-authoritative: never reclaim.
+                retain.append(row)
+                continue
+            age = _running_age_seconds(row, now=clock)
+            if age is not None and age > float(stale_running_after_seconds):
+                # Outside keep_last completed-history budget.
+                stale_doomed.append(row)
+                continue
             retain.append(row)
             continue
         candidates.append(row)
@@ -826,7 +879,7 @@ def prune_checkpoints(
     keep_n = max(0, keep_last)
     # Protected/running/failed-without-green do not consume the keep_last budget
     # for completed history; keep_last bounds completed/failed-after-green set.
-    doomed = candidates_newest_first[keep_n:]
+    doomed = list(candidates_newest_first[keep_n:]) + stale_doomed
 
     pruned: list[str] = []
     for row in doomed:
