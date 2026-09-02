@@ -396,3 +396,60 @@ def test_rotated_schema_pack_makes_legacy_checkpoint_resume_terminal(tmp_path: P
     assert "git-cg eval run" in hint
     assert "recompute-scores" in hint
     assert hint == expected_hint or "Checkpoint preserved read-only" in hint
+
+
+def test_finalize_gc_protects_live_checkpoint_from_reclamation(tmp_path: Path) -> None:
+    """Non-completed live checkpoint stays protected when reclaim is enabled."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    old = "2026-08-01T00:00:00Z"
+
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale",
+        experiment_id="exp-foreign-stale",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    live_id = "ckpt-live-run"
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-run",
+        compat_hash="b" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, live, status="running", started_at=old)
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=10,
+        keep_checkpoint=False,
+        checkpoint_id=live_id,
+        status="running",
+        stale_running_after_seconds=3600,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert "ckpt-foreign-stale" not in ids
+    assert "ckpt-foreign-stale" in pruned
+    assert live_id not in pruned

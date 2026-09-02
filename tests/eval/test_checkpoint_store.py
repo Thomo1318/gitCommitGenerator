@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import get_args
 
@@ -483,3 +484,133 @@ def test_delete_removes_index(tmp_path: Path) -> None:
     delete_checkpoint(tmp_path, "ckpt-del")
     assert list_checkpoint_ids(tmp_path) == []
     assert list_index_rows(tmp_path) == []
+
+
+def test_stale_running_disabled_by_default(tmp_path: Path) -> None:
+    """Unset bound retains an aged running row."""
+    old = "2026-08-01T00:00:00Z"
+    run = _record("ckpt-old-run", status="running", started_at=old, last_progress_at=old)
+    write_checkpoint(tmp_path, run, status="running", started_at=old)
+    done = _record("ckpt-done", status="completed", started_at="2026-08-20T12:00:00Z")
+    write_checkpoint(tmp_path, done, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    baseline = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=10)
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert "ckpt-old-run" in ids
+    assert "ckpt-old-run" not in baseline
+
+    again = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=10,
+        stale_running_after_seconds=None,
+        now=datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC),
+    )
+    assert again == baseline
+    assert "ckpt-old-run" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_reclaimed_when_bound_exceeded(tmp_path: Path) -> None:
+    """Aged running row past the bound is pruned when reclaim is enabled."""
+    old = "2026-08-01T00:00:00Z"
+    run = _record("ckpt-stale", status="running", started_at=old, last_progress_at=old)
+    write_checkpoint(tmp_path, run, status="running", started_at=old)
+    done = _record("ckpt-done", status="completed", started_at="2026-08-20T12:00:00Z")
+    write_checkpoint(tmp_path, done, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=10,
+        stale_running_after_seconds=3600,
+        now=datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC),
+    )
+    assert "ckpt-stale" in pruned
+    assert "ckpt-stale" not in list_checkpoint_ids(tmp_path)
+    assert "ckpt-done" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_respects_protect_ids(tmp_path: Path) -> None:
+    """protect_ids retains aged running rows past the reclaim bound."""
+    old = "2026-08-01T00:00:00Z"
+    run = _record("ckpt-protected", status="running", started_at=old)
+    write_checkpoint(tmp_path, run, status="running", started_at=old)
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        protect_ids=["ckpt-protected"],
+        stale_running_after_seconds=60,
+        now=datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC),
+    )
+    assert pruned == []
+    assert "ckpt-protected" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_ignores_fresh_running(tmp_path: Path) -> None:
+    """Running rows younger than the bound stay retained."""
+    fresh = "2026-08-20T11:59:00Z"
+    run = _record("ckpt-fresh", status="running", started_at=fresh)
+    write_checkpoint(tmp_path, run, status="running", started_at=fresh)
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=3600,
+        now=datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC),
+    )
+    assert pruned == []
+    assert "ckpt-fresh" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_never_prunes_excluded_rows(tmp_path: Path) -> None:
+    """Corrupt authoritative with no index is never reclaimed."""
+    cid = "ckpt-corrupt-old"
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    auth.write_text("{not-json", encoding="utf-8")
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC),
+    )
+    assert pruned == []
+    assert auth.is_file()
+
+
+def test_stale_running_never_reclaims_index_only_fallback(tmp_path: Path) -> None:
+    """Index last-known-good running rows require a readable authoritative payload."""
+    cid = "ckpt-index-only"
+    old = "2026-08-01T00:00:00Z"
+    run = _record(cid, status="running", started_at=old)
+    write_checkpoint(tmp_path, run, status="running", started_at=old)
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    auth.write_text("{broken", encoding="utf-8")
+    assert index_file(tmp_path, cid).is_file()
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC),
+    )
+    assert pruned == []
+    assert auth.is_file()
+    rows = list_index_rows(tmp_path, suite_id="suite-a")
+    assert any(r.checkpoint_id == cid and r.status == "running" for r in rows)
+
+
+def test_invalid_reclaim_bound_rejected(tmp_path: Path) -> None:
+    """Zero/negative reclaim bounds fail closed with EVAL_USAGE."""
+    for bad in (0, -1, -100):
+        with pytest.raises(CheckpointStoreError) as ei:
+            prune_checkpoints(
+                tmp_path,
+                suite_id="suite-a",
+                keep_last=10,
+                stale_running_after_seconds=bad,
+            )
+        assert ei.value.code == "EVAL_USAGE"
