@@ -96,7 +96,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval issue show` | command | public | canonical | Show one local diagnostic issue. — Public CLI operator surface. |
 | `eval issue suppress` | command | public | canonical | Suppress a local diagnostic issue. — Public CLI operator surface. |
 | `eval lab` | group | public (group) | group | Lab / Lane C advisory status, pins, and run. — Nested Typer group (not invoked alone). |
-| `eval lab pins` | command | public | canonical | Show schema_pack and metric_catalog pins (offline). — Public CLI operator surface. |
+| `eval lab pins` | command | public | canonical | Show offline schema/metric/prompt/model/sampling pins. — Public CLI operator surface. |
 | `eval lab run` | command | public | canonical | Run advisory Lane C cohort (no product gate). — Public CLI operator surface. |
 | `eval lab status` | command | public | canonical | Show lab eligibility and judge availability (offline). — Public CLI operator surface. |
 | `eval materialize-core-goldens` | command | public | canonical | Rebuild checked-in evaluation reference files used by tests. — Public CLI operator surface. |

@@ -575,7 +575,7 @@ lab_app = typer.Typer(
         "\n"
         "Subcommands:\n"
         "- status: eligibility + judge availability (no network)\n"
-        "- pins: schema_pack + metric_catalog pin presentation\n"
+        "- pins: schema/metric/prompt-pack/model/sampling pin presentation\n"
         "- run: advisory Lane C runner (no product gate)\n"
         "\n"
         "Guarantees:\n"
@@ -4629,9 +4629,24 @@ def lab_status_cmd(
 @lab_app.command(
     "pins",
     cls=BriefFullHelpCommand,
-    short_help="Show schema_pack and metric_catalog pins (offline).",
+    short_help="Show offline schema/metric/prompt/model/sampling pins.",
 )
 def lab_pins_cmd(
+    judge_model: str | None = typer.Option(
+        None,
+        "--judge-model",
+        help="Optional dated judge model pin (defaults to env when unset).",
+    ),
+    pack_identity: str | None = typer.Option(
+        None,
+        "--pack-identity",
+        help="Optional prompt-pack identity override (pin token only).",
+    ),
+    sampling_identity: str | None = typer.Option(
+        None,
+        "--sampling-identity",
+        help="Optional sampling identity override (pin token only).",
+    ),
     as_json: bool = typer.Option(
         False,
         "--json",
@@ -4639,24 +4654,43 @@ def lab_pins_cmd(
     ),
     detail: bool = _detail_help_option(),
 ) -> None:
-    """Show frozen schema_pack and metric_catalog pins.
+    """Show offline pin identities for lab / Lane C work.
 
     Offline and secret-safe.
 
     <<GIT_CG_HELP_DETAIL>>
 
-    Reuses ``pins.schema_pack_pin`` / ``pins.metric_catalog_pin``. Never contacts
-    the network and never prints secrets. ``--json`` emits the standard envelope.
+    Reuses ``pins.schema_pack_pin`` / ``pins.metric_catalog_pin`` plus Lane C
+    prompt-pack, model, and sampling identity helpers. Never contacts the
+    network, never prints secrets, and never emits prompt bodies. ``--json``
+    emits the standard envelope.
     """
     from git_cg.eval.cli_output import emit_human_line
     from git_cg.eval.lab import build_lab_pins
 
-    data = build_lab_pins()
+    data = build_lab_pins(
+        judge_model=judge_model,
+        pack_identity=pack_identity,
+        sampling_identity=sampling_identity,
+    )
     if as_json:
         emit_json_envelope(build_envelope("eval lab pins", ok=True, data=data))
     else:
+        emit_human_line(f"schema_pack: {data['schema_pack_pin']} · metric_catalog: {data['metric_catalog_pin']}")
         emit_human_line(f"schema_pack_pin={data['schema_pack_pin']}")
         emit_human_line(f"metric_catalog_pin={data['metric_catalog_pin']}")
+        emit_human_line(f"prompt_pack_pin={data['prompt_pack_pin']}")
+        model_pin = data.get("model_pin") or ""
+        if model_pin:
+            emit_human_line(f"model_pin={model_pin}")
+        else:
+            emit_human_line("model_pin=")
+        emit_human_line(f"sampling_pin={data['sampling_pin']}")
+        emit_human_line(f"output_contract_pin={data['output_contract_pin']}")
+        available = data.get("available_prompt_pack_pins") or {}
+        if isinstance(available, dict) and available:
+            for metric_id, pin in sorted(available.items()):
+                emit_human_line(f"available_prompt_pack_pin.{metric_id}={pin}")
     raise typer.Exit(code=0)
 
 
