@@ -93,6 +93,7 @@ class RunRequest:
     enable_dogfood: bool = False
     keep_last: int = 10
     keep_checkpoint: bool = False
+    stale_running_after_seconds: int | None = None
     checkpoint_id: str | None = None
     experiment_id: str | None = None
     case_ids: tuple[str, ...] | None = None
@@ -584,6 +585,7 @@ def _finalize_gc(
     keep_checkpoint: bool,
     checkpoint_id: str | None,
     status: str,
+    stale_running_after_seconds: int | None = None,
 ) -> list[str]:
     """Run terminal GC/finalization for a completed run."""
     protect: list[str] = []
@@ -598,9 +600,12 @@ def _finalize_gc(
             suite_id=suite_id,
             keep_last=keep_last,
             protect_ids=protect,
+            stale_running_after_seconds=stale_running_after_seconds,
         )
     except CheckpointStoreError as exc:
-        raise RunOrchestratorError(str(exc), code=exc.code, exit_code=4) from exc
+        # EVAL_USAGE (e.g. non-positive reclaim bound) maps to exit 2; store IO to 4.
+        exit_code = 2 if exc.code == "EVAL_USAGE" else 4
+        raise RunOrchestratorError(str(exc), code=exc.code, exit_code=exit_code) from exc
 
 
 def _run_export_only(req: RunRequest, repo: Path) -> RunResult:
@@ -986,6 +991,7 @@ def run_evaluation(req: RunRequest) -> RunResult:
             keep_checkpoint=req.keep_checkpoint,
             checkpoint_id=checkpoint_id,
             status=ckpt_status,
+            stale_running_after_seconds=req.stale_running_after_seconds,
         )
         # Successful completed runs may drop their own checkpoint unless kept.
         if ckpt_status == "completed" and not req.keep_checkpoint and checkpoint_id and checkpoint_id not in pruned:

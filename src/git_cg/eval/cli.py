@@ -859,6 +859,15 @@ def run_cmd(
         "--keep-checkpoint",
         help="Keep this run's checkpoint even when the run succeeds.",
     ),
+    reclaim_stale_running: int | None = typer.Option(
+        None,
+        "--reclaim-stale-running",
+        help=(
+            "Prune suite `running` checkpoints older than N seconds. "
+            "Off by default. Does not affect product accept; the live "
+            "non-completed checkpoint stays protected."
+        ),
+    ),
     gold_mode: str = typer.Option(
         "strict",
         "--gold-mode",
@@ -908,6 +917,7 @@ def run_cmd(
     - --suite / --fixture-root choose fixtures
     - --case limits work to listed case ids (lab/triage only)
     - --keep-last / --keep-checkpoint control checkpoint retention
+    - --reclaim-stale-running prunes aged `running` checkpoints when set (off by default)
     - --gold-mode controls reference comparison strictness
     - --json emits the standard CLI JSON envelope
 
@@ -926,6 +936,7 @@ def run_cmd(
                 gold_mode=gold_mode,
                 keep_last=keep_last,
                 keep_checkpoint=keep_checkpoint,
+                stale_running_after_seconds=reclaim_stale_running,
                 checkpoint_id=checkpoint,
                 experiment_id=experiment,
                 case_ids=_parse_case_ids(case),
@@ -973,6 +984,15 @@ def resume_cmd(
         "--keep-checkpoint",
         help="Keep this run's checkpoint even when the run succeeds.",
     ),
+    reclaim_stale_running: int | None = typer.Option(
+        None,
+        "--reclaim-stale-running",
+        help=(
+            "Prune suite `running` checkpoints older than N seconds. "
+            "Off by default. Does not affect product accept; the live "
+            "non-completed checkpoint stays protected."
+        ),
+    ),
     gold_mode: str = typer.Option(
         "strict",
         "--gold-mode",
@@ -997,6 +1017,7 @@ def resume_cmd(
 
     Retention and comparison flags match eval run:
     - --keep-last / --keep-checkpoint control checkpoint retention
+    - --reclaim-stale-running prunes aged `running` checkpoints when set (off by default)
     - --gold-mode controls reference comparison strictness
     - --fixture-root overrides the fixture directory when needed
     - --json emits the standard CLI JSON envelope
@@ -1026,6 +1047,7 @@ def resume_cmd(
                 gold_mode=gold_mode,
                 keep_last=keep_last,
                 keep_checkpoint=keep_checkpoint,
+                stale_running_after_seconds=reclaim_stale_running,
                 checkpoint_id=checkpoint,
                 offline=True,
             )
