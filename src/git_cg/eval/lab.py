@@ -123,18 +123,119 @@ def build_lab_status(
     }
 
 
-def build_lab_pins() -> dict[str, Any]:
-    """Present frozen schema_pack and metric_catalog pins for ``eval lab pins``.
+def _truncate_identity(value: str, *, limit: int = 128) -> str:
+    """Return a short identity token suitable for operator envelopes."""
+    text = value.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit]
 
-    Offline and secret-safe. Reuses existing pin helpers; does not expand
-    prompt-pack or sampling pin detail beyond the frozen catalog surface.
+
+def _resolve_model_pin(
+    judge_model: str | None,
+    environ: Mapping[str, str] | None,
+) -> str:
+    """Resolve a secret-free model pin from explicit arg or env (may be empty)."""
+    from git_cg.eval.lane_c.eligibility import ENV_JUDGE_MODEL
+
+    env = environ if environ is not None else {}
+    raw = judge_model if judge_model is not None else env.get(ENV_JUDGE_MODEL, "")
+    if not isinstance(raw, str):
+        return ""
+    return _truncate_identity(raw)
+
+
+def _resolve_identity(
+    explicit: str | None,
+    default: str,
+) -> str:
+    """Prefer an explicit identity string; otherwise use the offline default."""
+    if explicit is None:
+        return default
+    return _truncate_identity(explicit)
+
+
+def _available_prompt_pack_pins() -> dict[str, str]:
+    """Resolve local Lane C prompt-pack pins offline (pin tokens only).
+
+    Never returns prompt bodies. Missing or unreadable packs are skipped.
     """
+    from git_cg.eval.lane_c.prompt_pack import (
+        PromptPackError,
+        prompt_pack_pin,
+        resolve_judge_pack,
+    )
+
+    pins: dict[str, str] = {}
+    for metric_id in ("cprime.geval_craft", "cprime.geval_relevance"):
+        try:
+            pack = resolve_judge_pack(metric_id)
+            pins[metric_id] = prompt_pack_pin(pack)
+        except PromptPackError:
+            continue
+    return pins
+
+
+def build_lab_pins(
+    *,
+    judge_model: str | None = None,
+    pack_identity: str | None = None,
+    sampling_identity: str | None = None,
+    output_contract_identity: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Present offline pin identities for ``eval lab pins``.
+
+    Always includes frozen ``schema_pack`` / ``metric_catalog`` pins. Adds
+    prompt-pack, model, sampling, and output-contract identities from Lane C
+    eligibility defaults or explicit overrides. Local prompt-pack content pins
+    are included when repo packs resolve offline.
+
+    Secret-safe: no network, no credentials, no prompt bodies.
+    """
+    import os
+
+    from git_cg.eval.lane_c.eligibility import (
+        DEFAULT_OUTPUT_CONTRACT_IDENTITY,
+        DEFAULT_PACK_IDENTITY,
+        DEFAULT_SAMPLING_IDENTITY,
+    )
+
+    # Process env is only used for the non-secret model id when environ is omitted.
+    env_map: Mapping[str, str] = environ if environ is not None else os.environ
+
+    model_pin = _resolve_model_pin(judge_model, env_map)
+    prompt_pack = _resolve_identity(pack_identity, DEFAULT_PACK_IDENTITY)
+    sampling = _resolve_identity(sampling_identity, DEFAULT_SAMPLING_IDENTITY)
+    output_contract = _resolve_identity(
+        output_contract_identity,
+        DEFAULT_OUTPUT_CONTRACT_IDENTITY,
+    )
+    local_packs = _available_prompt_pack_pins()
+
+    schema_pin = schema_pack_pin()
+    catalog_pin = metric_catalog_pin()
+
     return {
         "authority": LAB_AUTHORITY,
         "product_gate": LAB_PRODUCT_GATE,
         "offline": True,
-        "schema_pack_pin": schema_pack_pin(),
-        "metric_catalog_pin": metric_catalog_pin(),
+        "secrets_consulted": False,
+        "schema_pack_pin": schema_pin,
+        "metric_catalog_pin": catalog_pin,
+        "prompt_pack_pin": prompt_pack,
+        "model_pin": model_pin,
+        "sampling_pin": sampling,
+        "output_contract_pin": output_contract,
+        # Short aliases for operators that prefer bare pin names.
+        "schema_pack": schema_pin,
+        "metric_catalog": catalog_pin,
+        "prompt_pack": prompt_pack,
+        "model": model_pin,
+        "sampling": sampling,
+        "output_contract": output_contract,
+        # Local pack content hashes only (never prompt text).
+        "available_prompt_pack_pins": local_packs,
     }
 
 
