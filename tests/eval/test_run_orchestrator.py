@@ -453,3 +453,170 @@ def test_finalize_gc_protects_live_checkpoint_from_reclamation(tmp_path: Path) -
     assert "ckpt-foreign-stale" not in ids
     assert "ckpt-foreign-stale" in pruned
     assert live_id not in pruned
+
+
+def test_finalize_gc_failed_current_stays_protected(tmp_path: Path) -> None:
+    """Failed current run stays protected while foreign stale can reclaim."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    old = "2026-08-01T00:00:00Z"
+
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale-fail",
+        experiment_id="exp-foreign-stale-fail",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    live_id = "ckpt-live-failed"
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-failed",
+        compat_hash="b" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="failed",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, live, status="failed", started_at=old)
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=0,
+        keep_checkpoint=False,
+        checkpoint_id=live_id,
+        status="failed",
+        stale_running_after_seconds=3600,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert live_id not in pruned
+    assert "ckpt-foreign-stale-fail" in pruned
+    assert "ckpt-foreign-stale-fail" not in ids
+
+
+def test_finalize_gc_completed_honours_keep_checkpoint(tmp_path: Path) -> None:
+    """Completed current run is protected when keep_checkpoint=True."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    live_id = "ckpt-live-completed"
+    older = build_checkpoint_record(
+        checkpoint_id="ckpt-older-completed",
+        experiment_id="exp-older-completed",
+        compat_hash="a" * 64,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T10:00:00Z",
+    )
+    write_checkpoint(tmp_path, older, status="completed", started_at="2026-08-20T10:00:00Z")
+
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-completed",
+        compat_hash="b" * 64,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, live, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=0,
+        keep_checkpoint=True,
+        checkpoint_id=live_id,
+        status="completed",
+        stale_running_after_seconds=None,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert live_id not in pruned
+    assert "ckpt-older-completed" in pruned
+
+
+def test_finalize_gc_keep_checkpoint_with_reclaim_enabled(tmp_path: Path) -> None:
+    """keep_checkpoint protects current id while foreign stale is removed."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    old = "2026-08-01T00:00:00Z"
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale-keep",
+        experiment_id="exp-foreign-stale-keep",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    live_id = "ckpt-live-keep"
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-keep",
+        compat_hash="b" * 64,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, live, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=10,
+        keep_checkpoint=True,
+        checkpoint_id=live_id,
+        status="completed",
+        stale_running_after_seconds=3600,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert live_id not in pruned
+    assert "ckpt-foreign-stale-keep" in pruned
+    assert "ckpt-foreign-stale-keep" not in ids
