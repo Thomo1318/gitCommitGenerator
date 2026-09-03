@@ -14,7 +14,6 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -114,21 +113,9 @@ def test_all_sections_skipped_is_usage_error(repo: Path) -> None:
     assert ei.value.code == "EVAL_USAGE"
 
 
-def test_projection_shape_and_authority(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_projection_shape_and_authority(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
 
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "cm-eval-fixtures-core",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double(suite_id="cm-eval-fixtures-core")
     # Patch the symbols resolved by lazy import inside run_triage.
     import git_cg.eval.doctor as doctor_mod
     import git_cg.eval.explain as explain_mod
@@ -155,25 +142,13 @@ def test_projection_shape_and_authority(repo: Path, monkeypatch: pytest.MonkeyPa
     assert report.ok is True
 
 
-def test_explain_auto_selects_single_failure(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_explain_auto_selects_single_failure(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
     _write_experiment(repo, "exp-a")
     _write_case(repo, "exp-a", "case-fail", passed=False)
 
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     report = run_triage(repo, experiment_id="exp-a")
@@ -184,26 +159,16 @@ def test_explain_auto_selects_single_failure(repo: Path, monkeypatch: pytest.Mon
     assert report.exit_code == 0  # failures alone do not force non-zero
 
 
-def test_explain_omitted_when_multiple_failures(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_explain_omitted_when_multiple_failures(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double
+) -> None:
     import git_cg.eval.doctor as doctor_mod
 
     _write_experiment(repo, "exp-a")
     _write_case(repo, "exp-a", "case-a", passed=False)
     _write_case(repo, "exp-a", "case-b", passed=False)
 
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     report = run_triage(repo, experiment_id="exp-a")
@@ -215,26 +180,14 @@ def test_explain_omitted_when_multiple_failures(repo: Path, monkeypatch: pytest.
     assert report.exit_code == 0
 
 
-def test_explicit_case_explain(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_explicit_case_explain(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
     _write_experiment(repo, "exp-a")
     _write_case(repo, "exp-a", "case-a", passed=False)
     _write_case(repo, "exp-a", "case-b", passed=False)
 
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     report = run_triage(repo, experiment_id="exp-a", case_id="case-b")
@@ -243,24 +196,12 @@ def test_explicit_case_explain(repo: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert data["explain"]["cases"][0]["case_id"] == "case-b"
 
 
-def test_invalid_case_propagates_usage(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_invalid_case_propagates_usage(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
     _write_experiment(repo, "exp-a")
     _write_case(repo, "exp-a", "case-a", passed=False)
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     with pytest.raises(ExplainError) as ei:
@@ -269,23 +210,11 @@ def test_invalid_case_propagates_usage(repo: Path, monkeypatch: pytest.MonkeyPat
     assert ei.value.code == "EVAL_USAGE"
 
 
-def test_doctor_red_exit_1(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_doctor_red_exit_1(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
     import git_cg.eval.explain as explain_mod
 
-    doctor = SimpleNamespace(
-        green=False,
-        exit_code=1,
-        to_data=lambda: {
-            "green": False,
-            "exit_code": 1,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": ["pin_floating"],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double(green=False, exit_code=1, block_failures=["pin_floating"])
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
     monkeypatch.setattr(
         explain_mod,
@@ -297,23 +226,11 @@ def test_doctor_red_exit_1(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert report.ok is False
 
 
-def test_doctor_compat_exit_3_outranks_red(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_doctor_compat_exit_3_outranks_red(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
     import git_cg.eval.explain as explain_mod
 
-    doctor = SimpleNamespace(
-        green=False,
-        exit_code=3,
-        to_data=lambda: {
-            "green": False,
-            "exit_code": 3,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double(green=False, exit_code=3)
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
     monkeypatch.setattr(
         explain_mod,
@@ -324,7 +241,7 @@ def test_doctor_compat_exit_3_outranks_red(repo: Path, monkeypatch: pytest.Monke
     assert report.exit_code == 3
 
 
-def test_corrupt_case_store_integrity(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_corrupt_case_store_integrity(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
     _write_experiment(repo, "exp-a")
@@ -332,19 +249,7 @@ def test_corrupt_case_store_integrity(repo: Path, monkeypatch: pytest.MonkeyPatc
     bad.parent.mkdir(parents=True, exist_ok=True)
     bad.write_text("{not-json", encoding="utf-8")
 
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     with pytest.raises(ExplainError) as ei:
@@ -386,23 +291,11 @@ def test_source_has_no_banned_imports_or_thresholds() -> None:
                 assert "> 0.8" not in body_src and "< 0.2" not in body_src
 
 
-def test_projection_serialisable(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_projection_serialisable(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
     import git_cg.eval.explain as explain_mod
 
-    doctor = SimpleNamespace(
-        green=True,
-        exit_code=0,
-        to_data=lambda: {
-            "green": True,
-            "exit_code": 0,
-            "suite_id": "s",
-            "checks": [],
-            "scores": [],
-            "block_failures": [],
-            "warn_failures": [],
-        },
-    )
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
     monkeypatch.setattr(
         explain_mod,
