@@ -91,6 +91,67 @@ class ReviewQueueError(ValueError):
         self.hint = hint
 
 
+def _normalize_reviewer_handle(
+    value: object,
+    *,
+    field: str,
+    message: str | None = None,
+    hint: str | None = None,
+) -> str:
+    """Strip and validate an opaque local reviewer handle.
+
+    Producer boundaries raise ``EVAL_USAGE`` / exit 2. Does not casefold.
+    """
+    handle = value.strip() if isinstance(value, str) else ""
+    if not handle or not _REVIEWER_RE.fullmatch(handle):
+        raise ReviewQueueError(
+            message
+            or (
+                f"{field} must be an opaque local handle matching "
+                r"[A-Za-z0-9._:-]{1,128}"
+            ),
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint=hint,
+        )
+    return handle
+
+
+def _assert_reviewer_identity_integrity(review: dict[str, Any]) -> None:
+    """Reject both-present-unequal reviewer dual fields as damaged data.
+
+    Shared write-path integrity boundary: mismatch raises
+    ``EVAL_STORE_INTEGRITY`` / exit 4. Single-field rows remain permitted
+    for legacy readability.
+    """
+    rev = review.get("reviewer")
+    rid = review.get("reviewer_id")
+    if not isinstance(rev, str) or not isinstance(rid, str):
+        return
+    if rev.strip() != rid.strip():
+        raise ReviewQueueError(
+            "human_review identity damaged: reviewer and reviewer_id disagree",
+            code="EVAL_STORE_INTEGRITY",
+            exit_code=4,
+            hint="Repair the dual identity fields so they match, or drop one legacy field.",
+        )
+
+
+def _resolve_reviewer_identity(review: dict[str, Any]) -> str | None:
+    """Project reviewer identity for reads.
+
+    * both present and equal: canonical stripped handle
+    * both present and unequal: fail closed (``EVAL_STORE_INTEGRITY``)
+    * single field: permissive ``reviewer`` or ``reviewer_id`` fallback
+    """
+    _assert_reviewer_identity_integrity(review)
+    rev = review.get("reviewer")
+    rid = review.get("reviewer_id")
+    rev_s = rev.strip() if isinstance(rev, str) and rev.strip() else None
+    rid_s = rid.strip() if isinstance(rid, str) and rid.strip() else None
+    return rev_s or rid_s
+
+
 def _utc_now() -> str:
     """Return the current UTC timestamp as an ISO-8601 Zulu string."""
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -117,7 +178,12 @@ def _atomic_write(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _validate_human_review(row: dict[str, Any]) -> None:
-    """Validate a payload against the closed schema/contract (fail closed)."""
+    """Validate a payload against the closed schema/contract (fail closed).
+
+    When both ``reviewer`` and ``reviewer_id`` are present they must be equal
+    after strip. Mismatch is damaged store data (``EVAL_STORE_INTEGRITY``),
+    not producer usage.
+    """
     from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
     try:
@@ -128,6 +194,7 @@ def _validate_human_review(row: dict[str, Any]) -> None:
             code="EVAL_STORE_INTEGRITY",
             exit_code=4,
         ) from exc
+    _assert_reviewer_identity_integrity(row)
 
 
 def _load_json(path: Path, *, code: str = "EVAL_STORE_INTEGRITY", exit_code: int = 4) -> dict[str, Any]:
@@ -285,13 +352,12 @@ def enqueue(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Enqueue a new advisory human_review_v1 row (status=pending)."""
-    if not reviewer or not _REVIEWER_RE.fullmatch(reviewer.strip()):
-        raise ReviewQueueError(
-            "reviewer must be an opaque local handle matching [A-Za-z0-9._:-]{1,128}",
-            code="EVAL_USAGE",
-            exit_code=2,
-            hint="Do not store email/display names.",
-        )
+    who = _normalize_reviewer_handle(
+        reviewer,
+        field="reviewer",
+        message="reviewer must be an opaque local handle matching [A-Za-z0-9._:-]{1,128}",
+        hint="Do not store email/display names.",
+    )
     if redaction_profile not in REDACTION_PROFILES:
         raise ReviewQueueError(
             f"invalid redaction_profile: {redaction_profile!r}",
@@ -319,8 +385,8 @@ def enqueue(
         "schema_version": SCHEMA_VERSION,
         "id": review_id,
         "review_id": review_id,
-        "reviewer": reviewer.strip(),
-        "reviewer_id": reviewer.strip(),
+        "reviewer": who,
+        "reviewer_id": who,
         "created_at": now,
         "authority": "advisory",
         "redaction_profile": redaction_profile,
@@ -387,7 +453,7 @@ def list_reviews(repo: Path, *, status: str | None = None) -> dict[str, Any]:
                     "status": item.get("status"),
                     "case_id": review.get("case_id"),
                     "bundle_id": review.get("bundle_id"),
-                    "reviewer": review.get("reviewer") or review.get("reviewer_id"),
+                    "reviewer": _resolve_reviewer_identity(review),
                     "authority": review.get("authority", "advisory"),
                     "updated_at": item.get("updated_at") or item.get("created_at"),
                     "claimed_by": item.get("claimed_by"),
@@ -457,13 +523,11 @@ def claim(
     duplicate/over-claim races between concurrent operators, then relies on
     atomic JSON replace for the row write.
     """
-    if not reviewer or not _REVIEWER_RE.fullmatch(reviewer.strip()):
-        raise ReviewQueueError(
-            "claim requires opaque --reviewer handle",
-            code="EVAL_USAGE",
-            exit_code=2,
-        )
-    who = reviewer.strip()
+    who = _normalize_reviewer_handle(
+        reviewer,
+        field="reviewer",
+        message="claim requires opaque --reviewer handle",
+    )
     lock_path: Path | None = None
     try:
         if not dry_run:
@@ -549,13 +613,11 @@ def adjudicate(
         target = STATUS_ADJUDICATED
 
     now = _utc_now()
-    who = (adjudicator or item.get("claimed_by") or "operator").strip()
-    if not _REVIEWER_RE.fullmatch(who):
-        raise ReviewQueueError(
-            "adjudicator must be an opaque local handle",
-            code="EVAL_USAGE",
-            exit_code=2,
-        )
+    who = _normalize_reviewer_handle(
+        (adjudicator or item.get("claimed_by") or "operator"),
+        field="adjudicator",
+        message="adjudicator must be an opaque local handle",
+    )
 
     adjudication: dict[str, Any] = {
         "outcome": oc if oc != OUTCOME_DISMISS else OUTCOME_DISMISS,
@@ -731,9 +793,9 @@ def rollup_reviews(
             rid = str(item.get("review_id") or review.get("review_id") or "")
             if rid:
                 review_ids.append(rid)
-            reviewer = review.get("reviewer") or review.get("reviewer_id")
-            if isinstance(reviewer, str) and reviewer.strip():
-                reviewers.append(reviewer.strip())
+            reviewer = _resolve_reviewer_identity(review)
+            if reviewer is not None:
+                reviewers.append(reviewer)
             status = str(item.get("status") or "")
             status_counts[status] = status_counts.get(status, 0) + 1
             scores = review.get("scores") if isinstance(review.get("scores"), dict) else {}
