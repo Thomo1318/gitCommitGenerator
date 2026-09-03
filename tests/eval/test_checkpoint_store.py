@@ -614,3 +614,628 @@ def test_invalid_reclaim_bound_rejected(tmp_path: Path) -> None:
                 stale_running_after_seconds=bad,
             )
         assert ei.value.code == "EVAL_USAGE"
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint GC edge cases: age bounds, keep-last, degraded inventory
+# ---------------------------------------------------------------------------
+
+
+def _write_running(
+    repo: Path,
+    cid: str,
+    *,
+    started_at: str,
+    last_progress_at: str | None = None,
+    suite: str = "suite-a",
+) -> None:
+    """Write a durable running checkpoint with explicit timestamps."""
+    progress = last_progress_at or started_at
+    rec = _record(
+        cid,
+        suite=suite,
+        status="running",
+        started_at=started_at,
+        last_progress_at=progress,
+    )
+    # Pin last_progress_at after build so explicit values survive defaults.
+    rec["last_progress_at"] = progress
+    write_checkpoint(repo, rec, status="running", started_at=started_at)
+
+
+def _write_completed(
+    repo: Path,
+    cid: str,
+    *,
+    started_at: str,
+    suite: str = "suite-a",
+) -> None:
+    """Write a durable completed checkpoint."""
+    write_checkpoint(
+        repo,
+        _record(cid, suite=suite, status="completed", started_at=started_at),
+        status="completed",
+        started_at=started_at,
+    )
+
+
+def _write_failed(
+    repo: Path,
+    cid: str,
+    *,
+    started_at: str,
+    suite: str = "suite-a",
+) -> None:
+    """Write a durable failed checkpoint."""
+    write_checkpoint(
+        repo,
+        _record(cid, suite=suite, status="failed", started_at=started_at),
+        status="failed",
+        started_at=started_at,
+    )
+
+
+def _clock() -> datetime:
+    """Fixed reclaim clock used across boundary tests."""
+    return datetime(2026, 8, 20, 12, 0, 0, tzinfo=UTC)
+
+
+def test_stale_running_exact_age_equality_retained(tmp_path: Path) -> None:
+    """Age equal to the reclaim bound uses strict greater-than and must retain."""
+    # now=12:00, started=11:00; age=3600 equals bound and must retain
+    started = "2026-08-20T11:00:00Z"
+    _write_running(tmp_path, "ckpt-eq-bound", started_at=started)
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=3600,
+        now=_clock(),
+    )
+    assert pruned == []
+    assert "ckpt-eq-bound" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_age_bound_minus_plus_one(tmp_path: Path) -> None:
+    """One second under the bound retains; one second over reclaims."""
+    # age=3599 vs bound=3600 retains
+    _write_running(tmp_path, "ckpt-under", started_at="2026-08-20T11:00:01Z")
+    under = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=3600,
+        now=_clock(),
+    )
+    assert under == []
+    assert "ckpt-under" in list_checkpoint_ids(tmp_path)
+
+    # age=3601 vs bound=3600 reclaims
+    _write_running(tmp_path, "ckpt-over", started_at="2026-08-20T10:59:59Z")
+    over = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=3600,
+        now=_clock(),
+    )
+    assert "ckpt-over" in over
+    assert "ckpt-over" not in list_checkpoint_ids(tmp_path)
+    assert "ckpt-under" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_age_prefers_started_at_over_last_progress(tmp_path: Path) -> None:
+    """Reclaim age prefers started_at even when last_progress_at differs."""
+    # started_at old (stale) with fresh last_progress still reclaims from started_at
+    _write_running(
+        tmp_path,
+        "ckpt-old-start",
+        started_at="2026-08-01T00:00:00Z",
+        last_progress_at="2026-08-20T11:59:00Z",
+    )
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=3600,
+        now=_clock(),
+    )
+    assert "ckpt-old-start" in pruned
+
+    # started_at fresh with ancient last_progress retains from started_at
+    _write_running(
+        tmp_path,
+        "ckpt-fresh-start",
+        started_at="2026-08-20T11:30:00Z",
+        last_progress_at="2026-07-01T00:00:00Z",
+    )
+    pruned2 = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=3600,
+        now=_clock(),
+    )
+    assert pruned2 == []
+    assert "ckpt-fresh-start" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_age_falls_back_to_last_progress_at(tmp_path: Path) -> None:
+    """When started_at is absent on disk, age uses last_progress_at."""
+    cid = "ckpt-lp-age"
+    # Legacy payload without started_at; last_progress drives age.
+    payload = _legacy_payload(cid, last_progress_at="2026-08-01T00:00:00Z")
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    auth.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # Matching index keeps suite filtering stable without rewrite.
+    idx = index_file(tmp_path, cid)
+    idx.parent.mkdir(parents=True, exist_ok=True)
+    idx.write_text(
+        json.dumps(
+            {
+                "checkpoint_id": cid,
+                "suite_id": "suite-a",
+                "experiment_id": f"exp-{cid}",
+                "started_at": "",
+                "last_progress_at": "2026-08-01T00:00:00Z",
+                "status": "running",
+                "mode": "fresh_suite_run",
+                "path": str(auth),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rows = list_index_rows(tmp_path, suite_id="suite-a")
+    assert any(r.checkpoint_id == cid for r in rows)
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    assert cid in pruned
+    assert cid not in list_checkpoint_ids(tmp_path)
+    # Reclaim deletes the row; no rewrite path remains.
+    after = json.loads(auth.read_text(encoding="utf-8")) if auth.is_file() else None
+    assert after is None
+
+
+def test_stale_running_unparseable_age_retains(tmp_path: Path) -> None:
+    """Unparseable age candidates fail closed to retain (never reclaim)."""
+    cid = "ckpt-bad-age"
+    _write_running(tmp_path, cid, started_at="2026-08-01T00:00:00Z")
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    raw = json.loads(auth.read_text(encoding="utf-8"))
+    # Break schema timestamps so authoritative load fails; index timestamps stay invalid.
+    raw["started_at"] = "not-a-timestamp"
+    raw["last_progress_at"] = "also-bad"
+    auth.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    idx = index_file(tmp_path, cid)
+    idx.write_text(
+        json.dumps(
+            {
+                "checkpoint_id": cid,
+                "suite_id": "suite-a",
+                "experiment_id": f"exp-{cid}",
+                "started_at": "nope",
+                "last_progress_at": "still-nope",
+                "status": "running",
+                "mode": "fresh_suite_run",
+                "path": str(auth),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=_clock(),
+    )
+    assert pruned == []
+    assert auth.is_file()
+
+
+def test_stale_running_suite_isolation_with_multiple_rows(tmp_path: Path) -> None:
+    """Only the requested suite's stale-running rows are reclaimed."""
+    old = "2026-08-01T00:00:00Z"
+    _write_running(tmp_path, "ckpt-a-stale", started_at=old, suite="suite-a")
+    _write_running(tmp_path, "ckpt-b-stale", started_at=old, suite="suite-b")
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    assert pruned == ["ckpt-a-stale"]
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert "ckpt-a-stale" not in ids
+    assert "ckpt-b-stale" in ids
+
+
+def test_stale_running_mixed_protect_and_unprotected(tmp_path: Path) -> None:
+    """protect_ids keeps one stale runner while siblings reclaim."""
+    old = "2026-08-01T00:00:00Z"
+    _write_running(tmp_path, "ckpt-keep", started_at=old)
+    _write_running(tmp_path, "ckpt-drop-1", started_at=old)
+    _write_running(tmp_path, "ckpt-drop-2", started_at=old)
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        protect_ids=["ckpt-keep"],
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    assert set(pruned) == {"ckpt-drop-1", "ckpt-drop-2"}
+    assert "ckpt-keep" in list_checkpoint_ids(tmp_path)
+
+
+def test_stale_running_second_pass_idempotent(tmp_path: Path) -> None:
+    """Repeated reclaim is idempotent once stale rows are gone."""
+    old = "2026-08-01T00:00:00Z"
+    _write_running(tmp_path, "ckpt-once", started_at=old)
+    first = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    assert first == ["ckpt-once"]
+    second = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    assert second == []
+    assert list_checkpoint_ids(tmp_path) == []
+
+
+def test_keep_last_zero_deletes_all_eligible_completed(tmp_path: Path) -> None:
+    """keep_last=0 removes all completed candidates."""
+    for i, ts in enumerate(("2026-08-20T10:00:00Z", "2026-08-20T11:00:00Z", "2026-08-20T12:00:00Z")):
+        _write_completed(tmp_path, f"ckpt-c{i}", started_at=ts)
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=0)
+    assert set(pruned) == {"ckpt-c0", "ckpt-c1", "ckpt-c2"}
+    assert list_checkpoint_ids(tmp_path) == []
+
+
+def test_keep_last_one_retains_newest_only(tmp_path: Path) -> None:
+    """keep_last=1 retains only the newest eligible row."""
+    _write_completed(tmp_path, "ckpt-old", started_at="2026-08-20T10:00:00Z")
+    _write_completed(tmp_path, "ckpt-mid", started_at="2026-08-20T11:00:00Z")
+    _write_completed(tmp_path, "ckpt-new", started_at="2026-08-20T12:00:00Z")
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=1)
+    assert set(pruned) == {"ckpt-old", "ckpt-mid"}
+    assert set(list_checkpoint_ids(tmp_path)) == {"ckpt-new"}
+
+
+def test_keep_last_exact_count_prunes_nothing(tmp_path: Path) -> None:
+    """Eligible count equal to keep_last deletes nothing."""
+    _write_completed(tmp_path, "ckpt-a", started_at="2026-08-20T10:00:00Z")
+    _write_completed(tmp_path, "ckpt-b", started_at="2026-08-20T11:00:00Z")
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=2)
+    assert pruned == []
+    assert set(list_checkpoint_ids(tmp_path)) == {"ckpt-a", "ckpt-b"}
+
+
+def test_keep_last_larger_than_eligible_prunes_nothing(tmp_path: Path) -> None:
+    """keep_last larger than eligible count is a no-op."""
+    _write_completed(tmp_path, "ckpt-only", started_at="2026-08-20T10:00:00Z")
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=50)
+    assert pruned == []
+    assert set(list_checkpoint_ids(tmp_path)) == {"ckpt-only"}
+
+
+def test_negative_keep_last_rejected(tmp_path: Path) -> None:
+    """Negative keep_last fails closed with EVAL_USAGE."""
+    with pytest.raises(CheckpointStoreError) as ei:
+        prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=-1)
+    assert ei.value.code == "EVAL_USAGE"
+
+
+def test_keep_last_failed_boundary_after_completed(tmp_path: Path) -> None:
+    """Failed rows enter keep-last after a completed exists; oldest drop first."""
+    _write_failed(tmp_path, "ckpt-fail-old", started_at="2026-08-20T09:00:00Z")
+    _write_completed(tmp_path, "ckpt-done", started_at="2026-08-20T10:00:00Z")
+    _write_failed(tmp_path, "ckpt-fail-new", started_at="2026-08-20T11:00:00Z")
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=1)
+    # Newest eligible is fail-new; older failed and completed rows prune.
+    assert "ckpt-fail-new" in list_checkpoint_ids(tmp_path)
+    assert "ckpt-fail-old" in pruned
+    assert "ckpt-done" in pruned
+    assert "ckpt-done" not in list_checkpoint_ids(tmp_path)
+
+
+def test_keep_last_protect_ids_saves_terminal_outside_window(tmp_path: Path) -> None:
+    """protect_ids retains a completed row that would otherwise prune."""
+    _write_completed(tmp_path, "ckpt-old", started_at="2026-08-20T10:00:00Z")
+    _write_completed(tmp_path, "ckpt-new", started_at="2026-08-20T12:00:00Z")
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=1,
+        protect_ids=["ckpt-old"],
+    )
+    assert pruned == []
+    assert set(list_checkpoint_ids(tmp_path)) == {"ckpt-old", "ckpt-new"}
+
+
+def test_keep_last_second_pass_idempotent(tmp_path: Path) -> None:
+    """Repeated keep-last prune does not delete further rows."""
+    for i in range(4):
+        _write_completed(tmp_path, f"ckpt-k{i}", started_at=f"2026-08-20T1{i}:00:00Z")
+    first = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=2)
+    assert len(first) == 2
+    remaining = set(list_checkpoint_ids(tmp_path))
+    second = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=2)
+    assert second == []
+    assert set(list_checkpoint_ids(tmp_path)) == remaining
+
+
+def test_reclaim_does_not_consume_keep_last_budget(tmp_path: Path) -> None:
+    """Stale reclaim does not consume completed-history keep_last budget."""
+    old = "2026-08-01T00:00:00Z"
+    # Three completed rows and two stale running rows.
+    _write_completed(tmp_path, "ckpt-c0", started_at="2026-08-20T10:00:00Z")
+    _write_completed(tmp_path, "ckpt-c1", started_at="2026-08-20T11:00:00Z")
+    _write_completed(tmp_path, "ckpt-c2", started_at="2026-08-20T12:00:00Z")
+    _write_running(tmp_path, "ckpt-r0", started_at=old)
+    _write_running(tmp_path, "ckpt-r1", started_at=old)
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=2,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    # Both stale runners reclaim; keep_last=2 retains the newest two completed.
+    assert "ckpt-r0" in pruned and "ckpt-r1" in pruned
+    assert "ckpt-c0" in pruned
+    assert ids == {"ckpt-c1", "ckpt-c2"}
+
+
+def test_mixed_inventory_gc_exclusions_and_ordering(tmp_path: Path) -> None:
+    """Mixed healthy, corrupt, index-only, and cross-suite inventory stays safe under GC."""
+    _write_completed(tmp_path, "ckpt-healthy", started_at="2026-08-20T12:00:00Z")
+    _write_running(tmp_path, "ckpt-index-only", started_at="2026-08-01T00:00:00Z")
+    auth_io = tmp_path / ".eval" / "checkpoints" / "ckpt-index-only.json"
+    auth_io.write_text("{broken", encoding="utf-8")
+
+    # Corrupt authoritative with no index is excluded
+    corrupt = tmp_path / ".eval" / "checkpoints" / "ckpt-corrupt-only.json"
+    corrupt.write_text("{not-json", encoding="utf-8")
+
+    # Cross-suite completed row must stay out of suite-a GC.
+    _write_completed(
+        tmp_path,
+        "ckpt-other-suite",
+        started_at="2026-08-20T09:00:00Z",
+        suite="suite-b",
+    )
+
+    inv = list_checkpoint_inventory(tmp_path, suite_id="suite-a")
+    inv_ids = [r.checkpoint_id for r in inv]
+    assert "ckpt-healthy" in inv_ids
+    assert "ckpt-index-only" in inv_ids
+    assert "ckpt-corrupt-only" not in inv_ids
+    assert "ckpt-other-suite" not in inv_ids
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=_clock(),
+    )
+    # keep_last=0 may drop healthy completed; index-only and corrupt remain.
+    assert "ckpt-index-only" not in pruned
+    assert corrupt.is_file()
+    assert auth_io.is_file()
+    assert "ckpt-other-suite" in list_checkpoint_ids(tmp_path)
+
+
+def test_corrupt_auth_and_invalid_index_never_pruned(tmp_path: Path) -> None:
+    """Corrupt authoritative plus malformed index fallback is never pruned."""
+    cid = "ckpt-double-bad"
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    auth.write_text("{broken", encoding="utf-8")
+    idx = index_file(tmp_path, cid)
+    idx.parent.mkdir(parents=True, exist_ok=True)
+    idx.write_text("{also-broken", encoding="utf-8")
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=_clock(),
+    )
+    assert pruned == []
+    assert auth.is_file()
+    assert idx.is_file()
+
+
+def test_unknown_status_with_valid_fields_safe_under_gc(tmp_path: Path) -> None:
+    """Unknown durable status stays safe under GC via exclusion or atomic prune."""
+    cid = "ckpt-unknown-gc"
+    _write_completed(tmp_path, cid, started_at="2026-08-19T12:00:00Z")
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    raw = json.loads(auth.read_text(encoding="utf-8"))
+    raw["status"] = "exploded"
+    auth.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.warns(UserWarning, match="unknown durable status"):
+        rows = list_index_rows(tmp_path, suite_id="suite-a")
+    assert len(rows) == 1
+    assert rows[0].status == "completed"  # index last-known-good
+
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=0)
+    # Unknown durable status may retain via exclusion or prune only as an atomic
+    # auth+index pair. Never leave a half-deleted candidate.
+    if cid in pruned:
+        assert not auth.is_file()
+        assert not index_file(tmp_path, cid).is_file()
+    else:
+        assert auth.is_file()
+
+
+def test_malformed_started_at_with_bad_index_retains_under_reclaim(tmp_path: Path) -> None:
+    """Malformed started_at with bad index timestamps never partial-deletes under reclaim."""
+    cid = "ckpt-malformed-ts"
+    _write_running(tmp_path, cid, started_at="2026-08-01T00:00:00Z")
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    raw = json.loads(auth.read_text(encoding="utf-8"))
+    raw["started_at"] = "not-a-timestamp"
+    auth.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    index_file(tmp_path, cid).write_text(
+        json.dumps(
+            {
+                "checkpoint_id": cid,
+                "suite_id": "suite-a",
+                "experiment_id": f"exp-{cid}",
+                "started_at": "bad",
+                "last_progress_at": "bad",
+                "status": "running",
+                "mode": "fresh_suite_run",
+                "path": str(auth),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=_clock(),
+    )
+    assert pruned == []
+    assert auth.is_file()
+
+
+def test_legacy_payload_gc_without_rewrite(tmp_path: Path) -> None:
+    """Legacy payload participates in list/prune without rewrite."""
+    cid = "ckpt-legacy-gc"
+    payload = _legacy_payload(cid, last_progress_at="2026-08-20T01:00:00Z")
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    auth.parent.mkdir(parents=True, exist_ok=True)
+    before = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    auth.write_text(before, encoding="utf-8")
+
+    rows = list_index_rows(tmp_path, suite_id="suite-a")
+    assert len(rows) == 1
+    assert rows[0].checkpoint_id == cid
+    # Default status synthesis is running; keep-last does not prune running rows.
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=0)
+    assert pruned == []
+    assert auth.read_text(encoding="utf-8") == before
+
+    # With reclaim enabled and aged last_progress, legacy running reclaims.
+    pruned2 = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    # Age from last_progress 01:00 is about 11h; reclaim when authoritative is readable.
+    assert cid in pruned2
+
+
+def test_auth_write_index_missing_authority_first_gc(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Authoritative durable row with missing index stays authority-first under list/prune."""
+    from git_cg.eval import checkpoint_store as store
+
+    rec = _record("ckpt-idx-miss", status="completed", started_at="2026-08-20T07:00:00Z")
+    real_atomic = store.atomic_write_json
+    calls = {"n": 0}
+
+    def _fail_index(path, payload):
+        calls["n"] += 1
+        # First atomic write is authoritative; second is the index.
+        if calls["n"] == 2:
+            raise store.LayerAPathError("simulated index failure")
+        return real_atomic(path, payload)
+
+    monkeypatch.setattr(store, "atomic_write_json", _fail_index)
+    with pytest.raises(CheckpointStoreError):
+        write_checkpoint(tmp_path, rec, status="completed", started_at="2026-08-20T07:00:00Z")
+
+    assert (tmp_path / ".eval" / "checkpoints" / "ckpt-idx-miss.json").is_file()
+    assert not index_file(tmp_path, "ckpt-idx-miss").is_file()
+    rows = list_index_rows(tmp_path, suite_id="suite-a")
+    assert len(rows) == 1
+    assert rows[0].status == "completed"
+
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=0)
+    assert "ckpt-idx-miss" in pruned
+    assert "ckpt-idx-miss" not in list_checkpoint_ids(tmp_path)
+
+
+def test_delete_then_prune_is_noop_for_id(tmp_path: Path) -> None:
+    """Delete removes auth and index; subsequent prune is a no-op for that id."""
+    _write_completed(tmp_path, "ckpt-gone", started_at="2026-08-20T12:00:00Z")
+    delete_checkpoint(tmp_path, "ckpt-gone")
+    assert list_checkpoint_ids(tmp_path) == []
+    assert list_index_rows(tmp_path) == []
+    pruned = prune_checkpoints(tmp_path, suite_id="suite-a", keep_last=0)
+    assert pruned == []
+
+
+def test_index_only_after_auth_loss_retained_under_reclaim(tmp_path: Path) -> None:
+    """Auth deleted but index remains: non-authoritative retain under reclaim."""
+    cid = "ckpt-auth-lost"
+    _write_running(tmp_path, cid, started_at="2026-08-01T00:00:00Z")
+    auth = tmp_path / ".eval" / "checkpoints" / f"{cid}.json"
+    auth.unlink()
+    assert index_file(tmp_path, cid).is_file()
+
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=1,
+        now=_clock(),
+    )
+    assert pruned == []
+    rows = list_index_rows(tmp_path, suite_id="suite-a")
+    assert any(r.checkpoint_id == cid and r.status == "running" for r in rows)
+
+
+def test_missing_checkpoint_dirs_prune_safe(tmp_path: Path) -> None:
+    """Missing checkpoints/index directories: prune returns empty safely."""
+    assert not (tmp_path / ".eval").exists()
+    pruned = prune_checkpoints(
+        tmp_path,
+        suite_id="suite-a",
+        keep_last=0,
+        stale_running_after_seconds=60,
+        now=_clock(),
+    )
+    assert pruned == []
+    assert list_checkpoint_ids(tmp_path) == []
+    assert list_index_rows(tmp_path) == []
+    assert list_checkpoint_inventory(tmp_path) == []
