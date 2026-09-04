@@ -152,6 +152,11 @@
       "items": {
         "$ref": "#/$defs/non_empty_string"
       }
+    },
+    "iso8601_utc_second": {
+      "description": "Canonical UTC timestamp at second precision with Z suffix (matches utc_now_iso()).",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
     }
   },
   "$id": "https://git-cg.local/schemas/eval/evaluation_checkpoint_v1.schema.json",
@@ -211,6 +216,19 @@
     },
     "snapshot_id": {
       "type": "string"
+    },
+    "status": {
+      "description": "Durable checkpoint lifecycle status (authoritative over rebuildable index).",
+      "type": "string",
+      "enum": [
+        "running",
+        "failed",
+        "completed"
+      ]
+    },
+    "started_at": {
+      "description": "Durable canonical run start timestamp (UTC second precision, Z suffix).",
+      "$ref": "#/$defs/iso8601_utc_second"
     }
   },
   "required": [

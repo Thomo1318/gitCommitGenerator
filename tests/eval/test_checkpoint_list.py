@@ -188,3 +188,45 @@ def test_inventory_skips_invalid_checkpoint_filenames(tmp_path: Path) -> None:
     bad.write_text("{}", encoding="utf-8")
     rows = list_checkpoint_inventory(tmp_path)
     assert [r.checkpoint_id for r in rows] == ["ckpt-good"]
+
+
+def test_checkpoint_list_reports_authoritative_status_after_index_loss(tmp_path: Path) -> None:
+    """CLI inventory must surface durable terminal status when the index is gone."""
+    (tmp_path / ".git").mkdir()
+    suite = "suite-term"
+    snapshot = "snap-term"
+    live = compute_compat_hash(
+        schema_pack_pin=schema_pack_pin(),
+        metric_catalog_pin=metric_catalog_pin(),
+        suite_id=suite,
+        snapshot_hash=snapshot,
+    )
+    rec = build_checkpoint_record(
+        checkpoint_id="ckpt-term",
+        experiment_id="exp-term",
+        compat_hash=live,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id=snapshot,
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, rec, status="completed", started_at="2026-08-20T12:00:00Z")
+    idx = tmp_path / ".eval" / "index" / "checkpoints" / "ckpt-term.json"
+    assert idx.is_file()
+    idx.unlink()
+
+    rows = list_checkpoint_inventory(tmp_path, suite_id=suite)
+    assert len(rows) == 1
+    assert rows[0].status == "completed"
+
+    result = runner.invoke(app, ["eval", "checkpoint", "list", "--root", str(tmp_path), "--suite", suite, "--json"])
+    assert result.exit_code == 0, result.output
+    env = json.loads(result.output)
+    assert env["data"]["checkpoint_count"] == 1
+    assert env["data"]["checkpoints"][0]["status"] == "completed"
+    assert env["data"]["checkpoints"][0]["checkpoint_id"] == "ckpt-term"

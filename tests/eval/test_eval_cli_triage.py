@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from git_cg.eval.binding import paths as binding_paths
 from git_cg.eval.binding.paths import atomic_write_json, experiments_dir
 from git_cg.eval.scoring.result_builder import make_score
 from git_cg.main import app as cli_app
@@ -80,10 +79,10 @@ def _seed(repo: Path, *, cases: list[tuple[str, bool]], experiment_id: str = "ex
 
 
 @pytest.fixture()
-def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    _seed(tmp_path, cases=[("case-fail", False)])
-    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda start=None: tmp_path)
-    return tmp_path
+def repo(isolated_eval_repo: Path) -> Path:
+    """Seeded triage repo on shared Layer-A isolation."""
+    _seed(isolated_eval_repo, cases=[("case-fail", False)])
+    return isolated_eval_repo
 
 
 def _env(result) -> dict:
@@ -91,26 +90,10 @@ def _env(result) -> dict:
     return json.loads(result.stdout)
 
 
-def test_cli_triage_json_envelope(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_triage_json_envelope(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
-    doctor = type(
-        "D",
-        (),
-        {
-            "green": True,
-            "exit_code": 0,
-            "to_data": lambda self: {
-                "green": True,
-                "exit_code": 0,
-                "suite_id": "cm-eval-fixtures-core",
-                "checks": [],
-                "scores": [],
-                "block_failures": [],
-                "warn_failures": [],
-            },
-        },
-    )()
+    doctor = make_doctor_double(suite_id="cm-eval-fixtures-core")
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     result = runner.invoke(cli_app, ["eval", "triage", "--json"])
@@ -132,26 +115,10 @@ def test_cli_triage_json_envelope(repo: Path, monkeypatch: pytest.MonkeyPatch) -
     assert "search_traces" not in blob
 
 
-def test_cli_triage_human_mode(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_triage_human_mode(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
-    doctor = type(
-        "D",
-        (),
-        {
-            "green": True,
-            "exit_code": 0,
-            "to_data": lambda self: {
-                "green": True,
-                "exit_code": 0,
-                "suite_id": "s",
-                "checks": [],
-                "scores": [],
-                "block_failures": [],
-                "warn_failures": [],
-            },
-        },
-    )()
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     result = runner.invoke(cli_app, ["eval", "triage"])
@@ -161,28 +128,13 @@ def test_cli_triage_human_mode(repo: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert "git-cg eval triage" in result.stdout
 
 
-def test_cli_triage_multiple_failures_omits_explain(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_triage_multiple_failures_omits_explain(
+    isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double
+) -> None:
     import git_cg.eval.doctor as doctor_mod
 
-    _seed(tmp_path, cases=[("case-a", False), ("case-b", False)])
-    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda start=None: tmp_path)
-    doctor = type(
-        "D",
-        (),
-        {
-            "green": True,
-            "exit_code": 0,
-            "to_data": lambda self: {
-                "green": True,
-                "exit_code": 0,
-                "suite_id": "s",
-                "checks": [],
-                "scores": [],
-                "block_failures": [],
-                "warn_failures": [],
-            },
-        },
-    )()
+    _seed(isolated_eval_repo, cases=[("case-a", False), ("case-b", False)])
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     result = runner.invoke(cli_app, ["eval", "triage", "--json"])
@@ -192,26 +144,10 @@ def test_cli_triage_multiple_failures_omits_explain(tmp_path: Path, monkeypatch:
     assert any("pass --case" in n for n in env["data"]["notes"])
 
 
-def test_cli_triage_invalid_case_exit_2(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_triage_invalid_case_exit_2(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
-    doctor = type(
-        "D",
-        (),
-        {
-            "green": True,
-            "exit_code": 0,
-            "to_data": lambda self: {
-                "green": True,
-                "exit_code": 0,
-                "suite_id": "s",
-                "checks": [],
-                "scores": [],
-                "block_failures": [],
-                "warn_failures": [],
-            },
-        },
-    )()
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
 
     result = runner.invoke(cli_app, ["eval", "triage", "--case", "nope", "--json"])
@@ -239,26 +175,10 @@ def test_cli_triage_all_skipped_exit_2(repo: Path) -> None:
     assert env["errors"][0]["code"] == "EVAL_USAGE"
 
 
-def test_cli_triage_import_stays_clean(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_triage_import_stays_clean(repo: Path, monkeypatch: pytest.MonkeyPatch, make_doctor_double) -> None:
     import git_cg.eval.doctor as doctor_mod
 
-    doctor = type(
-        "D",
-        (),
-        {
-            "green": True,
-            "exit_code": 0,
-            "to_data": lambda self: {
-                "green": True,
-                "exit_code": 0,
-                "suite_id": "s",
-                "checks": [],
-                "scores": [],
-                "block_failures": [],
-                "warn_failures": [],
-            },
-        },
-    )()
+    doctor = make_doctor_double()
     monkeypatch.setattr(doctor_mod, "run_local_doctor", lambda **_k: doctor)
     sys.modules.pop("opik", None)
     result = runner.invoke(

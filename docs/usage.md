@@ -262,6 +262,10 @@ Run mode (e.g. full, resume_missing).
 
 Checkpoint id when resuming.
 
+#### `--reclaim-stale-running <SECONDS>`
+
+Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected.
+
 #### `--json`
 
 Print machine-readable JSON instead of plain text.
@@ -281,6 +285,10 @@ Continue an unfinished evaluation from a checkpoint.
 #### `--checkpoint <ID>`
 
 Checkpoint id (required).
+
+#### `--reclaim-stale-running <SECONDS>`
+
+Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected.
 
 #### `--json`
 

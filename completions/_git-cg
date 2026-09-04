@@ -95,6 +95,9 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
         flag --checkpoint help="Checkpoint id when resuming." {
             arg <ID>
         }
+        flag --reclaim-stale-running help="Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected." {
+            arg <SECONDS>
+        }
         flag --json help="Print machine-readable JSON instead of plain text."
         flag --root help="Repo root (defaults to discovery)." {
             arg <DIR>
@@ -103,6 +106,9 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
     cmd resume help="Continue an unfinished evaluation from a checkpoint." {
         flag --checkpoint help="Checkpoint id (required)." required=#true {
             arg <ID>
+        }
+        flag --reclaim-stale-running help="Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected." {
+            arg <SECONDS>
         }
         flag --json help="Print machine-readable JSON instead of plain text."
         flag --root help="Repo root (defaults to discovery)." {

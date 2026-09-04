@@ -35,9 +35,15 @@ stateDiagram-v2
 
 ## 📦 Included Changes
 
-<!-- List the main commit headers AND the items from their "Included changes" sections (Matches git-cg output) -->
+<!-- Synced by .github/workflows/pr-included-changes.yml as a collapsible block. -->
+<!-- Fallback shape before first sync (matches workflow output): -->
+
+<details>
+<summary>N commits</summary>
 
 -
+
+</details>
 
 ## 🔗 Related Issues
 

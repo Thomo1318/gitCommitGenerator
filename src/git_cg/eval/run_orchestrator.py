@@ -93,6 +93,7 @@ class RunRequest:
     enable_dogfood: bool = False
     keep_last: int = 10
     keep_checkpoint: bool = False
+    stale_running_after_seconds: int | None = None
     checkpoint_id: str | None = None
     experiment_id: str | None = None
     case_ids: tuple[str, ...] | None = None
@@ -584,6 +585,7 @@ def _finalize_gc(
     keep_checkpoint: bool,
     checkpoint_id: str | None,
     status: str,
+    stale_running_after_seconds: int | None = None,
 ) -> list[str]:
     """Run terminal GC/finalization for a completed run."""
     protect: list[str] = []
@@ -598,9 +600,12 @@ def _finalize_gc(
             suite_id=suite_id,
             keep_last=keep_last,
             protect_ids=protect,
+            stale_running_after_seconds=stale_running_after_seconds,
         )
     except CheckpointStoreError as exc:
-        raise RunOrchestratorError(str(exc), code=exc.code, exit_code=4) from exc
+        # EVAL_USAGE (e.g. non-positive reclaim bound) maps to exit 2; store IO to 4.
+        exit_code = 2 if exc.code == "EVAL_USAGE" else 4
+        raise RunOrchestratorError(str(exc), code=exc.code, exit_code=exit_code) from exc
 
 
 def _run_export_only(req: RunRequest, repo: Path) -> RunResult:
@@ -657,6 +662,13 @@ def _run_export_only(req: RunRequest, repo: Path) -> RunResult:
 
 def run_evaluation(req: RunRequest) -> RunResult:
     """Execute one governed suite mode and return a CLI-ready result."""
+    if req.stale_running_after_seconds is not None and req.stale_running_after_seconds <= 0:
+        raise RunOrchestratorError(
+            "stale_running_after_seconds must be > 0 when set",
+            code="EVAL_USAGE",
+            exit_code=2,
+            hint="Omit --reclaim-stale-running or pass a positive age bound in seconds.",
+        )
     if req.enable_dogfood:
         raise RunOrchestratorError(
             "dogfood attachments are off by default on suite run",
@@ -744,11 +756,21 @@ def run_evaluation(req: RunRequest) -> RunResult:
         completed = [str(x) for x in ckpt.get("completed_case_ids") or []]
         pending = [str(x) for x in ckpt.get("pending_case_ids") or []]
         if not pending:
-            # Nothing left — treat as completed resume no-op.
+            # Empty pending: completed resume no-op; still run terminal GC/reclaim.
             summaries = _load_prior_case_summaries(repo, experiment_id, completed)
             all_pass = bool(summaries) and all(s.deterministic_pass is True for s in summaries)
+            status = "completed" if all_pass else "failed"
+            pruned = _finalize_gc(
+                repo,
+                suite_id=prepared.suite_id,
+                keep_last=req.keep_last,
+                keep_checkpoint=req.keep_checkpoint,
+                checkpoint_id=checkpoint_id,
+                status=status,
+                stale_running_after_seconds=req.stale_running_after_seconds,
+            )
             return RunResult(
-                status="completed" if all_pass else "failed",
+                status=status,
                 mode=mode,
                 suite_id=prepared.suite_id,
                 experiment_id=experiment_id,
@@ -760,6 +782,7 @@ def run_evaluation(req: RunRequest) -> RunResult:
                 case_results=summaries,
                 all_pass=all_pass,
                 keep_last=req.keep_last,
+                pruned_checkpoint_ids=pruned,
                 exit_code=0 if all_pass else 1,
             )
         prior_summaries = _load_prior_case_summaries(repo, experiment_id, completed)
@@ -986,6 +1009,7 @@ def run_evaluation(req: RunRequest) -> RunResult:
             keep_checkpoint=req.keep_checkpoint,
             checkpoint_id=checkpoint_id,
             status=ckpt_status,
+            stale_running_after_seconds=req.stale_running_after_seconds,
         )
         # Successful completed runs may drop their own checkpoint unless kept.
         if ckpt_status == "completed" and not req.keep_checkpoint and checkpoint_id and checkpoint_id not in pruned:

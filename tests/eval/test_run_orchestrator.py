@@ -1,4 +1,4 @@
-"""Suite run orchestrator modes (Issue #246 Slice 3)."""
+"""Suite run orchestrator mode tests."""
 
 from __future__ import annotations
 
@@ -252,7 +252,7 @@ def test_recompute_score_history_append_only(tmp_path: Path) -> None:
 
 
 def test_b11_per_case_checkpoint_cadence_at_most_one_case_loss(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """S6-B11: orchestrator checkpoints per case (≤1-case-loss on crash).
+    """Orchestrator checkpoints per case (≤1-case-loss on crash).
 
     After each successful case write, completed/pending checkpoint cursors advance
     so a crash loses at most the in-flight case — never the whole scored prefix.
@@ -300,3 +300,408 @@ def test_b11_per_case_checkpoint_cadence_at_most_one_case_loss(tmp_path: Path, m
     final_running_or_done = persist_calls[-1]
     assert "seed-v1-valid-fixture" in final_running_or_done[0]
     assert "seed-b1-session12-regime-b" in final_running_or_done[0]
+
+
+def test_failed_run_persists_terminal_status_durably(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Failure path must leave durable terminal status on the authoritative payload."""
+    from git_cg.eval import run_orchestrator as orch
+
+    real_score = orch.score_bundle
+    calls = {"n": 0}
+
+    def boom(*args: object, **kwargs: object) -> object:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Let the first case succeed so a checkpoint exists, then fail.
+            return real_score(*args, **kwargs)
+        raise RuntimeError("injected suite failure")
+
+    monkeypatch.setattr(orch, "score_bundle", boom)
+    with pytest.raises(RunOrchestratorError) as ei:
+        run_evaluation(
+            _req(
+                mode="fresh_suite_run",
+                repo_root=tmp_path,
+                case_ids=("seed-v1-valid-fixture", "seed-b1-session12-regime-b"),
+                keep_checkpoint=True,
+            )
+        )
+    assert ei.value.code == "EVAL_SUITE_FAIL"
+
+    # Find the checkpoint written for this run.
+    ckpt_dir = tmp_path / ".eval" / "checkpoints"
+    files = list(ckpt_dir.glob("*.json"))
+    assert files, "expected a durable checkpoint after failure"
+    # Prefer the one marked failed.
+    failed = None
+    for path in files:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if raw.get("status") == "failed":
+            failed = raw
+            break
+    assert failed is not None, f"no failed checkpoint among {[p.name for p in files]}"
+    assert "started_at" in failed
+    assert failed["started_at"].endswith("Z")
+
+    # Delete index and confirm reconstruction still reports failed.
+    idx_dir = tmp_path / ".eval" / "index" / "checkpoints"
+    for idx in idx_dir.glob("*.json"):
+        idx.unlink()
+    from git_cg.eval.checkpoint_store import list_index_rows
+
+    rows = list_index_rows(tmp_path, suite_id=failed.get("suite_id") or "cm-eval-fixtures-core")
+    by_id = {r.checkpoint_id: r for r in rows}
+    assert failed["checkpoint_id"] in by_id
+    assert by_id[failed["checkpoint_id"]].status == "failed"
+
+
+def test_rotated_schema_pack_makes_legacy_checkpoint_resume_terminal(tmp_path: Path) -> None:
+    """Legacy schema-pack checkpoints must fail closed on resume with recovery_hint guidance."""
+    from git_cg.eval.compat import recovery_hint
+
+    prepared = prepare_suite_cases("cm-eval-fixtures-core", fixture_root=FIXTURE_ROOT)
+    # Simulate a pre-rotation checkpoint: valid shape, wrong/stale compat_hash.
+    stale_hash = "a" * 64
+    rec = build_checkpoint_record(
+        checkpoint_id="ckpt-legacy-schema-pack",
+        experiment_id="exp-legacy-schema-pack",
+        compat_hash=stale_hash,
+        completed_case_ids=[],
+        pending_case_ids=["seed-v1-valid-fixture"],
+        mode="resume_missing",
+        suite_id=prepared.suite_id,
+        snapshot_id=prepared.suite_snapshot_pin,
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    path = write_checkpoint(tmp_path, rec, status="running", started_at="2026-08-20T12:00:00Z")
+    before = path.read_bytes()
+
+    with pytest.raises(RunOrchestratorError) as ei:
+        run_evaluation(
+            _req(
+                mode="resume_missing",
+                repo_root=tmp_path,
+                checkpoint_id="ckpt-legacy-schema-pack",
+            )
+        )
+    err = ei.value
+    assert err.exit_code == 3
+    assert err.code == "EVAL_COMPAT_HASH_MISMATCH"
+    assert path.read_bytes() == before
+    hint = err.hint or ""
+    expected_hint = recovery_hint(checkpoint_id="ckpt-legacy-schema-pack")
+    assert "git-cg eval run" in hint
+    assert "recompute-scores" in hint
+    assert hint == expected_hint or "Checkpoint preserved read-only" in hint
+
+
+def test_finalize_gc_protects_live_checkpoint_from_reclamation(tmp_path: Path) -> None:
+    """Non-completed live checkpoint stays protected when reclaim is enabled."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    old = "2026-08-01T00:00:00Z"
+
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale",
+        experiment_id="exp-foreign-stale",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    live_id = "ckpt-live-run"
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-run",
+        compat_hash="b" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, live, status="running", started_at=old)
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=10,
+        keep_checkpoint=False,
+        checkpoint_id=live_id,
+        status="running",
+        stale_running_after_seconds=3600,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert "ckpt-foreign-stale" not in ids
+    assert "ckpt-foreign-stale" in pruned
+    assert live_id not in pruned
+
+
+def test_finalize_gc_failed_current_stays_protected(tmp_path: Path) -> None:
+    """Failed current run stays protected while foreign stale can reclaim."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    old = "2026-08-01T00:00:00Z"
+
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale-fail",
+        experiment_id="exp-foreign-stale-fail",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    live_id = "ckpt-live-failed"
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-failed",
+        compat_hash="b" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="failed",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, live, status="failed", started_at=old)
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=0,
+        keep_checkpoint=False,
+        checkpoint_id=live_id,
+        status="failed",
+        stale_running_after_seconds=3600,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert live_id not in pruned
+    assert "ckpt-foreign-stale-fail" in pruned
+    assert "ckpt-foreign-stale-fail" not in ids
+
+
+def test_finalize_gc_completed_honours_keep_checkpoint(tmp_path: Path) -> None:
+    """Completed current run is protected when keep_checkpoint=True."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    live_id = "ckpt-live-completed"
+    older = build_checkpoint_record(
+        checkpoint_id="ckpt-older-completed",
+        experiment_id="exp-older-completed",
+        compat_hash="a" * 64,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T10:00:00Z",
+    )
+    write_checkpoint(tmp_path, older, status="completed", started_at="2026-08-20T10:00:00Z")
+
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-completed",
+        compat_hash="b" * 64,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, live, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=0,
+        keep_checkpoint=True,
+        checkpoint_id=live_id,
+        status="completed",
+        stale_running_after_seconds=None,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert live_id not in pruned
+    assert "ckpt-older-completed" in pruned
+
+
+def test_finalize_gc_keep_checkpoint_with_reclaim_enabled(tmp_path: Path) -> None:
+    """keep_checkpoint protects current id while foreign stale is removed."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+    from git_cg.eval.run_orchestrator import _finalize_gc
+
+    suite = "cm-eval-fixtures-core"
+    old = "2026-08-01T00:00:00Z"
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale-keep",
+        experiment_id="exp-foreign-stale-keep",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    live_id = "ckpt-live-keep"
+    live = build_checkpoint_record(
+        checkpoint_id=live_id,
+        experiment_id="exp-live-keep",
+        compat_hash="b" * 64,
+        completed_case_ids=["c1"],
+        pending_case_ids=[],
+        mode="fresh_suite_run",
+        suite_id=suite,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, live, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    pruned = _finalize_gc(
+        tmp_path,
+        suite_id=suite,
+        keep_last=10,
+        keep_checkpoint=True,
+        checkpoint_id=live_id,
+        status="completed",
+        stale_running_after_seconds=3600,
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert live_id in ids
+    assert live_id not in pruned
+    assert "ckpt-foreign-stale-keep" in pruned
+    assert "ckpt-foreign-stale-keep" not in ids
+
+
+def test_invalid_stale_running_threshold_fails_before_work(tmp_path: Path) -> None:
+    """Non-positive reclaim thresholds fail closed before scoring or checkpoint writes."""
+    with pytest.raises(RunOrchestratorError) as ei:
+        run_evaluation(
+            _req(
+                mode="fresh_suite_run",
+                repo_root=tmp_path,
+                case_ids=("seed-v1-valid-fixture",),
+                stale_running_after_seconds=0,
+            )
+        )
+    err = ei.value
+    assert err.code == "EVAL_USAGE"
+    assert err.exit_code == 2
+    assert "stale_running_after_seconds" in str(err)
+    # No evaluation artifacts written yet.
+    assert not (tmp_path / ".eval" / "checkpoints").exists()
+    assert not (tmp_path / ".eval" / "experiments").exists()
+
+
+def test_resume_noop_applies_reclaim_gc(tmp_path: Path) -> None:
+    """Completed resume no-op still reclaims foreign stale-running checkpoints."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+
+    first = run_evaluation(
+        _req(
+            mode="fresh_suite_run",
+            repo_root=tmp_path,
+            case_ids=("seed-v1-valid-fixture",),
+            keep_checkpoint=True,
+            keep_last=10,
+        )
+    )
+    # Empty pending → resume no-op path.
+    done = build_checkpoint_record(
+        checkpoint_id="ckpt-resume-noop",
+        experiment_id=first.experiment_id,
+        compat_hash=first.compat_hash,
+        completed_case_ids=list(first.completed_case_ids),
+        pending_case_ids=[],
+        mode="resume_missing",
+        suite_id=first.suite_id,
+        snapshot_id=load_checkpoint(tmp_path, first.checkpoint_id).get("snapshot_id"),
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, done, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    old = "2026-08-01T00:00:00Z"
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale-noop",
+        experiment_id="exp-foreign-stale-noop",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=first.suite_id,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    resumed = run_evaluation(
+        _req(
+            mode="resume_missing",
+            repo_root=tmp_path,
+            checkpoint_id="ckpt-resume-noop",
+            keep_checkpoint=True,
+            keep_last=10,
+            stale_running_after_seconds=3600,
+        )
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert resumed.pending_case_ids == []
+    assert "ckpt-resume-noop" in ids
+    assert "ckpt-resume-noop" not in resumed.pruned_checkpoint_ids
+    assert "ckpt-foreign-stale-noop" in resumed.pruned_checkpoint_ids
+    assert "ckpt-foreign-stale-noop" not in ids

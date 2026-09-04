@@ -74,11 +74,30 @@ jobs:
             let body = pr.data.body || "";
 
             // 4. Update the specific section via Regex
-            // Matches '## 📦 Included Changes', optional HTML comment, and captures everything up to the next '## ' or EOF
-            const regex = /(## 📦 Included Changes\s*(?:<!--[\s\S]*?-->\s*)?)([\s\S]*?)(?=\n## |$)/;
+            // Matches '## 📦 Included Changes', zero or more adjacent HTML comments, then body until next '## ' or EOF
+            const regex = /(## 📦 Included Changes\s*(?:<!--[\s\S]*?-->\s*)*)([\s\S]*?)(?=\n## |$)/;
 
             if (regex.test(body)) {
-              const newText = includedChanges.length > 0 ? includedChanges.join('\n') + '\n\n' : '* No included changes detected.\n\n';
+              const listText = includedChanges.length > 0
+                ? includedChanges.join('\n')
+                : '* No included changes detected.';
+              // Count top-level `* ` bullets only; nested included-change lines are indented.
+              const commitCount = includedChanges.filter((line) => /^\* /.test(line)).length;
+              const summaryLabel = commitCount === 1
+                ? '1 commit'
+                : `${commitCount} commits`;
+              // Emit <details> here: this job rewrites the section on edited/synchronize,
+              // so manual PR-body wrappers do not stick.
+              const newText = [
+                '<details>',
+                `<summary>${summaryLabel}</summary>`,
+                '',
+                listText,
+                '',
+                '</details>',
+                '',
+                ''
+              ].join('\n');
               const newBody = body.replace(regex, `$1\n${newText}`);
 
               if (newBody !== body) {

@@ -19,23 +19,20 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from git_cg.eval.binding import paths as binding_paths
 from git_cg.main import app
 
 runner = CliRunner()
 
 
 @pytest.fixture()
-def clean_doctor_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Isolate doctor Layer-A discovery from the developer's local ``.eval/``.
+def clean_doctor_repo(isolated_eval_repo: Path) -> Path:
+    """Doctor-CLI alias for shared ``isolated_eval_repo`` isolation.
 
     Doctor still loads the committed offline fixture suite by suite_id; only the
     checkpoint/queue scan root is redirected so local scratch checkpoints cannot
     flip ``compat.hash_resume`` red during CLI contract tests.
     """
-    (tmp_path / ".git").mkdir()
-    monkeypatch.setattr(binding_paths, "resolve_repo_root", lambda start=None: tmp_path)
-    return tmp_path
+    return isolated_eval_repo
 
 
 def _parse_envelope(result) -> dict:

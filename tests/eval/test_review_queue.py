@@ -80,6 +80,174 @@ def test_enqueue_rejects_email_reviewer(repo: Path) -> None:
     assert ei.value.exit_code == 2
 
 
+def _write_queue_item(repo: Path, *, review_id: str, review: dict, status: str = STATUS_PENDING) -> Path:
+    """Hand-write a queue envelope bypassing enqueue validation (integrity tests)."""
+    root = review_queue_dir(repo)
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{review_id}.json"
+    item = {
+        "schema_version": "review_queue_item_v0",
+        "review_id": review_id,
+        "status": status,
+        "created_at": "2026-09-02T00:00:00Z",
+        "updated_at": "2026-09-02T00:00:00Z",
+        "review": review,
+        "adjudication": None,
+        "claimed_by": None,
+        "claimed_at": None,
+    }
+    path.write_text(json.dumps(item, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def _base_review(review_id: str = "hr-identity-01") -> dict:
+    """Minimal schema-valid human_review_v1 body for identity fixtures."""
+    return {
+        "schema_version": "human_review_v1",
+        "id": review_id,
+        "review_id": review_id,
+        "case_id": "case-identity",
+        "created_at": "2026-09-02T00:00:00Z",
+        "authority": "advisory",
+        "redaction_profile": "meta_eval_scrub",
+        "scores": {},
+    }
+
+
+def test_dual_emit_equal(repo: Path) -> None:
+    """Enqueue dual-emits equal reviewer and reviewer_id."""
+    result = enqueue(repo, case_id="case-dual", reviewer="rev-dual-01")
+    review = result["item"]["review"]
+    assert review["reviewer"] == "rev-dual-01"
+    assert review["reviewer_id"] == "rev-dual-01"
+    assert review["reviewer"] == review["reviewer_id"]
+    on_disk = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
+    assert on_disk["review"]["reviewer"] == on_disk["review"]["reviewer_id"] == "rev-dual-01"
+
+
+def test_mismatched_reviewer_fields_rejected(repo: Path) -> None:
+    """Lifecycle write rejects both-present-unequal identity (exit 4).
+
+    Uses a hand-damaged queue row plus claim. No synthetic enqueue(reviewer_id=).
+    """
+    rid = "hr-mismatch-01"
+    review = _base_review(rid)
+    review["reviewer"] = "alice"
+    review["reviewer_id"] = "bob"
+    _write_queue_item(repo, review_id=rid, review=review, status=STATUS_PENDING)
+
+    with pytest.raises(ReviewQueueError) as ei:
+        claim(repo, review_id=rid, reviewer="alice")
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert ei.value.exit_code == 4
+    assert "disagree" in str(ei.value).lower() or "identity" in str(ei.value).lower()
+
+
+def test_read_unequal_dual_fields_fails_closed(repo: Path) -> None:
+    """list_reviews and rollup_reviews fail closed on both-present-unequal rows."""
+    rid = "hr-unequal-read-01"
+    review = _base_review(rid)
+    review["reviewer"] = "alice"
+    review["reviewer_id"] = "bob"
+    _write_queue_item(repo, review_id=rid, review=review)
+
+    with pytest.raises(ReviewQueueError) as list_ei:
+        list_reviews(repo)
+    assert list_ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert list_ei.value.exit_code == 4
+
+    with pytest.raises(ReviewQueueError) as roll_ei:
+        rollup_reviews(repo, case_id="case-identity")
+    assert roll_ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert roll_ei.value.exit_code == 4
+
+
+def test_legacy_reviewer_id_only_readable(repo: Path) -> None:
+    """reviewer_id-only legacy rows resolve via fallback."""
+    rid = "hr-legacy-id-only"
+    review = _base_review(rid)
+    review["reviewer_id"] = "legacy-id-only"
+    assert "reviewer" not in review
+    _write_queue_item(repo, review_id=rid, review=review)
+
+    listed = list_reviews(repo)
+    assert listed["review_count"] == 1
+    assert listed["reviews"][0]["reviewer"] == "legacy-id-only"
+
+    roll = rollup_reviews(repo, case_id="case-identity")
+    assert roll["rollup_count"] == 1
+    assert roll["rollups"][0]["reviewers"] == ["legacy-id-only"]
+
+
+def test_legacy_reviewer_only_readable(repo: Path) -> None:
+    """reviewer-only legacy rows read cleanly."""
+    rid = "hr-legacy-rev-only"
+    review = _base_review(rid)
+    review["reviewer"] = "legacy-rev-only"
+    assert "reviewer_id" not in review
+    _write_queue_item(repo, review_id=rid, review=review)
+
+    listed = list_reviews(repo)
+    assert listed["review_count"] == 1
+    assert listed["reviews"][0]["reviewer"] == "legacy-rev-only"
+
+    roll = rollup_reviews(repo, case_id="case-identity")
+    assert roll["rollup_count"] == 1
+    assert roll["rollups"][0]["reviewers"] == ["legacy-rev-only"]
+
+
+def test_claim_idempotent_damaged_identity_fails_closed(repo: Path) -> None:
+    """Idempotent claim of an in_review row fails closed on dual-identity damage."""
+    rid = "hr-claim-idem-damage"
+    review = _base_review(rid)
+    review["reviewer"] = "alice"
+    review["reviewer_id"] = "bob"
+    path = _write_queue_item(
+        repo,
+        review_id=rid,
+        review=review,
+        status=STATUS_IN_REVIEW,
+    )
+    item = json.loads(path.read_text(encoding="utf-8"))
+    item["claimed_by"] = "alice"
+    item["claimed_at"] = "2026-09-02T00:00:00Z"
+    path.write_text(json.dumps(item, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(ReviewQueueError) as ei:
+        claim(repo, review_id=rid, reviewer="alice")
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert ei.value.exit_code == 4
+
+
+def test_adjudicate_dry_run_damaged_identity_fails_closed(repo: Path) -> None:
+    """Dry-run adjudicate fails closed on dual-identity damage before no-op return."""
+    rid = "hr-adj-dry-damage"
+    review = _base_review(rid)
+    review["reviewer"] = "alice"
+    review["reviewer_id"] = "bob"
+    path = _write_queue_item(
+        repo,
+        review_id=rid,
+        review=review,
+        status=STATUS_IN_REVIEW,
+    )
+    item = json.loads(path.read_text(encoding="utf-8"))
+    item["claimed_by"] = "alice"
+    item["claimed_at"] = "2026-09-02T00:00:00Z"
+    path.write_text(json.dumps(item, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(ReviewQueueError) as ei:
+        adjudicate(
+            repo,
+            review_id=rid,
+            outcome="approve_promote",
+            destination_hint="observability_fixture",
+            dry_run=True,
+        )
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert ei.value.exit_code == 4
+
+
 def test_claim_adjudicate_lifecycle(repo: Path) -> None:
     """Full pending→in_review→adjudicated path emits typed outcome_ref and never writes fixtures."""
     created = enqueue(repo, case_id="case-1", reviewer="rev-1")
