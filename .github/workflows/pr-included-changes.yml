@@ -74,21 +74,20 @@ jobs:
             let body = pr.data.body || "";
 
             // 4. Update the specific section via Regex
-            // Matches '## 📦 Included Changes', optional HTML comment, and captures everything up to the next '## ' or EOF
-            const regex = /(## 📦 Included Changes\s*(?:<!--[\s\S]*?-->\s*)?)([\s\S]*?)(?=\n## |$)/;
+            // Matches '## 📦 Included Changes', zero or more adjacent HTML comments, then body until next '## ' or EOF
+            const regex = /(## 📦 Included Changes\s*(?:<!--[\s\S]*?-->\s*)*)([\s\S]*?)(?=\n## |$)/;
 
             if (regex.test(body)) {
               const listText = includedChanges.length > 0
                 ? includedChanges.join('\n')
                 : '* No included changes detected.';
-              // Top-level bullets only (nested included-change lines are indented).
+              // Count top-level `* ` bullets only; nested included-change lines are indented.
               const commitCount = includedChanges.filter((line) => /^\* /.test(line)).length;
               const summaryLabel = commitCount === 1
-                ? 'Nested commit message (1 commit · click to expand)'
-                : `Nested commit messages (${commitCount} commits · click to expand)`;
-              // Keep the synced section collapsible so long tip histories stay scannable.
-              // The wrapper must be emitted here: this workflow rewrites the section on
-              // pull_request edited/synchronize and would otherwise strip manual <details>.
+                ? '1 commit'
+                : `${commitCount} commits`;
+              // Emit <details> here: this job rewrites the section on edited/synchronize,
+              // so manual PR-body wrappers do not stick.
               const newText = [
                 '<details>',
                 `<summary>${summaryLabel}</summary>`,
