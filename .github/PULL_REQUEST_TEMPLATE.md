@@ -35,9 +35,15 @@ stateDiagram-v2
 
 ## 📦 Included Changes
 
-<!-- List the main commit headers AND the items from their "Included changes" sections (Matches git-cg output) -->
+<!-- Auto-synced by .github/workflows/pr-included-changes.yml into a collapsible details block. -->
+<!-- Manual fallback shape (matches workflow output): -->
+
+<details>
+<summary>Nested commit messages (N commits · click to expand)</summary>
 
 -
+
+</details>
 
 ## 🔗 Related Issues
 
