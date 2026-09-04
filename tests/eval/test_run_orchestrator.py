@@ -620,3 +620,88 @@ def test_finalize_gc_keep_checkpoint_with_reclaim_enabled(tmp_path: Path) -> Non
     assert live_id not in pruned
     assert "ckpt-foreign-stale-keep" in pruned
     assert "ckpt-foreign-stale-keep" not in ids
+
+
+def test_invalid_stale_running_threshold_fails_before_work(tmp_path: Path) -> None:
+    """Non-positive reclaim thresholds fail closed before scoring or checkpoint writes."""
+    with pytest.raises(RunOrchestratorError) as ei:
+        run_evaluation(
+            _req(
+                mode="fresh_suite_run",
+                repo_root=tmp_path,
+                case_ids=("seed-v1-valid-fixture",),
+                stale_running_after_seconds=0,
+            )
+        )
+    err = ei.value
+    assert err.code == "EVAL_USAGE"
+    assert err.exit_code == 2
+    assert "stale_running_after_seconds" in str(err)
+    # No evaluation artifacts written yet.
+    assert not (tmp_path / ".eval" / "checkpoints").exists()
+    assert not (tmp_path / ".eval" / "experiments").exists()
+
+
+def test_resume_noop_applies_reclaim_gc(tmp_path: Path) -> None:
+    """Completed resume no-op still reclaims foreign stale-running checkpoints."""
+    from git_cg.eval.checkpoint_store import list_checkpoint_ids
+
+    first = run_evaluation(
+        _req(
+            mode="fresh_suite_run",
+            repo_root=tmp_path,
+            case_ids=("seed-v1-valid-fixture",),
+            keep_checkpoint=True,
+            keep_last=10,
+        )
+    )
+    # Empty pending → resume no-op path.
+    done = build_checkpoint_record(
+        checkpoint_id="ckpt-resume-noop",
+        experiment_id=first.experiment_id,
+        compat_hash=first.compat_hash,
+        completed_case_ids=list(first.completed_case_ids),
+        pending_case_ids=[],
+        mode="resume_missing",
+        suite_id=first.suite_id,
+        snapshot_id=load_checkpoint(tmp_path, first.checkpoint_id).get("snapshot_id"),
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="completed",
+        started_at="2026-08-20T12:00:00Z",
+    )
+    write_checkpoint(tmp_path, done, status="completed", started_at="2026-08-20T12:00:00Z")
+
+    old = "2026-08-01T00:00:00Z"
+    stale = build_checkpoint_record(
+        checkpoint_id="ckpt-foreign-stale-noop",
+        experiment_id="exp-foreign-stale-noop",
+        compat_hash="a" * 64,
+        completed_case_ids=[],
+        pending_case_ids=["c1"],
+        mode="fresh_suite_run",
+        suite_id=first.suite_id,
+        snapshot_id="snap-1",
+        schema_pack=schema_pack_pin(),
+        metric_catalog=metric_catalog_pin(),
+        status="running",
+        started_at=old,
+    )
+    write_checkpoint(tmp_path, stale, status="running", started_at=old)
+
+    resumed = run_evaluation(
+        _req(
+            mode="resume_missing",
+            repo_root=tmp_path,
+            checkpoint_id="ckpt-resume-noop",
+            keep_checkpoint=True,
+            keep_last=10,
+            stale_running_after_seconds=3600,
+        )
+    )
+    ids = set(list_checkpoint_ids(tmp_path))
+    assert resumed.pending_case_ids == []
+    assert "ckpt-resume-noop" in ids
+    assert "ckpt-resume-noop" not in resumed.pruned_checkpoint_ids
+    assert "ckpt-foreign-stale-noop" in resumed.pruned_checkpoint_ids
+    assert "ckpt-foreign-stale-noop" not in ids
