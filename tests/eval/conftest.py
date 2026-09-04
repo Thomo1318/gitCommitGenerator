@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib.util
 from collections.abc import Callable
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -17,10 +17,13 @@ import pytest
 from git_cg.eval.binding import paths as binding_paths
 
 
-# Root tests/conftest.py owns shared Opik lane scrubbing. Plain
-# `import conftest` from tests under tests/eval/ resolves HERE, so re-export
-# the root helper for consumers that call scrub_opik_project_lanes.
-def _load_root_conftest():
+def _load_root_conftest() -> ModuleType:
+    """Load tests/conftest.py by path.
+
+    Modules under tests/eval/ resolve plain ``import conftest`` to *this* file,
+    which shadows the root helper. Re-export scrub_opik_project_lanes for
+    Opik/lane tests that still import conftest as _cq.
+    """
     root_path = Path(__file__).resolve().parents[1] / "conftest.py"
     spec = importlib.util.spec_from_file_location("git_cg_tests_root_conftest", root_path)
     if spec is None or spec.loader is None:
