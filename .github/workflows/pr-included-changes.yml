@@ -78,7 +78,27 @@ jobs:
             const regex = /(## 📦 Included Changes\s*(?:<!--[\s\S]*?-->\s*)?)([\s\S]*?)(?=\n## |$)/;
 
             if (regex.test(body)) {
-              const newText = includedChanges.length > 0 ? includedChanges.join('\n') + '\n\n' : '* No included changes detected.\n\n';
+              const listText = includedChanges.length > 0
+                ? includedChanges.join('\n')
+                : '* No included changes detected.';
+              // Top-level bullets only (nested included-change lines are indented).
+              const commitCount = includedChanges.filter((line) => /^\* /.test(line)).length;
+              const summaryLabel = commitCount === 1
+                ? 'Nested commit message (1 commit · click to expand)'
+                : `Nested commit messages (${commitCount} commits · click to expand)`;
+              // Keep the synced section collapsible so long tip histories stay scannable.
+              // The wrapper must be emitted here: this workflow rewrites the section on
+              // pull_request edited/synchronize and would otherwise strip manual <details>.
+              const newText = [
+                '<details>',
+                `<summary>${summaryLabel}</summary>`,
+                '',
+                listText,
+                '',
+                '</details>',
+                '',
+                ''
+              ].join('\n');
               const newBody = body.replace(regex, `$1\n${newText}`);
 
               if (newBody !== body) {
