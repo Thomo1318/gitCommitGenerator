@@ -2,6 +2,11 @@
 
 Provides the green-doctor double factory and Layer-A repo-root isolation.
 No production behaviour lives here.
+
+Plain ``import conftest`` under ``tests/eval/`` binds this module and can win
+``sys.modules['conftest']`` for later top-level tests. Load root
+``tests/conftest.py`` by path and re-export its public helpers so full-suite
+collection still sees root factories.
 """
 
 from __future__ import annotations
@@ -20,9 +25,10 @@ from git_cg.eval.binding import paths as binding_paths
 def _load_root_conftest() -> ModuleType:
     """Load tests/conftest.py by path.
 
-    Modules under tests/eval/ resolve plain ``import conftest`` to *this* file,
-    which shadows the root helper. Re-export scrub_opik_project_lanes for
-    Opik/lane tests that still import conftest as _cq.
+    Modules under tests/eval/ resolve plain ``import conftest`` to this file,
+    which shadows the root helper. Re-export root public callables (Opik/lane
+    scrub helpers and commit-plan factories) when this module wins
+    ``sys.modules['conftest']``.
     """
     root_path = Path(__file__).resolve().parents[1] / "conftest.py"
     spec = importlib.util.spec_from_file_location("git_cg_tests_root_conftest", root_path)
@@ -33,7 +39,15 @@ def _load_root_conftest() -> ModuleType:
     return mod
 
 
-scrub_opik_project_lanes = _load_root_conftest().scrub_opik_project_lanes
+_ROOT_CONFTEST = _load_root_conftest()
+
+# Shadow-safe re-exports of root public helpers.
+scrub_opik_project_lanes = _ROOT_CONFTEST.scrub_opik_project_lanes
+make_diff_signals = _ROOT_CONFTEST.make_diff_signals
+make_commit_intent = _ROOT_CONFTEST.make_commit_intent
+make_commit_plan = _ROOT_CONFTEST.make_commit_plan
+make_ranked_intent = _ROOT_CONFTEST.make_ranked_intent
+make_trailer_priors = _ROOT_CONFTEST.make_trailer_priors
 
 
 def _make_doctor_double(
