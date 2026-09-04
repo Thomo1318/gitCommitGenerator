@@ -35,11 +35,11 @@ stateDiagram-v2
 
 ## 📦 Included Changes
 
-<!-- Auto-synced by .github/workflows/pr-included-changes.yml into a collapsible details block. -->
-<!-- Manual fallback shape (matches workflow output): -->
+<!-- Synced by .github/workflows/pr-included-changes.yml as a collapsible block. -->
+<!-- Fallback shape before first sync (matches workflow output): -->
 
 <details>
-<summary>Nested commit messages (N commits · click to expand)</summary>
+<summary>N commits</summary>
 
 -
 
