@@ -29,6 +29,56 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.24.0
+
+### ✨ Features
+
+- 👔 feat(eval-checkpoint): reclaim stale running by age bound (#256)
+- 👔 feat(eval-checkpoint): durable status and authority-first GC (#256)
+
+### 🐛 Bug Fixes
+
+- 🐛 fix(eval-run): reclaim GC on resume no-op; reject bad bounds (#256)
+- 🦺 fix(eval-review): fail closed on damaged dual identity claims (#256)
+- 🦺 fix(eval-review): harden dual-field reviewer identity canon (#256)
+- 💚 ci(eval-tests): re-export root factories past eval conftest shadow (#256)
+- 🌑 chore(eval-run): wire opt-in stale-running reclaim gate (#256)
+
+### ♻️ Refactors
+
+- ♻️ refactor(eval-triage): route doctor doubles through shared factory (#256)
+- ♻️ refactor(eval-doctor): alias clean_doctor_repo to shared isolation (#256)
+- 🏷️ refactor(eval-schemas): add durable checkpoint status and started_at (#256)
+
+### 📝 Documentation
+
+- 📝 docs(eval): document bounded stale-running reclamation (#256)
+- 📝 docs(usage): spell reclaim-stale-running protect semantics (#256)
+- 💡 docs(eval): document root conftest re-export shadow path (#256)
+- 📝 docs(pr-template): align Included Changes summary chrome (#256)
+- 📝 docs(pr-template): default Included Changes to details shape (#256)
+- 📝 docs(llms): auto-update llms.txt
+
+### ✅ Tests
+
+- ✅ test(eval-cli): lock reclaim flag help, default-off, and fail-closed (#256)
+- ✅ test(eval-run): lock finalize protect under reclaim and keep (#256)
+- ✅ test(eval-checkpoint): lock GC age, keep-last, and degraded inventory (#256)
+- ✅ test(eval-review): lock dual-field identity canon contracts (#256)
+- ✅ test(eval-checkpoint): lock stale-running reclaim contracts (#256)
+- 🤡 test(eval): add shared doctor double and repo isolation (#256)
+- 🧪 test(eval): re-export root Opik scrub from eval conftest (#256)
+
+### 🏗️ Build & CI
+
+- 👷 ci(eval): gate checkpoint store and orchestrator coverage (#256)
+- 👷 ci(pr-body): wrap synced Included Changes in details (#256)
+- 💚 ci(pr-body): preserve multi-comment Included Changes headers (#256)
+
+### Miscellaneous
+
+- Merge pull request #262 from Thomo1318/eval/256-8a-s6-foundation-residuals
+
 ## v0.23.0
 
 ### Miscellaneous
