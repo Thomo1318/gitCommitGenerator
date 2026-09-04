@@ -197,7 +197,7 @@ cmd "eval" {
             arg "<ID>"
         }
         flag "--reclaim-stale-running" {
-            help "Prune suite running checkpoints older than N seconds (off by default)."
+            help "Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected."
             arg "<SECONDS>"
         }
         flag "--json" {
@@ -216,7 +216,7 @@ cmd "eval" {
             required #true
         }
         flag "--reclaim-stale-running" {
-            help "Prune suite running checkpoints older than N seconds (off by default)."
+            help "Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected."
             arg "<SECONDS>"
         }
         flag "--json" {

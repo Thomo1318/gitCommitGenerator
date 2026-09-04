@@ -264,7 +264,7 @@ Checkpoint id when resuming.
 
 #### `--reclaim-stale-running <SECONDS>`
 
-Prune suite running checkpoints older than N seconds (off by default).
+Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected.
 
 #### `--json`
 
@@ -288,7 +288,7 @@ Checkpoint id (required).
 
 #### `--reclaim-stale-running <SECONDS>`
 
-Prune suite running checkpoints older than N seconds (off by default).
+Prune suite running checkpoints older than N seconds. Off by default; does not affect product accept; live non-completed checkpoint stays protected.
 
 #### `--json`
 
