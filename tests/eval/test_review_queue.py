@@ -196,6 +196,58 @@ def test_legacy_reviewer_only_readable(repo: Path) -> None:
     assert roll["rollups"][0]["reviewers"] == ["legacy-rev-only"]
 
 
+def test_claim_idempotent_damaged_identity_fails_closed(repo: Path) -> None:
+    """Idempotent claim of an in_review row fails closed on dual-identity damage."""
+    rid = "hr-claim-idem-damage"
+    review = _base_review(rid)
+    review["reviewer"] = "alice"
+    review["reviewer_id"] = "bob"
+    path = _write_queue_item(
+        repo,
+        review_id=rid,
+        review=review,
+        status=STATUS_IN_REVIEW,
+    )
+    item = json.loads(path.read_text(encoding="utf-8"))
+    item["claimed_by"] = "alice"
+    item["claimed_at"] = "2026-09-02T00:00:00Z"
+    path.write_text(json.dumps(item, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(ReviewQueueError) as ei:
+        claim(repo, review_id=rid, reviewer="alice")
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert ei.value.exit_code == 4
+
+
+def test_adjudicate_dry_run_damaged_identity_fails_closed(repo: Path) -> None:
+    """Dry-run adjudicate fails closed on dual-identity damage before no-op return."""
+    rid = "hr-adj-dry-damage"
+    review = _base_review(rid)
+    review["reviewer"] = "alice"
+    review["reviewer_id"] = "bob"
+    path = _write_queue_item(
+        repo,
+        review_id=rid,
+        review=review,
+        status=STATUS_IN_REVIEW,
+    )
+    item = json.loads(path.read_text(encoding="utf-8"))
+    item["claimed_by"] = "alice"
+    item["claimed_at"] = "2026-09-02T00:00:00Z"
+    path.write_text(json.dumps(item, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(ReviewQueueError) as ei:
+        adjudicate(
+            repo,
+            review_id=rid,
+            outcome="approve_promote",
+            destination_hint="observability_fixture",
+            dry_run=True,
+        )
+    assert ei.value.code == "EVAL_STORE_INTEGRITY"
+    assert ei.value.exit_code == 4
+
+
 def test_claim_adjudicate_lifecycle(repo: Path) -> None:
     """Full pending→in_review→adjudicated path emits typed outcome_ref and never writes fixtures."""
     created = enqueue(repo, case_id="case-1", reviewer="rev-1")

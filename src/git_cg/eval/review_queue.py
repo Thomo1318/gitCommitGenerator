@@ -533,6 +533,15 @@ def claim(
         if not dry_run:
             lock_path = _acquire_claim_lock(repo, review_id, who)
         item, path = _read_item(repo, review_id)
+        review = item.get("review")
+        if not isinstance(review, dict):
+            raise ReviewQueueError(
+                "queue item missing nested human_review_v1 payload",
+                code="EVAL_STORE_INTEGRITY",
+                exit_code=4,
+            )
+        # Integrity before status/dry-run short-circuits (idempotent claim included).
+        _assert_reviewer_identity_integrity(review)
         current = str(item.get("status") or "")
         if current != STATUS_PENDING:
             # Idempotent re-claim by same reviewer while in_review.
@@ -599,6 +608,15 @@ def adjudicate(
             hint=f"Allowed: {sorted(OUTCOMES)}",
         )
     item, path = _read_item(repo, review_id)
+    review = item.get("review")
+    if not isinstance(review, dict):
+        raise ReviewQueueError(
+            "queue item missing nested human_review_v1 payload",
+            code="EVAL_STORE_INTEGRITY",
+            exit_code=4,
+        )
+    # Integrity before transition/dry-run short-circuits.
+    _assert_reviewer_identity_integrity(review)
     if oc == OUTCOME_DISMISS:
         target = STATUS_DISMISSED
         if str(item.get("status")) not in {STATUS_PENDING, STATUS_IN_REVIEW}:
