@@ -6,6 +6,7 @@ No production behaviour lives here.
 
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,22 @@ from typing import Any
 import pytest
 
 from git_cg.eval.binding import paths as binding_paths
+
+
+# Root tests/conftest.py owns shared Opik lane scrubbing. Plain
+# `import conftest` from tests under tests/eval/ resolves HERE, so re-export
+# the root helper for consumers that call scrub_opik_project_lanes.
+def _load_root_conftest():
+    root_path = Path(__file__).resolve().parents[1] / "conftest.py"
+    spec = importlib.util.spec_from_file_location("git_cg_tests_root_conftest", root_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"unable to load root conftest: {root_path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+scrub_opik_project_lanes = _load_root_conftest().scrub_opik_project_lanes
 
 
 def _make_doctor_double(
