@@ -53,11 +53,9 @@ class BindLock:
             self.path.unlink(missing_ok=True)
 
     def __enter__(self) -> BindLock:
-        """Context-manager enter — returns self."""
         return self
 
     def __exit__(self, *_exc: object) -> None:
-        """Context-manager exit — always releases."""
         self.release()
 
 

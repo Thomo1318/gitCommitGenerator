@@ -204,19 +204,17 @@ def test_bind_lock_context_manager_and_double_release(tmp_path: Path) -> None:
     assert lock is not None
     with lock:
         assert lock.path.exists()
-    # released by context manager
     assert not lock.path.exists()
-    # double-release is a no-op
     lock.release()
 
 
 def test_acquire_bind_lock_mkdir_failure_returns_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "nope"
 
-    def _boom(*_a, **_k):
+    def _fail_mkdir(*_a, **_k):
         raise OSError("mkdir failed")
 
-    monkeypatch.setattr(Path, "mkdir", _boom)
+    monkeypatch.setattr(Path, "mkdir", _fail_mkdir)
     assert acquire_bind_lock(target, timeout=0.1) is None
 
 
@@ -227,10 +225,10 @@ def test_try_create_lock_write_failure_cleans_up(tmp_path: Path, monkeypatch: py
     bundles.mkdir()
     real_write = os.write
 
-    def _boom(fd, data):
+    def _fail_write(fd, data):
         raise OSError("write failed")
 
-    monkeypatch.setattr(os, "write", _boom)
+    monkeypatch.setattr(os, "write", _fail_write)
     assert lock_mod._try_create_lock(bundles / BIND_LOCK_NAME) is None
     assert not (bundles / BIND_LOCK_NAME).exists()
     monkeypatch.setattr(os, "write", real_write)
@@ -242,12 +240,8 @@ def test_lock_mtime_age_unreadable(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     path = tmp_path / "x.lock"
     path.write_text("x", encoding="utf-8")
 
-    class BoomStat:
-        def st_mtime(self):  # pragma: no cover - property style unused
-            return 0
-
-    def _boom(self):
+    def _fail_stat(self):
         raise OSError("stat failed")
 
-    monkeypatch.setattr(Path, "stat", _boom)
+    monkeypatch.setattr(Path, "stat", _fail_stat)
     assert _lock_mtime_age(path) is None

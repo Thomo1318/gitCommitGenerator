@@ -9,6 +9,7 @@ Refs: #257.
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 
 import pytest
@@ -61,7 +62,7 @@ def test_secret_in_card_field_redacted(tmp_path: Path) -> None:
     assert result.bound is True
     stored = result.bundle["meta"]["score_card"]
     assert "api_key" not in stored
-    assert SK_TOKEN not in json_dump(stored)
+    assert SK_TOKEN not in json.dumps(stored)
     assert stored.get("total") == 1
 
 
@@ -125,9 +126,3 @@ def test_byte_length_field_preserved(tmp_path: Path) -> None:
     raw = b"\xff\xfe\xfd"
     result = _bind(tmp_path, final_message=raw)
     assert result.bundle["meta"]["final_message_byte_length"] == 3
-
-
-def json_dump(value) -> str:
-    import json
-
-    return json.dumps(value)
