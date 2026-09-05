@@ -34,6 +34,7 @@ git-cg = "git_cg.main:app"
 dev = [
   "harbor>=0.22.0",
   "matplotlib>=3.11.1",
+  "pyright>=1.1.411",
   "pytest>=9",
   "pytest-cov>=7",
   "ruff>=0.15.15",
