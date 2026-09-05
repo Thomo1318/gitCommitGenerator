@@ -245,3 +245,153 @@ def test_lock_mtime_age_unreadable(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(Path, "stat", _fail_stat)
     assert _lock_mtime_age(path) is None
+
+
+def test_lock_payload_carries_ownership_nonce(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    lock = acquire_bind_lock(bundles, timeout=1.0)
+    assert lock is not None
+    try:
+        payload = lock.path.read_text(encoding="utf-8")
+        assert lock.nonce
+        assert len(lock.nonce) == 32
+        int(lock.nonce, 16)
+        assert "pid=" in payload
+        assert "t=" in payload
+        assert f"nonce={lock.nonce}" in payload
+    finally:
+        lock.release()
+
+
+def test_sequential_owners_hold_distinct_nonces(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    first = acquire_bind_lock(bundles, timeout=1.0)
+    assert first is not None
+    first_nonce = first.nonce
+    first.release()
+    assert not first.path.exists()
+    second = acquire_bind_lock(bundles, timeout=1.0)
+    assert second is not None
+    try:
+        assert second.nonce != first_nonce
+        assert f"nonce={second.nonce}" in second.path.read_text(encoding="utf-8")
+    finally:
+        second.release()
+    assert not second.path.exists()
+
+
+def test_release_does_not_remove_reclaimed_lock(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    old = acquire_bind_lock(bundles, timeout=1.0)
+    assert old is not None
+    stale_mtime = time.time() - (STALE_LOCK_SECONDS + 5)
+    os.utime(old.path, (stale_mtime, stale_mtime))
+    new = acquire_bind_lock(bundles, timeout=1.0)
+    assert new is not None
+    try:
+        assert new.nonce != old.nonce
+        old.release()
+        assert new.path.exists()
+        assert f"nonce={new.nonce}" in new.path.read_text(encoding="utf-8")
+    finally:
+        new.release()
+
+
+def test_release_after_timeout_does_not_remove_new_owner_lock(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    old = acquire_bind_lock(bundles, timeout=0.2)
+    assert old is not None
+    timed_out = acquire_bind_lock(bundles, timeout=0.15)
+    assert timed_out is None
+    old.path.unlink()
+    new = acquire_bind_lock(bundles, timeout=1.0)
+    assert new is not None
+    try:
+        old.release()
+        assert new.path.exists()
+        assert f"nonce={new.nonce}" in new.path.read_text(encoding="utf-8")
+    finally:
+        new.release()
+
+
+def test_release_after_replacement_does_not_remove_new_lock(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    old = acquire_bind_lock(bundles, timeout=1.0)
+    assert old is not None
+    old.path.unlink()
+    new = acquire_bind_lock(bundles, timeout=1.0)
+    assert new is not None
+    try:
+        old.release()
+        assert new.path.exists()
+        assert f"nonce={new.nonce}" in new.path.read_text(encoding="utf-8")
+    finally:
+        new.release()
+
+
+def test_mismatched_nonce_release_is_noop(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    lock = acquire_bind_lock(bundles, timeout=1.0)
+    assert lock is not None
+    lock.path.write_text("pid=1 t=1.000000 nonce=deadbeefdeadbeefdeadbeefdeadbeef\n", encoding="utf-8")
+    lock.release()
+    assert lock.path.exists()
+    lock.path.unlink()
+
+
+def test_legacy_non_nonce_payload_release_is_noop(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    lock = acquire_bind_lock(bundles, timeout=1.0)
+    assert lock is not None
+    lock.path.write_text(f"pid=1 t={time.time():.6f}\n", encoding="utf-8")
+    lock.release()
+    assert lock.path.exists()
+    lock.path.unlink()
+
+
+def test_malformed_payload_release_is_noop(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    lock = acquire_bind_lock(bundles, timeout=1.0)
+    assert lock is not None
+    lock.path.write_bytes(b"\xff\xfe not a lock\n")
+    lock.release()
+    assert lock.path.exists()
+    lock.path.unlink()
+
+
+def test_unreadable_payload_release_is_noop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    lock = acquire_bind_lock(bundles, timeout=1.0)
+    assert lock is not None
+    target = lock.path
+    real_read = Path.read_bytes
+
+    def _fail_read(self: Path) -> bytes:
+        if self == target:
+            raise OSError("unreadable")
+        return real_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", _fail_read)
+    lock.release()
+    assert target.exists()
+    monkeypatch.undo()
+    target.unlink()
+
+
+def test_matching_nonce_release_removes_lock(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    bundles.mkdir()
+    lock = acquire_bind_lock(bundles, timeout=1.0)
+    assert lock is not None
+    lock.release()
+    assert not lock.path.exists()
+    lock.release()
