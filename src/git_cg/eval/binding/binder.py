@@ -164,16 +164,17 @@ def _mint_session_id() -> str:
 
 
 #: Acceptpath reuse-scan cache schema version (rebuildable; never sole authority).
-_INDEX_VERSION = 1
-
-#: Cache key field separator for scoped reuse triples.
-_INDEX_KEY_SEP = "::"
+_INDEX_VERSION = 2
 
 
 def _index_entry_key(key: tuple[str, str, str]) -> str:
-    """Serialize a scoped reuse triple into a stable cache key string."""
+    """Serialize a scoped reuse triple as an injective canonical JSON array."""
     repo_root, token, final_sha = key
-    return f"{repo_root}{_INDEX_KEY_SEP}{token}{_INDEX_KEY_SEP}{final_sha}"
+    return json.dumps(
+        [repo_root, token, final_sha],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
 
 
 def _load_index(index_path: Path) -> dict[str, str] | None:

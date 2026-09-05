@@ -16,6 +16,7 @@ import pytest
 
 from git_cg.eval.binding import paths as binding_paths
 from git_cg.eval.binding.binder import (
+    _INDEX_VERSION,
     BindInput,
     _cache_write_through,
     _index_entry_key,
@@ -51,6 +52,29 @@ def _bundles(tmp_path: Path) -> Path:
     return tmp_path / ".eval" / "bundles" / "acceptpath"
 
 
+def test_index_entry_key_is_injective_for_separator_collisions() -> None:
+    final_sha = "a" * 64
+    first = ("/tmp/repo", "accept::token", final_sha)
+    second = ("/tmp/repo::accept", "token", final_sha)
+
+    first_key = _index_entry_key(first)
+    second_key = _index_entry_key(second)
+
+    assert first_key != second_key
+    assert json.loads(first_key) == list(first)
+    assert json.loads(second_key) == list(second)
+
+
+def test_index_entry_key_uses_canonical_json_array_encoding() -> None:
+    key = ("/tmp/répô", "accept_unicode", "b" * 64)
+
+    assert _index_entry_key(key) == json.dumps(
+        list(key),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
 def test_cache_hit_returns_cached_id(tmp_path: Path) -> None:
     first = _bind(tmp_path)
     assert first.bound is True
@@ -63,7 +87,6 @@ def test_cache_hit_returns_cached_id(tmp_path: Path) -> None:
     assert key is not None
     assert entries[_index_entry_key(key)] == session
 
-    # Second bind must reuse via cache-assisted path.
     second = _bind(tmp_path)
     assert second.bundle["session_thread_id"] == session
     files = [p for p in _bundles(tmp_path).glob("*.json") if p.name != "index.json"]
@@ -139,6 +162,27 @@ def test_no_behaviour_change_when_index_absent(tmp_path: Path) -> None:
     assert first.bound is True and second.bound is True
 
 
+def test_v1_index_is_ignored_then_rebuilt_as_v2(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_v1")
+    key = _reuse_key(tmp_path, "ae_v1", message_sha256_bytes(FINAL))
+    assert key is not None
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    legacy_key = "::".join(key)
+    index_path.write_text(
+        json.dumps({"version": 1, "entries": {legacy_key: first.bundle["session_thread_id"]}}),
+        encoding="utf-8",
+    )
+
+    assert _load_index(index_path) is None
+    second = _bind(tmp_path, accept_event_token="ae_v1")
+
+    assert second.bundle["session_thread_id"] == first.bundle["session_thread_id"]
+    loaded = _load_index(index_path)
+    assert loaded is not None
+    assert loaded[_index_entry_key(key)] == first.bundle["session_thread_id"]
+    assert json.loads(index_path.read_text(encoding="utf-8"))["version"] == _INDEX_VERSION
+
+
 def test_wrong_version_index_ignored(tmp_path: Path) -> None:
     first = _bind(tmp_path, accept_event_token="ae_ver")
     session = first.bundle["session_thread_id"]
@@ -150,20 +194,16 @@ def test_wrong_version_index_ignored(tmp_path: Path) -> None:
 
 
 def test_cache_write_failure_is_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def _boom(*_a, **_k):
-        raise binding_paths.LayerAPathError("cache write boom")
-
-    # First bind succeeds even if cache write fails after bundle write.
     calls: list[str] = []
     real_atomic = binding_paths.atomic_write_json
 
-    def _wrap(path, payload):
+    def _fail_index_write(path, payload):
         calls.append(Path(path).name)
         if Path(path).name == "index.json":
-            raise binding_paths.LayerAPathError("cache write boom")
+            raise binding_paths.LayerAPathError("cache write failed")
         return real_atomic(path, payload)
 
-    monkeypatch.setattr(binding_paths, "atomic_write_json", _wrap)
+    monkeypatch.setattr(binding_paths, "atomic_write_json", _fail_index_write)
     result = _bind(tmp_path, accept_event_token="ae_cachefail")
     assert result.bound is True
     assert result.errors == ()
@@ -174,10 +214,15 @@ def test_load_index_rejects_non_object_and_bad_entries(tmp_path: Path) -> None:
     p = tmp_path / "index.json"
     p.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
     assert _load_index(p) is None
-    p.write_text(json.dumps({"version": 1, "entries": "nope"}), encoding="utf-8")
+    p.write_text(json.dumps({"version": _INDEX_VERSION, "entries": "nope"}), encoding="utf-8")
     assert _load_index(p) is None
     p.write_text(
-        json.dumps({"version": 1, "entries": {"ok": "sess_x", "blank": "  ", "b": 2}}),
+        json.dumps(
+            {
+                "version": _INDEX_VERSION,
+                "entries": {"ok": "sess_x", "blank": "  ", "b": 2},
+            }
+        ),
         encoding="utf-8",
     )
     loaded = _load_index(p)
