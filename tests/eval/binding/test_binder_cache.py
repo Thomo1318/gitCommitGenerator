@@ -52,6 +52,20 @@ def _bundles(tmp_path: Path) -> Path:
     return tmp_path / ".eval" / "bundles" / "acceptpath"
 
 
+def _authoritative_bundle_path(tmp_path: Path) -> Path:
+    files = [path for path in _bundles(tmp_path).glob("*.json") if path.name != "index.json"]
+    assert len(files) == 1
+    return files[0]
+
+
+def _rewrite_authoritative_bundle(tmp_path: Path, mutate) -> dict:
+    path = _authoritative_bundle_path(tmp_path)
+    bundle = json.loads(path.read_text(encoding="utf-8"))
+    mutate(bundle)
+    path.write_text(json.dumps(bundle), encoding="utf-8")
+    return bundle
+
+
 def test_index_entry_key_is_injective_for_separator_collisions() -> None:
     final_sha = "a" * 64
     first = ("/tmp/repo", "accept::token", final_sha)
@@ -234,3 +248,74 @@ def test_cache_write_through_ignores_blank_session(tmp_path: Path) -> None:
     key = (str(tmp_path), "tok", "a" * 64)
     _cache_write_through(index_path, key, "   ")
     assert not index_path.exists()
+
+
+def test_cache_hit_session_mismatch_not_reused(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_identity_session")
+    original_session = first.bundle["session_thread_id"]
+
+    def mutate(bundle: dict) -> None:
+        bundle["session_thread_id"] = "sess_" + ("b" * 32)
+
+    _rewrite_authoritative_bundle(tmp_path, mutate)
+    second = _bind(tmp_path, accept_event_token="ae_identity_session")
+
+    assert second.bound is True
+    assert second.bundle["session_thread_id"] != original_session
+
+
+@pytest.mark.parametrize(
+    "stored_root",
+    ["/other/repo", "", None],
+    ids=["cross_root", "empty", "missing"],
+)
+def test_cache_hit_repo_root_mismatch_not_reused(tmp_path: Path, stored_root: str | None) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_identity_root")
+    original_session = first.bundle["session_thread_id"]
+
+    def mutate(bundle: dict) -> None:
+        accept_event = bundle["meta"]["accept_event"]
+        if stored_root is None:
+            accept_event.pop("repo_root", None)
+        else:
+            accept_event["repo_root"] = stored_root
+
+    _rewrite_authoritative_bundle(tmp_path, mutate)
+    second = _bind(tmp_path, accept_event_token="ae_identity_root")
+
+    assert second.bound is True
+    assert second.bundle["session_thread_id"] != original_session
+
+
+def test_reuse_adoption_requires_valid_schema(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_identity_schema")
+    original_session = first.bundle["session_thread_id"]
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    index_path.unlink()
+
+    def mutate(bundle: dict) -> None:
+        bundle["schema_version"] = "ape_bundle_v0"
+
+    _rewrite_authoritative_bundle(tmp_path, mutate)
+    second = _bind(tmp_path, accept_event_token="ae_identity_schema")
+
+    assert second.bound is True
+    assert second.bundle["session_thread_id"] != original_session
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("bound", False), ("artifact_class", "fixture")],
+)
+def test_reuse_adoption_requires_bound_final_accept(tmp_path: Path, field: str, value: object) -> None:
+    first = _bind(tmp_path, accept_event_token=f"ae_identity_{field}")
+    original_session = first.bundle["session_thread_id"]
+
+    def mutate(bundle: dict) -> None:
+        bundle[field] = value
+
+    _rewrite_authoritative_bundle(tmp_path, mutate)
+    second = _bind(tmp_path, accept_event_token=f"ae_identity_{field}")
+
+    assert second.bound is True
+    assert second.bundle["session_thread_id"] != original_session

@@ -449,11 +449,14 @@ def test_scan_reuse_skips_index_and_corrupt_files(tmp_path) -> None:
     assert _scan_reuse_key(bundles, key) is None
     assert _scan_reuse_key(tmp_path / "missing", key) is None
 
-    # Authoritative match still works.
+    # Schema-valid candidate is adoptable.
     good = {
+        "schema_version": "ape_bundle_v1",
+        "case_id": "acceptpath:sess_good",
+        "artifact_class": "final_accept",
+        "bound": True,
         "final_message_sha256": message_sha256(FINAL_ACCEPTED),
         "session_thread_id": "sess_good",
-        "case_id": "acceptpath:sess_good",
         "meta": {"accept_event": {"token": "ae_scan", "repo_root": str(tmp_path.resolve())}},
     }
     (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
@@ -510,8 +513,8 @@ def test_reuse_ignores_blank_session_and_case_ids(tmp_path) -> None:
     target.write_text(json.dumps(blank), encoding="utf-8")
     key = (str(tmp_path.resolve()), "ae_blankish", first.bundle["final_message_sha256"])
     scanned = _scan_reuse_key(bundles, key)
-    assert scanned is not None
-    # Re-bind should mint a fresh session because blank ids are ignored.
+    assert scanned is None
+    # Re-bind mints a fresh session because blank ids are not adoptable.
     second = _bind(tmp_path, accept_event_token="ae_blankish")
     assert second.bound is True
     assert second.bundle["session_thread_id"].startswith("sess_")

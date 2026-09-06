@@ -52,7 +52,7 @@ from git_cg.eval.binding.profiles import capture_enabled
 from git_cg.eval.corpus.canonical import message_sha256
 from git_cg.eval.enums import ArtifactClass, ProvenanceLabel, RedactionProfile
 from git_cg.eval.evidence_scrub import mask_secrets_in_text, project_secret_safe
-from git_cg.eval.schema_pack import SchemaPackError, validate_instance
+from git_cg.eval.schema_pack import SchemaPackError, is_valid, validate_instance
 
 __all__ = [
     "BindInput",
@@ -246,7 +246,11 @@ def _load_bundle_for_session(bundles_dir: Path, session_id: str) -> dict[str, An
 
 
 def _bundle_matches_key(data: dict[str, Any], key: tuple[str, str, str]) -> bool:
-    """True when authoritative bundle ``data`` matches scoped reuse ``key``."""
+    """True when authoritative bundle ``data`` matches scoped reuse ``key``.
+
+    Stored ``meta.accept_event.repo_root`` must be a nonempty exact match.
+    Missing, empty, or cross-root values fail closed.
+    """
     repo_root, token, final_sha = key
     if data.get("final_message_sha256") != final_sha:
         return False
@@ -257,7 +261,34 @@ def _bundle_matches_key(data: dict[str, Any], key: tuple[str, str, str]) -> bool
     if accept_event.get("token") != token:
         return False
     stored_root = accept_event.get("repo_root")
-    return (not stored_root) or stored_root == repo_root
+    return isinstance(stored_root, str) and bool(stored_root.strip()) and stored_root == repo_root
+
+
+def _reuse_identity_adoptable(
+    data: dict[str, Any],
+    key: tuple[str, str, str],
+    *,
+    expected_session_id: str | None = None,
+    bundle_path: Path | None = None,
+) -> bool:
+    """True when ``data`` may donate reuse identity.
+
+    Cache hits and miss-scan candidates share this fail-closed gate.
+    """
+    if not _bundle_matches_key(data, key):
+        return False
+    if data.get("bound") is not True:
+        return False
+    if data.get("artifact_class") != ArtifactClass.FINAL_ACCEPT.value:
+        return False
+    session_id = data.get("session_thread_id")
+    if not isinstance(session_id, str) or not session_id.strip():
+        return False
+    if expected_session_id is not None and session_id != expected_session_id:
+        return False
+    if bundle_path is not None and bundle_path.stem != session_id:
+        return False
+    return is_valid("ape_bundle_v1", data)
 
 
 def _reuse_key(repo_root: Path, accept_event_token: str | None, final_sha: str) -> tuple[str, str, str] | None:
@@ -270,11 +301,11 @@ def _reuse_key(repo_root: Path, accept_event_token: str | None, final_sha: str) 
 def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, Any] | None:
     """Find an existing authoritative acceptpath bundle matching ``key``.
 
-    Consults the optional rebuildable ``index.json`` cache first. On cache hit,
-    still verifies the authoritative bundle file before reuse. On miss,
-    corrupt, or stale cache, falls through to a linear directory scan of bundle
-    JSON files (index caches are never sole authority; N19.2/N19.3). Linear-scan
-    hits write through to the cache best-effort.
+    Consults the optional rebuildable ``index.json`` cache first. Cache hits
+    and miss-scan hits are adopted only after reuse-identity validation
+    against the authoritative bundle. On miss, corrupt, stale, or unadoptable
+    cache, fall through to a linear directory scan (index caches are never
+    sole authority; N19.2/N19.3). Linear-scan hits write through best-effort.
     """
     if not bundles_dir.is_dir():
         return None
@@ -282,10 +313,16 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
     index_path = bundles_dir / "index.json"
     cached_session = _cache_lookup_session(index_path, key)
     if cached_session is not None:
+        cached_path = bundles_dir / f"{cached_session}.json"
         cached_bundle = _load_bundle_for_session(bundles_dir, cached_session)
-        if cached_bundle is not None and _bundle_matches_key(cached_bundle, key):
+        if cached_bundle is not None and _reuse_identity_adoptable(
+            cached_bundle,
+            key,
+            expected_session_id=cached_session,
+            bundle_path=cached_path,
+        ):
             return cached_bundle
-        # Stale/wrong cache entry — ignore and fall through to linear scan.
+        # Ignore stale or unadoptable cache and fall through.
 
     for path in sorted(bundles_dir.glob("*.json")):
         if path.name == "index.json":
@@ -296,7 +333,7 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
             continue  # corrupt file is not authority; skip
         if not isinstance(data, dict):
             continue
-        if not _bundle_matches_key(data, key):
+        if not _reuse_identity_adoptable(data, key, bundle_path=path):
             continue
         # Write-through after authoritative scan hit (best-effort).
         session_id = data.get("session_thread_id")
