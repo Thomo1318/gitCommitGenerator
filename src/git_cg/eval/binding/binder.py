@@ -357,6 +357,8 @@ def bind_final_accept(
       zero writes (D1/N19.5).
     * Empty/whitespace final message ⇒ ``bound=False,
       unbound_reason="final_message_absent"``.
+    * Invalid ``redaction_profile`` ⇒ ``bound=False,
+      unbound_reason="invalid_redaction_profile"``, zero writes.
     * Schema-invalid / unresolved-repo outcomes return unbound results with
       reasons (never product-blocking).
     * Same ``(repo_root, accept_event_token, final_message_sha256)`` may reuse
@@ -369,6 +371,13 @@ def bind_final_accept(
     """
     if not capture_enabled():
         return BindResult(bound=False, unbound_reason="capture_disabled")
+
+    # Fail closed before hashing, projection, lock, or any filesystem writes.
+    redaction = inp.redaction_profile or _DEFAULT_REDACTION
+    try:
+        redaction = RedactionProfile(redaction).value
+    except TypeError, ValueError:
+        return BindResult(bound=False, unbound_reason="invalid_redaction_profile")
 
     final_bytes = inp.final_message
     text, encoding_meta = _project_final_text(final_bytes)
@@ -408,8 +417,6 @@ def bind_final_accept(
             session_id = _mint_session_id()
         if case_id is None:
             case_id = f"acceptpath:{session_id}"
-
-        redaction = inp.redaction_profile or _DEFAULT_REDACTION
 
         meta: dict[str, Any] = {"producer": _PRODUCER}
         meta.update(encoding_meta)

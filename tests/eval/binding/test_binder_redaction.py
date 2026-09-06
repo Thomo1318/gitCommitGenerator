@@ -126,3 +126,51 @@ def test_byte_length_field_preserved(tmp_path: Path) -> None:
     raw = b"\xff\xfe\xfd"
     result = _bind(tmp_path, final_message=raw)
     assert result.bundle["meta"]["final_message_byte_length"] == 3
+
+
+def test_invalid_profile_returns_invalid_redaction_profile(tmp_path: Path) -> None:
+    """Unknown profile fails closed with a dedicated reason, not schema_invalid."""
+    result = _bind(tmp_path, redaction_profile="not_a_profile")
+    assert result.bound is False
+    assert result.unbound_reason == "invalid_redaction_profile"
+    assert result.unbound_reason != "schema_invalid"
+    assert result.bundle is None
+    assert result.paths_written == ()
+
+
+def test_invalid_profile_performs_no_writes(tmp_path: Path) -> None:
+    """Invalid profile must not mkdir, lock, index, or write a bundle (D-10)."""
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("keep", encoding="utf-8")
+
+    def _snapshot() -> dict[str, tuple[int, int]]:
+        return {
+            path.relative_to(tmp_path).as_posix(): (path.stat().st_mtime_ns, path.stat().st_size)
+            for path in tmp_path.rglob("*")
+        }
+
+    before = _snapshot()
+    result = _bind(tmp_path, redaction_profile="not_a_profile")
+    after = _snapshot()
+    assert result.bound is False
+    assert result.unbound_reason == "invalid_redaction_profile"
+    assert result.paths_written == ()
+    assert before == after
+    assert not (tmp_path / ".eval").exists()
+
+
+def test_none_profile_defaults_to_default_scrub(tmp_path: Path) -> None:
+    result = _bind(tmp_path, redaction_profile=None)
+    assert result.bound is True
+    assert result.bundle["redaction_profile"] == "default_scrub"
+
+
+def test_valid_profile_recorded_without_disabling_scrub(tmp_path: Path) -> None:
+    """Profile is provenance only; evidence scrubbing stays always-on (D-6)."""
+    draft = f"draft with secret {SK_TOKEN} inside\n"
+    result = _bind(tmp_path, redaction_profile="public_ci", generated_message=draft)
+    assert result.bound is True
+    assert result.bundle["redaction_profile"] == "public_ci"
+    stored = result.bundle["meta"].get("generated_message")
+    assert stored is not None
+    assert SK_TOKEN not in stored
