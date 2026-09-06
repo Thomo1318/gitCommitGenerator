@@ -306,6 +306,9 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
     against the authoritative bundle. On miss, corrupt, stale, or unadoptable
     cache, fall through to a linear directory scan (index caches are never
     sole authority; N19.2/N19.3). Linear-scan hits write through best-effort.
+
+    The miss-scan skips ``index.json``, symlinks, and non-regular files.
+    Hard links remain regular files.
     """
     if not bundles_dir.is_dir():
         return None
@@ -325,7 +328,7 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
         # Ignore stale or unadoptable cache and fall through.
 
     for path in sorted(bundles_dir.glob("*.json")):
-        if path.name == "index.json":
+        if path.name == "index.json" or path.is_symlink() or not path.is_file():
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))

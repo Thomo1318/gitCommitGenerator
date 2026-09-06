@@ -463,6 +463,72 @@ def test_scan_reuse_skips_index_and_corrupt_files(tmp_path) -> None:
     assert _scan_reuse_key(bundles, key)["session_thread_id"] == "sess_good"
 
 
+def test_scan_skips_symlinked_bundle_files(tmp_path) -> None:
+    """Matching *.json symlink must not donate reuse identity (F-12)."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    repo_root = str(tmp_path.resolve())
+    token = "ae_scan_symlink"
+    sha = message_sha256(FINAL_ACCEPTED)
+
+    def _candidate(session_id: str) -> dict:
+        return {
+            "schema_version": "ape_bundle_v1",
+            "case_id": f"acceptpath:{session_id}",
+            "artifact_class": "final_accept",
+            "bound": True,
+            "final_message_sha256": sha,
+            "session_thread_id": session_id,
+            "meta": {"accept_event": {"token": token, "repo_root": repo_root}},
+        }
+
+    good = _candidate("sess_good")
+    (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
+
+    # Name sorts before sess_good.json so a followed symlink would be adopted first.
+    poison = _candidate("sess_alink")
+    outside = tmp_path / "outside_payload.json"
+    outside.write_text(json.dumps(poison), encoding="utf-8")
+    link = bundles / "sess_alink.json"
+    link.symlink_to(outside)
+    assert link.is_symlink()
+
+    key = (repo_root, token, sha)
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    assert scanned["session_thread_id"] == "sess_good"
+
+
+def test_scan_skips_non_regular_files(tmp_path) -> None:
+    """Matching *.json directory is skipped without raising (F-12)."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    repo_root = str(tmp_path.resolve())
+    token = "ae_scan_nonregular"
+    sha = message_sha256(FINAL_ACCEPTED)
+    good = {
+        "schema_version": "ape_bundle_v1",
+        "case_id": "acceptpath:sess_good",
+        "artifact_class": "final_accept",
+        "bound": True,
+        "final_message_sha256": sha,
+        "session_thread_id": "sess_good",
+        "meta": {"accept_event": {"token": token, "repo_root": repo_root}},
+    }
+    (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
+    # Directory named *.json sorts first; skip it and still adopt the regular file.
+    (bundles / "aaa.json").mkdir()
+
+    key = (repo_root, token, sha)
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    assert scanned["session_thread_id"] == "sess_good"
+
+
 def test_bind_write_error_reports_without_raising(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(*_a, **_k):
         raise binding_paths.LayerAPathError("containment boom")
