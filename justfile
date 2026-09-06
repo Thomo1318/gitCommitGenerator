@@ -170,6 +170,8 @@ eval-package-coverage:
 # Per-file coverage gate for interaction-owned eval modules (≥80% each).
 # pytest-cov --cov-fail-under is aggregate-only; JSON + tools/check_per_file_coverage.py
 # enforce the threshold per file. eval-package-coverage remains the primary floor.
+# Binding modules are listed explicitly so a single-file regression fails closed.
+# Refs: #254, #257.
 eval-per-file-coverage:
     @echo "📊 per-file coverage gate (≥80% each owned eval module)"
     @mkdir -p .eval
@@ -181,6 +183,7 @@ eval-per-file-coverage:
       --cov=git_cg.eval.feedback_definitions \
       --cov=git_cg.eval.checkpoint_store \
       --cov=git_cg.eval.run_orchestrator \
+      --cov=git_cg.eval.binding \
       --cov-branch \
       --cov-report=term-missing \
       --cov-report=json:.eval/per_file_coverage.json \
@@ -193,7 +196,42 @@ eval-per-file-coverage:
       --file src/git_cg/eval/evidence_scrub.py \
       --file src/git_cg/eval/feedback_definitions.py \
       --file src/git_cg/eval/checkpoint_store.py \
-      --file src/git_cg/eval/run_orchestrator.py
+      --file src/git_cg/eval/run_orchestrator.py \
+      --file src/git_cg/eval/binding/__init__.py \
+      --file src/git_cg/eval/binding/accept_hook.py \
+      --file src/git_cg/eval/binding/binder.py \
+      --file src/git_cg/eval/binding/lock.py \
+      --file src/git_cg/eval/binding/message_versions.py \
+      --file src/git_cg/eval/binding/paths.py \
+      --file src/git_cg/eval/binding/profiles.py \
+      --file src/git_cg/eval/binding/session_thread.py \
+      --file src/git_cg/eval/binding/trajectory.py
+
+# Binding-scoped per-file coverage gate (≥80% each file).
+# Every binding module is listed explicitly. Missing file = hard fail.
+# Do not pass --allow-missing. Refs: #257.
+eval-binding-coverage:
+    @echo "📊 binding per-file coverage gate (≥80% each binding module)"
+    @mkdir -p .eval
+    @rm -f .eval/binding_per_file_coverage.json
+    uv run pytest tests/eval/binding -o addopts="" \
+      --cov=git_cg.eval.binding \
+      --cov-branch \
+      --cov-report=term-missing \
+      --cov-report=json:.eval/binding_per_file_coverage.json \
+      -q
+    uv run python tools/check_per_file_coverage.py \
+      --json .eval/binding_per_file_coverage.json \
+      --fail-under 80 \
+      --file src/git_cg/eval/binding/__init__.py \
+      --file src/git_cg/eval/binding/accept_hook.py \
+      --file src/git_cg/eval/binding/binder.py \
+      --file src/git_cg/eval/binding/lock.py \
+      --file src/git_cg/eval/binding/message_versions.py \
+      --file src/git_cg/eval/binding/paths.py \
+      --file src/git_cg/eval/binding/profiles.py \
+      --file src/git_cg/eval/binding/session_thread.py \
+      --file src/git_cg/eval/binding/trajectory.py
 
 # Hyperfine bench of the real commit path with dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
