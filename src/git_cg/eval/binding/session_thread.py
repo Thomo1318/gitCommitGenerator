@@ -11,8 +11,8 @@ Contract locks honoured here:
 * **D12** — required fields ``schema_version`` / ``id`` / ``session_thread_id``
   / ``redaction_profile``; ``id = sessmeta_<session_thread_id>``; lifecycle +
   timestamps + correlation ids live under ``meta``.
-* **D9 / N18** — ``session_thread_id`` is always a ``sess_<uuid4>`` capture
-  episode id; ``GenerationTelemetry.thread_id`` (``repo-…``) is correlation-only
+* **D9 / N18** — ``session_thread_id`` is always a ``sess_`` + 32 lowercase-hex
+  capture-episode id; ``GenerationTelemetry.thread_id`` (``repo-…``) is correlation-only
   and is recorded under ``meta.generation_thread_id``, never as the session id.
 * **N8 / R13** — additive; ``existing_trace_span_ids`` may be empty when spans
   are unavailable — never invent ids.
@@ -109,7 +109,7 @@ def build_session_twin(
     if not isinstance(session_thread_id, str) or not session_thread_id.strip():
         raise SessionTwinError("session_thread_id must be a non-empty string")
     session_id = session_thread_id.strip()
-    if not session_id.startswith("sess_"):
+    if paths.SESSION_ID_RE.fullmatch(session_id) is None:
         raise SessionTwinError(f"session_thread_id must be a sess_ capture-episode id (D9): {session_id!r}")
     if lifecycle not in SESSION_LIFECYCLE_STATES:
         raise SessionTwinError(f"lifecycle must be one of {sorted(SESSION_LIFECYCLE_STATES)}: {lifecycle!r}")

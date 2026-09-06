@@ -327,6 +327,80 @@ class TestTreeHelpersAndContainment:
         assert str(out).endswith(str(Path(".eval") / "sessions" / "x.json"))
 
 
+class TestSessionBundlePath:
+    _SESSION_ID = "sess_" + ("a" * 32)
+
+    def test_valid_direct_child(self, tmp_path: Path) -> None:
+        bundles = tmp_path / "bundles"
+        bundles.mkdir()
+        expected = bundles / f"{self._SESSION_ID}.json"
+        expected.write_text("{}", encoding="utf-8")
+        assert binding_paths.session_bundle_path(bundles, self._SESSION_ID) == expected
+
+    def test_missing_direct_child_still_returns_candidate(self, tmp_path: Path) -> None:
+        bundles = tmp_path / "bundles"
+        bundles.mkdir()
+        session_id = "sess_" + ("b" * 32)
+        assert binding_paths.session_bundle_path(bundles, session_id) == bundles / f"{session_id}.json"
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        [
+            None,
+            1,
+            "",
+            "sess_",
+            "sess_" + ("A" * 32),
+            "sess_" + ("a" * 31),
+            "sess_" + ("g" * 32),
+            "sess_../../x",
+            "sess_..%2F",
+            "sess_/abs",
+            "sess_01234567-89ab-cdef-0123-456789abcdef",
+            f"  sess_{'a' * 32}  ",
+        ],
+    )
+    def test_malformed_returns_none(self, tmp_path: Path, bad_id: object) -> None:
+        bundles = tmp_path / "bundles"
+        bundles.mkdir()
+        assert binding_paths.session_bundle_path(bundles, bad_id) is None
+
+    def test_symlink_escape_returns_none(self, tmp_path: Path) -> None:
+        bundles = tmp_path / "bundles"
+        bundles.mkdir()
+        trap = tmp_path / "escaped.json"
+        trap.write_text("{}", encoding="utf-8")
+        link = bundles / f"{self._SESSION_ID}.json"
+        link.symlink_to(trap)
+        assert binding_paths.session_bundle_path(bundles, self._SESSION_ID) is None
+
+    def test_in_dir_symlink_remains_contained(self, tmp_path: Path) -> None:
+        bundles = tmp_path / "bundles"
+        bundles.mkdir()
+        target = bundles / "real.json"
+        target.write_text("{}", encoding="utf-8")
+        link = bundles / f"{self._SESSION_ID}.json"
+        link.symlink_to(target)
+        assert binding_paths.session_bundle_path(bundles, self._SESSION_ID) == link
+
+    def test_resolve_oserror_returns_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        bundles = tmp_path / "bundles"
+        bundles.mkdir()
+        real_resolve = Path.resolve
+
+        def _resolve(self: Path, *args: object, **kwargs: object) -> Path:
+            if self.name == f"{TestSessionBundlePath._SESSION_ID}.json":
+                raise OSError("cannot resolve session bundle")
+            return real_resolve(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "resolve", _resolve)
+        assert binding_paths.session_bundle_path(bundles, self._SESSION_ID) is None
+
+    def test_exported_in_all(self) -> None:
+        assert "session_bundle_path" in binding_paths.__all__
+        assert "SESSION_ID_RE" in binding_paths.__all__
+
+
 class TestAtomicWriteJson:
     def test_write_success_roundtrip(self, tmp_path: Path) -> None:
         out = tmp_path / ".eval" / "bundles" / "acceptpath" / "sess_x.json"

@@ -20,6 +20,7 @@ from git_cg.eval.binding.binder import (
     BindInput,
     _cache_write_through,
     _index_entry_key,
+    _load_bundle_for_session,
     _load_index,
     _reuse_key,
     _scan_reuse_key,
@@ -64,6 +65,69 @@ def _rewrite_authoritative_bundle(tmp_path: Path, mutate) -> dict:
     mutate(bundle)
     path.write_text(json.dumps(bundle), encoding="utf-8")
     return bundle
+
+
+def _poison_cache(tmp_path: Path, token: str, session_id: str) -> tuple[str, str, str]:
+    key = _reuse_key(tmp_path, token, message_sha256_bytes(FINAL))
+    assert key is not None
+    _write_index(binding_paths.acceptpath_index_file(tmp_path), {_index_entry_key(key): session_id})
+    return key
+
+
+def _assert_loader_skips_fs(monkeypatch: pytest.MonkeyPatch, bundles_dir: Path, session_id: str) -> None:
+    seen: list[str] = []
+    original_is_file = Path.is_file
+
+    def spy_is_file(self: Path) -> bool:
+        seen.append(str(self))
+        return original_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", spy_is_file)
+    assert _load_bundle_for_session(bundles_dir, session_id) is None
+    assert seen == []
+
+
+def _assert_scan_skips_join(monkeypatch: pytest.MonkeyPatch, session_id: str) -> None:
+    original_truediv = Path.__truediv__
+    forbidden = f"{session_id}.json"
+
+    def spy_truediv(self: Path, other: object):
+        if str(other) == forbidden:
+            raise AssertionError(f"malformed session id must not be joined onto a path: {session_id!r}")
+        return original_truediv(self, other)
+
+    monkeypatch.setattr(Path, "__truediv__", spy_truediv)
+
+
+def _bind_rejects_cached_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    token: str,
+    bad_id: str,
+) -> str:
+    first = _bind(tmp_path, accept_event_token=token)
+    session = first.bundle["session_thread_id"]
+    _assert_loader_skips_fs(monkeypatch, _bundles(tmp_path), bad_id)
+    _poison_cache(tmp_path, token, bad_id)
+
+    loaded_ids: list[str] = []
+    real_loader = _load_bundle_for_session
+
+    def spy_loader(bundles_dir: Path, session_id: str):
+        loaded_ids.append(session_id)
+        return real_loader(bundles_dir, session_id)
+
+    monkeypatch.setattr(
+        "git_cg.eval.binding.binder._load_bundle_for_session",
+        spy_loader,
+    )
+    _assert_scan_skips_join(monkeypatch, bad_id)
+    second = _bind(tmp_path, accept_event_token=token)
+    assert bad_id not in loaded_ids
+    assert second.bound is True
+    assert second.errors == ()
+    assert second.bundle["session_thread_id"] == session
+    return session
 
 
 def test_index_entry_key_is_injective_for_separator_collisions() -> None:
@@ -319,3 +383,101 @@ def test_reuse_adoption_requires_bound_final_accept(tmp_path: Path, field: str, 
 
     assert second.bound is True
     assert second.bundle["session_thread_id"] != original_session
+
+
+def test_cache_id_rejected_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_empty_id")
+    session = first.bundle["session_thread_id"]
+    _assert_loader_skips_fs(monkeypatch, _bundles(tmp_path), "")
+
+    monkeypatch.setattr(
+        "git_cg.eval.binding.binder._cache_lookup_session",
+        lambda *_args, **_kwargs: "",
+    )
+    _assert_scan_skips_join(monkeypatch, "")
+    second = _bind(tmp_path, accept_event_token="ae_empty_id")
+    assert second.bound is True
+    assert second.errors == ()
+    assert second.bundle["session_thread_id"] == session
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    ["sess_../../x", "sess_..%2F", "sess_/abs"],
+)
+def test_cache_id_rejected_traversal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    bad_id: str,
+) -> None:
+    _bind_rejects_cached_id(tmp_path, monkeypatch, f"ae_trav_{bad_id}", bad_id)
+    assert not (_bundles(tmp_path).parent / "x.json").exists()
+    assert not (_bundles(tmp_path) / "sess_" / "abs.json").exists()
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "sess_" + ("A" * 32),
+        "sess_" + ("a" * 31),
+        "sess_" + ("g" * 32),
+        "sess_01234567-89ab-cdef-0123-456789abcdef",
+    ],
+)
+def test_cache_id_rejected_malformed_grammar(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    bad_id: str,
+) -> None:
+    _bind_rejects_cached_id(tmp_path, monkeypatch, "ae_malformed", bad_id)
+
+
+def test_cache_id_rejected_absolute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    trap = tmp_path / "escaped.json"
+    trap.write_text("{}", encoding="utf-8")
+    _bind_rejects_cached_id(tmp_path, monkeypatch, "ae_abs_id", str(trap.with_suffix("")))
+    assert trap.read_text(encoding="utf-8") == "{}"
+
+
+def test_cache_id_rejected_whitespace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    padded = f"  sess_{'a' * 32}  "
+    _assert_loader_skips_fs(monkeypatch, _bundles(tmp_path), " \t ")
+    _bind_rejects_cached_id(tmp_path, monkeypatch, "ae_ws_id", padded)
+
+
+def test_valid_id_still_hits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_valid_id")
+    session = first.bundle["session_thread_id"]
+    assert binding_paths.SESSION_ID_RE.fullmatch(session) is not None
+    key = _reuse_key(tmp_path, "ae_valid_id", message_sha256_bytes(FINAL))
+    assert key is not None
+    scanned_without_glob = _scan_reuse_key(_bundles(tmp_path), key)
+    assert scanned_without_glob is not None
+    assert scanned_without_glob["session_thread_id"] == session
+
+    def boom_glob(self, pattern):
+        raise AssertionError(f"miss-scan glob should not run on a valid cache hit: {pattern!r}")
+
+    monkeypatch.setattr(Path, "glob", boom_glob)
+    second = _bind(tmp_path, accept_event_token="ae_valid_id")
+    assert second.bound is True
+    assert second.bundle["session_thread_id"] == session
+    files = [path for path in _bundles(tmp_path).iterdir() if path.suffix == ".json" and path.name != "index.json"]
+    assert len(files) == 1
+
+
+def test_cache_id_symlink_escape_falls_back_to_scan(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_symlink_escape")
+    session = first.bundle["session_thread_id"]
+    bundles = _bundles(tmp_path)
+    decoy = "sess_" + ("c" * 32)
+    trap = tmp_path / "escaped.json"
+    trap.write_text('{"poison": true}', encoding="utf-8")
+    (bundles / f"{decoy}.json").symlink_to(trap)
+    _poison_cache(tmp_path, "ae_symlink_escape", decoy)
+
+    second = _bind(tmp_path, accept_event_token="ae_symlink_escape")
+    assert second.bound is True
+    assert second.errors == ()
+    assert second.bundle["session_thread_id"] == session
+    assert json.loads(trap.read_text(encoding="utf-8")) == {"poison": True}

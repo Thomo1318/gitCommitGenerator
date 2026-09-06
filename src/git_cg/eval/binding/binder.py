@@ -232,10 +232,14 @@ def _cache_write_through(index_path: Path, key: tuple[str, str, str], session_id
 
 
 def _load_bundle_for_session(bundles_dir: Path, session_id: str) -> dict[str, Any] | None:
-    """Load an authoritative bundle by session id when present and well-formed."""
-    if not session_id or not session_id.strip():
+    """Load an authoritative bundle by session id when present and well-formed.
+
+    Path construction is :func:`paths.session_bundle_path`. Malformed or
+    escaped ids are silent misses, never bind failures.
+    """
+    path = paths.session_bundle_path(bundles_dir, session_id)
+    if path is None:
         return None
-    path = bundles_dir / f"{session_id}.json"
     try:
         if not path.is_file():
             return None
@@ -303,9 +307,11 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
 
     Consults the optional rebuildable ``index.json`` cache first. Cache hits
     and miss-scan hits are adopted only after reuse-identity validation
-    against the authoritative bundle. On miss, corrupt, stale, or unadoptable
-    cache, fall through to a linear directory scan (index caches are never
-    sole authority; N19.2/N19.3). Linear-scan hits write through best-effort.
+    against the authoritative bundle. Cached session ids use
+    :func:`paths.session_bundle_path`; malformed or escaped values are
+    silent misses. On miss, corrupt, stale, or unadoptable cache, fall
+    through to a linear directory scan (index caches are never sole
+    authority; N19.2/N19.3). Linear-scan hits write through best-effort.
 
     The miss-scan skips ``index.json``, symlinks, and non-regular files.
     Hard links remain regular files.
@@ -315,8 +321,8 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
 
     index_path = bundles_dir / "index.json"
     cached_session = _cache_lookup_session(index_path, key)
-    if cached_session is not None:
-        cached_path = bundles_dir / f"{cached_session}.json"
+    cached_path = paths.session_bundle_path(bundles_dir, cached_session)
+    if cached_path is not None and cached_session is not None:
         cached_bundle = _load_bundle_for_session(bundles_dir, cached_session)
         if cached_bundle is not None and _reuse_identity_adoptable(
             cached_bundle,

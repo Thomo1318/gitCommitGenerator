@@ -38,6 +38,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -57,6 +58,7 @@ __all__ = [
     "REPLAYS_DIRNAME",
     "REVIEW_QUEUE_DIRNAME",
     "SESSIONS_DIRNAME",
+    "SESSION_ID_RE",
     "TRAIN_EXPORT_DIRNAME",
     "TRAJECTORIES_DIRNAME",
     "LayerAPathError",
@@ -76,6 +78,7 @@ __all__ = [
     "replays_dir",
     "resolve_repo_root",
     "review_queue_dir",
+    "session_bundle_path",
     "sessions_dir",
     "train_export_dir",
     "trajectories_dir",
@@ -103,6 +106,9 @@ EXPERIMENTS_DIRNAME = ("experiments",)
 #: Restrictive modes for runtime trees (N19.3).
 _FILE_MODE = 0o600
 _DIR_MODE = 0o700
+
+#: Capture-episode session id: ``sess_`` plus 32 lowercase hex digits.
+SESSION_ID_RE = re.compile(r"^sess_[0-9a-f]{32}$")
 
 
 class LayerAPathError(ValueError):
@@ -235,6 +241,27 @@ def acceptpath_index_file(repo_root: Path) -> Path:
     truth (N19.3).
     """
     return _contained(repo_root, Path(*ACCEPTPATH_BUNDLES_DIRNAME) / "index.json")
+
+
+def session_bundle_path(bundles_dir: Path, session_id: object) -> Path | None:
+    """Return ``bundles_dir / <session_id>.json`` when grammatical and contained.
+
+    Grammar is :data:`SESSION_ID_RE`. The joined path must resolve to a direct
+    child of ``bundles_dir``. Malformed or escaped values return ``None``; this
+    helper never raises.
+    """
+    if not isinstance(session_id, str) or SESSION_ID_RE.fullmatch(session_id) is None:
+        return None
+    bundles = Path(bundles_dir)
+    candidate = bundles / f"{session_id}.json"
+    try:
+        bundles_resolved = bundles.resolve()
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    if resolved.parent != bundles_resolved:
+        return None
+    return candidate
 
 
 def sessions_dir(repo_root: Path) -> Path:

@@ -102,6 +102,20 @@ def test_non_sess_id_fails_closed() -> None:
         build_session_twin("repo-gitCommitGenerator", lifecycle="closed")
 
 
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "sess_not_a_real_id",
+        "sess_" + ("A" * 32),
+        "sess_../../x",
+        "sess_01234567-89ab-cdef-0123-456789abcdef",
+    ],
+)
+def test_session_id_must_match_capture_grammar(bad_id: str) -> None:
+    with pytest.raises(SessionTwinError, match="sess_"):
+        build_session_twin(bad_id, lifecycle="closed")
+
+
 def test_blank_id_fails_closed() -> None:
     with pytest.raises(SessionTwinError, match="non-empty"):
         build_session_twin("   ", lifecycle="closed")
