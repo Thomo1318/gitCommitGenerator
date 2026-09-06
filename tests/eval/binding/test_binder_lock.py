@@ -92,6 +92,37 @@ def test_stale_lock_recovery(tmp_path: Path) -> None:
     assert result.paths_written
 
 
+def test_default_bind_lock_budget_is_bounded(tmp_path: Path) -> None:
+    bundles = tmp_path / "bundles"
+    held = acquire_bind_lock(bundles, timeout=1.0)
+    assert held is not None
+    try:
+        started = time.monotonic()
+        assert acquire_bind_lock(bundles) is None
+        elapsed = time.monotonic() - started
+        # Default wait must stay under 1 s; poll jitter is not asserted.
+        assert elapsed < 1.0
+    finally:
+        held.release()
+
+
+def test_bind_completes_under_default_lock_budget(tmp_path: Path) -> None:
+    bundles = binding_paths.acceptpath_bundles_dir(tmp_path)
+    bundles.mkdir(parents=True, exist_ok=True)
+    held = acquire_bind_lock(bundles, timeout=1.0)
+    assert held is not None
+    try:
+        started = time.monotonic()
+        result = _bind(tmp_path, accept_event_token="ae_budget")
+        elapsed = time.monotonic() - started
+        assert result.bound is True
+        assert result.paths_written
+        # Binder uses the default lock timeout; wait must stay under 1 s.
+        assert elapsed < 1.0
+    finally:
+        held.release()
+
+
 def test_acquire_bind_lock_timeout_returns_none(tmp_path: Path) -> None:
     bundles = tmp_path / "bundles"
     bundles.mkdir()

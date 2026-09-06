@@ -35,7 +35,7 @@ BIND_LOCK_NAME = ".bind.lock"
 STALE_LOCK_SECONDS = 30.0
 
 #: Default acquisition poll budget (seconds).
-_DEFAULT_TIMEOUT = 5.0
+_DEFAULT_TIMEOUT = 0.25
 
 #: Poll interval while waiting for a live lock (seconds).
 _POLL_INTERVAL = 0.05
