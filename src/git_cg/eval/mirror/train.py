@@ -21,6 +21,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any, Final
 
+from git_cg.eval.mirror.redaction import sanitize_export_tree
+
 __all__ = [
     "POSITIVE_GOLD",
     "TRAIN_DATASET_ID",
@@ -124,7 +126,8 @@ def project_train_row(
         "ci_sole_green": False,
         "product_accept_authority": False,
     }
-    return row
+    cleaned = sanitize_export_tree(row)
+    return cleaned if isinstance(cleaned, dict) else row
 
 
 def filter_positive_gold(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -144,7 +147,8 @@ def filter_positive_gold(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, An
         row = dict(raw)
         row["label"] = "positive"
         row["projection"] = POSITIVE_GOLD
-        out.append(row)
+        cleaned = sanitize_export_tree(row)
+        out.append(cleaned if isinstance(cleaned, dict) else row)
     return out
 
 
@@ -178,7 +182,7 @@ def build_train_projection(
     if pos_ids & neg_ids:
         raise TrainProjectionError("positive_gold/negative bundle_id overlap")
 
-    return {
+    projected = {
         "dataset_id": str(dataset_id or TRAIN_DATASET_ID),
         "q18": "single_dataset_label_split_metadata",
         "rows": rows,
@@ -189,3 +193,5 @@ def build_train_projection(
         "product_accept_authority": False,
         "authority": "corpus_retention",
     }
+    cleaned = sanitize_export_tree(projected)
+    return cleaned if isinstance(cleaned, dict) else projected

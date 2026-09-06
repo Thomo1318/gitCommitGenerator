@@ -23,6 +23,7 @@ from typing import Any
 
 from git_cg.eval.binding.paths import LayerAPathError, atomic_write_json, eval_tree_root, resolve_repo_root
 from git_cg.eval.corpus.canonical import canonical_json_bytes, sha256_hex
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 
 __all__ = [
     "EXPORT_PAYLOADS_DIRNAME",
@@ -113,8 +114,11 @@ def persist_payload_artifact(
     """
     if not isinstance(payload, dict):
         raise ExportPayloadError("payload artifact body must be a JSON object")
+    cleaned = sanitize_export_tree(payload)
+    if not isinstance(cleaned, dict):
+        raise ExportPayloadError("payload artifact body must be a JSON object")
     root = repo_root if repo_root is not None else resolve_repo_root()
-    digest, size = verify_payload_object(payload)
+    digest, size = verify_payload_object(cleaned)
     path = _artifact_path(root, digest)
     try:
         if path.is_file():
@@ -123,9 +127,9 @@ def persist_payload_artifact(
                 existing = json.loads(path.read_text(encoding="utf-8"))
                 verify_payload_object(existing, expected_sha256=digest)
             except OSError, json.JSONDecodeError, ExportPayloadError, TypeError:
-                atomic_write_json(path, payload)
+                atomic_write_json(path, cleaned)
         else:
-            atomic_write_json(path, payload)
+            atomic_write_json(path, cleaned)
     except (OSError, LayerAPathError) as exc:
         raise ExportPayloadError(f"failed to persist payload artifact: {exc}") from exc
 
@@ -159,4 +163,5 @@ def load_payload_artifact(
     if not isinstance(obj, dict):
         raise ExportPayloadError(f"payload artifact is not an object: {payload_ref}")
     verify_payload_object(obj, expected_sha256=sha, expected_size=expected_size)
-    return obj
+    cleaned = sanitize_export_tree(obj)
+    return cleaned if isinstance(cleaned, dict) else obj

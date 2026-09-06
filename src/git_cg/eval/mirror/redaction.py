@@ -26,6 +26,8 @@ Hard laws:
   tracking; ``meta`` is a typed key allowlist (not blanket copy). Keys matching
   secret/token/api_key/authorization/prompt/diff/environment/headers/cookie/
   credential are denied unless the active profile explicitly permits them.
+  Exact ``final_message_b64`` keys are always denied (D-3 local-only ancillary
+  bytes; never an export surface).
 * **P0-5:** authority surfaces required by projections (``gate``,
   ``score_card``/``product_card``, bound ``attempts``/final-accept refs, bundle
   ``id``) are retained under every export-capable profile; free-text leaves
@@ -44,6 +46,7 @@ __all__ = [
     "QUARANTINE_MARKER",
     "RedactionError",
     "redact_bundle_for_export",
+    "sanitize_export_tree",
 ]
 
 #: Marker recorded in ``meta.redaction_quarantine`` for each omitted field.
@@ -54,6 +57,9 @@ _OMISSION_SENTINEL = "[REDACTION FAILED - PAYLOAD OMITTED FOR SAFETY]"
 
 #: Internal drop sentinel (never serialised).
 _DROP: Final = object()
+
+#: Exact local-only key that must never appear on export copies (D-3).
+_EXPORT_FORBIDDEN_KEYS: Final[frozenset[str]] = frozenset({"final_message_b64"})
 
 # Profiles that may retain allowlisted body-adjacent keys containing otherwise
 # denied tokens (still secret-scrubbed). Only train/vault/private planes.
@@ -230,6 +236,8 @@ def _key_denied(key: str, profile: RedactionProfile) -> bool:
     owner-relaxable. ``diff`` keys are denied on thin/default profiles and only
     permitted on owner-body profiles (values still secret-scrubbed).
     """
+    if key in _EXPORT_FORBIDDEN_KEYS:
+        return True
     lowered = key.lower().replace("-", "_")
     # Always-denied secret/auth/prompt surfaces — never owner-relaxable.
     if any(token in lowered for token in _ALWAYS_DENIED_KEY_TOKENS):
@@ -237,6 +245,23 @@ def _key_denied(key: str, profile: RedactionProfile) -> bool:
     # ``diff`` is stripped on non-owner-body profiles; owner-body profiles may
     # keep structured diff *summaries* (values still scrubbed).
     return "diff" in lowered and profile not in _OWNER_BODY_PROFILES
+
+
+def sanitize_export_tree(value: Any) -> Any:
+    """Return a non-mutating recursive copy without exact forbidden export keys.
+
+    Drops exact ``final_message_b64`` keys at any nesting level. Dicts, lists,
+    and tuples are copied; scalars pass through. String *values* are not
+    rewritten. Authoritative local inputs must not be passed through this
+    helper when the caller still needs the local-only bytes.
+    """
+    if isinstance(value, dict):
+        return {key: sanitize_export_tree(child) for key, child in value.items() if key not in _EXPORT_FORBIDDEN_KEYS}
+    if isinstance(value, list):
+        return [sanitize_export_tree(child) for child in value]
+    if isinstance(value, tuple):
+        return tuple(sanitize_export_tree(child) for child in value)
+    return value
 
 
 def _join_path(prefix: str, key: str | int) -> str:
@@ -502,4 +527,5 @@ def redact_bundle_for_export(
         # after allowlist — omit entirely to avoid hollow noise.
         pass
 
-    return out
+    sanitized = sanitize_export_tree(out)
+    return sanitized if isinstance(sanitized, dict) else out

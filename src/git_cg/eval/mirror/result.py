@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Final
 
 from git_cg.eval.mirror.health import ExportHealth, map_error_class_to_health
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 
 __all__ = [
     "MirrorResult",
@@ -184,7 +185,7 @@ def _infer_health(
 def export_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
     """Operator export-result axis (P0-7). Never a product-accept blocker."""
     data = result.to_dict() if isinstance(result, MirrorResult) else dict(result)
-    return {
+    projected = {
         "axis": "export_result",
         "mode": data.get("mode"),
         "health": data.get("health"),
@@ -196,6 +197,8 @@ def export_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
         "product_accept_blocked": False,
         "notes": list(data.get("notes") or []),
     }
+    cleaned = sanitize_export_tree(projected)
+    return cleaned if isinstance(cleaned, dict) else projected
 
 
 def evaluation_job_result(result: MirrorResult | Mapping[str, Any]) -> dict[str, Any]:
@@ -207,7 +210,7 @@ def evaluation_job_result(result: MirrorResult | Mapping[str, Any]) -> dict[str,
     mode = str(data.get("mode") or "off")
     strict_failed = bool(data.get("strict_mirror_failed"))
     job_ok = not (mode == "strict_mirror" and strict_failed)
-    return {
+    projected = {
         "axis": "evaluation_job_result",
         "mode": mode,
         "health": data.get("health"),
@@ -217,6 +220,8 @@ def evaluation_job_result(result: MirrorResult | Mapping[str, Any]) -> dict[str,
         "error_classes": list(data.get("error_classes") or []),
         "notes": list(data.get("notes") or []),
     }
+    cleaned = sanitize_export_tree(projected)
+    return cleaned if isinstance(cleaned, dict) else projected
 
 
 # Silence unused import warning helpers for type checkers that flag asdict.

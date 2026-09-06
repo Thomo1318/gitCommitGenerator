@@ -35,6 +35,7 @@ from typing import Any, Final
 
 from git_cg.eval.catalog import load_metric_catalog
 from git_cg.eval.enums import ArtifactClass, Polarity, Source
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 
 __all__ = [
@@ -156,7 +157,10 @@ def select_final_attempt(bundle: dict[str, Any]) -> dict[str, Any] | None:
 def _bundle_meta(bundle: dict[str, Any]) -> dict[str, Any]:
     """Project bundle metadata fields needed by operator engines."""
     meta = bundle.get("meta")
-    return dict(meta) if isinstance(meta, dict) else {}
+    if not isinstance(meta, dict):
+        return {}
+    cleaned = sanitize_export_tree(meta)
+    return cleaned if isinstance(cleaned, dict) else {}
 
 
 @lru_cache(maxsize=1)
@@ -244,7 +248,9 @@ def authority_annotations(
         "cloud_rescore_forbidden",
         "authority",
     }
-    return {k: v for k, v in annotations.items() if v is not None or k in required}
+    trimmed = {k: v for k, v in annotations.items() if v is not None or k in required}
+    cleaned = sanitize_export_tree(trimmed)
+    return cleaned if isinstance(cleaned, dict) else trimmed
 
 
 def project_bundle_to_trace(
@@ -274,7 +280,7 @@ def project_bundle_to_trace(
         },
     )
 
-    return {
+    projected = {
         "input": {
             "bundle_id": bundle.get("id") or bundle.get("case_id"),
             "schema_version": bundle.get("schema_version"),
@@ -295,6 +301,8 @@ def project_bundle_to_trace(
             "authority": annotations,
         },
     }
+    cleaned = sanitize_export_tree(projected)
+    return cleaned if isinstance(cleaned, dict) else projected
 
 
 def project_session_thread(
@@ -310,7 +318,7 @@ def project_session_thread(
     meta = session_thread.get("meta") or {}
     if not isinstance(meta, dict):
         meta = {}
-    return {
+    projected = {
         "thread_id": session_thread.get("session_thread_id") or session_thread.get("id"),
         "experiment_name": experiment_name,
         "lifecycle": meta.get("lifecycle"),
@@ -327,6 +335,8 @@ def project_session_thread(
             "cloud_rescore_forbidden": True,
         },
     }
+    cleaned = sanitize_export_tree(projected)
+    return cleaned if isinstance(cleaned, dict) else projected
 
 
 def _coerce_feedback_value(value: Any) -> tuple[float, str, str] | None:
@@ -367,6 +377,8 @@ def project_score_card_to_feedback(
 
     for key, value in score_card.items():
         name = str(key)
+        if name == "final_message_b64":
+            continue
         if name in _SCORE_CARD_META_KEYS and not isinstance(value, (bool, int, float)):
             continue
 
@@ -425,4 +437,5 @@ def project_score_card_to_feedback(
                 auth = dict(item.get("authority") or {})
                 auth["boolean_source_value"] = boolean_meta[key]
                 item["authority"] = auth
-    return out
+    cleaned = sanitize_export_tree(out)
+    return cleaned if isinstance(cleaned, list) else out

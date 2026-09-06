@@ -123,6 +123,7 @@ from git_cg.eval.mirror.queue import (
 from git_cg.eval.mirror.redaction import (
     QUARANTINE_MARKER,
     redact_bundle_for_export,
+    sanitize_export_tree,
 )
 from git_cg.eval.mirror.result import (
     MirrorResult,
@@ -230,6 +231,7 @@ __all__ = [
     "require_resolved_git_sha",
     "resolve_git_sha",
     "resolve_opik_config",
+    "sanitize_export_tree",
     "scrub_export_note",
     "select_final_attempt",
 ]
