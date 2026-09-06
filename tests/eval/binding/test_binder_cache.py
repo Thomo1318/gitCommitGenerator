@@ -4,13 +4,20 @@ Cache is rebuildable and never sole authority. Corrupt, missing, or stale
 index entries must fall back to a linear bundle scan without changing bind
 behaviour.
 
+This module also includes a measurement-only 1k/10k miss-scan benchmark
+(``-k benchmark``). It records scan and lock-hold timings and does not
+implement a K-window or ratify lock budget.
+
 Refs: #257.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -28,6 +35,8 @@ from git_cg.eval.binding.binder import (
     bind_final_accept,
     message_sha256_bytes,
 )
+from git_cg.eval.binding.lock import acquire_bind_lock
+from git_cg.eval.schema_pack import is_valid
 
 FINAL = (
     "✨ feat(eval): cache reuse scan\n\nRefs: #257\nSemVer-Impact: PATCH\nChange-Types: fix\nChangelog-Groups: Fixed\n"
@@ -481,3 +490,224 @@ def test_cache_id_symlink_escape_falls_back_to_scan(tmp_path: Path) -> None:
     assert second.errors == ()
     assert second.bundle["session_thread_id"] == session
     assert json.loads(trap.read_text(encoding="utf-8")) == {"poison": True}
+
+
+# Measurement-only miss-scan timings (D-13 prerequisite). Refs: #257.
+
+# Proposed D-13 recency cut used only to place twins inside vs outside it.
+# This constant is fixture metadata, not product law, and must not ratify K.
+_PLACEMENT_WINDOW = 512
+
+
+def _session_id_for_index(index: int) -> str:
+    return f"sess_{index:032x}"
+
+
+def _clone_acceptpath_bundle(
+    template: dict[str, Any],
+    *,
+    session_id: str,
+    token: str,
+    final_sha: str,
+    repo_root: str,
+) -> dict[str, Any]:
+    bundle = json.loads(json.dumps(template))
+    bundle["session_thread_id"] = session_id
+    bundle["case_id"] = f"acceptpath:{session_id}"
+    bundle["final_message_sha256"] = final_sha
+    meta = dict(bundle.get("meta") or {})
+    accept_event = dict(meta.get("accept_event") or {})
+    accept_event["token"] = token
+    accept_event["repo_root"] = repo_root
+    meta["accept_event"] = accept_event
+    bundle["meta"] = meta
+    bundle["bound"] = True
+    bundle["artifact_class"] = "final_accept"
+    return bundle
+
+
+def _measure_locked_scan(bundles_dir: Path, key: tuple[str, str, str]) -> tuple[dict[str, Any] | None, float, float]:
+    """Return ``(bundle, scan_ms, lock_hold_ms)`` for the current in-lock miss-scan.
+
+    ``lock_hold_ms`` stops immediately before ``release()``.
+    """
+    held = acquire_bind_lock(bundles_dir)
+    assert held is not None
+    started = time.perf_counter()
+    try:
+        found = _scan_reuse_key(bundles_dir, key)
+        scan_ms = (time.perf_counter() - started) * 1000.0
+    finally:
+        lock_hold_ms = (time.perf_counter() - started) * 1000.0
+        held.release()
+    return found, scan_ms, lock_hold_ms
+
+
+def _seed_benchmark_bundles(tmp_path: Path, bundle_count: int) -> dict[str, Any]:
+    """Populate ``bundle_count`` schema-valid bundles with in/out-placement twins."""
+    assert bundle_count > _PLACEMENT_WINDOW
+
+    template_result = _bind(tmp_path, accept_event_token="ae_bench_template")
+    assert template_result.bound is True
+    template = template_result.bundle
+    assert template is not None
+    assert is_valid("ape_bundle_v1", template)
+
+    bundles = _bundles(tmp_path)
+    for path in bundles.glob("*.json"):
+        path.unlink()
+
+    repo_root = str(tmp_path.resolve())
+    target_sha = message_sha256_bytes(FINAL)
+    inside_index = bundle_count - 1
+    outside_index = 0
+    inside_session = _session_id_for_index(inside_index)
+    outside_session = _session_id_for_index(outside_index)
+    inside_token = "ae_bench_inside"
+    outside_token = "ae_bench_outside"
+    inside_key = _reuse_key(tmp_path, inside_token, target_sha)
+    outside_key = _reuse_key(tmp_path, outside_token, target_sha)
+    miss_key = _reuse_key(tmp_path, "ae_bench_nomatch", target_sha)
+    assert inside_key is not None and outside_key is not None and miss_key is not None
+
+    for index in range(bundle_count):
+        session_id = _session_id_for_index(index)
+        if index == inside_index:
+            token = inside_token
+        elif index == outside_index:
+            token = outside_token
+        else:
+            token = f"ae_bench_fill_{index}"
+        bundle = _clone_acceptpath_bundle(
+            template,
+            session_id=session_id,
+            token=token,
+            final_sha=target_sha,
+            repo_root=repo_root,
+        )
+        (bundles / f"{session_id}.json").write_text(
+            json.dumps(bundle, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+
+    base = time.time()
+    for index in range(bundle_count):
+        path = bundles / f"{_session_id_for_index(index)}.json"
+        stamp = base + index
+        os.utime(path, (stamp, stamp))
+
+    inside_bundle = json.loads((bundles / f"{inside_session}.json").read_text(encoding="utf-8"))
+    outside_bundle = json.loads((bundles / f"{outside_session}.json").read_text(encoding="utf-8"))
+    filler_bundle = json.loads((bundles / f"{_session_id_for_index(1)}.json").read_text(encoding="utf-8"))
+    assert is_valid("ape_bundle_v1", inside_bundle)
+    assert is_valid("ape_bundle_v1", outside_bundle)
+    assert is_valid("ape_bundle_v1", filler_bundle)
+    assert _reuse_key(tmp_path, inside_token, target_sha) == inside_key
+    assert _reuse_key(tmp_path, outside_token, target_sha) == outside_key
+
+    newest_cutoff = bundle_count - _PLACEMENT_WINDOW
+    assert inside_index >= newest_cutoff
+    assert outside_index < newest_cutoff
+
+    return {
+        "bundles": bundles,
+        "inside_key": inside_key,
+        "outside_key": outside_key,
+        "miss_key": miss_key,
+        "inside_session": inside_session,
+        "outside_session": outside_session,
+        "index_path": binding_paths.acceptpath_index_file(tmp_path),
+    }
+
+
+@pytest.mark.parametrize("bundle_count", [1_000, 10_000])
+def test_benchmark_acceptpath_miss_scan_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    bundle_count: int,
+) -> None:
+    """Measure current unbounded miss-scan cost; do not ratify K or lock budget.
+
+    Cases: cache hit, twin inside the proposed 512 placement, twin outside it,
+    and a no-match full-scan control. Current product scan is still O(N).
+    """
+    seeded = _seed_benchmark_bundles(tmp_path, bundle_count)
+    bundles = seeded["bundles"]
+    index_path = seeded["index_path"]
+
+    def _clear_index() -> None:
+        if index_path.exists():
+            index_path.unlink()
+
+    _clear_index()
+    outside, outside_scan_ms, outside_lock_ms = _measure_locked_scan(bundles, seeded["outside_key"])
+    assert outside is not None
+    assert outside["session_thread_id"] == seeded["outside_session"]
+
+    _clear_index()
+    inside, inside_scan_ms, inside_lock_ms = _measure_locked_scan(bundles, seeded["inside_key"])
+    assert inside is not None
+    assert inside["session_thread_id"] == seeded["inside_session"]
+
+    _clear_index()
+    missing, miss_scan_ms, miss_lock_ms = _measure_locked_scan(bundles, seeded["miss_key"])
+    assert missing is None
+
+    _write_index(index_path, {_index_entry_key(seeded["inside_key"]): seeded["inside_session"]})
+    glob_calls: list[str] = []
+    real_glob = Path.glob
+
+    def spy_glob(self: Path, pattern: str, *args, **kwargs):
+        glob_calls.append(pattern)
+        return real_glob(self, pattern, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "glob", spy_glob)
+    cached, cache_scan_ms, cache_lock_ms = _measure_locked_scan(bundles, seeded["inside_key"])
+    monkeypatch.setattr(Path, "glob", real_glob)
+    assert cached is not None
+    assert cached["session_thread_id"] == seeded["inside_session"]
+    assert glob_calls == []
+
+    for scan_ms, lock_ms in (
+        (outside_scan_ms, outside_lock_ms),
+        (inside_scan_ms, inside_lock_ms),
+        (miss_scan_ms, miss_lock_ms),
+        (cache_scan_ms, cache_lock_ms),
+    ):
+        assert scan_ms >= 0.0
+        assert lock_ms >= 0.0
+        assert lock_ms >= scan_ms
+
+    record = {
+        "bundle_count": bundle_count,
+        "placement_window": _PLACEMENT_WINDOW,
+        "scan_implementation": "unbounded_filename_asc",
+        "k_ratified": False,
+        "lock_budget_ratified": False,
+        "cases": {
+            "cache_hit": {
+                "scan_ms": round(cache_scan_ms, 3),
+                "lock_hold_ms": round(cache_lock_ms, 3),
+                "hit": True,
+                "glob_entered": False,
+            },
+            "inside_placement": {
+                "scan_ms": round(inside_scan_ms, 3),
+                "lock_hold_ms": round(inside_lock_ms, 3),
+                "hit": True,
+                "session": seeded["inside_session"],
+            },
+            "outside_placement": {
+                "scan_ms": round(outside_scan_ms, 3),
+                "lock_hold_ms": round(outside_lock_ms, 3),
+                "hit": True,
+                "session": seeded["outside_session"],
+            },
+            "full_scan_no_match": {
+                "scan_ms": round(miss_scan_ms, 3),
+                "lock_hold_ms": round(miss_lock_ms, 3),
+                "hit": False,
+            },
+        },
+    }
+    print("MISS_SCAN_MEASUREMENT " + json.dumps(record, ensure_ascii=False), flush=True)
