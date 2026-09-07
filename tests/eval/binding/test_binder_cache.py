@@ -222,6 +222,38 @@ def test_write_through_after_successful_bind(tmp_path: Path) -> None:
     assert entries[_index_entry_key(key)] == result.bundle["session_thread_id"]
 
 
+def test_binder_uses_acceptpath_index_file_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bind consults acceptpath_index_file(root) for cache lookup and write-through."""
+    index_calls: list[Path] = []
+    relocated = tmp_path / ".eval" / "relocated-index.json"
+
+    def relocated_index(repo_root: Path) -> Path:
+        index_calls.append(Path(repo_root).resolve())
+        return relocated
+
+    monkeypatch.setattr(binding_paths, "acceptpath_index_file", relocated_index)
+
+    first = _bind(tmp_path, accept_event_token="ae_index_path")
+    assert first.bound is True
+    session = first.bundle["session_thread_id"]
+    assert index_calls
+    assert all(path == tmp_path.resolve() for path in index_calls)
+    assert relocated.is_file()
+    assert not (_bundles(tmp_path) / "index.json").exists()
+    entries = _load_index(relocated)
+    assert entries is not None
+    key = _reuse_key(tmp_path, "ae_index_path", message_sha256_bytes(FINAL))
+    assert key is not None
+    assert entries[_index_entry_key(key)] == session
+
+    second = _bind(tmp_path, accept_event_token="ae_index_path")
+    assert second.bundle["session_thread_id"] == session
+    assert index_calls
+    assert all(path == tmp_path.resolve() for path in index_calls)
+    assert relocated.is_file()
+    assert not (_bundles(tmp_path) / "index.json").exists()
+
+
 def test_rebuild_from_bundles_recreates_index(tmp_path: Path) -> None:
     first = _bind(tmp_path, accept_event_token="ae_rebuild")
     session = first.bundle["session_thread_id"]

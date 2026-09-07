@@ -306,7 +306,12 @@ def _reuse_key(repo_root: Path, accept_event_token: str | None, final_sha: str) 
     return (str(Path(repo_root).resolve()), accept_event_token, final_sha)
 
 
-def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, Any] | None:
+def _scan_reuse_key(
+    bundles_dir: Path,
+    key: tuple[str, str, str],
+    *,
+    index_path: Path | None = None,
+) -> dict[str, Any] | None:
     """Find an existing authoritative acceptpath bundle matching ``key``.
 
     Consults the optional rebuildable ``index.json`` cache first. Cache hits
@@ -317,14 +322,16 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
     through to a linear directory scan (index caches are never sole
     authority; N19.2/N19.3). Linear-scan hits write through best-effort.
 
+    When ``index_path`` is omitted, the cache is ``bundles_dir / "index.json"``.
+
     The miss-scan skips ``index.json``, symlinks, and non-regular files.
     Hard links remain regular files.
     """
     if not bundles_dir.is_dir():
         return None
 
-    index_path = bundles_dir / "index.json"
-    cached_session = _cache_lookup_session(index_path, key)
+    cache_path = index_path if index_path is not None else bundles_dir / "index.json"
+    cached_session = _cache_lookup_session(cache_path, key)
     cached_path = paths.session_bundle_path(bundles_dir, cached_session)
     if cached_path is not None and cached_session is not None:
         cached_bundle = _load_bundle_for_session(bundles_dir, cached_session)
@@ -351,7 +358,7 @@ def _scan_reuse_key(bundles_dir: Path, key: tuple[str, str, str]) -> dict[str, A
         # Write-through after authoritative scan hit (best-effort).
         session_id = data.get("session_thread_id")
         if isinstance(session_id, str) and session_id.strip():
-            _cache_write_through(index_path, key, session_id)
+            _cache_write_through(cache_path, key, session_id)
         return data
     return None
 
@@ -419,10 +426,11 @@ def bind_final_accept(
     case_id: str | None = None
     key = _reuse_key(root, inp.accept_event_token, final_sha) if root is not None else None
     bundles_dir: Path | None = paths.acceptpath_bundles_dir(root) if root is not None else None
+    index_path: Path | None = paths.acceptpath_index_file(root) if root is not None else None
     bind_lock = acquire_bind_lock(bundles_dir) if (write and bundles_dir is not None) else None
     try:
         if key is not None and bundles_dir is not None:
-            existing = _scan_reuse_key(bundles_dir, key)
+            existing = _scan_reuse_key(bundles_dir, key, index_path=index_path)
             if existing is not None:
                 existing_session = existing.get("session_thread_id")
                 existing_case = existing.get("case_id")
@@ -495,8 +503,8 @@ def bind_final_accept(
                 paths.atomic_write_json(out, bundle)
                 paths_written = (out.relative_to(root).as_posix(),)
                 # Best-effort reuse-scan cache write-through after successful bind.
-                if key is not None:
-                    _cache_write_through(bundles_dir / "index.json", key, session_id)
+                if key is not None and index_path is not None:
+                    _cache_write_through(index_path, key, session_id)
             except (OSError, paths.LayerAPathError) as exc:
                 # Persistence failure must not block product accept; report honestly.
                 errors = (f"bind_write_error: {exc}",)
