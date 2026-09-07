@@ -41,6 +41,19 @@ Contract locks honoured here:
   correlation-only and never becomes the session id.
 * **D1 / N19.5** — capture gated by :func:`profiles.capture_enabled`; when off,
   return ``bound=False, unbound_reason="capture_disabled"`` with zero writes.
+* **Cache / authority** — ``index.json`` is rebuildable and never sole
+  authority. Schema version is injective v2 (canonical JSON-array keys);
+  wrong-version or corrupt indexes are ignored and rebuilt. No dual-read.
+* **Miss-scan** — skip ``index.json``, symlinks, and non-regular files.
+  Hard links remain regular files.
+* **Session-ID grammar** — cached ids must match ``sess_`` + 32 lowercase
+  hex before path construction; violations are silent misses.
+* **Privacy boundary** — evidence surfaces are always projected secret-safe.
+  Final accepted bytes are never scrubbed. ``meta.final_message_b64`` stays
+  local-bundle-only.
+* **``meta.scan_bounded``** — not emitted. Miss-scan is unbounded
+  filename-ascending; D-13 is unimplemented. Truncation would be the
+  only case that sets ``meta.scan_bounded=true``.
 
 No network. No Opik import. No product-accept blocking: :func:`bind_final_accept`
 never raises for product-accept reasons — it reports outcomes via
