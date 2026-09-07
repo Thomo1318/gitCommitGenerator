@@ -24,6 +24,10 @@ Contract locks honoured here:
 * **N19.4 / N20.3** — bytes-aware: ``final_message: bytes | str``; hash the
   original bytes; invalid UTF-8 projects with ``utf-8-replace`` and records
   ``meta.final_message_encoding`` / ``meta.final_message_byte_length``.
+* **Hash source** — :func:`bind_final_accept` hashes original bytes via
+  :func:`message_sha256_bytes`. :func:`bind_unbound` hashes supplied
+  projected text via :func:`git_cg.eval.corpus.canonical.message_sha256`.
+  Accept identity is original bytes; unbound identity is projected text.
 * **D9 / N18** — ``session_thread_id`` is always a freshly minted (or
   scoped-reuse) ``sess_`` id; ``GenerationTelemetry.thread_id`` (``repo-…``) is
   correlation-only and never becomes the session id.
@@ -360,6 +364,11 @@ def bind_final_accept(
 ) -> BindResult:
     """Bind exact final bytes into ``final_accept`` evidence (D4).
 
+    Hash source is the original ``final_message`` bytes via
+    :func:`message_sha256_bytes`, not the stored UTF-8 projection. Invalid
+    UTF-8 still projects with ``utf-8-replace`` for the schema text field;
+    ``final_message_sha256`` remains the hash of those original bytes.
+
     Never raises for product-accept reasons. Behaviour:
 
     * Capture disabled ⇒ ``bound=False, unbound_reason="capture_disabled"``,
@@ -515,6 +524,10 @@ def bind_unbound(
     Fails closed when the reason is blank or the class is ``final_accept``
     (``EVAL_FAKE_BOUND``). Does not write by default; the returned bundle (when
     constructed) is honest unbound evidence for offline scoring.
+
+    Hash source is the supplied ``final_message`` text via
+    :func:`git_cg.eval.corpus.canonical.message_sha256`. This helper accepts
+    projected text only; it has no original-byte input.
     """
     if not reason or not reason.strip():
         raise ValueError("unbound bind requires a non-empty reason (EVAL_FAKE_BOUND)")

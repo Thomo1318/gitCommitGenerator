@@ -9,6 +9,9 @@ Covers the locked binder-core contract surface (D1-D6, N2/N6/N19):
   ``final_message_sha256`` over the exact bytes;
 * bytes-aware hashing (N19.4/N20.3): ``bytes | str``; invalid UTF-8 projects
   with ``utf-8-replace`` while the hash stays over the original bytes;
+* hash-source asymmetry: ``bind_final_accept`` hashes original bytes via
+  ``message_sha256_bytes``; ``bind_unbound`` hashes supplied projected text
+  via ``message_sha256``;
 * scoped idempotency (N19.2/N20.1): same event+bytes ⇒ reuse; new event+same
   bytes ⇒ new session; missing token ⇒ new session;
 * atomic persist + containment (N19.3): bundle written under
@@ -255,6 +258,28 @@ def test_bind_invalid_utf8_projects_replace_and_hashes_original(tmp_path) -> Non
     assert bundle["meta"]["final_message_byte_length"] == len(raw)
     # Schema still valid (final_message is a string).
     validate_instance("ape_bundle_v1", bundle)
+
+
+def test_bind_final_accept_hashes_original_bytes(tmp_path) -> None:
+    """Final-accept hash source is original bytes, not replacement-decoded text."""
+    raw = b"\xff\xfe original-bytes hash\n"
+    projected = raw.decode("utf-8", errors="replace")
+    result = _bind(tmp_path, final_message=raw)
+    assert result.bound is True
+    assert result.bundle["final_message_sha256"] == message_sha256_bytes(raw)
+    assert result.bundle["final_message_sha256"] != message_sha256(projected)
+    assert result.bundle["final_message"] == projected
+
+
+def test_bind_unbound_hashes_projected_text() -> None:
+    """Unbound hash source is the supplied projected text, not original bytes."""
+    raw = b"\xff\xfe original-bytes hash\n"
+    projected = raw.decode("utf-8", errors="replace")
+    result = bind_unbound(reason="fixture_only", final_message=projected)
+    assert result.bound is False
+    assert result.bundle["final_message_sha256"] == message_sha256(projected)
+    assert result.bundle["final_message_sha256"] != message_sha256_bytes(raw)
+    assert result.bundle["final_message"] == projected
 
 
 def test_bind_empty_final_message_unbound(tmp_path) -> None:
