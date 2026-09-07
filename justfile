@@ -233,6 +233,14 @@ eval-binding-coverage:
       --file src/git_cg/eval/binding/session_thread.py \
       --file src/git_cg/eval/binding/trajectory.py
 
+# Binding-scoped public docstring gate (≥80%).
+# Stdlib ast walker only — do not reuse tools/docstring_guard.py (presence/style).
+# Binding package only; fail-closed below 80% with missing qualified names.
+# Refs: #257.
+eval-binding-docstrings:
+    @echo "📝 binding public-docstring gate (≥80%)"
+    uv run python tools/check_docstring_coverage.py src/git_cg/eval/binding --threshold 80
+
 # Hyperfine bench of the real commit path with dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
 # Refs: #246 (dogfood async lane).
