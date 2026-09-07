@@ -1,8 +1,8 @@
 """Acceptpath reuse-scan index.json cache behaviour.
 
-Cache is rebuildable and never sole authority. Corrupt, missing, or stale
-index entries must fall back to a linear bundle scan without changing bind
-behaviour.
+Cache is rebuildable and never sole authority. Corrupt, missing, stale,
+oversized, or malformed index data must fall back to a linear bundle scan
+without changing bind behaviour.
 
 This module also includes a measurement-only 1k/10k miss-scan benchmark
 (``-k benchmark``). It records scan and lock-hold timings and does not
@@ -23,9 +23,14 @@ import pytest
 
 from git_cg.eval.binding import paths as binding_paths
 from git_cg.eval.binding.binder import (
+    _INDEX_MAX_BYTES,
+    _INDEX_MAX_ENTRIES,
+    _INDEX_MAX_KEY_BYTES,
+    _INDEX_MAX_SESSION_ID_BYTES,
     _INDEX_VERSION,
     BindInput,
     _cache_write_through,
+    _index_entry_admissible,
     _index_entry_key,
     _load_bundle_for_session,
     _load_index,
@@ -336,16 +341,165 @@ def test_load_index_rejects_non_object_and_bad_entries(tmp_path: Path) -> None:
     p.write_text(json.dumps({"version": _INDEX_VERSION, "entries": "nope"}), encoding="utf-8")
     assert _load_index(p) is None
     p.write_text(
-        json.dumps(
-            {
-                "version": _INDEX_VERSION,
-                "entries": {"ok": "sess_x", "blank": "  ", "b": 2},
-            }
-        ),
+        json.dumps({"version": _INDEX_VERSION, "entries": {"ok": "sess_x", "blank": "  "}}),
         encoding="utf-8",
     )
-    loaded = _load_index(p)
-    assert loaded == {"ok": "sess_x"}
+    assert _load_index(p) is None
+    p.write_text(
+        json.dumps({"version": _INDEX_VERSION, "entries": {"ok": "sess_x", "b": 2}}),
+        encoding="utf-8",
+    )
+    assert _load_index(p) is None
+    p.write_text(
+        json.dumps({"version": _INDEX_VERSION, "entries": {"": "sess_x"}}),
+        encoding="utf-8",
+    )
+    assert _load_index(p) is None
+
+
+def test_oversized_index_treated_as_miss(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_oversize")
+    session = first.bundle["session_thread_id"]
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    index_path.write_bytes(b"{" + (b"x" * _INDEX_MAX_BYTES) + b"}")
+    assert _load_index(index_path) is None
+    second = _bind(tmp_path, accept_event_token="ae_oversize")
+    assert second.bound is True
+    assert second.errors == ()
+    assert second.bundle["session_thread_id"] == session
+
+
+def test_index_size_cap_after_stale_stat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    index_path = tmp_path / "index.json"
+    index_path.write_bytes(b"{" + (b"x" * _INDEX_MAX_BYTES) + b"}")
+    original_stat = Path.stat
+
+    class _StaleStat:
+        def __init__(self, inner: object) -> None:
+            self._inner = inner
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._inner, name)
+
+        @property
+        def st_size(self) -> int:
+            return 64
+
+    def _stale_stat(self: Path, *args: object, **kwargs: object):
+        result = original_stat(self, *args, **kwargs)
+        if self == index_path:
+            return _StaleStat(result)
+        return result
+
+    monkeypatch.setattr(Path, "stat", _stale_stat)
+    assert _load_index(index_path) is None
+
+
+def test_index_entry_rejects_unencodable_key_or_value() -> None:
+    assert _index_entry_admissible("\ud800", "sess_x") is False
+    assert _index_entry_admissible("ok", "\ud800") is False
+
+
+def test_index_entry_count_cap_miss(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_count_cap")
+    session = first.bundle["session_thread_id"]
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    too_many = {str(i): "sess_x" for i in range(_INDEX_MAX_ENTRIES + 1)}
+    index_path.write_text(
+        json.dumps({"version": _INDEX_VERSION, "entries": too_many}),
+        encoding="utf-8",
+    )
+    assert _load_index(index_path) is None
+    second = _bind(tmp_path, accept_event_token="ae_count_cap")
+    assert second.bundle["session_thread_id"] == session
+
+
+def test_index_non_string_entry_miss(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_non_string")
+    session = first.bundle["session_thread_id"]
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    index_path.write_text(
+        json.dumps({"version": _INDEX_VERSION, "entries": {"ok": "sess_x", "b": 2}}),
+        encoding="utf-8",
+    )
+    assert _load_index(index_path) is None
+    second = _bind(tmp_path, accept_event_token="ae_non_string")
+    assert second.bundle["session_thread_id"] == session
+
+
+def test_index_duplicate_keys_miss(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_dup_keys")
+    session = first.bundle["session_thread_id"]
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    index_path.write_text(
+        f'{{"version": {_INDEX_VERSION}, "entries": {{"ok": "sess_a", "ok": "sess_b"}}}}',
+        encoding="utf-8",
+    )
+    assert _load_index(index_path) is None
+    second = _bind(tmp_path, accept_event_token="ae_dup_keys")
+    assert second.bundle["session_thread_id"] == session
+
+
+def test_load_index_rejects_oversized_key_or_session_value(tmp_path: Path) -> None:
+    first = _bind(tmp_path, accept_event_token="ae_oversize_fields")
+    session = first.bundle["session_thread_id"]
+    p = binding_paths.acceptpath_index_file(tmp_path)
+    p.write_text(
+        json.dumps({"version": _INDEX_VERSION, "entries": {"x" * (_INDEX_MAX_KEY_BYTES + 1): "sess_x"}}),
+        encoding="utf-8",
+    )
+    assert _load_index(p) is None
+    second = _bind(tmp_path, accept_event_token="ae_oversize_fields")
+    assert second.bundle["session_thread_id"] == session
+    p.write_text(
+        json.dumps({"version": _INDEX_VERSION, "entries": {"ok": "s" * (_INDEX_MAX_SESSION_ID_BYTES + 1)}}),
+        encoding="utf-8",
+    )
+    assert _load_index(p) is None
+    third = _bind(tmp_path, accept_event_token="ae_oversize_fields")
+    assert third.bundle["session_thread_id"] == session
+
+
+def test_write_index_refuses_oversized_entry_count(tmp_path: Path) -> None:
+    p = tmp_path / "index.json"
+    p.write_text("keep-me", encoding="utf-8")
+    too_many = {str(i): "sess_x" for i in range(_INDEX_MAX_ENTRIES + 1)}
+    _write_index(p, too_many)
+    assert p.read_text(encoding="utf-8") == "keep-me"
+
+
+def test_write_index_refuses_oversized_key_or_session_value(tmp_path: Path) -> None:
+    p = tmp_path / "index.json"
+    p.write_text("keep-me", encoding="utf-8")
+    _write_index(p, {"x" * (_INDEX_MAX_KEY_BYTES + 1): "sess_x"})
+    assert p.read_text(encoding="utf-8") == "keep-me"
+    _write_index(p, {"ok": "s" * (_INDEX_MAX_SESSION_ID_BYTES + 1)})
+    assert p.read_text(encoding="utf-8") == "keep-me"
+    _write_index(p, {"": "sess_x"})
+    assert p.read_text(encoding="utf-8") == "keep-me"
+
+
+def test_write_index_refuses_oversized_payload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    p = tmp_path / "index.json"
+    p.write_text("keep-me", encoding="utf-8")
+    monkeypatch.setattr(
+        "git_cg.eval.binding.binder.json.dumps",
+        lambda *_args, **_kwargs: "x" * _INDEX_MAX_BYTES,
+    )
+    _write_index(p, {"ok": "sess_x"})
+    assert p.read_text(encoding="utf-8") == "keep-me"
+
+
+def test_write_index_swallows_serialize_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    p = tmp_path / "index.json"
+    p.write_text("keep-me", encoding="utf-8")
+
+    def _boom(*_args: object, **_kwargs: object) -> str:
+        raise TypeError("cannot serialize")
+
+    monkeypatch.setattr("git_cg.eval.binding.binder.json.dumps", _boom)
+    _write_index(p, {"ok": "sess_x"})
+    assert p.read_text(encoding="utf-8") == "keep-me"
 
 
 def test_cache_write_through_ignores_blank_session(tmp_path: Path) -> None:

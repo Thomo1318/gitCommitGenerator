@@ -43,7 +43,8 @@ Contract locks honoured here:
   return ``bound=False, unbound_reason="capture_disabled"`` with zero writes.
 * **Cache / authority** — ``index.json`` is rebuildable and never sole
   authority. Schema version is injective v2 (canonical JSON-array keys);
-  wrong-version or corrupt indexes are ignored and rebuilt. No dual-read.
+  wrong-version, corrupt, oversized, or malformed indexes are ignored and
+  rebuilt. No dual-read.
 * **Miss-scan** — skip ``index.json``, symlinks, and non-regular files.
   Hard links remain regular files.
 * **Session-ID grammar** — cached ids must match ``sess_`` + 32 lowercase
@@ -192,6 +193,36 @@ def _mint_session_id() -> str:
 
 #: Acceptpath reuse-scan cache schema version (rebuildable; never sole authority).
 _INDEX_VERSION = 2
+#: Defensive limits apply only to the rebuildable index, never to bundles.
+_INDEX_MAX_BYTES = 1_048_576
+_INDEX_MAX_ENTRIES = 4096
+_INDEX_MAX_KEY_BYTES = 4096
+_INDEX_MAX_SESSION_ID_BYTES = 256
+
+
+def _index_entry_admissible(key: object, value: object) -> bool:
+    """Return whether one cache entry stays within index shape and byte bounds."""
+    try:
+        return (
+            isinstance(key, str)
+            and bool(key)
+            and len(key.encode("utf-8")) <= _INDEX_MAX_KEY_BYTES
+            and isinstance(value, str)
+            and bool(value.strip())
+            and len(value.encode("utf-8")) <= _INDEX_MAX_SESSION_ID_BYTES
+        )
+    except UnicodeEncodeError:
+        return False
+
+
+def _index_object_pairs(pairs: list[tuple[Any, Any]]) -> dict[Any, Any]:
+    """Build a JSON object, rejecting duplicate keys fail-closed."""
+    out: dict[Any, Any] = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError("duplicate json object key")
+        out[key] = value
+    return out
 
 
 def _index_entry_key(key: tuple[str, str, str]) -> str:
@@ -205,35 +236,49 @@ def _index_entry_key(key: tuple[str, str, str]) -> str:
 
 
 def _load_index(index_path: Path) -> dict[str, str] | None:
-    """Load the acceptpath reuse-scan cache, or ``None`` when unusable.
+    """Load a bounded, well-shaped index, or return ``None`` on any defect.
 
-    Returns ``None`` for missing, corrupt, wrong-version, or schema-invalid
-    indexes. Cache absence must never alter binding behaviour.
+    Returns ``None`` for missing, corrupt, wrong-version, oversized, or
+    schema-invalid indexes. Any malformed entry discards the whole document.
+    Cache absence must never alter binding behaviour.
     """
     try:
-        if not index_path.is_file():
+        if not index_path.is_file() or index_path.stat().st_size > _INDEX_MAX_BYTES:
             return None
-        raw = index_path.read_text(encoding="utf-8")
-        data = json.loads(raw)
+        with index_path.open("rb") as fh:
+            blob = fh.read(_INDEX_MAX_BYTES + 1)
+        if len(blob) > _INDEX_MAX_BYTES:
+            return None
+        raw = blob.decode("utf-8")
+        data = json.loads(raw, object_pairs_hook=_index_object_pairs)
     except OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError:
         return None
-    if not isinstance(data, dict):
-        return None
-    if data.get("version") != _INDEX_VERSION:
+    if not isinstance(data, dict) or data.get("version") != _INDEX_VERSION:
         return None
     entries = data.get("entries")
-    if not isinstance(entries, dict):
+    if not isinstance(entries, dict) or len(entries) > _INDEX_MAX_ENTRIES:
         return None
     out: dict[str, str] = {}
     for key, value in entries.items():
-        if isinstance(key, str) and isinstance(value, str) and key and value.strip():
-            out[key] = value
+        if not _index_entry_admissible(key, value):
+            return None
+        out[key] = value
     return out
 
 
 def _write_index(index_path: Path, entries: dict[str, str]) -> None:
-    """Best-effort atomic write of the reuse-scan cache. Never raises."""
+    """Best-effort atomic write of a bounded reuse-scan cache. Never raises."""
+    if len(entries) > _INDEX_MAX_ENTRIES:
+        return
+    if any(not _index_entry_admissible(key, value) for key, value in entries.items()):
+        return
     payload = {"version": _INDEX_VERSION, "entries": dict(entries)}
+    try:
+        encoded = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    except TypeError, ValueError:
+        return
+    if len(encoded) + 1 > _INDEX_MAX_BYTES:
+        return
     with contextlib.suppress(OSError, paths.LayerAPathError, TypeError, ValueError):
         paths.atomic_write_json(index_path, payload)
 
