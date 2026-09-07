@@ -386,6 +386,98 @@ def _scan_reuse_key(
     return None
 
 
+def _resolve_reuse_identity(
+    session_id: str | None,
+    key: tuple[str, str, str] | None,
+    bundles_dir: Path | None,
+    index_path: Path | None,
+) -> tuple[str, str]:
+    """Return ``(session_id, case_id)`` after optional reuse adoption."""
+    case_id: str | None = None
+    if key is not None and bundles_dir is not None:
+        existing = _scan_reuse_key(bundles_dir, key, index_path=index_path)
+        if existing is not None:
+            existing_session = existing.get("session_thread_id")
+            existing_case = existing.get("case_id")
+            if isinstance(existing_session, str) and existing_session.strip():
+                session_id = existing_session
+            if isinstance(existing_case, str) and existing_case.strip():
+                case_id = existing_case
+
+    if session_id is None or not session_id.strip():
+        session_id = _mint_session_id()
+    if case_id is None:
+        case_id = f"acceptpath:{session_id}"
+    return session_id, case_id
+
+
+def _build_bundle_meta(
+    inp: BindInput,
+    *,
+    encoding_meta: dict[str, Any],
+    root: Path | None,
+) -> dict[str, Any]:
+    """Assemble secret-safe bind metadata. Final bytes are never included."""
+    meta: dict[str, Any] = {"producer": _PRODUCER}
+    meta.update(encoding_meta)
+    if inp.meta:
+        # Additive non-authoritative fields only; never override binder authority.
+        # Project secret-safe so evidence surfaces never persist raw secrets.
+        safe_meta = project_secret_safe(dict(inp.meta))
+        if isinstance(safe_meta, dict):
+            for meta_key, value in safe_meta.items():
+                meta.setdefault(meta_key, value)
+    if inp.generated_message is not None and str(inp.generated_message).strip():
+        # Draft evidence only — redact secret shapes; never the scored final.
+        masked_draft = mask_secrets_in_text(str(inp.generated_message))
+        if masked_draft is not None and str(masked_draft).strip():
+            meta["generated_message"] = masked_draft
+    if inp.score_card:
+        # Score card is evidence under meta; project secret-safe.
+        safe_card = project_secret_safe(dict(inp.score_card))
+        if isinstance(safe_card, dict):
+            meta["score_card"] = safe_card
+    binding_meta: dict[str, Any] = {"state": "bound"}
+    if inp.trace_id:
+        binding_meta["trace_id"] = inp.trace_id
+    if inp.thread_id:
+        binding_meta["thread_id"] = inp.thread_id  # correlation only (D9)
+    meta["binding"] = binding_meta
+    if inp.accept_event_token:
+        meta["accept_event"] = {
+            "token": inp.accept_event_token,
+            "repo_root": str(root) if root is not None else None,
+        }
+    return meta
+
+
+def _persist_bundle(
+    *,
+    root: Path,
+    bundles_dir: Path,
+    session_id: str,
+    bundle: dict[str, Any],
+    key: tuple[str, str, str] | None,
+    index_path: Path | None,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Atomically persist a bundle and best-effort cache write-through.
+
+    Persistence failures are returned as errors and never raised.
+    """
+    paths_written: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+    try:
+        out = bundles_dir / f"{session_id}.json"
+        paths.atomic_write_json(out, bundle)
+        paths_written = (out.relative_to(root).as_posix(),)
+        if key is not None and index_path is not None:
+            _cache_write_through(index_path, key, session_id)
+    except (OSError, paths.LayerAPathError) as exc:
+        # Persistence failure must not block product accept; report honestly.
+        errors = (f"bind_write_error: {exc}",)
+    return paths_written, errors
+
+
 def bind_final_accept(
     inp: BindInput,
     *,
@@ -450,57 +542,18 @@ def bind_final_accept(
     # Short-lived lock around reuse-scan-plus-write; lock failure falls back to
     # unlocked atomic-replace and never blocks product accept.
     session_id = inp.session_thread_id
-    case_id: str | None = None
     key = _reuse_key(root, inp.accept_event_token, final_sha) if root is not None else None
     bundles_dir: Path | None = paths.acceptpath_bundles_dir(root) if root is not None else None
     index_path: Path | None = paths.acceptpath_index_file(root) if root is not None else None
     bind_lock = acquire_bind_lock(bundles_dir) if (write and bundles_dir is not None) else None
     try:
-        if key is not None and bundles_dir is not None:
-            existing = _scan_reuse_key(bundles_dir, key, index_path=index_path)
-            if existing is not None:
-                existing_session = existing.get("session_thread_id")
-                existing_case = existing.get("case_id")
-                if isinstance(existing_session, str) and existing_session.strip():
-                    session_id = existing_session
-                if isinstance(existing_case, str) and existing_case.strip():
-                    case_id = existing_case
-
-        if session_id is None or not session_id.strip():
-            session_id = _mint_session_id()
-        if case_id is None:
-            case_id = f"acceptpath:{session_id}"
-
-        meta: dict[str, Any] = {"producer": _PRODUCER}
-        meta.update(encoding_meta)
-        if inp.meta:
-            # Additive non-authoritative fields only; never override binder authority.
-            # Project secret-safe so evidence surfaces never persist raw secrets.
-            safe_meta = project_secret_safe(dict(inp.meta))
-            if isinstance(safe_meta, dict):
-                for meta_key, value in safe_meta.items():
-                    meta.setdefault(meta_key, value)
-        if inp.generated_message is not None and str(inp.generated_message).strip():
-            # Draft evidence only — redact secret shapes; never the scored final.
-            masked_draft = mask_secrets_in_text(str(inp.generated_message))
-            if masked_draft is not None and str(masked_draft).strip():
-                meta["generated_message"] = masked_draft
-        if inp.score_card:
-            # Score card is evidence under meta; project secret-safe.
-            safe_card = project_secret_safe(dict(inp.score_card))
-            if isinstance(safe_card, dict):
-                meta["score_card"] = safe_card
-        binding_meta: dict[str, Any] = {"state": "bound"}
-        if inp.trace_id:
-            binding_meta["trace_id"] = inp.trace_id
-        if inp.thread_id:
-            binding_meta["thread_id"] = inp.thread_id  # correlation only (D9)
-        meta["binding"] = binding_meta
-        if inp.accept_event_token:
-            meta["accept_event"] = {
-                "token": inp.accept_event_token,
-                "repo_root": str(root) if root is not None else None,
-            }
+        session_id, case_id = _resolve_reuse_identity(
+            session_id,
+            key,
+            bundles_dir,
+            index_path,
+        )
+        meta = _build_bundle_meta(inp, encoding_meta=encoding_meta, root=root)
 
         bundle: dict[str, Any] = {
             "schema_version": "ape_bundle_v1",
@@ -525,16 +578,14 @@ def bind_final_accept(
         paths_written: tuple[str, ...] = ()
         errors: tuple[str, ...] = ()
         if write and root is not None and bundles_dir is not None:
-            try:
-                out = bundles_dir / f"{session_id}.json"
-                paths.atomic_write_json(out, bundle)
-                paths_written = (out.relative_to(root).as_posix(),)
-                # Best-effort reuse-scan cache write-through after successful bind.
-                if key is not None and index_path is not None:
-                    _cache_write_through(index_path, key, session_id)
-            except (OSError, paths.LayerAPathError) as exc:
-                # Persistence failure must not block product accept; report honestly.
-                errors = (f"bind_write_error: {exc}",)
+            paths_written, errors = _persist_bundle(
+                root=root,
+                bundles_dir=bundles_dir,
+                session_id=session_id,
+                bundle=bundle,
+                key=key,
+                index_path=index_path,
+            )
 
         return BindResult(
             bound=True,
