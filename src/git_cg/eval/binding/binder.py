@@ -28,6 +28,14 @@ Contract locks honoured here:
   :func:`message_sha256_bytes`. :func:`bind_unbound` hashes supplied
   projected text via :func:`git_cg.eval.corpus.canonical.message_sha256`.
   Accept identity is original bytes; unbound identity is projected text.
+* **Draft persistence** — ``meta.generated_message`` is stored only when
+  :func:`mask_secrets_in_text` returns a non-empty scrubbed draft. Empty or
+  fully-scrubbed drafts are omitted. Draft text is evidence only, never the
+  scored artifact.
+* **Validation asymmetry** — :func:`bind_final_accept` never raises for
+  product-accept reasons; it reports outcomes on :class:`BindResult`.
+  :func:`bind_unbound` raises ``ValueError`` for a blank reason, a
+  ``final_accept`` class, or an unknown class (``EVAL_FAKE_BOUND``).
 * **D9 / N18** — ``session_thread_id`` is always a freshly minted (or
   scoped-reuse) ``sess_`` id; ``GenerationTelemetry.thread_id`` (``repo-…``) is
   correlation-only and never becomes the session id.
@@ -124,7 +132,9 @@ class BindInput:
     Attributes:
         final_message: Exact accepted final bytes (preferred) or text.
         generated_message: Best-effort redacted/pre-BetterLeaks draft evidence —
-            **not** guaranteed raw model output (N19.5 / NTH-U5).
+            **not** guaranteed raw model output (N19.5 / NTH-U5). Persisted
+            under ``meta.generated_message`` only when the scrubbed result is
+            non-empty.
         score_card: Product deterministic score card dict when available.
         trace_id: Generation trace id (correlation only).
         thread_id: ``GenerationTelemetry.thread_id`` — repo-scoped Opik
@@ -376,7 +386,9 @@ def bind_final_accept(
     UTF-8 still projects with ``utf-8-replace`` for the schema text field;
     ``final_message_sha256`` remains the hash of those original bytes.
 
-    Never raises for product-accept reasons. Behaviour:
+    Never raises for product-accept reasons. :func:`bind_unbound` may raise
+    ``ValueError`` on invalid reason or class inputs.
+    Behaviour:
 
     * Capture disabled ⇒ ``bound=False, unbound_reason="capture_disabled"``,
       zero writes (D1/N19.5).
@@ -386,6 +398,8 @@ def bind_final_accept(
       unbound_reason="invalid_redaction_profile"``, zero writes.
     * Schema-invalid / unresolved-repo outcomes return unbound results with
       reasons (never product-blocking).
+    * ``meta.generated_message`` is persisted only when the scrubbed draft
+      is non-empty; empty or fully-scrubbed drafts are omitted.
     * Same ``(repo_root, accept_event_token, final_message_sha256)`` may reuse
       an existing bundle (N19.2); persistence failures are reported on the
       result without blocking accept.
@@ -529,9 +543,11 @@ def bind_unbound(
 ) -> BindResult:
     """Explicit unbound helper (N6). ``artifact_class`` must NOT be final_accept.
 
-    Fails closed when the reason is blank or the class is ``final_accept``
-    (``EVAL_FAKE_BOUND``). Does not write by default; the returned bundle (when
-    constructed) is honest unbound evidence for offline scoring.
+    Raises ``ValueError`` when the reason is blank, the class is
+    ``final_accept``, or the class is not an allowed unbound class
+    (``EVAL_FAKE_BOUND``). :func:`bind_final_accept` never raises for
+    product-accept reasons. Does not write by default; the returned bundle
+    (when constructed) is honest unbound evidence for offline scoring.
 
     Hash source is the supplied ``final_message`` text via
     :func:`git_cg.eval.corpus.canonical.message_sha256`. This helper accepts

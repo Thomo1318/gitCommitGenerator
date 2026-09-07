@@ -12,6 +12,11 @@ Covers the locked binder-core contract surface (D1-D6, N2/N6/N19):
 * hash-source asymmetry: ``bind_final_accept`` hashes original bytes via
   ``message_sha256_bytes``; ``bind_unbound`` hashes supplied projected text
   via ``message_sha256``;
+* draft persistence: ``meta.generated_message`` is stored only when the
+  scrubbed draft is non-empty;
+* validation asymmetry: ``bind_final_accept`` never raises for
+  product-accept reasons; ``bind_unbound`` raises ``ValueError`` on
+  invalid reason/class inputs;
 * scoped idempotency (N19.2/N20.1): same event+bytes ⇒ reuse; new event+same
   bytes ⇒ new session; missing token ⇒ new session;
 * atomic persist + containment (N19.3): bundle written under
@@ -350,6 +355,49 @@ def test_synth_s3_draft_vs_final(tmp_path) -> None:
     assert bundle["final_message"] != GENERATED
 
 
+def test_generated_message_persisted_only_when_scrubbed_nonempty(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-6: persist generated_message only after a non-empty scrubbed result."""
+    kept = _bind(
+        tmp_path,
+        generated_message="  keep this draft  ",
+        accept_event_token="ae_draft_keep",
+    )
+    assert kept.bound is True
+    assert kept.bundle["meta"]["generated_message"] == "  keep this draft  "
+
+    omitted = _bind(
+        tmp_path,
+        generated_message="   \n\t  ",
+        accept_event_token="ae_draft_omit_ws",
+    )
+    assert omitted.bound is True
+    assert "generated_message" not in omitted.bundle["meta"]
+
+    absent = _bind(tmp_path, generated_message=None, accept_event_token="ae_draft_omit_none")
+    assert absent.bound is True
+    assert "generated_message" not in absent.bundle["meta"]
+
+    monkeypatch.setattr("git_cg.eval.binding.binder.mask_secrets_in_text", lambda _value: "")
+    scrubbed_empty = _bind(
+        tmp_path,
+        generated_message="nonempty draft that scrubs away",
+        accept_event_token="ae_draft_omit_scrubbed",
+    )
+    assert scrubbed_empty.bound is True
+    assert "generated_message" not in scrubbed_empty.bundle["meta"]
+
+
+def test_bind_final_accept_does_not_raise_for_product_accept_reasons(tmp_path) -> None:
+    """F-7: bind_final_accept reports product-accept failures on BindResult."""
+    empty = _bind(tmp_path, final_message="   \n  ")
+    assert empty.bound is False
+    assert empty.unbound_reason == "final_message_absent"
+
+    invalid = _bind(tmp_path, redaction_profile="not_a_profile")
+    assert invalid.bound is False
+    assert invalid.unbound_reason == "invalid_redaction_profile"
+
+
 # ---------------------------------------------------------------------------
 # N6 — honest unbound (fail closed)
 # ---------------------------------------------------------------------------
@@ -379,6 +427,16 @@ def test_bind_unbound_happy_produces_schema_valid_non_final_accept() -> None:
 def test_bind_unbound_rejects_unknown_class() -> None:
     with pytest.raises(ValueError, match="artifact_class"):
         bind_unbound(reason="x", artifact_class="not_a_class")
+
+
+def test_bind_unbound_raises_for_invalid_reason_or_class() -> None:
+    """F-7: bind_unbound fail-closes invalid reason/class with ValueError."""
+    with pytest.raises(ValueError, match="EVAL_FAKE_BOUND"):
+        bind_unbound(reason="")
+    with pytest.raises(ValueError, match="EVAL_FAKE_BOUND"):
+        bind_unbound(reason="ok", artifact_class="final_accept")
+    with pytest.raises(ValueError, match="artifact_class"):
+        bind_unbound(reason="ok", artifact_class="not_a_class")
 
 
 # ---------------------------------------------------------------------------
