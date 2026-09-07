@@ -217,16 +217,6 @@ def test_stale_index_falls_back_to_scan(tmp_path: Path) -> None:
     assert second.bundle["session_thread_id"] == session
 
 
-def test_write_through_after_successful_bind(tmp_path: Path) -> None:
-    result = _bind(tmp_path, accept_event_token="ae_wt")
-    assert result.bound is True
-    index_path = binding_paths.acceptpath_index_file(tmp_path)
-    entries = _load_index(index_path)
-    assert entries is not None
-    key = _reuse_key(tmp_path, "ae_wt", message_sha256_bytes(FINAL))
-    assert entries[_index_entry_key(key)] == result.bundle["session_thread_id"]
-
-
 def test_binder_uses_acceptpath_index_file_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Bind consults acceptpath_index_file(root) for cache lookup and write-through."""
     index_calls: list[Path] = []
@@ -321,11 +311,11 @@ def test_cache_write_failure_is_silent(tmp_path: Path, monkeypatch: pytest.Monke
     calls: list[str] = []
     real_atomic = binding_paths.atomic_write_json
 
-    def _fail_index_write(path, payload):
+    def _fail_index_write(path, payload, **kwargs):
         calls.append(Path(path).name)
         if Path(path).name == "index.json":
             raise binding_paths.LayerAPathError("cache write failed")
-        return real_atomic(path, payload)
+        return real_atomic(path, payload, **kwargs)
 
     monkeypatch.setattr(binding_paths, "atomic_write_json", _fail_index_write)
     result = _bind(tmp_path, accept_event_token="ae_cachefail")

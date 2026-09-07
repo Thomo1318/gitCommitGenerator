@@ -337,13 +337,21 @@ def _ensure_dir(path: Path) -> None:
         os.chmod(path, _DIR_MODE)
 
 
-def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
+def atomic_write_json(
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    serialized: bytes | None = None,
+) -> Path:
     """Atomically write ``payload`` as UTF-8 JSON to ``path`` (N19.3).
 
     Writes a temp file in the *target directory*, fsyncs the file and parent
     directory, then ``os.replace`` onto the final path so an interrupted write
     never leaves a partially-valid authoritative bundle under the final name.
     Final file mode is ``0600``; JSON uses sorted keys + trailing newline.
+    ``serialized`` may provide the already-rendered UTF-8 JSON bytes when the
+    caller has already serialized the payload for validation; those bytes are
+    written as-is and the existing trailing newline is still appended.
 
     The final ``path`` must already be containment-checked by the caller; this
     helper re-verifies containment defensively when the path is under a
@@ -358,7 +366,10 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            if serialized is None:
+                json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            else:
+                handle.write(serialized.decode("utf-8"))
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())

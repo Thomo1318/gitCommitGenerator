@@ -280,7 +280,7 @@ def _write_index(index_path: Path, entries: dict[str, str]) -> None:
     if len(encoded) + 1 > _INDEX_MAX_BYTES:
         return
     with contextlib.suppress(OSError, paths.LayerAPathError, TypeError, ValueError):
-        paths.atomic_write_json(index_path, payload)
+        paths.atomic_write_json(index_path, payload, serialized=encoded)
 
 
 def _cache_lookup_session(index_path: Path, key: tuple[str, str, str]) -> str | None:
