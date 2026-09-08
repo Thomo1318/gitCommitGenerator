@@ -466,6 +466,7 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 `.eval/` can contain **final commit messages and drafts**. Gitignore is **not** retention:
 
 * Local maintainer responsibility to delete/rotate `.eval/` contents.
+* Bind never auto-evicts acceptpath. Operators reclaim debris with `git-cg eval gc --acceptpath --older-than <duration>`. Authoritative `sess_<32-hex>.json` names need `--force`.
 * Do **not** enable capture on shared/public repos without scrub.
 * No automatic cloud upload in S3 (that is S4); capture is off by default.
 * Default redaction profile is `default_scrub`; the final-message text is retained verbatim locally because it is the scored artifact (diffs/prompts/secrets are still scrubbed).

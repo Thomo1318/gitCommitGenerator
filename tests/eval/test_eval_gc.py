@@ -6,6 +6,7 @@ Locks:
 * Normal mode deletes only stale non-authoritative debris.
 * JSON mode emits one ``cli_output_envelope_v1``.
 * CLI import stays binder/Opik-free.
+* Bind never auto-evicts acceptpath; operators run ``eval gc --acceptpath --older-than``.
 
 No network. No Opik. Refs: #257.
 """
@@ -119,6 +120,35 @@ def test_gc_selection_deletion_behaviour(tmp_path: Path) -> None:
     assert stale.name in {item.path for item in deleted.deleted}
     assert not stale.exists()
     assert fresh.is_file()
+
+
+def test_gc_is_idempotent_and_operator_controlled(tmp_path: Path) -> None:
+    """Explicit GC deletes stale debris once; a second pass is a no-op.
+
+    Bind never auto-evicts: retention stays operator-controlled via
+    ``eval gc --acceptpath --older-than``.
+    """
+    bundles = _acceptpath(tmp_path)
+    session = _write(bundles / AUTHORITATIVE, '{"bound": true}')
+    index = _write(bundles / DEBRIS_INDEX, '{"v": 2}')
+    lock = _write(bundles / DEBRIS_LOCK, "lock")
+    for candidate in (session, index, lock):
+        _age(candidate, seconds=10_000)
+
+    first = gc_acceptpath(tmp_path, older_than="1s")
+    assert session.is_file()
+    assert not index.exists()
+    assert not lock.exists()
+    deleted = {item.path for item in first.deleted}
+    assert DEBRIS_INDEX in deleted
+    assert DEBRIS_LOCK in deleted
+    assert AUTHORITATIVE not in deleted
+
+    second = gc_acceptpath(tmp_path, older_than="1s")
+    assert session.is_file()
+    assert second.deleted == ()
+    assert second.selected == ()
+    assert AUTHORITATIVE in {item.path for item in second.preserved}
 
 
 def test_eval_gc_requires_acceptpath_and_older_than(isolated_eval_repo: Path) -> None:

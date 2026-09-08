@@ -44,7 +44,8 @@ Contract locks honoured here:
 * **Cache / authority** — ``index.json`` is rebuildable and never sole
   authority. Schema version is injective v2 (canonical JSON-array keys);
   wrong-version, corrupt, oversized, or malformed indexes are ignored and
-  rebuilt. No dual-read.
+  rebuilt. No dual-read. Bind never auto-evicts acceptpath; operators
+  reclaim debris with ``git-cg eval gc --acceptpath --older-than``.
 * **Lock-gated cache writes** — index write-through runs only while a
   bind lock is held. Lock failure still persists the authoritative
   bundle best-effort and never blocks accept.

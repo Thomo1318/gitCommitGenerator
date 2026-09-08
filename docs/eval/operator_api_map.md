@@ -357,7 +357,7 @@ documents — sketches name the envelope wrapper keys only.
 * **Optional keys:** *(none)*
 * **Nested (informational):**
   * selected[]/deleted[]/preserved[]/skipped[]: acceptpath filenames
-* **Notes:** Offline acceptpath retention. Requires --acceptpath and --older-than. Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. --dry-run selects without deleting. Age is file mtime.
+* **Notes:** Offline acceptpath retention. Requires --acceptpath and --older-than. Bind never auto-evicts. Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. --dry-run selects without deleting. Age is file mtime.
 
 #### `eval issue list`
 

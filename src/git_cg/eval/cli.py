@@ -2511,8 +2511,10 @@ def gc_cmd(
 ) -> None:
     """Purge stale acceptpath debris.
 
-    Offline retention for ``.eval/bundles/acceptpath/``. Does not change
-    product ranking, contact Opik, or import the binder at CLI module load.
+    Offline retention for ``.eval/bundles/acceptpath/``. Bind never
+    auto-evicts; this command is the operator retention path. Does not
+    change product ranking, contact Opik, or import the binder at CLI
+    module load.
 
     <<GIT_CG_HELP_DETAIL>>
 

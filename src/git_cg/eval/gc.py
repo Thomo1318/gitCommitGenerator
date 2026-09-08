@@ -4,10 +4,12 @@ Retention helper for ``.eval/bundles/acceptpath/``. Stdlib-only at import
 time so ``git_cg.eval.cli`` stays binder/Opik-free. Path helpers are
 imported lazily inside functions.
 
-Normal mode deletes stale *non-authoritative* debris only
-(``index.json``, ``.bind.lock``, leftover ``.*.tmp`` files, unadoptable JSON).
-Authoritative ``sess_<32-hex>.json`` names required for reuse identity
-are preserved unless ``force=True``. ``dry_run`` selects without deleting.
+Bind never auto-evicts acceptpath; operators run this helper via
+``git-cg eval gc --acceptpath --older-than``. Normal mode deletes stale
+*non-authoritative* debris only (``index.json``, ``.bind.lock``, leftover
+``.*.tmp`` files, unadoptable JSON). Authoritative ``sess_<32-hex>.json``
+names required for reuse identity are preserved unless ``force=True``.
+``dry_run`` selects without deleting.
 
 Duration syntax is a positive integer plus ``s`` / ``m`` / ``h`` / ``d``.
 No default age. Age is file mtime. Symlinks and unsafe/non-regular files

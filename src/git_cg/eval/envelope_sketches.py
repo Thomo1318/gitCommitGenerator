@@ -306,6 +306,7 @@ def _build_registry() -> dict[str, DataSketch]:
             nested=("selected[]/deleted[]/preserved[]/skipped[]: acceptpath filenames",),
             notes=(
                 "Offline acceptpath retention. Requires --acceptpath and --older-than. "
+                "Bind never auto-evicts. "
                 "Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. "
                 "--dry-run selects without deleting. Age is file mtime."
             ),
