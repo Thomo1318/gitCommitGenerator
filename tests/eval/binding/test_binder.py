@@ -486,6 +486,41 @@ def test_write_disabled_produces_bundle_without_persist(tmp_path) -> None:
     validate_instance("ape_bundle_v1", result.bundle)
 
 
+def test_write_disabled_mints_fresh_preview_identity(tmp_path) -> None:
+    """Dry-run cannot consult on-disk reuse and mints a fresh preview id."""
+    first = bind_final_accept(
+        BindInput(final_message=FINAL_ACCEPTED, accept_event_token="ae_dry"),
+        repo_root=tmp_path,
+        write=False,
+    )
+    second = bind_final_accept(
+        BindInput(final_message=FINAL_ACCEPTED, accept_event_token="ae_dry"),
+        repo_root=tmp_path,
+        write=False,
+    )
+    assert first.bound is True
+    assert second.bound is True
+    assert first.paths_written == ()
+    assert second.paths_written == ()
+    assert not (tmp_path / ".eval").exists()
+    assert first.bundle["session_thread_id"] != second.bundle["session_thread_id"]
+
+    supplied = "sess_" + ("ef" * 16)
+    preview = bind_final_accept(
+        BindInput(
+            final_message=FINAL_ACCEPTED,
+            accept_event_token="ae_dry",
+            session_thread_id=supplied,
+        ),
+        repo_root=tmp_path,
+        write=False,
+    )
+    assert preview.bound is True
+    assert preview.paths_written == ()
+    assert preview.bundle["session_thread_id"] == supplied
+    assert not (tmp_path / ".eval").exists()
+
+
 def test_scan_reuse_skips_index_and_corrupt_files(tmp_path) -> None:
     """Bundle JSON is authority; index.json + corrupt files must never be reused."""
     from git_cg.eval.binding.binder import _scan_reuse_key

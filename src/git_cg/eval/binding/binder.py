@@ -679,6 +679,11 @@ def bind_final_accept(
     * Index write-through runs only while a bind lock is held. Lock
       failure still persists the authoritative bundle and never blocks
       accept.
+    * ``write=False`` is an in-memory dry-run: no repo-root resolution,
+      lock, reuse scan, or bundle/index writes. With no explicit
+      ``BindInput.session_thread_id`` the preview mints a fresh session
+      identity. A supplied id is retained. The preview is not persisted
+      and cannot reuse an on-disk bundle identity.
     """
     if not capture_enabled():
         return BindResult(bound=False, unbound_reason="capture_disabled")

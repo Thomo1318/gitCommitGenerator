@@ -455,6 +455,8 @@ The miss-scan still lists and stats every `*.json` entry to rank recency, so the
 
 `/.eval/` is gitignored. Writes are atomic (temp + `os.replace`), mode `0600`/`0700`, and path-contained under the resolved repo root. Bundle JSON files are authoritative; any `index.json` is rebuildable cache only. Index write-through runs only while a bind lock is held. Lock failure still writes the authoritative bundle and never blocks accept.
 
+`bind_final_accept(..., write=False)` is an in-memory dry-run. It does not resolve a repo root, take the bind lock, scan existing bundles, or write bundle or index files. With no explicit `BindInput.session_thread_id` the preview mints a fresh session identity. A supplied id is retained. That preview cannot reuse an on-disk bundle identity.
+
 ### Product-pass vs eval-fail (mandatory split)
 
 A **valid final message with incomplete evidence** (missing trajectory, capture failure, unbound) is a **product pass + eval/observability fail** — never a Hybrid/gold prose rejection. Binding is best-effort and never blocks the accept path.
