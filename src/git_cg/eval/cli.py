@@ -3900,7 +3900,7 @@ def _resolve_repo(root: Path | None) -> Path:
 
 
 def _emit_eval_error(command: str, exc: Exception, *, as_json: bool) -> None:
-    """Emit a Slice-5 deterministic error and exit with the locked code.
+    """Emit a deterministic evaluation-command error and exit with the locked code.
 
     ``exc`` is an ExplainError/DiagnoseError carrying ``code``/``exit_code``/
     optional ``hint``. Human mode → one stderr line; JSON mode → one
