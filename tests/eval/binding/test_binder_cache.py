@@ -1,12 +1,16 @@
 """Acceptpath reuse-scan index.json cache behaviour.
 
 Cache is rebuildable and never sole authority. Corrupt, missing, stale,
-oversized, or malformed index data must fall back to a linear bundle scan
-without changing bind behaviour.
+oversized, or malformed index data must fall back to a miss-scan without
+changing bind behaviour.
 
-This module also includes a measurement-only 1k/10k miss-scan benchmark
-(``-k benchmark``). It records scan and lock-hold timings and does not
-implement a K-window or ratify lock budget.
+Miss-scan is hybrid-bounded: at most K recent regular ``*.json``
+bundles, default 512, mtime descending / filename ascending. Truncation
+sets ``meta.scan_bounded=true`` only on that miss-scan. Cache hits and
+``GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN=1`` never set the marker.
+
+The 1k/10k harness (``-k benchmark``) records bounded-scan and lock-hold
+timings. It does not ratify K or the lock budget.
 
 Refs: #257.
 """
@@ -23,12 +27,17 @@ import pytest
 
 from git_cg.eval.binding import paths as binding_paths
 from git_cg.eval.binding.binder import (
+    _DEFAULT_SCAN_WINDOW,
+    _FULL_SCAN_ENV,
     _INDEX_MAX_BYTES,
     _INDEX_MAX_ENTRIES,
     _INDEX_MAX_KEY_BYTES,
     _INDEX_MAX_SESSION_ID_BYTES,
     _INDEX_VERSION,
+    _SCAN_WINDOW_ENV,
     BindInput,
+    _acceptpath_full_scan,
+    _acceptpath_scan_window,
     _cache_write_through,
     _index_entry_admissible,
     _index_entry_key,
@@ -670,17 +679,6 @@ def test_cache_id_symlink_escape_falls_back_to_scan(tmp_path: Path) -> None:
     assert json.loads(trap.read_text(encoding="utf-8")) == {"poison": True}
 
 
-# Measurement-only miss-scan timings (D-13 prerequisite). Refs: #257.
-
-# Proposed D-13 recency cut used only to place twins inside vs outside it.
-# This constant is fixture metadata, not product law, and must not ratify K.
-_PLACEMENT_WINDOW = 512
-
-
-def _session_id_for_index(index: int) -> str:
-    return f"sess_{index:032x}"
-
-
 def _clone_acceptpath_bundle(
     template: dict[str, Any],
     *,
@@ -704,8 +702,303 @@ def _clone_acceptpath_bundle(
     return bundle
 
 
+# Bounded miss-scan window and truncation marker. Refs: #257.
+
+
+def _unlink_acceptpath_index(tmp_path: Path) -> None:
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    if index_path.exists():
+        index_path.unlink()
+
+
+def _plant_window_bundles(
+    tmp_path: Path,
+    specs: list[tuple[str, str, float]],
+) -> tuple[Path, dict[str, Any], str]:
+    """Write ``(session_id, token, mtime)`` twins and return ``(dir, template, sha)``."""
+    template_result = _bind(tmp_path, accept_event_token="ae_window_template")
+    assert template_result.bound is True
+    template = template_result.bundle
+    assert template is not None
+    assert is_valid("ape_bundle_v1", template)
+
+    bundles = _bundles(tmp_path)
+    for path in bundles.glob("*.json"):
+        path.unlink()
+
+    repo_root = str(tmp_path.resolve())
+    final_sha = message_sha256_bytes(FINAL)
+    for session_id, token, mtime in specs:
+        bundle = _clone_acceptpath_bundle(
+            template,
+            session_id=session_id,
+            token=token,
+            final_sha=final_sha,
+            repo_root=repo_root,
+        )
+        path = bundles / f"{session_id}.json"
+        path.write_text(json.dumps(bundle, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.utime(path, (mtime, mtime))
+    return bundles, template, final_sha
+
+
+def test_scan_window_env_fails_closed_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_SCAN_WINDOW_ENV, raising=False)
+    assert _acceptpath_scan_window() == _DEFAULT_SCAN_WINDOW
+    assert _DEFAULT_SCAN_WINDOW == 512
+
+    for token in ("0", "-1", "+0", "abc", "1.5", " ", "512.0", "0x20"):
+        monkeypatch.setenv(_SCAN_WINDOW_ENV, token)
+        assert _acceptpath_scan_window() == _DEFAULT_SCAN_WINDOW
+
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "4")
+    assert _acceptpath_scan_window() == 4
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, " 8 ")
+    assert _acceptpath_scan_window() == 8
+
+
+def test_full_scan_env_is_token_one_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(_FULL_SCAN_ENV, raising=False)
+    assert _acceptpath_full_scan() is False
+    for token in ("", "0", "2", "true", "TRUE", "yes", "on", "full"):
+        monkeypatch.setenv(_FULL_SCAN_ENV, token)
+        assert _acceptpath_full_scan() is False
+    monkeypatch.setenv(_FULL_SCAN_ENV, "1")
+    assert _acceptpath_full_scan() is True
+    monkeypatch.setenv(_FULL_SCAN_ENV, " 1 ")
+    assert _acceptpath_full_scan() is True
+
+
+def test_mtime_desc_filename_asc_picks_first_duplicate(tmp_path: Path) -> None:
+    older = "sess_" + ("a" * 32)
+    newer = "sess_" + ("b" * 32)
+    token = "ae_mtime_order"
+    bundles, _, sha = _plant_window_bundles(
+        tmp_path,
+        [
+            (older, token, 100.0),
+            (newer, token, 200.0),
+        ],
+    )
+    key = _reuse_key(tmp_path, token, sha)
+    assert key is not None
+    _unlink_acceptpath_index(tmp_path)
+    found = _scan_reuse_key(bundles, key)
+    assert found is not None
+    assert found["session_thread_id"] == newer
+
+    # Equal mtimes: filename ascending wins.
+    os.utime(bundles / f"{older}.json", (50.0, 50.0))
+    os.utime(bundles / f"{newer}.json", (50.0, 50.0))
+    _unlink_acceptpath_index(tmp_path)
+    tied = _scan_reuse_key(bundles, key)
+    assert tied is not None
+    assert tied["session_thread_id"] == older
+
+
+def test_bounded_scan_misses_old_twin_and_sets_scan_bounded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    inside = "sess_" + ("1" * 32)
+    filler = "sess_" + ("2" * 32)
+    outside = "sess_" + ("0" * 32)
+    _plant_window_bundles(
+        tmp_path,
+        [
+            (outside, "ae_bounded_old", 10.0),
+            (filler, "ae_bounded_fill", 20.0),
+            (inside, "ae_bounded_new", 30.0),
+        ],
+    )
+    _unlink_acceptpath_index(tmp_path)
+
+    missed = _bind(tmp_path, accept_event_token="ae_bounded_old")
+    assert missed.bound is True
+    assert missed.bundle is not None
+    assert missed.bundle["session_thread_id"] != outside
+    assert missed.bundle["meta"].get("scan_bounded") is True
+
+    _unlink_acceptpath_index(tmp_path)
+    reused = _bind(tmp_path, accept_event_token="ae_bounded_new")
+    assert reused.bound is True
+    assert reused.bundle is not None
+    assert reused.bundle["session_thread_id"] == inside
+    assert reused.bundle["meta"].get("scan_bounded") is True
+
+
+def test_non_truncated_and_exact_window_omit_scan_bounded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    first = "sess_" + ("a" * 32)
+    second = "sess_" + ("b" * 32)
+    _plant_window_bundles(
+        tmp_path,
+        [
+            (first, "ae_exact_a", 10.0),
+            (second, "ae_exact_b", 20.0),
+        ],
+    )
+    _unlink_acceptpath_index(tmp_path)
+    result = _bind(tmp_path, accept_event_token="ae_exact_a")
+    assert result.bound is True
+    assert result.bundle is not None
+    assert result.bundle["session_thread_id"] == first
+    assert "scan_bounded" not in result.bundle["meta"]
+
+
+def test_ineligible_files_do_not_count_toward_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    first = "sess_" + ("c" * 32)
+    second = "sess_" + ("d" * 32)
+    bundles, _, _ = _plant_window_bundles(
+        tmp_path,
+        [
+            (first, "ae_ineligible_a", 10.0),
+            (second, "ae_ineligible_b", 20.0),
+        ],
+    )
+    (bundles / "index.json").write_text("{}", encoding="utf-8")
+    (bundles / "aaa.json").mkdir()
+    poison = tmp_path / "outside_symlink.json"
+    poison.write_text("{}", encoding="utf-8")
+    (bundles / "sess_alink.json").symlink_to(poison)
+    result = _bind(tmp_path, accept_event_token="ae_ineligible_a")
+    assert result.bound is True
+    assert result.bundle is not None
+    assert result.bundle["session_thread_id"] == first
+    assert "scan_bounded" not in result.bundle["meta"]
+
+
+def test_full_scan_override_finds_old_twin_without_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "1")
+    monkeypatch.setenv(_FULL_SCAN_ENV, "1")
+    old = "sess_" + ("0" * 32)
+    new = "sess_" + ("1" * 32)
+    _plant_window_bundles(
+        tmp_path,
+        [
+            (old, "ae_full_old", 10.0),
+            (new, "ae_full_new", 20.0),
+        ],
+    )
+    _unlink_acceptpath_index(tmp_path)
+    result = _bind(tmp_path, accept_event_token="ae_full_old")
+    assert result.bound is True
+    assert result.bundle is not None
+    assert result.bundle["session_thread_id"] == old
+    assert "scan_bounded" not in result.bundle["meta"]
+
+
+def test_cache_hit_never_sets_scan_bounded_or_globs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "1")
+    first = _bind(tmp_path, accept_event_token="ae_cache_hit_flag")
+    assert first.bound is True
+    assert first.bundle is not None
+    assert "scan_bounded" not in first.bundle["meta"]
+
+    def boom_glob(self, pattern):
+        raise AssertionError(f"cache hit must not miss-scan: {pattern!r}")
+
+    monkeypatch.setattr(Path, "glob", boom_glob)
+    second = _bind(tmp_path, accept_event_token="ae_cache_hit_flag")
+    assert second.bound is True
+    assert second.bundle is not None
+    assert second.bundle["session_thread_id"] == first.bundle["session_thread_id"]
+    assert "scan_bounded" not in second.bundle["meta"]
+
+
+def test_caller_meta_cannot_inject_scan_bounded(tmp_path: Path) -> None:
+    result = _bind(tmp_path, accept_event_token="ae_inject_flag", meta={"scan_bounded": True})
+    assert result.bound is True
+    assert result.bundle is not None
+    assert "scan_bounded" not in result.bundle["meta"]
+
+
+def test_bounded_scan_does_not_backfill_outside_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "1")
+    old = "sess_" + ("0" * 32)
+    newest = "sess_" + ("f" * 32)
+    bundles, template, sha = _plant_window_bundles(
+        tmp_path,
+        [
+            (old, "ae_nobackfill", 10.0),
+            (newest, "ae_nobackfill_other", 20.0),
+        ],
+    )
+    # Newest file occupies the window but is not adoptable for this key.
+    corrupt = dict(template)
+    corrupt["bound"] = False
+    (bundles / f"{newest}.json").write_text(json.dumps(corrupt), encoding="utf-8")
+    os.utime(bundles / f"{newest}.json", (20.0, 20.0))
+    _unlink_acceptpath_index(tmp_path)
+    state: dict[str, bool] = {}
+    key = _reuse_key(tmp_path, "ae_nobackfill", sha)
+    assert key is not None
+    found = _scan_reuse_key(bundles, key, scan_state=state)
+    assert found is None
+    assert state.get("truncated") is True
+
+
+def test_positive_window_hit_still_requires_adoptable_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    session = "sess_" + ("e" * 32)
+    bundles, template, sha = _plant_window_bundles(
+        tmp_path,
+        [(session, "ae_gate", 10.0)],
+    )
+    bad = _clone_acceptpath_bundle(
+        template,
+        session_id=session,
+        token="ae_gate",
+        final_sha=sha,
+        repo_root=str(tmp_path.resolve()),
+    )
+    bad["artifact_class"] = "fixture"
+    (bundles / f"{session}.json").write_text(json.dumps(bad), encoding="utf-8")
+    os.utime(bundles / f"{session}.json", (10.0, 10.0))
+    _unlink_acceptpath_index(tmp_path)
+    key = _reuse_key(tmp_path, "ae_gate", sha)
+    assert key is not None
+    assert _scan_reuse_key(bundles, key) is None
+    result = _bind(tmp_path, accept_event_token="ae_gate")
+    assert result.bound is True
+    assert result.bundle is not None
+    assert result.bundle["session_thread_id"] != session
+    assert result.bundle["artifact_class"] == "final_accept"
+
+
+# Measurement-only miss-scan timings. Do not ratify K. Refs: #257.
+
+# Recency cut used only to place twins inside vs outside the window.
+# Aliased to the product default so placement cannot drift; still not ratification.
+_PLACEMENT_WINDOW = _DEFAULT_SCAN_WINDOW
+
+
+def _session_id_for_index(index: int) -> str:
+    return f"sess_{index:032x}"
+
+
 def _measure_locked_scan(bundles_dir: Path, key: tuple[str, str, str]) -> tuple[dict[str, Any] | None, float, float]:
-    """Return ``(bundle, scan_ms, lock_hold_ms)`` for the current in-lock miss-scan.
+    """Return ``(bundle, scan_ms, lock_hold_ms)`` for the in-lock miss-scan.
 
     ``lock_hold_ms`` stops immediately before ``release()``.
     """
@@ -804,32 +1097,34 @@ def test_benchmark_acceptpath_miss_scan_metrics(
     monkeypatch: pytest.MonkeyPatch,
     bundle_count: int,
 ) -> None:
-    """Measure current unbounded miss-scan cost; do not ratify K or lock budget.
+    """Measure bounded miss-scan cost; do not ratify K or lock budget.
 
-    Cases: cache hit, twin inside the proposed 512 placement, twin outside it,
-    and a no-match full-scan control. Current product scan is still O(N).
+    Cases: cache hit, twin inside the 512 window, twin outside it (bounded
+    miss), bounded no-match, and full-scan override for the outside twin.
     """
     seeded = _seed_benchmark_bundles(tmp_path, bundle_count)
     bundles = seeded["bundles"]
     index_path = seeded["index_path"]
 
-    def _clear_index() -> None:
-        if index_path.exists():
-            index_path.unlink()
-
-    _clear_index()
+    _unlink_acceptpath_index(tmp_path)
     outside, outside_scan_ms, outside_lock_ms = _measure_locked_scan(bundles, seeded["outside_key"])
-    assert outside is not None
-    assert outside["session_thread_id"] == seeded["outside_session"]
+    assert outside is None
 
-    _clear_index()
+    _unlink_acceptpath_index(tmp_path)
     inside, inside_scan_ms, inside_lock_ms = _measure_locked_scan(bundles, seeded["inside_key"])
     assert inside is not None
     assert inside["session_thread_id"] == seeded["inside_session"]
 
-    _clear_index()
+    _unlink_acceptpath_index(tmp_path)
     missing, miss_scan_ms, miss_lock_ms = _measure_locked_scan(bundles, seeded["miss_key"])
     assert missing is None
+
+    monkeypatch.setenv(_FULL_SCAN_ENV, "1")
+    _unlink_acceptpath_index(tmp_path)
+    outside_full, outside_full_scan_ms, outside_full_lock_ms = _measure_locked_scan(bundles, seeded["outside_key"])
+    monkeypatch.delenv(_FULL_SCAN_ENV, raising=False)
+    assert outside_full is not None
+    assert outside_full["session_thread_id"] == seeded["outside_session"]
 
     _write_index(index_path, {_index_entry_key(seeded["inside_key"]): seeded["inside_session"]})
     glob_calls: list[str] = []
@@ -851,6 +1146,7 @@ def test_benchmark_acceptpath_miss_scan_metrics(
         (inside_scan_ms, inside_lock_ms),
         (miss_scan_ms, miss_lock_ms),
         (cache_scan_ms, cache_lock_ms),
+        (outside_full_scan_ms, outside_full_lock_ms),
     ):
         assert scan_ms >= 0.0
         assert lock_ms >= 0.0
@@ -859,7 +1155,7 @@ def test_benchmark_acceptpath_miss_scan_metrics(
     record = {
         "bundle_count": bundle_count,
         "placement_window": _PLACEMENT_WINDOW,
-        "scan_implementation": "unbounded_filename_asc",
+        "scan_implementation": "mtime_desc_filename_asc_k_window",
         "k_ratified": False,
         "lock_budget_ratified": False,
         "cases": {
@@ -878,13 +1174,19 @@ def test_benchmark_acceptpath_miss_scan_metrics(
             "outside_placement": {
                 "scan_ms": round(outside_scan_ms, 3),
                 "lock_hold_ms": round(outside_lock_ms, 3),
-                "hit": True,
+                "hit": False,
                 "session": seeded["outside_session"],
             },
-            "full_scan_no_match": {
+            "bounded_no_match": {
                 "scan_ms": round(miss_scan_ms, 3),
                 "lock_hold_ms": round(miss_lock_ms, 3),
                 "hit": False,
+            },
+            "full_scan_outside": {
+                "scan_ms": round(outside_full_scan_ms, 3),
+                "lock_hold_ms": round(outside_full_lock_ms, 3),
+                "hit": True,
+                "session": seeded["outside_session"],
             },
         },
     }
