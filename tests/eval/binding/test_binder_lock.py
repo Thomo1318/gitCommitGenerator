@@ -80,6 +80,37 @@ def test_lock_failure_falls_back_to_unlocked(tmp_path: Path, monkeypatch: pytest
     assert result.paths_written
 
 
+def test_lock_failure_skips_index_write_through(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lock miss still persists the bundle and leaves a seeded index untouched."""
+    from git_cg.eval.binding.binder import _INDEX_VERSION, _index_entry_key, _reuse_key
+
+    bundles = binding_paths.acceptpath_bundles_dir(tmp_path)
+    bundles.mkdir(parents=True, exist_ok=True)
+    index_path = binding_paths.acceptpath_index_file(tmp_path)
+    sentinel_key = _reuse_key(tmp_path, "ae_lock_index", message_sha256_bytes(FINAL))
+    assert sentinel_key is not None
+    seeded = {
+        "version": _INDEX_VERSION,
+        "entries": {_index_entry_key(sentinel_key): "sess_" + ("cd" * 16)},
+    }
+    index_path.write_text(json.dumps(seeded, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    before = index_path.read_bytes()
+    writes: list[object] = []
+
+    def _record_write(*args: object, **kwargs: object) -> None:
+        writes.append((args, kwargs))
+
+    monkeypatch.setattr("git_cg.eval.binding.binder.acquire_bind_lock", lambda *_a, **_k: None)
+    monkeypatch.setattr("git_cg.eval.binding.binder._cache_write_through", _record_write)
+    result = _bind(tmp_path, accept_event_token="ae_lock_index")
+    assert result.bound is True
+    assert result.paths_written
+    session = result.bundle["session_thread_id"]
+    assert (bundles / f"{session}.json").is_file()
+    assert writes == []
+    assert index_path.read_bytes() == before
+
+
 def test_stale_lock_recovery(tmp_path: Path) -> None:
     bundles = binding_paths.acceptpath_bundles_dir(tmp_path)
     bundles.mkdir(parents=True, exist_ok=True)

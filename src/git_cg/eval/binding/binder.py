@@ -45,6 +45,9 @@ Contract locks honoured here:
   authority. Schema version is injective v2 (canonical JSON-array keys);
   wrong-version, corrupt, oversized, or malformed indexes are ignored and
   rebuilt. No dual-read.
+* **Lock-gated cache writes** — index write-through runs only while a
+  bind lock is held. Lock failure still persists the authoritative
+  bundle best-effort and never blocks accept.
 * **Miss-scan** — skip ``index.json``, symlinks, and non-regular files.
   Hard links remain regular files. Listing still walks every ``*.json``.
 * **Session-ID grammar** — cached ids must match ``sess_`` + 32 lowercase
@@ -430,6 +433,7 @@ def _scan_reuse_key(
     index_path: Path | None = None,
     counters: dict[str, int] | None = None,
     scan_state: dict[str, bool] | None = None,
+    allow_cache_write: bool = True,
 ) -> dict[str, Any] | None:
     """Find an existing authoritative acceptpath bundle matching ``key``.
 
@@ -439,7 +443,8 @@ def _scan_reuse_key(
     :func:`paths.session_bundle_path`; malformed or escaped values are
     silent misses. On miss, corrupt, stale, or unadoptable cache, fall
     through to the bounded miss-scan (index caches are never sole
-    authority; N19.2/N19.3). Scan hits write through best-effort.
+    authority; N19.2/N19.3). Scan hits write through best-effort when
+    ``allow_cache_write`` is true.
 
     When ``index_path`` is omitted, the cache is ``bundles_dir / "index.json"``.
 
@@ -485,7 +490,7 @@ def _scan_reuse_key(
             continue
         # Write-through after authoritative scan hit (best-effort).
         session_id = data.get("session_thread_id")
-        if isinstance(session_id, str) and session_id.strip():
+        if allow_cache_write and isinstance(session_id, str) and session_id.strip():
             _cache_write_through(cache_path, key, session_id)
         return data
     return None
@@ -498,6 +503,7 @@ def _resolve_reuse_identity(
     index_path: Path | None,
     counters: dict[str, int] | None = None,
     scan_state: dict[str, bool] | None = None,
+    allow_cache_write: bool = True,
 ) -> tuple[str, str]:
     """Return ``(session_id, case_id)`` after optional reuse adoption."""
     case_id: str | None = None
@@ -508,6 +514,7 @@ def _resolve_reuse_identity(
             index_path=index_path,
             counters=counters,
             scan_state=scan_state,
+            allow_cache_write=allow_cache_write,
         )
         if existing is not None:
             existing_session = existing.get("session_thread_id")
@@ -577,10 +584,12 @@ def _persist_bundle(
     bundle: dict[str, Any],
     key: tuple[str, str, str] | None,
     index_path: Path | None,
+    allow_cache_write: bool = True,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Atomically persist a bundle and best-effort cache write-through.
 
     Persistence failures are returned as errors and never raised.
+    Cache write-through runs only when ``allow_cache_write`` is true.
     """
     paths_written: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
@@ -588,7 +597,7 @@ def _persist_bundle(
         out = bundles_dir / f"{session_id}.json"
         paths.atomic_write_json(out, bundle)
         paths_written = (out.relative_to(root).as_posix(),)
-        if key is not None and index_path is not None:
+        if allow_cache_write and key is not None and index_path is not None:
             _cache_write_through(index_path, key, session_id)
     except (OSError, paths.LayerAPathError) as exc:
         # Persistence failure must not block product accept; report honestly.
@@ -667,6 +676,9 @@ def bind_final_accept(
       ``artifact_class=final_accept``, ``bound=true``, stored
       ``final_message_sha256`` over the original bytes, and (when ``write``)
       atomically persist under ``.eval/bundles/acceptpath/``.
+    * Index write-through runs only while a bind lock is held. Lock
+      failure still persists the authoritative bundle and never blocks
+      accept.
     """
     if not capture_enabled():
         return BindResult(bound=False, unbound_reason="capture_disabled")
@@ -707,6 +719,7 @@ def bind_final_accept(
     bind_lock = acquire_bind_lock(bundles_dir) if lock_attempted else None
     if lock_attempted and bind_lock is None:
         _bump_counters(stats, lock_fallbacks=1)
+    allow_cache_write = bind_lock is not None
     try:
         scan_state: dict[str, bool] = {}
         session_id, case_id = _resolve_reuse_identity(
@@ -716,6 +729,7 @@ def bind_final_accept(
             index_path,
             counters=stats,
             scan_state=scan_state,
+            allow_cache_write=allow_cache_write,
         )
         meta = _build_bundle_meta(
             inp,
@@ -755,6 +769,7 @@ def bind_final_accept(
                 bundle=bundle,
                 key=key,
                 index_path=index_path,
+                allow_cache_write=allow_cache_write,
             )
 
         _bump_counters(stats, bind_success=1)

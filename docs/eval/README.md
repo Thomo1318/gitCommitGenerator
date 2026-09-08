@@ -453,7 +453,7 @@ The miss-scan still lists and stats every `*.json` entry to rank recency, so the
   sessions/<session_thread_id>.json             # commit_session_thread_v1 twin
 ```
 
-`/.eval/` is gitignored. Writes are atomic (temp + `os.replace`), mode `0600`/`0700`, and path-contained under the resolved repo root. Bundle JSON files are authoritative; any `index.json` is rebuildable cache only.
+`/.eval/` is gitignored. Writes are atomic (temp + `os.replace`), mode `0600`/`0700`, and path-contained under the resolved repo root. Bundle JSON files are authoritative; any `index.json` is rebuildable cache only. Index write-through runs only while a bind lock is held. Lock failure still writes the authoritative bundle and never blocks accept.
 
 ### Product-pass vs eval-fail (mandatory split)
 
