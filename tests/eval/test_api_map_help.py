@@ -324,7 +324,7 @@ def test_rendered_api_map_contains_all_envelope_sketches() -> None:
     from git_cg.eval.envelope_sketches import ENVELOPE_DATA_SKETCHES, MINIMUM_SKETCH_COMMANDS
 
     rendered = render_operator_api_map()
-    assert "## Per-command envelope `data` sketches (S6-A08)" in rendered
+    assert "## Per-command envelope `data` sketches" in rendered
     for cmd in sorted(MINIMUM_SKETCH_COMMANDS):
         assert f"`{cmd}`" in rendered, f"minimum command missing from map: {cmd}"
         assert f"#### `{cmd}`" in rendered, f"sketch heading missing: {cmd}"
