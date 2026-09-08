@@ -612,6 +612,39 @@ def test_scan_skips_non_regular_files(tmp_path) -> None:
     assert scanned["session_thread_id"] == "sess_good"
 
 
+def test_scan_adopts_hard_linked_regular_bundle(tmp_path) -> None:
+    """Hard-linked regular files remain eligible miss-scan candidates."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    repo_root = str(tmp_path.resolve())
+    token = "ae_scan_hardlink"
+    sha = message_sha256(FINAL_ACCEPTED)
+    session_id = "sess_" + ("ab" * 16)
+    payload = {
+        "schema_version": "ape_bundle_v1",
+        "case_id": f"acceptpath:{session_id}",
+        "artifact_class": "final_accept",
+        "bound": True,
+        "final_message_sha256": sha,
+        "session_thread_id": session_id,
+        "meta": {"accept_event": {"token": token, "repo_root": repo_root}},
+    }
+    inode = tmp_path / "inode_source.json"
+    inode.write_text(json.dumps(payload), encoding="utf-8")
+    candidate = bundles / f"{session_id}.json"
+    candidate.hardlink_to(inode)
+    assert candidate.is_file()
+    assert not candidate.is_symlink()
+    assert candidate.stat().st_nlink >= 2
+
+    key = (repo_root, token, sha)
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    assert scanned["session_thread_id"] == session_id
+
+
 def test_bind_write_error_reports_without_raising(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(*_a, **_k):
         raise binding_paths.LayerAPathError("containment boom")
