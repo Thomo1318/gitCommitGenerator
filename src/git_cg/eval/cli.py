@@ -55,6 +55,7 @@ from git_cg.eval.cli_output import (
 #   git-cg eval explain --detail
 #   git-cg eval compare --detail
 #   git-cg eval diagnose --detail
+#   git-cg eval gc --detail
 #   git-cg eval review --detail
 #   git-cg eval review enqueue --detail
 #   git-cg eval review list --detail
@@ -2462,6 +2463,139 @@ def diagnose_cmd(
                 f"  would_write: issue={ww.get('issue_path')} diagnostics={ww.get('diagnostics_path')}",
                 err=False,
             )
+    raise typer.Exit(code=0)
+
+
+@eval_app.command(
+    "gc",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="Purge stale acceptpath debris; authoritative bundles need --force.",
+)
+def gc_cmd(
+    acceptpath: bool = typer.Option(
+        False,
+        "--acceptpath",
+        help="Operate on .eval/bundles/acceptpath/ (required; only supported scope).",
+    ),
+    older_than: str | None = typer.Option(
+        None,
+        "--older-than",
+        help="Required positive duration with s/m/h/d suffix (for example 7d, 2h, 15m, 30s).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Allow deletion of authoritative acceptpath bundles required for reuse identity.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Select matching files without deleting them.",
+    ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Purge stale acceptpath debris.
+
+    Offline retention for ``.eval/bundles/acceptpath/``. Does not change
+    product ranking, contact Opik, or import the binder at CLI module load.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires ``--acceptpath`` and ``--older-than <duration>``. Duration is a
+    positive integer plus ``s``, ``m``, ``h``, or ``d`` (no default).
+
+    Normal mode deletes only stale non-authoritative debris (rebuildable
+    ``index.json``, ``.bind.lock``, leftover ``.*.tmp`` files, unadoptable
+    JSON). Authoritative ``sess_<32-hex>.json`` bundles required for reuse
+    identity are preserved unless ``--force`` is set. ``--dry-run`` selects
+    without deleting. Age is file mtime. Symlinks and non-regular files are
+    skipped.
+
+    Plain text prints selected/deleted/preserved counts. ``--json`` emits one
+    ``cli_output_envelope_v1`` document.
+    """
+    from git_cg.eval.cli_output import emit_human_line, envelope_message
+    from git_cg.eval.gc import GcError, gc_acceptpath
+
+    if not acceptpath:
+        err = envelope_message(
+            "EVAL_USAGE",
+            "eval gc requires --acceptpath",
+            hint="Only .eval/bundles/acceptpath/ is supported in this command.",
+        )
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            emit_human_line(f"eval gc: {err['message']} (hint: {err['hint']})", err=True)
+        raise typer.Exit(code=2)
+    if older_than is None or not str(older_than).strip():
+        err = envelope_message(
+            "EVAL_USAGE",
+            "eval gc requires --older-than <duration>",
+            hint="Examples: 30s, 15m, 2h, 7d",
+        )
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            emit_human_line(f"eval gc: {err['message']} (hint: {err['hint']})", err=True)
+        raise typer.Exit(code=2)
+
+    try:
+        repo = _resolve_repo(root)
+        result = gc_acceptpath(repo, older_than=older_than, force=force, dry_run=dry_run)
+    except GcError as exc:
+        err = envelope_message(exc.code, str(exc), hint=exc.hint)
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            line = f"eval gc: {err['message']}"
+            if hint := err.get("hint"):
+                line = f"{line} (hint: {hint})"
+            emit_human_line(line, err=True)
+        raise typer.Exit(code=exc.exit_code) from None
+    except Exception as exc:
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval gc",
+                    ok=False,
+                    data={},
+                    errors=[{"code": "EVAL_REPO_UNRESOLVABLE", "message": str(exc)}],
+                )
+            )
+        else:
+            emit_human_line(f"eval gc: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+
+    data = result.to_data()
+    if as_json:
+        emit_json_envelope(build_envelope("eval gc", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval gc: acceptpath older_than={data['older_than']} "
+            f"selected={data['selected_count']} deleted={data['deleted_count']} "
+            f"preserved={data['preserved_count']} skipped={data['skipped_count']} "
+            f"force={str(force).lower()} dry_run={str(dry_run).lower()}",
+            err=False,
+        )
+        if dry_run:
+            for rel in data["selected"]:
+                emit_human_line(f"  would_delete: {rel}", err=False)
     raise typer.Exit(code=0)
 
 

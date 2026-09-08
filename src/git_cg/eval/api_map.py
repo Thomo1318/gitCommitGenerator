@@ -47,6 +47,7 @@ CANONICAL_COMMANDS: frozenset[str] = frozenset(
         "eval replay",
         "eval promote",
         "eval diagnose",
+        "eval gc",
         "eval issue list",
         "eval issue show",
         "eval issue resolve",

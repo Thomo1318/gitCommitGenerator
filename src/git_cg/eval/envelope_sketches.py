@@ -60,6 +60,7 @@ MINIMUM_SKETCH_COMMANDS: Final[frozenset[str]] = frozenset(
         "eval explain",
         "eval compare",
         "eval diagnose",
+        "eval gc",
         "eval issue list",
         "eval issue show",
         "eval checkpoint list",
@@ -283,6 +284,30 @@ def _build_registry() -> dict[str, DataSketch]:
             notes=(
                 "Idempotent fingerprint upsert into .eval/issues/. "
                 "--dry-run validates + projects without writing issues/ or diagnostics/."
+            ),
+        ),
+        "eval gc": _sketch(
+            "eval gc",
+            required_keys=(
+                "acceptpath",
+                "older_than",
+                "older_than_seconds",
+                "force",
+                "dry_run",
+                "selected",
+                "deleted",
+                "preserved",
+                "skipped",
+                "selected_count",
+                "deleted_count",
+                "preserved_count",
+                "skipped_count",
+            ),
+            nested=("selected[]/deleted[]/preserved[]/skipped[]: acceptpath filenames",),
+            notes=(
+                "Offline acceptpath retention. Requires --acceptpath and --older-than. "
+                "Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. "
+                "--dry-run selects without deleting. Age is file mtime."
             ),
         ),
         "eval issue list": _sketch(

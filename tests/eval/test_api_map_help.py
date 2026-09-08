@@ -68,6 +68,7 @@ CANONICAL_HELP_NAMES = sorted(
         "replay",
         "promote",
         "diagnose",
+        "gc",
         # groups
         "session",
         "thread",

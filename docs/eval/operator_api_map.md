@@ -89,6 +89,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval export-retry` | command | public (deprecated alias) | temporary alias | Alias of eval export retry. — Canonical: `eval export retry`. Removal: first minor release after S6 GA. |
 | `eval export-status` | command | public (deprecated alias) | temporary alias | Alias of eval export status. — Canonical: `eval export status`. Removal: first minor release after S6 GA. |
 | `eval failures` | command | public | canonical | List failing cases with metric and failure ids. — Public CLI operator surface. |
+| `eval gc` | command | public | canonical | Purge stale acceptpath debris; authoritative bundles need --force. — Public CLI operator surface. |
 | `eval issue` | group | public (group) | group | Manage local diagnostic issues. — Nested Typer group (not invoked alone). |
 | `eval issue list` | command | public | canonical | List local diagnostic issues. — Public CLI operator surface. |
 | `eval issue reopen` | command | public | canonical | Reopen a local diagnostic issue. — Public CLI operator surface. |
@@ -135,6 +136,7 @@ git-cg eval export drain …
 git-cg eval export retry …
 git-cg eval export status …
 git-cg eval failures …
+git-cg eval gc …
 git-cg eval issue list …
 git-cg eval issue reopen …
 git-cg eval issue resolve …
@@ -231,6 +233,7 @@ documents — sketches name the envelope wrapper keys only.
 * `eval export retry`
 * `eval export status`
 * `eval failures`
+* `eval gc`
 * `eval issue list`
 * `eval issue show`
 * `eval opik config show`
@@ -347,6 +350,14 @@ documents — sketches name the envelope wrapper keys only.
   * failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}
   * filters: {regime?, family?, failure_id?, severity?} (NTH-02; null when unset)
 * **Notes:** Read-only. experiment_id may be null when no local runs exist. Optional --regime/--family/--failure-id/--severity filters are AND-combined; when active, metric_ids/failure_ids project the matching failing-score subset.
+
+#### `eval gc`
+
+* **Required keys:** `acceptpath`, `deleted`, `deleted_count`, `dry_run`, `force`, `older_than`, `older_than_seconds`, `preserved`, `preserved_count`, `selected`, `selected_count`, `skipped`, `skipped_count`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * selected[]/deleted[]/preserved[]/skipped[]: acceptpath filenames
+* **Notes:** Offline acceptpath retention. Requires --acceptpath and --older-than. Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. --dry-run selects without deleting. Age is file mtime.
 
 #### `eval issue list`
 

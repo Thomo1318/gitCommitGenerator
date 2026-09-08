@@ -183,6 +183,7 @@ eval-per-file-coverage:
       --cov=git_cg.eval.feedback_definitions \
       --cov=git_cg.eval.checkpoint_store \
       --cov=git_cg.eval.run_orchestrator \
+      --cov=git_cg.eval.gc \
       --cov=git_cg.eval.binding \
       --cov-branch \
       --cov-report=term-missing \
@@ -197,6 +198,7 @@ eval-per-file-coverage:
       --file src/git_cg/eval/feedback_definitions.py \
       --file src/git_cg/eval/checkpoint_store.py \
       --file src/git_cg/eval/run_orchestrator.py \
+      --file src/git_cg/eval/gc.py \
       --file src/git_cg/eval/binding/__init__.py \
       --file src/git_cg/eval/binding/accept_hook.py \
       --file src/git_cg/eval/binding/binder.py \
