@@ -32,6 +32,7 @@ from git_cg.eval.binding.binder import (
     _cache_write_through,
     _index_entry_admissible,
     _index_entry_key,
+    _index_object_pairs,
     _load_bundle_for_session,
     _load_index,
     _reuse_key,
@@ -336,11 +337,6 @@ def test_load_index_rejects_non_object_and_bad_entries(tmp_path: Path) -> None:
     )
     assert _load_index(p) is None
     p.write_text(
-        json.dumps({"version": _INDEX_VERSION, "entries": {"ok": "sess_x", "b": 2}}),
-        encoding="utf-8",
-    )
-    assert _load_index(p) is None
-    p.write_text(
         json.dumps({"version": _INDEX_VERSION, "entries": {"": "sess_x"}}),
         encoding="utf-8",
     )
@@ -415,6 +411,12 @@ def test_index_non_string_entry_miss(tmp_path: Path) -> None:
     assert _load_index(index_path) is None
     second = _bind(tmp_path, accept_event_token="ae_non_string")
     assert second.bundle["session_thread_id"] == session
+
+
+def test_index_object_pairs_builds_objects_and_rejects_duplicates() -> None:
+    assert _index_object_pairs([("a", 1), ("b", 2)]) == {"a": 1, "b": 2}
+    with pytest.raises(ValueError, match="duplicate json object key"):
+        _index_object_pairs([("a", 1), ("a", 2)])
 
 
 def test_index_duplicate_keys_miss(tmp_path: Path) -> None:
