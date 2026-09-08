@@ -75,6 +75,7 @@ from typing import Any
 from git_cg.eval.binding import paths
 from git_cg.eval.binding.lock import acquire_bind_lock
 from git_cg.eval.binding.profiles import capture_enabled
+from git_cg.eval.cache_json import object_pairs_reject_duplicates, read_bounded_json
 from git_cg.eval.corpus.canonical import message_sha256
 from git_cg.eval.enums import ArtifactClass, ProvenanceLabel, RedactionProfile
 from git_cg.eval.evidence_scrub import mask_secrets_in_text, project_secret_safe
@@ -216,13 +217,8 @@ def _index_entry_admissible(key: object, value: object) -> bool:
 
 
 def _index_object_pairs(pairs: list[tuple[Any, Any]]) -> dict[Any, Any]:
-    """Build a JSON object, rejecting duplicate keys fail-closed."""
-    out: dict[Any, Any] = {}
-    for key, value in pairs:
-        if key in out:
-            raise ValueError("duplicate json object key")
-        out[key] = value
-    return out
+    """Binder-index JSON object hook; reject duplicate keys fail-closed."""
+    return object_pairs_reject_duplicates(pairs)
 
 
 def _index_entry_key(key: tuple[str, str, str]) -> str:
@@ -242,18 +238,13 @@ def _load_index(index_path: Path) -> dict[str, str] | None:
     schema-invalid indexes. Any malformed entry discards the whole document.
     Cache absence must never alter binding behaviour.
     """
-    try:
-        if not index_path.is_file() or index_path.stat().st_size > _INDEX_MAX_BYTES:
-            return None
-        with index_path.open("rb") as fh:
-            blob = fh.read(_INDEX_MAX_BYTES + 1)
-        if len(blob) > _INDEX_MAX_BYTES:
-            return None
-        raw = blob.decode("utf-8")
-        data = json.loads(raw, object_pairs_hook=_index_object_pairs)
-    except OSError, json.JSONDecodeError, UnicodeDecodeError, TypeError, ValueError:
-        return None
-    if not isinstance(data, dict) or data.get("version") != _INDEX_VERSION:
+    data = read_bounded_json(
+        index_path,
+        max_bytes=_INDEX_MAX_BYTES,
+        object_pairs_hook=_index_object_pairs,
+        require_mapping=True,
+    )
+    if data is None or data.get("version") != _INDEX_VERSION:
         return None
     entries = data.get("entries")
     if not isinstance(entries, dict) or len(entries) > _INDEX_MAX_ENTRIES:

@@ -37,6 +37,7 @@ from git_cg.eval.binding.paths import (
     checkpoints_dir,
     index_dir,
 )
+from git_cg.eval.cache_json import read_bounded_json
 from git_cg.eval.schema_pack import SchemaPackError, validate_instance
 
 __all__ = [
@@ -390,15 +391,7 @@ def _read_index_raw(repo_root: Path, checkpoint_id: str) -> dict[str, Any] | Non
         path = index_file(repo_root, checkpoint_id)
     except CheckpointStoreError:
         return None
-    if not path.is_file():
-        return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except OSError, json.JSONDecodeError:
-        return None
-    if not isinstance(raw, dict):
-        return None
-    return raw
+    return read_bounded_json(path, require_mapping=True)
 
 
 def _load_authoritative_raw(
