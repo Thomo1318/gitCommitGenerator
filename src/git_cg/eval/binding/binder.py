@@ -46,7 +46,7 @@ Contract locks honoured here:
   wrong-version, corrupt, oversized, or malformed indexes are ignored and
   rebuilt. No dual-read.
 * **Miss-scan** — skip ``index.json``, symlinks, and non-regular files.
-  Hard links remain regular files.
+  Hard links remain regular files. Listing still walks every ``*.json``.
 * **Session-ID grammar** — cached ids must match ``sess_`` + 32 lowercase
   hex before path construction; violations are silent misses.
 * **Privacy boundary** — evidence surfaces are always projected secret-safe.
@@ -55,11 +55,14 @@ Contract locks honoured here:
 * **Bounded miss-scan** — cache miss selects at most K recent regular
   ``*.json`` bundles (default 512; ``GIT_CG_EVAL_ACCEPTPATH_SCAN_WINDOW``).
   Sort is mtime descending, filename ascending. ``index.json``,
-  ``.bind.lock``, symlinks, and non-regular files are skipped. Parse
-  only the selected window. ``GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN=1``
-  removes the bound. ``meta.scan_bounded=true`` is set only when that
-  miss-scan truncates; never on cache hit, non-truncated scan, or
-  full-scan override. Refs: #257.
+  symlinks, and non-regular files are skipped. Listing still walks
+  every ``*.json``; only parse cost is capped at K. A recency index or
+  bounded directory cursor is a separate follow-up.
+  ``GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN=1`` removes the parse bound.
+  ``meta.scan_bounded=true`` means the eligible set exceeded K, so the
+  scan did not inspect the whole directory. The marker is set on
+  truncated misses and on truncated-but-found reuse. Never on cache
+  hit, non-truncated scan, or full-scan override. Refs: #257.
 
 No network. No Opik import. No product-accept blocking: :func:`bind_final_accept`
 never raises for product-accept reasons — it reports outcomes via
@@ -79,8 +82,13 @@ from pathlib import Path
 from typing import Any
 
 from git_cg.eval.binding import paths
-from git_cg.eval.binding.lock import BIND_LOCK_NAME, acquire_bind_lock
+from git_cg.eval.binding.lock import acquire_bind_lock
 from git_cg.eval.binding.profiles import capture_enabled
+from git_cg.eval.binding.scan_window import (
+    DEFAULT_SCAN_WINDOW,
+    FULL_SCAN_ENV,
+    SCAN_WINDOW_ENV,
+)
 from git_cg.eval.cache_json import object_pairs_reject_duplicates, read_bounded_json
 from git_cg.eval.corpus.canonical import message_sha256
 from git_cg.eval.enums import ArtifactClass, ProvenanceLabel, RedactionProfile
@@ -206,41 +214,37 @@ _INDEX_MAX_ENTRIES = 4096
 _INDEX_MAX_KEY_BYTES = 4096
 _INDEX_MAX_SESSION_ID_BYTES = 256
 
-#: Default miss-scan window. Lock-budget ratification is separate.
-_DEFAULT_SCAN_WINDOW = 512
-_SCAN_WINDOW_ENV = "GIT_CG_EVAL_ACCEPTPATH_SCAN_WINDOW"
-_FULL_SCAN_ENV = "GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN"
-
 
 def _acceptpath_scan_window() -> int:
     """Return the miss-scan window, failing closed to the default."""
-    raw = os.environ.get(_SCAN_WINDOW_ENV)
+    raw = os.environ.get(SCAN_WINDOW_ENV)
     if raw is None:
-        return _DEFAULT_SCAN_WINDOW
+        return DEFAULT_SCAN_WINDOW
     token = raw.strip()
     if not token.isascii() or not token.isdigit():
-        return _DEFAULT_SCAN_WINDOW
+        return DEFAULT_SCAN_WINDOW
     value = int(token, 10)
     if value < 1:
-        return _DEFAULT_SCAN_WINDOW
+        return DEFAULT_SCAN_WINDOW
     return value
 
 
 def _acceptpath_full_scan() -> bool:
     """True only for the diagnostic full-scan override token ``1``."""
-    raw = os.environ.get(_FULL_SCAN_ENV)
+    raw = os.environ.get(FULL_SCAN_ENV)
     return raw is not None and raw.strip() == "1"
 
 
 def _miss_scan_candidates(bundles_dir: Path) -> tuple[list[Path], bool]:
     """Select miss-scan files: mtime desc, filename asc, optional K-window.
 
-    Returns ``(paths, truncated)``. ``truncated`` is True only when the
-    eligible set exceeded K and the full-scan override is off.
+    Returns ``(paths, truncated)``. Listing still walks every ``*.json``.
+    ``truncated`` is True only when the eligible set exceeded K and the
+    full-scan override is off, including truncated-but-found reuse.
     """
     eligible: list[tuple[float, str, Path]] = []
     for path in bundles_dir.glob("*.json"):
-        if path.name in {"index.json", BIND_LOCK_NAME} or path.is_symlink() or not path.is_file():
+        if path.name == "index.json" or path.is_symlink() or not path.is_file():
             continue
         try:
             mtime = path.stat().st_mtime
@@ -439,12 +443,13 @@ def _scan_reuse_key(
 
     When ``index_path`` is omitted, the cache is ``bundles_dir / "index.json"``.
 
-    The miss-scan skips ``index.json``, ``.bind.lock``, symlinks, and
-    non-regular files. Hard links remain regular files. Candidates are
-    mtime descending, filename ascending, and bounded to K unless the
-    full-scan override is set. Only selected candidates are parsed.
-    When the eligible set is truncated, ``scan_state["truncated"]`` is
-    set True. Cache hits never set that flag.
+    The miss-scan skips ``index.json``, symlinks, and non-regular
+    files. Hard links remain regular files. Candidates are mtime
+    descending, filename ascending, and parse-bounded to K unless the
+    full-scan override is set. Listing still walks every ``*.json``.
+    Only selected candidates are parsed. When the eligible set is
+    truncated, ``scan_state["truncated"]`` is set True, including
+    truncated-but-found reuse. Cache hits never set that flag.
     """
     if not bundles_dir.is_dir():
         return None

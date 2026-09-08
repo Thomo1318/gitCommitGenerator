@@ -5,8 +5,10 @@ oversized, or malformed index data must fall back to a miss-scan without
 changing bind behaviour.
 
 Miss-scan is hybrid-bounded: at most K recent regular ``*.json``
-bundles, default 512, mtime descending / filename ascending. Truncation
-sets ``meta.scan_bounded=true`` only on that miss-scan. Cache hits and
+bundles, default 512, mtime descending / filename ascending. Listing
+still walks every ``*.json``; only parse cost is capped. Truncation
+sets ``meta.scan_bounded=true`` when the eligible set exceeded K,
+including truncated-but-found reuse. Cache hits and
 ``GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN=1`` never set the marker.
 
 The 1k/10k harness (``-k benchmark``) records bounded-scan and lock-hold
@@ -27,14 +29,11 @@ import pytest
 
 from git_cg.eval.binding import paths as binding_paths
 from git_cg.eval.binding.binder import (
-    _DEFAULT_SCAN_WINDOW,
-    _FULL_SCAN_ENV,
     _INDEX_MAX_BYTES,
     _INDEX_MAX_ENTRIES,
     _INDEX_MAX_KEY_BYTES,
     _INDEX_MAX_SESSION_ID_BYTES,
     _INDEX_VERSION,
-    _SCAN_WINDOW_ENV,
     BindInput,
     _acceptpath_full_scan,
     _acceptpath_scan_window,
@@ -51,6 +50,11 @@ from git_cg.eval.binding.binder import (
     message_sha256_bytes,
 )
 from git_cg.eval.binding.lock import acquire_bind_lock
+from git_cg.eval.binding.scan_window import (
+    DEFAULT_SCAN_WINDOW,
+    FULL_SCAN_ENV,
+    SCAN_WINDOW_ENV,
+)
 from git_cg.eval.schema_pack import is_valid
 
 FINAL = (
@@ -743,29 +747,29 @@ def _plant_window_bundles(
 
 
 def test_scan_window_env_fails_closed_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(_SCAN_WINDOW_ENV, raising=False)
-    assert _acceptpath_scan_window() == _DEFAULT_SCAN_WINDOW
-    assert _DEFAULT_SCAN_WINDOW == 512
+    monkeypatch.delenv(SCAN_WINDOW_ENV, raising=False)
+    assert _acceptpath_scan_window() == DEFAULT_SCAN_WINDOW
+    assert DEFAULT_SCAN_WINDOW == 512
 
     for token in ("0", "-1", "+0", "abc", "1.5", " ", "512.0", "0x20"):
-        monkeypatch.setenv(_SCAN_WINDOW_ENV, token)
-        assert _acceptpath_scan_window() == _DEFAULT_SCAN_WINDOW
+        monkeypatch.setenv(SCAN_WINDOW_ENV, token)
+        assert _acceptpath_scan_window() == DEFAULT_SCAN_WINDOW
 
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "4")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "4")
     assert _acceptpath_scan_window() == 4
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, " 8 ")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, " 8 ")
     assert _acceptpath_scan_window() == 8
 
 
 def test_full_scan_env_is_token_one_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(_FULL_SCAN_ENV, raising=False)
+    monkeypatch.delenv(FULL_SCAN_ENV, raising=False)
     assert _acceptpath_full_scan() is False
     for token in ("", "0", "2", "true", "TRUE", "yes", "on", "full"):
-        monkeypatch.setenv(_FULL_SCAN_ENV, token)
+        monkeypatch.setenv(FULL_SCAN_ENV, token)
         assert _acceptpath_full_scan() is False
-    monkeypatch.setenv(_FULL_SCAN_ENV, "1")
+    monkeypatch.setenv(FULL_SCAN_ENV, "1")
     assert _acceptpath_full_scan() is True
-    monkeypatch.setenv(_FULL_SCAN_ENV, " 1 ")
+    monkeypatch.setenv(FULL_SCAN_ENV, " 1 ")
     assert _acceptpath_full_scan() is True
 
 
@@ -800,7 +804,7 @@ def test_bounded_scan_misses_old_twin_and_sets_scan_bounded(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "2")
     inside = "sess_" + ("1" * 32)
     filler = "sess_" + ("2" * 32)
     outside = "sess_" + ("0" * 32)
@@ -832,7 +836,7 @@ def test_non_truncated_and_exact_window_omit_scan_bounded(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "2")
     first = "sess_" + ("a" * 32)
     second = "sess_" + ("b" * 32)
     _plant_window_bundles(
@@ -854,7 +858,7 @@ def test_ineligible_files_do_not_count_toward_window(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "2")
     first = "sess_" + ("c" * 32)
     second = "sess_" + ("d" * 32)
     bundles, _, _ = _plant_window_bundles(
@@ -880,8 +884,8 @@ def test_full_scan_override_finds_old_twin_without_marker(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "1")
-    monkeypatch.setenv(_FULL_SCAN_ENV, "1")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "1")
+    monkeypatch.setenv(FULL_SCAN_ENV, "1")
     old = "sess_" + ("0" * 32)
     new = "sess_" + ("1" * 32)
     _plant_window_bundles(
@@ -903,7 +907,7 @@ def test_cache_hit_never_sets_scan_bounded_or_globs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "1")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "1")
     first = _bind(tmp_path, accept_event_token="ae_cache_hit_flag")
     assert first.bound is True
     assert first.bundle is not None
@@ -931,7 +935,7 @@ def test_bounded_scan_does_not_backfill_outside_window(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "1")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "1")
     old = "sess_" + ("0" * 32)
     newest = "sess_" + ("f" * 32)
     bundles, template, sha = _plant_window_bundles(
@@ -959,7 +963,7 @@ def test_positive_window_hit_still_requires_adoptable_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_SCAN_WINDOW_ENV, "2")
+    monkeypatch.setenv(SCAN_WINDOW_ENV, "2")
     session = "sess_" + ("e" * 32)
     bundles, template, sha = _plant_window_bundles(
         tmp_path,
@@ -988,10 +992,6 @@ def test_positive_window_hit_still_requires_adoptable_gate(
 
 # Measurement-only miss-scan timings. Do not ratify K. Refs: #257.
 
-# Recency cut used only to place twins inside vs outside the window.
-# Aliased to the product default so placement cannot drift; still not ratification.
-_PLACEMENT_WINDOW = _DEFAULT_SCAN_WINDOW
-
 
 def _session_id_for_index(index: int) -> str:
     return f"sess_{index:032x}"
@@ -1016,7 +1016,7 @@ def _measure_locked_scan(bundles_dir: Path, key: tuple[str, str, str]) -> tuple[
 
 def _seed_benchmark_bundles(tmp_path: Path, bundle_count: int) -> dict[str, Any]:
     """Populate ``bundle_count`` schema-valid bundles with in/out-placement twins."""
-    assert bundle_count > _PLACEMENT_WINDOW
+    assert bundle_count > DEFAULT_SCAN_WINDOW
 
     template_result = _bind(tmp_path, accept_event_token="ae_bench_template")
     assert template_result.bound is True
@@ -1076,7 +1076,7 @@ def _seed_benchmark_bundles(tmp_path: Path, bundle_count: int) -> dict[str, Any]
     assert _reuse_key(tmp_path, inside_token, target_sha) == inside_key
     assert _reuse_key(tmp_path, outside_token, target_sha) == outside_key
 
-    newest_cutoff = bundle_count - _PLACEMENT_WINDOW
+    newest_cutoff = bundle_count - DEFAULT_SCAN_WINDOW
     assert inside_index >= newest_cutoff
     assert outside_index < newest_cutoff
 
@@ -1119,10 +1119,10 @@ def test_benchmark_acceptpath_miss_scan_metrics(
     missing, miss_scan_ms, miss_lock_ms = _measure_locked_scan(bundles, seeded["miss_key"])
     assert missing is None
 
-    monkeypatch.setenv(_FULL_SCAN_ENV, "1")
+    monkeypatch.setenv(FULL_SCAN_ENV, "1")
     _unlink_acceptpath_index(tmp_path)
     outside_full, outside_full_scan_ms, outside_full_lock_ms = _measure_locked_scan(bundles, seeded["outside_key"])
-    monkeypatch.delenv(_FULL_SCAN_ENV, raising=False)
+    monkeypatch.delenv(FULL_SCAN_ENV, raising=False)
     assert outside_full is not None
     assert outside_full["session_thread_id"] == seeded["outside_session"]
 
@@ -1154,7 +1154,7 @@ def test_benchmark_acceptpath_miss_scan_metrics(
 
     record = {
         "bundle_count": bundle_count,
-        "placement_window": _PLACEMENT_WINDOW,
+        "placement_window": DEFAULT_SCAN_WINDOW,
         "scan_implementation": "mtime_desc_filename_asc_k_window",
         "k_ratified": False,
         "lock_budget_ratified": False,
