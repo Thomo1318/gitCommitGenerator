@@ -475,6 +475,10 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 
 S3 **emits and binds local evidence only.** Upload/drain is **S4**; gated advisory Lane C′ judges are **S5** (see [S5](#s5--gated-lane-c-cohort--optional-judge-lab-233)); full eval CLI/doctor/amend-brief/review queue is **S6**; ADR-0011 rewrite is **S7**.
 
+### Mutation-testing advisory
+
+`just eval-mutation-advisory` prints [`mutation-testing-advisory.md`](./mutation-testing-advisory.md). Mutation tooling is not installed. Not a CI or product-accept gate.
+
 ## S4 — non-blocking Opik mirror + owner corpus lake
 
 > **Implementation issue:** [#232](https://github.com/Thomo1318/gitCommitGenerator/issues/232)

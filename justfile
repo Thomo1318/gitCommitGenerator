@@ -283,3 +283,8 @@ deslop-naming-scan base="origin/main" committed_only="":
     printf '🔎 deslop naming scan vs %s…\n' {{quote(base)}}
     uv run python tools/deslop_naming_scan.py "${args[@]}"
 
+# Print docs/eval/mutation-testing-advisory.md (does not run mutation testing).
+# Advisory only. Never a CI or product-accept gate. Refs: #257.
+eval-mutation-advisory:
+    @echo "🧬 acceptpath binding mutation-testing advisory"
+    @cat docs/eval/mutation-testing-advisory.md
