@@ -355,3 +355,100 @@ def test_eval_gc_human_dry_run(isolated_eval_repo: Path) -> None:
     assert "  would_delete: index.json" in result.stdout
     assert "  deleted:" not in result.stdout
     assert index.is_file()
+
+
+def test_gc_classifies_escaped_child_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bundles = _acceptpath(tmp_path)
+    child = _write(bundles / "escaped.json")
+    _age(child, seconds=10_000)
+    real_resolve = Path.resolve
+
+    def resolve(self: Path, *args: object, **kwargs: object) -> Path:
+        if self == child:
+            return tmp_path / "outside" / child.name
+        return real_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    result = gc_acceptpath(tmp_path, older_than="1s")
+    assert any(item.path == child.name and item.reason == "escaped_path" for item in result.skipped)
+    assert child.is_file()
+
+
+def test_gc_classifies_unresolvable_child(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bundles = _acceptpath(tmp_path)
+    child = _write(bundles / "unresolvable.json")
+    _age(child, seconds=10_000)
+    real_resolve = Path.resolve
+
+    def resolve(self: Path, *args: object, **kwargs: object) -> Path:
+        if self == child:
+            raise OSError("resolve failed")
+        return real_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    result = gc_acceptpath(tmp_path, older_than="1s")
+    assert any(item.path == child.name and item.reason == "unresolvable" for item in result.skipped)
+    assert child.is_file()
+
+
+def test_gc_classifies_unreadable_mtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bundles = _acceptpath(tmp_path)
+    child = _write(bundles / "unreadable.json")
+    _age(child, seconds=10_000)
+    real_stat = Path.stat
+
+    class _UnreadableMtime:
+        def __init__(self, inner: object) -> None:
+            self._inner = inner
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._inner, name)
+
+        @property
+        def st_mtime(self) -> float:
+            raise OSError("mtime unavailable")
+
+    def stat(self: Path, *args: object, **kwargs: object):
+        result = real_stat(self, *args, **kwargs)
+        if self == child:
+            return _UnreadableMtime(result)
+        return result
+
+    monkeypatch.setattr(Path, "stat", stat)
+    result = gc_acceptpath(tmp_path, older_than="1s")
+    assert any(item.path == child.name and item.reason == "unreadable_mtime" for item in result.skipped)
+    assert child.is_file()
+
+
+def test_eval_gc_human_error_includes_hint(isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval import gc as gc_mod
+
+    def fail(*args: object, **kwargs: object):
+        raise gc_mod.GcError(
+            "cannot inspect acceptpath",
+            code="EVAL_STORE_INTEGRITY",
+            exit_code=4,
+            hint="check the repository metadata",
+        )
+
+    monkeypatch.setattr(gc_mod, "gc_acceptpath", fail)
+    result = runner.invoke(
+        app,
+        ["eval", "gc", "--acceptpath", "--older-than", "1s", "--root", str(isolated_eval_repo)],
+    )
+    text = f"{result.stdout}{result.stderr}"
+    assert result.exit_code == 4
+    assert "eval gc: cannot inspect acceptpath (hint: check the repository metadata)" in text
+
+
+def test_eval_gc_human_repo_unresolvable(isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import git_cg.eval.binding.paths as binding_paths
+
+    def fail(start: Path | None = None) -> Path:
+        raise RuntimeError("repository unavailable")
+
+    monkeypatch.setattr(binding_paths, "resolve_repo_root", fail)
+    result = runner.invoke(app, ["eval", "gc", "--acceptpath", "--older-than", "1s"])
+    text = f"{result.stdout}{result.stderr}"
+    assert result.exit_code == 1
+    assert "eval gc: repo root unresolvable: repository unavailable" in text
