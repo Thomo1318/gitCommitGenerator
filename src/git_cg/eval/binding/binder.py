@@ -379,6 +379,7 @@ def _scan_reuse_key(
     key: tuple[str, str, str],
     *,
     index_path: Path | None = None,
+    counters: dict[str, int] | None = None,
 ) -> dict[str, Any] | None:
     """Find an existing authoritative acceptpath bundle matching ``key``.
 
@@ -409,8 +410,10 @@ def _scan_reuse_key(
             expected_session_id=cached_session,
             bundle_path=cached_path,
         ):
+            _bump_counters(counters, cache_hits=1)
             return cached_bundle
         # Ignore stale or unadoptable cache and fall through.
+    _bump_counters(counters, cache_misses=1)
 
     for path in sorted(bundles_dir.glob("*.json")):
         if path.name == "index.json" or path.is_symlink() or not path.is_file():
@@ -436,11 +439,17 @@ def _resolve_reuse_identity(
     key: tuple[str, str, str] | None,
     bundles_dir: Path | None,
     index_path: Path | None,
+    counters: dict[str, int] | None = None,
 ) -> tuple[str, str]:
     """Return ``(session_id, case_id)`` after optional reuse adoption."""
     case_id: str | None = None
     if key is not None and bundles_dir is not None:
-        existing = _scan_reuse_key(bundles_dir, key, index_path=index_path)
+        existing = _scan_reuse_key(
+            bundles_dir,
+            key,
+            index_path=index_path,
+            counters=counters,
+        )
         if existing is not None:
             existing_session = existing.get("session_thread_id")
             existing_case = existing.get("case_id")
@@ -523,6 +532,43 @@ def _persist_bundle(
     return paths_written, errors
 
 
+def _bump_counters(counters: dict[str, int] | None, **deltas: int) -> None:
+    """Accumulate best-effort counter deltas in memory."""
+    if counters is None:
+        return
+    for name, amount in deltas.items():
+        if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
+            continue
+        counters[name] = counters.get(name, 0) + amount
+
+
+def _flush_counters(anchor: Path | None, counters: dict[str, int], *, write: bool) -> None:
+    """Persist accumulated counters on the write path. Never raises."""
+    if not write or not counters:
+        return
+    try:
+        from git_cg.eval.binding.diagnostics import increment_binder_counters
+
+        increment_binder_counters(_diagnostics_repo_root(anchor), **counters)
+    except Exception:
+        return
+
+
+def _diagnostics_repo_root(anchor: Path | None) -> Path | None:
+    """Resolve a repo root for diagnostics from a repo or acceptpath directory."""
+    if anchor is None:
+        return None
+    try:
+        resolved = Path(anchor).resolve()
+    except OSError:
+        return None
+    parts = resolved.parts
+    marker = (".eval", "bundles", "acceptpath")
+    if len(parts) >= 3 and parts[-3:] == marker:
+        return resolved.parents[2]
+    return resolved
+
+
 def bind_final_accept(
     inp: BindInput,
     *,
@@ -561,6 +607,8 @@ def bind_final_accept(
     if not capture_enabled():
         return BindResult(bound=False, unbound_reason="capture_disabled")
 
+    stats: dict[str, int] = {}
+
     # Fail closed before hashing, projection, lock, or any filesystem writes.
     redaction = inp.redaction_profile or _DEFAULT_REDACTION
     try:
@@ -582,6 +630,7 @@ def bind_final_accept(
             root = Path(repo_root).resolve() if repo_root is not None else paths.resolve_repo_root()
         except paths.RepoRootUnresolvedError:
             return BindResult(bound=False, unbound_reason="repo_root_unresolved")
+        _bump_counters(stats, bind_attempts=1)
 
     # Scoped idempotent reuse (N19.2): same event + same bytes ⇒ reuse identity.
     # Short-lived lock around reuse-scan-plus-write; lock failure falls back to
@@ -590,13 +639,17 @@ def bind_final_accept(
     key = _reuse_key(root, inp.accept_event_token, final_sha) if root is not None else None
     bundles_dir: Path | None = paths.acceptpath_bundles_dir(root) if root is not None else None
     index_path: Path | None = paths.acceptpath_index_file(root) if root is not None else None
-    bind_lock = acquire_bind_lock(bundles_dir) if (write and bundles_dir is not None) else None
+    lock_attempted = bool(write and bundles_dir is not None)
+    bind_lock = acquire_bind_lock(bundles_dir) if lock_attempted else None
+    if lock_attempted and bind_lock is None:
+        _bump_counters(stats, lock_fallbacks=1)
     try:
         session_id, case_id = _resolve_reuse_identity(
             session_id,
             key,
             bundles_dir,
             index_path,
+            counters=stats,
         )
         meta = _build_bundle_meta(inp, encoding_meta=encoding_meta, root=root)
 
@@ -618,6 +671,7 @@ def bind_final_accept(
         try:
             validate_instance("ape_bundle_v1", bundle)
         except SchemaPackError as exc:
+            # Schema-invalid bind is zero-write, including diagnostics.
             return BindResult(bound=False, unbound_reason="schema_invalid", errors=(str(exc),))
 
         paths_written: tuple[str, ...] = ()
@@ -632,6 +686,8 @@ def bind_final_accept(
                 index_path=index_path,
             )
 
+        _bump_counters(stats, bind_success=1)
+        _flush_counters(root if root is not None else repo_root, stats, write=write)
         return BindResult(
             bound=True,
             bundle=bundle,

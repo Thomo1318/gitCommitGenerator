@@ -200,6 +200,7 @@ eval-per-file-coverage:
       --file src/git_cg/eval/binding/__init__.py \
       --file src/git_cg/eval/binding/accept_hook.py \
       --file src/git_cg/eval/binding/binder.py \
+      --file src/git_cg/eval/binding/diagnostics.py \
       --file src/git_cg/eval/binding/lock.py \
       --file src/git_cg/eval/binding/message_versions.py \
       --file src/git_cg/eval/binding/paths.py \
@@ -226,6 +227,7 @@ eval-binding-coverage:
       --file src/git_cg/eval/binding/__init__.py \
       --file src/git_cg/eval/binding/accept_hook.py \
       --file src/git_cg/eval/binding/binder.py \
+      --file src/git_cg/eval/binding/diagnostics.py \
       --file src/git_cg/eval/binding/lock.py \
       --file src/git_cg/eval/binding/message_versions.py \
       --file src/git_cg/eval/binding/paths.py \
