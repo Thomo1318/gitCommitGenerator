@@ -209,6 +209,7 @@ eval-per-file-coverage:
       --file src/git_cg/eval/binding/message_versions.py \
       --file src/git_cg/eval/binding/paths.py \
       --file src/git_cg/eval/binding/profiles.py \
+      --file src/git_cg/eval/binding/scan_window.py \
       --file src/git_cg/eval/binding/session_thread.py \
       --file src/git_cg/eval/binding/trajectory.py
 
@@ -236,6 +237,7 @@ eval-binding-coverage:
       --file src/git_cg/eval/binding/message_versions.py \
       --file src/git_cg/eval/binding/paths.py \
       --file src/git_cg/eval/binding/profiles.py \
+      --file src/git_cg/eval/binding/scan_window.py \
       --file src/git_cg/eval/binding/session_thread.py \
       --file src/git_cg/eval/binding/trajectory.py
 
