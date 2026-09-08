@@ -436,6 +436,15 @@ S3 binds the **real accepted final message bytes** (exact `COMMIT_EDITMSG` / acc
 
 Truthy = `1`/`true`/`on`/`yes`; falsy = unset/empty/`0`/`false`/`off`/`no`; any other token fails closed to **off**. A normal `git-cg commit` makes **no** `.eval` writes and **no** network calls when capture is off.
 
+Capture-on miss-scan diagnostics (not product-accept knobs):
+
+| Variable | Default | Meaning |
+|:---|:---|:---|
+| `GIT_CG_EVAL_ACCEPTPATH_SCAN_WINDOW` | `512` | Positive ASCII-digit parse window after an index-cache miss. Invalid, blank, non-ASCII, or non-positive values use `512`. |
+| `GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN` | unset | Exact token `1` disables the parse bound. Any other value leaves the bound in place. |
+
+The miss-scan still lists and stats every `*.json` entry to rank recency, so the directory walk remains O(n). Only candidate parsing is capped. `meta.scan_bounded=true` means the eligible set exceeded the window, including when the matching bundle is inside it. Cache hits, complete scans, and full-scan overrides omit the marker. A recency index or bounded directory cursor is a separate follow-up. `K=512` is the fail-closed default, not a ratified lock budget.
+
 ### Local Layer-A paths (repo-local, gitignored)
 
 ```text
