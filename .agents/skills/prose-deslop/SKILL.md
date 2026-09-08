@@ -1,6 +1,6 @@
 ---
 name: prose-deslop
-description: Remove AI writing patterns from prose (docs, PR bodies, ADRs, technical writing). Enforces domain-first naming for durable operator surfaces cited in prose (recipes, paths, CLI). Default: never touch commit messages/git-cg/SOP. Explicit opt-in only for desloping proposed/draft gold-standard commit message text (no git mutation).
+description: "Remove AI writing patterns from prose (docs, PR bodies, ADRs, technical writing). Enforces domain-first naming for durable operator surfaces cited in prose (recipes, paths, CLI). Default: never touch commit messages/git-cg/SOP. Explicit opt-in only for desloping proposed/draft gold-standard commit message text (no git mutation)."
 ---
 
 # prose-deslop — technical prose anti-slop
