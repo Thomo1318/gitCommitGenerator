@@ -52,9 +52,14 @@ Contract locks honoured here:
 * **Privacy boundary** — evidence surfaces are always projected secret-safe.
   Final accepted bytes are never scrubbed. ``meta.final_message_b64`` stays
   local-bundle-only.
-* **``meta.scan_bounded``** — not emitted. Miss-scan is unbounded
-  filename-ascending; D-13 is unimplemented. Truncation would be the
-  only case that sets ``meta.scan_bounded=true``.
+* **Bounded miss-scan** — cache miss selects at most K recent regular
+  ``*.json`` bundles (default 512; ``GIT_CG_EVAL_ACCEPTPATH_SCAN_WINDOW``).
+  Sort is mtime descending, filename ascending. ``index.json``,
+  ``.bind.lock``, symlinks, and non-regular files are skipped. Parse
+  only the selected window. ``GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN=1``
+  removes the bound. ``meta.scan_bounded=true`` is set only when that
+  miss-scan truncates; never on cache hit, non-truncated scan, or
+  full-scan override. Refs: #257.
 
 No network. No Opik import. No product-accept blocking: :func:`bind_final_accept`
 never raises for product-accept reasons — it reports outcomes via
@@ -67,13 +72,14 @@ import base64
 import contextlib
 import hashlib
 import json
+import os
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from git_cg.eval.binding import paths
-from git_cg.eval.binding.lock import acquire_bind_lock
+from git_cg.eval.binding.lock import BIND_LOCK_NAME, acquire_bind_lock
 from git_cg.eval.binding.profiles import capture_enabled
 from git_cg.eval.cache_json import object_pairs_reject_duplicates, read_bounded_json
 from git_cg.eval.corpus.canonical import message_sha256
@@ -199,6 +205,54 @@ _INDEX_MAX_BYTES = 1_048_576
 _INDEX_MAX_ENTRIES = 4096
 _INDEX_MAX_KEY_BYTES = 4096
 _INDEX_MAX_SESSION_ID_BYTES = 256
+
+#: Default miss-scan window. Lock-budget ratification is separate.
+_DEFAULT_SCAN_WINDOW = 512
+_SCAN_WINDOW_ENV = "GIT_CG_EVAL_ACCEPTPATH_SCAN_WINDOW"
+_FULL_SCAN_ENV = "GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN"
+
+
+def _acceptpath_scan_window() -> int:
+    """Return the miss-scan window, failing closed to the default."""
+    raw = os.environ.get(_SCAN_WINDOW_ENV)
+    if raw is None:
+        return _DEFAULT_SCAN_WINDOW
+    token = raw.strip()
+    if not token.isascii() or not token.isdigit():
+        return _DEFAULT_SCAN_WINDOW
+    value = int(token, 10)
+    if value < 1:
+        return _DEFAULT_SCAN_WINDOW
+    return value
+
+
+def _acceptpath_full_scan() -> bool:
+    """True only for the diagnostic full-scan override token ``1``."""
+    raw = os.environ.get(_FULL_SCAN_ENV)
+    return raw is not None and raw.strip() == "1"
+
+
+def _miss_scan_candidates(bundles_dir: Path) -> tuple[list[Path], bool]:
+    """Select miss-scan files: mtime desc, filename asc, optional K-window.
+
+    Returns ``(paths, truncated)``. ``truncated`` is True only when the
+    eligible set exceeded K and the full-scan override is off.
+    """
+    eligible: list[tuple[float, str, Path]] = []
+    for path in bundles_dir.glob("*.json"):
+        if path.name in {"index.json", BIND_LOCK_NAME} or path.is_symlink() or not path.is_file():
+            continue
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        eligible.append((mtime, path.name, path))
+    eligible.sort(key=lambda item: (-item[0], item[1]))
+    if _acceptpath_full_scan():
+        return [item[2] for item in eligible], False
+    window = _acceptpath_scan_window()
+    truncated = len(eligible) > window
+    return [item[2] for item in eligible[:window]], truncated
 
 
 def _index_entry_admissible(key: object, value: object) -> bool:
@@ -371,6 +425,7 @@ def _scan_reuse_key(
     *,
     index_path: Path | None = None,
     counters: dict[str, int] | None = None,
+    scan_state: dict[str, bool] | None = None,
 ) -> dict[str, Any] | None:
     """Find an existing authoritative acceptpath bundle matching ``key``.
 
@@ -379,13 +434,17 @@ def _scan_reuse_key(
     against the authoritative bundle. Cached session ids use
     :func:`paths.session_bundle_path`; malformed or escaped values are
     silent misses. On miss, corrupt, stale, or unadoptable cache, fall
-    through to a linear directory scan (index caches are never sole
-    authority; N19.2/N19.3). Linear-scan hits write through best-effort.
+    through to the bounded miss-scan (index caches are never sole
+    authority; N19.2/N19.3). Scan hits write through best-effort.
 
     When ``index_path`` is omitted, the cache is ``bundles_dir / "index.json"``.
 
-    The miss-scan skips ``index.json``, symlinks, and non-regular files.
-    Hard links remain regular files.
+    The miss-scan skips ``index.json``, ``.bind.lock``, symlinks, and
+    non-regular files. Hard links remain regular files. Candidates are
+    mtime descending, filename ascending, and bounded to K unless the
+    full-scan override is set. Only selected candidates are parsed.
+    When the eligible set is truncated, ``scan_state["truncated"]`` is
+    set True. Cache hits never set that flag.
     """
     if not bundles_dir.is_dir():
         return None
@@ -406,12 +465,14 @@ def _scan_reuse_key(
         # Ignore stale or unadoptable cache and fall through.
     _bump_counters(counters, cache_misses=1)
 
-    for path in sorted(bundles_dir.glob("*.json")):
-        if path.name == "index.json" or path.is_symlink() or not path.is_file():
-            continue
+    candidates, truncated = _miss_scan_candidates(bundles_dir)
+    if truncated and scan_state is not None:
+        scan_state["truncated"] = True
+
+    for path in candidates:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
+        except OSError, json.JSONDecodeError, UnicodeDecodeError:
             continue  # corrupt file is not authority; skip
         if not isinstance(data, dict):
             continue
@@ -431,6 +492,7 @@ def _resolve_reuse_identity(
     bundles_dir: Path | None,
     index_path: Path | None,
     counters: dict[str, int] | None = None,
+    scan_state: dict[str, bool] | None = None,
 ) -> tuple[str, str]:
     """Return ``(session_id, case_id)`` after optional reuse adoption."""
     case_id: str | None = None
@@ -440,6 +502,7 @@ def _resolve_reuse_identity(
             key,
             index_path=index_path,
             counters=counters,
+            scan_state=scan_state,
         )
         if existing is not None:
             existing_session = existing.get("session_thread_id")
@@ -461,6 +524,7 @@ def _build_bundle_meta(
     *,
     encoding_meta: dict[str, Any],
     root: Path | None,
+    scan_bounded: bool = False,
 ) -> dict[str, Any]:
     """Assemble secret-safe bind metadata. Final bytes are never included."""
     meta: dict[str, Any] = {"producer": _PRODUCER}
@@ -472,6 +536,10 @@ def _build_bundle_meta(
         if isinstance(safe_meta, dict):
             for meta_key, value in safe_meta.items():
                 meta.setdefault(meta_key, value)
+    if scan_bounded:
+        meta["scan_bounded"] = True
+    else:
+        meta.pop("scan_bounded", None)
     if inp.generated_message is not None and str(inp.generated_message).strip():
         # Draft evidence only — redact secret shapes; never the scored final.
         masked_draft = mask_secrets_in_text(str(inp.generated_message))
@@ -635,14 +703,21 @@ def bind_final_accept(
     if lock_attempted and bind_lock is None:
         _bump_counters(stats, lock_fallbacks=1)
     try:
+        scan_state: dict[str, bool] = {}
         session_id, case_id = _resolve_reuse_identity(
             session_id,
             key,
             bundles_dir,
             index_path,
             counters=stats,
+            scan_state=scan_state,
         )
-        meta = _build_bundle_meta(inp, encoding_meta=encoding_meta, root=root)
+        meta = _build_bundle_meta(
+            inp,
+            encoding_meta=encoding_meta,
+            root=root,
+            scan_bounded=bool(scan_state.get("truncated")),
+        )
 
         bundle: dict[str, Any] = {
             "schema_version": "ape_bundle_v1",
