@@ -172,16 +172,16 @@ def test_duplicate_valid_bundles_same_key(tmp_path: Path) -> None:
     first = _bind(tmp_path, accept_event_token="ae_dup")
     session = first.bundle["session_thread_id"]
     bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
-    # Plant a second valid bundle with same key but different session id.
+    # Plant a second valid bundle with same key but a different canonical id.
+    duplicate = "sess_" + ("cd" * 16)
     dup = dict(first.bundle)
-    dup["session_thread_id"] = "sess_duplicate_zzzz"
-    dup["case_id"] = "acceptpath:sess_duplicate_zzzz"
-    (bundles / "sess_duplicate_zzzz.json").write_text(json.dumps(dup), encoding="utf-8")
+    dup["session_thread_id"] = duplicate
+    dup["case_id"] = f"acceptpath:{duplicate}"
+    (bundles / f"{duplicate}.json").write_text(json.dumps(dup), encoding="utf-8")
     second = _bind(tmp_path, accept_event_token="ae_dup")
     assert second.bound is True
-    # Sorted scan: sess_duplicate_zzzz comes after original sess_* typically;
-    # either way identity is one of the authoritative matches, never crash.
-    assert second.bundle["session_thread_id"] in {session, "sess_duplicate_zzzz"}
+    # Sorted scan: either authoritative match may win; bind must not crash.
+    assert second.bundle["session_thread_id"] in {session, duplicate}
 
 
 def test_interrupted_temp_write_recovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

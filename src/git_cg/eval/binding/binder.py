@@ -620,11 +620,15 @@ def _persist_bundle(
 
     Persistence failures are returned as errors and never raised.
     Cache write-through runs only when ``allow_cache_write`` is true.
+    Path construction is :func:`paths.session_bundle_path`; malformed
+    ids report ``bind_write_error: invalid session_thread_id``.
     """
     paths_written: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    out = paths.session_bundle_path(bundles_dir, session_id)
+    if out is None:
+        return (), ("bind_write_error: invalid session_thread_id",)
     try:
-        out = bundles_dir / f"{session_id}.json"
         paths.atomic_write_json(out, bundle)
         paths_written = (out.relative_to(root).as_posix(),)
         if allow_cache_write and key is not None and index_path is not None:

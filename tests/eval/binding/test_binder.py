@@ -691,6 +691,25 @@ def test_bind_write_error_reports_without_raising(tmp_path, monkeypatch: pytest.
     assert result.errors and result.errors[0].startswith("bind_write_error:")
 
 
+def test_persist_malformed_session_id_reports_invalid_session_thread_id(tmp_path) -> None:
+    from git_cg.eval.binding.binder import _persist_bundle
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    paths_written, errors = _persist_bundle(
+        root=tmp_path,
+        bundles_dir=bundles,
+        session_id="sess_malformed",
+        bundle={"schema_version": "ape_bundle_v1"},
+        key=None,
+        index_path=None,
+        allow_cache_write=False,
+    )
+    assert paths_written == ()
+    assert errors == ("bind_write_error: invalid session_thread_id",)
+    assert list(bundles.iterdir()) == []
+
+
 def test_schema_invalid_meta_returns_unbound(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from git_cg.eval import schema_pack
     from git_cg.eval.schema_pack import SchemaPackError
