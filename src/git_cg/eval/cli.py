@@ -2522,15 +2522,17 @@ def gc_cmd(
     positive integer plus ``s``, ``m``, ``h``, or ``d`` (no default).
 
     Normal mode deletes only stale non-authoritative debris (rebuildable
-    ``index.json``, ``.bind.lock``, leftover ``.*.tmp`` files, unadoptable
-    JSON). Authoritative ``sess_<32-hex>.json`` bundles required for reuse
-    identity are preserved unless ``--force`` is set. ``--dry-run`` selects
-    without deleting. Age is file mtime. Symlinks and non-regular files are
-    skipped.
+    ``index.json``, leftover ``.*.tmp`` files, unadoptable JSON that is not
+    ``sess_*.json``). Authoritative ``sess_<32-hex>.json`` bundles required
+    for reuse identity are preserved unless ``--force`` is set. Legacy
+    ``sess_*.json`` names and ``.bind.lock`` are unmanaged and never
+    selected, including with ``--force``. ``--dry-run`` selects without
+    deleting. Age is file mtime. Symlinks and non-regular files are skipped.
 
     Plain text prints selected/deleted/preserved counts. ``--json`` emits one
     ``cli_output_envelope_v1`` document.
     """
+    from git_cg.eval.binding.paths import RepoRootUnresolvedError
     from git_cg.eval.cli_output import emit_human_line, envelope_message
     from git_cg.eval.gc import GcError, gc_acceptpath
 
@@ -2559,18 +2561,7 @@ def gc_cmd(
 
     try:
         repo = _resolve_repo(root)
-        result = gc_acceptpath(repo, older_than=older_than, force=force, dry_run=dry_run)
-    except GcError as exc:
-        err = envelope_message(exc.code, str(exc), hint=exc.hint)
-        if as_json:
-            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
-        else:
-            line = f"eval gc: {err['message']}"
-            if hint := err.get("hint"):
-                line = f"{line} (hint: {hint})"
-            emit_human_line(line, err=True)
-        raise typer.Exit(code=exc.exit_code) from None
-    except Exception as exc:
+    except RepoRootUnresolvedError as exc:
         if as_json:
             emit_json_envelope(
                 build_envelope(
@@ -2583,6 +2574,18 @@ def gc_cmd(
         else:
             emit_human_line(f"eval gc: repo root unresolvable: {exc}", err=True)
         raise typer.Exit(code=1) from None
+    try:
+        result = gc_acceptpath(repo, older_than=older_than, force=force, dry_run=dry_run)
+    except GcError as exc:
+        err = envelope_message(exc.code, str(exc), hint=exc.hint)
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            line = f"eval gc: {err['message']}"
+            if hint := err.get("hint"):
+                line = f"{line} (hint: {hint})"
+            emit_human_line(line, err=True)
+        raise typer.Exit(code=exc.exit_code) from None
 
     data = result.to_data()
     if as_json:

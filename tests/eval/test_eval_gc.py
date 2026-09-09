@@ -3,6 +3,7 @@
 Locks:
 * Required ``--acceptpath`` and ``--older-than``; no default duration.
 * Valid-looking ``sess_<32-hex>.json`` names are reuse identity and need ``--force``.
+* Legacy ``sess_*.json`` names and ``.bind.lock`` are unmanaged even with ``--force``.
 * Normal mode deletes only stale non-authoritative debris.
 * JSON mode emits one ``cli_output_envelope_v1``.
 * CLI import stays binder/Opik-free.
@@ -28,8 +29,9 @@ runner = CliRunner()
 
 SESSION = "sess_" + ("ab" * 16)
 AUTHORITATIVE = f"{SESSION}.json"
+LEGACY_SESSION = "sess_legacy_not_hex.json"
 DEBRIS_INDEX = "index.json"
-DEBRIS_LOCK = ".bind.lock"
+UNMANAGED_LOCK = ".bind.lock"
 DEBRIS_ORPHAN = ".orphan.tmp"
 UNADOPTABLE = "not-a-session.json"
 
@@ -68,7 +70,7 @@ def test_gc_respects_reuse_identity(tmp_path: Path) -> None:
     bundles = _acceptpath(tmp_path)
     session = _write(bundles / AUTHORITATIVE, '{"bound": true}')
     index = _write(bundles / DEBRIS_INDEX)
-    lock = _write(bundles / DEBRIS_LOCK, "lock")
+    lock = _write(bundles / UNMANAGED_LOCK, "lock")
     orphan = _write(bundles / DEBRIS_ORPHAN, "tmp")
     other = _write(bundles / UNADOPTABLE, "{}")
     for path in (session, index, lock, orphan, other):
@@ -78,18 +80,23 @@ def test_gc_respects_reuse_identity(tmp_path: Path) -> None:
     assert session.is_file()
     assert AUTHORITATIVE in {item.path for item in result.preserved}
     assert not index.exists()
-    assert not lock.exists()
+    assert lock.is_file()
     assert not orphan.exists()
     assert not other.exists()
     deleted = {item.path for item in result.deleted}
     assert DEBRIS_INDEX in deleted
     assert UNADOPTABLE in deleted
+    assert UNMANAGED_LOCK not in deleted
 
 
 def test_gc_requires_force_for_authoritative_bundles(tmp_path: Path) -> None:
     bundles = _acceptpath(tmp_path)
     session = _write(bundles / AUTHORITATIVE, "not-json")
+    lock = _write(bundles / UNMANAGED_LOCK, "lock")
+    legacy = _write(bundles / LEGACY_SESSION, "{}")
     _age(session, seconds=10_000)
+    _age(lock, seconds=10_000)
+    _age(legacy, seconds=10_000)
     dry = gc_acceptpath(tmp_path, older_than="1s", force=False, dry_run=True)
     assert session.is_file()
     assert AUTHORITATIVE in {item.path for item in dry.preserved}
@@ -99,6 +106,11 @@ def test_gc_requires_force_for_authoritative_bundles(tmp_path: Path) -> None:
     forced = gc_acceptpath(tmp_path, older_than="1s", force=True, dry_run=False)
     assert AUTHORITATIVE in {item.path for item in forced.deleted}
     assert not session.exists()
+    assert lock.is_file()
+    assert legacy.is_file()
+    skipped = {item.path: item.reason for item in forced.skipped}
+    assert skipped[UNMANAGED_LOCK] == "unmanaged"
+    assert skipped[LEGACY_SESSION] == "unmanaged"
 
 
 def test_gc_selection_deletion_behaviour(tmp_path: Path) -> None:
@@ -131,17 +143,17 @@ def test_gc_is_idempotent_and_operator_controlled(tmp_path: Path) -> None:
     bundles = _acceptpath(tmp_path)
     session = _write(bundles / AUTHORITATIVE, '{"bound": true}')
     index = _write(bundles / DEBRIS_INDEX, '{"v": 2}')
-    lock = _write(bundles / DEBRIS_LOCK, "lock")
+    lock = _write(bundles / UNMANAGED_LOCK, "lock")
     for candidate in (session, index, lock):
         _age(candidate, seconds=10_000)
 
     first = gc_acceptpath(tmp_path, older_than="1s")
     assert session.is_file()
     assert not index.exists()
-    assert not lock.exists()
+    assert lock.is_file()
     deleted = {item.path for item in first.deleted}
     assert DEBRIS_INDEX in deleted
-    assert DEBRIS_LOCK in deleted
+    assert UNMANAGED_LOCK not in deleted
     assert AUTHORITATIVE not in deleted
 
     second = gc_acceptpath(tmp_path, older_than="1s")
@@ -228,20 +240,28 @@ def test_gc_skips_non_regular_and_unmanaged(tmp_path: Path) -> None:
     bundles = _acceptpath(tmp_path)
     index = _write(bundles / DEBRIS_INDEX)
     notes = _write(bundles / "notes.txt", "leave")
+    lock = _write(bundles / UNMANAGED_LOCK, "lock")
+    legacy = _write(bundles / LEGACY_SESSION, "{}")
     nested = bundles / "subdir"
     nested.mkdir()
     link = bundles / "link.json"
     link.symlink_to(index)
     _age(index, seconds=10_000)
     _age(notes, seconds=10_000)
+    _age(lock, seconds=10_000)
+    _age(legacy, seconds=10_000)
 
     result = gc_acceptpath(tmp_path, older_than="1s")
     skipped = {item.path: item.reason for item in result.skipped}
     assert not index.exists()
     assert notes.is_file()
+    assert lock.is_file()
+    assert legacy.is_file()
     assert nested.is_dir()
     assert link.is_symlink()
     assert skipped["notes.txt"] == "unmanaged"
+    assert skipped[UNMANAGED_LOCK] == "unmanaged"
+    assert skipped[LEGACY_SESSION] == "unmanaged"
     assert skipped["link.json"] == "non_regular"
     assert skipped["subdir"] == "non_regular"
 
@@ -475,10 +495,35 @@ def test_eval_gc_human_repo_unresolvable(isolated_eval_repo: Path, monkeypatch: 
     import git_cg.eval.binding.paths as binding_paths
 
     def fail(start: Path | None = None) -> Path:
-        raise RuntimeError("repository unavailable")
+        raise binding_paths.RepoRootUnresolvedError("repository unavailable")
 
     monkeypatch.setattr(binding_paths, "resolve_repo_root", fail)
     result = runner.invoke(app, ["eval", "gc", "--acceptpath", "--older-than", "1s"])
     text = f"{result.stdout}{result.stderr}"
     assert result.exit_code == 1
     assert "eval gc: repo root unresolvable: repository unavailable" in text
+
+
+def test_eval_gc_store_integrity_not_repo_unresolvable(
+    isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from git_cg.eval import gc as gc_mod
+
+    def fail(*args: object, **kwargs: object):
+        raise gc_mod.GcError(
+            "cannot inspect acceptpath",
+            code="EVAL_STORE_INTEGRITY",
+            exit_code=4,
+            hint="Refuse paths that escape .eval/bundles/acceptpath/",
+        )
+
+    monkeypatch.setattr(gc_mod, "gc_acceptpath", fail)
+    result = runner.invoke(
+        app,
+        ["eval", "gc", "--json", "--acceptpath", "--older-than", "1s", "--root", str(isolated_eval_repo)],
+    )
+    assert result.exit_code == 4
+    env = json.loads(result.stdout)
+    codes = [err.get("code") for err in env.get("errors", [])]
+    assert "EVAL_STORE_INTEGRITY" in codes
+    assert "EVAL_REPO_UNRESOLVABLE" not in codes

@@ -6,10 +6,12 @@ imported lazily inside functions.
 
 Bind never auto-evicts acceptpath; operators run this helper via
 ``git-cg eval gc --acceptpath --older-than``. Normal mode deletes stale
-*non-authoritative* debris only (``index.json``, ``.bind.lock``, leftover
-``.*.tmp`` files, unadoptable JSON). Authoritative ``sess_<32-hex>.json``
-names required for reuse identity are preserved unless ``force=True``.
-``dry_run`` selects without deleting.
+*non-authoritative* debris only (``index.json``, leftover ``.*.tmp``
+files, unadoptable JSON that is not ``sess_*.json``). Authoritative
+``sess_<32-hex>.json`` names required for reuse identity are preserved
+unless ``force=True``. Legacy ``sess_*.json`` names and ``.bind.lock``
+are unmanaged and never selected, including with ``force``; stale-lock
+reclamation belongs to the binder. ``dry_run`` selects without deleting.
 
 Duration syntax is a positive integer plus ``s`` / ``m`` / ``h`` / ``d``.
 No default age. Age is file mtime. Symlinks and unsafe/non-regular files
@@ -40,7 +42,6 @@ DURATION_UNITS: dict[str, int] = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 
 _DURATION_RE = re.compile(r"^([1-9][0-9]*)([smhd])$")
 _SESSION_ID_RE = re.compile(r"^sess_[0-9a-f]{32}$")
-_LOCK_NAME = ".bind.lock"
 _INDEX_NAME = "index.json"
 
 
@@ -130,7 +131,9 @@ def gc_acceptpath(
     """Select and optionally delete stale acceptpath files under ``repo_root``.
 
     Never deletes outside the contained acceptpath directory. Authoritative
-    session-named bundles are preserved unless ``force`` is true.
+    session-named bundles are preserved unless ``force`` is true. Legacy
+    ``sess_*.json`` files and ``.bind.lock`` stay unmanaged even with
+    ``force``.
     """
     seconds = parse_duration(older_than)
     from git_cg.eval.binding.paths import (
@@ -283,15 +286,18 @@ def _classify_child(
 
 
 def _is_acceptpath_debris(path: Path, *, index_path: Path) -> bool:
-    """True for rebuildable cache, lock, leftover .*.tmp files, or unadoptable JSON."""
+    """True for rebuildable cache, leftover .*.tmp files, or unadoptable JSON.
+
+    ``.bind.lock`` and any ``sess_*.json`` name are unmanaged here.
+    Canonical ``sess_<32-hex>.json`` files are classified as authoritative
+    before this helper runs. Stale-lock reclamation belongs to the binder.
+    """
     name = path.name
     if name == _INDEX_NAME or path == index_path:
         return True
-    if name == _LOCK_NAME:
-        return True
     if name.startswith(".") and name.endswith(".tmp"):
         return True
-    return name.endswith(".json")
+    return name.endswith(".json") and not name.startswith("sess_")
 
 
 def _is_protected_session_file(path: Path) -> bool:
