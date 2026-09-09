@@ -1,8 +1,10 @@
 """Acceptpath reuse-scan index.json cache behaviour.
 
 Cache is rebuildable and never sole authority. Corrupt, missing, stale,
-oversized, or malformed index data must fall back to a miss-scan without
-changing bind behaviour.
+byte-oversized, or malformed index data must fall back to a miss-scan
+without changing bind behaviour. Valid maps over the entry cap are
+pruned in memory on load (sorted canonical keys) and never rewritten
+by the load path.
 
 Miss-scan is hybrid-bounded: at most K recent regular ``*.json``
 bundles, default 512, mtime descending / filename ascending. Listing
@@ -402,7 +404,7 @@ def test_index_entry_rejects_unencodable_key_or_value() -> None:
     assert _index_entry_admissible("ok", "\ud800") is False
 
 
-def test_index_entry_count_cap_miss(tmp_path: Path) -> None:
+def test_load_index_prunes_oversized_entry_count(tmp_path: Path) -> None:
     first = _bind(tmp_path, accept_event_token="ae_count_cap")
     session = first.bundle["session_thread_id"]
     index_path = binding_paths.acceptpath_index_file(tmp_path)
@@ -411,7 +413,12 @@ def test_index_entry_count_cap_miss(tmp_path: Path) -> None:
         json.dumps({"version": _INDEX_VERSION, "entries": too_many}),
         encoding="utf-8",
     )
-    assert _load_index(index_path) is None
+    loaded = _load_index(index_path)
+    assert loaded is not None
+    assert len(loaded) == _INDEX_MAX_ENTRIES
+    assert set(loaded) == set(sorted(too_many)[:_INDEX_MAX_ENTRIES])
+    on_disk = json.loads(index_path.read_text(encoding="utf-8"))
+    assert len(on_disk["entries"]) == _INDEX_MAX_ENTRIES + 1
     second = _bind(tmp_path, accept_event_token="ae_count_cap")
     assert second.bundle["session_thread_id"] == session
 

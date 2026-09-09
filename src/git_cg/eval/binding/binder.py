@@ -43,11 +43,13 @@ Contract locks honoured here:
   return ``bound=False, unbound_reason="capture_disabled"`` with zero writes.
 * **Cache / authority** — ``index.json`` is rebuildable and never sole
   authority. Schema version is injective v2 (canonical JSON-array keys);
-  wrong-version, corrupt, oversized, or malformed indexes are ignored and
-  rebuilt. Writes that would exceed ``_INDEX_MAX_ENTRIES`` prune
-  deterministically (retain the write-through key, then sorted keys).
-  No dual-read. Bind never auto-evicts acceptpath bundles; operators
-  reclaim debris with ``git-cg eval gc --acceptpath --older-than``.
+  wrong-version, corrupt, byte-oversized, or malformed indexes are ignored
+  and rebuilt. Entry-count overflow is pruned in memory on load and on
+  write (sorted canonical keys; write-through retains that key first).
+  Load never rewrites the file. Recency/LRU eviction is out of scope:
+  the cache has no persisted access timestamps. No dual-read. Bind never
+  auto-evicts acceptpath bundles; operators reclaim debris with
+  ``git-cg eval gc --acceptpath --older-than``.
 * **Lock-gated cache writes** — index write-through runs only while a
   bind lock is held. Lock failure still persists the authoritative
   bundle best-effort and never blocks accept.
@@ -298,8 +300,10 @@ def _index_entry_key(key: tuple[str, str, str]) -> str:
 def _load_index(index_path: Path) -> dict[str, str] | None:
     """Load a bounded, well-shaped index, or return ``None`` on any defect.
 
-    Returns ``None`` for missing, corrupt, wrong-version, oversized, or
+    Returns ``None`` for missing, corrupt, wrong-version, byte-oversized, or
     schema-invalid indexes. Any malformed entry discards the whole document.
+    Entry-count overflow is pruned in memory with the same deterministic
+    retention as writes; this function never rewrites the file.
     Cache absence must never alter binding behaviour.
     """
     data = read_bounded_json(
@@ -311,13 +315,15 @@ def _load_index(index_path: Path) -> dict[str, str] | None:
     if data is None or data.get("version") != _INDEX_VERSION:
         return None
     entries = data.get("entries")
-    if not isinstance(entries, dict) or len(entries) > _INDEX_MAX_ENTRIES:
+    if not isinstance(entries, dict):
         return None
     out: dict[str, str] = {}
     for key, value in entries.items():
         if not _index_entry_admissible(key, value):
             return None
         out[key] = value
+    if len(out) > _INDEX_MAX_ENTRIES:
+        return _prune_index_entries(out)
     return out
 
 
@@ -326,6 +332,7 @@ def _prune_index_entries(entries: dict[str, str], *, keep: str | None = None) ->
 
     When ``keep`` is present it is retained first. Remaining slots are filled
     by sorted canonical key order so eviction is stable across repeated writes.
+    This is not LRU: the rebuildable cache has no persisted recency metadata.
     """
     if len(entries) <= _INDEX_MAX_ENTRIES:
         return dict(entries)
