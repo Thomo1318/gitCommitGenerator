@@ -27,9 +27,9 @@ FINAL = (
 )
 
 # Secret-shaped fixtures (offline detectors in evidence_scrub).
-# JWT segments are assembled at runtime so scanners do not treat the
-# fixture as a committed credential.
-SK_TOKEN = "sk-abcdefghijklmnopqrstuvwxyz012345"
+# Token and JWT segments are assembled at runtime so scanners do not
+# treat the fixtures as committed credentials.
+SK_TOKEN = "sk-" + "".join(chr(code) for code in range(ord("a"), ord("z") + 1)) + "012345"
 
 
 def _jwt_fixture() -> str:
