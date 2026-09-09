@@ -2526,8 +2526,10 @@ def gc_cmd(
     ``sess_*.json``). Authoritative ``sess_<32-hex>.json`` bundles required
     for reuse identity are preserved unless ``--force`` is set. Legacy
     ``sess_*.json`` names and ``.bind.lock`` are unmanaged and never
-    selected, including with ``--force``. ``--dry-run`` selects without
+    selected, including with ``--force``. A leftover ``.bind.lock`` remains
+    until a later bind reclaims it. ``--dry-run`` selects without
     deleting. Age is file mtime. Symlinks and non-regular files are skipped.
+    Unexpected GC failures emit ``EVAL_INTERNAL`` (exit 4).
 
     Plain text prints selected/deleted/preserved counts. ``--json`` emits one
     ``cli_output_envelope_v1`` document.
@@ -2586,6 +2588,18 @@ def gc_cmd(
                 line = f"{line} (hint: {hint})"
             emit_human_line(line, err=True)
         raise typer.Exit(code=exc.exit_code) from None
+    except Exception as exc:
+        detail = str(exc).strip() or type(exc).__name__
+        err = envelope_message(
+            "EVAL_INTERNAL",
+            f"unexpected failure: {detail}",
+            hint="Inspect the local evaluation store.",
+        )
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            emit_human_line(f"eval gc: {err['message']} (hint: {err['hint']})", err=True)
+        raise typer.Exit(code=4) from None
 
     data = result.to_data()
     if as_json:

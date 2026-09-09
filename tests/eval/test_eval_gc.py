@@ -6,6 +6,7 @@ Locks:
 * Legacy ``sess_*.json`` names and ``.bind.lock`` are unmanaged even with ``--force``.
 * Normal mode deletes only stale non-authoritative debris.
 * JSON mode emits one ``cli_output_envelope_v1``.
+* Unexpected GC failures stay ``EVAL_INTERNAL`` / exit 4 (no traceback).
 * CLI import stays binder/Opik-free.
 * Bind never auto-evicts acceptpath; operators run ``eval gc --acceptpath --older-than``.
 
@@ -468,6 +469,54 @@ def test_gc_classifies_unreadable_mtime(tmp_path: Path, monkeypatch: pytest.Monk
     result = gc_acceptpath(tmp_path, older_than="1s")
     assert any(item.path == child.name and item.reason == "unreadable_mtime" for item in result.skipped)
     assert child.is_file()
+
+
+def test_eval_gc_unexpected_error_json(isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval import gc as gc_mod
+
+    def fail(*args: object, **kwargs: object):
+        raise RuntimeError("unexpected GC failure")
+
+    monkeypatch.setattr(gc_mod, "gc_acceptpath", fail)
+    result = runner.invoke(
+        app,
+        [
+            "eval",
+            "gc",
+            "--json",
+            "--acceptpath",
+            "--older-than",
+            "1s",
+            "--root",
+            str(isolated_eval_repo),
+        ],
+    )
+    assert result.exit_code == 4
+    env = json.loads(result.stdout)
+    assert env["ok"] is False
+    assert env["command"] == "eval gc"
+    assert env["errors"][0]["code"] == "EVAL_INTERNAL"
+    assert "unexpected GC failure" in env["errors"][0]["message"]
+    text = f"{result.stdout}{result.stderr}"
+    assert "Traceback" not in text
+
+
+def test_eval_gc_unexpected_error_human(isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from git_cg.eval import gc as gc_mod
+
+    def fail(*args: object, **kwargs: object):
+        raise RuntimeError("unexpected GC failure")
+
+    monkeypatch.setattr(gc_mod, "gc_acceptpath", fail)
+    result = runner.invoke(
+        app,
+        ["eval", "gc", "--acceptpath", "--older-than", "1s", "--root", str(isolated_eval_repo)],
+    )
+    text = f"{result.stdout}{result.stderr}"
+    assert result.exit_code == 4
+    assert "eval gc: unexpected failure: unexpected GC failure" in text
+    assert "Inspect the local evaluation store." in text
+    assert "Traceback" not in text
 
 
 def test_eval_gc_human_error_includes_hint(isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
