@@ -308,7 +308,11 @@ def _build_registry() -> dict[str, DataSketch]:
                 "Offline acceptpath retention. Requires --acceptpath and --older-than. "
                 "Bind never auto-evicts. "
                 "Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. "
-                "--dry-run selects without deleting. Age is file mtime."
+                ".bind.lock and legacy sess_*.json names are unmanaged even with --force; "
+                "stale-lock reclamation belongs to the binder. "
+                "--dry-run selects without deleting. Age is file mtime. "
+                "Repository-resolution failures stay EVAL_REPO_UNRESOLVABLE (exit 1); "
+                "store path failures stay EVAL_STORE_INTEGRITY (exit 4)."
             ),
         ),
         "eval issue list": _sketch(

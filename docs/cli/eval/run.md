@@ -30,6 +30,9 @@ Usage: git-cg eval run [OPTIONS]
 │ --keep-last                      INTEGER    How many recent checkpoints to keep per suite family (default: 10).      │
 │                                             [default: 10]                                                            │
 │ --keep-checkpoint                           Keep this run's checkpoint even when the run succeeds.                   │
+│ --reclaim-stale-running          INTEGER    Prune suite `running` checkpoints older than N seconds. Off by default.  │
+│                                             Does not affect product accept; the live non-completed checkpoint stays  │
+│                                             protected.                                                               │
 │ --gold-mode                      TEXT       How tightly to compare against reference answers (default: strict).      │
 │                                             [default: strict]                                                        │
 │ --case                           TEXT       Limit to specific case ids (comma-separated). Lab/triage only, not CI    │

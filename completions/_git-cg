@@ -163,6 +163,18 @@ cmd eval help="Run and inspect local evaluation suites, debug failures, manage r
             arg <DIR>
         }
     }
+    cmd gc help="Purge stale acceptpath debris; authoritative bundles need --force." {
+        flag --acceptpath help="Operate on .eval/bundles/acceptpath/ (required; only supported scope)."
+        flag --older-than help="Required positive duration with s/m/h/d suffix (for example 7d, 2h, 15m, 30s)." {
+            arg <DURATION>
+        }
+        flag --force help="Allow deletion of authoritative acceptpath bundles required for reuse identity."
+        flag --dry-run help="Select matching files without deleting them."
+        flag --json help="Print machine-readable JSON instead of plain text."
+        flag --root help="Repo root (defaults to discovery)." {
+            arg <DIR>
+        }
+    }
     cmd checkpoint help="Local evaluation checkpoint inventory (read-only)." {
         cmd list help="List local .eval/checkpoints for resume/GC planning (read-only)." {
             flag --suite help="Optional suite_id filter." {

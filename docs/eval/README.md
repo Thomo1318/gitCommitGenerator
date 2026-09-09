@@ -466,7 +466,10 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 `.eval/` can contain **final commit messages and drafts**. Gitignore is **not** retention:
 
 * Local maintainer responsibility to delete/rotate `.eval/` contents.
-* Bind never auto-evicts acceptpath. Operators reclaim debris with `git-cg eval gc --acceptpath --older-than <duration>`. Authoritative `sess_<32-hex>.json` names need `--force`.
+* Bind never auto-evicts acceptpath. Operators reclaim debris with `git-cg eval gc --acceptpath --older-than <duration>`.
+* Normal mode deletes stale non-authoritative debris only. Authoritative `sess_<32-hex>.json` names need `--force`.
+* `.bind.lock` and legacy `sess_*.json` names are unmanaged even with `--force`. Stale-lock reclamation belongs to the binder.
+* `--dry-run` selects without deleting.
 * Do **not** enable capture on shared/public repos without scrub.
 * No automatic cloud upload in S3 (that is S4); capture is off by default.
 * Default redaction profile is `default_scrub`; the final-message text is retained verbatim locally because it is the scored artifact (diffs/prompts/secrets are still scrubbed).
@@ -920,6 +923,7 @@ Full live tree: [`operator_api_map.md`](./operator_api_map.md). Highlights:
 | Suite ops | `eval run` · `eval resume` · `eval recompute-scores` · `eval encode-fixture` · `eval materialize-core-goldens` |
 | Health | `eval doctor` · `eval opik doctor` · `eval opik verify` (optional/advisory) · `eval opik config show` · `eval triage` |
 | Debug / diag | `eval failures` · `eval explain` · `eval compare` · `eval diagnose` · `eval issue list\|show\|resolve\|reopen\|suppress` |
+| Retention | `eval gc` |
 | Replay / review / promote | `eval replay` · `eval review *` (incl. `rollup`) · `eval promote` |
 | Sessions / brief | `eval session show` · `eval thread show` · `eval amend-brief` |
 | Train / dogfood | `eval train-export` · `eval dogfood` (**dark-launch**; hidden from regular help) |
