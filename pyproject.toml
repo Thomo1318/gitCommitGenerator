@@ -87,7 +87,10 @@ packages = ["src/git_cg"]
 extraPaths = ["src", "scripts"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=src/git_cg --cov=scripts --cov-branch --cov-report=term-missing:skip-covered"
+addopts = "--cov=src/git_cg --cov=scripts --cov-branch --cov-report=term-missing:skip-covered -m 'not benchmark'"
+markers = [
+  "benchmark: 1k/10k acceptpath miss-scan timings; excluded from default pytest. Run with just eval-binding-bench.",
+]
 python_files = "test_*.py"
 pythonpath = ["src"]
 testpaths = ["tests"]

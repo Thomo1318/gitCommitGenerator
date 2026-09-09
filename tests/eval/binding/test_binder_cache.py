@@ -11,8 +11,10 @@ sets ``meta.scan_bounded=true`` when the eligible set exceeded K,
 including truncated-but-found reuse. Cache hits and
 ``GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN=1`` never set the marker.
 
-The 1k/10k harness (``-k benchmark``) records bounded-scan and lock-hold
-timings. It does not ratify K or the lock budget.
+The 1k/10k harness is marked ``benchmark`` and excluded from default
+pytest. Run it with ``just eval-binding-bench`` (``-m benchmark``). It
+records bounded-scan and lock-hold timings and does not ratify K or the
+lock budget.
 
 Refs: #257.
 """
@@ -1127,6 +1129,7 @@ def _seed_benchmark_bundles(tmp_path: Path, bundle_count: int) -> dict[str, Any]
     }
 
 
+@pytest.mark.benchmark
 @pytest.mark.parametrize("bundle_count", [1_000, 10_000])
 def test_benchmark_acceptpath_miss_scan_metrics(
     tmp_path: Path,

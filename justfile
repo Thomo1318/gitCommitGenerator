@@ -165,7 +165,7 @@ eval-package-coverage:
       --cov=src/git_cg/eval/checkpoint_store.py \
       --cov=src/git_cg/eval/run_orchestrator.py \
       --cov-branch --cov-report=term-missing \
-      --cov-fail-under=80 -q
+      --cov-fail-under=80 -m "not benchmark" -q
 
 # Per-file coverage gate for interaction-owned eval modules (≥80% each).
 # pytest-cov --cov-fail-under is aggregate-only; JSON + tools/check_per_file_coverage.py
@@ -176,7 +176,7 @@ eval-per-file-coverage:
     @echo "📊 per-file coverage gate (≥80% each owned eval module)"
     @mkdir -p .eval
     @rm -f .eval/per_file_coverage.json
-    uv run pytest tests/eval -o addopts="" \
+    uv run pytest tests/eval -o addopts="" -m "not benchmark" \
       --cov=git_cg.eval.review_queue \
       --cov=git_cg.eval.promote \
       --cov=git_cg.eval.evidence_scrub \
@@ -220,7 +220,7 @@ eval-binding-coverage:
     @echo "📊 binding per-file coverage gate (≥80% each binding module)"
     @mkdir -p .eval
     @rm -f .eval/binding_per_file_coverage.json
-    uv run pytest tests/eval/binding -o addopts="" \
+    uv run pytest tests/eval/binding -o addopts="" -m "not benchmark" \
       --cov=git_cg.eval.binding \
       --cov-branch \
       --cov-report=term-missing \
@@ -248,6 +248,12 @@ eval-binding-coverage:
 eval-binding-docstrings:
     @echo "📝 binding public-docstring gate (≥80%)"
     uv run python tools/check_docstring_coverage.py src/git_cg/eval/binding --threshold 80
+
+# 1k/10k acceptpath miss-scan timings. Explicit opt-in; excluded from default pytest.
+# Does not ratify K or the lock budget. Refs: #257.
+eval-binding-bench:
+    @echo "🔬 binding acceptpath miss-scan timings (1k/10k; not a CI gate)"
+    uv run pytest tests/eval/binding/test_binder_cache.py -o addopts="" -m benchmark -q
 
 # Hyperfine bench of the real commit path with dogfood async on vs off.
 # Maintainer evidence only — never a CI gate, never a product-accept gate.
