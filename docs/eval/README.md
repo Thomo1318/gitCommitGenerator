@@ -468,7 +468,7 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 * Local maintainer responsibility to delete/rotate `.eval/` contents.
 * Bind never auto-evicts acceptpath. Operators reclaim debris with `git-cg eval gc --acceptpath --older-than <duration>`.
 * Normal mode deletes stale non-authoritative debris only. Authoritative `sess_<32-hex>.json` names need `--force`.
-* `.bind.lock` and legacy `sess_*.json` names are unmanaged even with `--force`. Stale-lock reclamation belongs to the binder.
+* `.bind.lock` and legacy `sess_*.json` names are unmanaged even with `--force`. Stale-lock reclamation belongs to the binder. A leftover `.bind.lock` remains until a later bind reclaims it; GC will not delete it.
 * `--dry-run` selects without deleting.
 * Do **not** enable capture on shared/public repos without scrub.
 * No automatic cloud upload in S3 (that is S4); capture is off by default.
@@ -948,7 +948,7 @@ Naming locks: **`eval run`** is canonical (not `eval suite run`); session/thread
 | **1** | soft / warn or scored red | Doctor warn-only or non-terminal red aggregate where command defines it |
 | **2** | usage | `EVAL_USAGE` — bad args, illegal issue transition, invalid ids |
 | **3** | pin / compat | `EVAL_COMPAT_HASH_MISMATCH` — resume hard-stop; checkpoint bytes preserved |
-| **4** | store integrity | `EVAL_STORE_INTEGRITY` — missing/corrupt Layer-A JSON, path escape, schema-invalid store |
+| **4** | store integrity | `EVAL_STORE_INTEGRITY` — missing/corrupt Layer-A JSON, path escape, schema-invalid store; `EVAL_INTERNAL` — unexpected GC failure on `eval gc` |
 
 JSON operator commands emit one `cli_output_envelope_v1` (`ok`, `code`, `message`, `data`, `warnings`). Envelope `data` sketches are gated by `python -m git_cg.eval.api_map --check` (**S6-A07/A08**).
 

@@ -15,9 +15,10 @@ Purge stale acceptpath debris; authoritative bundles need --force.
 * Normal mode deletes stale non-authoritative debris only.
 * Authoritative `sess_<32-hex>.json` names need `--force`.
 * `.bind.lock` and legacy `sess_*.json` names are unmanaged even with `--force`.
-* Stale-lock reclamation belongs to the binder.
+* Stale-lock reclamation belongs to the binder. A leftover `.bind.lock` remains until a later bind reclaims it; GC will not delete it.
 * `--dry-run` selects without deleting. Age is file mtime.
 * Repository-resolution failures (`EVAL_REPO_UNRESOLVABLE`, exit 1) are distinct from store-integrity failures (`EVAL_STORE_INTEGRITY`, exit 4).
+* Unexpected GC failures stay `EVAL_INTERNAL` (exit 4) with a JSON/human envelope and no traceback.
 
 ## Help
 

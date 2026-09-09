@@ -312,7 +312,9 @@ def _build_registry() -> dict[str, DataSketch]:
                 "stale-lock reclamation belongs to the binder. "
                 "--dry-run selects without deleting. Age is file mtime. "
                 "Repository-resolution failures stay EVAL_REPO_UNRESOLVABLE (exit 1); "
-                "store path failures stay EVAL_STORE_INTEGRITY (exit 4)."
+                "store path failures stay EVAL_STORE_INTEGRITY (exit 4). "
+                "Unexpected GC failures stay EVAL_INTERNAL (exit 4). "
+                "A leftover .bind.lock remains until a later bind reclaims it."
             ),
         ),
         "eval issue list": _sketch(
