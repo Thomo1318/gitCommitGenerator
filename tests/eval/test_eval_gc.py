@@ -321,10 +321,10 @@ def test_gc_unsafe_unlink_is_skipped(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_gc_path_error_fail_closed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import git_cg.eval.binding.paths as binding_paths
 
-    def _boom(_root: Path) -> Path:
+    def fail(_root: Path) -> Path:
         raise binding_paths.LayerAPathError("escaped")
 
-    monkeypatch.setattr(binding_paths, "acceptpath_bundles_dir", _boom)
+    monkeypatch.setattr(binding_paths, "acceptpath_bundles_dir", fail)
     with pytest.raises(GcError) as exc:
         gc_acceptpath(tmp_path, older_than="1s")
     assert exc.value.code == "EVAL_STORE_INTEGRITY"
@@ -507,17 +507,12 @@ def test_eval_gc_human_repo_unresolvable(isolated_eval_repo: Path, monkeypatch: 
 def test_eval_gc_store_integrity_not_repo_unresolvable(
     isolated_eval_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from git_cg.eval import gc as gc_mod
+    import git_cg.eval.binding.paths as binding_paths
 
-    def fail(*args: object, **kwargs: object):
-        raise gc_mod.GcError(
-            "cannot inspect acceptpath",
-            code="EVAL_STORE_INTEGRITY",
-            exit_code=4,
-            hint="Refuse paths that escape .eval/bundles/acceptpath/",
-        )
+    def fail(_root: Path) -> Path:
+        raise binding_paths.LayerAPathError("escaped")
 
-    monkeypatch.setattr(gc_mod, "gc_acceptpath", fail)
+    monkeypatch.setattr(binding_paths, "acceptpath_bundles_dir", fail)
     result = runner.invoke(
         app,
         ["eval", "gc", "--json", "--acceptpath", "--older-than", "1s", "--root", str(isolated_eval_repo)],
