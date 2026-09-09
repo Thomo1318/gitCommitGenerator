@@ -2,7 +2,7 @@ name: Promptfoo Code Scan
 
 on:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, ready_for_review, synchronize, reopened]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -26,5 +26,4 @@ jobs:
       - name: Run Promptfoo Code Scan
         uses: promptfoo/code-scan-action@v0
         with:
-          min-severity: medium
-          
+          min-severity: low
