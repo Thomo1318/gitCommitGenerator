@@ -43,6 +43,7 @@ from git_cg.eval.binding.binder import (
     _index_object_pairs,
     _load_bundle_for_session,
     _load_index,
+    _prune_index_entries,
     _reuse_key,
     _scan_reuse_key,
     _write_index,
@@ -465,12 +466,47 @@ def test_load_index_rejects_oversized_key_or_session_value(tmp_path: Path) -> No
     assert third.bundle["session_thread_id"] == session
 
 
-def test_write_index_refuses_oversized_entry_count(tmp_path: Path) -> None:
+def test_write_index_prunes_oversized_entry_count(tmp_path: Path) -> None:
     p = tmp_path / "index.json"
-    p.write_text("keep-me", encoding="utf-8")
-    too_many = {str(i): "sess_x" for i in range(_INDEX_MAX_ENTRIES + 1)}
-    _write_index(p, too_many)
-    assert p.read_text(encoding="utf-8") == "keep-me"
+    too_many = {f"k{i:04d}": "sess_x" for i in range(_INDEX_MAX_ENTRIES + 8)}
+    keep = f"k{_INDEX_MAX_ENTRIES:04d}"
+    _write_index(p, too_many, keep=keep)
+    loaded = _load_index(p)
+    assert loaded is not None
+    assert len(loaded) == _INDEX_MAX_ENTRIES
+    assert keep in loaded
+    expected = {keep: "sess_x"}
+    for key in sorted(too_many):
+        if len(expected) >= _INDEX_MAX_ENTRIES:
+            break
+        expected.setdefault(key, "sess_x")
+    assert loaded == expected
+    _write_index(p, too_many, keep=keep)
+    assert _load_index(p) == expected
+
+
+def test_prune_index_entries_retains_keep_then_sorted_keys() -> None:
+    overflow = {f"k{i:04d}": f"sess_{i:04d}" for i in range(_INDEX_MAX_ENTRIES + 3)}
+    keep = f"k{_INDEX_MAX_ENTRIES + 1:04d}"
+    pruned = _prune_index_entries(overflow, keep=keep)
+    assert len(pruned) == _INDEX_MAX_ENTRIES
+    assert keep in pruned
+    assert pruned[keep] == overflow[keep]
+    again = _prune_index_entries(overflow, keep=keep)
+    assert again == pruned
+
+
+def test_cache_write_through_prunes_to_cap(tmp_path: Path) -> None:
+    index_path = tmp_path / "index.json"
+    seeded = {f"k{i:04d}": "sess_x" for i in range(_INDEX_MAX_ENTRIES)}
+    _write_index(index_path, seeded)
+    key = (str(tmp_path), "tok", "a" * 64)
+    cache_key = _index_entry_key(key)
+    _cache_write_through(index_path, key, "sess_" + ("ab" * 16))
+    loaded = _load_index(index_path)
+    assert loaded is not None
+    assert len(loaded) == _INDEX_MAX_ENTRIES
+    assert loaded[cache_key] == "sess_" + ("ab" * 16)
 
 
 def test_write_index_refuses_oversized_key_or_session_value(tmp_path: Path) -> None:

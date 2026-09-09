@@ -44,7 +44,9 @@ Contract locks honoured here:
 * **Cache / authority** — ``index.json`` is rebuildable and never sole
   authority. Schema version is injective v2 (canonical JSON-array keys);
   wrong-version, corrupt, oversized, or malformed indexes are ignored and
-  rebuilt. No dual-read. Bind never auto-evicts acceptpath; operators
+  rebuilt. Writes that would exceed ``_INDEX_MAX_ENTRIES`` prune
+  deterministically (retain the write-through key, then sorted keys).
+  No dual-read. Bind never auto-evicts acceptpath bundles; operators
   reclaim debris with ``git-cg eval gc --acceptpath --older-than``.
 * **Lock-gated cache writes** — index write-through runs only while a
   bind lock is held. Lock failure still persists the authoritative
@@ -319,10 +321,32 @@ def _load_index(index_path: Path) -> dict[str, str] | None:
     return out
 
 
-def _write_index(index_path: Path, entries: dict[str, str]) -> None:
-    """Best-effort atomic write of a bounded reuse-scan cache. Never raises."""
-    if len(entries) > _INDEX_MAX_ENTRIES:
-        return
+def _prune_index_entries(entries: dict[str, str], *, keep: str | None = None) -> dict[str, str]:
+    """Return at most ``_INDEX_MAX_ENTRIES`` items with deterministic retention.
+
+    When ``keep`` is present it is retained first. Remaining slots are filled
+    by sorted canonical key order so eviction is stable across repeated writes.
+    """
+    if len(entries) <= _INDEX_MAX_ENTRIES:
+        return dict(entries)
+    selected: dict[str, str] = {}
+    if keep is not None and keep in entries:
+        selected[keep] = entries[keep]
+    for key in sorted(entries):
+        if len(selected) >= _INDEX_MAX_ENTRIES:
+            break
+        if key in selected:
+            continue
+        selected[key] = entries[key]
+    return selected
+
+
+def _write_index(index_path: Path, entries: dict[str, str], *, keep: str | None = None) -> None:
+    """Best-effort atomic write of a bounded reuse-scan cache. Never raises.
+
+    Oversized maps are pruned to ``_INDEX_MAX_ENTRIES`` rather than refused.
+    """
+    entries = _prune_index_entries(entries, keep=keep)
     if any(not _index_entry_admissible(key, value) for key, value in entries.items()):
         return
     payload = {"version": _INDEX_VERSION, "entries": dict(entries)}
@@ -348,12 +372,17 @@ def _cache_lookup_session(index_path: Path, key: tuple[str, str, str]) -> str | 
 
 
 def _cache_write_through(index_path: Path, key: tuple[str, str, str], session_id: str) -> None:
-    """Merge ``session_id`` into the cache for ``key`` (best-effort)."""
+    """Merge ``session_id`` into the cache for ``key`` (best-effort).
+
+    When the map would exceed ``_INDEX_MAX_ENTRIES``, prune deterministically
+    while retaining this write-through key.
+    """
     if not session_id or not session_id.strip():
         return
     entries = _load_index(index_path) or {}
-    entries[_index_entry_key(key)] = session_id
-    _write_index(index_path, entries)
+    cache_key = _index_entry_key(key)
+    entries[cache_key] = session_id
+    _write_index(index_path, entries, keep=cache_key)
 
 
 def _load_bundle_for_session(bundles_dir: Path, session_id: str) -> dict[str, Any] | None:
