@@ -36,6 +36,11 @@ Dependencies: 21 runtime, 1 dev
 | eval-package-coverage | `just eval-package-coverage` |
 | eval-per-file-coverage | `just eval-per-file-coverage` |
 | --cov-report=json | `just --cov-report=json` |
+| eval-binding-coverage | `just eval-binding-coverage` |
+| --cov-report=json | `just --cov-report=json` |
+| eval-binding-docstrings | `just eval-binding-docstrings` |
+| eval-binding-bench | `just eval-binding-bench` |
+| eval-mutation-advisory | `just eval-mutation-advisory` |
 
 ## Scripts (package.json)
 
@@ -281,4 +286,4 @@ uv run python scripts/sync_promptfoo_to_opik.py promptfoo_redteam_results.json
 - origin: https://github.com/Thomo1318/gitCommitGenerator
 ---
 
-58.1ms | 738 files checked | 21/539 tools matched
+71.5ms | 738 files checked | 21/539 tools matched
