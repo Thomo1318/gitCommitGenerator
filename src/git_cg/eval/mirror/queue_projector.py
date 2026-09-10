@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Final, Protocol, runtime_checkable
 
 from git_cg.eval.mirror.queue_mirror import QUEUE_MIRROR_AUTHORITY, QueueMirrorResult, QueueMirrorStatus
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.mirror.transport import scrub_export_note
 
 __all__ = [
@@ -181,7 +182,7 @@ def _projection_payload(item: Mapping[str, Any]) -> dict[str, Any]:
                 return item.get(key)
         return None
 
-    return {
+    projected = {
         "review_id": _scalar_meta(_pick("review_id", "id"), max_len=128),
         "status": _scalar_meta(_pick("status"), max_len=64),
         "case_id": _scalar_meta(_pick("case_id"), max_len=128),
@@ -192,6 +193,8 @@ def _projection_payload(item: Mapping[str, Any]) -> dict[str, Any]:
         "mirror_authority": QUEUE_MIRROR_AUTHORITY,
         "read_back": False,
     }
+    cleaned = sanitize_export_tree(projected)
+    return cleaned if isinstance(cleaned, dict) else projected
 
 
 def _default_live_projector_factory() -> LiveQueueProjector:
@@ -240,6 +243,9 @@ def _default_live_projector_factory() -> LiveQueueProjector:
                 }
                 payload["mirror_authority"] = QUEUE_MIRROR_AUTHORITY
                 payload["read_back"] = False
+                cleaned = sanitize_export_tree(payload)
+                if isinstance(cleaned, dict):
+                    payload = cleaned
                 try:
                     client.trace(
                         name=f"review-queue:{payload.get('review_id')}",
@@ -341,7 +347,11 @@ def project_review_queue_live(
             )
 
     try:
-        payloads = [_projection_payload(item) for item in items]
+        payloads = []
+        for item in items:
+            payload = _projection_payload(item)
+            cleaned = sanitize_export_tree(payload)
+            payloads.append(cleaned if isinstance(cleaned, dict) else payload)
         projected = int(active.project_items(payloads, project=project))
     except Exception as exc:
         msg = scrub_export_note(f"live projection failed: {exc}")

@@ -55,6 +55,7 @@ from git_cg.eval.cli_output import (
 #   git-cg eval explain --detail
 #   git-cg eval compare --detail
 #   git-cg eval diagnose --detail
+#   git-cg eval gc --detail
 #   git-cg eval review --detail
 #   git-cg eval review enqueue --detail
 #   git-cg eval review list --detail
@@ -1340,7 +1341,7 @@ def amend_brief_cmd(
             write=write,
         )
     except AmendBriefError as exc:
-        _emit_slice5_error("eval amend-brief", exc, as_json=as_json)
+        _emit_eval_error("eval amend-brief", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval amend-brief", ok=True, data=data))
@@ -1468,7 +1469,7 @@ def dogfood_cmd(
             exit_code=2,
             hint="--payload must point at an existing JSON file for the Lane C judge.",
         )
-        _emit_slice5_error("eval dogfood", exc, as_json=as_json)
+        _emit_eval_error("eval dogfood", exc, as_json=as_json)
         return
     repo = _resolve_repo(None)
     sha = hashlib.sha256(commit_message.encode("utf-8")).hexdigest()
@@ -1486,7 +1487,7 @@ def dogfood_cmd(
             write=write,
         )
     except DOGFoodError as exc:
-        _emit_slice5_error("eval dogfood", exc, as_json=as_json)
+        _emit_eval_error("eval dogfood", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval dogfood", ok=True, data=data))
@@ -1608,7 +1609,7 @@ def train_export_cmd(
             dry_run=dry_run if dry_run else None,
         )
     except TrainExportError as exc:
-        _emit_slice5_error("eval train-export", exc, as_json=as_json)
+        _emit_eval_error("eval train-export", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval train-export", ok=True, data=data))
@@ -1721,7 +1722,7 @@ def triage_cmd(
             skip_explain=skip_explain,
         )
     except (TriageError, ExplainError) as exc:
-        _emit_slice5_error("eval triage", exc, as_json=as_json)
+        _emit_eval_error("eval triage", exc, as_json=as_json)
         return
 
     data = report.to_data()
@@ -1854,7 +1855,7 @@ def failures_cmd(
             severity=severity,
         )
     except ExplainError as exc:
-        _emit_slice5_error("eval failures", exc, as_json=as_json)
+        _emit_eval_error("eval failures", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval failures", ok=True, data=data))
@@ -1924,7 +1925,7 @@ def explain_cmd(
     try:
         data = explain(repo, experiment_id=experiment_id, case_id=case_id)
     except ExplainError as exc:
-        _emit_slice5_error("eval explain", exc, as_json=as_json)
+        _emit_eval_error("eval explain", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval explain", ok=True, data=data))
@@ -2014,7 +2015,7 @@ def compare_cmd(
             b_case_id=b_case_id,
         )
     except ExplainError as exc:
-        _emit_slice5_error("eval compare", exc, as_json=as_json)
+        _emit_eval_error("eval compare", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval compare", ok=True, data=data))
@@ -2110,7 +2111,7 @@ def replay_cmd(
             dry_run=dry_run,
         )
     except ReplayError as exc:
-        _emit_slice5_error("eval replay", exc, as_json=as_json)
+        _emit_eval_error("eval replay", exc, as_json=as_json)
         return
     compare = result["compare"]
     data = {
@@ -2303,7 +2304,7 @@ def promote_cmd(
                 data["decision_path"] = decision_path
             emit_json_envelope(build_envelope("eval promote", ok=False, data=data, errors=[err]))
             raise typer.Exit(code=int(getattr(exc, "exit_code", 2))) from None
-        # Print S6-E09 denial context before exiting (_emit_slice5_error raises Exit).
+        # Print S6-E09 denial context before exiting (_emit_eval_error raises Exit).
         from git_cg.eval.cli_output import emit_human_line, envelope_message
 
         code = getattr(exc, "code", "EVAL_USAGE")
@@ -2435,7 +2436,7 @@ def diagnose_cmd(
             dry_run=dry_run,
         )
     except DiagnoseError as exc:
-        _emit_slice5_error("eval diagnose", exc, as_json=as_json)
+        _emit_eval_error("eval diagnose", exc, as_json=as_json)
         return
     issue = result["issue"]
     data = {
@@ -2462,6 +2463,158 @@ def diagnose_cmd(
                 f"  would_write: issue={ww.get('issue_path')} diagnostics={ww.get('diagnostics_path')}",
                 err=False,
             )
+    raise typer.Exit(code=0)
+
+
+@eval_app.command(
+    "gc",
+    cls=BriefFullHelpCommand,
+    rich_help_panel="Inspect",
+    short_help="Purge stale acceptpath debris; authoritative bundles need --force.",
+)
+def gc_cmd(
+    acceptpath: bool = typer.Option(
+        False,
+        "--acceptpath",
+        help="Operate on .eval/bundles/acceptpath/ (required; only supported scope).",
+    ),
+    older_than: str | None = typer.Option(
+        None,
+        "--older-than",
+        help="Required positive duration with s/m/h/d suffix (for example 7d, 2h, 15m, 30s).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Allow deletion of authoritative acceptpath bundles required for reuse identity.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Select matching files without deleting them.",
+    ),
+    root: Path | None = typer.Option(
+        None,
+        "--root",
+        help="Repo root (defaults to discovery).",
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print machine-readable JSON instead of plain text.",
+    ),
+    detail: bool = _detail_help_option(),
+) -> None:
+    """Purge stale acceptpath debris.
+
+    Offline retention for ``.eval/bundles/acceptpath/``. Bind never
+    auto-evicts; this command is the operator retention path. Does not
+    change product ranking, contact Opik, or import the binder at CLI
+    module load.
+
+    <<GIT_CG_HELP_DETAIL>>
+
+    Requires ``--acceptpath`` and ``--older-than <duration>``. Duration is a
+    positive integer plus ``s``, ``m``, ``h``, or ``d`` (no default).
+
+    Normal mode deletes only stale non-authoritative debris (rebuildable
+    ``index.json``, leftover ``.*.tmp`` files, unadoptable JSON that is not
+    ``sess_*.json``). Authoritative ``sess_<32-hex>.json`` bundles required
+    for reuse identity are preserved unless ``--force`` is set. Legacy
+    ``sess_*.json`` names and ``.bind.lock`` are unmanaged and never
+    selected, including with ``--force``. A leftover ``.bind.lock`` remains
+    until a later bind reclaims it. ``--dry-run`` selects without
+    deleting. Age is file mtime. Symlinks and non-regular files are skipped.
+    Unexpected GC failures emit ``EVAL_INTERNAL`` (exit 4).
+
+    Plain text prints selected/deleted/preserved counts. ``--json`` emits one
+    ``cli_output_envelope_v1`` document.
+    """
+    from git_cg.eval.binding.paths import RepoRootUnresolvedError
+    from git_cg.eval.cli_output import emit_human_line, envelope_message
+    from git_cg.eval.gc import GcError, gc_acceptpath
+
+    if not acceptpath:
+        err = envelope_message(
+            "EVAL_USAGE",
+            "eval gc requires --acceptpath",
+            hint="Only .eval/bundles/acceptpath/ is supported in this command.",
+        )
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            emit_human_line(f"eval gc: {err['message']} (hint: {err['hint']})", err=True)
+        raise typer.Exit(code=2)
+    if older_than is None or not str(older_than).strip():
+        err = envelope_message(
+            "EVAL_USAGE",
+            "eval gc requires --older-than <duration>",
+            hint="Examples: 30s, 15m, 2h, 7d",
+        )
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            emit_human_line(f"eval gc: {err['message']} (hint: {err['hint']})", err=True)
+        raise typer.Exit(code=2)
+
+    try:
+        repo = _resolve_repo(root)
+    except RepoRootUnresolvedError as exc:
+        if as_json:
+            emit_json_envelope(
+                build_envelope(
+                    "eval gc",
+                    ok=False,
+                    data={},
+                    errors=[{"code": "EVAL_REPO_UNRESOLVABLE", "message": str(exc)}],
+                )
+            )
+        else:
+            emit_human_line(f"eval gc: repo root unresolvable: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    try:
+        result = gc_acceptpath(repo, older_than=older_than, force=force, dry_run=dry_run)
+    except GcError as exc:
+        err = envelope_message(exc.code, str(exc), hint=exc.hint)
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            line = f"eval gc: {err['message']}"
+            if hint := err.get("hint"):
+                line = f"{line} (hint: {hint})"
+            emit_human_line(line, err=True)
+        raise typer.Exit(code=exc.exit_code) from None
+    except Exception as exc:
+        detail = str(exc).strip() or type(exc).__name__
+        err = envelope_message(
+            "EVAL_INTERNAL",
+            f"unexpected failure: {detail}",
+            hint="Inspect the local evaluation store.",
+        )
+        if as_json:
+            emit_json_envelope(build_envelope("eval gc", ok=False, errors=[err]))
+        else:
+            emit_human_line(f"eval gc: {err['message']} (hint: {err['hint']})", err=True)
+        raise typer.Exit(code=4) from None
+
+    data = result.to_data()
+    if as_json:
+        emit_json_envelope(build_envelope("eval gc", ok=True, data=data))
+    else:
+        emit_human_line(
+            f"eval gc: acceptpath older_than={data['older_than']} "
+            f"selected={data['selected_count']} deleted={data['deleted_count']} "
+            f"preserved={data['preserved_count']} skipped={data['skipped_count']} "
+            f"force={str(force).lower()} dry_run={str(dry_run).lower()}",
+            err=False,
+        )
+        if dry_run:
+            for rel in data["selected"]:
+                emit_human_line(f"  would_delete: {rel}", err=False)
     raise typer.Exit(code=0)
 
 
@@ -2559,7 +2712,7 @@ def review_enqueue_cmd(
             dry_run=dry_run,
         )
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review enqueue", exc, as_json=as_json)
+        _emit_eval_error("eval review enqueue", exc, as_json=as_json)
         return
     item = result["item"]
     if as_json:
@@ -2605,7 +2758,7 @@ def review_list_cmd(
     try:
         data = list_reviews(repo, status=status)
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review list", exc, as_json=as_json)
+        _emit_eval_error("eval review list", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval review list", ok=True, data=data))
@@ -2656,7 +2809,7 @@ def review_rollup_cmd(
     try:
         data = rollup_reviews(repo, case_id=case_id, bundle_id=bundle_id)
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review rollup", exc, as_json=as_json)
+        _emit_eval_error("eval review rollup", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval review rollup", ok=True, data=data))
@@ -2713,7 +2866,7 @@ def review_show_cmd(
     try:
         data = show_review(repo, review_id=review_id)
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review show", exc, as_json=as_json)
+        _emit_eval_error("eval review show", exc, as_json=as_json)
         return
     item = data["item"]
     if as_json:
@@ -2769,7 +2922,7 @@ def review_claim_cmd(
     try:
         result = claim(repo, review_id=review_id, reviewer=reviewer, dry_run=dry_run)
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review claim", exc, as_json=as_json)
+        _emit_eval_error("eval review claim", exc, as_json=as_json)
         return
     item = result["item"]
     if as_json:
@@ -2839,7 +2992,7 @@ def review_adjudicate_cmd(
             dry_run=dry_run,
         )
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review adjudicate", exc, as_json=as_json)
+        _emit_eval_error("eval review adjudicate", exc, as_json=as_json)
         return
     item = result["item"]
     if as_json:
@@ -2894,7 +3047,7 @@ def review_dismiss_cmd(
             dry_run=dry_run,
         )
     except ReviewQueueError as exc:
-        _emit_slice5_error("eval review dismiss", exc, as_json=as_json)
+        _emit_eval_error("eval review dismiss", exc, as_json=as_json)
         return
     item = result["item"]
     if as_json:
@@ -2971,7 +3124,7 @@ def session_show_cmd(
     try:
         data = show_session(repo, session_id)
     except SessionsError as exc:
-        _emit_slice5_error("eval session show", exc, as_json=as_json)
+        _emit_eval_error("eval session show", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval session show", ok=True, data=data))
@@ -3045,7 +3198,7 @@ def thread_show_cmd(
     try:
         data = show_thread(repo, thread_id)
     except SessionsError as exc:
-        _emit_slice5_error("eval thread show", exc, as_json=as_json)
+        _emit_eval_error("eval thread show", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval thread show", ok=True, data=data))
@@ -3114,7 +3267,7 @@ def issue_list_cmd(
     try:
         data = list_issues(repo, status=status)
     except DiagnoseError as exc:
-        _emit_slice5_error("eval issue list", exc, as_json=as_json)
+        _emit_eval_error("eval issue list", exc, as_json=as_json)
         return
     if as_json:
         emit_json_envelope(build_envelope("eval issue list", ok=True, data=data))
@@ -3162,7 +3315,7 @@ def issue_show_cmd(
     try:
         data = show_issue(repo, issue_id=issue_id)
     except DiagnoseError as exc:
-        _emit_slice5_error("eval issue show", exc, as_json=as_json)
+        _emit_eval_error("eval issue show", exc, as_json=as_json)
         return
     issue = data["issue"]
     if as_json:
@@ -3765,8 +3918,8 @@ def _resolve_repo(root: Path | None) -> Path:
     return root if root is not None else resolve_repo_root()
 
 
-def _emit_slice5_error(command: str, exc: Exception, *, as_json: bool) -> None:
-    """Emit a Slice-5 deterministic error and exit with the locked code.
+def _emit_eval_error(command: str, exc: Exception, *, as_json: bool) -> None:
+    """Emit a deterministic evaluation-command error and exit with the locked code.
 
     ``exc`` is an ExplainError/DiagnoseError carrying ``code``/``exit_code``/
     optional ``hint``. Human mode → one stderr line; JSON mode → one
@@ -3811,7 +3964,7 @@ def _run_issue_transition(
             reason=reason,
         )
     except DiagnoseError as exc:
-        _emit_slice5_error(command, exc, as_json=as_json)
+        _emit_eval_error(command, exc, as_json=as_json)
         return
     issue = result["issue"]
     if as_json:

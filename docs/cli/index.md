@@ -81,6 +81,7 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
 * [`git-cg eval export retry`](eval/export/retry.md)
 * [`git-cg eval export status`](eval/export/status.md)
 * [`git-cg eval failures`](eval/failures.md)
+* [`git-cg eval gc`](eval/gc.md)
 * [`git-cg eval issue list`](eval/issue/list.md)
 * [`git-cg eval issue reopen`](eval/issue/reopen.md)
 * [`git-cg eval issue resolve`](eval/issue/resolve.md)
@@ -134,6 +135,8 @@ See the [eval overview](eval/index.md) for nested groups. Canonical S6 operator 
   * [`git-cg eval export-status`](eval/export-status.md) — Alias of eval export status.
 * **`git-cg eval failures`**
   * [`git-cg eval failures`](eval/failures.md) — List failing cases with metric and failure ids.
+* **`git-cg eval gc`**
+  * [`git-cg eval gc`](eval/gc.md) — Purge stale acceptpath debris; authoritative bundles need --force.
 * **`git-cg eval issue`**
   * [`git-cg eval issue`](eval/issue.md) — Manage local diagnostic issues.
   * [`git-cg eval issue list`](eval/issue/list.md) — List local diagnostic issues.

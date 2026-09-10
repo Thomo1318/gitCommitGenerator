@@ -38,6 +38,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -57,11 +58,13 @@ __all__ = [
     "REPLAYS_DIRNAME",
     "REVIEW_QUEUE_DIRNAME",
     "SESSIONS_DIRNAME",
+    "SESSION_ID_RE",
     "TRAIN_EXPORT_DIRNAME",
     "TRAJECTORIES_DIRNAME",
     "LayerAPathError",
     "RepoRootUnresolvedError",
     "acceptpath_bundles_dir",
+    "acceptpath_index_file",
     "amend_briefs_dir",
     "antipattern_vault_dir",
     "atomic_write_json",
@@ -75,6 +78,7 @@ __all__ = [
     "replays_dir",
     "resolve_repo_root",
     "review_queue_dir",
+    "session_bundle_path",
     "sessions_dir",
     "train_export_dir",
     "trajectories_dir",
@@ -102,6 +106,9 @@ EXPERIMENTS_DIRNAME = ("experiments",)
 #: Restrictive modes for runtime trees (N19.3).
 _FILE_MODE = 0o600
 _DIR_MODE = 0o700
+
+#: Capture-episode session id: ``sess_`` plus 32 lowercase hex digits.
+SESSION_ID_RE = re.compile(r"^sess_[0-9a-f]{32}$")
 
 
 class LayerAPathError(ValueError):
@@ -226,6 +233,37 @@ def acceptpath_bundles_dir(repo_root: Path) -> Path:
     return _contained(repo_root, Path(*ACCEPTPATH_BUNDLES_DIRNAME))
 
 
+def acceptpath_index_file(repo_root: Path) -> Path:
+    """Return ``.eval/bundles/acceptpath/index.json`` (cache-only; contained).
+
+    The index is a rebuildable reuse-scan cache and is **never** sole authority.
+    Bundle JSON files under :func:`acceptpath_bundles_dir` remain the source of
+    truth (N19.3).
+    """
+    return _contained(repo_root, Path(*ACCEPTPATH_BUNDLES_DIRNAME) / "index.json")
+
+
+def session_bundle_path(bundles_dir: Path, session_id: object) -> Path | None:
+    """Return ``bundles_dir / <session_id>.json`` when grammatical and contained.
+
+    Grammar is :data:`SESSION_ID_RE`. The joined path must resolve to a direct
+    child of ``bundles_dir``. Malformed or escaped values return ``None``; this
+    helper never raises.
+    """
+    if not isinstance(session_id, str) or SESSION_ID_RE.fullmatch(session_id) is None:
+        return None
+    bundles = Path(bundles_dir)
+    candidate = bundles / f"{session_id}.json"
+    try:
+        bundles_resolved = bundles.resolve()
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    if resolved.parent != bundles_resolved:
+        return None
+    return candidate
+
+
 def sessions_dir(repo_root: Path) -> Path:
     """Return ``.eval/sessions/`` (contained; not created here)."""
     return _contained(repo_root, Path(*SESSIONS_DIRNAME))
@@ -299,13 +337,21 @@ def _ensure_dir(path: Path) -> None:
         os.chmod(path, _DIR_MODE)
 
 
-def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
+def atomic_write_json(
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    serialized: bytes | None = None,
+) -> Path:
     """Atomically write ``payload`` as UTF-8 JSON to ``path`` (N19.3).
 
     Writes a temp file in the *target directory*, fsyncs the file and parent
     directory, then ``os.replace`` onto the final path so an interrupted write
     never leaves a partially-valid authoritative bundle under the final name.
     Final file mode is ``0600``; JSON uses sorted keys + trailing newline.
+    ``serialized`` may provide the already-rendered UTF-8 JSON bytes when the
+    caller has already serialized the payload for validation; those bytes are
+    written as-is and the existing trailing newline is still appended.
 
     The final ``path`` must already be containment-checked by the caller; this
     helper re-verifies containment defensively when the path is under a
@@ -320,7 +366,10 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            if serialized is None:
+                json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            else:
+                handle.write(serialized.decode("utf-8"))
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())

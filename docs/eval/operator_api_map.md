@@ -3,13 +3,13 @@
      Check:      uv run python -m git_cg.eval.api_map --check
 -->
 
-# Operator API map (S6)
+# Operator API map
 
 Generated from the **live Typer tree** (`git_cg.eval.cli.eval_app`).
-This document is the Slice 2 operator API map (Issue #246 / RK-S6-10).
+Operator-facing CLI map. Refs: #246.
 
-> **Not** a general-purpose Python SDK, REST/OpenAPI surface, or S7
-> autodoc site. CLI is the primary public operator API.
+> **Not** a general-purpose Python SDK, REST/OpenAPI surface, or autodoc
+> site. CLI is the primary public operator API.
 
 ## Stability tiers
 
@@ -24,7 +24,7 @@ for maintainers but are **hidden from regular `git-cg eval --help`** so basic
 users do not see them in the default command menu. Direct invocation and
 operator-map / claim-matrix references remain valid.
 
-Undocumented internals are **not** promised compatible (S6-A05).
+Undocumented internals are **not** promised compatible.
 
 ## Policy constants
 
@@ -89,6 +89,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval export-retry` | command | public (deprecated alias) | temporary alias | Alias of eval export retry. — Canonical: `eval export retry`. Removal: first minor release after S6 GA. |
 | `eval export-status` | command | public (deprecated alias) | temporary alias | Alias of eval export status. — Canonical: `eval export status`. Removal: first minor release after S6 GA. |
 | `eval failures` | command | public | canonical | List failing cases with metric and failure ids. — Public CLI operator surface. |
+| `eval gc` | command | public | canonical | Purge stale acceptpath debris; authoritative bundles need --force. — Public CLI operator surface. |
 | `eval issue` | group | public (group) | group | Manage local diagnostic issues. — Nested Typer group (not invoked alone). |
 | `eval issue list` | command | public | canonical | List local diagnostic issues. — Public CLI operator surface. |
 | `eval issue reopen` | command | public | canonical | Reopen a local diagnostic issue. — Public CLI operator surface. |
@@ -121,7 +122,7 @@ Any design that allows concurrent writers (multiple operators, daemon workers, o
 | `eval train-export` | command | public | canonical | Export redacted training rows from landed bundles. — Public CLI operator surface. |
 | `eval triage` | command | public | canonical | One-shot advisory view: doctor + failures + explain. — Public CLI operator surface. |
 
-## Canonical S6 operator surface (Slice 0 lock)
+## Canonical eval CLI surface
 
 ```text
 git-cg eval amend-brief …
@@ -135,6 +136,7 @@ git-cg eval export drain …
 git-cg eval export retry …
 git-cg eval export status …
 git-cg eval failures …
+git-cg eval gc …
 git-cg eval issue list …
 git-cg eval issue reopen …
 git-cg eval issue resolve …
@@ -195,7 +197,7 @@ canonical; do not treat the rest of `git_cg.eval*` as a public SDK.
 * Implementation modules under `git_cg.eval.binding`, `git_cg.eval.mirror`
   internals, `git_cg.eval.scoring.family_*`, private `_` helpers, and
   product ranking paths in `git_cg.main` are **internal**.
-* Scripts under `scripts/*` are not a second score law (Slice 8 absorption).
+* Scripts under `scripts/*` are not a second score law.
 * Optional `just eval-*` wrappers must not become a second command law.
 
 ## JSON envelope
@@ -207,7 +209,7 @@ JSON-capable operator commands emit exactly one
 * progress / diagnostics / human deprecations → **stderr**
 * deprecations also appear in envelope `warnings[]` in JSON mode
 
-## Per-command envelope `data` sketches (S6-A08)
+## Per-command envelope `data` sketches
 
 Command-discriminated top-level keys for `cli_output_envelope_v1.data`.
 The envelope schema keeps `data` as an object; **these sketches close the
@@ -231,6 +233,7 @@ documents — sketches name the envelope wrapper keys only.
 * `eval export retry`
 * `eval export status`
 * `eval failures`
+* `eval gc`
 * `eval issue list`
 * `eval issue show`
 * `eval opik config show`
@@ -311,7 +314,7 @@ documents — sketches name the envelope wrapper keys only.
 * **Optional keys:** *(none)*
 * **Nested (informational):**
   * cases[]: deterministic explain rows (blame_span, failure_ids, replay_command, ...)
-  * headers: INT-29 pins/meta projection
+  * headers: pins/meta projection
 * **Notes:** No opaque LLM RCA. Secret-safe projection via evidence_scrub.
 
 #### `eval export drain`
@@ -323,7 +326,7 @@ documents — sketches name the envelope wrapper keys only.
   * mode=off: {mode: off, note: nothing_to_do}
   * live drain: mirror_result + attempted/exported/failed/error_classes
   * fail-open: {note: fail_open, error?}
-* **Notes:** F4 fail-open drain. Exact key subset depends on mode/dry-run/config path; do not invent keys outside the optional set. Config-invalid may use empty data {}.
+* **Notes:** Fail-open drain. Exact key subset depends on mode/dry-run/config path; do not invent keys outside the optional set. Config-invalid may use empty data {}.
 
 #### `eval export retry`
 
@@ -345,8 +348,16 @@ documents — sketches name the envelope wrapper keys only.
 * **Optional keys:** *(none)*
 * **Nested (informational):**
   * failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}
-  * filters: {regime?, family?, failure_id?, severity?} (NTH-02; null when unset)
+  * filters: {regime?, family?, failure_id?, severity?} (null when unset)
 * **Notes:** Read-only. experiment_id may be null when no local runs exist. Optional --regime/--family/--failure-id/--severity filters are AND-combined; when active, metric_ids/failure_ids project the matching failing-score subset.
+
+#### `eval gc`
+
+* **Required keys:** `acceptpath`, `deleted`, `deleted_count`, `dry_run`, `force`, `older_than`, `older_than_seconds`, `preserved`, `preserved_count`, `selected`, `selected_count`, `skipped`, `skipped_count`
+* **Optional keys:** *(none)*
+* **Nested (informational):**
+  * selected[]/deleted[]/preserved[]/skipped[]: acceptpath filenames
+* **Notes:** Offline acceptpath retention. Requires --acceptpath and --older-than. Bind never auto-evicts. Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. .bind.lock and legacy sess_*.json names are unmanaged even with --force; stale-lock reclamation belongs to the binder. --dry-run selects without deleting. Age is file mtime. Repository-resolution failures stay EVAL_REPO_UNRESOLVABLE (exit 1); store path failures stay EVAL_STORE_INTEGRITY (exit 4). Unexpected GC failures stay EVAL_INTERNAL (exit 4). A leftover .bind.lock remains until a later bind reclaims it.
 
 #### `eval issue list`
 
@@ -371,7 +382,7 @@ documents — sketches name the envelope wrapper keys only.
 * **Nested (informational):**
   * secrets: {api_key: masked|null, api_key_present: bool}
   * config: public_config_view (no raw tokens; may be null on config_error)
-  * mirror_result: S4 mirror result projection
+  * mirror_result: Opik config mirror-result projection
 * **Notes:** Canonical config surface. Deprecated `eval config show` emits the same data shape plus envelope warnings[].
 
 #### `eval opik doctor`
@@ -439,7 +450,7 @@ documents — sketches name the envelope wrapper keys only.
 * **Nested (informational):**
   * rollups[]: multi-rater dimension/outcome majority projection
   * filters: {case_id?, bundle_id?}
-* **Notes:** NTH-05 read-only multi-rater UX. authority is always advisory; can_sole_promote_gold is always false.
+* **Notes:** Read-only multi-rater UX. authority is always advisory; can_sole_promote_gold is always false.
 
 #### `eval run`
 
@@ -487,9 +498,9 @@ documents — sketches name the envelope wrapper keys only.
   * scrub_report: {status, ...} (row scrub-fail → drop + continue)
   * paths: null | {export_path, row_paths[], vault_paths[], row_count}
   * would_write: null | {export_path, rows_dir, row_count, export_id} when dry_run/no-write
-* **Notes:** ci_sole_green and product_accept_authority stay false. No .eval/quarantine/ store; field quarantine remains S4 meta. --dry-run is an alias of --no-write (validate + would-write; zero store mutation).
+* **Notes:** ci_sole_green and product_accept_authority stay false. No .eval/quarantine/ store; field quarantine remains Opik export metadata. --dry-run is an alias of --no-write (validate + would-write; zero store mutation).
 
-## Doctor report contract (Slice 4)
+## Doctor report contract
 
 `git-cg eval doctor` (local suite/pin/metric) and `git-cg eval opik
 doctor` (secret-safe Opik/export/queue) are **observability-only** and
@@ -502,27 +513,27 @@ Each emits a machine-readable check list in envelope `data.checks[]`:
 {check_id, metric_id?, status: pass|warn|fail, severity, message, hint?}
 ```
 
-Doctor metric producers (close the S6 phantom-metric gap), projected as
+Doctor metric producers (close the phantom-metric gap), projected as
 catalog-aligned `ScoreResultV1` rows in `data.scores[]`:
 
 | Metric | Producer | Severity |
 |:---|:---|:---|
-| `h.compat_hash_resume` | Slice 3 checkpoint compat vs live preimage | block |
+| `h.compat_hash_resume` | Checkpoint compat vs live preimage | block |
 | `h.doctor_green` | Rollup over the doctor check set | warn |
-| `h.export_config_resolved` | S4 `resolve_opik_config` / `operator_config_health` | warn |
+| `h.export_config_resolved` | `resolve_opik_config` / `operator_config_health` | warn |
 
 **Aggregation rule (locked):** `h.doctor_green` aggregates
 **block-severity** checks only. Warn-severity check failures never flip
 green → red. This rule is part of the frozen doctor contract.
 
-Secret safety (S6-C08): every secret-bearing value passes through
+Secret safety: every secret-bearing value passes through
 `mask_secret()` (`•••[len=N]`). Raw token values and prefixes are
 never printed in human or JSON output.
 
 Exit classes: `0` green · `1` doctor red (block fail) · `2` usage/config
 · `3` compatibility mismatch · `4` missing evidence.
 
-## Triage router contract (Slice 8 / D27)
+## Triage router contract
 
 `git-cg eval triage` is the offline advisory router that absorbs
 `scripts/opik_trace_triage.py`. It composes library engines

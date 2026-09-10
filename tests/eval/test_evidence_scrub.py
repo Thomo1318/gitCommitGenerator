@@ -152,5 +152,120 @@ def test_project_secret_safe_masks_string_leaves() -> None:
     assert "•••" in projected["items"][0]
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # Whole-value secrets (non-assignment shapes).
+        "sk-live-H65probeTokenABCDEFGHIJKLMNOP",
+        "AKIAIOSFODNN7EXAMPLE",
+        "ghp_H65probeTokenABCDEFGHIJKLMNOPQRSTUVWXYZ12",
+        "github_pat_11ABCDEFGHIJKLMNOPQRSTUV_0123456789abcdef",
+        "xoxb-1234567890-abcdefghij",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.aGVsbG93b3JsZA.signature1234",
+        "-----BEGIN RSA PRIVATE KEY-----",
+        # Assignment-shaped secrets (key= prefix retained).
+        "api_key=h65secretvalue",
+        "password=supersecretpassword123",
+        "token: abcdefgh12345678",
+        "authorization: Bearer eyJhbGciOiJIUzI1NiJ9.h65probe.signature",
+    ],
+)
+def test_mask_secrets_in_text_is_idempotent(raw: str) -> None:
+    """Masking an already-masked string must return the same string."""
+    once = mask_secrets_in_text(raw)
+    twice = mask_secrets_in_text(once)
+    thrice = mask_secrets_in_text(twice)
+    assert once is not None
+    assert once == twice == thrice
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "api_key=h65secretvalue",
+        "password=supersecretpassword123",
+        "token: abcdefgh12345678",
+        "sk-live-H65probeTokenABCDEFGHIJKLMNOP",
+        "plain safe note",
+    ],
+)
+def test_mask_optional_operator_text_is_idempotent(raw: str) -> None:
+    """Operator-text masking is idempotent for secrets and safe text."""
+    once = mask_optional_operator_text(raw)
+    twice = mask_optional_operator_text(once)
+    assert once == twice
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"note": "api_key=h65secretvalue", "ok": "value"},
+        {"items": ["sk-live-H65probeTokenABCDEFGHIJKLMNOP", "plain"]},
+        {"nested": {"deep": "token: abcdefgh12345678"}},
+        {"mixed": [{"inner": "password=supersecretpassword123"}]},
+    ],
+)
+def test_project_secret_safe_is_idempotent(payload: dict) -> None:
+    """Recursive projection is idempotent — re-projection changes nothing."""
+    once = project_secret_safe(payload)
+    twice = project_secret_safe(once)
+    assert once == twice
+
+
+def test_scrub_evidence_mapping_is_idempotent() -> None:
+    """Dropping secret keys is idempotent — re-scrubbing changes nothing."""
+    payload = {
+        "ok": "value",
+        "api_key": "sk-should-drop",
+        "nested": {"token": "drop-me", "keep": "yes"},
+        "list": [{"password": "x"}, "plain"],
+    }
+    once = scrub_evidence_mapping(payload)
+    twice = scrub_evidence_mapping(once)
+    assert once == twice
+
+
+def test_looks_like_secret_key_rejects_non_string() -> None:
+    """Non-string keys are not secret-looking."""
+    from git_cg.eval.evidence_scrub import _looks_like_secret_key
+
+    assert _looks_like_secret_key(42) is False
+    assert _looks_like_secret_key(None) is False
+    assert _looks_like_secret_key(b"api_key") is False
+
+
+def test_scrub_evidence_mapping_handles_tuple() -> None:
+    """Tuples are projected to lists (JSON-safe)."""
+    result = scrub_evidence_mapping(("a", "b"))
+    assert result == ["a", "b"]
+
+
+def test_mask_secrets_in_text_rejects_non_string() -> None:
+    """Non-string, non-None input is returned as-is."""
+    assert mask_secrets_in_text(42) == 42  # type: ignore[arg-type]
+
+
+def test_mask_secrets_in_text_empty_and_whitespace() -> None:
+    """Empty and whitespace-only strings pass through unchanged."""
+    assert mask_secrets_in_text("") == ""
+    assert mask_secrets_in_text("   ") == "   "
+
+
+def test_project_secret_safe_handles_tuple() -> None:
+    """Tuples are projected to lists."""
+    result = project_secret_safe(("a", "sk-live-H65probeTokenABCDEFGHIJKLMNOP"))
+    assert isinstance(result, list)
+    assert result[0] == "a"
+    assert "sk-live" not in result[1]
+
+
+def test_project_secret_safe_preserves_non_string_leaf() -> None:
+    """Non-string, non-container leaves pass through unchanged."""
+    assert project_secret_safe(42) == 42
+    assert project_secret_safe(None) is None
+    assert project_secret_safe(True) is True
+
+
 def test_secret_pattern_count_is_eight() -> None:
+    """Pin pattern count — adding a pattern requires deliberate false-positive review."""
     assert len(_SECRET_VALUE_PATTERNS) == 8

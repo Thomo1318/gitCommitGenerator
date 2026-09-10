@@ -879,7 +879,7 @@ def test_checkpoint_store_list_and_load_edges(tmp_path: Path) -> None:
 runner = CliRunner()
 
 
-def test_cli_slice5_error_and_issue_transition_helpers(
+def test_cli_eval_error_and_issue_transition_helpers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from git_cg.eval import cli as cli_mod
@@ -895,14 +895,14 @@ def test_cli_slice5_error_and_issue_transition_helpers(
             self.hint = "try again"
 
     with pytest.raises(typer.Exit) as ei:
-        cli_mod._emit_slice5_error("eval explain", _BoomError(), as_json=False)
+        cli_mod._emit_eval_error("eval explain", _BoomError(), as_json=False)
     assert ei.value.exit_code == 2
     err = capsys.readouterr().err
     assert "boom" in err
     assert "try again" in err
 
     with pytest.raises(typer.Exit) as ei:
-        cli_mod._emit_slice5_error("eval explain", _BoomError(), as_json=True)
+        cli_mod._emit_eval_error("eval explain", _BoomError(), as_json=True)
     assert ei.value.exit_code == 2
     out = capsys.readouterr().out
     assert '"ok": false' in out or '"ok":false' in out.replace(" ", "")

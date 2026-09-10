@@ -11,7 +11,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from git_cg.eval.mirror.config import mask_secret
+from git_cg.eval.mirror.config import is_masked, mask_secret
 
 _SECRET_TOKENS = frozenset({"api_key", "secret", "password", "token", "authorization"})
 
@@ -91,11 +91,14 @@ def mask_secrets_in_text(value: str | None) -> str | None:
     for pat in _SECRET_VALUE_PATTERNS:
 
         def _repl(match: re.Match[str], _pat: re.Pattern[str] = pat) -> str:
-            """Internal helper: repl."""
+            """Replace a regex match with its masked form, preserving assignment prefixes."""
             # Prefer the captured secret group when present (assignment forms).
             secret = match.group(1) if match.lastindex else match.group(0)
             if not secret:
                 secret = match.group(0)
+            # Already-masked values are idempotent — return unchanged.
+            if is_masked(secret):
+                return match.group(0)
             masked = mask_secret(secret) or ""
             # Keep a stable assignment prefix when the pattern captured a value.
             full = match.group(0)

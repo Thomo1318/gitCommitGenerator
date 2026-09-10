@@ -22,6 +22,7 @@ from typing import Any
 from git_cg.eval.binding.paths import resolve_repo_root
 from git_cg.eval.mirror import queue as export_queue
 from git_cg.eval.mirror.health import ExportHealth
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
 from git_cg.eval.mirror.secrets import MirrorSecretError, OpikRuntimeSecrets, resolve_opik_secrets
 from git_cg.eval.mirror.transport import ExportTransportError, Transport, scrub_export_note
@@ -213,6 +214,9 @@ def drain_queue(
 
         try:
             payload = export_queue.load_queue_payload(qid, repo_root=root, row=claimed)
+            cleaned_payload = sanitize_export_tree(payload)
+            if isinstance(cleaned_payload, dict):
+                payload = cleaned_payload
         except export_queue.ExportQueueError as exc:
             err_cls = getattr(exc, "error_class", "export_validation") or "export_validation"
             classes.append(err_cls)

@@ -21,16 +21,19 @@ Usage: git-cg eval resume [OPTIONS]
  Does not change how commits are ranked. Requires --checkpoint from a prior run.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --checkpoint             TEXT       Checkpoint id from a prior suite run (required).                                 │
-│ --fixture-root           DIRECTORY  Optional alternate fixture directory (for tests/lab layouts).                    │
-│ --keep-last              INTEGER    How many recent checkpoints to keep per suite family (default: 10).              │
-│                                     [default: 10]                                                                    │
-│ --keep-checkpoint                   Keep this run's checkpoint even when the run succeeds.                           │
-│ --gold-mode              TEXT       How tightly to compare against reference answers (default: strict).              │
-│                                     [default: strict]                                                                │
-│ --json                              Print machine-readable JSON instead of plain text.                               │
-│ --detail                            Show detailed help text and exit.                                                │
-│ --help                              Show this message and exit.                                                      │
+│ --checkpoint                   TEXT       Checkpoint id from a prior suite run (required).                           │
+│ --fixture-root                 DIRECTORY  Optional alternate fixture directory (for tests/lab layouts).              │
+│ --keep-last                    INTEGER    How many recent checkpoints to keep per suite family (default: 10).        │
+│                                           [default: 10]                                                              │
+│ --keep-checkpoint                         Keep this run's checkpoint even when the run succeeds.                     │
+│ --reclaim-stale-running        INTEGER    Prune suite `running` checkpoints older than N seconds. Off by default.    │
+│                                           Does not affect product accept; the live non-completed checkpoint stays    │
+│                                           protected.                                                                 │
+│ --gold-mode                    TEXT       How tightly to compare against reference answers (default: strict).        │
+│                                           [default: strict]                                                          │
+│ --json                                    Print machine-readable JSON instead of plain text.                         │
+│ --detail                                  Show detailed help text and exit.                                          │
+│ --help                                    Show this message and exit.                                                │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 

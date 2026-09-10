@@ -36,6 +36,17 @@ AUTHORITY_BOUNDARY_EXTRA: dict[str, list[str]] = {
         "* Project creation requires `--remote --create-missing`.",
         "* Local project pins and `config/feedback_definitions.json` remain vocabulary/source of truth.",
     ],
+    "eval gc": [
+        "* Offline acceptpath retention only (`--acceptpath` and `--older-than`).",
+        "* Bind never auto-evicts; this command is the operator retention path.",
+        "* Normal mode deletes stale non-authoritative debris only.",
+        "* Authoritative `sess_<32-hex>.json` names need `--force`.",
+        "* `.bind.lock` and legacy `sess_*.json` names are unmanaged even with `--force`.",
+        "* Stale-lock reclamation belongs to the binder. A leftover `.bind.lock` remains until a later bind reclaims it; GC will not delete it.",
+        "* `--dry-run` selects without deleting. Age is file mtime.",
+        "* Repository-resolution failures (`EVAL_REPO_UNRESOLVABLE`, exit 1) are distinct from store-integrity failures (`EVAL_STORE_INTEGRITY`, exit 4).",
+        "* Unexpected GC failures stay `EVAL_INTERNAL` (exit 4) with a JSON/human envelope and no traceback.",
+    ],
 }
 
 REPO = Path(__file__).resolve().parents[1]

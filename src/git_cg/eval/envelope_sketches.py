@@ -60,6 +60,7 @@ MINIMUM_SKETCH_COMMANDS: Final[frozenset[str]] = frozenset(
         "eval explain",
         "eval compare",
         "eval diagnose",
+        "eval gc",
         "eval issue list",
         "eval issue show",
         "eval checkpoint list",
@@ -225,7 +226,7 @@ def _build_registry() -> dict[str, DataSketch]:
             nested=(
                 "secrets: {api_key: masked|null, api_key_present: bool}",
                 "config: public_config_view (no raw tokens; may be null on config_error)",
-                "mirror_result: S4 mirror result projection",
+                "mirror_result: Opik config mirror-result projection",
             ),
             notes=(
                 "Canonical config surface. Deprecated `eval config show` emits "
@@ -237,7 +238,7 @@ def _build_registry() -> dict[str, DataSketch]:
             required_keys=("experiment_id", "failing_cases", "case_count", "filters"),
             nested=(
                 "failing_cases[]: {case_id, deterministic_pass, metric_ids[], failure_ids[], evaluator_errors[]}",
-                "filters: {regime?, family?, failure_id?, severity?} (NTH-02; null when unset)",
+                "filters: {regime?, family?, failure_id?, severity?} (null when unset)",
             ),
             notes=(
                 "Read-only. experiment_id may be null when no local runs exist. "
@@ -250,7 +251,7 @@ def _build_registry() -> dict[str, DataSketch]:
             required_keys=("experiment_id", "case_count", "cases", "headers"),
             nested=(
                 "cases[]: deterministic explain rows (blame_span, failure_ids, replay_command, ...)",
-                "headers: INT-29 pins/meta projection",
+                "headers: pins/meta projection",
             ),
             notes="No opaque LLM RCA. Secret-safe projection via evidence_scrub.",
         ),
@@ -283,6 +284,37 @@ def _build_registry() -> dict[str, DataSketch]:
             notes=(
                 "Idempotent fingerprint upsert into .eval/issues/. "
                 "--dry-run validates + projects without writing issues/ or diagnostics/."
+            ),
+        ),
+        "eval gc": _sketch(
+            "eval gc",
+            required_keys=(
+                "acceptpath",
+                "older_than",
+                "older_than_seconds",
+                "force",
+                "dry_run",
+                "selected",
+                "deleted",
+                "preserved",
+                "skipped",
+                "selected_count",
+                "deleted_count",
+                "preserved_count",
+                "skipped_count",
+            ),
+            nested=("selected[]/deleted[]/preserved[]/skipped[]: acceptpath filenames",),
+            notes=(
+                "Offline acceptpath retention. Requires --acceptpath and --older-than. "
+                "Bind never auto-evicts. "
+                "Normal mode preserves sess_<32-hex>.json reuse-identity names unless --force. "
+                ".bind.lock and legacy sess_*.json names are unmanaged even with --force; "
+                "stale-lock reclamation belongs to the binder. "
+                "--dry-run selects without deleting. Age is file mtime. "
+                "Repository-resolution failures stay EVAL_REPO_UNRESOLVABLE (exit 1); "
+                "store path failures stay EVAL_STORE_INTEGRITY (exit 4). "
+                "Unexpected GC failures stay EVAL_INTERNAL (exit 4). "
+                "A leftover .bind.lock remains until a later bind reclaims it."
             ),
         ),
         "eval issue list": _sketch(
@@ -404,9 +436,7 @@ def _build_registry() -> dict[str, DataSketch]:
                 "rollups[]: multi-rater dimension/outcome majority projection",
                 "filters: {case_id?, bundle_id?}",
             ),
-            notes=(
-                "NTH-05 read-only multi-rater UX. authority is always advisory; can_sole_promote_gold is always false."
-            ),
+            notes=("Read-only multi-rater UX. authority is always advisory; can_sole_promote_gold is always false."),
         ),
         "eval train-export": _sketch(
             "eval train-export",
@@ -439,7 +469,7 @@ def _build_registry() -> dict[str, DataSketch]:
             ),
             notes=(
                 "ci_sole_green and product_accept_authority stay false. "
-                "No .eval/quarantine/ store; field quarantine remains S4 meta. "
+                "No .eval/quarantine/ store; field quarantine remains Opik export metadata. "
                 "--dry-run is an alias of --no-write (validate + would-write; zero store mutation)."
             ),
         ),
@@ -528,7 +558,7 @@ def _build_registry() -> dict[str, DataSketch]:
                 "fail-open: {note: fail_open, error?}",
             ),
             notes=(
-                "F4 fail-open drain. Exact key subset depends on mode/dry-run/config path; "
+                "Fail-open drain. Exact key subset depends on mode/dry-run/config path; "
                 "do not invent keys outside the optional set. Config-invalid may use empty data {}."
             ),
         ),
@@ -571,7 +601,7 @@ def render_sketches_markdown(
     """Render the API-map appendix section lines (no trailing file newline)."""
     reg = ENVELOPE_DATA_SKETCHES if sketches is None else sketches
     lines: list[str] = [
-        "## Per-command envelope `data` sketches (S6-A08)",
+        "## Per-command envelope `data` sketches",
         "",
         "Command-discriminated top-level keys for `cli_output_envelope_v1.data`.",
         "The envelope schema keeps `data` as an object; **these sketches close the",

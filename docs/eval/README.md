@@ -436,6 +436,15 @@ S3 binds the **real accepted final message bytes** (exact `COMMIT_EDITMSG` / acc
 
 Truthy = `1`/`true`/`on`/`yes`; falsy = unset/empty/`0`/`false`/`off`/`no`; any other token fails closed to **off**. A normal `git-cg commit` makes **no** `.eval` writes and **no** network calls when capture is off.
 
+Capture-on miss-scan diagnostics (not product-accept knobs):
+
+| Variable | Default | Meaning |
+|:---|:---|:---|
+| `GIT_CG_EVAL_ACCEPTPATH_SCAN_WINDOW` | `512` | Positive ASCII-digit parse window after an index-cache miss. Invalid, blank, non-ASCII, or non-positive values use `512`. |
+| `GIT_CG_EVAL_ACCEPTPATH_FULL_SCAN` | unset | Exact token `1` disables the parse bound. Any other value leaves the bound in place. |
+
+The miss-scan still lists and stats every `*.json` entry to rank recency, so the directory walk remains O(n). Only candidate parsing is capped. `meta.scan_bounded=true` means the eligible set exceeded the window, including when the matching bundle is inside it. Cache hits, complete scans, and full-scan overrides omit the marker. A recency index or bounded directory cursor is a separate follow-up. `K=512` is the fail-closed default, not a ratified lock budget.
+
 ### Local Layer-A paths (repo-local, gitignored)
 
 ```text
@@ -444,7 +453,9 @@ Truthy = `1`/`true`/`on`/`yes`; falsy = unset/empty/`0`/`false`/`off`/`no`; any 
   sessions/<session_thread_id>.json             # commit_session_thread_v1 twin
 ```
 
-`/.eval/` is gitignored. Writes are atomic (temp + `os.replace`), mode `0600`/`0700`, and path-contained under the resolved repo root. Bundle JSON files are authoritative; any `index.json` is rebuildable cache only.
+`/.eval/` is gitignored. Writes are atomic (temp + `os.replace`), mode `0600`/`0700`, and path-contained under the resolved repo root. Bundle JSON files are authoritative; any `index.json` is rebuildable cache only. Index write-through runs only while a bind lock is held. Lock failure still writes the authoritative bundle and never blocks accept.
+
+`bind_final_accept(..., write=False)` is an in-memory dry-run. It does not resolve a repo root, take the bind lock, scan existing bundles, or write bundle or index files. With no explicit `BindInput.session_thread_id` the preview mints a fresh session identity. A supplied id is retained. That preview cannot reuse an on-disk bundle identity.
 
 ### Product-pass vs eval-fail (mandatory split)
 
@@ -455,6 +466,10 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 `.eval/` can contain **final commit messages and drafts**. Gitignore is **not** retention:
 
 * Local maintainer responsibility to delete/rotate `.eval/` contents.
+* Bind never auto-evicts acceptpath. Operators reclaim debris with `git-cg eval gc --acceptpath --older-than <duration>`.
+* Normal mode deletes stale non-authoritative debris only. Authoritative `sess_<32-hex>.json` names need `--force`.
+* `.bind.lock` and legacy `sess_*.json` names are unmanaged even with `--force`. Stale-lock reclamation belongs to the binder. A leftover `.bind.lock` remains until a later bind reclaims it; GC will not delete it.
+* `--dry-run` selects without deleting.
 * Do **not** enable capture on shared/public repos without scrub.
 * No automatic cloud upload in S3 (that is S4); capture is off by default.
 * Default redaction profile is `default_scrub`; the final-message text is retained verbatim locally because it is the scored artifact (diffs/prompts/secrets are still scrubbed).
@@ -462,6 +477,10 @@ A **valid final message with incomplete evidence** (missing trajectory, capture 
 ### Boundary
 
 S3 **emits and binds local evidence only.** Upload/drain is **S4**; gated advisory Lane C′ judges are **S5** (see [S5](#s5--gated-lane-c-cohort--optional-judge-lab-233)); full eval CLI/doctor/amend-brief/review queue is **S6**; ADR-0011 rewrite is **S7**.
+
+### Mutation-testing advisory
+
+`just eval-mutation-advisory` prints [`mutation-testing-advisory.md`](./mutation-testing-advisory.md). Mutation tooling is not installed. Not a CI or product-accept gate.
 
 ## S4 — non-blocking Opik mirror + owner corpus lake
 
@@ -904,6 +923,7 @@ Full live tree: [`operator_api_map.md`](./operator_api_map.md). Highlights:
 | Suite ops | `eval run` · `eval resume` · `eval recompute-scores` · `eval encode-fixture` · `eval materialize-core-goldens` |
 | Health | `eval doctor` · `eval opik doctor` · `eval opik verify` (optional/advisory) · `eval opik config show` · `eval triage` |
 | Debug / diag | `eval failures` · `eval explain` · `eval compare` · `eval diagnose` · `eval issue list\|show\|resolve\|reopen\|suppress` |
+| Retention | `eval gc` |
 | Replay / review / promote | `eval replay` · `eval review *` (incl. `rollup`) · `eval promote` |
 | Sessions / brief | `eval session show` · `eval thread show` · `eval amend-brief` |
 | Train / dogfood | `eval train-export` · `eval dogfood` (**dark-launch**; hidden from regular help) |
@@ -928,7 +948,7 @@ Naming locks: **`eval run`** is canonical (not `eval suite run`); session/thread
 | **1** | soft / warn or scored red | Doctor warn-only or non-terminal red aggregate where command defines it |
 | **2** | usage | `EVAL_USAGE` — bad args, illegal issue transition, invalid ids |
 | **3** | pin / compat | `EVAL_COMPAT_HASH_MISMATCH` — resume hard-stop; checkpoint bytes preserved |
-| **4** | store integrity | `EVAL_STORE_INTEGRITY` — missing/corrupt Layer-A JSON, path escape, schema-invalid store |
+| **4** | store integrity | `EVAL_STORE_INTEGRITY` — missing/corrupt Layer-A JSON, path escape, schema-invalid store; `EVAL_INTERNAL` — unexpected GC failure on `eval gc` |
 
 JSON operator commands emit one `cli_output_envelope_v1` (`ok`, `code`, `message`, `data`, `warnings`). Envelope `data` sketches are gated by `python -m git_cg.eval.api_map --check` (**S6-A07/A08**).
 

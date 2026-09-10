@@ -48,6 +48,7 @@ from git_cg.eval.mirror.payload import (
     load_payload_artifact,
     persist_payload_artifact,
 )
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.schema_pack import validate_instance
 
 __all__ = [
@@ -143,7 +144,8 @@ def _transport_body_from_batch(batch: dict[str, Any]) -> dict[str, Any]:
     meta = batch.get("meta") if isinstance(batch.get("meta"), dict) else {}
     body = meta.get("transport_body")
     if isinstance(body, dict):
-        return body
+        cleaned = sanitize_export_tree(body)
+        return cleaned if isinstance(cleaned, dict) else body
     # Fail closed: envelope without durable body cannot be enqueued meaningfully.
     raise ExportQueueError(
         "export batch missing meta.transport_body — refuse empty item-id-only enqueue",
@@ -236,6 +238,11 @@ def enqueue_export_batch(
     if batch.get("metric_catalog"):
         item["metric_catalog"] = batch["metric_catalog"]
 
+    cleaned_item = sanitize_export_tree(item)
+    if not isinstance(cleaned_item, dict):
+        raise ExportQueueError("export queue item is not an object after sanitization")
+    item = cleaned_item
+
     try:
         validate_instance("export_queue_item_v1", item)
     except Exception as exc:
@@ -256,7 +263,8 @@ def load_queue_item(queue_id: str, repo_root: Path | None = None) -> dict[str, A
         raise ExportQueueError(f"unreadable export queue item {queue_id!r}: {exc}") from exc
     if not isinstance(item, dict):
         raise ExportQueueError(f"export queue item is not an object: {queue_id!r}")
-    return item
+    cleaned = sanitize_export_tree(item)
+    return cleaned if isinstance(cleaned, dict) else item
 
 
 def load_queue_payload(
@@ -272,12 +280,14 @@ def load_queue_payload(
     sha = item.get("payload_sha256")
     size = item.get("payload_size_bytes")
     try:
-        return load_payload_artifact(
+        payload = load_payload_artifact(
             ref,
             repo_root=root,
             expected_sha256=str(sha) if sha else None,
             expected_size=int(size) if size is not None else None,
         )
+        cleaned = sanitize_export_tree(payload)
+        return cleaned if isinstance(cleaned, dict) else payload
     except ExportPayloadError as exc:
         raise ExportQueueError(str(exc), error_class=exc.error_class) from exc
 

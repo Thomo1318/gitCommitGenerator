@@ -39,6 +39,7 @@ Usage: git-cg eval [OPTIONS] COMMAND [ARGS]...
 │ explain                   Show a deterministic explanation for a failing case.                                       │
 │ compare                   Diff two cases (structure and metrics).                                                    │
 │ diagnose                  Create or update a diagnostic issue from a failure.                                        │
+│ gc                        Purge stale acceptpath debris; authoritative bundles need --force.                         │
 │ checkpoint                Local evaluation checkpoint inventory (read-only).                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Review & sessions ──────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -81,6 +82,7 @@ Usage: git-cg eval [OPTIONS] COMMAND [ARGS]...
 * [`git-cg eval export-retry`](export-retry.md) — Alias of eval export retry.
 * [`git-cg eval export-status`](export-status.md) — Alias of eval export status.
 * [`git-cg eval failures`](failures.md) — List failing cases with metric and failure ids.
+* [`git-cg eval gc`](gc.md) — Purge stale acceptpath debris; authoritative bundles need --force.
 * [`git-cg eval issue`](issue.md) — Manage local diagnostic issues.
 * [`git-cg eval materialize-core-goldens`](materialize-core-goldens.md) — Rebuild checked-in evaluation reference files used by tests.
 * [`git-cg eval opik`](opik.md) — Opik health checks and secret-safe config.

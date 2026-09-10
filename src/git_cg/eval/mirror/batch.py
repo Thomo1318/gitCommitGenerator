@@ -22,6 +22,7 @@ from typing import Any, Final
 
 from git_cg.eval.corpus.canonical import canonical_json_bytes, content_sha256
 from git_cg.eval.enums import RedactionProfile
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 from git_cg.eval.schema_pack import validate_instance
 
@@ -134,14 +135,22 @@ def _build_batch(
     envelope exceeds ``max_bytes``.
     """
     # Transport body for this batch slice (redacted items keyed by ref).
+    sanitized_payloads = []
+    for payload in item_payloads:
+        cleaned = sanitize_export_tree(payload)
+        if not isinstance(cleaned, dict):
+            raise TypeError(f"item payload must be a dict, got {type(cleaned).__name__}")
+        sanitized_payloads.append(cleaned)
     transport_body = {
-        "items": [{"item_ref": ref, "payload": payload} for ref, payload in zip(item_refs, item_payloads, strict=True)],
+        "items": [
+            {"item_ref": ref, "payload": payload} for ref, payload in zip(item_refs, sanitized_payloads, strict=True)
+        ],
         "redaction_profile": profile.value,
         "schema_pack": schema_pin,
         "metric_catalog": catalog_pin,
     }
     payload_sha = content_sha256(transport_body)
-    bundle_hashes = [content_sha256(p) for p in item_payloads]
+    bundle_hashes = [content_sha256(p) for p in sanitized_payloads]
     key = batch_idempotency_key(
         bundle_hashes=bundle_hashes,
         project_lane=project_lane or project,
@@ -189,7 +198,8 @@ def _build_batch(
     if size > max_bytes:
         raise ExportSizeError(f"batch envelope {size} bytes exceeds ceiling {max_bytes} bytes (export_size)")
     validate_instance("export_batch_v1", batch)
-    return batch
+    cleaned = sanitize_export_tree(batch)
+    return cleaned if isinstance(cleaned, dict) else batch
 
 
 def build_export_batches(
@@ -255,14 +265,17 @@ def build_export_batches(
     for item_ref, payload in items:
         if not isinstance(payload, dict):
             raise TypeError(f"item payload must be a dict, got {type(payload).__name__}")
+        cleaned = sanitize_export_tree(payload)
+        if not isinstance(cleaned, dict):
+            raise TypeError(f"item payload must be a dict, got {type(cleaned).__name__}")
         ref = str(item_ref)
         try:
-            try_batch([ref], [payload])
+            try_batch([ref], [cleaned])
         except ExportSizeError as exc:
             raise ExportSizeError(
                 f"item {ref!r} alone exceeds final envelope ceiling {max_bytes} bytes (export_size)"
             ) from exc
-        validated.append((ref, payload))
+        validated.append((ref, cleaned))
 
     batches: list[dict[str, Any]] = []
     current_refs: list[str] = []

@@ -418,6 +418,38 @@ Print machine-readable JSON instead of plain text.
 
 Repo root (defaults to discovery).
 
+## `git-cg eval gc`
+
+- **Usage**: `git-cg eval gc [FLAGS]`
+
+Purge stale acceptpath debris; authoritative bundles need --force.
+
+### Flags
+
+#### `--acceptpath`
+
+Operate on .eval/bundles/acceptpath/ (required; only supported scope).
+
+#### `--older-than <DURATION>`
+
+Required positive duration with s/m/h/d suffix (for example 7d, 2h, 15m, 30s).
+
+#### `--force`
+
+Allow deletion of authoritative acceptpath bundles required for reuse identity.
+
+#### `--dry-run`
+
+Select matching files without deleting them.
+
+#### `--json`
+
+Print machine-readable JSON instead of plain text.
+
+#### `--root <DIR>`
+
+Repo root (defaults to discovery).
+
 ## `git-cg eval checkpoint`
 
 - **Usage**: `git-cg eval checkpoint <SUBCOMMAND>`

@@ -34,6 +34,7 @@ git-cg = "git_cg.main:app"
 dev = [
   "harbor>=0.22.0",
   "matplotlib>=3.11.1",
+  "pyright>=1.1.411",
   "pytest>=9",
   "pytest-cov>=7",
   "ruff>=0.15.15",
@@ -86,7 +87,10 @@ packages = ["src/git_cg"]
 extraPaths = ["src", "scripts"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=src/git_cg --cov=scripts --cov-branch --cov-report=term-missing:skip-covered"
+addopts = "--cov=src/git_cg --cov=scripts --cov-branch --cov-report=term-missing:skip-covered -m 'not eval_binding_bench'"
+markers = [
+  "eval_binding_bench: 1k/10k acceptpath miss-scan timings; excluded from default pytest. Run with just eval-binding-bench.",
+]
 python_files = "test_*.py"
 pythonpath = ["src"]
 testpaths = ["tests"]

@@ -35,7 +35,7 @@ from git_cg.eval.mirror.projections import (
     project_session_thread,
 )
 from git_cg.eval.mirror.queue import ExportQueueError, enqueue_export_batch
-from git_cg.eval.mirror.redaction import redact_bundle_for_export
+from git_cg.eval.mirror.redaction import redact_bundle_for_export, sanitize_export_tree
 from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
 from git_cg.eval.mirror.train import build_train_projection
 
@@ -357,8 +357,10 @@ def build_export_plan(
             }
             if thread_payload is not None:
                 payload["thread"] = thread_payload
-
-            transport_items.append((item_ref, payload))
+            cleaned_payload = sanitize_export_tree(payload)
+            if not isinstance(cleaned_payload, dict):
+                raise TypeError("composed transport payload must be a dict")
+            transport_items.append((item_ref, cleaned_payload))
             projected += 1
         except (ProjectionError, ExportSizeError, ValueError, TypeError) as exc:
             failed += 1
@@ -391,16 +393,15 @@ def build_export_plan(
             )
             exp_name = str(experiment.get("experiment_name") or "")
             thread_payload = project_session_thread(session, experiment_name=exp_name)
-            transport_items.append(
-                (
-                    s_ref,
-                    {
-                        "thread": thread_payload,
-                        "experiment": experiment,
-                        "authority": (thread_payload.get("metadata") or {}).get("authority"),
-                    },
-                )
-            )
+            session_payload: dict[str, Any] = {
+                "thread": thread_payload,
+                "experiment": experiment,
+                "authority": (thread_payload.get("metadata") or {}).get("authority"),
+            }
+            cleaned_session = sanitize_export_tree(session_payload)
+            if not isinstance(cleaned_session, dict):
+                raise TypeError("composed session payload must be a dict")
+            transport_items.append((s_ref, cleaned_session))
             projected += 1
         except (ProjectionError, ValueError, TypeError) as exc:
             failed += 1
@@ -412,6 +413,9 @@ def build_export_plan(
     if do_train and redacted_bundles:
         try:
             train_payload = build_train_projection(redacted_bundles)
+            cleaned_train = sanitize_export_tree(train_payload)
+            if isinstance(cleaned_train, dict):
+                train_payload = cleaned_train
         except Exception as exc:  # train projection must not kill export plan
             error_classes.append("export_validation")
             notes.append(f"train_projection: {exc}"[:200])

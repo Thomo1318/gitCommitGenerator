@@ -9,6 +9,14 @@ Covers the locked binder-core contract surface (D1-D6, N2/N6/N19):
   ``final_message_sha256`` over the exact bytes;
 * bytes-aware hashing (N19.4/N20.3): ``bytes | str``; invalid UTF-8 projects
   with ``utf-8-replace`` while the hash stays over the original bytes;
+* hash-source asymmetry: ``bind_final_accept`` hashes original bytes via
+  ``message_sha256_bytes``; ``bind_unbound`` hashes supplied projected text
+  via ``message_sha256``;
+* draft persistence: ``meta.generated_message`` is stored only when the
+  scrubbed draft is non-empty;
+* validation asymmetry: ``bind_final_accept`` never raises for
+  product-accept reasons; ``bind_unbound`` raises ``ValueError`` on
+  invalid reason/class inputs;
 * scoped idempotency (N19.2/N20.1): same event+bytes ⇒ reuse; new event+same
   bytes ⇒ new session; missing token ⇒ new session;
 * atomic persist + containment (N19.3): bundle written under
@@ -257,6 +265,28 @@ def test_bind_invalid_utf8_projects_replace_and_hashes_original(tmp_path) -> Non
     validate_instance("ape_bundle_v1", bundle)
 
 
+def test_bind_final_accept_hashes_original_bytes(tmp_path) -> None:
+    """Final-accept hash source is original bytes, not replacement-decoded text."""
+    raw = b"\xff\xfe original-bytes hash\n"
+    projected = raw.decode("utf-8", errors="replace")
+    result = _bind(tmp_path, final_message=raw)
+    assert result.bound is True
+    assert result.bundle["final_message_sha256"] == message_sha256_bytes(raw)
+    assert result.bundle["final_message_sha256"] != message_sha256(projected)
+    assert result.bundle["final_message"] == projected
+
+
+def test_bind_unbound_hashes_projected_text() -> None:
+    """Unbound hash source is the supplied projected text, not original bytes."""
+    raw = b"\xff\xfe original-bytes hash\n"
+    projected = raw.decode("utf-8", errors="replace")
+    result = bind_unbound(reason="fixture_only", final_message=projected)
+    assert result.bound is False
+    assert result.bundle["final_message_sha256"] == message_sha256(projected)
+    assert result.bundle["final_message_sha256"] != message_sha256_bytes(raw)
+    assert result.bundle["final_message"] == projected
+
+
 def test_bind_empty_final_message_unbound(tmp_path) -> None:
     result = _bind(tmp_path, final_message="   \n  ")
     assert result.bound is False
@@ -325,6 +355,49 @@ def test_synth_s3_draft_vs_final(tmp_path) -> None:
     assert bundle["final_message"] != GENERATED
 
 
+def test_generated_message_persisted_only_when_scrubbed_nonempty(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-6: persist generated_message only after a non-empty scrubbed result."""
+    kept = _bind(
+        tmp_path,
+        generated_message="  keep this draft  ",
+        accept_event_token="ae_draft_keep",
+    )
+    assert kept.bound is True
+    assert kept.bundle["meta"]["generated_message"] == "  keep this draft  "
+
+    omitted = _bind(
+        tmp_path,
+        generated_message="   \n\t  ",
+        accept_event_token="ae_draft_omit_ws",
+    )
+    assert omitted.bound is True
+    assert "generated_message" not in omitted.bundle["meta"]
+
+    absent = _bind(tmp_path, generated_message=None, accept_event_token="ae_draft_omit_none")
+    assert absent.bound is True
+    assert "generated_message" not in absent.bundle["meta"]
+
+    monkeypatch.setattr("git_cg.eval.binding.binder.mask_secrets_in_text", lambda _value: "")
+    scrubbed_empty = _bind(
+        tmp_path,
+        generated_message="nonempty draft that scrubs away",
+        accept_event_token="ae_draft_omit_scrubbed",
+    )
+    assert scrubbed_empty.bound is True
+    assert "generated_message" not in scrubbed_empty.bundle["meta"]
+
+
+def test_bind_final_accept_does_not_raise_for_product_accept_reasons(tmp_path) -> None:
+    """F-7: bind_final_accept reports product-accept failures on BindResult."""
+    empty = _bind(tmp_path, final_message="   \n  ")
+    assert empty.bound is False
+    assert empty.unbound_reason == "final_message_absent"
+
+    invalid = _bind(tmp_path, redaction_profile="not_a_profile")
+    assert invalid.bound is False
+    assert invalid.unbound_reason == "invalid_redaction_profile"
+
+
 # ---------------------------------------------------------------------------
 # N6 — honest unbound (fail closed)
 # ---------------------------------------------------------------------------
@@ -354,6 +427,16 @@ def test_bind_unbound_happy_produces_schema_valid_non_final_accept() -> None:
 def test_bind_unbound_rejects_unknown_class() -> None:
     with pytest.raises(ValueError, match="artifact_class"):
         bind_unbound(reason="x", artifact_class="not_a_class")
+
+
+def test_bind_unbound_raises_for_invalid_reason_or_class() -> None:
+    """F-7: bind_unbound fail-closes invalid reason/class with ValueError."""
+    with pytest.raises(ValueError, match="EVAL_FAKE_BOUND"):
+        bind_unbound(reason="")
+    with pytest.raises(ValueError, match="EVAL_FAKE_BOUND"):
+        bind_unbound(reason="ok", artifact_class="final_accept")
+    with pytest.raises(ValueError, match="artifact_class"):
+        bind_unbound(reason="ok", artifact_class="not_a_class")
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +486,41 @@ def test_write_disabled_produces_bundle_without_persist(tmp_path) -> None:
     validate_instance("ape_bundle_v1", result.bundle)
 
 
+def test_write_disabled_mints_fresh_preview_identity(tmp_path) -> None:
+    """Dry-run cannot consult on-disk reuse and mints a fresh preview id."""
+    first = bind_final_accept(
+        BindInput(final_message=FINAL_ACCEPTED, accept_event_token="ae_dry"),
+        repo_root=tmp_path,
+        write=False,
+    )
+    second = bind_final_accept(
+        BindInput(final_message=FINAL_ACCEPTED, accept_event_token="ae_dry"),
+        repo_root=tmp_path,
+        write=False,
+    )
+    assert first.bound is True
+    assert second.bound is True
+    assert first.paths_written == ()
+    assert second.paths_written == ()
+    assert not (tmp_path / ".eval").exists()
+    assert first.bundle["session_thread_id"] != second.bundle["session_thread_id"]
+
+    supplied = "sess_" + ("ef" * 16)
+    preview = bind_final_accept(
+        BindInput(
+            final_message=FINAL_ACCEPTED,
+            accept_event_token="ae_dry",
+            session_thread_id=supplied,
+        ),
+        repo_root=tmp_path,
+        write=False,
+    )
+    assert preview.bound is True
+    assert preview.paths_written == ()
+    assert preview.bundle["session_thread_id"] == supplied
+    assert not (tmp_path / ".eval").exists()
+
+
 def test_scan_reuse_skips_index_and_corrupt_files(tmp_path) -> None:
     """Bundle JSON is authority; index.json + corrupt files must never be reused."""
     from git_cg.eval.binding.binder import _scan_reuse_key
@@ -449,15 +567,117 @@ def test_scan_reuse_skips_index_and_corrupt_files(tmp_path) -> None:
     assert _scan_reuse_key(bundles, key) is None
     assert _scan_reuse_key(tmp_path / "missing", key) is None
 
-    # Authoritative match still works.
+    # Schema-valid candidate is adoptable.
     good = {
+        "schema_version": "ape_bundle_v1",
+        "case_id": "acceptpath:sess_good",
+        "artifact_class": "final_accept",
+        "bound": True,
         "final_message_sha256": message_sha256(FINAL_ACCEPTED),
         "session_thread_id": "sess_good",
-        "case_id": "acceptpath:sess_good",
         "meta": {"accept_event": {"token": "ae_scan", "repo_root": str(tmp_path.resolve())}},
     }
     (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
     assert _scan_reuse_key(bundles, key)["session_thread_id"] == "sess_good"
+
+
+def test_scan_skips_symlinked_bundle_files(tmp_path) -> None:
+    """Matching *.json symlink must not donate reuse identity (F-12)."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    repo_root = str(tmp_path.resolve())
+    token = "ae_scan_symlink"
+    sha = message_sha256(FINAL_ACCEPTED)
+
+    def _candidate(session_id: str) -> dict:
+        return {
+            "schema_version": "ape_bundle_v1",
+            "case_id": f"acceptpath:{session_id}",
+            "artifact_class": "final_accept",
+            "bound": True,
+            "final_message_sha256": sha,
+            "session_thread_id": session_id,
+            "meta": {"accept_event": {"token": token, "repo_root": repo_root}},
+        }
+
+    good = _candidate("sess_good")
+    (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
+
+    # Name sorts before sess_good.json so a followed symlink would be adopted first.
+    poison = _candidate("sess_alink")
+    outside = tmp_path / "outside_payload.json"
+    outside.write_text(json.dumps(poison), encoding="utf-8")
+    link = bundles / "sess_alink.json"
+    link.symlink_to(outside)
+    assert link.is_symlink()
+
+    key = (repo_root, token, sha)
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    assert scanned["session_thread_id"] == "sess_good"
+
+
+def test_scan_skips_non_regular_files(tmp_path) -> None:
+    """Matching *.json directory is skipped without raising (F-12)."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    repo_root = str(tmp_path.resolve())
+    token = "ae_scan_nonregular"
+    sha = message_sha256(FINAL_ACCEPTED)
+    good = {
+        "schema_version": "ape_bundle_v1",
+        "case_id": "acceptpath:sess_good",
+        "artifact_class": "final_accept",
+        "bound": True,
+        "final_message_sha256": sha,
+        "session_thread_id": "sess_good",
+        "meta": {"accept_event": {"token": token, "repo_root": repo_root}},
+    }
+    (bundles / "sess_good.json").write_text(json.dumps(good), encoding="utf-8")
+    # Directory named *.json sorts first; skip it and still adopt the regular file.
+    (bundles / "aaa.json").mkdir()
+
+    key = (repo_root, token, sha)
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    assert scanned["session_thread_id"] == "sess_good"
+
+
+def test_scan_adopts_hard_linked_regular_bundle(tmp_path) -> None:
+    """Hard-linked regular files remain eligible miss-scan candidates."""
+    from git_cg.eval.binding.binder import _scan_reuse_key
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    repo_root = str(tmp_path.resolve())
+    token = "ae_scan_hardlink"
+    sha = message_sha256(FINAL_ACCEPTED)
+    session_id = "sess_" + ("ab" * 16)
+    payload = {
+        "schema_version": "ape_bundle_v1",
+        "case_id": f"acceptpath:{session_id}",
+        "artifact_class": "final_accept",
+        "bound": True,
+        "final_message_sha256": sha,
+        "session_thread_id": session_id,
+        "meta": {"accept_event": {"token": token, "repo_root": repo_root}},
+    }
+    inode = tmp_path / "inode_source.json"
+    inode.write_text(json.dumps(payload), encoding="utf-8")
+    candidate = bundles / f"{session_id}.json"
+    candidate.hardlink_to(inode)
+    assert candidate.is_file()
+    assert not candidate.is_symlink()
+    assert candidate.stat().st_nlink >= 2
+
+    key = (repo_root, token, sha)
+    scanned = _scan_reuse_key(bundles, key)
+    assert scanned is not None
+    assert scanned["session_thread_id"] == session_id
 
 
 def test_bind_write_error_reports_without_raising(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -469,6 +689,25 @@ def test_bind_write_error_reports_without_raising(tmp_path, monkeypatch: pytest.
     assert result.bound is True
     assert result.paths_written == ()
     assert result.errors and result.errors[0].startswith("bind_write_error:")
+
+
+def test_persist_malformed_session_id_reports_invalid_session_thread_id(tmp_path) -> None:
+    from git_cg.eval.binding.binder import _persist_bundle
+
+    bundles = tmp_path / ".eval" / "bundles" / "acceptpath"
+    bundles.mkdir(parents=True)
+    paths_written, errors = _persist_bundle(
+        root=tmp_path,
+        bundles_dir=bundles,
+        session_id="sess_malformed",
+        bundle={"schema_version": "ape_bundle_v1"},
+        key=None,
+        index_path=None,
+        allow_cache_write=False,
+    )
+    assert paths_written == ()
+    assert errors == ("bind_write_error: invalid session_thread_id",)
+    assert list(bundles.iterdir()) == []
 
 
 def test_schema_invalid_meta_returns_unbound(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -510,8 +749,8 @@ def test_reuse_ignores_blank_session_and_case_ids(tmp_path) -> None:
     target.write_text(json.dumps(blank), encoding="utf-8")
     key = (str(tmp_path.resolve()), "ae_blankish", first.bundle["final_message_sha256"])
     scanned = _scan_reuse_key(bundles, key)
-    assert scanned is not None
-    # Re-bind should mint a fresh session because blank ids are ignored.
+    assert scanned is None
+    # Re-bind mints a fresh session because blank ids are not adoptable.
     second = _bind(tmp_path, accept_event_token="ae_blankish")
     assert second.bound is True
     assert second.bundle["session_thread_id"].startswith("sess_")

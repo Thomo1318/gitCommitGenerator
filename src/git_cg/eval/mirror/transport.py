@@ -30,6 +30,7 @@ import re
 import time
 from typing import Any, Final, Protocol, runtime_checkable
 
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.mirror.secrets import OpikRuntimeSecrets
 
 __all__ = [
@@ -233,7 +234,10 @@ class OpikSdkTransport:
                 host=secrets.base_url,
                 api_key=secrets.api_key or None,
             )
-            self._send(client, experiment_name=experiment_name, payload=payload)
+            cleaned_payload = sanitize_export_tree(payload)
+            if not isinstance(cleaned_payload, dict):
+                raise ExportTransportError("export_validation", "transport payload must be a JSON object")
+            self._send(client, experiment_name=experiment_name, payload=cleaned_payload)
             self._bounded_flush(client, timeout_ms=timeout_ms, deadline=deadline)
         except ExportTransportError:
             raise
@@ -303,12 +307,14 @@ class OpikSdkTransport:
         if not output_obj and thread:
             output_obj = {"messages": thread.get("messages") or []}
 
-        return {
+        projected = {
             "name": experiment_name,
             "input": input_obj if isinstance(input_obj, dict) else {},
             "output": output_obj if isinstance(output_obj, dict) else {},
             "metadata": metadata,
         }
+        cleaned = sanitize_export_tree(projected)
+        return cleaned if isinstance(cleaned, dict) else projected
 
     @staticmethod
     def _project_trace_fields(payload: dict[str, Any], *, experiment_name: str) -> list[dict[str, Any]]:
@@ -353,10 +359,14 @@ class OpikSdkTransport:
                             item_index=index,
                         )
                     )
-                return projected
+                cleaned_projected: list[dict[str, Any]] = []
+                for item in projected:
+                    cleaned = sanitize_export_tree(item)
+                    cleaned_projected.append(cleaned if isinstance(cleaned, dict) else item)
+                return cleaned_projected
 
         # Narrow back-compat: already-projected flat surfaces.
-        return [
+        fallback = [
             {
                 "name": experiment_name,
                 "input": payload.get("input", {}) if isinstance(payload.get("input"), dict) else {},
@@ -364,6 +374,8 @@ class OpikSdkTransport:
                 "metadata": payload.get("metadata", {}) if isinstance(payload.get("metadata"), dict) else {},
             }
         ]
+        cleaned_fallback = sanitize_export_tree(fallback)
+        return cleaned_fallback if isinstance(cleaned_fallback, list) else fallback
 
     @staticmethod
     def _send(client: Any, *, experiment_name: str, payload: dict[str, Any]) -> None:
@@ -436,11 +448,12 @@ class MockTransport:
         timeout_ms: int,
     ) -> None:
         """Record upload kwargs for tests; optionally raise a scripted failure."""
+        cleaned_payload = sanitize_export_tree(payload)
         self.calls.append(
             {
                 "project": project,
                 "experiment_name": experiment_name,
-                "payload": payload,
+                "payload": cleaned_payload if isinstance(cleaned_payload, dict) else payload,
                 "timeout_ms": timeout_ms,
             }
         )

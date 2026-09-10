@@ -34,6 +34,7 @@ Law (plan §7.2.14 / §10.6 / P0-1):
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -585,3 +586,13 @@ def mask_secret(value: str | None) -> str | None:
     if value is None:
         return None
     return f"•••[len={len(value)}]"
+
+
+# Canonical pattern for the mask_secret output format.
+# evidence_scrub.py depends on this shape for idempotency checks.
+MASK_MARKER_PATTERN: re.Pattern[str] = re.compile(r"^•••\[len=\d+\]$")
+
+
+def is_masked(value: str) -> bool:
+    """True when *value* is already a ``mask_secret`` output marker."""
+    return bool(MASK_MARKER_PATTERN.fullmatch(value))

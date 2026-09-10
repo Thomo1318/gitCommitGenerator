@@ -2,12 +2,16 @@ name: Promptfoo Code Scan
 
 on:
   pull_request:
-    types: [opened, ready_for_review]
+    types: [opened, ready_for_review, synchronize, reopened]
   workflow_dispatch:
     inputs:
       pr_number:
         description: 'PR number to scan'
         required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   security-scan:
@@ -26,5 +30,4 @@ jobs:
       - name: Run Promptfoo Code Scan
         uses: promptfoo/code-scan-action@v0
         with:
-          min-severity: medium
-          
+          min-severity: low
