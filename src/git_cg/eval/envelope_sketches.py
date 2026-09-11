@@ -449,6 +449,7 @@ def _build_registry() -> dict[str, DataSketch]:
                 "scrub_report",
                 "positive_gold_count",
                 "negative_count",
+                "excluded_profile",
                 "excluded_unlabeled",
                 "written",
                 "paths",
