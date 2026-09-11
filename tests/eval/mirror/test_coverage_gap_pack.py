@@ -315,24 +315,23 @@ class TestCompositionCoverage:
         assert plan2.failed == 1
         assert any("sess fail" in n for n in plan2.notes)
 
-    def test_train_projection_failure_is_soft(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_train_projection_runtime_error_propagates(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unexpected train projection errors propagate (no broad catch)."""
         from git_cg.eval.mirror import composition as composition_mod
 
         def boom(*_a, **_k):
             raise RuntimeError("train blew up")
 
         monkeypatch.setattr(composition_mod, "build_train_projection", boom)
-        plan = build_export_plan(
-            {"bundles": [_bundle()], "include_train": True},
-            CONFIG,
-            repo_root=tmp_path,
-            git_sha="abc1234",
-            enqueue=False,
-            include_train=True,
-        )
-        assert plan.projected == 1
-        assert any("train_projection" in n for n in plan.notes)
-        assert "export_validation" in plan.error_classes
+        with pytest.raises(RuntimeError, match="train blew up"):
+            build_export_plan(
+                {"bundles": [_bundle()], "include_train": True},
+                CONFIG,
+                repo_root=tmp_path,
+                git_sha="abc1234",
+                enqueue=False,
+                include_train=True,
+            )
 
     def test_export_size_error_on_batch(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from git_cg.eval.mirror import composition as composition_mod
