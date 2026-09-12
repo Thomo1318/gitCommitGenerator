@@ -65,7 +65,7 @@ Agents regularly skip renames when rules only show one slice or one finding id. 
 | CLI | commands, subcommands, public flags |
 | Symbols | functions, classes, constants, env keys introduced on branch |
 | Files / scripts | new or renamed paths |
-| Tests | module names and node ids |
+| Tests | module names, node ids, and class names (`Test<Subject><Behavior>`, not `Test<ProcessID>…`) |
 | Comments that *define* a durable name | operator-facing recipe/path spellings |
 
 ### Flag families (any N, any generation)
@@ -76,7 +76,7 @@ Flag an introduced or branch-touched **identifier in the identity role** if it m
 | --- | --- | --- |
 | **A. Stage segment** | `s<N>`, `slice<N>`, `phase<N>`, `wave<N>`, `milestone<N>`, `sprint<N>` as name segment | `eval-s7-proof`, `s15_gate`, `slice_1_handler` |
 | **B. Plan/review/session index** | `finding`/`FIND[-_]`/`find`/`item`/`step`/`task`/`INT[-_]` + N | `finding_6`, `FIND-003`, `INT-05`, `item_4`, `step_3` |
-| **C. Governance taxonomy as identity** | Issue/ADR grammar used as the *name* of code/recipe/path (not as citation): `D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-<N>`, `F<N>`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `AC[-_]<N>`, `A<N>`, `RK-…`, `NTH[-_]<N>`, `P0` / `P1` / `P2`, `DoD[-_]<N>` | `apply_d31()`, `handle_e07()`, `e07_gate`, `enforce_i6()`, `handle_f_s6_04()`, `s6_a04_metric`, `s6_g02_bench`, `nth03_export()`, `p0_gate`, `ac13_floor` API |
+| **C. Governance taxonomy as identity** | Issue/ADR grammar used as the *name* of code/recipe/path (not as citation): `D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-<N>`, `F<N>`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `AC[-_]<N>`, `A<N>`, `RK-…`, `NTH[-_]<N>`, `P0` / `P1` / `P2`, `DoD[-_]<N>`; plus **positional/embedded process IDs** (`S8cD`, `S8c-D`, `TestS8cDBehavior`, `s8c_d_gate`) | `apply_d31()`, `handle_e07()`, `e07_gate`, `TestS8cDBehavior`, `s8c_d_gate`, leading `# S8c-D:`, `s6_a04_metric`, `nth03_export()`, `p0_gate` |
 | **D. Ceremony/scratch primary** | primary noun is process theater or temp hygiene | `proof` (ticket proof), `wip`, `tmp`, `final2`, bare `helper` |
 | **E. Synonym cycle** | two+ live names for one entity in the same patch | `payload` / `data_dict` / `raw_event` |
 
@@ -217,6 +217,8 @@ Return the full cleaned draft in one fenced `text` block, plus a mini Naming Aud
 ## Quick Checks (Pre-Commit / Pre-PR)
 
 - [ ] Naming Audit table completed (families A–E; not a hard-coded slice/decision/finding list).
+- [ ] End-of-slice Python lint gate run when touching `.py` (`just lint-slice`)?
+- [ ] Leading/embedded process IDs (`S8cD`, `S8c-D`, `TestS8c…`) removed from identity surfaces?
 - [ ] Stage segment (`s<N>`, `slice<N>`, `phase<N>`, …) in **new** recipes/paths/symbols? Rename or justify **without** “matches existing sN files”.
 - [ ] Plan/review index (`finding_<N>`, `FIND[-_]<N>`, `INT[-_]<N>`, `step_<N>`, …) as identity? Rename.
 - [ ] Governance ID as identity (`D<N>`, `I<N>`, `R<N>`, `E<N>`, `F-S<N>-…`, `S<N>-[A-H]<N>`, `S<N>-DOG-<N>`, `RK-…`, `NTH-<N>`, `P0` / `P1` / `P2`, `AC-<N>` as API/recipe/path)? Rename; keep matrix/comment citations.
@@ -298,4 +300,4 @@ Only when the user explicitly approves the catalog change:
 - Router / policy entrypoint: `deslop-gate`
 - Prose counterpart: `prose-deslop`
 - Naming pattern catalog: [references/naming.md](references/naming.md)
-- Mechanical gate: `just deslop-naming-scan` → `tools/deslop_naming_scan.py` (families A–D on branch diff; exit 2 on identity residue)
+- Mechanical gates: `just lint-slice` (Ruff on touched Python) then `just deslop-naming-scan` → `tools/deslop_naming_scan.py` (families A–D + positional process IDs on branch diff; exit 2 on identity residue)
