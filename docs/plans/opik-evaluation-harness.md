@@ -1997,7 +1997,7 @@ git_cg_opik_config_v1:
     import: string
   endpoint?: string                    # OPIK_URL_OVERRIDE
   workspace?: string
-  flush_timeout_ms: int                # hard bound for short-lived procs
+  flush_timeout_ms: int                # cooperative flush bound for short-lived procs
   track_disable: bool
   check_tls_certificate: bool
   config_path?: string
@@ -3179,7 +3179,7 @@ Align with existing `telemetry.redact_payload` instincts; eval must not open a w
 **Laws:**
 1. Explicit endpoint/project/environment — **no silent Default Project**.
 2. Project lanes: `live` / `eval` / `ci` / `import` (see config schema).
-3. Short-lived hooks must use **bounded** `flush_timeout_ms`; timeout ⇒ `export_error` class, not product fail.
+3. Short-lived hooks must use **bounded** `flush_timeout_ms`; the bound is cooperative (the SDK flush call remains blocking) and timeout / non-`True` flush ⇒ `export_network` (export health), not product fail.
 4. Missing key/project/network/auth/TLS/HTTP failures classify as **export/config health only**.
 5. `git-cg eval opik doctor` and `git-cg eval opik config show` are secret-safe (mask keys).
 
