@@ -10,7 +10,11 @@ Law:
 
 * Idempotency key = SHA-256 over canonical JSON of identity inputs (D10 / P1-2).
 * Size ceiling measures the **final envelope** canonical body (P1-13), not only
-  per-item sizes. Default 4 MB; configurable downward.
+  per-item sizes. Default 4 MiB; ``max_bytes`` accepts any positive value.
+* ``size_bytes`` is the canonical UTF-8 byte length of the final envelope,
+  including the ``size_bytes`` field itself, computed to a fixed point. The
+  field is self-referential and converges because its decimal width
+  stabilizes.
 * ``ExportStatus`` (envelope) is distinct from ``QueueStatus`` (ops) — E7.
 * No network, no Opik, no scoring — pure offline builder.
 """
@@ -39,7 +43,7 @@ __all__ = [
     "map_queue_status_to_export_status",
 ]
 
-#: Default max batch payload: 4 MB (plan §8.4 / D9; configurable downward only).
+#: Default max batch payload: 4 MiB (plan §8.4 / D9). ``max_bytes`` accepts any positive value.
 DEFAULT_MAX_BATCH_BYTES = 4 * 1024 * 1024
 
 #: Reserved headroom when packing items so post-envelope framing fits under ceiling.
