@@ -55,6 +55,7 @@ from __future__ import annotations
 from git_cg.eval.mirror.batch import (
     DEFAULT_MAX_BATCH_BYTES,
     EXPORT_STATUSES,
+    MAX_SIZE_CONVERGENCE_PASSES,
     ExportSizeError,
     ExportStatus,
     batch_idempotency_key,
@@ -162,6 +163,7 @@ __all__ = [
     "EXPORT_STATUSES",
     "FEEDBACK_SOURCE",
     "LAZY_OPIK_IMPORT_ALLOWLIST",
+    "MAX_SIZE_CONVERGENCE_PASSES",
     "POSITIVE_GOLD",
     "QUARANTINE_MARKER",
     "QUEUE_STATUSES",
