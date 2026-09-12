@@ -273,6 +273,36 @@ dogfood-bench runs="20":
     @uv run python -m git_cg.eval.dogfood.bench \
         .eval/dogfood/bench_async_off.json .eval/dogfood/bench_async_on.json
 
+# End-of-slice Ruff gate for Python files touched vs base.
+# Includes committed, staged, unstaged, and untracked files before deslop review.
+# Override base: just lint-slice origin/main
+# Explicit files: just lint-slice origin/main path/to/file.py
+lint-slice base="origin/main" *files:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # quote() keeps parameters as data, not Bash source (CWE-78).
+    mapfile -t targets < <(
+      if [ -n "{{files}}" ]; then
+        printf '%s\n' {{files}}
+      else
+        git rev-parse --verify {{quote(base)}} >/dev/null
+        {
+          git diff --name-only --diff-filter=ACMR {{quote(base)}}...HEAD
+          git diff --name-only --diff-filter=ACMR HEAD
+          git diff --name-only --diff-filter=ACMR --cached
+          git ls-files --others --exclude-standard
+        } | rg '\.py$' | awk 'NF' | sort -u
+      fi
+    )
+    if [ "${#targets[@]}" -eq 0 ]; then
+      echo "No Python files to lint vs {{base}} — lint-slice skipped."
+      exit 0
+    fi
+    printf '🔎 lint-slice (%d Python file(s)) vs %s…\n' "${#targets[@]}" {{quote(base)}}
+    printf '  %s\n' "${targets[@]}"
+    uv run ruff check "${targets[@]}"
+    uv run ruff format --check "${targets[@]}"
+
 # Mechanical deslop Naming Audit (families A–D identity shapes on branch diff).
 # Fails closed (exit 2) when stage/plan/governance/ceremony residue is introduced
 # as durable operator/code identity. Any generation — not a per-slice denylist.
