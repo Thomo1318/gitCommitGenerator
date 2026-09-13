@@ -298,6 +298,12 @@ lint-slice base="origin/main" *files:
       echo "No Python files to lint vs {{base}} — lint-slice skipped."
       exit 0
     fi
+    # Ruff parses leading-dash paths as options; ./ keeps them as files.
+    for i in "${!targets[@]}"; do
+      case "${targets[$i]}" in
+        -*) targets[$i]="./${targets[$i]}" ;;
+      esac
+    done
     printf '🔎 lint-slice (%d Python file(s)) vs %s…\n' "${#targets[@]}" {{quote(base)}}
     printf '  %s\n' "${targets[@]}"
     uv run ruff check "${targets[@]}"
