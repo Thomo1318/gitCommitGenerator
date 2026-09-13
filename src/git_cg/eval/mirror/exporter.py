@@ -1,4 +1,4 @@
-"""S4b export orchestration (F4 fail-open, FIND-022 bounded flush).
+"""S4b export orchestration (F4 fail-open, FIND-022 cooperative flush bound).
 
 Drains the Layer-A export queue through a :class:`Transport`. Every failure is
 classified (``export_network`` / ``export_auth`` / ``export_validation`` /

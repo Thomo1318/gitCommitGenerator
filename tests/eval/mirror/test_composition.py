@@ -354,3 +354,64 @@ class TestCompositionAuthorityAndSessionFallback:
         body = load_queue_payload(plan.queue_row_refs[0], repo_root=tmp_path)
         item_payloads = [entry.get("payload") for entry in body.get("items", []) if isinstance(entry, dict)]
         assert any(isinstance(p, dict) and "thread" in p for p in item_payloads)
+
+
+class TestTrainProjectionFailurePolicy:
+    """Train validation defects fail open; unexpected errors propagate."""
+
+    def test_train_projection_validation_error_fail_open(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.mirror import composition as composition_mod
+        from git_cg.eval.mirror.train import TrainProjectionError
+
+        def boom(*_a: object, **_k: object) -> dict:
+            raise TrainProjectionError("profile matrix rejected everything")
+
+        monkeypatch.setattr(composition_mod, "build_train_projection", boom)
+        plan = build_export_plan(
+            {"bundles": [_bundle()], "include_train": True},
+            CONFIG,
+            repo_root=tmp_path,
+            git_sha="abc1234",
+            enqueue=False,
+            include_train=True,
+        )
+        assert "export_validation" in plan.error_classes
+        assert any("train_projection" in n for n in plan.notes)
+        assert plan.failed == 0
+        assert plan.product_accept_blocked is False
+
+    def test_train_projection_runtime_error_propagates(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.mirror import composition as composition_mod
+
+        def boom(*_a: object, **_k: object) -> dict:
+            raise RuntimeError("train blew up")
+
+        monkeypatch.setattr(composition_mod, "build_train_projection", boom)
+        with pytest.raises(RuntimeError, match="train blew up"):
+            build_export_plan(
+                {"bundles": [_bundle()], "include_train": True},
+                CONFIG,
+                repo_root=tmp_path,
+                git_sha="abc1234",
+                enqueue=False,
+                include_train=True,
+            )
+
+    def test_enqueue_runtime_error_remains_caught(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from git_cg.eval.mirror import composition as composition_mod
+
+        def boom(*_a: object, **_k: object) -> Path:
+            raise RuntimeError("enqueue blew up")
+
+        monkeypatch.setattr(composition_mod, "enqueue_export_batch", boom)
+        plan = build_export_plan(
+            {"bundles": [_bundle()], "include_train": False},
+            CONFIG,
+            repo_root=tmp_path,
+            git_sha="abc1234",
+            enqueue=True,
+            include_train=False,
+        )
+        assert plan.failed >= 1
+        assert "export_validation" in plan.error_classes
+        assert plan.product_accept_blocked is False

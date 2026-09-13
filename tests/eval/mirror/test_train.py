@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.train import (
     POSITIVE_GOLD,
     TRAIN_DATASET_ID,
@@ -15,6 +16,8 @@ from git_cg.eval.mirror.train import (
     project_train_row,
 )
 
+_ABSENT = object()
+
 
 def _bundle(
     *,
@@ -22,15 +25,23 @@ def _bundle(
     label: str | None,
     split: str = "train",
     regime: str | None = None,
-    profile: str = "train_rich",
+    profile: object = "train_rich",
+    top_profile: object = _ABSENT,
 ) -> dict:
-    """Build a train-projection bundle fixture with optional label/regime."""
-    meta: dict = {"redaction_profile": profile, "split_group_id": f"sg-{bid}"}
+    """Build a train-projection bundle fixture with optional label/regime.
+
+    ``profile`` stamps ``meta.redaction_profile`` (``_ABSENT`` omits the key
+    entirely — distinct from empty/invalid tokens). ``top_profile`` stamps the
+    top-level ``redaction_profile`` when not ``_ABSENT``.
+    """
+    meta: dict = {"split_group_id": f"sg-{bid}"}
+    if profile is not _ABSENT:
+        meta["redaction_profile"] = profile
     if label is not None:
         meta["train_label"] = label
     if regime is not None:
         meta["regime"] = regime
-    return {
+    bundle = {
         "id": bid,
         "artifact_class": "final_accept",
         "gate": {"deterministic_pass": True},
@@ -38,6 +49,9 @@ def _bundle(
         "meta": meta,
         "split": split,
     }
+    if top_profile is not _ABSENT:
+        bundle["redaction_profile"] = top_profile
+    return bundle
 
 
 class TestNormalizeTrainLabel:
@@ -84,7 +98,7 @@ class TestProjectTrainRow:
 class TestFilterPositiveGold:
     def test_negatives_never_join_positive_gold(self) -> None:
         rows = [
-            {"bundle_id": "p", "label": "positive", "regime": "A"},
+            {"bundle_id": "p", "label": "positive", "regime": "A", "redaction_profile": "train_rich"},
             {"bundle_id": "n", "label": "negative", "regime": "antipattern"},
             {"bundle_id": "u", "label": None},
         ]
@@ -161,3 +175,151 @@ class TestBuildTrainProjection:
             "authority",
         ):
             assert key in row and row[key] not in (None, ""), key
+
+
+class TestFilterPositiveGoldProfileGate:
+    def test_positive_gold_rejects_missing_profile(self) -> None:
+        rows = [
+            {"bundle_id": "p", "label": "positive", "regime": "A"},
+            {"bundle_id": "q", "label": "positive", "regime": "A", "redaction_profile": "train_rich"},
+        ]
+        gold = filter_positive_gold(rows)
+        assert [g["bundle_id"] for g in gold] == ["q"]
+
+
+class TestTrainProfileMatrix:
+    """Fail-closed export-profile matrix (missing/conflict/invalid → excluded)."""
+
+    def test_missing_profile_excluded_from_train_gold(self) -> None:
+        proj = build_train_projection([_bundle(bid="b1", label="positive", profile=_ABSENT)])
+        assert proj["rows"] == []
+        assert proj["positive_gold"] == []
+        assert proj["excluded_profile"] == 1
+        assert proj["excluded_unlabeled"] == 0
+
+    def test_conflicting_top_meta_profiles_excluded(self) -> None:
+        bundle = _bundle(bid="b1", label="positive", profile="default_scrub", top_profile="train_rich")
+        proj = build_train_projection([bundle])
+        assert proj["rows"] == []
+        assert proj["excluded_profile"] == 1
+
+    def test_valid_top_only_accepted(self) -> None:
+        bundle = _bundle(bid="b1", label="positive", profile=_ABSENT, top_profile="train_rich")
+        proj = build_train_projection([bundle])
+        assert proj["excluded_profile"] == 0
+        assert proj["rows"][0]["redaction_profile"] == "train_rich"
+
+    def test_no_invented_profile(self) -> None:
+        assert project_train_row(_bundle(bid="b1", label="positive", profile=_ABSENT)) is None
+
+    @pytest.mark.parametrize("token", ["", "   "])
+    def test_empty_or_whitespace_profile_is_missing(self, token: str) -> None:
+        proj = build_train_projection([_bundle(bid="b1", label="positive", profile=token)])
+        assert proj["excluded_profile"] == 1
+        assert proj["rows"] == []
+
+    @pytest.mark.parametrize("token", ["not_a_profile", "raw_dev_unsafe"])
+    def test_invalid_token_rejected(self, token: str) -> None:
+        proj = build_train_projection([_bundle(bid="b1", label="positive", profile=token)])
+        assert proj["excluded_profile"] == 1
+        assert proj["rows"] == []
+
+    def test_meta_only_accepted(self) -> None:
+        proj = build_train_projection([_bundle(bid="b1", label="positive")])
+        assert proj["excluded_profile"] == 0
+        assert proj["rows"][0]["redaction_profile"] == "train_rich"
+
+    def test_equal_top_meta_accepted(self) -> None:
+        bundle = _bundle(bid="b1", label="positive", profile="train_rich", top_profile="train_rich")
+        proj = build_train_projection([bundle])
+        assert proj["excluded_profile"] == 0
+        assert len(proj["rows"]) == 1
+
+    def test_counters_disjoint(self) -> None:
+        proj = build_train_projection(
+            [
+                _bundle(bid="p1", label="positive"),
+                _bundle(bid="u1", label=None),
+                _bundle(bid="x1", label="positive", profile=_ABSENT),
+            ]
+        )
+        assert proj["excluded_unlabeled"] == 1
+        assert proj["excluded_profile"] == 1
+        assert len(proj["rows"]) == 1
+
+    def test_unlabeled_rows_never_inspect_profiles(self) -> None:
+        proj = build_train_projection([_bundle(bid="u1", label=None, profile="raw_dev_unsafe")])
+        assert proj["excluded_unlabeled"] == 1
+        assert proj["excluded_profile"] == 0
+
+    def test_valid_projection_has_zero_excluded_profile(self) -> None:
+        proj = build_train_projection(
+            [
+                _bundle(bid="p1", label="positive"),
+                _bundle(bid="n1", label="negative", regime="antipattern"),
+            ]
+        )
+        assert proj["excluded_profile"] == 0
+        assert proj["excluded_unlabeled"] == 0
+
+    def test_rows_never_carry_final_message_b64(self) -> None:
+        bundle = _bundle(bid="b1", label="positive")
+        bundle["final_message_b64"] = "b64-bytes-must-not-survive"
+        row = project_train_row(bundle)
+        assert row is not None
+        assert "final_message_b64" not in row
+
+
+class TestExportProfileVocabulary:
+    def test_valid_vocabulary_is_enum_minus_raw_dev_unsafe(self) -> None:
+        from git_cg.eval.mirror.redaction import _export_profile_or_none
+
+        expected = {p.value for p in RedactionProfile} - {"raw_dev_unsafe"}
+        accepted = {
+            token for token in (p.value for p in RedactionProfile) if _export_profile_or_none(token) is not None
+        }
+        assert accepted == expected
+        assert _export_profile_or_none("raw_dev_unsafe") is None
+
+
+class TestExactLabelPrecedence:
+    """Label precedence: bundle.train_label → meta.train_label → meta.label → bundle.label.
+
+    Presence (value is not None) governs — an earlier source that is present
+    but empty/falsey wins (fail-closed: no silent fallback).
+    """
+
+    def test_earlier_empty_top_label_blocks_fallback(self) -> None:
+        bundle = _bundle(bid="b1", label=None)
+        bundle["train_label"] = ""
+        bundle["meta"]["label"] = "positive"
+        proj = build_train_projection([bundle])
+        assert proj["excluded_unlabeled"] == 1
+        assert proj["rows"] == []
+
+    def test_bundle_train_label_highest_precedence(self) -> None:
+        bundle = _bundle(bid="b1", label=None)
+        bundle["train_label"] = "positive"
+        bundle["meta"]["train_label"] = "negative"
+        proj = build_train_projection([bundle])
+        assert proj["rows"][0]["label"] == "positive"
+
+    def test_meta_train_label_precedes_meta_label(self) -> None:
+        bundle = _bundle(bid="b1", label=None)
+        bundle["meta"]["train_label"] = "negative"
+        bundle["meta"]["label"] = "positive"
+        proj = build_train_projection([bundle])
+        assert proj["rows"][0]["label"] == "negative"
+
+    def test_meta_label_precedes_bundle_label(self) -> None:
+        bundle = _bundle(bid="b1", label=None)
+        bundle["meta"]["label"] = "negative"
+        bundle["label"] = "positive"
+        proj = build_train_projection([bundle])
+        assert proj["rows"][0]["label"] == "negative"
+
+    def test_bundle_label_used_when_earlier_sources_absent(self) -> None:
+        bundle = _bundle(bid="b1", label=None)
+        bundle["label"] = "positive"
+        proj = build_train_projection([bundle])
+        assert proj["rows"][0]["label"] == "positive"

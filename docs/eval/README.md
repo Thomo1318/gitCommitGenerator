@@ -530,7 +530,7 @@ Export always runs the R14 ladder. Default path is `default_scrub`. Owner-rich p
 
 * Batches are bounded (default **≤4MB** envelope), idempotent, and pin-bound.
 * Transport imports Opik **lazily** inside the upload call only (`src/git_cg/eval/mirror/transport.py`).
-* Installed SDK flush uses whole seconds; config remains `flush_timeout_ms` and is converted with ceiling + outer deadline.
+* Installed SDK flush uses whole seconds; config remains `flush_timeout_ms` and is converted with ceiling + outer deadline. The bound is cooperative: the SDK flush call remains blocking, and any return that is not `True` classifies as `export_network`.
 * Notes/errors are scrubbed (URLs, auth headers, secret-shaped tokens, path/query fragments).
 
 ### Experiment naming + pins

@@ -8,6 +8,7 @@ from git_cg.eval.enums import RedactionProfile
 from git_cg.eval.mirror.batch import (
     DEFAULT_MAX_BATCH_BYTES,
     EXPORT_STATUSES,
+    MAX_SIZE_CONVERGENCE_PASSES,
     ExportSizeError,
     ExportStatus,
     batch_idempotency_key,
@@ -16,6 +17,7 @@ from git_cg.eval.mirror.batch import (
     map_queue_status_to_export_status,
 )
 from git_cg.eval.mirror.queue import QUEUE_STATUSES
+from git_cg.eval.mirror.redaction import sanitize_export_tree
 from git_cg.eval.pins import metric_catalog_pin, schema_pack_pin
 
 
@@ -145,3 +147,95 @@ def test_final_envelope_size_is_measured() -> None:
     b = batches[0]
     assert b["size_bytes"] == envelope_size_bytes(b)
     assert b["size_bytes"] > b["payload_size_bytes"]
+
+
+#: Payload whose envelope crosses the 10_000-byte digit-width boundary when
+#: ``max_bytes`` stays at the 7-digit default (``4194304``).
+_DIGIT_WIDTH_PAD = 8800
+_DIGIT_WIDTH_STALE_SIZE = 10_000
+_DIGIT_WIDTH_CONVERGED_SIZE = 10_001
+
+#: Same framing, but with a 5-digit serialized ``max_bytes=10000`` the two-pass
+#: writer would store 10_000 while the converged envelope is 10_001.
+_CEILING_BYPASS_PAD = 8802
+_CEILING_BYPASS_MAX_BYTES = 10_000
+
+
+@pytest.mark.parametrize("pad", [10, 100, _DIGIT_WIDTH_PAD, 20_000, 98_798])
+def test_emitted_size_bytes_matches_envelope_across_magnitudes(pad: int) -> None:
+    batches = build_export_batches(
+        [("item-0", {"pad": "x" * pad})],
+        RedactionProfile.DEFAULT_SCRUB,
+    )
+    assert len(batches) == 1
+    batch = batches[0]
+    assert batch["size_bytes"] == envelope_size_bytes(batch)
+    assert batch["payload_size_bytes"] <= batch["size_bytes"]
+
+
+def test_digit_width_transition_stores_converged_envelope_size() -> None:
+    batches = build_export_batches(
+        [("item-0", {"pad": "x" * _DIGIT_WIDTH_PAD})],
+        RedactionProfile.DEFAULT_SCRUB,
+    )
+    batch = batches[0]
+    assert batch["size_bytes"] == envelope_size_bytes(batch)
+    assert batch["size_bytes"] == _DIGIT_WIDTH_CONVERGED_SIZE
+    assert batch["size_bytes"] != _DIGIT_WIDTH_STALE_SIZE
+
+
+def test_converged_size_cannot_bypass_ceiling() -> None:
+    with pytest.raises(ExportSizeError, match="export_size"):
+        build_export_batches(
+            [("item-0", {"pad": "x" * _CEILING_BYPASS_PAD})],
+            RedactionProfile.DEFAULT_SCRUB,
+            max_bytes=_CEILING_BYPASS_MAX_BYTES,
+        )
+
+
+def test_exact_ceiling_admits_converged_envelope() -> None:
+    items = [("item-0", {"pad": "x" * _CEILING_BYPASS_PAD})]
+    generous = 15_000
+    batches = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=generous)
+    assert len(batches) == 1
+    ceiling = batches[0]["size_bytes"]
+    assert len(str(ceiling)) == len(str(generous))
+    exact = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB, max_bytes=ceiling)
+    assert len(exact) == 1
+    assert exact[0]["size_bytes"] == ceiling
+    assert exact[0]["size_bytes"] == envelope_size_bytes(exact[0])
+    assert exact[0]["max_bytes"] == ceiling
+
+
+def test_size_convergence_does_not_change_batch_identity() -> None:
+    items = [("item-0", {"pad": "x" * _DIGIT_WIDTH_PAD})]
+    first = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    second = build_export_batches(items, RedactionProfile.DEFAULT_SCRUB)
+    assert first[0]["batch_id"] == second[0]["batch_id"]
+    assert first[0]["idempotency_key"] == second[0]["idempotency_key"]
+
+
+def test_final_sanitize_does_not_change_envelope_size() -> None:
+    batches = build_export_batches(
+        [("item-0", {"pad": "x" * _DIGIT_WIDTH_PAD})],
+        RedactionProfile.DEFAULT_SCRUB,
+    )
+    batch = batches[0]
+    before = envelope_size_bytes(batch)
+    cleaned = sanitize_export_tree(batch)
+    assert isinstance(cleaned, dict)
+    assert envelope_size_bytes(cleaned) == before
+    assert cleaned["size_bytes"] == envelope_size_bytes(cleaned)
+
+
+def test_size_bytes_raises_when_measurement_does_not_converge(monkeypatch: pytest.MonkeyPatch) -> None:
+    sizes = iter(range(100, 100 + MAX_SIZE_CONVERGENCE_PASSES + 1))
+    monkeypatch.setattr(
+        "git_cg.eval.mirror.batch.envelope_size_bytes",
+        lambda _batch: next(sizes),
+    )
+    with pytest.raises(ExportSizeError, match="export_size") as exc_info:
+        build_export_batches(_items(1, 10), RedactionProfile.DEFAULT_SCRUB)
+    cause = exc_info.value.__cause__
+    assert isinstance(cause, ExportSizeError)
+    assert "converge" in str(cause)

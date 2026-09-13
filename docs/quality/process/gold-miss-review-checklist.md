@@ -30,6 +30,8 @@
 - [ ] Confidence matrix (Direct vs Reconstructed)
 
 ## IDs and close-out
+- [ ] End-of-slice Python lint gate: `just lint-slice` (or equivalent Ruff check/format on touched `.py`)
+- [ ] Naming scan clean when durable surfaces moved: `just deslop-naming-scan`
 
 - [ ] F*/R* from FAILURE_TAXONOMY (mint row if new)
 - [ ] P* from PREVENTION_BACKLOG (mint row if new)

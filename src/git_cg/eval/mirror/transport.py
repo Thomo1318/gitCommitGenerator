@@ -15,12 +15,16 @@ Every failure is classified into the closed ``export_*`` vocabulary
 HTTP status codes (P1-3), then exception shape, and never leaks secret
 material, URLs, headers, or bodies into the message.
 
-Bounded flush (P0-4 / FIND-022):
+Cooperative flush bound (P0-4 / FIND-022):
   * Config is always ``flush_timeout_ms``.
   * Installed ``opik==2.0.52`` accepts ``flush(timeout: Optional[int])`` in
     **seconds** and returns ``bool``.
   * Adapter converts with ``math.ceil(ms / 1000)`` and wraps an outer
-    monotonic deadline so short-lived hook processes cannot hang on exit.
+    monotonic deadline. The bound is **cooperative**, not a hard cap:
+    Python cannot forcibly interrupt a synchronous ``flush()``, so the SDK
+    call itself remains blocking. Deadline overruns and any return that is
+    not ``True`` classify as ``export_network`` only after control returns
+    to the adapter — never a false success.
 """
 
 from __future__ import annotations
@@ -191,12 +195,11 @@ _classify = classify_export_error
 
 
 class OpikSdkTransport:
-    """Real transport via the Opik SDK (lazy import, bounded flush).
+    """Real transport via the Opik SDK (lazy import, cooperative flush bound).
 
     The ``opik`` import happens inside :meth:`upload` so importing this module
-    never pulls Opik into the offline/product path. The client is constructed
-    per-upload with an explicit flush timeout so a short-lived hook process
-    cannot hang on exit (FIND-022 / P0-4).
+    never pulls Opik into the offline/product path. Flush semantics follow
+    the module contract (FIND-022 / P0-4).
     """
 
     def upload(
@@ -399,7 +402,11 @@ class OpikSdkTransport:
 
         * Converts ms → seconds via :func:`flush_timeout_seconds`.
         * Honours an outer monotonic deadline (remaining seconds, ≥1 when work remains).
-        * ``flush() is False`` or hang past deadline ⇒ ``export_network`` (timeout class).
+        * The bound is cooperative: the SDK call remains blocking and Python
+          cannot forcibly interrupt a synchronous ``flush()``. A deadline
+          overrun, or any return that is not ``True`` (``False``, ``None``,
+          or an unexpected truthy value), ⇒ ``export_network`` (timeout
+          class) once control returns to the adapter — never a false success.
         """
         flush = getattr(client, "flush", None)
         if not callable(flush):
@@ -423,10 +430,10 @@ class OpikSdkTransport:
                 "export_network",
                 f"flush exceeded outer deadline ({timeout_ms}ms)",
             )
-        if ok is False:
+        if ok is not True:
             raise ExportTransportError(
                 "export_network",
-                f"flush returned false within {timeout_s}s bound (timeout/incomplete)",
+                f"flush returned {ok!r} within {timeout_s}s bound (timeout/incomplete)",
             )
 
 

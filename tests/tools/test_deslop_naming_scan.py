@@ -319,3 +319,118 @@ def test_added_lines_from_git_fail_closed_on_git_error(tmp_path, monkeypatch):
         mod._added_lines_from_git(repo, "tools/x.py", "origin/main", include_working_tree=True)
     with pytest.raises(RuntimeError):
         mod._added_lines_from_git(repo, "tools/x.py", "origin/main", include_working_tree=False)
+
+
+def test_flags_process_id_positional_and_embedded_identity():
+    """Family C.process_id: leading/embedded process IDs are identity residue."""
+    content = '''
+# S8c-D governs the export profile.
+"""S8cD governs the mirror contract."""
+class TestS8cDBehavior:
+    pass
+class TestS8Projection:
+    pass
+def s8c_d_gate():
+    return None
+# S12aX residual note
+# S3b-Q residual note
+'''
+    proc = _run_stdin("src/git_cg/process_ids.py", content)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    out = proc.stdout
+    assert "C.process_id" in out
+    assert "S8c-D" in out
+    assert "S8cD" in out
+    assert "TestS8cDBehavior" in out
+    assert "TestS8Projection" in out
+    assert "s8c_d_gate" in out
+    assert "S12aX" in out
+    assert "S3b-Q" in out
+
+
+def test_flags_process_id_assignment_when_same_line_has_parenthetical():
+    """Assignment identity is not skipped because a later call cites (S8cD)."""
+    content = "S8cD = resolve(S8cD)\n"
+    proc = _run_stdin("src/git_cg/mixed_process_id.py", content)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    out = proc.stdout
+    assert "C.process_id" in out
+    assert "S8cD" in out
+
+
+def test_preserves_parenthetical_process_id_on_code_line():
+    """A sole parenthetical process ID on a code line stays a citation."""
+    content = "value = resolve(S8cD)\n"
+    proc = _run_stdin("src/git_cg/ok_paren_process_id.py", content)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_flags_process_id_leading_markdown_documentation():
+    content = """
+S8cD governs the export path.
+## S8c-D residual queue
+1. S8cD residual queue
+"""
+    proc = _run_stdin("docs/quality/process/example.md", content)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    out = proc.stdout
+    assert "C.process_id" in out
+    assert "S8cD" in out
+    assert "S8c-D" in out
+
+
+def test_preserves_trailing_process_id_and_governance_citations():
+    content = '''
+# See behavior (S8c-D).
+"""description (S8-S4-00)"""
+# Gate applies per S8c-D; keep domain first.
+| S8c-D | residual row |
+# D26: scrub presentation locals; closed tags only.
+# E07: invalid mode → config_error (matrix cite only).
+# FIND-068 product-path Opik stays lazy.
+'''
+    proc = _run_stdin("src/git_cg/ok_process_cites.py", content)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_preserves_docstring_continuation_trailing_process_id_citations():
+    """Docstring body lines without a leading marker keep trailing process IDs.
+
+    Mirrors src/git_cg/eval/mirror/train.py continuation lines that end with
+    parenthetical process-ID citations such as ``(S8c-D)``.
+    """
+    content = '''
+def validate_export_profile(profile: str) -> None:
+    """Reject unsafe profiles fail-closed.
+
+    Values ``raw_dev`` / ``raw_dev_unsafe``) are rejected fail-closed (S8c-D).
+    Use the disjoint counters ``excluded_unlabeled`` / ``excluded_profile`` (S8c-D).
+    """
+    return None
+'''
+    proc = _run_stdin("src/git_cg/eval/mirror/train.py", content)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_preserves_governance_compound_and_prose_process_id_citations():
+    """Whole-token governance IDs and mid-prose compounds stay citations."""
+    content = '''
+# See RK-S8c-12 for residual risk.
+# post-S8b landing gates the residual queue.
+# Gate is S8c-specific; keep domain names first.
+# Tracks S8a/S8b/S8c stage range.
+"""opened
+S8c-D is identity at docstring continuation head.
+trailing cite only (S8c-D).
+"""
+'''
+    proc = _run_stdin("docs/quality/process/ok_cites.md", content)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    out = proc.stdout
+    assert "C.process_id" in out
+    assert "S8c-D" in out
+    assert "RK-S8c-12" not in out
+    assert "post-S8b" not in out
+    assert "S8c-specific" not in out
+    assert "S8a/S8b/S8c" not in out
+    assert "trailing cite only" not in out

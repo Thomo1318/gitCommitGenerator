@@ -107,6 +107,8 @@ Separators optional; case-insensitive for the letter prefix.
 
 **Claim-matrix letters:** `S6-A04`, `S6-G02`, `S5-H`, `S7-DOG-05` are **coordinates** in claim/evidence tables (keep). `s6_g02_metric`, `s7_dog_05_handler` as the only name of a recipe/test/API = identity residue. Bare section headers in docs (`### S6-A — …`) stay as document structure citations.
 
+**Process / sub-stage IDs (positional + embedded):** shapes like `S8c`, `S8cD`, `S8c-D`, `S12aX`, `s8c_d_gate` (any digit width/case/separators) are **identity** when they **lead** a comment/docstring/document line or **embed** in an identifier (`class TestS8cDBehavior`, `def s8c_d_gate()`). They stay **citations** when trailing/parenthetical, mid-prose, or in a table row (`# See behavior (S8c-D).`, `| S8c-D | … |`). Do not maintain a per-ID denylist — match the generalized shape. Test classes use `Test<Subject><Behavior>` (not `Test<ProcessID>…`).
+
 **Action:** name the invariant, failure mode, measurement, or behavior (`eval_coverage_floor`, `lazy_opik_init_when_mode_off`, `invalid_mode_config_error`, `scrub_presentation_locals`). Optional short citation may remain in a comment or docstring **after** the domain name exists.
 
 **Do not** expand this table with every new decision/error/claim number — the shape is enough. S4/S5/S6 closed-issue grammar seeded the shapes; future `E99` / `S9-G01` are already covered.
@@ -127,6 +129,7 @@ Two or more live names for one entity in the same patch. Standardize on one cano
 
 | Bad shape | Good shape | Family |
 | --- | --- | --- |
+| `TestS8cDBehavior` / leading `# S8c-D:` / `s8c_d_gate` | `TestTrainProjectionFailClosed` / job-led comment / domain gate name | C (process-id position) |
 | `handle_e07()` / `e07_gate` / `run_error_e07` | `invalid_mode_config_error` / domain failure + entity | C (Errors) |
 | `test_e12_schema_only` as sole node id | `test_invalid_mode_emits_config_error` | C (Errors) |
 | `s6_g02_bench` / `s7_dog_05_case` | `commit_path_hyperfine_bench` / domain dogfood case | C (claim-matrix) |
@@ -231,6 +234,8 @@ See code-deslop **Catalog feedback loop**.
 Recipe/Make/npm **header comments** are durable operator docs. Leading with `S6` / `S7` / `Slice 7` / bare `AC-13` as the main description is residue: those labels recycle across issues.
 
 **Lead with domain job; trail `Refs: #N` (and optional acceptance id) after.**
+
+Also forbid leading process/sub-stage IDs (`S8c-D:`, `S8cD …`) in operator comments, docstrings, and durable Markdown headers. Trailing parenthetical citations remain valid.
 
 Keep true matrix/ADR citations and short in-code `# D26` pointers. Do not treat a justfile banner as the same class as an issue claim-matrix cell.
 

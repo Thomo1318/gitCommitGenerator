@@ -305,7 +305,7 @@ class TestOpikSdkTransport:
                 timeout_ms=1000,
             )
         assert ei.value.error_class == "export_network"
-        assert "false" in str(ei.value).lower()
+        assert "returned False" in str(ei.value)
 
     def test_flush_hang_past_deadline(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FakeOpik:

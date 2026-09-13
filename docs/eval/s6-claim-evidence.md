@@ -110,7 +110,7 @@ api_map + envelope sketches
 | **S6-C03** | Prompt pack change without local pin/result ⇒ warn/red | `tests/eval/test_doctor.py` pin/catalog checks + CLI doctor fixture suite | landed |
 | **S6-C04** | `opik config show` masks secrets | `tests/eval/test_eval_opik_doctor.py` + config show mask paths; `tests/eval/mirror/test_config.py::test_mask_secret_never_leaks_prefix` | landed |
 | **S6-C05** | `opik doctor` never prints tokens | `tests/eval/test_eval_opik_doctor.py::test_opik_doctor_never_prints_raw_token`; `test_opik_doctor_json_never_prints_raw_token`; `test_opik_doctor_human_mode_masks_token` | landed |
-| **S6-C06** | Doctor/export failures do not flip product accept | Dual-axis composition: `tests/eval/mirror/test_composition_s4.py` fail-open; doctor isolation tests | landed |
+| **S6-C06** | Doctor/export failures do not flip product accept | Dual-axis composition: `tests/eval/mirror/test_composition.py` fail-open; doctor isolation tests | landed |
 | **S6-C07** | Phantom metrics have real computation sites + report contract | `tests/eval/test_doctor.py::test_local_doctor_emits_phantom_metric_scores`; `test_doctor_green_score_matches_block_failures`; `test_report_data_shape_is_machine_readable` | landed |
 | **S6-C08** | Secret-bearing operator output routes through mask helpers | `tests/eval/test_eval_cli_explain.py::test_cli_explain_and_diagnose_never_print_raw_token`; `tests/eval/test_explain.py::test_explain_masks_secret_shaped_evaluator_errors`; `tests/eval/test_diagnose.py::test_diagnose_masks_secret_bearing_title_notes_and_store_row`; `tests/eval/test_s6_slice7.py::test_train_export_masks_secret_in_retained_message` | landed |
 

@@ -97,7 +97,8 @@ ENV_CHECK_TLS = "GIT_CG_OPIK_CHECK_TLS"
 ENV_CONFIG_PATH = "GIT_CG_OPIK_CONFIG"
 OPIK_ENV_PROJECT_NAME = "OPIK_PROJECT_NAME"
 
-#: Default bounded flush for short-lived hook processes (FIND-022).
+#: Default cooperative flush bound for short-lived hook processes (FIND-022);
+#: the SDK flush call itself remains blocking.
 DEFAULT_FLUSH_TIMEOUT_MS = 5000
 DEFAULT_ENVIRONMENT = "development"
 

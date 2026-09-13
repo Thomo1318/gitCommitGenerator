@@ -1997,7 +1997,7 @@ git_cg_opik_config_v1:
     import: string
   endpoint?: string                    # OPIK_URL_OVERRIDE
   workspace?: string
-  flush_timeout_ms: int                # hard bound for short-lived procs
+  flush_timeout_ms: int                # cooperative flush bound for short-lived procs
   track_disable: bool
   check_tls_certificate: bool
   config_path?: string
@@ -2516,7 +2516,7 @@ schemas/eval/
 | **Goal** | Project **precomputed local** results to Opik for operator compare **and owner training/longitudinal corpus lake**; never scoring engine of record / CI sole green. |
 | **Depends on** | S1–S3 (need something real to export) |
 | **Network** | optional; all flows degrade safe |
-| **Delivers** | (1) `export_batch_v1` builder. (2) REST/SDK upload path, batched, idempotent, size-bounded with **default max batch payload 4MB** (configurable downward; raise only with explicit owner note). (3) Experiment naming `eval_<lane>_<catalog_version>_<gitsha>_<utc>` + full pin set. (4) Pinned project/lane — no Default Project dump. (5) **R14 redaction ladder** on export (not only thin default). (6) Export failure classification; cannot flip `gate.deterministic_pass`. (7) Dataset mapping + **commit_session_thread** projection. (8) Optional train-positive/negative dataset projections. (9) Prefer publishing product deterministic score_card / final-bytes-bound scores (FIND-027). (10) Tests with mocked transport + scrub/quarantine. (11) Absorb/retire `scripts/compile_opik_dataset.py` upload parts as library calls. |
+| **Delivers** | (1) `export_batch_v1` builder. (2) REST/SDK upload path, batched, idempotent, size-bounded with **default max batch payload 4MB**; `max_bytes` accepts any positive value. (3) Experiment naming `eval_<lane>_<catalog_version>_<gitsha>_<utc>` + full pin set. (4) Pinned project/lane — no Default Project dump. (5) **R14 redaction ladder** on export (not only thin default). (6) Export failure classification; cannot flip `gate.deterministic_pass`. (7) Dataset mapping + **commit_session_thread** projection. (8) Optional train-positive/negative dataset projections. (9) Prefer publishing product deterministic score_card / final-bytes-bound scores (FIND-027). (10) Tests with mocked transport + scrub/quarantine. (11) Absorb/retire `scripts/compile_opik_dataset.py` upload parts as library calls. |
 | **Non-goals** | Cloud SoT; online score execution; Ollie; requiring export on commit. |
 | **Primary paths** | `src/git_cg/eval/mirror/**`, `tests/eval/test_mirror*.py` |
 | **R-items** | **R3, R14** (corpus lake + redaction ladder) |
@@ -3179,7 +3179,7 @@ Align with existing `telemetry.redact_payload` instincts; eval must not open a w
 **Laws:**
 1. Explicit endpoint/project/environment — **no silent Default Project**.
 2. Project lanes: `live` / `eval` / `ci` / `import` (see config schema).
-3. Short-lived hooks must use **bounded** `flush_timeout_ms`; timeout ⇒ `export_error` class, not product fail.
+3. Short-lived hooks must use **bounded** `flush_timeout_ms`; the bound is cooperative (the SDK flush call remains blocking) and timeout / non-`True` flush ⇒ `export_network` (export health), not product fail.
 4. Missing key/project/network/auth/TLS/HTTP failures classify as **export/config health only**.
 5. `git-cg eval opik doctor` and `git-cg eval opik config show` are secret-safe (mask keys).
 

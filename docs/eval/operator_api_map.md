@@ -489,7 +489,7 @@ documents — sketches name the envelope wrapper keys only.
 
 #### `eval train-export`
 
-* **Required keys:** `authority`, `ci_sole_green`, `dropped_row_ids`, `dry_run`, `excluded_unlabeled`, `export`, `export_id`, `negative_count`, `paths`, `positive_gold_count`, `product_accept_authority`, `row_count`, `row_ids`, `scrub_report`, `would_write`, `written`
+* **Required keys:** `authority`, `ci_sole_green`, `dropped_row_ids`, `dry_run`, `excluded_profile`, `excluded_unlabeled`, `export`, `export_id`, `negative_count`, `paths`, `positive_gold_count`, `product_accept_authority`, `row_count`, `row_ids`, `scrub_report`, `would_write`, `written`
 * **Optional keys:** *(none)*
 * **Closed enums:**
   * `authority`: `corpus_retention`

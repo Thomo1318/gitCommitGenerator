@@ -92,6 +92,31 @@ class RedactionError(ValueError):
     """Redaction policy failure (fail-closed; ``export_validation`` class)."""
 
 
+def _export_profile_or_none(token: object) -> RedactionProfile | None:
+    """Normalize a profile token to an export-capable profile, or ``None``.
+
+    Shared export-profile validator for train projection and train export:
+
+    * ``None`` / empty / whitespace-only tokens return ``None`` (missing).
+    * Unknown tokens return ``None`` (``ValueError`` swallowed — invalid).
+    * ``raw_dev_unsafe`` returns ``None`` (owner-local debug only; never an
+      export/train vocabulary member).
+    * Every other enum member is a valid export profile.
+    """
+    if token is None:
+        return None
+    text = str(token).strip()
+    if not text:
+        return None
+    try:
+        prof = RedactionProfile(text)
+    except ValueError:
+        return None
+    if prof is RedactionProfile.RAW_DEV_UNSAFE:
+        return None
+    return prof
+
+
 # --- Field policy tables -------------------------------------------------
 #
 # Each profile maps to the set of top-level bundle fields *retained*. Anything

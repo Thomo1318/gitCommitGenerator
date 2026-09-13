@@ -224,7 +224,11 @@ class TestE6SelectionPredicateNoUserAcceptance:
 
         gold = filter_positive_gold(
             [
-                {"label": "positive", "bundle_id": "p"},
+                {
+                    "label": "positive",
+                    "bundle_id": "p",
+                    "redaction_profile": "train_rich",
+                },
                 {"label": "negative", "bundle_id": "n"},
                 {"user_acceptance": 1.0, "bundle_id": "pop"},  # popularity only
             ]
