@@ -518,6 +518,12 @@ def _process_id_findings(
             )
         )
 
+    token_spans: dict[str, list[tuple[int, int]]] = {}
+    for m in _TOKEN_RE.finditer(line):
+        key = _strip_token(m.group("token"))
+        if key:
+            token_spans.setdefault(key, []).append(m.span("token"))
+
     if not _TABLE_ROW_RE.match(line):
         marker = _LEAD_COMMENT_RE.match(line)
         content = line[marker.end() :] if marker else line
@@ -550,8 +556,14 @@ def _process_id_findings(
         elif not commentish and not is_md:
             # Parenthetical citation form stays citation even when the git
             # hunk lacks the docstring/comment opener that sets commentish.
-            if re.search(rf"\(\s*{re.escape(st)}\s*\)", line):
-                continue
+            # Bound the check to this token's span so a later `(S8cD)` does
+            # not hide an earlier assignment identity on the same line.
+            remaining = token_spans.get(st)
+            if remaining:
+                start, end = remaining.pop(0)
+                prefix, suffix = line[:start], line[end:]
+                if prefix.rstrip().endswith("(") and suffix.lstrip().startswith(")"):
+                    continue
             # Bare full-span token on a code/data line is identity.
             _add(st)
     for dm in _DEF_NAME_RE.finditer(line):

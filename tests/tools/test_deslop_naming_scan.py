@@ -348,6 +348,23 @@ def s8c_d_gate():
     assert "S3b-Q" in out
 
 
+def test_flags_process_id_assignment_when_same_line_has_parenthetical():
+    """Assignment identity is not skipped because a later call cites (S8cD)."""
+    content = "S8cD = resolve(S8cD)\n"
+    proc = _run_stdin("src/git_cg/mixed_process_id.py", content)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    out = proc.stdout
+    assert "C.process_id" in out
+    assert "S8cD" in out
+
+
+def test_preserves_parenthetical_process_id_on_code_line():
+    """A sole parenthetical process ID on a code line stays a citation."""
+    content = "value = resolve(S8cD)\n"
+    proc = _run_stdin("src/git_cg/ok_paren_process_id.py", content)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_flags_process_id_leading_markdown_documentation():
     content = """
 S8cD governs the export path.
