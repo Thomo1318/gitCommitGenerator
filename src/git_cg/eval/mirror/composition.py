@@ -37,7 +37,7 @@ from git_cg.eval.mirror.projections import (
 from git_cg.eval.mirror.queue import ExportQueueError, enqueue_export_batch
 from git_cg.eval.mirror.redaction import redact_bundle_for_export, sanitize_export_tree
 from git_cg.eval.mirror.result import MirrorResult, build_mirror_result
-from git_cg.eval.mirror.train import build_train_projection
+from git_cg.eval.mirror.train import TrainProjectionError, build_train_projection
 
 __all__ = [
     "ExportPlanError",
@@ -416,7 +416,10 @@ def build_export_plan(
             cleaned_train = sanitize_export_tree(train_payload)
             if isinstance(cleaned_train, dict):
                 train_payload = cleaned_train
-        except Exception as exc:  # train projection must not kill export plan
+        except (TrainProjectionError, ValueError, TypeError) as exc:
+            # Fail-open: train projection validation defects classify as
+            # export_validation without incrementing failed and never block the
+            # product accept path. Unexpected errors (e.g. RuntimeError) propagate.
             error_classes.append("export_validation")
             notes.append(f"train_projection: {exc}"[:200])
 
@@ -488,6 +491,9 @@ def build_export_plan(
             error_classes.append(exc.error_class)
             notes.append(str(exc)[:200])
         except Exception as exc:
+            # Broad catch is intentional: enqueue is the terminal
+            # fail-open hop — unexpected defects classify export_validation
+            # and increment failed rather than kill the export plan.
             failed += 1
             error_classes.append("export_validation")
             notes.append(str(exc)[:200])

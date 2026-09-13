@@ -57,7 +57,7 @@ Do **not** implement this gate as “search for s7 and finding_6 only,” and do
 
 Replacement direction: **scope + behavior + entity**. Preserve matrix/ADR/issue citations.
 
-**Operator-facing comments** (justfile/task headers): lead with the **job**, not `S<N>` / `Slice <N>` as primary orientation. Trailing `Refs: #N` is fine; slice-led banners are orientation debt when labels recycle.
+**Operator-facing comments** (justfile/task headers): lead with the **job**, not `S<N>` / `Slice <N>` as primary orientation. Same rule for process/sub-stage IDs (`S8c-D`, `S8cD`) at the start of comments, docstrings, or durable Markdown headers. Trailing `Refs: #N` is fine; slice-led banners are orientation debt when labels recycle.
 
 If the child pass cleaned comments but left family A–D **identity** names on durable surfaces, **the gate fails** — finish renames + cascade.
 
@@ -97,10 +97,16 @@ Forbidden: gitmoji/type authority changes, trailer key edits, issue-id invention
 Skills alone cannot force tool use. Before claiming a naming deslop is done:
 
 ```bash
+just lint-slice
 just deslop-naming-scan
 ```
 
-Exit `2` means identity residue remains (families A–D). Exit `0` is necessary but not sufficient for a full deslop (comments/voice still need the skills).
+1. `just lint-slice` — end-of-slice Ruff check/format on Python files touched vs base (committed + working tree). Skip-clean when no `.py` files.
+2. `just deslop-naming-scan` — identity residue gate (families A–D, including positional/embedded process IDs under C).
+
+Exit `2` from the naming scan means identity residue remains. Exit `0` on both is necessary but not sufficient for a full deslop (comments/voice still need the skills).
+
+Process/sub-stage IDs (`S8cD`, `S8c-D`, `TestS8c…`) leading comments/docs or embedded in identifiers are identity; trailing parentheticals and table citations stay. Prefer `Test<Subject><Behavior>` test class names.
 
 ## Explicit command shapes
 

@@ -30,14 +30,14 @@ Merge evidence is composition-path aware (`build_export_plan` / drain), not leaf
 | `additionalProperties: false` + `raw_dev_unsafe` exclusion (E3) | `tests/eval/mirror/test_config.py::test_e3_schema_keeps_additional_properties_false_and_blocks_raw_dev` |
 | Canonical JSON stability; NaN/Inf rejected | `tests/eval/mirror/test_batch.py`, `tests/eval/mirror/test_payload.py` |
 | No secret fields in fixtures | `tests/eval/mirror/test_config.py` fixture/schema tests (S4-A05) |
-| Invalid mode → operator `config_error` (E12) | `test_config.py::test_e12_*`, `test_composition_s4.py::test_e12_*`, `tests/eval/test_eval_cli.py` drain/status/config show cases |
+| Invalid mode → operator `config_error` (E12) | `test_config.py::test_e12_*`, `test_composition.py::test_e12_*`, `tests/eval/test_eval_cli.py` drain/status/config show cases |
 
 ### Pipeline join (P0-5 / E8)
 
 | Requirement | Evidence |
 |:---|:---|
-| redact→project preserves `gate` + `score_card` | `tests/eval/mirror/test_composition_s4.py::test_redact_project_batch_enqueue_drain_preserves_authority` |
-| `build_export_plan` is sole join path | `test_composition_s4.py::test_build_export_plan_is_sole_join_path` |
+| redact→project preserves `gate` + `score_card` | `tests/eval/mirror/test_composition.py::test_redact_project_batch_enqueue_drain_preserves_authority` |
+| `build_export_plan` is sole join path | `test_composition.py::test_build_export_plan_is_sole_join_path` |
 | `final_accept` binding wins over `attempts[-1]` | `tests/eval/mirror/test_projections.py` (final_accept selection) |
 | Quarantine never cleartext later in batch/queue/transport notes | `tests/eval/mirror/test_redaction.py`, transport scrub tests in `test_transport.py` |
 
@@ -72,8 +72,8 @@ Merge evidence is composition-path aware (`build_export_plan` / drain), not leaf
 
 | Requirement | Evidence |
 |:---|:---|
-| Product path unchanged with mirror off / opik missing | `test_composition_s4.py` mode-off + fail-open tests; transport package import mask |
-| Export failure cannot flip `gate.deterministic_pass` | `test_composition_s4.py::test_transport_failure_is_fail_open_on_product_axis` |
+| Product path unchanged with mirror off / opik missing | `test_composition.py` mode-off + fail-open tests; transport package import mask |
+| Export failure cannot flip `gate.deterministic_pass` | `test_composition.py::test_transport_failure_is_fail_open_on_product_axis` |
 | Legacy `compile_opik_dataset.py` no live upload; no `user_acceptance` SoT (E6) | `tests/eval/mirror/test_compile_opik_dataset_absorption.py` |
 | Unlabeled antipattern cannot enter `positive_gold`; labels/splits mandatory (Q18 / S4-F) | `tests/eval/mirror/test_train.py` |
 
@@ -97,7 +97,7 @@ Must stay green for merge (S4-A + B + D + E deterministic offline) and close (al
 redact → project → experiment pins → batch → enqueue → drain(mock)
 ```
 
-Implemented by `git_cg.eval.mirror.composition.build_export_plan` and covered in `tests/eval/mirror/test_composition_s4.py`.
+Implemented by `git_cg.eval.mirror.composition.build_export_plan` and covered in `tests/eval/mirror/test_composition.py`.
 
 ## PR close pack (checklist paste)
 

@@ -10,7 +10,11 @@ Law:
 
 * Idempotency key = SHA-256 over canonical JSON of identity inputs (D10 / P1-2).
 * Size ceiling measures the **final envelope** canonical body (P1-13), not only
-  per-item sizes. Default 4 MB; configurable downward.
+  per-item sizes. Default 4 MiB; ``max_bytes`` accepts any positive value.
+* ``size_bytes`` is the canonical UTF-8 byte length of the final envelope,
+  including the ``size_bytes`` field itself, computed to a fixed point. The
+  field is self-referential and converges because its decimal width
+  stabilizes.
 * ``ExportStatus`` (envelope) is distinct from ``QueueStatus`` (ops) — E7.
 * No network, no Opik, no scoring — pure offline builder.
 """
@@ -30,6 +34,7 @@ __all__ = [
     "DEFAULT_MAX_BATCH_BYTES",
     "ENVELOPE_HEADROOM_BYTES",
     "EXPORT_STATUSES",
+    "MAX_SIZE_CONVERGENCE_PASSES",
     "ExportSizeError",
     "ExportStatus",
     "batch_idempotency_key",
@@ -38,11 +43,14 @@ __all__ = [
     "map_queue_status_to_export_status",
 ]
 
-#: Default max batch payload: 4 MB (plan §8.4 / D9; configurable downward only).
+#: Default max batch payload: 4 MiB (plan §8.4 / D9). ``max_bytes`` accepts any positive value.
 DEFAULT_MAX_BATCH_BYTES = 4 * 1024 * 1024
 
 #: Reserved headroom when packing items so post-envelope framing fits under ceiling.
 ENVELOPE_HEADROOM_BYTES = 256 * 1024
+
+#: Bounded write/remeasure attempts so stored ``size_bytes`` matches the envelope.
+MAX_SIZE_CONVERGENCE_PASSES = 4
 
 
 class ExportStatus(StrEnum):
@@ -130,9 +138,10 @@ def _build_batch(
     """Build and validate one ``export_batch_v1`` envelope.
 
     Computes content-addressed ``payload_sha256`` over the transport body,
-    derives the deterministic idempotency key (P1-2), measures final
-    ``size_bytes``, and fails closed via ``ExportSizeError`` when the
-    envelope exceeds ``max_bytes``.
+    derives the deterministic idempotency key (P1-2), converges
+    ``size_bytes`` by bounded write/remeasure so the stored value matches
+    the canonical envelope, and fails closed via ``ExportSizeError`` when
+    the envelope exceeds ``max_bytes``.
     """
     # Transport body for this batch slice (redacted items keyed by ref).
     sanitized_payloads = []
@@ -163,7 +172,7 @@ def _build_batch(
         payload_sha256=payload_sha,
     )
 
-    # Provisional envelope without size_bytes, then measure final body.
+    # Seed size_bytes, then converge by bounded write/remeasure.
     batch: dict[str, Any] = {
         "schema_version": "export_batch_v1",
         "id": f"export_batch_{key[:16]}",
@@ -189,14 +198,18 @@ def _build_batch(
             "transport_body": transport_body,
         },
     }
-    size = envelope_size_bytes(batch)
-    batch["size_bytes"] = size
-    # Re-measure after writing size_bytes (stable once set if digit width stable;
-    # recompute once more for honesty around digit-length edge cases).
-    size = envelope_size_bytes(batch)
-    batch["size_bytes"] = size
-    if size > max_bytes:
-        raise ExportSizeError(f"batch envelope {size} bytes exceeds ceiling {max_bytes} bytes (export_size)")
+    previous: int | None = None
+    for _ in range(MAX_SIZE_CONVERGENCE_PASSES):
+        measured = envelope_size_bytes(batch)
+        if measured == batch["size_bytes"] and previous is not None:
+            break
+        batch["size_bytes"] = measured
+        previous = measured
+    else:
+        raise ExportSizeError("size_bytes failed to converge within bound (internal)")
+    final_size = measured
+    if final_size > max_bytes:
+        raise ExportSizeError(f"batch envelope {final_size} bytes exceeds ceiling {max_bytes} bytes (export_size)")
     validate_instance("export_batch_v1", batch)
     cleaned = sanitize_export_tree(batch)
     return cleaned if isinstance(cleaned, dict) else batch

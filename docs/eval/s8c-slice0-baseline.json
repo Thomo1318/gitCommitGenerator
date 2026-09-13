@@ -1,0 +1,183 @@
+{
+  "schema_version": "s8c_slice0_baseline_v1",
+  "issue": 258,
+  "slice": "S8-S4-00",
+  "branch": "eval/258-8c-s4-mirror-export-residuals",
+  "base_ref": "origin/main",
+  "base_sha": "edb55be201dced99740b6092849f5660d1814bff",
+  "base_tag": "v0.25.0",
+  "census_path": "docs/eval/s8c-slice0-landed-state-census.md",
+  "recorded_at": "2026-09-11T14:08:46+10:00",
+  "working_tree_clean_at_capture": true,
+  "product_code_changed": false,
+  "baseline": {
+    "commands": [
+      {
+        "cmd": "uv run pytest tests/eval/mirror -q --tb=short",
+        "exit_code": 0,
+        "summary": "396 passed in 37.23s",
+        "note": "issue records ~36.6s on 2026-09-10; timing is not AC"
+      },
+      {
+        "cmd": "uv run pytest tests/eval/mirror -o addopts=\"\" --cov=git_cg.eval.mirror.batch --cov=git_cg.eval.mirror.train --cov=git_cg.eval.mirror.transport --cov=git_cg.eval.mirror.composition --cov-branch -q",
+        "exit_code": 0,
+        "summary": "396 passed in 34.20s; batch 95% / train 96% / transport 97% / composition 94% / combined 96% (591 stmts, 202 branches)",
+        "note": "maintain gate >=80 per owned module (AC-10)"
+      },
+      {
+        "cmd": "uv run python tools/check_docstring_coverage.py src/git_cg/eval/mirror --threshold 80",
+        "exit_code": 0,
+        "summary": "documented: 125/125 (100.00%)",
+        "note": "public-only count; matches issue AC-10 claim"
+      }
+    ],
+    "overall_pass": true,
+    "historical_flake_retired": "test_secret_failure_claim_mark_guards combined-run flake no longer reproduces; stale '136 passed + flake' pre-review claim not reused"
+  },
+  "policy_lock": {
+    "build_batch_sole_authority": true,
+    "default_max_batch_bytes_4mib": true,
+    "max_bytes_any_positive": true,
+    "sanitizer_before_packing": true,
+    "f4_product_accept_blocked_always_false": true,
+    "e6_user_acceptance_never_correctness": true,
+    "s8b_sanitize_export_tree_preserved": true,
+    "raw_dev_unsafe_export_guard_preserved": true,
+    "pep758_forms_preserved": ["experiments.py:74", "queue.py:196", "payload.py:129"],
+    "lazy_opik_import_isolated": "transport.py:218",
+    "opik_pin": "opik==2.0.52 (uv.lock:1718-1720)",
+    "canonical_cli": "git-cg eval opik config show",
+    "export_timeout_kept": true
+  },
+  "packer_census": {
+    "rebuilds_via_build_batch": true,
+    "envelope_headroom_bytes_unused_reserved": true,
+    "stale_configurable_downward_wording": ["batch.py:13", "batch.py:41"],
+    "payload_size_bytes_unaffected_by_d8": "computed from transport body before field exists inside it; no self-reference",
+    "payload_size_bytes_guard": "future magnitude sweep asserts payload_size_bytes <= size_bytes per emitted batch",
+    "batch_idempotency_key_excludes_size_bytes": true
+  },
+  "d1_packer_cost": {
+    "measured": true,
+    "measured_at": "2026-09-10",
+    "table": [
+      {"items": 50, "payload_kib": 102, "wall_ms": 53},
+      {"items": 100, "payload_kib": 203, "wall_ms": 148},
+      {"items": 200, "payload_kib": 404, "wall_ms": 516},
+      {"items": 400, "payload_kib": 808, "wall_ms": 1885}
+    ],
+    "scaling": "~4x per doubling -> quadratic remeasure cost; extrapolated ~45-50s for one 4MiB batch",
+    "is_acceptance_criterion": false,
+    "owner_judgment": "defer",
+    "defer_reasons": [
+      "performance characteristic, not a correctness defect; no AC violated today",
+      "routine eval mirror batches sit well below the 4MiB ceiling",
+      "optimisation requires byte-identical equivalence proof against _build_batch() exact authority - risk outweighs non-correctness gain",
+      "defer-with-notes is lawful (D-1); the 2026-09-10 measurement is recorded either way"
+    ],
+    "reopen_triggers": [
+      "observed real-workflow batch builds hurting operator flows (e.g. routine batches exceeding ~5s wall time)",
+      "ceiling-raise demand making quadratic cost binding"
+    ]
+  },
+  "d8_size_bytes_escape": {
+    "reproduced": true,
+    "reproduced_at": "2026-09-10",
+    "via_public_path": "build_export_batches()",
+    "boundaries": [
+      {"boundary": 9999, "stored": 10002, "actual": 10003},
+      {"boundary": 99999, "stored": 100003, "actual": 100004},
+      {"boundary": 999999, "stored": 1000004, "actual": 1000005}
+    ],
+    "representative_evidence_not_test_constants": true,
+    "s8_s4_02_promoted_to_required": true,
+    "fix_deferred_to": "S8-S4-02 (bounded convergence loop, MAX_SIZE_CONVERGENCE_PASSES, fail-closed else, post-write ceiling check)"
+  },
+  "flush_census": {
+    "bounded_flush_cooperative_synchronous": "transport.py:397-430",
+    "pre_amendment_predicate": "transport.py:426 'if ok is False:'",
+    "adopted_amendment": "is not True (lands in S8-S4-03)",
+    "overclaim_inventory": [
+      "transport.py:23",
+      "transport.py:199",
+      "docs/plans/opik-evaluation-harness.md:2000",
+      "src/git_cg/eval/mirror/config.py:100",
+      "src/git_cg/eval/mirror/exporter.py:1",
+      "docs/plans/opik-evaluation-harness.md:2519 (configurable downward wording, D-6/F-R11)"
+    ],
+    "census_note_only_no_rewrite": ["docs/plans/opik-evaluation-harness.md:1206 (h.flush_bounded metric row)"],
+    "historical_qualify_only": ["harness :2510", ":3170", ":3804"],
+    "readme_already_honest": "docs/eval/README.md:533 - preserve, do not regress",
+    "queue_projector_flush_separate_path": "queue_projector.py:259-264 best-effort flush(timeout=2), return ignored, except Exception: pass - out of S8c scope (RK-S8c-12)"
+  },
+  "train_census": {
+    "unlabeled_rows_return_none": "train.py:57,60,75,94",
+    "labeled_rows_can_emit_profile_none": "train.py:116 (the D-3 defect)",
+    "filter_positive_gold_no_profile_check": "train.py:133-151",
+    "build_train_projection_excluded_unlabeled_only": "train.py:191",
+    "composition_broad_except_around_train": "composition.py:419",
+    "sanitizer_import_present": "train.py:24 (call sites :129, :150, :196)",
+    "build_export_plan_redacts_before_projection": "composition.py:304 -> :415 -> :416"
+  },
+  "train_export_consumers": {
+    "project_train_row": "train_export.py:190-192",
+    "build_train_projection": "train_export.py:324",
+    "filter_positive_gold": "train_export.py:325",
+    "summary_excluded_unlabeled_only": ["train_export.py:395", "train_export.py:486"]
+  },
+  "schema_profile_census": {
+    "redaction_profile_enum_tokens": 8,
+    "schema_enum_location": "schemas/eval/train_row_v1.schema.json $defs.redaction_profile (:103-113)",
+    "schema_property_exclusion": "allOf + not: {const: raw_dev_unsafe} (:173-181)",
+    "effective_export_vocabulary_tokens": 7,
+    "enum_schema_validator_agree": true,
+    "differing_failure_modes_intentional": "train-export schema drops/raises; mirror projection will skip/count (excluded_profile); both fail-closed"
+  },
+  "sanitize_redundancy": {
+    "call_sites": ["project_train_row (train.py:129)", "filter_positive_gold (train.py:150)", "build_train_projection (train.py:196)"],
+    "structurally_idempotent_size_neutral": true,
+    "disposition": "record only - do not remove any call site (S8b law); do not add a fourth pass"
+  },
+  "coverage_census": {
+    "eval_per_file_coverage_excludes_mirror": true,
+    "eval_package_coverage_is_broader_floor_not_s8c_specific": true,
+    "owned_module_floors": {"batch": 95, "train": 96, "transport": 97, "composition": 94, "combined": 96},
+    "docstrings": "125/125 = 100%",
+    "ac10_is_maintain_gate": true
+  },
+  "scope_freeze": {
+    "in_scope_slices": ["S8-S4-00", "S8-S4-02", "S8-S4-03", "S8-S4-04"],
+    "deferred": ["S8-S4-01 (defer-with-notes, see d1_packer_cost)"],
+    "optional_nth_not_close_bar": ["S8-S4-05", "S8-S4-06"],
+    "non_goals": [
+      "no S8a/S8b/S8d-S8f or S10/#240 work",
+      "no Sentry flush audit (#235, F-R19)",
+      "no flush preemption (Option B)",
+      "no E6 weakening; no F4 authority changes",
+      "no sanitizer/redaction reimplementation",
+      "no invented redaction_profile; no applied_redaction_profile fallback",
+      "no downward-only max_bytes; no mandatory ENVELOPE_HEADROOM_BYTES wiring",
+      "no PEP 758 rewrites",
+      "no broad CLI/test/style cleanup; no new CLI surface; export_timeout kept",
+      "no new test/runtime dependencies",
+      "no timing benchmarks as acceptance (AC-9)",
+      "no manual CHANGELOG.md edit (F-R18)",
+      "no queue-projector flush change (RK-S8c-12)",
+      "no issue-body/umbrella mutation in this slice"
+    ]
+  },
+  "umbrella_235_status_read": {
+    "read_only": true,
+    "s8c_row": "Planned; residual inventory matches issue scope",
+    "stale_observation": "S8b row still shows PR #263 open @ ae2bbce - stale vs merged v0.25.0 base; status observation only, umbrella update not S8c scope"
+  },
+  "exit": {
+    "census_recorded": true,
+    "baselines_captured": true,
+    "scope_frozen": true,
+    "no_product_code_in_slice": true,
+    "s8_s4_04_may_start": true,
+    "s8_s4_02_03_may_proceed": true,
+    "s8_s4_01_deferred_with_notes": true
+  }
+}

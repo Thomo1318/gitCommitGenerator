@@ -11,6 +11,9 @@ Citation vs identity:
     scratch lab paths, and plan/board version labels.
   - Identity: just recipes, .eval artifact paths, CLI-ish operator tokens,
     and code symbols (def/class/test names).
+  - Process IDs (S8c, S8cD, S8c-D, any width/case): identity when they lead a
+    comment/docstring/document line or embed in an identifier; citation when
+    trailing/parenthetical, mid-prose, or in a table row.
 
 Default scope: justfile, src/, tools/, scripts/, docs/, config/, top-level
 task/config files. Skill catalogs and this scanner are excluded.
@@ -204,10 +207,11 @@ _CITATION_ATOM = r"""
   | s\d{1,3}[_-]?dog[_-]?\d{1,3}              # S7-DOG-05 (exact coordinate)
   | s\d{1,3}[_-]?[a-h]\d{0,3}                 # S6-A04, S6-G02, S4-A, S5-H (exact)
   | s\d{1,3}[_-]\d{1,3}[a-z]?                 # S7-2, S7-1a sub-slice cites (exact)
+  | s\d{1,3}[_-][a-z]?\d{1,3}[_-]\d{1,3}       # S8-S4-00 three-part stage cites (exact)
   | s\d{1,3}                                  # bare S6 / S7 cite
-  | s\d{1,3}[a-z]                             # rare S6a-style short cite
+  | s\d{1,3}[a-z](?:[-_]s\d{1,3}[a-z])*      # S6a short cite + S8d-S8f stage ranges
   | slice[_-]?\d{1,3}
-  | (?:pre|post)[_-]?s\d{1,3}
+  | (?:pre|post)[_-]?s\d{1,3}[a-z]?          # post-S8 / post-S8b
 """
 
 _CITATION_ID_RE = re.compile(rf"(?ix)^(?:{_CITATION_ATOM})(?:/(?:{_CITATION_ATOM}))*$")
@@ -217,6 +221,34 @@ _KEBAB_OPERATOR_RE = re.compile(r"(?i)^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$")
 _SNAKE_SYMBOL_RE = re.compile(r"(?i)^[a-z_][a-z0-9_]*$")
 _DEF_NAME_RE = re.compile(r"(?i)\b(?:def|class|async\s+def)\s+([A-Za-z_][A-Za-z0-9_]*)")
 _BOARDISH_RE = re.compile(r"(?i)(?:board|findings-board|batch-[a-z])")
+
+# Process/sub-stage IDs: S8c, S8cD, S8c-D (any digit width, any letters).
+# Identity when leading a comment/docstring/document line or embedded in an
+# identifier. Citation when trailing, parenthetical, mid-prose, or table-row.
+_PROCESS_ID_RE = re.compile(r"(?i)s\d{1,3}[a-z](?:[-_]?[a-z]\d{0,3}){0,3}")
+
+_LEAD_COMMENT_RE = re.compile(
+    r"""(?x)
+    ^\s*(?:\#{1,6}|//|/\*|\*+|\"\"\"|\'\'\'|:\#|<!--|>+|[-*+]\s|\d+[.)]\s)\s*
+    """
+)
+
+_TABLE_ROW_RE = re.compile(r"^\s*\|")
+_TRIPLE_QUOTE_RE = re.compile(r'("""|\'\'\')')
+
+
+def _docstring_state_after(line: str, in_docstring: bool) -> bool:
+    """Toggle triple-quote docstring state for the next line.
+
+    Pure ``#`` comment lines outside a docstring ignore embedded triple quotes
+    so commentary about quote handling cannot corrupt the state machine.
+    """
+    stripped = line.lstrip()
+    if not in_docstring and stripped.startswith("#"):
+        return in_docstring
+    for _ in _TRIPLE_QUOTE_RE.finditer(line):
+        in_docstring = not in_docstring
+    return in_docstring
 
 
 @dataclass(frozen=True)
@@ -455,17 +487,125 @@ def _is_durable_identity_token(token: str, *, force_recipe: bool) -> bool:
     return False
 
 
-def scan_lines(path: str, lines: list[tuple[int, str]]) -> list[Finding]:
+def _process_id_findings(
+    norm: str,
+    line_no: int,
+    line: str,
+    tokens: list[str],
+    *,
+    is_md: bool,
+    commentish: bool,
+) -> list[Finding]:
+    """Flag process IDs in identity position (family C.process_id).
+
+    Stage+letter-suffix IDs (S8c, S8cD, S8c-D — any width/case/separators) are
+    identity when they lead a comment/docstring/document line or embed in
+    identifier names. Bare IDs stay citations mid-prose, in tables, and in
+    trailing parentheticals — including docstring continuation lines that have
+    no leading comment marker.
+    """
+    out: list[Finding] = []
+
+    def _add(token: str) -> None:
+        out.append(
+            Finding(
+                path=norm,
+                line_no=line_no,
+                family="C.process_id",
+                token=token,
+                line=line.strip()[:240],
+                role="identity",
+            )
+        )
+
+    token_spans: dict[str, list[tuple[int, int]]] = {}
+    for m in _TOKEN_RE.finditer(line):
+        key = _strip_token(m.group("token"))
+        if key:
+            token_spans.setdefault(key, []).append(m.span("token"))
+
+    if not _TABLE_ROW_RE.match(line):
+        marker = _LEAD_COMMENT_RE.match(line)
+        content = line[marker.end() :] if marker else line
+        if is_md or marker or commentish:
+            stripped = content.lstrip(" \t*•")
+            if stripped:
+                first = stripped.split(None, 1)[0]
+                if _PROCESS_ID_RE.match(first):
+                    cleaned = first.rstrip(".,;:!?'\"*") or first
+                    _add(cleaned)
+
+    for token in tokens:
+        st = _strip_token(token)
+        if not st:
+            continue
+        # Whole-token governance citations (RK-S8c-12, post-S8b, S8a/S8b/...) stay
+        # citations even when a process-ID substring sits inside them.
+        if _is_citation_id(st):
+            continue
+        match = _PROCESS_ID_RE.search(st)
+        if not match:
+            continue
+        if match.start() > 0 or match.end() < len(st):
+            # Embedded process ID. Skip prose compounds (S8c-specific) on
+            # comment/docstring/Markdown lines; keep durable identifiers.
+            remainder = (st[: match.start()] + st[match.end() :]).strip("-_/")
+            if (commentish or is_md) and remainder.isalpha() and remainder.islower():
+                continue
+            _add(st)
+        elif not commentish and not is_md:
+            # Parenthetical citation form stays citation even when the git
+            # hunk lacks the docstring/comment opener that sets commentish.
+            # Bound the check to this token's span so a later `(S8cD)` does
+            # not hide an earlier assignment identity on the same line.
+            remaining = token_spans.get(st)
+            if remaining:
+                start, end = remaining.pop(0)
+                prefix, suffix = line[:start], line[end:]
+                if prefix.rstrip().endswith("(") and suffix.lstrip().startswith(")"):
+                    continue
+            # Bare full-span token on a code/data line is identity.
+            _add(st)
+    for dm in _DEF_NAME_RE.finditer(line):
+        name = dm.group(1)
+        if _PROCESS_ID_RE.search(name):
+            _add(name)
+    return out
+
+
+def scan_lines(
+    path: str,
+    lines: list[tuple[int, str]],
+    *,
+    report_line_nos: set[int] | None = None,
+) -> list[Finding]:
+    """Scan ``lines`` for identity residue.
+
+    When ``report_line_nos`` is set, docstring/comment state is still advanced
+    across every supplied line, but findings are emitted only for those line
+    numbers. Callers that have git ``-U0`` hunks should pass the full file as
+    ``lines`` and the added-line set as ``report_line_nos`` so continuation
+    lines inside docstrings keep citation treatment.
+    """
     findings: list[Finding] = []
     norm = _norm(path)
     is_just = Path(norm).name.lower() == "justfile" or norm.endswith(".just")
     is_md = norm.endswith(".md")
+    in_docstring = False
 
     for line_no, line in lines:
         force_recipe = bool(is_just and _RECIPE_HEADER_RE.match(line))
-        commentish = bool(_COMMENT_LINE_RE.search(line))
+        # Docstring continuation lines carry no leading # / """ marker; treat
+        # them as prose so trailing/mid-prose process IDs stay citations.
+        commentish = bool(_COMMENT_LINE_RE.search(line)) or in_docstring
+        emit = report_line_nos is None or line_no in report_line_nos
+        tokens = _tokens_for_line(line) if emit else []
 
-        for token in _tokens_for_line(line):
+        if not emit:
+            in_docstring = _docstring_state_after(line, in_docstring)
+            continue
+
+        for token in tokens:
             token_st = _strip_token(token)
             if not token_st:
                 continue
@@ -505,6 +645,17 @@ def scan_lines(path: str, lines: list[tuple[int, str]]) -> list[Finding]:
                         role="identity",
                     )
                 )
+        findings.extend(
+            _process_id_findings(
+                norm,
+                line_no,
+                line,
+                tokens,
+                is_md=is_md,
+                commentish=commentish,
+            )
+        )
+        in_docstring = _docstring_state_after(line, in_docstring)
     return _dedupe(findings)
 
 
@@ -538,20 +689,35 @@ def scan_repo(
         if not _should_scan_path(path, includes, excludes):
             continue
         try:
-            lines = _added_lines_from_git(cwd, path, base, include_working_tree)
+            added = _added_lines_from_git(cwd, path, base, include_working_tree)
         except OSError as exc:
             print(f"warning: skip {path}: {exc}", file=sys.stderr)
             continue
-        if not lines:
+        if not added:
             continue
-        findings.extend(scan_lines(path, lines))
+        added_nos = {n for n, _ in added}
+        disk = cwd / path
+        # Prefer full-file lines so docstring state survives -U0 hunk gaps.
+        if disk.is_file():
+            try:
+                full_text = disk.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                print(f"warning: skip full read {path}: {exc}", file=sys.stderr)
+                findings.extend(scan_lines(path, added))
+            else:
+                full_lines = list(enumerate(full_text.splitlines(), start=1))
+                findings.extend(scan_lines(path, full_lines, report_line_nos=added_nos))
+        else:
+            findings.extend(scan_lines(path, added))
     return findings
 
 
 def _print_text(findings: list[Finding]) -> None:
     if not findings:
         print("deslop-naming-scan: clean - no family A-D identity residue on scanned added lines.")
-        print("Families checked: A (stage), B (plan/FIND/INT), C (governance-as-identity), D (ceremony).")
+        print(
+            "Families checked: A (stage), B (plan/FIND/INT), C (governance-as-identity + positional process IDs), D (ceremony)."
+        )
         return
     print(f"deslop-naming-scan: {len(findings)} finding(s)")
     print()

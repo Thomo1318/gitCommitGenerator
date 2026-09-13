@@ -164,15 +164,10 @@ def _row_label(bundle: Mapping[str, Any]) -> str | None:
     the R14 vocabulary. Negatives/antipatterns map to ``hard_negative`` so they
     can never silent-merge into ``positive_gold``.
     """
-    from git_cg.eval.mirror.train import normalize_train_label
+    from git_cg.eval.mirror.train import _resolve_train_label, normalize_train_label
 
-    raw = (
-        bundle.get("train_label")
-        or (bundle.get("meta") or {}).get("train_label")
-        or (bundle.get("meta") or {}).get("label")
-        or bundle.get("label")
-    )
-    closed = normalize_train_label(raw)
+    meta = bundle.get("meta") if isinstance(bundle.get("meta"), dict) else {}
+    closed = normalize_train_label(_resolve_train_label(bundle, meta))
     if closed == "positive":
         return "positive"
     if closed == "negative":
@@ -184,12 +179,19 @@ def _project_row(
     redacted: dict[str, Any],
     *,
     label: str,
-    export_profile: str,
-) -> dict[str, Any]:
-    """Project one redacted bundle into a schema-valid ``train_row_v1``."""
+) -> dict[str, Any] | None:
+    """Project one redacted bundle into a schema-valid ``train_row_v1``.
+
+    Returns ``None`` when the public projection rejects the row
+    (fail-closed profile matrix) — the caller drops the row and never
+    invents a profile. Emitted rows carry the projection-resolved
+    ``redaction_profile`` and ``split_group_id``.
+    """
     from git_cg.eval.mirror.train import project_train_row
 
     proj = project_train_row(redacted)
+    if proj is None:
+        return None
     row_id = str(redacted.get("id") or redacted.get("bundle_id") or f"row-{uuid.uuid4().hex[:12]}")
     gate = redacted.get("gate") if isinstance(redacted.get("gate"), dict) else {}
     gate_pass = gate.get("deterministic_pass")
@@ -197,16 +199,14 @@ def _project_row(
         "schema_version": ROW_SCHEMA,
         "id": row_id,
         "train_label": label,
-        "redaction_profile": export_profile,
+        "redaction_profile": str(proj["redaction_profile"]),
         "artifact_class": "train_row",
         "gate_pass": bool(gate_pass) if isinstance(gate_pass, bool) else False,
     }
     message = redacted.get("final_message")
     if isinstance(message, str) and message.strip():
         row["final_message"] = message
-    split = None
-    if proj is not None:
-        split = proj.get("split_group_id") or proj.get("split")
+    split = proj.get("split_group_id") or proj.get("split")
     if split:
         row["split_group_id"] = str(split)
     quarantine = (redacted.get("meta") or {}).get("redaction_quarantine")
@@ -280,6 +280,8 @@ def build_train_export(
     quarantined_fields: list[str] = []
     omitted_fields: list[str] = []
     scrub_status = "ok"
+    excluded_unlabeled = 0
+    excluded_profile = 0
 
     for bundle in bundles:
         bundle_id = str(bundle.get("id") or bundle.get("session_thread_id") or "?")
@@ -288,6 +290,7 @@ def build_train_export(
             # Unlabeled rows are excluded (never silently positive).
             dropped.append(bundle_id)
             omitted_fields.append(f"{bundle_id}:train_label")
+            excluded_unlabeled += 1
             continue
         # capture_on gate (corpus eligibility only; never product accept).
         gate = bundle.get("gate") if isinstance(bundle.get("gate"), dict) else {}
@@ -311,10 +314,21 @@ def build_train_export(
             quarantined_fields.extend(f"{bundle_id}:{q}" for q in quarantine)
 
         try:
-            row = _project_row(redacted, label=label, export_profile=redaction_profile)
+            row = _project_row(redacted, label=label)
         except TrainExportError:
             dropped.append(bundle_id)
             omitted_fields.append(f"{bundle_id}:<row_projection>")
+            continue
+        if row is None:
+            # Fail-closed: the projection rejected the redacted row.
+            # A redaction_profile is never independently invented for it.
+            dropped.append(bundle_id)
+            if _row_label(redacted) is None:
+                omitted_fields.append(f"{bundle_id}:train_label")
+                excluded_unlabeled += 1
+            else:
+                omitted_fields.append(f"{bundle_id}:<row_profile>")
+                excluded_profile += 1
             continue
 
         rows.append(row)
@@ -392,7 +406,8 @@ def build_train_export(
             "scrub_report": export.get("scrub_report", {"status": "ok"}),
             "positive_gold_count": len(positives),
             "negative_count": len(projection["negatives"]),
-            "excluded_unlabeled": projection["excluded_unlabeled"],
+            "excluded_profile": excluded_profile,
+            "excluded_unlabeled": excluded_unlabeled,
         }
     )
 
@@ -483,6 +498,7 @@ def train_export(
         "scrub_report": result["scrub_report"],
         "positive_gold_count": result["positive_gold_count"],
         "negative_count": result["negative_count"],
+        "excluded_profile": result["excluded_profile"],
         "excluded_unlabeled": result["excluded_unlabeled"],
         "written": persisted is not None,
         "paths": persisted,

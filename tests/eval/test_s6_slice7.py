@@ -445,9 +445,12 @@ def test_dogfood_g02b_parse_hyperfine_json(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _write_bundle(root: Path, bid: str, label: str, message: str) -> None:
+def _write_bundle(root: Path, bid: str, label: str, message: str, profile: str | None = "train_rich") -> None:
     bundles = root / ".eval" / "bundles" / "acceptpath"
     bundles.mkdir(parents=True, exist_ok=True)
+    meta: dict = {"train_label": label}
+    if profile is not None:
+        meta["redaction_profile"] = profile
     (bundles / f"{bid}.json").write_text(
         json.dumps(
             {
@@ -456,7 +459,7 @@ def _write_bundle(root: Path, bid: str, label: str, message: str) -> None:
                 "train_label": label,
                 "final_message": message,
                 "gate": {"deterministic_pass": label == "positive"},
-                "meta": {"train_label": label},
+                "meta": meta,
             }
         )
     )
@@ -1247,6 +1250,7 @@ def test_train_export_row_scrub_failure_drops_and_continues(tmp_path: Path, monk
         redact_bundle=_fake_redact,
     )
     assert "b-bad" in result["dropped_row_ids"]
+    assert result["excluded_profile"] == 0
     assert "b-ok" in result["row_ids"] or any(r.get("id") == "b-ok" for r in result["rows"])
     assert result["scrub_report"]["status"] == "quarantined"
     report_blob = json.dumps(result["scrub_report"])
@@ -1289,3 +1293,102 @@ def test_train_export_dry_run_alias_no_write(tmp_path: Path) -> None:
     assert data["written"] is False
     assert data["paths"] is None
     assert data["would_write"]["export_id"] == data["export_id"]
+
+
+def test_train_export_missing_profile_fails_closed(tmp_path: Path) -> None:
+    """Labeled row whose redacted form lacks a profile is dropped."""
+    from git_cg.eval.train_export import build_train_export
+
+    _write_bundle(tmp_path, "b-noprofile", "positive", "feat: no profile", profile=None)
+
+    def _pass_through(bundle, profile="train_rich"):
+        return dict(bundle)
+
+    result = build_train_export(
+        tmp_path,
+        redaction_profile="train_rich",
+        redact_bundle=_pass_through,
+    )
+    assert "b-noprofile" in result["dropped_row_ids"]
+    assert result["row_ids"] == []
+    assert result["excluded_profile"] == 1
+    assert result["excluded_unlabeled"] == 0
+
+
+def test_train_export_conflicting_profiles_dropped(tmp_path: Path) -> None:
+    """Conflicting top/meta profiles drop the row (fail closed)."""
+    from git_cg.eval.train_export import build_train_export
+
+    _write_bundle(tmp_path, "b-conflict", "positive", "feat: conflict", profile="default_scrub")
+
+    def _stamp_conflict(bundle, profile="train_rich"):
+        out = dict(bundle)
+        out["redaction_profile"] = "train_rich"
+        return out
+
+    result = build_train_export(
+        tmp_path,
+        redaction_profile="train_rich",
+        redact_bundle=_stamp_conflict,
+    )
+    assert "b-conflict" in result["dropped_row_ids"]
+    assert result["excluded_profile"] == 1
+    assert result["row_ids"] == []
+
+
+def test_train_export_valid_row_emits_with_resolved_profile(tmp_path: Path) -> None:
+    """Valid labeled/profile row emits carrying the projection-resolved profile."""
+    from git_cg.eval.train_export import build_train_export
+
+    _write_bundle(tmp_path, "b-ok", "positive", "feat: ok")
+    result = build_train_export(tmp_path, redaction_profile="train_rich", split_group_id="sg-explicit")
+    assert result["row_ids"] == ["b-ok"]
+    row = result["rows"][0]
+    assert row["redaction_profile"] == "train_rich"
+    assert row["split_group_id"] == "train"
+    assert result["export"]["split_group_id"] == "sg-explicit"
+
+
+def test_train_export_split_group_id_preserved_when_rows_dropped(tmp_path: Path) -> None:
+    """Export-level split_group_id survives even when every row fails closed."""
+    from git_cg.eval.train_export import build_train_export
+
+    _write_bundle(tmp_path, "b-drop", "positive", "feat: drop", profile=None)
+
+    def _pass_through(bundle, profile="train_rich"):
+        return dict(bundle)
+
+    result = build_train_export(
+        tmp_path,
+        redaction_profile="train_rich",
+        split_group_id="sg-survivor",
+        redact_bundle=_pass_through,
+    )
+    assert result["row_ids"] == []
+    assert result["export"]["split_group_id"] == "sg-survivor"
+
+
+def test_train_export_counters_surfaced_in_cli_payload(tmp_path: Path) -> None:
+    """excluded_profile/excluded_unlabeled surface in the CLI data payload."""
+    from git_cg.eval.train_export import train_export
+
+    _write_bundle(tmp_path, "b-pos", "positive", "feat: ok")
+    _write_bundle(tmp_path, "b-unlabeled", "", "feat: no label")
+    data = train_export(tmp_path, redaction_profile="train_rich", write=False)
+    assert data["row_count"] == 1
+    assert data["excluded_unlabeled"] == 1
+    assert data["excluded_profile"] == 0
+
+
+def test_public_projection_remains_dict_or_none() -> None:
+    """project_train_row keeps the public dict-or-None contract."""
+    from git_cg.eval.mirror.train import project_train_row
+
+    labeled = {
+        "id": "b1",
+        "train_label": "positive",
+        "meta": {"train_label": "positive", "redaction_profile": "train_rich"},
+    }
+    row = project_train_row(labeled)
+    assert isinstance(row, dict)
+    assert project_train_row({"id": "b2", "train_label": "positive"}) is None
