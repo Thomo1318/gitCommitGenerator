@@ -300,4 +300,4 @@ Only when the user explicitly approves the catalog change:
 - Router / policy entrypoint: `deslop-gate`
 - Prose counterpart: `prose-deslop`
 - Naming pattern catalog: [references/naming.md](references/naming.md)
-- Mechanical gates: `just lint-slice` (Ruff on touched Python) then `just deslop-naming-scan` → `tools/deslop_naming_scan.py` (families A–D + positional process IDs on branch diff; exit 2 on identity residue)
+- Mechanical gates: `just lint-slice` (Ruff on touched Python) then `just deslop-naming-scan` → `tools/deslop_naming_scan.py` (families A–D + positional process IDs on base-to-HEAD plus staged, unstaged, and untracked files; exit 2 on identity residue)
