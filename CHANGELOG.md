@@ -29,6 +29,133 @@
 - 📝 docs(usage): gold modes, finding codes, path-group mapping, and large-diff semantic tripwire (#182)
 - 📝 docs(readme): Session 6 operator residuals, module-scope law, and V12-A proof-pack pointer for Issue #204
 - 📝 docs(readme): F80 `GIT_CG_SKIP_PREPARE` operator contract, message-only rebuild example, and presentation-adjacent env table (#204)
+## v0.25.1
+
+### 🐛 Bug Fixes
+
+- 🦺 fix(deslop-naming): bind parenthetical citation skip to token span (#258)
+- 🦺 fix(eval-mirror): converge stored size_bytes to envelope (#258)
+- 🦺 fix(eval-mirror): accept only exact True from SDK flush (#258)
+- 🦺 fix(deslop-naming): flag positional process IDs as identity residue (#258)
+- 🥅 fix(composition): narrow train projection exception handling (#258)
+- 🦺 fix(train): enforce fail-closed export profile on rows (#258)
+
+### ♻️ Refactors
+
+- 🚚 refactor(eval-mirror): rename composition test module (#258)
+- ♻️ refactor(eval-cli): reuse config-show mode fallback token (#258)
+
+### 📝 Documentation
+
+- 📝 docs(llms): auto-update llms.txt
+- 📝 docs(deslop): record default naming-scan working-tree scope (#258)
+- 📝 docs(eval): allow any positive export batch max_bytes (#258)
+- 💡 docs(eval-mirror): document 4 MiB default and size_bytes (#258)
+- 📝 docs(deslop): record process-ID naming law and lint close-out (#258)
+- 📝 docs(eval): freeze S8c slice 0 baseline and landed-state census (#258)
+
+### 🏗️ Build & CI
+
+- 🔨 chore(just): prefix leading-dash lint-slice targets with ./ (#258)
+- 🔨 chore(just): add lint-slice Ruff gate for touched Python (#258)
+
+### Miscellaneous
+
+- Merge PR #265
+
+## v0.25.0
+
+### ✨ Features
+
+- ✨ feat(eval-binding): add contained acceptpath index path helper (#257)
+- 👔 feat(eval-binding): acceptpath cache, lock, evidence redaction (#257)
+- 📈 feat(eval-binding): persist optional acceptpath binder counters (#257)
+- ✨ feat(eval-gc): purge stale acceptpath debris offline (#257)
+- ✨ feat(gc): treat lock and legacy sess files as unmanaged (#257)
+
+### ⚡️ Performance
+
+- ⚡️ perf(eval-binding): bound default acceptpath bind-lock wait (#257)
+- ⚡️ perf(eval-binding): reuse validated index serialization on write (#257)
+
+### 🐛 Bug Fixes
+
+- 🦺 fix(eval-binding): make acceptpath index keys injective (#257)
+- 🦺 fix(eval-binding): validate reuse identity before adoption (#257)
+- 🦺 fix(eval-binding): validate redaction profile before writes (#257)
+- 🦺 fix(eval-binding): skip symlink and non-regular miss-scan files (#257)
+- 🦺 fix(eval-binding): gate session ids before cache path construction (#257)
+- 🦺 fix(eval-binding): bound and validate the acceptpath cache index (#257)
+- 🦺 fix(eval-binding): bound miss-scan with K-window and env guards (#257)
+- 🦺 fix(eval-binding): skip cache write-through without bind lock (#257)
+- 🦺 fix(binder): prune oversized binder index entries (#257)
+- 🦺 fix(binder): reject malformed session ids on persist (#257)
+- 🦺 fix(binder): prune oversized indexes on load (#257)
+- 🥅 fix(eval-gc): emit EVAL_INTERNAL on unexpected failures (#257)
+
+### ♻️ Refactors
+
+- 🧵 refactor(eval-binding): add short-lived acceptpath bind lock (#257)
+- ♻️ refactor(eval-binding): drop dead lock and redaction scaffolding (#257)
+- 🧵 refactor(eval-binding): guard bind-lock release with owner nonce (#257)
+- ♻️ refactor(eval-binding): wire binder to acceptpath index helper (#257)
+- ♻️ refactor(eval-binding): split accept binding into focused helpers (#257)
+- 🚚 refactor(eval-cli): rename slice-scoped error emitter (#257)
+- ♻️ refactor(eval-cache): share bounded JSON for rebuildable caches (#257)
+- ♻️ refactor(eval-binding): extract public miss-scan window names (#257)
+
+### 📝 Documentation
+
+- 💡 docs(eval-binding): document index cache and miss-scan contracts (#257)
+- 💡 docs(eval-cli): drop slice wording from error-emitter docs (#257)
+- 📝 docs(eval-binding): document acceptpath miss-scan env knobs (#257)
+- 📝 docs(eval-gc): document operator-gated acceptpath retention (#257)
+- 📝 docs(eval): document acceptpath mutation-testing advisory (#257)
+- 📝 docs(eval-gc): document unmanaged lock files and eval gc CLI (#257)
+- 📝 docs(eval-gc): record leftover locks and EVAL_INTERNAL (#257)
+- 📝 docs(llms): auto-update llms.txt
+
+### ✅ Tests
+
+- ✅ test(eval-binding): measure acceptpath miss-scan at 1k and 10k (#257)
+- ✅ test(eval-binding): pin lazy export resolution contract (#257)
+- ✅ test(eval-binding): pin offline bind with no network or Opik (#257)
+- ✅ test(eval-binding): pin final and unbound hash sources (#257)
+- ✅ test(eval-binding): pin draft persist and unbound fail-closed (#257)
+- ✅ test(eval-binding): pin object-hook and drop duplicate payload (#257)
+- ✅ test(eval-gc): cover skip reasons and human error paths (#257)
+- ✅ test(eval-binding): pin bounded acceptpath miss-scan contracts (#257)
+- ✅ test(eval-binding): pin hard-linked miss-scan adoption (#257)
+- ✅ test(eval-binding): pin dry-run preview identity (#257)
+- ✅ test(binder_cache): exclude benchmark tests from default pytest run (#257)
+- ✅ test(test): assemble JWT fixture at runtime (#257)
+- ✅ test(binder_cache): rename pytest marker to eval_binding_bench (#257)
+- ✅ test(eval-binding): assemble SK token fixture at runtime (#257)
+- ✅ test(eval-gc): exercise LayerAPathError store-integrity path (#257)
+
+### 🎨 Style
+
+- 💬 style(eval-api-map): strip stage labels from operator prose (#257)
+
+### 🏗️ Build & CI
+
+- ➕ build(dev): add pyright typechecker
+- 🔨 chore(eval-binding): gate binding files at 80% coverage each (#257)
+- 🔨 chore(eval-binding): gate public docstrings at 80% coverage (#257)
+- 🔨 chore(eval-binding): gate scan_window.py at 80% coverage (#257)
+- 👷 ci(promptfoo): rescan on synchronize and lower min-severity (#210)
+- 👷 ci(code-scan): add concurrency control to workflow (#257)
+
+### 🔒️ Security / Dependencies
+
+- 🔒️ fix(eval-mirror): drop final_message_b64 from export copies (#257)
+- 🔒 fix(eval-scrub): make secret masking idempotent (#257)
+
+### Miscellaneous
+
+- 🔧 chore(skills): quote prose-deslop YAML description (#257)
+- Merge PR #263
+
 ## v0.24.0
 
 ### ✨ Features
