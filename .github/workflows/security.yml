@@ -32,7 +32,7 @@ jobs:
 
       - name: TruffleHog OSS
         # trufflesecurity/trufflehog@v3.95.9 (action SHA + scanner version pin)
-        uses: trufflesecurity/trufflehog@27b0417c16317ca9a472a9a8092acce143b49c55
+        uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9
         with:
           path: ./
           # Per-event ranges:
@@ -77,7 +77,7 @@ jobs:
 
       - name: Install mise tools
         # jdx/mise-action@v4.2.1 — installs exact syft/grype/grant from mise.toml
-        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
           install: true
           cache: true
@@ -102,7 +102,7 @@ jobs:
         # Only skip when running under nektos/act (ACT=true). Do not set ACT=false.
         if: ${{ env.ACT != 'true' }}
         # actions/upload-artifact@v7.0.1
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: cyclone-dx-sbom
           path: bom.json
